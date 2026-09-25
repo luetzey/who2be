@@ -841,13 +841,21 @@ falsch, wenn sie gebraucht wird. Belegt durch
 `deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9). Dass der Lauf den
 Schreibpfad der API nicht verbiegt, belegen die Faelle 12–13 desselben Tests
 (Backup und Store unter verschiedenen Kennungen; Details unter
-„Tabellen-Store-Backup").
+„Tabellen-Store-Backup"). Dass ein volllaufendes Backup-Ziel den Lauf rot macht
+und den letzten guten Snapshot unversehrt laesst, belegt Fall 14.
 
 **Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
 Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
 Tabellen-Snapshots sind je genau **eine** Kopie, die in place ueberschrieben
 wird — sie vervielfachen sich nicht. Die Historie traegt restic (dedupliziert).
 Der `s3 sync` ist inkrementell, uebertragen wird nur die Differenz zum Vorlauf.
+Waehrend eines Laufs kommt kurzzeitig **eine weitere Kopie der gerade
+gesicherten Area** hinzu: der Tabellen-Snapshot wird in einen Vorlauf unter
+`${BACKUP_DIR}/tablestore/.scratch.*` geschrieben und erst danach an seinen Platz
+geschoben (Begruendung unter „Tabellen-Store-Backup"). Die groesste Area
+bestimmt diese Spitze. Alles, was der Lauf schreibt, liegt damit unter
+`${BACKUP_DIR}` — wer das Verzeichnis auf eine eigene Platte legt, bemisst damit
+den gesamten Bedarf.
 
 **Abwahl fuer On-Prem ohne diese Stores:** `BACKUP_BLOBS=off` bzw.
 `BACKUP_TABLESTORE=off`. Nur diese ausdrueckliche Abwahl ueberspringt eine Stufe
@@ -1161,10 +1169,12 @@ bringt `sqlite3` mit. Referenz dessen, was `backup.sh` je Area-Datei tut:
 ```bash
 # Stufe 3 aus backup.sh, sinngemaess je ${WHO2BE_TABLESTORE_DIR}/**/*.sqlite.
 # Das `su-exec <uid>:<gid>` ist kein Beiwerk — Begruendung direkt darunter.
+# ${tmp} liegt BEWUSST unter ${BACKUP_DIR}/tablestore/.scratch.* — Begruendung
+# beim Punkt „Vorlauf und `mv`" weiter unten.
 su-exec "$(stat -c '%u:%g' "${src}")" \
   sqlite3 "file:${src}?mode=ro" "VACUUM INTO '${tmp}'"
 sqlite3 "${tmp}" 'PRAGMA quick_check'         # muss 'ok' liefern
-mv -f "${tmp}" "${target}"                    # atomar ueber den Vorlauf
+mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert geprueft
 ```
 
 - **Der Lauf laeuft unter der Kennung des Datei-Eigentuemers.** Eine
@@ -1192,10 +1202,22 @@ mv -f "${tmp}" "${target}"                    # atomar ueber den Vorlauf
   Ergebnis ist eine technisch intakte Datei mit einem fachlich halben Import.
   Dieselbe Eigenschaft hat `pg_dump` gegenueber laufenden Mehr-Schritt-Vorgaengen.
   Der Lauf um 03:15 UTC trifft den Fall praktisch selten.
-- **Zwischendatei + `mv`:** `VACUUM INTO` lehnt ein existierendes Ziel ab, und
-  ein abgebrochener Schreibvorgang soll den letzten guten Snapshot nicht
-  zerstoeren. Scheitert eine Area, bleibt ihr Vorlauf-Snapshot stehen — der Lauf
-  wird trotzdem rot.
+- **Vorlauf und `mv`:** `VACUUM INTO` lehnt ein existierendes Ziel ab, und ein
+  abgebrochener Schreibvorgang soll den letzten guten Snapshot nicht zerstoeren.
+  Geschrieben wird deshalb zuerst in einen Vorlauf, der **im Zielverzeichnis
+  selbst** liegt (`${BACKUP_DIR}/tablestore/.scratch.*`) — und genau das ist die
+  Bedingung, unter der das anschliessende `mv` ein `rename(2)` ist: unteilbar,
+  ohne Kopiervorgang. Laege der Vorlauf auf einem anderen Dateisystem (etwa in
+  `/tmp`, also in der Writable-Layer des Containers statt im `backups`-Volume),
+  wuerde `mv` zu Kopieren-und-Loeschen: es kann an vollem Platz scheitern oder
+  abgebrochen werden, und beides ueberschreibt das Ziel waehrenddessen — der
+  letzte gute Snapshot waere dann ein Torso. Der Rueckgabewert von `mv` wird
+  geprueft; ein gescheiterter Austausch macht die Area zum Fehlschlag und den
+  Lauf rot. Scheitert eine Area, bleibt ihr bisheriger Snapshot unveraendert
+  stehen (auch der Verwaisten-Lauf raeumt ihn nicht weg) — der Lauf wird
+  trotzdem rot. Belegt durch Fall 14 in `test_backup_alarm.sh`: Backup-Ziel auf
+  einem zu kleinen Dateisystem, Lauf endet rot, kein Heartbeat, der Snapshot
+  vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und

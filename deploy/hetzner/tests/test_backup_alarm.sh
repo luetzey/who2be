@@ -495,9 +495,123 @@ assert_crossuid "${CASE12_OUT}" "Cross-UID (mit CAP_CHOWN)"
 # database"), und genau hier muss der Umbau tragen: der Lesevorgang laeuft
 # unter der Kennung des Eigentuemers, und das Ergebnis wird geprueft statt
 # geglaubt.
-log "13/13 Cross-UID OHNE CAP_CHOWN — Zusage haengt nicht an einer Capability"
+log "13/14 Cross-UID OHNE CAP_CHOWN — Zusage haengt nicht an einer Capability"
 CASE13_OUT="${ROOT}/case13.log"
 unshare -rm --map-auto bash "${ROOT}/case12-inner.sh" "${BACKUP_SH}" "${BIN}" drop-chown >"${CASE13_OUT}" 2>&1 || true
 assert_crossuid "${CASE13_OUT}" "Cross-UID (ohne CAP_CHOWN)"
+
+# --- 14) Volles Zieldateisystem: rot, und der letzte gute Stand bleibt ----
+# Der Fall, den die Faelle 1–13 prinzipbedingt NICHT messen koennen: dort liegen
+# Quelle, Vorlauf und Ziel im selben mktemp-Baum, also im selben Dateisystem.
+# Im Container ist das anders — ${BACKUP_DIR} ist ein eigenes Volume. Liegt der
+# Vorlauf woanders, wird das Schieben an seinen Platz zu einem echten
+# Kopiervorgang ueber die Grenze: er kann an vollem Platz scheitern, und er
+# ueberschreibt das Ziel waehrenddessen. Beides trifft die Kernzusage der Karte:
+# ein gescheiterter Snapshot darf den Lauf nicht gruen lassen, und der letzte
+# gute Stand ist genau der, auf den ein Restore zurueckfallen will.
+#
+# Nachgestellt mit einem eigenen, absichtlich zu kleinen Dateisystem fuer
+# ${BACKUP_DIR}: Lauf 1 legt einen guten Snapshot an, danach waechst die Area
+# ueber den freien Platz hinaus, Lauf 2 muss scheitern.
+log '14/14 Backup-Ziel laeuft voll — Lauf rot, kein Ping, letzter guter Snapshot intakt'
+
+cat >"${ROOT}/case14-inner.sh" <<'INNER'
+#!/usr/bin/env bash
+set -uo pipefail
+BACKUP_SH="$1"; BIN="$2"
+
+W="$(TMPDIR=/tmp mktemp -d)"
+STORE="${W}/tablestore"; BACKUPS="${W}/backups"
+mkdir -p "${STORE}/11111111-1111-1111-1111-111111111111" "${BACKUPS}"
+DB="${STORE}/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.sqlite"
+SNAP="${BACKUPS}/tablestore/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.sqlite"
+
+# ${BACKUP_DIR} bekommt ein EIGENES, kleines Dateisystem — der Punkt des Falls.
+mount -t tmpfs -o size=8M tmpfs "${BACKUPS}" || { echo "MOUNT_FAILED"; exit 0; }
+
+sqlite3 "${DB}" \
+  "PRAGMA journal_mode=WAL; CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO t (v) VALUES ('a'),('b');" \
+  >/dev/null
+
+export HEARTBEAT_LOG="${W}/heartbeat.log" RESTIC_LOG="${W}/restic.log" AWS_LOG="${W}/aws.log"
+
+run_backup() {
+  : >"${HEARTBEAT_LOG}"; : >"${RESTIC_LOG}"; : >"${AWS_LOG}"
+  TMPDIR=/tmp PATH="${BIN}:${PATH}" \
+  POSTGRES_HOST=db POSTGRES_USER=u POSTGRES_DB=d PGPASSWORD=p \
+  BACKUP_GPG_RECIPIENT=backup@example.org \
+  BACKUP_DIR="${BACKUPS}" BACKUP_BLOBS=off \
+  BACKUP_HEARTBEAT_URL="https://status.internal.invalid/ping/who2be-backup" \
+  WHO2BE_TABLESTORE_DIR="${STORE}" \
+    bash "${BACKUP_SH}" >"${W}/stdout.log" 2>&1
+  echo "$?"
+}
+
+rc1="$(run_backup)"
+echo "RUN1_EXIT=${rc1}"
+[[ -s "${SNAP}" ]] && echo "RUN1_SNAPSHOT_ROWS=$(sqlite3 "${SNAP}" 'SELECT count(*) FROM t' 2>&1)"
+
+# Area ueber den freien Platz hinaus wachsen lassen. Der Store liegt NICHT im
+# kleinen Dateisystem — nur das Backup-Ziel ist knapp.
+sqlite3 "${DB}" \
+  "INSERT INTO t (v) SELECT hex(randomblob(512)) FROM generate_series(1,20000);" >/dev/null 2>&1 \
+  || sqlite3 "${DB}" \
+       "WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM c WHERE i<20000)
+        INSERT INTO t (v) SELECT hex(randomblob(512)) FROM c;" >/dev/null
+echo "SOURCE_BYTES=$(stat -c '%s' "${DB}")"
+echo "FREE_ON_TARGET=$(df -k --output=avail "${BACKUPS}" | tail -1)K"
+
+rc2="$(run_backup)"
+echo "RUN2_EXIT=${rc2}"
+echo "RUN2_PINGS=$(wc -l <"${HEARTBEAT_LOG}" | tr -d ' ')"
+echo "--- Log von Lauf 2 (Tabellen-Store) ---"
+grep -E 'Tabellen|FATAL|UNVOLLSTAENDIG|fertig' "${W}/stdout.log" | sed 's/^/    /'
+if [[ -e "${SNAP}" ]]; then
+  echo "RUN2_SNAPSHOT_CHECK=$(sqlite3 "${SNAP}" 'PRAGMA quick_check' 2>&1 | head -1)"
+  echo "RUN2_SNAPSHOT_ROWS=$(sqlite3 "${SNAP}" 'SELECT count(*) FROM t' 2>&1 | head -1)"
+else
+  echo "RUN2_SNAPSHOT_CHECK=fehlt"
+  echo "RUN2_SNAPSHOT_ROWS=fehlt"
+fi
+echo "LEFTOVER_SCRATCH=$(find "${BACKUPS}" -maxdepth 2 -name '.scratch.*' | wc -l | tr -d ' ')"
+umount "${BACKUPS}" 2>/dev/null
+rm -rf "${W}"
+INNER
+
+CASE14_OUT="${ROOT}/case14.log"
+unshare -rm --map-auto bash "${ROOT}/case14-inner.sh" "${BACKUP_SH}" "${BIN}" >"${CASE14_OUT}" 2>&1 || true
+sed 's/^/  /' "${CASE14_OUT}"
+
+if grep -q '^MOUNT_FAILED' "${CASE14_OUT}"; then
+  printf '  ⚠ 14 uebersprungen: eigenes tmpfs im User-Namespace nicht mountbar\n'
+else
+  grep -q '^RUN1_EXIT=0' "${CASE14_OUT}" \
+    || fail "Volles Ziel: Vorlauf (Lauf 1) war schon nicht gruen — Aufbau taugt nicht"
+  grep -q '^RUN1_SNAPSHOT_ROWS=2' "${CASE14_OUT}" \
+    || fail "Volles Ziel: Lauf 1 hat keinen brauchbaren Snapshot hinterlassen"
+  ok "Volles Ziel: Lauf 1 gruen, guter Snapshot am Ziel"
+
+  grep -q '^RUN2_EXIT=0$' "${CASE14_OUT}" \
+    && fail "Volles Ziel: Lauf 2 endete GRUEN, obwohl der Snapshot nicht geschrieben werden konnte"
+  ok "Volles Ziel: Lauf 2 endet rot"
+  grep -q '^RUN2_PINGS=0' "${CASE14_OUT}" \
+    || fail "Volles Ziel: Heartbeat wurde trotz gescheitertem Snapshot gepingt"
+  ok "Volles Ziel: 0 Heartbeat-Pings"
+
+  # Blocker 3: der Stand, auf den ein Restore zurueckfallen will, darf nie ein
+  # Torso sein — entweder der alte Snapshot oder gar keiner.
+  if grep -qE '^RUN2_SNAPSHOT_CHECK=(ok|fehlt)$' "${CASE14_OUT}"; then
+    ok "Volles Ziel: Ziel-Snapshot ist intakt oder fehlt — kein Torso"
+  else
+    fail "Volles Ziel: der letzte gute Snapshot wurde beschaedigt ($(grep '^RUN2_SNAPSHOT_CHECK=' "${CASE14_OUT}"))"
+  fi
+  grep -qE '^RUN2_SNAPSHOT_ROWS=(2|fehlt)$' "${CASE14_OUT}" \
+    || fail "Volles Ziel: Ziel-Snapshot ist weder der alte Stand noch abwesend"
+  ok "Volles Ziel: Ziel-Snapshot traegt den alten Stand oder fehlt"
+
+  grep -q '^LEFTOVER_SCRATCH=0' "${CASE14_OUT}" \
+    || fail "Volles Ziel: Vorlauf-Verzeichnis blieb im Backup-Ziel liegen"
+  ok "Volles Ziel: kein Vorlauf-Rest im Backup-Ziel"
+fi
 
 printf '\033[1;32m[backup-alarm]\033[0m alle Faelle gruen\n'

@@ -59,6 +59,12 @@
 #   lokal:   dumps aelter als 7 Tage geloescht. Blob-Spiegel und Tabellen-Snapshots
 #            sind je GENAU EINE Kopie (in place ueberschrieben) — sie vervielfachen
 #            sich NICHT mit der 7-Tage-Retention. Die Historie traegt restic.
+#   Platz:   alles, was dieser Lauf schreibt, liegt unter ${BACKUP_DIR} — auch der
+#            Vorlauf des Tabellen-Snapshots (${BACKUP_DIR}/tablestore/.scratch.*).
+#            Wer ${BACKUP_DIR} auf eine eigene Platte legt, bemisst damit alles;
+#            waehrend eines Laufs kommt zur Dauerbelegung kurzzeitig EINE weitere
+#            Kopie der gerade gesicherten Area hinzu (die groesste bestimmt die
+#            Spitze). Der Vorlauf liegt bewusst dort und nicht in ${TMPDIR}, s. u.
 #   restic:  keep-daily 7 / keep-weekly 4 / keep-monthly 6 + prune
 #
 # Trigger (Host-Cron auf Hetzner, dokumentiert im RUNBOOK):
@@ -317,27 +323,62 @@ backup_tablestore() {
     return 1
   fi
 
-  mkdir -p "${TABLESTORE_SNAPSHOT_DIR}"
+  if ! mkdir -p "${TABLESTORE_SNAPSHOT_DIR}"; then
+    fail_stage "Tabellen-Store: Zielverzeichnis nicht anlegbar: ${TABLESTORE_SNAPSHOT_DIR}"
+    return 1
+  fi
   log "VACUUM INTO-Snapshots ${src} → ${TABLESTORE_SNAPSHOT_DIR}"
 
   # Die Merkliste liegt BEWUSST ausserhalb von ${BACKUP_DIR}: dort wuerde ein
   # harter Abbruch zwischen Anlage und Aufraeumen sie in den restic-Snapshot
-  # tragen. Dasselbe gilt fuer das Scratch-Verzeichnis, in das VACUUM INTO
-  # schreibt: es traegt 1777, damit auch der Eigentuemer der Datenbank
-  # hineinschreiben kann, wenn der Lesevorgang unter dessen Kennung laeuft.
-  # Der trap raeumt beides auch bei hartem Abbruch.
+  # tragen. Sie wird nie ueber eine Dateisystemgrenze bewegt.
+  #
+  # Das Scratch-Verzeichnis dagegen liegt BEWUSST IM ZIELVERZEICHNIS — nicht in
+  # ${TMPDIR}. `VACUUM INTO` schreibt dorthin, und der fertige Snapshot wird
+  # anschliessend an seinen Platz geschoben. Nur wenn Vorlauf und Ziel auf
+  # DEMSELBEN Dateisystem liegen, ist dieses Schieben ein rename(2): unteilbar
+  # und ohne Kopiervorgang. Ueber eine Dateisystemgrenze hinweg (im Container:
+  # Writable-Layer vs. Backups-Volume) weicht `mv` auf Kopieren-und-Loeschen
+  # aus — dann kann es mittendrin scheitern (volle Platte) oder abgebrochen
+  # werden, und beides HINTERLAESST DEN VORLAUF ALS TORSO, statt ihn stehen zu
+  # lassen. Genau der Stand, auf den ein Restore zurueckfallen will.
+  #
+  # Es traegt 1777, damit auch der Eigentuemer der Datenbank hineinschreiben
+  # kann, wenn der Lesevorgang unter dessen Kennung laeuft (s. o.). Der trap
+  # raeumt beides auch bei hartem Abbruch — und das Aufraeumen passiert vor dem
+  # restic-Aufruf, es landet also nichts Halbfertiges im Snapshot.
   local snapshots=0 errors=0 seen scratch
-  seen="$(mktemp "${TMPDIR:-/tmp}/who2be-tablestore-seen.XXXXXX")"
-  scratch="$(mktemp -d "${TMPDIR:-/tmp}/who2be-tablestore-scratch.XXXXXX")"
-  chmod 1777 "${scratch}"
+  seen="$(mktemp "${TMPDIR:-/tmp}/who2be-tablestore-seen.XXXXXX")" || {
+    fail_stage "Tabellen-Store: Merkliste nicht anlegbar"
+    return 1
+  }
+  scratch="$(mktemp -d "${TABLESTORE_SNAPSHOT_DIR}/.scratch.XXXXXX")" || {
+    rm -f "${seen}"
+    fail_stage "Tabellen-Store: Vorlauf-Verzeichnis in ${TABLESTORE_SNAPSHOT_DIR} nicht anlegbar"
+    return 1
+  }
   trap 'rm -rf "${seen}" "${scratch}"' RETURN
+  if ! chmod 1777 "${scratch}"; then
+    fail_stage "Tabellen-Store: Vorlauf-Verzeichnis nicht freigebbar: ${scratch}"
+    return 1
+  fi
 
   local db rel target tmp foreign
   while IFS= read -r db; do
     rel="${db#"${src}"/}"
     target="${TABLESTORE_SNAPSHOT_DIR}/${rel}"
     tmp="${scratch}/snap.sqlite"
-    mkdir -p "$(dirname "${target}")"
+    # Die Merkliste sagt "diese Area GIBT ES in der Quelle", nicht "der Snapshot
+    # gelang" — deshalb steht sie hier und nicht erst nach dem Erfolg. Sonst
+    # raeumte der Verwaisten-Lauf unten den letzten guten Snapshot einer Area
+    # weg, die diesmal scheiterte: der Stand, auf den ein Restore zurueckfallen
+    # will, waere ausgerechnet durch den Fehlschlag verschwunden.
+    printf '%s\n' "${rel}" >>"${seen}"
+    if ! mkdir -p "$(dirname "${target}")"; then
+      log "  ✗ ${rel}: Zielverzeichnis nicht anlegbar"
+      errors=$((errors + 1))
+      continue
+    fi
     rm -f "${tmp}"
     # Unter der Kennung des Datei-Eigentuemers lesen (s. o.), damit etwaige
     # WAL-Seitendateien nicht dem Backup-Nutzer gehoeren.
@@ -366,15 +407,30 @@ backup_tablestore() {
       errors=$((errors + 1))
       continue
     fi
-    # Erst nach bestandener Pruefung ueber den Vorlauf schieben: so bleibt der
-    # letzte gute Snapshot stehen, wenn dieser Lauf fuer diese Area scheitert.
-    mv -f "${tmp}" "${target}"
-    printf '%s\n' "${rel}" >>"${seen}"
+    # Erst nach bestandener Pruefung ueber den Vorlauf schieben. Weil Vorlauf
+    # und Ziel auf demselben Dateisystem liegen (s. o.), ist das ein rename(2):
+    # entweder steht danach der neue Snapshot da oder der alte — nie ein Torso.
+    # Der Rueckgabewert wird trotzdem ausgewertet: `set -e` greift in diesem
+    # Rumpf NICHT (der Aufruf lautet `backup_tablestore || true`), ein stilles
+    # Scheitern wuerde die Area als Erfolg zaehlen und damit den Heartbeat
+    # gruen faerben, obwohl der Snapshot fehlt.
+    if ! mv -f "${tmp}" "${target}"; then
+      log "  ✗ ${rel}: Snapshot liess sich nicht an seinen Platz schieben"
+      rm -f "${tmp}"
+      errors=$((errors + 1))
+      continue
+    fi
     snapshots=$((snapshots + 1))
   done < <(find "${src}" -type f -name '*.sqlite' | sort)
 
+  # Vorlauf abraeumen, BEVOR verwaiste Snapshots gesucht werden: sonst zaehlte
+  # ein liegengebliebener Vorlauf als Snapshot mit.
+  rm -rf "${scratch}"
+
   # Verwaiste Snapshots raeumen: eine geloeschte Area soll nicht ueber den
-  # lokalen Spiegel weiterleben (gleiche Begruendung wie --delete oben).
+  # lokalen Spiegel weiterleben (gleiche Begruendung wie --delete oben). Reste
+  # eines hart abgebrochenen Vorlaufs fallen hier ebenfalls weg — sie tragen
+  # das Praefix `.scratch.` und stehen in keiner Merkliste.
   local orphan
   while IFS= read -r orphan; do
     rel="${orphan#"${TABLESTORE_SNAPSHOT_DIR}"/}"
@@ -383,8 +439,8 @@ backup_tablestore() {
       rm -f "${orphan}"
     fi
   done < <(find "${TABLESTORE_SNAPSHOT_DIR}" -type f -name '*.sqlite' 2>/dev/null | sort)
-  find "${TABLESTORE_SNAPSHOT_DIR}" -type d -empty -delete 2>/dev/null || true
-  rm -rf "${seen}" "${scratch}"
+  find "${TABLESTORE_SNAPSHOT_DIR}" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+  rm -f "${seen}"
   trap - RETURN
 
   if (( errors > 0 )); then

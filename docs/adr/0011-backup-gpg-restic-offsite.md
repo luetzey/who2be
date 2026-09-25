@@ -141,11 +141,20 @@ gekostet haette. Sie wird geschlossen:
   Kennung selbst nachzieht (das gelingt nur mit `CAP_CHOWN` und faellt still um,
   wenn die Capability entzogen wird), und die Seitendateien nachtraeglich zu
   loeschen (ein paralleler Leser der API koennte den WAL-Index gemappt haben).
-- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (13 Faelle,
+- Der Tabellen-Snapshot entsteht in einem Vorlauf **im Zielverzeichnis** und
+  wird erst nach bestandener Pruefung per `rename(2)` an seinen Platz geschoben;
+  der Rueckgabewert wird ausgewertet. Auf demselben Dateisystem ist der
+  Austausch unteilbar — ueber eine Grenze hinweg (Container-Writable-Layer vs.
+  Backups-Volume) waere er ein Kopiervorgang, der an vollem Platz scheitern oder
+  abgebrochen werden kann und das Ziel dabei ueberschreibt. Der letzte gute
+  Snapshot ist genau der Stand, auf den ein Restore zurueckfaellt; er darf durch
+  einen gescheiterten Lauf weder beschaedigt noch als Erfolg gezaehlt werden.
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (14 Faelle,
   stub-basiert, kein Docker-Daemon noetig) — insbesondere Fall 7–9:
   Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`; Fall 12–13:
   Backup-Lauf und Store unter verschiedenen Kennungen, mit und ohne
-  `CAP_CHOWN`.
+  `CAP_CHOWN`; Fall 14: volllaufendes Backup-Ziel auf einem eigenen
+  Dateisystem ⇒ Lauf rot, kein Heartbeat, Vortags-Snapshot unversehrt.
 
 Weiterhin offen: der Restore-Drill (M2 / #454) — er ist der Beleg, dass die drei
 Bestaende zusammen auch wirklich zurueckkommen.

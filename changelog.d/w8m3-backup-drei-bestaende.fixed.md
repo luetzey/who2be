@@ -22,7 +22,14 @@
   wird je Area geprueft, nicht angenommen — eine fremde Seitendatei macht den
   Lauf rot.
 
-  Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (13 Faelle,
+  Der Snapshot wird in einen Vorlauf **im Zielverzeichnis** geschrieben und erst
+  nach bestandener Pruefung an seinen Platz geschoben. Nur dort ist dieses
+  Schieben ein `rename(2)` und damit unteilbar: ueber eine Dateisystemgrenze
+  hinweg waere es ein Kopiervorgang, der an vollem Platz scheitern kann und das
+  Ziel dabei ueberschreibt — der letzte gute Snapshot waere ein Torso, und ohne
+  Pruefung des Rueckgabewerts haette der Lauf ihn als Erfolg gezaehlt.
+
+  Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (14 Faelle,
   stub-basiert, ohne Docker-Daemon lauffaehig; die Faelle 12–13 stellen den
-  Kennungswechsel in einem User-Namespace nach). RUNBOOK und ADR-0011
-  nachgezogen.
+  Kennungswechsel in einem User-Namespace nach, Fall 14 ein volllaufendes
+  Backup-Ziel auf einem eigenen Dateisystem). RUNBOOK und ADR-0011 nachgezogen.
