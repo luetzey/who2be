@@ -49,6 +49,13 @@ bzw. Dokumentations-Standards).
 
 ## How-To
 
+- [`cloud-erstinbetriebnahme.md`](cloud-erstinbetriebnahme.md) —
+  Erstinbetriebnahme der Cloud-Edition: abhakbare Vorbereitungsliste des
+  Owners, nach Vorlaufzeit sortiert (Mollie, DNS, OAuth-Zugangsdaten mit
+  exakter Redirect-URI, SMTP-Weiche, Secrets, Reihenfolge, Fehlerbilder)
+  — Betreiber. Der Ausfuehrungsteil liegt im RUNBOOK und in
+  [`cloud-prod-smoke.md`](cloud-prod-smoke.md); dieses Dokument wiederholt
+  ihn nicht
 - [`mcp-claude-code.md`](mcp-claude-code.md) — MCP-Server an Claude
   Code/Claude.ai anbinden (Endnutzer/Integratoren)
 - [`mfa-admin.md`](mfa-admin.md) — MFA-Step-up administrieren (Betreiber)

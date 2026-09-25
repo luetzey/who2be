@@ -206,6 +206,12 @@ Kompakte Bring-up-Checkliste fuer die **erste** Cloud-Inbetriebnahme nach dem
 **Service-Key**, **Mailer** und **Deploy-Pipeline** — mit dem Compose-Bring-up
 und der Abnahme. Reihenfolge einhalten:
 
+> **Was der Owner VORHER besorgen muss** — Mollie-Testkonto (Tage Vorlauf!),
+> DNS, OAuth-Zugangsdaten inkl. der exakten Redirect-URI, die SMTP-Weiche —
+> steht als abhakbare Liste in
+> [`docs/cloud-erstinbetriebnahme.md`](../../docs/cloud-erstinbetriebnahme.md).
+> Diese Checkliste hier ist der Ausfuehrungsteil und setzt sie voraus.
+
 - [ ] **0 — Provisioning steht:** Box, Docker, **LUKS-Verschluesselung des
       Daten-Volumes verifiziert** (`cryptsetup status` = `is active`, Schritt 3b
       — muss vor dem ersten Bring-up passiert sein), Cloud-Firewall (80/443/22),
