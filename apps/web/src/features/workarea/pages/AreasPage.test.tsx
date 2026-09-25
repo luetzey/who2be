@@ -64,3 +64,26 @@ describe('AreasPage', () => {
     })
   })
 })
+
+// Responsive-Vertrag #572 (AK 5). jsdom hat kein Layout — Klassen-Vertrag zu
+// den gerenderten Messungen in
+// .claude/plan/2026-09-23-1100_572-w3-workarea-responsive-audit.md.
+describe('AreasPage — Responsive (#572)', () => {
+  it('laesst den Besitzer-Namen in der Meta-Pille hart umbrechen', async () => {
+    // Gemessen: ein langer Agentenname lief bei 320 px um 49 px ueber die
+    // Innenkante der Meta-Zeile — eine `inline-flex`-Pille bietet keine
+    // Trennstelle. `break-all`, weil Agentennamen zusammengeschrieben sein
+    // koennen (Muster `ResourcesPage` aus #564).
+    stubFetch([
+      ['/agents', [agent({ name: 'Unternehmensberatungsgesellschaftsrechercheagent' })]],
+      ['/work-areas', [area({ scope: 'private', owner_agent_id: 'agent-1' })]],
+    ])
+    renderAt(<AreasPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Agent: Unternehmensberatungsgesellschaftsrechercheagent'),
+      ).toHaveClass('break-all')
+    })
+  })
+})

@@ -59,5 +59,39 @@ versioniertem Prompt-Engineering ist das Risiko zu hoch.
   Restore-Probe ist ein Backup ein Gefuehl, kein Wiederherstellungspfad.
 - Secret-Rotation der Storage-Box-Credentials ist in MS-3 H8
   beschrieben (gemeinsame Rotation-Runbook).
+
+## Nachtrag 2026-09-21 — Offsite-Fehlschlag ist nicht mehr still (Issue #541)
+
+Die urspruengliche Fassung von `deploy/hetzner/scripts/backup.sh` behandelte
+`restic backup` und `restic forget` bewusst als **nicht-fatal** und beendete den
+Lauf auch bei gescheitertem Offsite-Sync mit Exit 0. Die Absicht war richtig: ein
+gescheiterter Offsite-Sync darf den lokalen Dump nicht entwerten.
+
+Die Nebenwirkung war es nicht. Ein Exit 0 macht den Cron-Lauf gruen; Storage Box
+voll, SSH-Key abgelaufen oder Netzwerk weg blieben damit **monatelang unbemerkt**,
+bis es beim Restore auffiel. Die Entscheidung stammt aus der Zeit vor einer
+Betriebs-Alarmierung und wird hiermit vom Owner **ausdruecklich revidiert** — nicht
+stillschweigend geloescht, sondern datiert ersetzt:
+
+- **Exit != 0 bei gescheitertem `restic backup` oder `restic forget`.** Die Zusage
+  "der lokale GPG-Dump bleibt erhalten" gilt **unveraendert** — der Dump ist an
+  diesem Punkt bereits geschrieben und wird nicht angefasst. Weggefallen ist allein
+  die falsche Erfolgsmeldung.
+- **Zusaetzlich ein Dead-Man's-Switch** ueber `BACKUP_HEARTBEAT_URL` (leer = aus,
+  Default): Ping nur bei vollstaendigem Erfolg, alarmiert wird durch das *Ausbleiben*
+  des Pings. Das faengt zusaetzlich die Faelle, die ein Exit-Code prinzipiell nicht
+  fangen kann (Cron aus, Container weg, Host aus).
+- **Der Heartbeat-Empfaenger ist self-hosted.** healthchecks.io und jeder andere
+  gehostete Dienst wurden vom Owner abgelehnt: ein Dritter waere Auftragsverarbeiter
+  fuer Betriebsmetadaten und braeuchte einen VVT-Eintrag
+  (`docs/compliance/vvt.md` §5). Mit einem selbst betriebenen Empfaenger entsteht
+  kein solcher Eintrag.
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (Stub-basiert, kein
+  Docker-Daemon noetig); Einrichtung und Testanleitung im RUNBOOK unter
+  "Backup & Restore" → "Alarmweg (Dead-Man's-Switch)".
+
+Nicht Teil dieser Revision und weiterhin offen: RPO-Senkung / WAL-Archivierung, die
+ungetesteten SeaweedFS-Blob-Kommandos (#532), der Restore-Drill (MS-3 H4 / #454).
+
 </content>
 </invoke>

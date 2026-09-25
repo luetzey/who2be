@@ -47,7 +47,17 @@ export function PlaybookDetailTabs({ active, onChange }: PlaybookDetailTabsProps
   }
 
   return (
-    <div role="tablist" aria-label={t('detail.tabs.label')} className="flex gap-1 border-b">
+    // `flex-wrap`: die drei Tabs messen mit den deutschen Labels zusammen
+    // 379,8px und laufen auf 320px aus dem 288px-Innenraum (gemessen am
+    // gebauten CSS: bodyScroll 84px). Umbruch statt Scroll-Container ist die
+    // Festlegung von #573 (Vorentscheidung 1); design-language.md §4.4
+    // Checklistenpunkt 1 verlangt lediglich, dass bei 320px kein
+    // horizontaler Body-Scroll entsteht, und nennt kein Mittel.
+    <div
+      role="tablist"
+      aria-label={t('detail.tabs.label')}
+      className="flex flex-wrap gap-1 border-b"
+    >
       {TABS.map(({ key, icon: Icon }) => {
         const selected = key === active
         return (

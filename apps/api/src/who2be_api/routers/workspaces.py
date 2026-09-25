@@ -30,7 +30,7 @@ router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
 def get_workspace_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> WorkspaceService:
-    return WorkspaceService(PgWorkspaceRepository(pool), PgOrganizationRepository(pool))
+    return WorkspaceService(PgWorkspaceRepository(pool), PgOrganizationRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

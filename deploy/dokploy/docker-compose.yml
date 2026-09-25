@@ -78,7 +78,7 @@ services:
     restart: "no"
 
   auth:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.196.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -90,12 +90,25 @@ services:
       # → 422), Bestands-Logins + Admin-Invites bleiben erlaubt. In Dokploy
       # ueber die Env `GOTRUE_DISABLE_SIGNUP=true` setzen.
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      # Captcha vor der Registrierung (Issue #539, Cloudflare Turnstile).
+      # Namen gegen die gepinnte v2.158.1 verifiziert
+      # (internal/conf/configuration.go:423-427/:495/:257, envconfig-Praefix
+      # "gotrue" in :653): das Secret heisst `..._CAPTCHA_SECRET`, NICHT
+      # `..._CAPTCHA_PROVIDER_SECRET`. ENABLED=false ueberspringt die
+      # Validierung ⇒ leer gelassen bleibt das Verhalten unveraendert; bei
+      # `true` muss das Secret gesetzt sein, sonst startet GoTrue nicht.
+      # Wirkt auch auf /recover, /resend, /magiclink, /otp, /sso und den
+      # Passwort-Login — Admin-Calls (Invite-Versand) sind ausgenommen.
+      # Details: docs/signup-and-invites.md §3.
+      GOTRUE_SECURITY_CAPTCHA_ENABLED: ${GOTRUE_SECURITY_CAPTCHA_ENABLED:-false}
+      GOTRUE_SECURITY_CAPTCHA_PROVIDER: ${GOTRUE_SECURITY_CAPTCHA_PROVIDER:-turnstile}
+      GOTRUE_SECURITY_CAPTCHA_SECRET: ${GOTRUE_SECURITY_CAPTCHA_SECRET:-}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Staging-Smoke: Autoconfirm AN ⇒ kein SMTP noetig (Signups sofort nutzbar).
       # Fuer Prod auf false + GOTRUE_SMTP_* setzen.
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
@@ -103,6 +116,20 @@ services:
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
       GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
       GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+      # Social-Login (Track K) — default AUS; pro Provider per .env aktivieren.
+      # Identisch zu deploy/hetzner/supabase/docker-compose.yml: die
+      # Redirect-URI zeigt auf die GoTrue-Callback-Route hinter dem
+      # auth-gateway (/auth/v1/callback → intern /callback). Ohne diese
+      # Variablen liesse sich die Cloud-Edition hier gar nicht anmelden, sobald
+      # GOTRUE_EXTERNAL_EMAIL_ENABLED=false gesetzt wird.
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOTRUE_EXTERNAL_GOOGLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOTRUE_EXTERNAL_GOOGLE_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: ${GOTRUE_EXTERNAL_GITHUB_ENABLED:-false}
+      GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GITHUB_SECRET: ${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
+      GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
       API_EXTERNAL_URL: https://supabase.${DOMAIN}
     depends_on:
       db:
@@ -331,6 +358,12 @@ services:
       # WHO2BE_LAUNCH_MODE durchgereicht werden, sonst sieht der Entrypoint
       # den Wert nie und /config.js bleibt still auf dem Default.
       WHO2BE_SESSION_MAX_AGE_HOURS: ${WHO2BE_SESSION_MAX_AGE_HOURS:-12}
+      # Turnstile-Site-Key fuer das Captcha an den Auth-Masken (#539). LEER =
+      # kein Widget, Auth laeuft exakt wie bisher. Gehoert paarweise zu
+      # GOTRUE_SECURITY_CAPTCHA_* am auth-Service: Site-Key hier (oeffentlich,
+      # steht im HTML), Secret dort (nie in die Web-App). Nur eine der beiden
+      # Seiten zu setzen bricht den Signup — entweder beide oder keine.
+      WHO2BE_TURNSTILE_SITE_KEY: ${WHO2BE_TURNSTILE_SITE_KEY:-}
     depends_on:
       api:
         condition: service_healthy

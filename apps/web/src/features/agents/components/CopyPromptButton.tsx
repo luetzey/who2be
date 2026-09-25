@@ -76,7 +76,14 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
             variant="brand"
             disabled={disabled || busy !== null}
             aria-label={t('copy.formatSelect')}
-            className="rounded-l-none border-l border-l-primary-foreground/30 px-2"
+            // `w-10 md:w-auto`: der Dropdown-Teil traegt nur ein Chevron;
+            // `px-2` um ein 16-px-Icon ergibt gemessen 33 px Breite bei 40 px
+            // Hoehe. Das haelt zwar den Floor aus
+            // `docs/frontend/design-language.md` §11 (>= 32 px, dort die
+            // einzige Quelle), bleibt in der Breite aber unter den 40 px, die
+            // AK 4 von #570 unterhalb `md` verlangt. `w-10` macht daraus
+            // 40x40 px; ab `md` gibt `md:w-auto` die Desktop-Dichte frei.
+            className="w-10 rounded-l-none border-l border-l-primary-foreground/30 px-2 md:w-auto"
             data-testid="copy-prompt-dropdown-trigger"
           >
             <ChevronDown className="h-4 w-4" />

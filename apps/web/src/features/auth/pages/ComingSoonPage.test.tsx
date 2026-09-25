@@ -59,4 +59,13 @@ describe('ComingSoonPage', () => {
       'mailto:hello@who2be.dev',
     )
   })
+
+  // Responsive-Audit (#569): der Kontakt ist eine konfigurierte, oft lange
+  // Mail-Adresse — ein ungebrochenes Token. Die Seite folgt dem §10.2-Muster
+  // und traegt den Umbruch damit wie alle Auth-Karten.
+  it('laesst lange Kontaktadressen umbrechen (#569)', () => {
+    renderPage()
+
+    expect(document.querySelector('main')?.className).toContain('break-words')
+  })
 })

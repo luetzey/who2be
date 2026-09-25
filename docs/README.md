@@ -13,7 +13,7 @@ bzw. Dokumentations-Standards).
   OpenAPI-Spec der REST-API (Integratoren; Export:
   `uv run python scripts/export_openapi.py`, interaktiv unter `/docs`
   einer laufenden API)
-- [`adr/`](adr/) — Architecture Decision Records (intern; 49 ADRs,
+- [`adr/`](adr/) — Architecture Decision Records (intern; 52 ADRs,
   nummeriert, je Entscheidung eine Datei)
 - [`standards/`](standards/) — stehende Engineering-Standards (intern +
   Contributor): [`engineering-method.md`](standards/engineering-method.md)
@@ -26,6 +26,10 @@ bzw. Dokumentations-Standards).
   Komponenten-Landkarte der Web-UI (intern)
 - [`licensing/plans.md`](licensing/plans.md) — Editionen/Tarif-Logik
   (intern)
+- [`code-references.md`](code-references.md) — Konvention fuer Code-Zeiger
+  in Issues, Karten, Plaenen und Reviews: SHA-Permalink und Symbolanker
+  statt `datei:zeile`, plus der Pruefer
+  `scripts/check_code_refs.py` (intern + Contributor)
 
 ## Konzept
 
@@ -45,6 +49,13 @@ bzw. Dokumentations-Standards).
 
 ## How-To
 
+- [`cloud-erstinbetriebnahme.md`](cloud-erstinbetriebnahme.md) —
+  Erstinbetriebnahme der Cloud-Edition: abhakbare Vorbereitungsliste des
+  Owners, nach Vorlaufzeit sortiert (Mollie, DNS, OAuth-Zugangsdaten mit
+  exakter Redirect-URI, SMTP-Weiche, Secrets, Reihenfolge, Fehlerbilder)
+  — Betreiber. Der Ausfuehrungsteil liegt im RUNBOOK und in
+  [`cloud-prod-smoke.md`](cloud-prod-smoke.md); dieses Dokument wiederholt
+  ihn nicht
 - [`mcp-claude-code.md`](mcp-claude-code.md) — MCP-Server an Claude
   Code/Claude.ai anbinden (Endnutzer/Integratoren)
 - [`mfa-admin.md`](mfa-admin.md) — MFA-Step-up administrieren (Betreiber)
@@ -58,9 +69,18 @@ bzw. Dokumentations-Standards).
 - [`cloud-hosting-owner-guide.md`](cloud-hosting-owner-guide.md) —
   Owner-Leitfaden Cloud-Hosting bei Hetzner: Schritt-fuer-Schritt von der
   leeren Box zum Launch, Tarif-/Limit-Diskussion, Missbrauchsschutz,
-  Datenhaltung, Backup-Strategie (Betreiber)
+  Datenhaltung, Backup-Strategie (Betreiber) — Analyse-/Vorschlagspapier,
+  Stand 2026-09-19; verbindlich fuer Tarife/Limits ist
+  [`licensing/plans.md`](licensing/plans.md)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
+- [`auto-merge-agenten.md`](auto-merge-agenten.md) — der eine erlaubte Weg,
+  Auto-Merge anzufordern: die drei Gates, das Kommando im Wortlaut,
+  Fehlerbilder, was gesperrt bleibt (intern + Agenten)
+- [`branch-protection-main.md`](branch-protection-main.md) —
+  Entscheidungsgrundlage der Branch-Protection auf `main`: `all-green` als
+  einziger Required Check, je Regel Nutzen/Kosten/Wirkung auf Agenten
+  (Owner; **umgesetzt am 2026-09-22**, Ruleset `16707501`)
 
 ## Arbeits- und Pruefstaende (intern, historisch)
 

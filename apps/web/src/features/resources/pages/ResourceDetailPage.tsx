@@ -134,12 +134,13 @@ export function ResourceDetailPage() {
                     />
                     <LocaleBadge locale={resource.locale} />
                     {resource.slug ? (
-                      <Badge variant="outline" className="font-mono text-xs">
+                      // #564: siehe ResourcesPage — Slug ohne Trennstellen.
+                      <Badge variant="outline" className="max-w-full font-mono text-xs break-all">
                         {resource.slug}
                       </Badge>
                     ) : null}
                     {tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">
+                      <Badge key={tag} variant="secondary" className="max-w-full text-xs break-words">
                         {tag}
                       </Badge>
                     ))}
@@ -319,14 +320,22 @@ export function ResourceDetailPage() {
                               `${sub.id}-${sub.block_id ?? 'doc'}`
                             }
                             renderItem={(sub) => (
-                              <span className="flex items-center justify-between gap-3">
+                              // #564: `flex-wrap` + `min-w-0` am Link. Ohne
+                              // beides drueckt die Scope-Badge (Block-Anker mit
+                              // `blk_`-Praefix, gemessen 449px bei 320px
+                              // Viewport) den Link auf Breite 0 — `truncate`
+                              // greift erst mit `min-w-0`.
+                              <span className="flex flex-wrap items-center justify-between gap-3">
                                 <Link
                                   to={wsPath(`/resources/${sub.id}`)}
-                                  className="truncate"
+                                  className="min-w-0 truncate"
                                 >
                                   {sub.name}
                                 </Link>
-                                <Badge variant="secondary">
+                                <Badge
+                                  variant="secondary"
+                                  className="max-w-full break-all"
+                                >
                                   {sub.link_scope === 'block'
                                     ? t('detail.scopeBlock', {
                                         blockId: sub.block_id ?? '',

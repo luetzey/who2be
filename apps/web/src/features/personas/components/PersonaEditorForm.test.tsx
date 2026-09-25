@@ -221,4 +221,22 @@ describe('PersonaEditorForm', () => {
     expect(listPersonaTags).toHaveBeenCalled()
     expect(listPlaybookTags).not.toHaveBeenCalled()
   })
+
+  // Responsive-Audit #571 (Haelfte B): Der Modi-Editor sitzt auf der New-Page
+  // in zwei geschachtelten Polsterungen (Card-Content + Disclosure-Body). Bei
+  // 320 px Viewport gemessen frass das 80 px der 320 px Breite — der Editor
+  // hatte 268 px, im „Modi\"-Tab der Detail-Page dagegen 318 px. Beide
+  // Polsterungen schrumpfen unterhalb `sm` und stellen ab `sm` den Bestand
+  // wieder her.
+  it('polstert Card und Modi-Disclosure unterhalb `sm` schmaler (Responsive-Audit)', () => {
+    const { container } = render(<Harness />)
+
+    const cardContent = container.querySelector('.pt-6')
+    expect(cardContent?.className).toContain('px-3')
+    expect(cardContent?.className).toContain('sm:px-6')
+
+    const disclosureBody = container.querySelector('details > div.border-t')
+    expect(disclosureBody?.className).toContain('px-2')
+    expect(disclosureBody?.className).toContain('sm:px-4')
+  })
 })
