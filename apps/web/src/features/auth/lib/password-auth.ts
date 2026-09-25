@@ -23,3 +23,24 @@
 export function isPasswordAuthEnabled(): boolean {
   return !__CLOUD_BUILD__
 }
+
+/**
+ * True in der Cloud (Sign in with Apple sichtbar), false im Self-Hosting.
+ *
+ * Umgekehrtes Vorzeichen zu `isPasswordAuthEnabled`, bewusst **dasselbe**
+ * Edition-Merkmal (ADR-0029) — kein zweiter Schalter. Warum Apple anders als
+ * Google/GitHub an der Edition haengt: Apple verlangt ein zahlungspflichtiges
+ * Developer-Konto UND eine im Apple-Portal registrierte HTTPS-Domain
+ * (`localhost` und IP-Adressen lehnt Apple ab). Im Self-Hosting hat niemand
+ * beides, die Schaltflaeche waere dort garantiert tote Flaeche. Google und
+ * GitHub sind dagegen von jedem selbst konfigurierbar und bleiben in beiden
+ * Editionen sichtbar.
+ *
+ * Backend-Pendant: `GOTRUE_EXTERNAL_APPLE_ENABLED` (Compose-Default ueberall
+ * `false`, in der Cloud-`.env` auf `true` gesetzt — dort, wo die Credentials
+ * liegen). Beides wird im Deploy gemeinsam gesetzt.
+ */
+export function isAppleAuthEnabled(): boolean {
+  return __CLOUD_BUILD__
+}
+

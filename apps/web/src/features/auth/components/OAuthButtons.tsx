@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
 
 import { buildRedirectTo } from '../lib/redirect'
+import { isAppleAuthEnabled } from '../lib/password-auth'
 
 // Monochrome Brand-Glyphen als currentColor-SVG — kein Brand-Hex, erbt die
 // Textfarbe des Buttons und bleibt damit im Token-System (Dark/Light).
@@ -27,12 +28,28 @@ function GithubGlyph() {
   )
 }
 
+function AppleGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="currentColor">
+      <path d="M17.05 12.536c.019 2.86 2.5 3.81 2.53 3.823-.02.064-.4 1.37-1.32 2.72-.795 1.166-1.62 2.33-2.92 2.354-1.277.024-1.688-.758-3.148-.758-1.46 0-1.917.734-3.126.782-1.254.048-2.208-1.262-3.01-2.424-1.75-2.534-3.086-7.16-1.29-10.286.89-1.552 2.484-2.535 4.213-2.56 1.232-.024 2.395.83 3.148.83.753 0 2.166-1.026 3.652-.875.622.026 2.37.226 3.492 1.7-.09.057-2.085 1.219-2.06 3.635zM14.68 3.9c.666-.806 1.115-1.929.993-3.047-.986.04-2.18.657-2.868 1.462-.617.713-1.157 1.856-1.012 2.951 1.1.085 2.221-.559 2.888-1.366z" />
+    </svg>
+  )
+}
+
 // Social-Login (Track K): GoTrue External Provider. supabase-js leitet den
 // Browser auf `${SUPABASE_URL}/auth/v1/authorize?provider=…&redirect_to=…`,
-// GoTrue spricht mit Google/GitHub und schickt den Browser danach an unsere
-// `redirect_to` (die Callback-Route) zurueck — Tokens kommen im URL-Hash
+// GoTrue spricht mit Google/GitHub/Apple und schickt den Browser danach an
+// unsere `redirect_to` (die Callback-Route) zurueck — Tokens kommen im URL-Hash
 // (implicit flow). `redirect_to` ist immer ein In-App-Pfad auf unserem Origin.
-type Provider = 'google' | 'github'
+//
+// Apple laeuft denselben Weg, mit zwei Eigenheiten, die GoTrue v2.196.0 selbst
+// abfaengt und die hier nur der Nachvollziehbarkeit wegen stehen:
+//   * Apple antwortet per POST auf die Callback-Route (`response_mode=form_post`,
+//     internal/api/provider/apple.go) — GoTrue registriert GET und POST.
+//   * Name und E-Mail liefert Apple NUR beim allerersten Login, im POST-Feld
+//     `user`; GoTrue liest es dort aus (internal/api/external_oauth.go) und legt
+//     es in die User-Metadaten. Unsere Callback-Seite muss nichts nachholen.
+type Provider = 'google' | 'github' | 'apple'
 
 // `disabled` gated den Social-Login z. B. solange die Signup-Consent-Checkbox
 // nicht gesetzt ist (WP-I). Default false → Login bleibt unveraendert.
@@ -86,6 +103,18 @@ export function OAuthButtons({
         <GithubGlyph />
         {t('oauth.github')}
       </Button>
+      {isAppleAuthEnabled() ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => void signInWith('apple')}
+          disabled={disabled || pending !== null}
+        >
+          <AppleGlyph />
+          {t('oauth.apple')}
+        </Button>
+      ) : null}
     </div>
   )
 }

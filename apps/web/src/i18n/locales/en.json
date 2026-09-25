@@ -738,7 +738,8 @@
     },
     "oauth": {
       "google": "Sign in with Google",
-      "github": "Sign in with GitHub"
+      "github": "Sign in with GitHub",
+      "apple": "Sign in with Apple"
     },
     "connector": {
       "title": "Authorize connection",

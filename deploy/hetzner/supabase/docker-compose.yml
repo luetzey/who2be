@@ -161,6 +161,18 @@ services:
       GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
       GOTRUE_EXTERNAL_GITHUB_SECRET: ${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
       GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
+      # Sign in with Apple (Cloud-Edition). ACHTUNG, anders als Google/GitHub:
+      # GOTRUE_EXTERNAL_APPLE_SECRET ist ein aus dem `.p8`-Key signiertes
+      # ES256-JWT mit HOECHSTENS SECHS MONATEN Laufzeit (Apple: max. 15777000 s).
+      # GoTrue erneuert es nicht und warnt nicht — nach Ablauf antwortet Apple
+      # `invalid_client` und der Login scheitert mit generischer 500. Portal-
+      # Schritte + Erneuerungs-Prozedur: README.md in diesem Verzeichnis.
+      # CLIENT_ID ist die Services-ID (nicht die App-ID); die Redirect-URI muss
+      # im Portal unter "Website URLs" wortgleich eingetragen sein.
+      GOTRUE_EXTERNAL_APPLE_ENABLED: ${GOTRUE_EXTERNAL_APPLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_APPLE_CLIENT_ID: ${GOTRUE_EXTERNAL_APPLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_APPLE_SECRET: ${GOTRUE_EXTERNAL_APPLE_SECRET:-}
+      GOTRUE_EXTERNAL_APPLE_REDIRECT_URI: ${GOTRUE_EXTERNAL_APPLE_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
       API_EXTERNAL_URL: https://supabase.${DOMAIN}
     depends_on:
       db:
