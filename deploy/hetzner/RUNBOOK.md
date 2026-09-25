@@ -392,11 +392,46 @@ docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
   sh -c 'zcat -f /var/log/caddy/access*.log*'
 ```
 
-**Aufbewahrung: 14 Tage** (`roll_keep_for 336h`), zusaetzlich groessenbegrenzt
-auf ~10 MiB aktiv plus 10 komprimierte Generationen. Die Rotation IST das
-Loeschverfahren — es gibt keinen Cronjob, der zusaetzlich aufraeumt, und damit
-auch keinen, der ausfallen kann. Wer die Frist aendert, aendert sie an drei
-Stellen gemeinsam: Caddyfile, `docs/compliance/vvt.md` §7 und
+**Aufbewahrung: 14 Tage.** Sie wird von einem Host-Cron durchgesetzt, nicht von
+der Caddy-Konfiguration allein: `roll_size`/`roll_keep` deckeln die **Groesse**,
+und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
+Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
+Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
+
+Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
+auf dem Host eingerichtet:
+
+```bash
+# Host-Crontab des Deploy-Users (crontab -e):
+30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+```
+
+**Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
+schreibt nach einem `mv` in den alten Inode weiter — die neue `access.log`
+entsteht erst beim Neu-Oeffnen. Nachgemessen gegen `caddy:2.8-alpine` (v2.8.4):
+weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncate`
+(kopieren + `truncate`) fuehrt zu einer Datei voller Nullbytes, weil der Writer
+am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
+**0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
+
+Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
+Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
+Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
+ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
+Quartals-Check:
+
+```bash
+# Aelteste Generation — darf nicht aelter als 14 Tage sein
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  find /var/log/caddy -name 'access.log.*' -mtime +14
+
+# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  ls -lt /var/log/caddy
+```
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
+Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
 `docs/compliance/data-retention-and-erasure.md` §5.
 
 **Was nicht im Log steht:** Cookie-, Authorization- und

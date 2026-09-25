@@ -226,11 +226,18 @@ Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
 Caddy schreibt sie nach `/var/log/caddy/access.log` auf dem Volume `caddy-logs`
 (`deploy/hetzner/Caddyfile`, Snippet `access_log`).
 
-**Retention: 14 Tage.** Das Loeschverfahren ist die Rotation selbst
-(`roll_keep_for 336h`) — es gibt keinen zweiten Mechanismus, der die Frist
-durchsetzt, und deshalb auch keinen, der ausfallen kann. Zusaetzlich greift
-eine Groessenbegrenzung (`roll_size 10MiB`, `roll_keep 10`), damit das Log die
-Platte nicht fuellt, bevor die Zeit ablaeuft.
+**Retention: 14 Tage.** Durchgesetzt wird sie von einem **Host-Cron**, der die
+aktive Datei taeglich rotiert und Generationen aelter als 14 Tage loescht
+(Einrichtung und Quartals-Pruefung: [`RUNBOOK.md` §Access-Logs](../../deploy/hetzner/RUNBOOK.md#access-logs--ressourcen-limits)).
+Die Caddy-Konfiguration allein traegt die Frist **nicht**: `roll_size 10MiB` /
+`roll_keep 10` begrenzen die Groesse, und `roll_keep_for 336h` wirkt nur auf
+bereits rotierte Generationen — bei geringem Anfrageaufkommen kann die aktive
+Datei laenger als 14 Tage bestehen. `roll_keep_for` ist deshalb die zweite,
+unabhaengige Grenze, nicht die erste.
+
+**Restrisiko, benannt statt weggelassen:** Faellt der Cron aus, wird die Frist
+ueberschritten, ohne dass etwas ausfaellt. Der Quartals-Check im RUNBOOK prueft
+genau das (aelteste Generation, letzter Rotationszeitpunkt).
 
 **Was gar nicht erst geschrieben wird:** Caddy redigiert `Cookie`,
 `Set-Cookie`, `Authorization` und `Proxy-Authorization` per Default zu
@@ -262,7 +269,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
-| Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Log-Rotation (`roll_keep_for 336h` bzw. `logging:`-Limits) |
+| Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron (taegliche Rotation + Loeschung aelter 14 Tage, RUNBOOK §Access-Logs); `roll_keep_for 336h` als zweite Grenze, `logging:`-Limits fuer Container-Logs |
 
 ---
 

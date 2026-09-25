@@ -180,7 +180,7 @@ Kurzfassung:
 | Agenten-Zugriffslog (`agent_access_log`) | Eintrag dauerhaft als Nachweis; beim Hard-Purge **geloescht** (expliziter DELETE vor der Org-CASCADE, FK `NO ACTION` seit 0080) |
 | Backups | lokal 7 Tage; Offsite restic `keep-daily 7 / keep-weekly 4 / keep-monthly 6` |
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
-| Server-Logs (Caddy-Access-Log) | **14 Tage**, durchgesetzt von der Log-Rotation selbst (`roll_keep_for 336h` in `deploy/hetzner/Caddyfile`), zusaetzlich groessenbegrenzt (`roll_size`/`roll_keep`). Container-Logs (stdout/stderr) je Dienst auf 3 x 10 MB gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien) |
+| Server-Logs (Caddy-Access-Log) | **14 Tage**, durchgesetzt von einem Host-Cron (taegliche Rotation + Loeschung aelterer Generationen, `deploy/hetzner/RUNBOOK.md` §Access-Logs); `roll_keep_for 336h` in `deploy/hetzner/Caddyfile` wirkt als zweite Grenze, zusaetzlich groessenbegrenzt (`roll_size`/`roll_keep`). Container-Logs (stdout/stderr) je Dienst auf 3 x 10 MB gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien) |
 
 ---
 

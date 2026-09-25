@@ -37,13 +37,28 @@
 #
 # Rotation ist Pflicht und nicht Kuer: eine unbegrenzt wachsende Logdatei ist
 # ein selbstgebauter Ausfall (volle Platte). Obergrenze hier ~10 MiB aktiv +
-# 10 gzip-komprimierte Generationen, zusaetzlich zeitlich gedeckelt.
+# 10 gzip-komprimierte Generationen.
 #
 # Datenschutz (V12 im VVT, Art. 6 Abs. 1 lit. f): Access-Logs enthalten
-# IP-Adressen und User-Agents.
-#   * `roll_keep_for 336h` = 14 Tage — die Loeschfrist ist die Rotation selbst,
-#     kein separater Cronjob. Sie liegt in dem Korridor, den
-#     docs/compliance/data-retention-and-erasure.md §5 vorgibt (7–30 Tage).
+# IP-Adressen und User-Agents. Aufbewahrung: 14 Tage, im Korridor von
+# docs/compliance/data-retention-and-erasure.md §5 (7–30 Tage).
+#
+# WIE die Frist durchgesetzt wird — und warum nicht hier:
+#   * Die Direktiven unten deckeln die GROESSE, nicht die Zeit. `roll_keep_for`
+#     wirkt ausschliesslich auf bereits rotierte Generationen und laeuft erst,
+#     wenn eine neue Datei entsteht; die aktive `access.log` erfasst es nie.
+#     Ein zeitlicher Ausloeser fehlt: `roll_size` ist der einzige. Bei dem
+#     Anfrageaufkommen eines Solo-Betriebs rotiert die Datei damit seltener
+#     als alle 14 Tage — die Frist waere eine Zusage ohne Mechanismus.
+#   * Caddy 2.8.4 kennt weder `roll_at` noch `roll_interval` und verwirft beide
+#     STILL (`caddy adapt` zeigt sie nicht im JSON, `validate` meldet nichts) —
+#     dasselbe Muster wie beim `mode`-Unterbefehl unten. Eine solche Zeile
+#     waere ein wirkungsloser Platzhalter.
+#   * Den zeitlichen Teil traegt deshalb ein Host-Cron, wie schon bei Backup
+#     und Retention-Purge: taeglich rotieren, Generationen aelter als 14 Tage
+#     loeschen. Einrichtung und Nachweis: RUNBOOK §Access-Logs.
+#     `roll_keep_for` bleibt als zweite, unabhaengige Grenze gesetzt — faellt
+#     der Cron aus, raeumt es bei der naechsten groessenbedingten Rotation auf.
 #   * Cookie/Set-Cookie/Authorization/Proxy-Authorization redigiert Caddy per
 #     Default zu `REDACTED`; die globale Server-Option `log_credentials`, die
 #     das abschalten wuerde, ist bewusst NICHT gesetzt.

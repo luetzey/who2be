@@ -91,8 +91,9 @@ Zusaetzlich, ohne dass die Karte es verlangt:
 
 1. `deploy/hetzner/Caddyfile`: Snippet `(access_log)`, in alle vier Site-Bloecke
    importiert. Output `file /var/log/caddy/access.log` (Volume → Host, A7),
-   `roll_size 10MiB`, `roll_keep 10`, `roll_keep_for 336h` (14 Tage),
-   `mode 640`; Query-Redaction via `format filter`.
+   `roll_size 10MiB`, `roll_keep 10`, `roll_keep_for 336h` (zweite Grenze);
+   Query-Redaction via `format filter`. Die 14-Tage-Frist traegt der Host-Cron
+   aus Schritt 7, nicht diese Direktiven.
 2. `deploy/hetzner/who2be/docker-compose.yml`: `caddy-logs`-Volume;
    `logging:`-Limits (`json-file`, `max-size 10m`, `max-file 3`),
    `security_opt`, `mem_limit` an **allen** Diensten inkl. Profil-Diensten.
@@ -104,8 +105,12 @@ Zusaetzlich, ohne dass die Karte es verlangt:
    (jeder Dienst in beiden Hetzner-Files traegt alle drei Bloecke) — damit ist
    „vollstaendig, nicht stichprobenhaft" nicht nur heute wahr.
 6. Verifikation: `caddy validate` mit dem echten 2.8.4-Binary,
-   YAML-Parse + Test-Suite, ruff/mypy.
-7. Changelog-Fragment unter `changelog.d/<slug>.security.md` — **nicht** direkt
+   YAML-Parse + Test-Suite, ruff/mypy. Zusaetzlich das Rotationsverfahren
+   aus Schritt 7 real gegen einen laufenden `caddy:2.8-alpine`-Container.
+7. Host-Cron fuer die 14-Tage-Frist im RUNBOOK: die Caddy-Direktiven deckeln
+   Groesse, nicht Zeit, also braucht die Frist einen eigenen Ausloeser
+   (dasselbe Muster wie bei Backup und Retention-Purge).
+8. Changelog-Fragment unter `changelog.d/<slug>.security.md` — **nicht** direkt
    in `CHANGELOG.md`. Das Fragment-Verfahren aus CONTRIBUTING.md (#587) ist
    nicht Stilfrage, sondern vom CI-Job `changelog-guard` erzwungen; ein
    direkter Eintrag in die Sammeldatei faellt dort hart durch. Lokal
@@ -189,12 +194,29 @@ moeglich — mehr als erwartet ist verifiziert:
     entferntes `import access_log` genau den Site-Fall — die Tests koennen also
     rot werden.
   - `ruff check`, `ruff format --check`, `mypy` (465 Dateien): gruen.
-- **Nicht verifiziert:** ein echter Stack-Start, das tatsaechliche Schreiben
-  der Logdatei ins Volume, das Rotationsverhalten unter Last, und ob die
-  gewaehlten `mem_limit`-Werte im Dauerbetrieb reichen. Letzteres laesst sich
-  ohne Produktionslast grundsaetzlich nicht messen — deshalb sind die Deckel
-  grosszuegig gewaehlt und das RUNBOOK sagt, woran man einen zu knappen Deckel
-  erkennt (dauerhaft > 80 %) und wie man ihn anhebt.
+- **Nicht verifiziert:** ein echter Start der beiden **Hetzner**-Stacks als
+  Ganzes und ob die gewaehlten `mem_limit`-Werte im Dauerbetrieb reichen.
+  Letzteres laesst sich ohne Produktionslast grundsaetzlich nicht messen —
+  deshalb sind die Deckel grosszuegig gewaehlt und das RUNBOOK sagt, woran man
+  einen zu knappen Deckel erkennt (dauerhaft > 80 %) und wie man ihn anhebt.
+  **Kein CI-Job schliesst diese Luecke:** `compose-smoke` startet
+  `docker compose up` ohne `-f`, also das Root-`docker-compose.yml` der lokalen
+  Entwicklung; die Dateien unter `deploy/hetzner/` laufen in keinem Workflow
+  (nur `deploy.yml` referenziert sie, und das erst auf der Zielmaschine). Der
+  gruene `compose-smoke` belegt fuer diese Aenderung nur, dass der lokale Stack
+  weiterhin startet — nicht den Startpfad der geaenderten Stacks.
+
+- **Rotationsverfahren dagegen real geprueft** (podman, `caddy:2.8-alpine`,
+  Binary v2.8.4), weil es die Frist traegt:
+  - `roll_keep_for` erfasst die **aktive** Datei nicht: ohne Rotationsereignis
+    bleibt sie bestehen — der Grund, warum der Host-Cron existiert.
+  - `copytruncate` (kopieren + `truncate -s 0`) erzeugt eine Datei voller
+    Nullbytes: der Writer schreibt am alten Offset weiter. Deshalb `mv`.
+  - Weder `USR1` noch `HUP` noch `caddy reload` oeffnen die Datei neu.
+    Deshalb der Container-Neustart; gemessene Unterbrechung **0,7 s**.
+  - Der RUNBOOK-Einzeiler wortgleich gefahren: aktive Datei neu angelegt
+    (Rechte `0600`, keine Nullbytes), 20 Tage alte Generation geloescht,
+    3 Tage alte erhalten, Caddy antwortet danach weiter.
 - **Coverage-Gate lokal:** `pytest --cov --cov-fail-under=85` scheitert hier
   mit 63,40 %, weil ohne erreichbare DB 485 Integrationstests uebersprungen
   werden. Gegenprobe auf `main`: identische 63,40 % und dieselben 485 Skips bei

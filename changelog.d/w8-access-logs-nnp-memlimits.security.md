@@ -4,10 +4,13 @@
   container host rather than inside the container (BSI IT-Grundschutz
   SYS.1.6.A7, a basic requirement: storing container logging data "MUSS
   ausserhalb des Containers, mindestens auf dem Container-Host, erfolgen").
-  Rotation is part of the same configuration — roughly 10 MiB per file, ten
-  compressed generations, and a 14-day ceiling — so the log cannot fill the
-  disk and the retention period needs no separate cleanup job that could fail
-  silently.
+  Rotation is part of the same configuration — roughly 10 MiB per file and ten
+  compressed generations — so the log cannot fill the disk. The 14-day
+  retention period is enforced separately, by a nightly host cron that rotates
+  the active file and removes older generations; the Caddy directives cap size
+  rather than age, so on their own they would not hold the period. The runbook
+  documents the cron, why a restart rather than a signal is needed, and the
+  quarterly check that catches a silent cron failure.
 
   Access logs carry IP addresses and user agents, a processing activity the
   record of processing activities already lists (V12, Art. 6(1)(f)); what it

@@ -163,22 +163,102 @@ def test_caddy_access_log_is_enabled_for_every_site() -> None:
     assert directives.count("import security_headers") == len(sites)
 
 
-def test_caddy_access_log_rotates_and_expires() -> None:
-    """Rotation UND Aufbewahrungsfrist sind gesetzt, nicht nur eines davon.
+def test_caddy_access_log_rotates_by_size() -> None:
+    """Groessenbegrenzung ist gesetzt — sonst fuellt das Log die Platte.
 
-    Ohne ``roll_size``/``roll_keep`` fuellt das Log die Platte (selbstgebauter
-    Ausfall); ohne ``roll_keep_for`` blieben IP-Adressen unbegrenzt liegen
-    (V12 im VVT). Die Frist ist zugleich das Loeschverfahren — es gibt keinen
-    zweiten Mechanismus, der sie durchsetzt.
+    Das ist ausdruecklich NUR die Groessengrenze. Die 14-Tage-Frist haengt
+    nicht daran; sie wird vom Host-Cron getragen, den
+    ``test_access_log_retention_is_enforced_by_a_documented_cron`` prueft.
     """
     directives = _caddyfile_directives()
     assert "output file /var/log/caddy/access.log" in directives
     assert "roll_size" in directives
     assert "roll_keep " in directives
-    # 336h = 14 Tage. Muss zu docs/compliance/vvt.md §7 und
-    # data-retention-and-erasure.md §5 passen — die drei Stellen sind eine
-    # Aussage, nicht drei.
+
+
+def test_caddy_access_log_keeps_the_secondary_time_bound() -> None:
+    """``roll_keep_for`` bleibt als zweite, unabhaengige Grenze gesetzt.
+
+    Sie traegt die Frist NICHT allein: sie wirkt nur auf bereits rotierte
+    Generationen und laeuft erst, wenn eine neue Datei entsteht — die aktive
+    ``access.log`` erfasst sie nie. Sie ist der Rueckfall, falls der Cron
+    ausfaellt, und muss deshalb zur dokumentierten Frist passen.
+    """
+    directives = _caddyfile_directives()
     assert "roll_keep_for 336h" in directives
+
+
+def test_caddy_does_not_use_directives_this_version_ignores() -> None:
+    """Keine Zeitrotations-Direktive, die Caddy 2.8 still verwirft.
+
+    ``roll_at``/``roll_interval`` kennt der file-Writer dieser Version nicht
+    und laesst sie beim Adaptieren kommentarlos weg — gegen das Binary
+    geprueft. Eine solche Zeile saehe nach durchgesetzter Frist aus und waere
+    wirkungslos; genau davor schuetzt dieser Test.
+    """
+    directives = _caddyfile_directives()
+    for ignored in ("roll_at", "roll_interval", "mode "):
+        assert ignored not in directives, (
+            f"{ignored!r} wird von Caddy 2.8 still verworfen — "
+            "wirkungsloser Platzhalter statt durchgesetzter Einstellung"
+        )
+
+
+def test_access_log_retention_is_enforced_by_a_documented_cron() -> None:
+    """Die 14-Tage-Frist hat einen Mechanismus, nicht nur eine Zusage.
+
+    Die Caddy-Direktiven deckeln die Groesse, nicht die Zeit. Ohne einen
+    zeitlichen Ausloeser kann die aktive Logdatei bei geringem Aufkommen
+    laenger als die zugesagte Frist bestehen — personenbezogene Daten (IP,
+    User-Agent) blieben dann ueber die Frist hinaus liegen, ohne dass etwas
+    ausfaellt. Deshalb muss das RUNBOOK ein Verfahren nennen, das die Frist
+    tatsaechlich durchsetzt, und die Frist darin muss zur Konfiguration und
+    zu den beiden Compliance-Dokumenten passen.
+    """
+    runbook = (_HETZNER / "RUNBOOK.md").read_text(encoding="utf-8")
+    assert "/var/log/caddy/access.log" in runbook
+
+    # Der Mechanismus, der fehlte: eine Zeile, die zeitbasiert LOESCHT. Der
+    # Quartals-Check listet dieselbe `-mtime`-Bedingung nur auf, ohne zu
+    # loeschen — deshalb muessen beide Teile in EINER Zeile stehen, sonst
+    # wuerde der Test von der blossen Pruefanleitung gruen gehalten.
+    delete_lines = [
+        line for line in runbook.splitlines() if "-mtime +14" in line and "-delete" in line
+    ]
+    assert delete_lines, (
+        "RUNBOOK nennt kein zeitbasiertes Loeschverfahren fuer die Access-Logs "
+        "(eine Zeile, die aeltere Generationen tatsaechlich entfernt)"
+    )
+    # ... und rotiert die aktive Datei, die roll_keep_for nie erfasst.
+    assert "mv /var/log/caddy/access.log" in runbook
+
+    # Die Frist ist EINE Aussage an vier Stellen.
+    for doc in (
+        _REPO_ROOT / "docs" / "compliance" / "vvt.md",
+        _REPO_ROOT / "docs" / "compliance" / "data-retention-and-erasure.md",
+    ):
+        text = doc.read_text(encoding="utf-8")
+        assert "14 Tage" in text
+        assert "RUNBOOK" in text, f"{doc.name} verweist nicht auf das Verfahren"
+
+
+def test_retention_docs_do_not_claim_a_failure_proof_mechanism() -> None:
+    """Kein Dokument behauptet, die Frist koenne nicht ausfallen.
+
+    Ein Host-Cron kann still ausfallen. Die Dokumente benennen dieses
+    Restrisiko; ein Satz, der das Gegenteil verspricht, wuerde einen spaeteren
+    Leser eine echte Pruefung ueberspringen lassen.
+    """
+    for path in (
+        _CADDYFILE,
+        _HETZNER / "RUNBOOK.md",
+        _REPO_ROOT / "docs" / "compliance" / "vvt.md",
+        _REPO_ROOT / "docs" / "compliance" / "data-retention-and-erasure.md",
+    ):
+        text = path.read_text(encoding="utf-8")
+        assert "keinen, der ausfallen kann" not in text, (
+            f"{path.name}: Zusage der Ausfallsicherheit, die das Verfahren nicht traegt"
+        )
 
 
 def test_caddy_access_log_redacts_oauth_query_values() -> None:
