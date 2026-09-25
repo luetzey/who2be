@@ -209,6 +209,160 @@ aber das ist ein Notbehelf, kein Betriebsmodus.
 eingeladener Nutzer, der noch kein Konto hat, landet ueber den Magic-Link
 eingeloggt auf `/invitations/:token/accept`.
 
+**Dritter Provider: Apple.** Sign in with Apple kommt in der Cloud dazu und ist
+in der Einrichtung deutlich aufwendiger als die beiden hier — eigener
+Abschnitt direkt unten, weil das Client Secret dort ablaeuft und der Login
+dabei still ausfaellt.
+
+## Sign in with Apple (Cloud-Edition)
+
+Apple ist der dritte Provider neben Google und GitHub — aber der einzige, bei
+dem etwas von allein kaputtgeht, wenn man nichts tut. **Das Wichtigste zuerst:
+das Apple-Client-Secret laeuft nach spaetestens sechs Monaten ab, und wenn es
+ablaeuft, faellt die Apple-Anmeldung still aus.** Kein Alarm, keine Warnung im
+Log, keine Mail von Apple; Google und GitHub laufen unbeirrt weiter, waehrend
+Apple-Nutzer eine generische Fehlermeldung sehen. Das Datum aus Schritt 4 unten
+gehoert in den Kalender, mit einer Erinnerung zwei Wochen davor.
+
+**Apple erscheint nur in der Cloud, nicht im Self-Hosting.** Das ist nicht
+konfigurierbar und haengt am Edition-Merkmal `VITE_WHO2BE_EDITION` (ADR-0029) —
+Apple verlangt ein zahlungspflichtiges Developer-Konto und eine bei Apple
+registrierte Domain; in einer selbst gehosteten Instanz waere die Schaltflaeche
+tote Flaeche. Google und GitHub bleiben in beiden Editionen.
+
+### Was im Apple-Developer-Portal anzulegen ist
+
+Drei Dinge, in dieser Reihenfolge — jedes baut auf dem vorherigen auf. Alles
+unter [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources).
+
+**1. App ID mit Sign-in-with-Apple-Fähigkeit.** Unter *Identifiers* → *App IDs*.
+Falls schon eine existiert, genuegt sie — die Faehigkeit „Sign in with Apple"
+muss aber aktiviert sein. Diese App ID ist die *primaere* App, an die die
+Website spaeter gebunden wird. Sie wird **nicht** in die `.env` eingetragen.
+
+**2. Services ID** — das ist der Wert, der als `CLIENT_ID` in die `.env` geht.
+*Identifiers* → Plus-Button → **Services IDs** → Beschreibung und Identifier
+vergeben (Konvention: umgekehrte Domain plus Zweck, z. B. `de.example.web`).
+Dann die gerade erstellte Services ID anklicken, „Sign in with Apple"
+auswaehlen, *Configure* drücken und im Dialog:
+
+- als *Primary App ID* die App ID aus Schritt 1 wählen,
+- unter **Website URLs** die Domain eintragen (`supabase.<DOMAIN>`) **und** die
+  Return-URL:
+
+  ```
+  https://supabase.<DOMAIN>/auth/v1/callback
+  ```
+
+Die Return-URL muss **zeichengenau** stimmen, inklusive `https` und ohne
+abschliessenden Schraegstrich — es ist dieselbe URI wie bei Google und GitHub,
+und der Compose-Default (`GOTRUE_EXTERNAL_APPLE_REDIRECT_URI`) hat genau diesen
+Wert. Apple ist hier strenger als Google: **`localhost` und IP-Adressen werden
+abgelehnt, HTTPS ist Pflicht, ein Fragment (`#`) ist verboten.** Deshalb laesst
+sich Apple gegen einen lokalen Stack nicht testen — dazu braeuchte es einen
+oeffentlichen HTTPS-Tunnel, dessen Domain hier ebenfalls eingetragen sein muss
+(dieselbe Einschraenkung, die der Mollie-Webhook schon hat).
+
+**3. Private Key (`.p8`).** *Keys* → Plus-Button → „Sign in with Apple"
+aktivieren → *Configure* → dieselbe primaere App ID → speichern und
+herunterladen. **Die Datei ist nur ein einziges Mal herunterladbar** — Apple
+zeigt sie nie wieder. Sicher ablegen (Passwortmanager, verschlüsseltes Backup),
+aber **nicht** ins Repo. Der Dateiname lautet `AuthKey_<KEY_ID>.p8`; diese
+`<KEY_ID>` wird in Schritt 4 gebraucht.
+
+Notiert werden also drei Werte: **Team-ID** (zehnstellig, im Portal oben rechts
+bzw. unter *Membership*), **Key-ID** (zehnstellig, aus dem `.p8`-Dateinamen) und
+die **Services ID** aus Schritt 2.
+
+### 4. Das Client Secret erzeugen
+
+Anders als Google und GitHub gibt Apple **keinen Secret-String** heraus. Das
+Secret ist ein JWT, das aus dem `.p8`-Key signiert wird — dafuer liegt ein
+Skript im Repo, damit das Signing-Material nicht durch einen fremden
+Online-Generator muss:
+
+```bash
+# Aus dem Repo-Root:
+uv run python scripts/gen_apple_client_secret.py \
+    --team-id ABCDE12345 \
+    --key-id FGHIJ67890 \
+    --services-id de.example.web \
+    --p8 ~/Downloads/AuthKey_FGHIJ67890.p8
+```
+
+Das Skript schreibt das Token auf stdout und das **Ablaufdatum** auf stderr.
+Standard-Laufzeit sind 180 Tage; Apple erlaubt maximal 15 777 000 Sekunden
+(sechs Monate) und weist ein Secret mit längerer Laufzeit bei *jedem* Login ab.
+
+### 5. Die Werte in `deploy/hetzner/supabase/.env` eintragen
+
+```dotenv
+GOTRUE_EXTERNAL_APPLE_ENABLED=true
+GOTRUE_EXTERNAL_APPLE_CLIENT_ID=de.example.web     # die Services ID, NICHT die App ID
+GOTRUE_EXTERNAL_APPLE_SECRET=<Ausgabe von Schritt 4>
+```
+
+Die Redirect-URI muss nur gesetzt werden, wenn sie vom Default abweicht. Danach
+den Supabase-Stack neu hochfahren (`docker compose … up -d --wait`), damit GoTrue
+die Variablen liest.
+
+Alle vier Variablen sind fuer GoTrue Pflicht, sobald `ENABLED=true` ist: fehlt
+eine, verweigert GoTrue den Provider mit `missing OAuth …` statt still
+weiterzulaufen. `GOTRUE_EXTERNAL_APPLE_URL` gibt es zwar als Variable, GoTrue
+**ignoriert** sie aber (und warnt im Log) — nicht setzen.
+
+### Wann laeuft das Secret ab, und was ist dann zu tun?
+
+| | |
+|---|---|
+| **Maximale Laufzeit** | sechs Monate (15 777 000 s), von Apple erzwungen |
+| **Laufzeit unseres Skripts** | 180 Tage ab Erzeugung |
+| **Wer erneuert?** | **niemand automatisch** — GoTrue erneuert das JWT nicht und warnt nicht |
+| **Symptom bei Ablauf** | Apple antwortet `invalid_client`, GoTrue macht daraus eine generische 500. Der Nutzer sieht einen unspezifischen Fehler, das Log nennt den Ablauf nicht. Google/GitHub sind **nicht** betroffen |
+| **Erneuern** | Schritt 4 erneut laufen lassen, neuen Wert in die `.env`, Stack neu starten. **Der `.p8`-Key bleibt derselbe** — kein Portal-Besuch, kein neuer Key |
+
+Das Erneuern dauert also zwei Minuten — es muss nur jemand daran denken. Deshalb:
+Kalendereintrag auf das Datum aus Schritt 4, Erinnerung zwei Wochen vorher.
+
+### Private Relay: Nutzer ohne echte E-Mail-Adresse
+
+Bei „Meine E-Mail-Adresse verbergen" liefert Apple eine Weiterleitungsadresse
+auf `@privaterelay.appleid.com` statt der echten. Das ist keine Fehlfunktion,
+sondern der Normalfall, und in Who2Be funktioniert damit alles — mit zwei
+Punkten, die man kennen muss:
+
+- **Offene Team-Einladungen.** Eine Einladung muss von der Adresse angenommen
+  werden, an die sie geschickt wurde. Wer jemanden an die Arbeitsadresse
+  einlaedt und der sich dann mit einer Relay-Adresse anmeldet, bekommt „Diese
+  Einladung ist fuer eine andere Email-Adresse." Das ist derselbe Schutz, der
+  heute schon greift, wenn sich jemand mit einem anderen Google-Konto anmeldet
+  als eingeladen — und er bleibt absichtlich so. Praktischer Rat fuer den
+  Einladenden: dem Eingeladenen sagen, dass er die Einladung mit demselben Konto
+  annehmen muss, an das sie ging.
+- **Mails an Relay-Adressen bouncen, wenn die Absender-Domain nicht bei Apple
+  registriert ist.** Apple laesst nur Mail von Domains durch, die im Portal
+  unter *Services* → „Sign in with Apple for Email Communication" hinterlegt und
+  per SPF (bzw. DKIM) verifiziert sind. Das betrifft genau die Absender-Domain
+  aus `GOTRUE_SMTP_ADMIN_EMAIL` — also die Domain, ueber die die Einladungsmails
+  gehen (siehe Abschnitt „Mailer" oben; SPF/DKIM sind dort schon Teil der
+  Checkliste). Ohne diesen Eintrag kommt bei Apple-Nutzern mit verborgener
+  Adresse keine Einladung an, waehrend sie bei allen anderen ankommt.
+
+Rechnungsstellung ist nicht betroffen: Relay-Adressen sind gueltige,
+zustellbare Adressen und werden an den Zahlungsanbieter ganz normal
+weitergegeben.
+
+### Name und E-Mail kommen nur beim ersten Login
+
+Apple schickt Vor- und Nachnamen **ausschliesslich bei der allerersten
+Anmeldung** eines Nutzers, danach nie wieder. GoTrue faengt das selbst ab und
+speichert die Angaben bei diesem ersten Mal in den Nutzer-Metadaten — es ist
+also nichts zu konfigurieren. Wissen sollte man es trotzdem: geht diese eine
+erste Anmeldung schief (etwa weil die Redirect-URI noch falsch war), sind Name
+und E-Mail fuer diesen Nutzer dauerhaft weg. Es gibt keinen zweiten Versuch,
+ausser der Nutzer entzieht Who2Be in seinen Apple-ID-Einstellungen den Zugriff
+und meldet sich erneut an.
+
 ## Studio (Profil `studio`)
 
 ```bash
@@ -245,6 +399,15 @@ Studio sollte nicht oeffentlich erreichbar sein.
 - Ohne gesetzten `SERVICE_ROLE_KEY` (bzw. `SUPABASE_SERVICE_KEY` in `../.env`)
   werden Invitation-Mails still uebersprungen — der Klartext-Token im 201-Body
   bleibt der einzige Weg, jemanden einzuladen.
+- **`GOTRUE_EXTERNAL_APPLE_SECRET` laeuft ab** (spaetestens nach sechs Monaten)
+  und erneuert sich nicht selbst. Danach scheitert *nur* die Apple-Anmeldung, mit
+  einer generischen 500 statt einer Meldung, die den Ablauf nennt — Google und
+  GitHub laufen weiter, der Ausfall ist also leicht zu uebersehen. Prozedur und
+  Kalenderhinweis: Abschnitt „Sign in with Apple".
+- Apple akzeptiert **kein `localhost`** als Redirect-URI. Der Provider ist gegen
+  einen lokalen Stack darum nicht testbar; Google und GitHub sind es. Wer Apple
+  lokal braucht, braucht einen oeffentlichen HTTPS-Tunnel mit im Portal
+  registrierter Domain.
 
 ## Verweis
 

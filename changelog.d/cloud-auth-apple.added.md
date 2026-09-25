@@ -42,4 +42,8 @@
 
   `deploy/hetzner/supabase/README.md` walks through what to create in the Apple
   Developer portal (App ID, Services ID, private key), which value goes where,
-  and when the secret expires.
+  and when the secret expires. Because Apple hands out a `.p8` key rather than a
+  secret string, `scripts/gen_apple_client_secret.py` signs the JWT for you and
+  prints its expiry date — so the value that belongs in your calendar comes out
+  of the same command that produces the secret, and your signing key never has
+  to go through a third-party generator.
