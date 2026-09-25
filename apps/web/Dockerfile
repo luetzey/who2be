@@ -50,6 +50,11 @@ RUN apk add --no-cache curl
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# Schreibt /etc/nginx/resolver.conf bei jedem Container-Start aus der DNS-Adresse
+# des Containers (Docker: 127.0.0.11, rootless Podman: eine andere) — nginx.conf
+# includiert die Datei statt die Adresse festzuschreiben.
+COPY docker/10-who2be-nginx-resolver.sh /docker-entrypoint.d/10-who2be-nginx-resolver.sh
+RUN chmod +x /docker-entrypoint.d/10-who2be-nginx-resolver.sh
 # Schreibt /config.js bei jedem Container-Start aus Env (nginx fuehrt alles in
 # /docker-entrypoint.d aus, bevor es startet).
 COPY apps/web/docker/40-who2be-runtime-config.sh /docker-entrypoint.d/40-who2be-runtime-config.sh
