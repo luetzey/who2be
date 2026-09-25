@@ -3,8 +3,7 @@
   `enforce_entity_quota`-Gate wie ihre Create-Geschwister.
 
   **Verhaltensänderung:** in der Cloud-Edition kann eine Kopier-Anfrage am
-  Free-Limit jetzt mit `402` (`entity_quota_exceeded`) antworten — bisher galt
-  der Deckel nur am Neu-Anlegen, obwohl eine Kopie eine echte neue
-  `persona`/`resource`/`agent`-Zeile ist und damit mitzählt. Bestehende Inhalte
-  bleiben unverändert les- und editierbar (Plan §3.2, kein Datenverlust);
-  On-Premise/OSS ist wie bisher unbegrenzt.
+  Free-Limit jetzt mit `402` (`entity_quota_exceeded`) antworten — eine Kopie
+  ist eine echte neue `persona`/`resource`/`agent`-Zeile und zählt damit gegen
+  das Kontingent. Bestehende Inhalte bleiben unverändert les- und editierbar
+  (Plan §3.2, kein Datenverlust); On-Premise/OSS ist wie bisher unbegrenzt.
