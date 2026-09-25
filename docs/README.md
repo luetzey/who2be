@@ -42,6 +42,10 @@ bzw. Dokumentations-Standards).
   [`compliance/README.md`](compliance/README.md)
 - [`signup-and-invites.md`](signup-and-invites.md) — Signup-/
   Invitation-Flow (intern)
+- [`website/`](website/) — Spezifikation der oeffentlichen
+  Marketing-Website (Seitenstruktur, Abschnitte, fertige deutsche Texte,
+  Produktwahrheits-Belege); Einstieg
+  [`website/README.md`](website/README.md)
 
 ## How-To
 
