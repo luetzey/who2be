@@ -217,9 +217,26 @@ Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
 ## 5 · Server-Logs / Zugriffsdaten
 
-Reverse-Proxy-/App-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB
-(Caddy/Container-Logs). Retention/Loeschung: `<PLATZHALTER: konkrete Log-
-Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
+Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
+Caddy schreibt sie nach `/var/log/caddy/access.log` auf dem Volume `caddy-logs`
+(`deploy/hetzner/Caddyfile`, Snippet `access_log`).
+
+**Retention: 14 Tage.** Das Loeschverfahren ist die Rotation selbst
+(`roll_keep_for 336h`) — es gibt keinen zweiten Mechanismus, der die Frist
+durchsetzt, und deshalb auch keinen, der ausfallen kann. Zusaetzlich greift
+eine Groessenbegrenzung (`roll_size 10MiB`, `roll_keep 10`), damit das Log die
+Platte nicht fuellt, bevor die Zeit ablaeuft.
+
+**Was gar nicht erst geschrieben wird:** Caddy redigiert `Cookie`,
+`Set-Cookie`, `Authorization` und `Proxy-Authorization` per Default zu
+`REDACTED` (die Server-Option `log_credentials`, die das abschalten wuerde, ist
+nicht gesetzt). Query-Werte sind davon nicht erfasst — weil `api.<DOMAIN>` den
+OAuth-Authorization-Endpunkt traegt (ADR-0036), ersetzt ein `format
+filter`-Block die Parameter `code`, `token`, `access_token` und
+`refresh_token`, bevor die Zeile die Platte erreicht.
+
+Container-Logs (stdout/stderr je Dienst) sind unabhaengig davon auf 3 x 10 MB
+gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 ---
 
@@ -240,7 +257,7 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
-| Server-Logs | `<PLATZHALTER>` | Log-Rotation |
+| Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Log-Rotation (`roll_keep_for 336h` bzw. `logging:`-Limits) |
 
 ---
 

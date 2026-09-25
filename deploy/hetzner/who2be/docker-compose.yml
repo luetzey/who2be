@@ -9,6 +9,42 @@
 # MCP laeuft im `mcp`-Profil und wird nicht beim normalen `up` gestartet
 # (Default-Transport ist stdio); per `docker compose run --rm mcp ...`
 # als interner Consumer/Smoke-Harness aufrufbar.
+#
+# --- Container-Haertung (W8/S1-S3) -------------------------------------------
+# Drei Blöcke an JEDEM Dienst, auch an den One-Shots und den Profil-Diensten.
+# Vollstaendigkeit ist hier keine Kosmetik: ein einzelner Dienst ohne Deckel
+# ist genau der, der den Host umwirft, und ein einzelner ohne `logging:` ist
+# der, der die Platte fuellt. `apps/api/tests/test_compose_hardening.py` haelt
+# das nach, damit ein kuenftig hinzugefuegter Dienst nicht still durchrutscht.
+#
+# 1. `logging:` — Docker-eigene Rotation der Container-Logs (stdout/stderr).
+#    Ohne sie waechst die json-Datei je Container unbegrenzt; 10m x 3 deckelt
+#    jeden Dienst auf 30 MB. Das ist unabhaengig von Caddys Access-Log
+#    (eigene Datei, eigene Rotation, s. ../Caddyfile).
+# 2. `security_opt: ["no-new-privileges:true"]` — setzt das gleichnamige
+#    Kernel-Flag: ein Prozess im Container kann seine Rechte ueber setuid-/
+#    setgid-Binaries oder Datei-Capabilities nicht mehr erhoehen. Keine
+#    Verhaltensaenderung fuer Dienste, die nicht ohnehin eskalieren wollen.
+#    (BSI SYS.1.6.A17 — SOLLTE.)
+# 3. `mem_limit` — Obergrenze, KEINE Reservierung. Zweck ist nicht, Speicher
+#    zuzuteilen, sondern zu verhindern, dass ein ausreissender Container den
+#    Host-OOM-Killer ausloest, der sich sein Opfer selbst sucht — potenziell
+#    Postgres mitten im Schreiben. Mit Deckel trifft es den Ausreisser, und
+#    `restart: unless-stopped` holt ihn zurueck. (BSI SYS.1.6.A15 — SOLLTE;
+#    Satz 2 verlangt die Dokumentation des Ueberschreitungsverhaltens, sie
+#    steht im RUNBOOK §Ressourcen-Limits.)
+#    Werte-Budget: Hetzner CX32, 8 GB, geteilt mit dem Supabase-Stack.
+#    Herleitung je Dienst: `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+
 services:
   migrate:
     image: ghcr.io/luetzey/who2be-api:${API_IMAGE_TAG:-latest}
@@ -20,6 +56,10 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     networks: [supabase-net]
     restart: "no"
+    <<: *hardening
+    # One-Shot im API-Image, laeuft nur beim Deploy: Alembic-artige Migrationen
+    # halten kein Dataset im Speicher. 512m ist ein Vielfaches des Beobachteten.
+    mem_limit: 512m
 
   api:
     image: ghcr.io/luetzey/who2be-api:${API_IMAGE_TAG:-latest}
@@ -79,6 +119,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    <<: *hardening
+    # Ein einziger uvicorn-Prozess (ADR-0049-Nachtrag verbietet `--workers`),
+    # also kein Multiplikator ueber Worker. Groesste legitime Spitze ist der
+    # Ingest: 20 MiB Nutzdaten (WHO2BE_INGEST_MAX_BYTES) plus Base64-/JSON-
+    # Rahmen, dazu die zeit- und groessenbudgetierten SQLite-Abfragen des
+    # Tabellen-Stores. 1g ist davon ein Vielfaches und laesst Raum fuer
+    # Connection-Pool und Interpreter.
+    mem_limit: 1g
 
   # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
   # SeaweedFS (Apache-2.0) statt MinIO (#525/#529, WP1/WP2) — Begruendung siehe
@@ -137,6 +185,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    <<: *hardening
+    # `weed server` faehrt Master, Volume-Server und S3-Gateway in EINEM
+    # Prozess. Der Volume-Index (needle map) liegt im Speicher und waechst mit
+    # der Zahl der Objekte, nicht mit deren Groesse — deshalb hier mehr als bei
+    # den anderen Go-Diensten. 1g deckt eine sechsstellige Objektzahl ab.
+    mem_limit: 1g
 
   # Einmal-Service: legt den Bucket an (idempotent bei jedem Deploy). Faehrt
   # das API-Image statt eines eigenen CLI-Images (das S3-SDK aus dem API-Code,
@@ -161,6 +215,10 @@ services:
         condition: service_healthy
     networks: [app-net]
     restart: "no"
+    <<: *hardening
+    # One-Shot: ein `make_bucket`-Aufruf ueber das S3-SDK im API-Image.
+    # Gleicher Deckel wie `migrate` — dasselbe Image, derselbe Charakter.
+    mem_limit: 512m
 
   web:
     image: ghcr.io/luetzey/who2be-web:${WEB_IMAGE_TAG:-latest}
@@ -206,6 +264,12 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    <<: *hardening
+    # nginx liefert ein statisches Vite-Bundle aus und proxy't /v1/ + /auth/v1/
+    # (apps/web/nginx.conf). Speicherbedarf sind Worker-Prozesse plus Puffer,
+    # typisch einstellige MB; 256m ist reichlich und faengt Proxy-Puffer-
+    # Spitzen bei parallelen Uploads ab.
+    mem_limit: 256m
 
   # Stdio-Variante (Default). One-Shot per `docker compose run --rm mcp ...`,
   # nicht beim normalen `up` aktiv (profile=mcp).
@@ -225,6 +289,10 @@ services:
     # Stdio-Container hat keinen offenen Port — Healthcheck aus.
     healthcheck:
       disable: true
+    <<: *hardening
+    # Python-Dienst wie `api`, aber ohne Ingest-/Blob-Pfad: der MCP-Server
+    # spricht ueber HTTP mit der API und haelt selbst keine grossen Bodies.
+    mem_limit: 512m
 
   # HTTP-Variante: Long-Running Streamable-HTTP-Server auf 0.0.0.0:8765/mcp.
   # Aktiv mit `--profile mcp-http`. Caddy proxy'iert `mcp.${DOMAIN}` darauf
@@ -256,6 +324,11 @@ services:
     restart: unless-stopped
     # Healthcheck aus dem Dockerfile bleibt aktiv — Streamable-HTTP-Endpunkt
     # antwortet auf GET mit `Accept: text/event-stream`.
+    <<: *hardening
+    # Wie `mcp`, nur long-running: zusaetzlich offene SSE-Sessions, die je
+    # Session wenige KB kosten. 512m deckt die erwartbare Session-Zahl eines
+    # Solo-Betriebs um Groessenordnungen.
+    mem_limit: 512m
 
   caddy:
     image: caddy:2.8-alpine
@@ -270,6 +343,12 @@ services:
       - ../Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      # Access-Logs (../Caddyfile, Snippet `access_log`). Ein Volume, KEIN
+      # Container-Pfad: BSI SYS.1.6.A7 verlangt die Speicherung der
+      # Protokollierungsdaten „ausserhalb des Containers, mindestens auf dem
+      # Container-Host". Ohne diesen Mount waeren die Logs nach jedem
+      # Redeploy weg — also genau dann, wenn man sie braucht.
+      - caddy-logs:/var/log/caddy
     # supabase-net: damit Caddy auch `supabase.<DOMAIN>` auf den
     # auth-gateway aus dem Supabase-Stack (MS-2 C2) proxy'en kann.
     networks: [app-net, supabase-net]
@@ -279,6 +358,11 @@ services:
       web:
         condition: service_healthy
     restart: unless-stopped
+    <<: *hardening
+    # Go-Reverse-Proxy ohne Anwendungslogik; Speicher sind Verbindungspuffer,
+    # der TLS-Zertifikats-Cache (vier Subdomains) und seit dieser Aenderung der
+    # gepufferte Log-Writer. 256m ist eine Groessenordnung ueber dem Bedarf.
+    mem_limit: 256m
 
   # C5a/C5b — pg_dump | gpg lokal + restic offsite.
   # Default-up startet diesen Service NICHT (profile=backup). Host-Cron triggert:
@@ -306,6 +390,13 @@ services:
     networks: [supabase-net]
     profiles: ["backup"]
     restart: "no"
+    <<: *hardening
+    # Groesster One-Shot: restic haelt beim Sichern den Repository-Index und
+    # Pack-Puffer im Speicher, deutlich mehr als `pg_dump | gpg` (die
+    # streamen). Laeuft nachts um 03:15 allein, konkurriert also nicht mit
+    # einer Nutzungsspitze — der Deckel schuetzt hier vor dem Fall, dass ein
+    # wachsendes Repo den Index unbemerkt aufblaeht.
+    mem_limit: 1g
 
 networks:
   app-net:
@@ -319,6 +410,10 @@ networks:
 volumes:
   caddy-data:
   caddy-config:
+  # Access-Logs (s. caddy-Service). Eigenes Volume, damit die Logs
+  # Redeploys ueberleben und beim Aufraeumen von caddy-data nicht
+  # versehentlich mitgehen.
+  caddy-logs:
   backups:
   # Objekt-Store (ADR-0048) und Tabellen-Store (ADR-0049) sind Nutzdaten wie
   # die DB — beide MUESSEN persistent sein, sonst verliert jeder Redeploy

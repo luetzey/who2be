@@ -301,6 +301,87 @@ Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
 
 ---
 
+## Access-Logs & Ressourcen-Limits
+
+### Access-Logs lesen
+
+Caddy protokolliert jede Anfrage an alle vier Subdomains nach
+`/var/log/caddy/access.log`. Die Datei liegt im Volume `caddy-logs`, nicht im
+Container-Dateisystem — sie ueberlebt also jeden Redeploy (BSI SYS.1.6.A7
+verlangt die Speicherung „ausserhalb des Containers, mindestens auf dem
+Container-Host").
+
+```bash
+# Laufend mitlesen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  tail -f /var/log/caddy/access.log
+
+# Alle 4xx/5xx der aktuellen Datei, lesbar
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'cat /var/log/caddy/access.log' \
+  | jq -c 'select(.status >= 400) | {ts, status, req: .request.uri, ip: .request.remote_ip}'
+
+# Rotierte Generationen (gzip) mitnehmen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'zcat -f /var/log/caddy/access*.log*'
+```
+
+**Aufbewahrung: 14 Tage** (`roll_keep_for 336h`), zusaetzlich groessenbegrenzt
+auf ~10 MiB aktiv plus 10 komprimierte Generationen. Die Rotation IST das
+Loeschverfahren — es gibt keinen Cronjob, der zusaetzlich aufraeumt, und damit
+auch keinen, der ausfallen kann. Wer die Frist aendert, aendert sie an drei
+Stellen gemeinsam: Caddyfile, `docs/compliance/vvt.md` §7 und
+`docs/compliance/data-retention-and-erasure.md` §5.
+
+**Was nicht im Log steht:** Cookie-, Authorization- und
+Proxy-Authorization-Header sind `REDACTED` (Caddy-Default), und die
+Query-Parameter `code`/`token`/`access_token`/`refresh_token` werden ersetzt,
+bevor die Zeile geschrieben wird — der OAuth-Endpunkt liegt auf
+`api.<DOMAIN>`. Wer beim Debuggen einen dieser Werte vermisst: das ist Absicht,
+nicht ein Fehler.
+
+Container-Logs (stdout/stderr) liest wie gewohnt `docker compose logs <dienst>`;
+sie sind je Dienst auf 3 x 10 MB gedeckelt.
+
+### Ressourcen-Limits und was bei Ueberschreitung passiert
+
+Jeder Container beider Stacks hat ein `mem_limit` (BSI SYS.1.6.A15). Die Werte
+sind auf die Zielmaschine geeicht — **Hetzner CX32, 8 GB, beide Stacks auf
+derselben Maschine** — und je Dienst im Compose-File begruendet; die Herleitung
+steht in `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`.
+
+Die Deckel sind Obergrenzen, **keine Reservierungen**: die Summe aller Deckel
+darf das RAM ueberschreiten, solange die Summe der typischen Nutzung deutlich
+darunter liegt. Die dauerhaft laufenden Dienste summieren sich auf rund
+6,2 GiB von 8 GB; `apps/api/tests/test_compose_hardening.py` haelt diese Summe
+im Rahmen, damit ein neuer Dienst das Budget nicht unbemerkt sprengt.
+
+**Verhalten bei Ueberschreitung** (A15 Satz 2 verlangt, dass es dokumentiert
+ist): Reisst ein Container sein Limit, beendet der Kernel-OOM-Killer einen
+Prozess **innerhalb dieses Containers**. Host und uebrige Container bleiben
+unberuehrt — genau das ist der Zweck der Deckel. Vorher gab es keine, und der
+OOM-Killer suchte sich sein Opfer nach Speicherverbrauch selbst aus, also mit
+hoher Wahrscheinlichkeit Postgres. Dienste mit `restart: unless-stopped`
+starten anschliessend selbst neu.
+
+Diagnose:
+
+```bash
+# Hat ein Container OOM gesehen?
+docker inspect --format '{{.Name}} OOMKilled={{.State.OOMKilled}} RestartCount={{.RestartCount}}' \
+  $(docker ps -aq)
+
+# Aktueller Verbrauch gegen das Limit
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
+Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
+anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
+OOM im Normalbetrieb waere schlechter als gar kein Limit.
+
+---
+
 ## CVE-Response
 
 Der CI-Job `audit` (`.github/workflows/ci.yml`) faehrt bei jedem Push und PR:
