@@ -8,6 +8,13 @@
       ]
     },
     {
+      "path": "/agents/{agent_id}/copy",
+      "name": "copy_agent",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
       "path": "/artifacts",
       "name": "create_artifact_in_private_area",
       "gates": [
@@ -36,6 +43,13 @@
       ]
     },
     {
+      "path": "/personas/{persona_id}/duplicate",
+      "name": "duplicate_persona",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
       "path": "/playbooks",
       "name": "create_playbook",
       "gates": [
@@ -45,6 +59,13 @@
     {
       "path": "/resources",
       "name": "create_resource",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/resources/{resource_id}/duplicate",
+      "name": "duplicate_resource",
       "gates": [
         "enforce_entity_quota"
       ]
@@ -97,11 +118,6 @@
       "path": "/agent-memories",
       "name": "save_memory",
       "reason": "Memory-Vorschlag eines Agenten, keine Inhalts-Entity: agent_memory steht nicht in entity_quota_service._COUNT_QUERY. Gebremst nur durch write_limit."
-    },
-    {
-      "path": "/agents/{agent_id}/copy",
-      "name": "copy_agent",
-      "reason": "OFFENE LUECKE, bewusst nicht hier behoben: AgentService.copy legt eine neue agent-Zeile an, und agent zaehlt in _COUNT_QUERY — anders als POST /agents traegt diese Route aber kein Gate. Das Free-Entity-Limit ist damit per Kopieren ueberschreitbar. Gates aendern ist in W8/P3 out of scope; als Befund gemeldet."
     },
     {
       "path": "/agents/{agent_id}/memories/{memory_id}/triage",
@@ -164,11 +180,6 @@
       "reason": "Token-Endpunkt des OAuth-Flusses. Gehoert zum Zugang selbst — ein Quota-Gate hier deckelte die Anmeldung, nicht die Nutzung."
     },
     {
-      "path": "/personas/{persona_id}/duplicate",
-      "name": "duplicate_persona",
-      "reason": "OFFENE LUECKE, bewusst nicht hier behoben: PersonaService.duplicate legt via _repo.insert eine neue persona-Zeile an, und persona zaehlt in _COUNT_QUERY — anders als POST /personas traegt diese Route aber kein Gate. Gates aendern ist in W8/P3 out of scope; als Befund gemeldet."
-    },
-    {
       "path": "/personas/{persona_id}/versions/{version}/restore",
       "name": "restore_persona_version",
       "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
@@ -187,11 +198,6 @@
       "path": "/playbooks/{playbook_id}/versions/{version}/transition",
       "name": "transition_playbook_version",
       "reason": "Reiner Statuswechsel einer bestehenden Version (draft/active/archived), legt nichts an."
-    },
-    {
-      "path": "/resources/{resource_id}/duplicate",
-      "name": "duplicate_resource",
-      "reason": "OFFENE LUECKE, bewusst nicht hier behoben: ResourceService.duplicate legt eine neue resource-Zeile an, und resource zaehlt in _COUNT_QUERY — anders als POST /resources traegt diese Route aber kein Gate. Gates aendern ist in W8/P3 out of scope; als Befund gemeldet."
     },
     {
       "path": "/resources/{resource_id}/versions/{version}/restore",
