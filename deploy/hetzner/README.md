@@ -95,6 +95,11 @@ Was das Overlay umstellt: `WHO2BE_EDITION=cloud`, API verbindet als Rolle
 Mollie-Billing-Env, und es baut das `runtime-cloud`-Image (mit
 `who2be-billing`-Paket). Details siehe Kopf des Overlay-Files.
 
+> **Erstinbetriebnahme?** Was der Owner **vorher** besorgen muss (Mollie-Konto
+> mit Tagen Vorlauf, DNS, OAuth-Zugangsdaten inkl. exakter Redirect-URI, die
+> SMTP-Weiche) und in welcher Reihenfolge, steht als abhakbare Liste in
+> [`docs/cloud-erstinbetriebnahme.md`](../../docs/cloud-erstinbetriebnahme.md).
+
 ```bash
 # 0) .env um die Cloud-Vars ergaenzen (siehe .env.example, Sektion
 #    "Cloud-Edition"): APP_DB_PASSWORD, SUPABASE_SERVICE_KEY, optional MOLLIE_*.
