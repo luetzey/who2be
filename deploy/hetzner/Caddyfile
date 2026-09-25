@@ -36,8 +36,11 @@
 # vorhandene Protokolldaten den Container ueberleben.
 #
 # Rotation ist Pflicht und nicht Kuer: eine unbegrenzt wachsende Logdatei ist
-# ein selbstgebauter Ausfall (volle Platte). Obergrenze hier ~10 MiB aktiv +
-# 10 gzip-komprimierte Generationen.
+# ein selbstgebauter Ausfall (volle Platte). Die Direktiven unten deckeln die
+# aktive Datei auf ~10 MiB und halten 10 komprimierte Generationen. Die
+# TAEGLICHEN Generationen des Rotations-Skripts (s. u.) zaehlen NICHT in
+# `roll_keep` — die Obergrenze des Verzeichnisses ergibt sich aus beiden
+# Mechanismen zusammen, nicht aus `roll_keep` allein.
 #
 # Datenschutz (V12 im VVT, Art. 6 Abs. 1 lit. f): Access-Logs enthalten
 # IP-Adressen und User-Agents. Aufbewahrung: 14 Tage, im Korridor von
@@ -55,10 +58,16 @@
 #     dasselbe Muster wie beim `mode`-Unterbefehl unten. Eine solche Zeile
 #     waere ein wirkungsloser Platzhalter.
 #   * Den zeitlichen Teil traegt deshalb ein Host-Cron, wie schon bei Backup
-#     und Retention-Purge: taeglich rotieren, Generationen aelter als 14 Tage
-#     loeschen. Einrichtung und Nachweis: RUNBOOK §Access-Logs.
-#     `roll_keep_for` bleibt als zweite, unabhaengige Grenze gesetzt — faellt
-#     der Cron aus, raeumt es bei der naechsten groessenbedingten Rotation auf.
+#     und Retention-Purge: `deploy/hetzner/scripts/rotate-access-log.sh`,
+#     taeglich. Es rotiert die aktive Datei und loescht aeltere Generationen.
+#     Einrichtung und Nachweis: RUNBOOK §Access-Logs.
+#   * `roll_keep_for` bleibt gesetzt, wirkt aber NUR auf die von Caddy selbst
+#     erzeugten Generationen (`access-<ts>.log.gz`). Die Generationen des
+#     Skripts heissen `access.log.<ts>.gz` und fallen nicht darunter — fuer sie
+#     ist das Skript der einzige Loeschpfad. `roll_keep_for` ist damit KEIN
+#     Rueckfall fuer die Frist, sondern eine Grenze innerhalb seiner eigenen
+#     Klasse. Dass das Skript beide Klassen raeumt, prueft
+#     deploy/hetzner/tests/test_access_log_rotation.sh.
 #   * Cookie/Set-Cookie/Authorization/Proxy-Authorization redigiert Caddy per
 #     Default zu `REDACTED`; die globale Server-Option `log_credentials`, die
 #     das abschalten wuerde, ist bewusst NICHT gesetzt.

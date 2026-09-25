@@ -398,12 +398,23 @@ und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
 Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
 Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
 
-Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
-auf dem Host eingerichtet:
+Der Cron ruft **ein Skript**, keine Kommandokette:
+`deploy/hetzner/scripts/rotate-access-log.sh`. Das ist keine Stilfrage, sondern
+die Lehre aus einer verketteten Fassung: dort hing die Loeschung an der
+Rotation, und die Rotation scheitert im Normalbetrieb regelmaessig — Caddy legt
+`access.log` erst beim **ersten Request** an, eine Nacht ohne Anfrage hatte also
+gar keine aktive Datei. Das Skript trennt die drei Teile:
+
+1. **Rotieren** — nur, wenn eine aktive Datei existiert. Fehlt sie, ist das der
+   normale Zustand eines Tages ohne Anfragen und **kein** Fehler.
+2. **Loeschen** — laeuft **immer**, unabhaengig von Schritt 1, und deckt **beide**
+   Namensklassen: `access.log.<ts>.gz` (aus diesem Skript) und
+   `access-<ts>.log.gz` (Caddys eigene groessenbedingte Rotation).
+3. **Caddy neu starten** — nur nach einer Rotation.
 
 ```bash
 # Host-Crontab des Deploy-Users (crontab -e):
-30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+30 4 * * * cd /opt/who2be && bash deploy/hetzner/scripts/rotate-access-log.sh >> /var/log/who2be-logrotate.log 2>&1
 ```
 
 **Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
@@ -414,24 +425,57 @@ weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncat
 am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
 **0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
 
-Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
-Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
-Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
-ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
-Quartals-Check:
+**Die Loeschschwelle liegt zwei Tage unter der Frist** (12 statt 14). Grund:
+eine Generation entsteht bis zu 24 h nach dem letzten Eintrag darin, und
+`find -mtime +N` greift erst ab einem Alter von *mehr* als N vollen Tagen.
+Mit 14 als Schwelle waere der aelteste Eintrag beim Loeschen bis zu 16 Tage alt.
+So sind die 14 Tage eine **Obergrenze**, kein Mittelwert.
+
+**`roll_keep_for 336h` ist kein Rueckfall fuer die Frist.** Es erfasst nur
+Caddys eigene Generationen (`access-<ts>.log.gz`); die des Skripts
+(`access.log.<ts>.gz`) fallen nicht darunter, und die aktive Datei erfasst es
+ohnehin nie. Fuer die Generationen des Skripts ist das Skript der **einzige**
+Loeschpfad — faellt es aus, wird die Frist ueberschritten. Deshalb ist der
+Fehlschlag nicht still:
+
+- **Exit != 0** bei jedem Fehlschlag (Rotation, Loeschung, Neustart), mit
+  `FEHLER`-Zeile im Log.
+- **Erfolgsstempel** `/var/log/who2be-logrotate.stamp` — nur ein *erfolgreicher*
+  Lauf schreibt ihn. Das ist der Unterschied zwischen „Cron lief und hatte
+  nichts zu tun" und „Cron lief nie": ein leeres Log-Verzeichnis sieht in beiden
+  Faellen gleich aus, der Stempel nicht.
+- **Optionaler Dead-Man's-Switch:** `ACCESS_LOG_HEARTBEAT_URL` wird **nur** bei
+  vollstaendigem Erfolg gepingt, gleiche Mechanik und gleicher self-hosted
+  Empfaenger wie beim Backup (siehe [Alarmweg](#alarmweg-dead-mans-switch)).
+  Leer (Default) = aus.
+
+Pruefung im Quartals-Check — **zuerst der Stempel**, denn er faengt den Fall,
+den ein Blick ins Verzeichnis nicht faengt:
 
 ```bash
-# Aelteste Generation — darf nicht aelter als 14 Tage sein
-docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  find /var/log/caddy -name 'access.log.*' -mtime +14
+# 1) Lief der Cron ueberhaupt? Stempel darf nicht aelter als ~26 h sein.
+#    Kein Stempel = der Cron war NIE erfolgreich.
+stat -c '%y %n' /var/log/who2be-logrotate.stamp || echo "FEHLT — Cron nie erfolgreich"
+find /var/log/who2be-logrotate.stamp -mmin +1560 -printf 'ZU ALT: %t\n'
 
-# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+# 2) Aelteste Generation — darf nicht aelter als 14 Tage sein (beide Klassen).
+#    Klammern sind Pflicht: ohne sie bindet -o schwaecher als das implizite -a
+#    und -mtime gaelte nur fuer das zweite Muster.
 docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  ls -lt /var/log/caddy
+  find /var/log/caddy \( -name 'access.log.*' -o -name 'access-*.log*' \) -mtime +14
+
+# 3) Fehlschlaege der letzten Laeufe
+grep FEHLER /var/log/who2be-logrotate.log | tail
 ```
 
-Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
-Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
+Das Verhalten des Skripts ist ausfuehrbar belegt, nicht nur beschrieben:
+`bash deploy/hetzner/tests/test_access_log_rotation.sh` faehrt die Rotation
+gegen echte Verzeichnisse im echten Caddy-Image — inklusive der Faelle „keine
+aktive Datei", „beide Namensklassen" und „Fehlschlag ist nicht still".
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: der Default
+`ACCESS_LOG_RETENTION_DAYS` im Skript, `deploy/hetzner/Caddyfile`,
+`docs/compliance/vvt.md` §7 und
 `docs/compliance/data-retention-and-erasure.md` §5.
 
 **Was nicht im Log steht:** Cookie-, Authorization- und
