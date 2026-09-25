@@ -83,7 +83,12 @@ Zusaetzlich, ohne dass die Karte es verlangt:
    „vollstaendig, nicht stichprobenhaft" nicht nur heute wahr.
 6. Verifikation: `caddy validate` mit dem echten 2.8.4-Binary,
    YAML-Parse + Test-Suite, ruff/mypy.
-7. CHANGELOG (Unreleased).
+7. Changelog-Fragment unter `changelog.d/<slug>.security.md` — **nicht** direkt
+   in `CHANGELOG.md`. Das Fragment-Verfahren aus CONTRIBUTING.md (#587) ist
+   nicht Stilfrage, sondern vom CI-Job `changelog-guard` erzwungen; ein
+   direkter Eintrag in die Sammeldatei faellt dort hart durch. Lokal
+   nachpruefbar mit
+   `uv run python scripts/changelog_fragments.py guard --base origin/main`.
 
 ## Scope-Grenze (bewusst)
 
