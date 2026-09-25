@@ -716,9 +716,9 @@ gpg --decrypt /tmp/latest.sql.gpg | head -5   # erwartet: '-- PostgreSQL databas
 > ⚠️ **Disclaimer:** Engineering-/Betriebs-Checkliste, **keine** Rechts- oder
 > Zertifizierungsberatung. Adressiert die Audit-Befunde **P4** (Encryption-at-Rest
 > nicht belegt) und **S2** (At-Rest-Verschluesselung Live-DB nicht nachweisbar)
-> aus `.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`. Die
-> tatsaechlich umgesetzte Variante ist vom Betreiber je nach Hetzner-Produkt zu
-> waehlen und unten zu protokollieren.
+> aus `.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`. Eine
+> Variantenwahl gibt es **nicht** — unabhaengig vom Hetzner-Produkt ist LUKS auf
+> dem Host einzurichten (siehe unten) und unten zu protokollieren.
 
 Die Live-Datenbank liegt im Docker-Volume `db-data` (siehe `docker-compose.yml`
 bzw. den self-hosted-Supabase-Stack). „At-Rest" heisst: die Bytes auf dem
