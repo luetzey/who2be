@@ -7,6 +7,20 @@ Luft in der Speichergrenze hat.
 Greift **ausschliesslich** in der **Cloud**-Edition (`is_cloud()`); On-Prem/OSS
 ist unbegrenzt (`storage_quota_bytes is None`).
 
+Anders als `Entitlement.entity_limit()` ist die Grenze hier ein echtes
+Entitlement-**Feld** und keine Ableitung, und genau deshalb braucht sie einen
+**Cloud-Rueckfall** (`effective_storage_quota_bytes`): `None` heisst nur
+ausserhalb der Cloud „unbegrenzt". Innerhalb der Cloud heisst es „kein Wert
+gesetzt" — und den Zustand stellt der Billing-Pfad selbst her:
+`webhook.map_event_to_entitlement` schreibt beim Revoke
+(`customer.subscription.deleted`, `invoice.payment_failed`) ein
+`Entitlement(status="inactive", features=frozenset())` **ohne**
+`storage_quota_bytes`, der Upsert persistiert das als NULL. Ohne Rueckfall waere
+eine gekuendigte Org unbegrenzt — das Gegenteil des Zwecks. Dasselbe gilt fuer
+jede Bestands-Zeile vor Migration 0084 und fuer jede vor #536 angelegte
+Mollie-Subscription, deren Metadata den Key nicht traegt. Belegt vom Kettentest
+`test_storage_quota_downgrade_chain.py`.
+
 Derselbe Vertrag wie beim Entity-Limit: **kein Datenverlust.** Bestand bleibt
 les- und herunterladbar — das Gate haengt nur an den Ingest-Routen, nicht an
 Read-, Export- oder Download-Pfaden. Nur NEUE Ingests oberhalb der Grenze
@@ -125,8 +139,8 @@ class StorageQuotaService:
         port = build_entitlement_port(self._pool, self._settings)
         entitlement: Entitlement = await port.resolve(org_id)
 
-        limit = entitlement.storage_quota_bytes
-        if limit is None:
+        limit = entitlement.effective_storage_quota_bytes(cloud=True)
+        if limit is None:  # pragma: no cover - in der Cloud liefert der Rueckfall immer eine Zahl
             return  # Unbegrenzt — kein Summen-Roundtrip noetig.
 
         used = await self._used_bytes(ctx.workspace_id)

@@ -68,6 +68,24 @@ services:
       # `environment`-Maps, daher gilt das Admin-MFA-Gate auch im Cloud-Stack —
       # hier bewusst nicht dupliziert, um Drift zu vermeiden.
       #
+      # Cloud-Auth: NUR externe Provider (Google, GitHub) — Owner-Entscheidung
+      # 2026-09-24. Das Gegenstueck zur UI-Seite (VITE_WHO2BE_EDITION=cloud,
+      # s. `web` unten): mit `false` weist GoTrue `POST /signup` (400
+      # `email_provider_disabled`) und `POST /token?grant_type=password` (422)
+      # ab. Team-Einladungen sind NICHT betroffen — `POST /invite` und
+      # `POST /verify` kennen in v2.196.0 keinen `External.Email`-Check, die
+      # Einladungsmail geht weiter raus.
+      #
+      # HIER bewusst env-gesteuert mit Default `true`, nicht hart `false`:
+      # dieser Stack bringt keine OAuth-Credentials mit (die Basis defaultet
+      # GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_ENABLED auf `false`). Ein hartes `false`
+      # wuerde JEDEN Anmeldeweg sperren — genau die Reihenfolge-Sperre, vor der
+      # `deploy/hetzner/supabase/README.md` warnt. Die Cloud-Eigenschaft wird
+      # dort gesetzt, wo Credentials existieren (Hetzner/Dokploy-`.env`).
+      # Wer die echte Cloud-Anmeldung lokal nachstellen will: erst Provider in
+      # der `.env` aktivieren (docs/cloud-local-smoke.md §3b), dann
+      # GOTRUE_EXTERNAL_EMAIL_ENABLED=false setzen.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Cloud-Paritaet: E-Mail-Verifikation PFLICHT (dev nutzt autoconfirm=true).
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       # SMTP → mailpit. Auth/Insecure egal, mailpit nimmt im Dev-Modus alles an.
@@ -113,6 +131,12 @@ services:
       # Oeffentliche https-Webhook-URL (Mollie akzeptiert kein localhost). Lokal
       # via Tunnel (ngrok/cloudflared) setzen — sonst ohne webhookUrl angelegt.
       MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Betreiber-Allowlist des Override-Endpoints (ADR-0028) — dieselbe Zeile
+      # wie im Hetzner-Overlay, und aus demselben Grund: ohne sie kommt die
+      # Variable nie im Container an und der Override antwortet fail-closed mit
+      # 403 (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
+      # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
+      WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
       # Invitation-/Service-Mails via GoTrue-Admin (optional auch ohne nutzbar).
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:5173}

@@ -121,7 +121,10 @@ TODO, sondern die Bedingung, unter der die Entscheidung gilt.
 
 **Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
 Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**
-Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`).
+Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`). Das gilt
+auch nach einer **Kuendigung**: die Org faellt auf das Free-Limit (100 MiB)
+zurueck, ihre bereits abgelegten Bytes bleiben vollstaendig les- und
+herunterladbar, nur der naechste Ingest antwortet mit `402`.
 Dasselbe gilt fuer den Workspace-Deckel: liegt eine Org nach einem Downgrade
 ueber ihrer Grenze, bleiben **alle** Workspaces vollstaendig nutzbar (lesen,
 schreiben, loeschen); nur die **Anlage** antwortet mit `402`,
@@ -193,16 +196,16 @@ Beispiel-Metadata für **Pro**:
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
 Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
-`mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
-unbegrenzt (`None`).
+`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
 
-Für `token_quota` **und `workspace_quota`** gilt das **nur außerhalb der Cloud**
-(On-Prem/OSS). Fehlt der
+Für `token_quota`, `storage_quota_bytes` **und `workspace_quota`** gilt das
+**nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
 Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
 angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
 Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
-„nicht gesetzt": `Entitlement.effective_token_quota` bzw.
-`effective_workspace_quota` fällt dann auf den
+„nicht gesetzt": `Entitlement.effective_token_quota`,
+`effective_storage_quota_bytes` bzw. `effective_workspace_quota` fällt dann auf
+den
 Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
 Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
 sie durchzusetzen.

@@ -22,6 +22,7 @@ import { notify } from '@/lib/feedback'
 import { OAuthButtons } from '../components/OAuthButtons'
 import { TurnstileWidget } from '../components/TurnstileWidget'
 import { translateAuthError } from '../lib/captcha'
+import { isPasswordAuthEnabled } from '../lib/password-auth'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 import { useCaptcha } from '../lib/use-captcha'
@@ -85,6 +86,13 @@ export function LoginPage() {
   // Seite. Weil ein Token einmalig gueltig ist, stellt `captcha.reset()` es
   // nach jedem verbrauchenden Request neu.
   const captcha = useCaptcha()
+
+  // Cloud: nur externe Provider (Owner-Entscheidung 2026-09-24). Das
+  // Passwortformular wird dann gar nicht erst gerendert — die harte
+  // Durchsetzung liegt bei GoTrue (`GOTRUE_EXTERNAL_EMAIL_ENABLED=false`,
+  // `POST /token` antwortet mit 422 `email_provider_disabled`), dieses Flag
+  // entfernt nur die dann tote UI. Im Self-Hosting unveraendert `true`.
+  const passwordAuth = isPasswordAuthEnabled()
 
   // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
   // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
@@ -240,6 +248,7 @@ export function LoginPage() {
             </Form>
           ) : (
           <div className="flex flex-col gap-4">
+            {passwordAuth ? (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 <FormField
@@ -353,11 +362,14 @@ export function LoginPage() {
                 ) : null}
               </form>
             </Form>
+            ) : null}
+            {passwordAuth ? (
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
               {t('or')}
               <span className="h-px flex-1 bg-border" />
             </div>
+            ) : null}
             <OAuthButtons next={next} />
             {/* Registrieren-Link zeigen, wenn entweder der "Wir arbeiten
                 noch"-Modus aktiv ist (fuehrt zur Hinweisseite, Issue #429)
