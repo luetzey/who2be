@@ -35,14 +35,13 @@ BSI IT-Grundschutz-Kompendium, Baustein **SYS.1.6 Containerisierung**:
   einem nicht-privilegierten System-Account ausgefuehrt werden, der ueber keine
   erweiterten Rechte fuer den Container-Dienst und das Betriebssystem des
   Host-Systems verfuegt **oder diese Rechte erlangen kann**."
-  → `no-new-privileges` adressiert genau den zweiten Halbsatz („erlangen
-  kann"): es sperrt den Rechtezuwachs ueber setuid-/setgid-Binaries und
-  Datei-Capabilities. Es erfuellt A17 damit **nicht vollstaendig** — der erste
-  Halbsatz (Runtime und Container laufen unter einem nicht-privilegierten
-  Account) und die geforderte Kapselung der Runtime sind eigene Themen und
-  bleiben offen. Diese Karte traegt einen Teilbeitrag, keine A17-Konformitaet.
-  `cap_drop`/`read_only` liegen unter A21/A23 (H) und sind laut Karte out of
-  scope.
+  → `no-new-privileges` adressiert den Teilaspekt „oder diese Rechte erlangen
+  kann": es sperrt den Rechtezuwachs ueber setuid-/setgid-Binaries und
+  Datei-Capabilities. Der Geltungsbereich von A17 ist breiter als dieser
+  Teilaspekt — die Karte weist die Massnahme deshalb bewusst als Beitrag zu
+  A17 aus und nicht als A17-Konformitaet, damit spaetere Leser den Umfang
+  nicht ueberschaetzen. Die Anforderungen A21/A23 (H) gehoeren zu einem
+  eigenen Zuschnitt und sind laut Karte nicht Teil dieser Aenderung.
 
 Quelle, selbst aufgeschlagen und woertlich abgeglichen: BSI
 IT-Grundschutz-Kompendium, Baustein SYS.1.6 Containerisierung, **Edition

@@ -3,17 +3,17 @@
 Drei Compose-Bloecke sollen an **jedem** Dienst beider Hetzner-Stacks stehen,
 und genau diese Vollstaendigkeit ist das, was ein Mensch beim Review zuverlaessig
 uebersieht — ein neuer Dienst wird angelegt, die drei Zeilen fehlen, und nichts
-faellt auf, weil der Stack ja startet. Was dabei verloren geht:
+faellt auf, weil der Stack ja startet:
 
-1. ``logging:`` fehlt an einem Dienst → dessen Container-Log waechst unbegrenzt
-   und fuellt irgendwann die Platte. Der Ausfall kommt Monate spaeter und sieht
+1. ``logging:`` deckelt das Container-Log; ohne den Deckel waechst es
+   unbegrenzt, und der daraus folgende Ausfall kommt Monate spaeter und sieht
    nicht nach einer Compose-Zeile aus.
-2. ``security_opt: ["no-new-privileges:true"]`` fehlt → in genau diesem
-   Container bleibt Privilege-Escalation ueber setuid-Binaries moeglich. Eine
-   Luecke, die niemandem auffaellt, weil sie nichts kaputt macht.
-3. ``mem_limit`` fehlt → dieser Container ist der einzige ohne Deckel und damit
-   der wahrscheinlichste Ausloeser eines Host-OOM, dessen Opfer sich der Kernel
-   selbst sucht (BSI SYS.1.6.A15).
+2. ``security_opt: ["no-new-privileges:true"]`` sperrt den Rechtezuwachs im
+   Container (BSI SYS.1.6.A17). Ein Dienst ohne die Zeile faellt niemandem
+   auf, weil die fehlende Einstellung nichts kaputt macht.
+3. ``mem_limit`` begrenzt den Speicher je Container (BSI SYS.1.6.A15). Ein
+   Dienst ohne Deckel bestimmt im Zweifel, welchen Prozess der Kernel
+   beendet — und das soll nicht dem Zufall ueberlassen bleiben.
 
 Deshalb prueft dieser Test nicht Stichproben, sondern zaehlt ab: jeder Dienst,
 den die beiden Dateien definieren — inklusive One-Shots und Profil-Diensten.
@@ -67,8 +67,8 @@ _IDS = [f"{stack}/{name}" for stack, name, _ in _ALL]
 def test_service_drops_new_privileges(stack: str, name: str, spec: dict[str, Any]) -> None:
     """Jeder Dienst setzt ``no-new-privileges`` — ohne Ausnahme."""
     assert spec.get("security_opt") == ["no-new-privileges:true"], (
-        f"{stack}/{name} ohne no-new-privileges — Privilege-Escalation ueber "
-        "setuid-Binaries bliebe in genau diesem Container offen."
+        f"{stack}/{name} ohne no-new-privileges — die Haertung muss an jedem "
+        "Dienst stehen, nicht an den meisten."
     )
 
 
@@ -88,8 +88,8 @@ def test_service_has_memory_ceiling(stack: str, name: str, spec: dict[str, Any])
     """Jeder Dienst hat eine Speicher-Obergrenze (BSI SYS.1.6.A15)."""
     limit = spec.get("mem_limit")
     assert isinstance(limit, str) and limit.endswith(("m", "g")), (
-        f"{stack}/{name} ohne mem_limit — dieser Container waere der einzige "
-        "ohne Deckel und damit der wahrscheinlichste Ausloeser eines Host-OOM."
+        f"{stack}/{name} ohne mem_limit — der Deckel muss an jedem Dienst "
+        "stehen, damit die Speicherobergrenzen als Ganzes wirken."
     )
 
 

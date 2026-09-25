@@ -12,10 +12,10 @@
 #
 # --- Container-Haertung (W8/S1-S3) -------------------------------------------
 # Drei Blöcke an JEDEM Dienst, auch an den One-Shots und den Profil-Diensten.
-# Vollstaendigkeit ist hier keine Kosmetik: ein einzelner Dienst ohne Deckel
-# ist genau der, der den Host umwirft, und ein einzelner ohne `logging:` ist
-# der, der die Platte fuellt. `apps/api/tests/test_compose_hardening.py` haelt
-# das nach, damit ein kuenftig hinzugefuegter Dienst nicht still durchrutscht.
+# Vollstaendigkeit ist hier keine Kosmetik: die Wirkung der drei Einstellungen
+# entsteht erst, wenn kein Dienst sie auslaesst.
+# `apps/api/tests/test_compose_hardening.py` haelt das nach, damit ein kuenftig
+# hinzugefuegter Dienst nicht still durchrutscht.
 #
 # 1. `logging:` — Docker-eigene Rotation der Container-Logs (stdout/stderr).
 #    Ohne sie waechst die json-Datei je Container unbegrenzt; 10m x 3 deckelt
@@ -25,11 +25,9 @@
 #    Kernel-Flag: ein Prozess im Container kann seine Rechte ueber setuid-/
 #    setgid-Binaries oder Datei-Capabilities nicht mehr erhoehen. Keine
 #    Verhaltensaenderung fuer Dienste, die nicht ohnehin eskalieren wollen.
-#    Das ist ein TEILBEITRAG zu BSI SYS.1.6.A17 (SOLLTE), nicht dessen
-#    Erfuellung: A17 verlangt zusaetzlich, dass Runtime und Container unter
-#    einem nicht-privilegierten System-Account laufen und die Runtime
-#    gekapselt ist. `no-new-privileges` deckt nur den Halbsatz „oder diese
-#    Rechte erlangen kann" ab.
+#    Das deckt den Aspekt des Rechtezuwachses aus BSI SYS.1.6.A17 (SOLLTE)
+#    ab; der Geltungsbereich der Anforderung ist breiter, die Zeile ist also
+#    ein Beitrag zu A17 und nicht dessen Erfuellung.
 # 3. `mem_limit` — Obergrenze, KEINE Reservierung. Zweck ist nicht, Speicher
 #    zuzuteilen, sondern zu verhindern, dass ein ausreissender Container den
 #    Host-OOM-Killer ausloest, der sich sein Opfer selbst sucht — potenziell
