@@ -13,7 +13,7 @@ Basis: `origin/main` @ `cee6478e` (Worktree vor der Arbeit darauf fast-forwarded
 | Zusatz — keine Quota-Schritte | `docs/cloud-prod-smoke.md` kennt nur den MCP-429-Fall (§5). Speicher (#536), Token (#538) und Workspace (#576) kommen nicht vor. |
 
 Format der Variable (im Code nachgesehen, nicht geraten):
-`who2be_billing/router.py#_override_operator_ids` splittet an `,`, trimmt und
+`packages/billing/src/who2be_billing/router.py#_override_operator_ids` splittet an `,`, trimmt und
 parst jeden Eintrag als `UUID` — also **kommaseparierte User-UUIDs**, leer ⇒
 fail-closed (niemand darf schreiben).
 

@@ -116,7 +116,7 @@ services:
       # Betreiber-Allowlist des Override-Endpoints (ADR-0028) — dieselbe Zeile
       # wie im Hetzner-Overlay, und aus demselben Grund: ohne sie kommt die
       # Variable nie im Container an und der Override antwortet fail-closed mit
-      # 403 (`who2be_billing/router.py#_require_override_operator`).
+      # 403 (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
       # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
       WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
       # Invitation-/Service-Mails via GoTrue-Admin (optional auch ohne nutzbar).

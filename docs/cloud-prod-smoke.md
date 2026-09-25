@@ -453,7 +453,8 @@ protokollieren.
 - **Override liefert 403** → einer der drei Vorbedingungen aus §4A fehlt. In
   dieser Reihenfolge pruefen:
   1. **API-Token statt Web-JWT** — der haeufigste Fall. `Bearer w2b_…` wird
-     kategorisch abgelehnt (`who2be_billing/router.py#_require_override_operator`).
+     kategorisch abgelehnt
+     (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
      Mit dem `aal2`-Web-JWT (`$JWT`) wiederholen.
   2. **Allowlist leer/fehlt im Container** —
      `dcc exec api printenv WHO2BE_BILLING_OVERRIDE_OPERATORS`. Leere Ausgabe ⇒
