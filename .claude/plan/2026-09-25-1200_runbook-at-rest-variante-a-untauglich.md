@@ -8,10 +8,10 @@ Karte: `t_87ed8580` (W8/M5+M1). Basis: `origin/main` @ `53c4b854`.
 „Hetzner Cloud Volumes werden serverseitig at-Rest verschluesselt (LUKS auf der
 Plattform-Ebene)." Hetzners eigene TOMs sagen das Gegenteil, woertlich:
 
-> | Encryption of Data (at rest) | Client's responsibility |
+> | Encryption of Data (at rest) | Client’s responsibility |
 
 Quelle: Hetzner Docs, „Technical and Organizational Measures", Abschnitt
-*Confidentiality*, ID GE-68A66, „Last change on 2025-03-31" —
+*Confidentiality*, ID GE-68A66, „Last change on 2025-04-01" —
 <https://docs.hetzner.com/general/security-and-identify/technical-and-organizational-measures/>,
 abgerufen 2026-09-25. Dieselbe Tabelle ordnet Dedicated- und Cloud-Server
 ausdruecklich dem Kunden zu („You/the Client are completely responsible for the

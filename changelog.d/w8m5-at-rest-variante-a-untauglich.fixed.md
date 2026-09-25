@@ -1,6 +1,6 @@
 - RUNBOOK: Die Behauptung, Hetzner verschlüssele Cloud Volumes serverseitig
   at-Rest, ist entfernt — sie war falsch. Hetzners eigene TOMs führen
-  „Encryption of Data (at rest)" als *Client's responsibility*; „Variante A"
+  „Encryption of Data (at rest)" als *Client’s responsibility*; „Variante A"
   ist damit kein gangbarer Weg und steht nur noch als ausdrückliche Warnung
   im Dokument. Gültig ist allein selbst verwaltetes LUKS auf dem Host.
 

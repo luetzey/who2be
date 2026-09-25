@@ -749,10 +749,10 @@ Protokoll-Tabelle am Ende des Abschnitts festhalten.
 Hetzner benennt das in den eigenen Technisch-organisatorischen Massnahmen
 (TOM) woertlich als Kundenpflicht:
 
-> | Encryption of Data (at rest) | Client's responsibility |
+> | Encryption of Data (at rest) | Client’s responsibility |
 
 — Hetzner Docs, *Technical and Organizational Measures*, Abschnitt
-„Confidentiality" (ID `GE-68A66`, „Last change on 2025-03-31"),
+„Confidentiality" (ID `GE-68A66`, „Last change on 2025-04-01"),
 <https://docs.hetzner.com/general/security-and-identify/technical-and-organizational-measures/>,
 abgerufen **2026-09-25**. Dieselbe Seite stellt Cloud- und Dedicated-Server
 ausdruecklich in die Kundenverantwortung („You/the Client are completely

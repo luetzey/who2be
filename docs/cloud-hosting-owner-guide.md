@@ -133,7 +133,7 @@ Es gibt nur **einen** gültigen Weg, beschrieben im
 Die früher hier genannte „Variante A" (verschlüsseltes Hetzner-Cloud-Volume,
 Plattform-LUKS) **existiert nicht** — Hetzner verschlüsselt Cloud Volumes nicht
 serverseitig, die eigenen TOMs führen „Encryption of Data (at rest)" als
-*Client's responsibility*. Es gibt also auch keine Console-Eigenschaft, die man
+*Client’s responsibility*. Es gibt also auch keine Console-Eigenschaft, die man
 als Nachweis abhaken könnte.
 
 Praktisch heißt das: Der Boot braucht ein **Key-File** (Mode 600, nicht im Repo,
