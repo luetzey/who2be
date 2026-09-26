@@ -11,5 +11,4 @@
   `test_gate_inventory.py` friert das Gate-Inventar aller POST-Routen als Golden
   ein (`apps/api/tests/contract/gate_inventory.json`, Aktualisierung mit
   `REGEN=1 uv run pytest apps/api/tests/test_gate_inventory.py`): verschwindet
-  ein Gate oder erscheint eine neue ungegatete Route, bricht der Diff — und jede
-  ungegatete Zeile braucht eine Begruendung im Golden.
+  ein Gate oder erscheint eine neue ungegatete Route, bricht der Diff.

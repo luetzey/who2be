@@ -77,7 +77,7 @@ E-Mail-Adresse mit, wird der Nutzer direkt bestaetigt — der Zweig
 
 ## Phase 0 · Sofort anfangen (Vorlauf: Tage, nicht in deiner Hand)
 
-Diese vier Punkte kannst du heute vom Handy aus anstossen. Alles danach wartet
+Diese Punkte kannst du heute vom Handy aus anstossen. Alles danach wartet
 auf sie.
 
 - [ ] **1 · Mollie-Konto eroeffnen und verifizieren, Test-API-Key (`test_…`)
@@ -167,6 +167,21 @@ auf sie.
       > noch die Erneuerungs-Prozedur sind irgendwo dokumentiert, die
       > Apple-Karte ist offen. Wenn du Apple willst, mach es nach dem Testlauf
       > — und rechne damit, dass du die Schritte selbst zusammensuchst.
+
+- [ ] **5 · AVV mit Hetzner abschliessen.**
+      *Wer: nur du · Dauer: 15 min in der Console, Gegenzeichnung kann Tage
+      dauern · Danach anders: die Datenschutzerklaerung traegt.*
+      Hetzner verarbeitet als Hoster die gesamte Datenbank und die Backups in
+      deinem Auftrag. Der Auftragsverarbeitungsvertrag wird in der
+      Hetzner-Console unter den Vertragsdokumenten abgeschlossen. Ohne ihn
+      fehlt der Unterbau fuer die Aussagen, die die Datenschutzerklaerung ueber
+      den Hoster macht — und der Eintrag im Verzeichnis der Verarbeitungen
+      bleibt ein Platzhalter (`docs/compliance/vvt.md`, Zeile Hetzner). Dasselbe
+      gilt fuer die weiteren Verarbeiter, sobald sie im Spiel sind
+      (Mail-Provider, Mollie, Cloudflare bei aktivem Captcha).
+      **Kein Rechtsrat** — welche Fassung du brauchst und was in die Texte
+      gehoert, klaert der Betreiber bzw. eine anwaltliche Pruefung;
+      `docs/compliance/legal-texts-checklist.md` listet den Inhalt.
 
 ---
 

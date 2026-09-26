@@ -282,6 +282,7 @@ deferred/akzeptierten Findings dieser Datei (**F-04**, **F-11**, **F-12**,
 - **F-12** (Security-Header) und **F-13** (`/docs` public) sind bewusste
   Haertungs-/OSS-Entscheidungen; F-12 ist als aktive Caddy-Task verortet.
 
-Hinweis: Der tatsaechliche Public-Flip ist **nicht** Teil dieses Schritts (Repo
-bleibt privat). F-12 ist seit 2026-06-03 geschlossen (CSP/Header in Caddy
+Hinweis: Der tatsaechliche Public-Flip war **nicht** Teil dieses Schritts. Das
+Repo ist inzwischen oeffentlich; der Befund oben gilt unveraendert und wurde
+nicht redigiert. F-12 ist seit 2026-06-03 geschlossen (CSP/Header in Caddy
 finalisiert, s. o.).
