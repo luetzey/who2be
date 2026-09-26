@@ -7,6 +7,7 @@ CVE-Triage und Secret-Rotation. Setup-Anleitungen liegen in
 
 Aktive Sektionen:
 
+- [Betriebsgrenze: genau EIN API-Container](#betriebsgrenze-genau-ein-api-container) — **vor jedem Skalieren lesen**: der Tabellen-Store vertraegt genau einen Schreiber
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/LUKS/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
@@ -19,6 +20,111 @@ Aktive Sektionen:
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
+
+---
+
+## Betriebsgrenze: genau EIN API-Container
+
+> ⛔ **Der `api`-Dienst darf nie in mehr als einer laufenden Instanz existieren.**
+> Kein `replicas`, kein `docker compose up --scale api=2`, kein
+> `WEB_CONCURRENCY`/`--workers`, kein zweiter Host auf demselben Volume.
+
+**Warum.** Die Zeilen der Agenten-Tabellen liegen nicht in Postgres, sondern in
+einer SQLite-Datei pro WorkArea (ADR-0049, siehe §Tabellen-Store-Backup). Die API
+serialisiert Schreibzugriffe darauf ueber einen **prozesslokalen** Lock. Ein
+zweiter Prozess haette einen eigenen Lock auf derselben Datei; uebrig bliebe
+SQLites `busy_timeout`. Die Folge ist **stille Korruption**: kein Fehler, kein
+Alarm, kein Log-Eintrag — der Schaden faellt erst beim Lesen auf, moeglicherweise
+Wochen spaeter.
+
+Horizontal skaliert wird erst mit area-affinem Routing (offener ADR). Bis dahin
+ist „mehr API-Kapazitaet" **keine** Konfigurationsfrage.
+
+### Was das absichert
+
+| Schicht | Wo | Faengt |
+|---|---|---|
+| Start-Guard | `apps/api/.../main.py` | `WEB_CONCURRENCY` / `--workers N` im API-Prozess |
+| Compose-Drift-Tests | `apps/api/tests/test_single_writer_guard.py` | `replicas`, `scale`, `--workers`, `update_config`/`start-first` in **jeder** Compose-Datei mit `api`-Dienst |
+| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`-Container nach dem `up` → Abbruch mit Exit 3 |
+
+**Der Start-Guard ist kein Beleg.** Er sieht nur den eigenen Prozessbaum;
+mehrere *Container* kann kein In-Process-Check erkennen. Dass er schweigt, sagt
+nichts darueber, ob die Grenze eingehalten wird.
+
+### Erzeugt ein Deploy kurzzeitig zwei API-Container?
+
+**Nein.** `deploy.sh` faehrt `docker compose up -d --wait --remove-orphans` ohne
+`--scale`, und Compose recreated einen Service in dieser Reihenfolge: neuen
+Container **erzeugen** (nicht starten) → alten **stoppen** → alten entfernen →
+umbenennen → erst in der folgenden Start-Phase starten (`recreateContainer` in
+`pkg/compose/convergence.go`, identisch geprueft in Compose v2.20, v2.29 und
+v2.39). Eine Ueberlappung braeuchte `deploy.update_config.order: start-first`
+(„the new task is started first, and the running tasks briefly overlap",
+Compose Deploy Specification) — der Default ist `stop-first`, und keine
+Compose-Datei dieses Repos setzt `update_config`. Ein Drift-Test haelt das fest.
+
+Weil die auf der Box installierte Compose-Version nicht gepinnt ist
+(`get.docker.com` installiert das jeweils aktuelle Release), bleibt ein
+Restrisiko. `deploy.sh` setzt dagegen **keinen** Vorab-`stop api` — das waere der
+einzige Mechanismus, der das Recreate-Fenster versionsunabhaengig schliesst
+(ohne laufenden alten Container kann keine Reihenfolge zwei laufende erzeugen),
+kostet aber bei jedem Deploy einen vollen Start samt Healthcheck-`start_period`
+an Downtime. Die Abwaegung faellt gegen ihn aus, weil die Sequenz ueber
+v2.20 – v2.39 belegt ist und der Drift-Test `start-first` verbietet.
+
+Zusaetzlich **misst** `deploy.sh` nach dem `up`:
+
+```bash
+docker compose … ps --status running --quiet api | grep -c .   # muss 1 sein
+```
+
+Ist das Ergebnis nicht `1`, bricht der Deploy mit Exit-Code 3 ab. Wichtig fuer
+die Einordnung: diese Messung laeuft **nach** `--wait`, prueft also den
+**Endzustand**. Eine transiente Ueberlappung waehrend des Recreate waere zum
+Messzeitpunkt vorbei — sie faengt **dauerhafte** Zweitinstanzen (verwaister
+Container aus einem frueheren Bringup, von Hand gestartete Instanz, gar nicht
+gestarteter Container), nicht das Fenster selbst.
+
+### Wenn der Deploy mit Exit 3 abbricht
+
+```bash
+cd /opt/who2be
+
+# 1) Was laeuft wirklich?
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env ps -a api
+
+# 2) Bei ZWEI laufenden Containern: sofort einen stoppen — jede Minute mit
+#    zwei Schreibern ist Korruptionsrisiko. Danach Integritaet pruefen.
+docker stop <container-id-des-aelteren>
+
+# 3) Integritaet aller Area-Dateien pruefen (muss ueberall `ok` liefern)
+docker compose … exec api sh -c \
+  'for f in /data/tablestore/*/*.sqlite; do echo -n "$f: "; \
+     python -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute(\"PRAGMA integrity_check\").fetchone()[0])" "$f"; done'
+
+# 4) Bei NULL laufenden Containern: der Start ist gescheitert, nicht die
+#    Grenze verletzt. Logs lesen, dann normal neu deployen.
+docker compose … logs --tail 100 api
+
+# 5) Meldet das Skript stattdessen "'compose ps api' ist selbst
+#    fehlgeschlagen": die Zahl ist unbekannt, nicht 0. Ursache ist meist ein
+#    nicht laufender Docker-Daemon oder ein Projekt-/Env-Fehler.
+systemctl status docker
+```
+
+Liefert Schritt 3 irgendwo etwas anderes als `ok`: Restore der betroffenen Area
+aus dem letzten Snapshot (§Tabellen-Store-Backup).
+
+### Legitime zweite Prozesse
+
+Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
+die API laeuft: der Retention-Cron (`docker compose run --rm api who2be-purge`)
+und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
+kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
+Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
+waehrend eines Deploys starten.
 
 ---
 
@@ -1315,6 +1421,11 @@ ${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite
 
 In Postgres steht nur der Katalog (`wa_table`, Schema + Name). **Ein
 `pg_dump`-Restore liefert also leere Tabellen**, wenn dieses Verzeichnis fehlt.
+
+> Diese Dateien sind der Grund fuer die Betriebsgrenze „genau EIN
+> API-Container" — siehe
+> [den Abschnitt oben](#betriebsgrenze-genau-ein-api-container), bevor du eine
+> zweite Instanz startest.
 
 **Nicht einfach kopieren:** eine SQLite-Datei im WAL-Modus ist waehrend eines
 laufenden Imports kein konsistenter Stand. Gesichert wird deshalb mit
