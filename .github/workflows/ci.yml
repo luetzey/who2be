@@ -306,6 +306,22 @@ jobs:
         run: |
           docker pull caddy:2.8-alpine
           CADDY_IMAGE=caddy:2.8-alpine bash deploy/hetzner/tests/test_access_log_rotation.sh
+      - name: Security-Header (Wirkung, gegen die echte Caddyfile)
+        # Die Header aus F-12 (docs/security-findings.md) waren bis hierher nur
+        # von Hand belegt — derselbe Zustand, den die Access-Log-Frist eine
+        # Zeile darueber hatte. Der Test faehrt Caddy als Wegwerf-Container mit
+        # der unveraenderten `deploy/hetzner/Caddyfile` hoch und misst, was auf
+        # der Leitung ankommt. Kein Eingriff in den Smoke-Stack: geprueft wird
+        # die Antwort des Proxys, dafuer braucht es weder API noch Datenbank.
+        #
+        # Der `/docs`-Fall ist dort ausdruecklich uebersprungen (er prueft die
+        # App, nicht Caddy) und bleibt Handlauf im Prod-Smoke; die Zusage selbst
+        # deckt apps/api/tests/test_docs_toggle.py ab. Die Bilanz-Zeile
+        # CHECKS_RUN/CHECKS_SKIPPED im Log sagt, was wirklich lief — ein Lauf
+        # ohne eine einzige Pruefung endet rot.
+        run: |
+          docker pull caddy:2.8-alpine
+          CADDY_IMAGE=caddy:2.8-alpine bash deploy/hetzner/tests/test_headers_ci.sh
       - name: Build runtime-cloud image (ADR-0029, build-only)
         # Cloud-Profil-Gegenprobe (LIC-4): das Docker-Target `runtime-cloud`
         # (inkl. who2be-billing) wurde in CI sonst nie gebaut — ein Bruch
