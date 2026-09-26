@@ -22,7 +22,7 @@ import { Select } from '@/components/ui/select'
 import { useAgentTokens } from '@/hooks/useTokens'
 import { useTokenMutations } from '@/hooks/useTokenMutations'
 import { cn } from '@/lib/utils'
-import { roleLabel, rolesAtMost } from '@/lib/roles'
+import { agentBoundRoleOptions, roleLabel } from '@/lib/roles'
 
 const tokenSchema = z.object({
   name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
@@ -48,11 +48,19 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
   // Token erbt hoechstens die eigene Rolle (Snapshot, ADR-0023). Die Rolle ist
   // unabhaengig von der Tool-Policy des Agenten: sie gated REST-Mutationen,
   // die Policy scopt die Reads/Writes des gebundenen Agenten.
+  //
+  // Zusaetzlich gilt hier die Maschinen-Obergrenze: jeder Token dieser Ansicht
+  // ist an einen Agenten gebunden (`agent_id` unten ist immer gesetzt), und das
+  // Backend lehnt `admin` fuer solche Tokens mit 403 `agent_bound_role_capped`
+  // ab. Deshalb wird auch der VORAUSGEWAEHLTE Wert gedeckelt, nicht nur die
+  // Liste: ein Admin bekaeme sonst ein Feld, dessen Vorgabe der Server
+  // verweigert — und ohne das Deckeln stuende im Select ein Wert, den seine
+  // eigenen Optionen nicht enthalten.
   const currentRole = useCurrentWorkspaceRole()
-  const roleOptions = currentRole !== null ? rolesAtMost(currentRole) : []
+  const roleOptions = currentRole !== null ? agentBoundRoleOptions(currentRole) : []
   const [roleOverride, setRoleOverride] = useState<WorkspaceRole | null>(null)
   const [expiresAt, setExpiresAt] = useState('')
-  const role = roleOverride ?? currentRole
+  const role = roleOverride ?? roleOptions[0] ?? currentRole
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')

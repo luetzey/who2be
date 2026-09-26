@@ -394,6 +394,82 @@ def deny_agent_bound_workspace_admin(ctx: WorkspaceContext) -> None:
         )
 
 
+AGENT_BOUND_MAX_ROLE = WorkspaceRole.editor
+
+
+def cap_agent_bound_role(role: WorkspaceRole) -> WorkspaceRole:
+    """Deckelt die Rolle eines agent-gebundenen Tokens auf `editor`.
+
+    Die Rolle `admin` an einem Maschinen-Token ist die Wurzel der Eskalation,
+    die `deny_agent_bound_workspace_admin` und `deny_machine_token_account_route`
+    an den Routen abfangen: sie verschafft dem Token eine Reichweite, die die
+    Pro-Agent-Policy daneben nicht begrenzt, weil die Rolle im Token gepinnt ist.
+    Die Gates schliessen die bekannten Wege; dieser Deckel verengt die
+    Angriffsflaeche an der Quelle, sodass ein kuenftiger, noch unbekannter Weg
+    gar keine Admin-Rolle vorfindet.
+
+    Bewusst eine reine Funktion und kein Gate: es gibt **zwei** Mint-Pfade
+    (`token_service.create` und `oauth_service._issue`), die unterschiedlich
+    reagieren muessen — der eine lehnt eine ausdrueckliche Anforderung ab, der
+    andere deckelt still eine abgeleitete Rolle. Gemeinsam ist nur die
+    Obergrenze, und die steht hier genau einmal.
+    """
+    return AGENT_BOUND_MAX_ROLE if not role_satisfies(AGENT_BOUND_MAX_ROLE, role) else role
+
+
+def is_machine_token(principal: CurrentPrincipal) -> bool:
+    """True, wenn der Aufruf ueber einen `w2b_`-API-Token kam (kein Mensch).
+
+    Diskriminator ist `token_workspace_id`: laut `CurrentPrincipal`-Vertrag ist
+    es im Token-Pfad IMMER gesetzt (Tokens sind pro Workspace gepinnt) und im
+    JWT-Pfad immer `None`. Dieselbe Unterscheidung nutzt `get_consent_principal`
+    bereits, um den OAuth-Consent auf eingeloggte Menschen zu klemmen.
+
+    Bewusst **nicht** `token_agent_id`: auf dem kontoweiten Pfad ist die Frage
+    „Mensch oder Maschine?", nicht „welcher Agent?". Ein Gate an der
+    Agent-Bindung waere zudem an die DB-Invariante aus Migration 0048 gekoppelt
+    (jeder aktive Token ist agent-gebunden) und ginge auf, wenn sie je fiele —
+    diese Pruefung bleibt geschlossen.
+    """
+    return principal.token_workspace_id is not None
+
+
+def deny_machine_token_account_route(principal: CurrentPrincipal) -> None:
+    """Wirft 403, wenn ein Maschinen-Token eine kontoweite Route aufruft.
+
+    **Kontoweit** heisst: ausserhalb von `/v1/workspaces/{workspace_id}/...`
+    und damit ausserhalb des Workspace-Pins, der auf dem Token-Pfad die
+    tragende Isolationslinie ist (`get_current_workspace`). Was hier laeuft,
+    betrifft das Konto des Besitzers als Ganzes — seine Organisationen, seine
+    Workspaces, seine Daten ueber alle Workspaces hinweg. Ein an genau einen
+    Workspace gebundener Token hat dafuer keinen legitimen Anlass; die
+    Entscheidungen auf dieser Ebene gehoeren einer Person.
+
+    Das Gate sitzt bewusst in der Dependency `get_current_user` und nicht in
+    den Routern: eine Aufzaehlung der heutigen Endpunkte waere beim naechsten
+    wieder unvollstaendig. So ist jede neue Route auf diesem Pfad per Vorgabe
+    abgesichert, und Maschinen-Zugriff ist die ausdrueckliche Ausnahme, die
+    `get_current_principal` waehlt und deren Tenancy-Schnitt sie dann selbst
+    verantwortet (heute allein `GET /v1/me`).
+
+    `ApiGateError` (RFC 7807) wie die uebrigen Autorisierungs-Gates daneben;
+    `actionable_by="human"`, weil die Maschine es nicht selbst beheben kann,
+    eine Person aber schon — indem sie die Aktion in der Oberflaeche ausfuehrt.
+    """
+    if is_machine_token(principal):
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="account_route_requires_human",
+            actionable_by="human",
+            detail=(
+                "Kontoweite Aktionen (Konto, Organisationen, Datenexport) erfordern "
+                "eine angemeldete Person. Ein API-Token ist an einen einzelnen "
+                "Workspace gebunden und kann sie nicht ausfuehren — melde dich in "
+                "der Oberflaeche an."
+            ),
+        )
+
+
 def require_memory_mode(ctx: WorkspaceContext, minimum: MemoryMode) -> None:
     """Wirft 403, wenn der Agent den geforderten Gedaechtnis-Modus nicht hat (ADR-0044).
 
@@ -630,13 +706,43 @@ async def get_current_principal(
 async def get_current_user(
     principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
 ) -> UUID:
-    """FastAPI-Dependency: owner_id des authentifizierten Aufrufers.
+    """FastAPI-Dependency: owner_id des authentifizierten **menschlichen** Aufrufers.
 
-    Wird fuer Workspace-uebergreifende Endpunkte (`/v1/me`, `/v1/organizations`)
+    Wird fuer kontoweite Endpunkte (`/v1/me`, `/v1/organizations`, `/v1/gdpr`)
     verwendet. Fuer Workspace-scoped Endpunkte stattdessen
     `get_current_workspace`.
+
+    Hier sitzt das kontoweite Gate (`deny_machine_token_account_route`), und
+    zwar aus einem strukturellen Grund: diese Dependency reduziert den Aufrufer
+    auf die nackte `user_id`, womit Workspace-Pin und Agent-Bindung danach
+    unwiederbringlich weg sind — ein Router an diesem Pfad *kann* nicht mehr
+    unterscheiden, ob ein Mensch oder eine Maschine ruft. Statt das an jeder
+    Route einzeln nachzuziehen (und bei der naechsten zu vergessen), entscheidet
+    es die Dependency: wer `get_current_user` verlangt, bekommt einen Menschen
+    oder ein 403.
+
+    Eine Route, die bewusst auch Maschinen bedienen soll, nimmt stattdessen
+    `get_current_principal` und schneidet ihre Antwort selbst am Workspace-Pin
+    (heute allein `GET /v1/me` fuer die MCP-Token-Aufloesung). Das ist dann eine
+    sichtbare Entscheidung im Router und kein Versehen.
     """
+    deny_machine_token_account_route(principal)
     return principal.user_id
+
+
+async def get_current_human_principal(
+    principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
+) -> CurrentPrincipal:
+    """Wie `get_current_user`, liefert aber den vollen Principal.
+
+    Fuer kontoweite Routen, die mehr als die `user_id` brauchen — der
+    Invitation-Accept prueft die Einladung gegen den `email`-Claim, den nur der
+    JWT-Pfad traegt. Dasselbe Gate, damit „braucht den Principal" nicht
+    versehentlich zu „laesst Maschinen durch" wird: genau diese Kopplung war der
+    Grund, dass der kontoweite Pfad ueberhaupt offen stand.
+    """
+    deny_machine_token_account_route(principal)
+    return principal
 
 
 async def _load_agent_tool_policy(

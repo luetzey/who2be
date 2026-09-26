@@ -152,3 +152,60 @@ def test_the_decision_is_recorded_at_the_gate() -> None:
     assert doc is not None
     assert "_issue" in doc
     assert "ADR-0036" in doc
+
+
+# --- Rollen-Deckel auf dem OAuth-Mint-Pfad ----------------------------------
+#
+# Derselbe Grund, aus dem diese Datei ueberhaupt existiert: `_issue` legt
+# `api_token`-Zeilen an, ohne `TokenService.create` zu durchlaufen. Der Deckel
+# fuer agent-gebundene Tokens muss deshalb hier eigens sitzen — sonst waere die
+# Grenze loecherig, und zwar genau auf dem Pfad, den ein Remote-Connector nimmt.
+
+
+@pytest.mark.parametrize("requested", ["admin", "editor", "viewer"])
+def test_oauth_issue_never_mints_above_editor(requested: str) -> None:
+    """Keine Rolle ueber `editor` verlaesst den OAuth-Mint-Pfad.
+
+    Gemessen wird am Insert-Argument, nicht am Rueckgabewert: die gepinnte Rolle
+    in der `api_token`-Zeile ist es, die spaeter jeden Tool-Call autorisiert.
+    """
+    repo = _RecordingTokenRepo()
+    asyncio.run(
+        _service(repo)._issue(
+            workspace_id=_WORKSPACE_ID,
+            owner_id=_OWNER_ID,
+            role=requested,
+            agent_id=_AGENT_ID,
+            client_id="oac_test",
+            scope=None,
+        )
+    )
+    assert len(repo.inserts) == 1
+    minted = repo.inserts[0]["role"]
+    assert minted != WorkspaceRole.admin
+    # Der Deckel senkt nur, er hebt nicht: `viewer` bleibt `viewer`.
+    expected = WorkspaceRole.editor if requested == "admin" else WorkspaceRole(requested)
+    assert minted == expected
+
+
+def test_oauth_issue_caps_silently_instead_of_failing_the_consent_flow() -> None:
+    """Der Deckel lehnt den Connector nicht ab, er reicht ihn gedeckelt durch.
+
+    Anders als bei einer ausdruecklich angeforderten Rolle in
+    `TokenService.create` waehlt hier niemand die Rolle — sie kommt aus der
+    Membership. Ein 403 im Consent-Flow verweigerte jedem Admin den Connector,
+    statt ihm einen ausreichenden zu geben.
+    """
+    repo = _RecordingTokenRepo()
+    issued = asyncio.run(
+        _service(repo)._issue(
+            workspace_id=_WORKSPACE_ID,
+            owner_id=_OWNER_ID,
+            role="admin",
+            agent_id=_AGENT_ID,
+            client_id="oac_test",
+            scope=None,
+        )
+    )
+    assert issued.access_token.startswith("w2b_")
+    assert repo.inserts[0]["role"] == WorkspaceRole.editor
