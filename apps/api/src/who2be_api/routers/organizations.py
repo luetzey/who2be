@@ -18,6 +18,7 @@ from who2be_api.services.audit_service import AuditService
 from who2be_api.services.organization_service import OrganizationService
 from who2be_api.services.workspace_service import WorkspaceService
 from who2be_models import (
+    ApiErrorBody,
     OrganizationCreate,
     OrganizationDeletionRead,
     OrganizationRead,
@@ -37,7 +38,7 @@ def get_organization_service(
 def get_workspace_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> WorkspaceService:
-    return WorkspaceService(PgWorkspaceRepository(pool), PgOrganizationRepository(pool))
+    return WorkspaceService(PgWorkspaceRepository(pool), PgOrganizationRepository(pool), pool)
 
 
 def get_account_lifecycle_service(
@@ -91,7 +92,13 @@ async def list_organization_workspaces(
     return await service.list_for_org(organization_id, user_id)
 
 
-@router.post("/{organization_id}/workspaces", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{organization_id}/workspaces",
+    status_code=status.HTTP_201_CREATED,
+    # ADR-0051: der Fehler-Body ist Teil des Vertrags, also steht er im Schema.
+    # Nur deklarativ — den `reason` setzt das Gate im Service (Issue #576).
+    responses={402: {"model": ApiErrorBody, "description": "reason: workspace_quota_exceeded"}},
+)
 @limiter.limit(write_limit)
 async def create_organization_workspace(
     request: Request,

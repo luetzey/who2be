@@ -79,14 +79,14 @@ export function MfaSection() {
           {verified.map((factor) => (
             <li
               key={factor.id}
-              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
             >
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex min-w-0 basis-full items-center gap-2 md:basis-auto">
                 <ShieldCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="truncate">
                   {factor.friendly_name || t('account.mfa.factorFallbackName')}
                 </span>
-                <Badge>{t('account.mfa.statusActive')}</Badge>
+                <Badge className="shrink-0">{t('account.mfa.statusActive')}</Badge>
               </span>
               <RemoveFactorButton factor={factor} onRemoved={refresh} />
             </li>

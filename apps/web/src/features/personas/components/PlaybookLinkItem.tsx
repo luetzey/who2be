@@ -96,6 +96,13 @@ export function PlaybookLinkItem({
         size="sm"
         onClick={onAction}
         disabled={disabled}
+        // Responsive-Audit #571: AK 3 setzt die Schwelle dieses Pakets auf
+        // 40 px unterhalb `md`; gemessen waren es 36 px. Die Norm (§11) laesst
+        // `size="sm"` fuer Zeilen-Aktionen ausdruecklich zu — die 40 px kommen
+        // aus dem Akzeptanzkriterium, nicht aus der Norm. `tailwind-merge`
+        // loest das `h-9` der Variante zugunsten von `h-10` auf; ab `md`
+        // bleibt die Verdichtung erhalten.
+        className="h-10 md:h-9"
       >
         <ActionIcon aria-hidden="true" />
         {actionLabel}

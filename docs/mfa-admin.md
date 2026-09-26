@@ -72,10 +72,11 @@ Token-Rolle* (nicht zwingend die Rolle des Aufrufers) `admin` ist:
 Die beiden Ausnahmen von `require_aal2` (API-Token-Maschinenpfad,
 On-Prem-fail-open) gelten hier unveraendert mit.
 
-## GoTrue-Konfiguration (TOTP aktivieren)
+## GoTrue-Konfiguration (Faktoren aktivieren)
 
-GoTrue **v2.158.1** kennt **kein** Top-Level `GOTRUE_MFA_ENABLED`; Faktoren
-werden pro Typ geschaltet. TOTP ist default an und wird explizit gesetzt in:
+GoTrue kennt **kein** Top-Level `GOTRUE_MFA_ENABLED`; Faktoren werden pro Typ
+geschaltet. Der Stack laeuft auf **v2.196.0** (Issue #499; vorher `v2.158.1`,
+das WebAuthn noch gar nicht kannte). Gesetzt wird in:
 
 - `docker-compose.yml` (dev) — Service `auth`,
 - `docker-compose.cloud.yml` (Cloud-lokal) — vererbt aus dem Basis-`auth`,
@@ -84,10 +85,47 @@ werden pro Typ geschaltet. TOTP ist default an und wird explizit gesetzt in:
 Relevante Variablen (mit `.env`-Override):
 
 ```
-GOTRUE_MFA_TOTP_ENROLL_ENABLED=true   # Enrollment erlauben
-GOTRUE_MFA_TOTP_VERIFY_ENABLED=true   # Challenge/Verify erlauben
-GOTRUE_MFA_MAX_ENROLLED_FACTORS=10    # max. Faktoren pro Nutzer
+GOTRUE_MFA_TOTP_ENROLL_ENABLED=true       # TOTP-Enrollment erlauben
+GOTRUE_MFA_TOTP_VERIFY_ENABLED=true       # TOTP-Challenge/Verify erlauben
+GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED=true  # WebAuthn-Enrollment erlauben
+GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED=true  # WebAuthn-Challenge/Verify erlauben
+GOTRUE_MFA_MAX_ENROLLED_FACTORS=10        # max. Faktoren pro Nutzer, beide Arten zusammen
 ```
+
+**Die TOTP-Schalter sind per Default an, die WebAuthn-Schalter per Default
+aus** — GoTrue traegt `default:"false"` am generischen Faktor-Typ, und nur TOTP
+hat einen eigenen Typ mit `default:"true"`. Deshalb stehen die WebAuthn-Zeilen
+explizit im Compose; ohne sie waere die Version gehoben, aber der Faktor
+weiterhin nicht verfuegbar.
+
+WebAuthn braucht zusaetzlich eine **Relying-Party-Konfiguration** — mit einem
+**anderen Praefix** (`GOTRUE_WEBAUTHN_`, nicht `GOTRUE_MFA_WEB_AUTHN_`):
+
+```
+GOTRUE_WEBAUTHN_RP_ID=localhost            # Domain OHNE Schema/Port
+GOTRUE_WEBAUTHN_RP_DISPLAY_NAME=Who2Be     # Name im Browser-Dialog
+GOTRUE_WEBAUTHN_RP_ORIGINS=http://localhost:5173  # voller Origin MIT Schema/Port
+```
+
+Alle drei sind Pflicht, sobald ein WebAuthn-Schalter an ist. Seit **v2.190.0**
+*warnt* GoTrue bei unvollstaendiger Konfiguration, statt den Start abzubrechen
+— ein fehlender Wert kostet also still den Faktor, nicht den Stack. Im
+Zweifel gegenpruefen:
+
+```bash
+docker compose logs --no-color auth | grep -i "WebAuthn configuration is invalid"
+# → KEINE Ausgabe
+```
+
+Die Compose-Dateien leiten `RP_ORIGINS` aus `WHO2BE_PUBLIC_URL` (dev) bzw.
+`SITE_URL` (Prod) ab; `RP_ID` ist lokal `localhost` und in Prod
+`app.<DOMAIN>`. Wer den Stack ueber eine LAN-IP oder einen abweichenden
+Hostnamen faehrt, setzt `GOTRUE_WEBAUTHN_RP_ID` passend nach — Browser lehnen
+eine RP_ID ab, die nicht zum geladenen Origin passt.
+
+> **Die Oberflaeche fuer WebAuthn/Passkeys kommt erst mit #435 W2.** Der Faktor
+> ist ab hier serverseitig verfuegbar; das Enrollment unten beschreibt
+> weiterhin den TOTP-Weg.
 
 Vorlagen: `.env.example` und `deploy/hetzner/supabase/.env.example`.
 

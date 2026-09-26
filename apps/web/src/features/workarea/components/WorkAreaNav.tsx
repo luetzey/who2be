@@ -35,7 +35,17 @@ export function WorkAreaNav() {
           end={item.end}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
+              // #572 (AK 3): unterhalb `md` traegt der Eintrag 40 px
+              // Hit-Target — gemessen liegt er mit `px-3 py-2` bei `text-sm`
+              // auf 36 px. Die Zahl kommt aus AK 3 des Issues, nicht aus der
+              // Norm: design-language.md §11 ist die einzige Quelle des Floors
+              // und setzt ihn auf >= 32 px, womit 36 px zulaessig waren; 40 px
+              // ist dort die Praeferenz `size="default"`. Ab `md` faellt die
+              // Polsterung auf die Desktop-Dichte zurueck.
+              // Klassenfolge woertlich wie in `SettingsNav` (#568) — beide
+              // Komponenten sind klassengleich, eine zweite Variante waere
+              // Pattern Drift.
+              'flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none md:min-h-0',
               isActive && 'bg-accent text-accent-foreground',
             )
           }

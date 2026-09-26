@@ -160,3 +160,18 @@ describe('SystemPromptNewPage', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Audit #566 (W3, Epic #431). jsdom hat kein Layout — geprueft wird
+// der Klassen-Vertrag. Die Layout-Aussage ist am gerenderten Baum belegt
+// (Plandatei .claude/plan/2026-09-23-0700_566-…): bei 320px Viewport fuellt die
+// Zeile den 238px-Container schon heute (Label 32px + Trigger 196px); mit einem
+// laengeren Label schiebt sie den Trigger ohne `flex-wrap` auf right 335 und
+// treibt body.scrollWidth auf 335.
+describe('SystemPromptNewPage — Umbruch bei 320px (#566)', () => {
+  it('laesst die Label-Zeile ueber dem Editor umbrechen', () => {
+    renderPage()
+
+    const row = screen.getByTestId('placeholder-help-trigger').parentElement
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+  })
+})

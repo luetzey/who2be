@@ -79,21 +79,31 @@ def test_placeholder_preview_resolves_and_misses(
             # Unauthentifiziert -> 401
             assert client.get(base, params={"kind": "date"}).status_code == 401
 
-            # date (ISO) -> heutiges Datum in UTC, nicht unresolved.
-            # Der Endpunkt rechnet in UTC (placeholder_preview_service.py:
-            # `RenderContext(now=datetime.now(UTC))`) — der Test muss denselben
-            # Zeitbegriff verwenden. Mit `date.today()` (Ortszeit) war die
-            # Assertion zwischen 0:00 und 2:00 CEST strukturell rot, weil in UTC
-            # dann noch der Vortag laeuft.
+            # Vergleichsbasis ist UTC, nicht die lokale Zeit des Laeufers: der
+            # Preview-Service setzt `now=datetime.now(UTC)`
+            # (services/placeholder_preview_service.py:70) und der DateResolver
+            # formatiert genau diesen Wert (placeholders/resolvers/date.py:52+58).
+            # Ein `date.today()` wuerde lokal rechnen und den Test in jeder
+            # Zeitzone oestlich von UTC zwischen lokaler und UTC-Mitternacht rot
+            # fahren (in MESZ 00:00-02:00) — ein Fenster, das die UTC-CI nie sieht.
+            # Das Fenster before/after deckt zusaetzlich den Fall ab, dass die
+            # UTC-Mitternacht waehrend der beiden Requests kippt.
+            before_utc = datetime.now(UTC).date()
+
+            # date (ISO) -> heutiges Datum, nicht unresolved
             iso = client.get(base, params={"kind": "date", "target_id": ""}, headers=auth)
             assert iso.status_code == 200
-            assert iso.json()["text"] == datetime.now(UTC).date().isoformat()
-            assert iso.json()["unresolved"] is False
 
             # date (human) -> deutscher Monatsname enthalten
             human = client.get(base, params={"kind": "date", "target_id": "human"}, headers=auth)
             assert human.status_code == 200
-            assert str(datetime.now(UTC).year) in human.json()["text"]
+
+            after_utc = datetime.now(UTC).date()
+            utc_dates = {before_utc, after_utc}
+
+            assert iso.json()["text"] in {day.isoformat() for day in utc_dates}
+            assert iso.json()["unresolved"] is False
+            assert any(str(day.year) in human.json()["text"] for day in utc_dates)
             assert human.json()["unresolved"] is False
 
             # tools-overview -> statische Markdown-Liste, nie unresolved

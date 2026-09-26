@@ -72,7 +72,11 @@ function Segment({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        'h-8 gap-1.5 rounded-md px-3 text-sm font-medium',
+        // Hit-Target #573 AK 5: gemessen 32 px (`h-8`) bei 320 px. `min-h-10`
+        // hebt das unterhalb `md` auf 40 px; ab `md` bleibt die Verdichtung
+        // der Segmentleiste erhalten. Der Floor selbst steht in
+        // design-language.md §11 (>= 32 px) — die 40 px kommen aus dem AK.
+        'min-h-10 gap-1.5 rounded-md px-3 text-sm font-medium md:min-h-0 md:h-8',
         selected
           ? 'bg-background text-foreground shadow-card hover:bg-background'
           : 'text-muted-foreground',
@@ -130,7 +134,7 @@ export function PlaybookListToolbar({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         <div
-          className="inline-flex items-center gap-1 rounded-lg bg-muted p-1"
+          className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1"
           role="group"
           aria-label={t('data:filter.statusGroup')}
         >
@@ -180,7 +184,7 @@ export function PlaybookListToolbar({
               size="icon"
               onClick={() => onQueryChange('')}
               aria-label={t('data:filter.clearSearch')}
-              className="absolute top-1/2 right-1 size-8 -translate-y-1/2 text-muted-foreground"
+              className="absolute top-1/2 right-1 h-10 w-8 -translate-y-1/2 text-muted-foreground md:h-8"
             >
               <X className="size-4" aria-hidden="true" />
             </Button>
@@ -293,7 +297,7 @@ export function PlaybookListToolbar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 gap-1 px-2 text-xs"
+                  className="min-h-10 gap-1 px-2 text-xs md:min-h-0 md:h-8"
                   onClick={onReset}
                 >
                   <X className="size-4" aria-hidden="true" />
@@ -311,7 +315,7 @@ export function PlaybookListToolbar({
             type="button"
             variant="secondary"
             size="sm"
-            className="h-7 gap-1 rounded-full px-3 text-xs"
+            className="h-10 gap-1 rounded-full px-3 text-xs md:h-7"
             onClick={() => onAgentChange('')}
             aria-label={t('data:filter.agentChipRemove', { name: agentName })}
           >
@@ -327,7 +331,7 @@ export function PlaybookListToolbar({
             type="button"
             variant="secondary"
             size="sm"
-            className="h-7 gap-1 rounded-full px-3 text-xs"
+            className="h-10 gap-1 rounded-full px-3 text-xs md:h-7"
             onClick={() => onLocaleChange('')}
             aria-label={t('data:filter.localeChipRemove', { name: localeName })}
           >

@@ -7,6 +7,23 @@
 #   1. supabase-Stack starten (dieser File) — erzeugt supabase-net.
 #   2. who2be-Stack (deploy/hetzner/who2be/docker-compose.yml) — haengt
 #      sich per `external: true` ins supabase-net rein.
+#
+# --- Container-Haertung (W8/S1-S3) -------------------------------------------
+# Gleiche drei Blöcke wie im App-Stack, an JEDEM Dienst inkl. der
+# `studio`-Profil-Dienste. Begruendung und Norm-Bezug (BSI SYS.1.6.A15/A17):
+# siehe ../who2be/docker-compose.yml; die Werte-Herleitung steht in
+# `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`. Beide Stacks
+# teilen sich die 8 GB der CX32, deshalb sind die Deckel aufeinander geeicht.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+
 services:
   db:
     image: supabase/postgres:15.1.1.78
@@ -34,6 +51,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    <<: *hardening
+    # Groesster legitimer Verbraucher im Gesamtsystem und deshalb der hoechste
+    # Deckel: shared_buffers, work_mem je Verbindung, Autovacuum-Worker. Der
+    # Punkt ist nicht, Postgres zu beschraenken, sondern das Gegenteil — solange
+    # KEIN Container einen Deckel hat, sucht der Host-OOM-Killer sich das
+    # groesste Ziel, und das ist Postgres. Mit Deckeln an allen anderen
+    # Diensten trifft es kuenftig den Ausreisser statt die DB im Schreiben.
+    # 3g von 8 GB laesst dem Rest des Systems ausreichend Luft.
+    mem_limit: 3g
 
   # Einmal-Service: setzt das Passwort von supabase_auth_admin auf
   # POSTGRES_PASSWORD. Das supabase/postgres-Image legt diese GoTrue-Rolle an,
@@ -58,9 +84,12 @@ services:
         condition: service_healthy
     networks: [supabase-net]
     restart: "no"
+    <<: *hardening
+    # One-Shot: ein `psql -c "ALTER ROLE …"` in einer Warteschleife.
+    mem_limit: 128m
 
   auth:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.196.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -72,21 +101,67 @@ services:
       # ab, ohne fremde Origins zuzulassen (Open-Redirect-Schutz, Track K).
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL},${SITE_URL}/*
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      # Captcha vor der Registrierung (Issue #539). Anbieter ist Cloudflare
+      # Turnstile. Die drei Namen sind gegen die gepinnte Version v2.158.1
+      # verifiziert (internal/conf/configuration.go:423-427 + :495 + :257,
+      # envconfig-Praefix "gotrue" in :653) — `..._CAPTCHA_SECRET`, NICHT
+      # `..._CAPTCHA_PROVIDER_SECRET` (envconfig nutzt den Go-Feldnamen
+      # `Secret`, nicht das JSON-Tag `provider_secret`).
+      #
+      # ENABLED=false (Default) ueberspringt die Validierung komplett
+      # (configuration.go:429-432) ⇒ leer gelassen bleibt alles wie bisher.
+      # Bei `true` MUSS das Secret gesetzt sein, sonst startet GoTrue nicht.
+      #
+      # Wirkt nicht nur auf /signup: das Middleware haengt auch an /recover,
+      # /resend, /magiclink, /otp, /sso und /token?grant_type=password
+      # (api.go:138-267). Admin-Calls mit Service-Role-Key (= der
+      # Invite-Versand) und die Magic-Link-Einloesung sind ausgenommen
+      # (middleware.go:171-177). Details: docs/signup-and-invites.md §3.
+      GOTRUE_SECURITY_CAPTCHA_ENABLED: ${GOTRUE_SECURITY_CAPTCHA_ENABLED:-false}
+      GOTRUE_SECURITY_CAPTCHA_PROVIDER: ${GOTRUE_SECURITY_CAPTCHA_PROVIDER:-turnstile}
+      GOTRUE_SECURITY_CAPTCHA_SECRET: ${GOTRUE_SECURITY_CAPTCHA_SECRET:-}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
-      # MFA / TOTP (WP-F, Befund S1): Zwei-Faktor per TOTP. Nach verifizierter
-      # Challenge setzt GoTrue `aal=aal2` im JWT; die Who2Be-API erzwingt aal2
-      # fuer Admin-Aktionen (core/security.require_aal2). Admins MUESSEN einen
-      # TOTP-Faktor einrichten (docs/mfa-admin.md). v2.158.1 hat KEIN
-      # Top-Level GOTRUE_MFA_ENABLED — TOTP wird pro Faktor geschaltet.
+      # MFA (WP-F, Befund S1; WebAuthn seit #499): Zwei-Faktor per TOTP oder
+      # WebAuthn. Nach verifizierter Challenge setzt GoTrue `aal=aal2` im JWT;
+      # die Who2Be-API erzwingt aal2 fuer Admin-Aktionen
+      # (core/security.require_aal2). Admins MUESSEN einen zweiten Faktor
+      # einrichten (docs/mfa-admin.md). GoTrue hat KEIN Top-Level
+      # GOTRUE_MFA_ENABLED — Faktoren werden pro Typ geschaltet. TOTP ist per
+      # Default an, WebAuthn per Default AUS (MFAFactorTypeConfiguration traegt
+      # `default:"false"` fuer beide Schalter, TOTP hat einen eigenen Typ mit
+      # `default:"true"`) — deshalb stehen beide WebAuthn-Schalter explizit hier.
       GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
       GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED:-true}
       GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # WebAuthn-Relying-Party (ANDERES Praefix als die Faktor-Schalter oben:
+      # GOTRUE_WEBAUTHN_*, nicht GOTRUE_MFA_WEB_AUTHN_*). Alle drei sind
+      # Pflicht, sobald ein WebAuthn-Schalter an ist; seit v2.190.0 warnt GoTrue
+      # bei unvollstaendiger Konfiguration, statt den Start abzubrechen —
+      # ein fehlender Wert kostet also den Faktor, nicht den Stack.
+      # RP_ID ist die registrierbare Domain OHNE Schema/Port und muss zum
+      # Origin der App passen; RP_ORIGINS ist der vollstaendige Origin
+      # (= SITE_URL, derselbe, den GOTRUE_URI_ALLOW_LIST oben fuehrt).
+      GOTRUE_WEBAUTHN_RP_ID: app.${DOMAIN}
+      GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: ${WEBAUTHN_RP_DISPLAY_NAME:-Who2Be}
+      GOTRUE_WEBAUTHN_RP_ORIGINS: ${SITE_URL}
+      # E-Mail/Passwort als Auth-Provider. Self-Hosting: `true` (Default,
+      # unveraendert). Cloud: hier auf `false` setzen — dort meldet man sich
+      # ausschliesslich ueber externe Provider an (Owner-Entscheidung
+      # 2026-09-24). GoTrue prueft dieses Flag NUR in `POST /signup`,
+      # `POST /token?grant_type=password` und `POST /magiclink`; `POST /invite`,
+      # `POST /verify`, `POST /recover` und `PUT /user` haben keinen solchen
+      # Check — Team-Einladungen laufen also unveraendert weiter (gegen den
+      # Quellstand von v2.196.0 geprueft). Das Web-Pendant ist das Build-Arg
+      # `VITE_WHO2BE_EDITION` (ADR-0029), beide werden im Deploy gemeinsam
+      # gesetzt. Anleitung: README.md, "Cloud-Edition: nur externe Provider".
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Prod: E-Mail-Verifikation AN (default false = Confirm Pflicht). Mit
       # GOTRUE_MAILER_AUTOCONFIRM=true im .env laesst sich das fuer einen
       # frischen Staging-Stack ohne SMTP voruebergehend umgehen.
@@ -115,6 +190,18 @@ services:
       GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
       GOTRUE_EXTERNAL_GITHUB_SECRET: ${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
       GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
+      # Sign in with Apple (Cloud-Edition). ACHTUNG, anders als Google/GitHub:
+      # GOTRUE_EXTERNAL_APPLE_SECRET ist ein aus dem `.p8`-Key signiertes
+      # ES256-JWT mit HOECHSTENS SECHS MONATEN Laufzeit (Apple: max. 15777000 s).
+      # GoTrue erneuert es nicht und warnt nicht — nach Ablauf antwortet Apple
+      # `invalid_client` und der Login scheitert mit generischer 500. Portal-
+      # Schritte + Erneuerungs-Prozedur: README.md in diesem Verzeichnis.
+      # CLIENT_ID ist die Services-ID (nicht die App-ID); die Redirect-URI muss
+      # im Portal unter "Website URLs" wortgleich eingetragen sein.
+      GOTRUE_EXTERNAL_APPLE_ENABLED: ${GOTRUE_EXTERNAL_APPLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_APPLE_CLIENT_ID: ${GOTRUE_EXTERNAL_APPLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_APPLE_SECRET: ${GOTRUE_EXTERNAL_APPLE_SECRET:-}
+      GOTRUE_EXTERNAL_APPLE_REDIRECT_URI: ${GOTRUE_EXTERNAL_APPLE_REDIRECT_URI:-https://supabase.${DOMAIN}/auth/v1/callback}
       API_EXTERNAL_URL: https://supabase.${DOMAIN}
     depends_on:
       db:
@@ -128,6 +215,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # GoTrue ist ein zustandsloser Go-Dienst: JWT-Signatur/-Pruefung, TOTP,
+    # OAuth-Weiterleitungen; der Zustand liegt in Postgres. Typischer
+    # Resident-Bedarf zweistellig MB. 512m ist ein Vielfaches davon.
+    mem_limit: 512m
 
   auth-gateway:
     image: nginx:1.27-alpine
@@ -145,6 +237,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # Reiner Pfad-/Header-Proxy vor GoTrue, liefert keine Dateien aus —
+    # niedrigster Dauerdienst-Deckel im Stack.
+    mem_limit: 128m
 
   meta:
     image: supabase/postgres-meta:v0.83.2
@@ -161,6 +257,10 @@ services:
         condition: service_healthy
     networks: [supabase-net]
     restart: unless-stopped
+    <<: *hardening
+    # Profil `studio` (default AUS): Node-Dienst, der Schema-Metadaten
+    # abfragt. Zaehlt nicht ins Dauerbudget.
+    mem_limit: 512m
 
   studio:
     image: supabase/studio:20240624-2eb04f3
@@ -181,6 +281,11 @@ services:
       - meta
     networks: [supabase-net]
     restart: unless-stopped
+    <<: *hardening
+    # Profil `studio` (default AUS): Next.js-Server, der hungrigste der
+    # Profil-Dienste. Wer Studio zuschaltet, tut das bewusst und
+    # voruebergehend — deshalb steht 1g hier NICHT im Dauerbudget.
+    mem_limit: 1g
 
 networks:
   supabase-net:

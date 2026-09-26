@@ -128,12 +128,15 @@ export function ResourcesPage() {
               </Badge>
               <LocaleBadge locale={resource.locale} />
               {resource.slug ? (
-                <Badge variant="outline" className="font-mono text-xs">
+                // #564: Slug ist serverseitig aus dem Namen abgeleitet — ein
+                // Wort ohne Trennstellen. `break-all` laesst es mitten im Wort
+                // brechen, `max-w-full` deckelt es gegen den Flex-Container.
+                <Badge variant="outline" className="max-w-full font-mono text-xs break-all">
                   {resource.slug}
                 </Badge>
               ) : null}
               {tags.map((tag) => (
-                <Badge key={tag} variant="outline" className="text-xs">
+                <Badge key={tag} variant="outline" className="max-w-full text-xs break-words">
                   {tag}
                 </Badge>
               ))}

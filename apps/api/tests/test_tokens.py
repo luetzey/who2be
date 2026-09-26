@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
@@ -72,6 +73,25 @@ def _delete_agent(agent_id: UUID) -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await conn.execute("DELETE FROM agent WHERE id = $1", agent_id)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _set_token_role(token_id: UUID, role: str) -> None:
+    """Setzt die Rolle eines Tokens direkt in der DB.
+
+    Ueber die API entsteht seit dem Rollen-Deckel kein `admin`-Token mehr. Ein
+    Bestands-Token aus der Zeit davor laesst sich deshalb nur noch so
+    herstellen — und genau den brauchen die Tests, die das MFA-Gate auf
+    `rotate` belegen.
+    """
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute("UPDATE api_token SET role = $2 WHERE id = $1", token_id, role)
         finally:
             await conn.close()
 
@@ -377,11 +397,19 @@ def test_token_listing_pagination_and_validation(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.integration
-def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
-    """#469 AC1: ein `admin`-Token laesst sich nur aus einer aal2-Session anlegen.
+def test_admin_token_create_is_capped_to_editor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#469 AC1, nachgezogen: `create` stellt gar kein `admin`-Token mehr aus.
 
-    Der Owner ist Workspace-`admin` (Seed) — ohne explizite `role` erbt der
-    Token also `admin` (Snapshot-Regel) und faellt unter das Admin-MFA-Gate.
+    Der Owner ist Workspace-`admin` (Seed). Frueher erbte der Token diese Rolle
+    (Snapshot-Regel) und fiel damit unter das Admin-MFA-Gate. Seit dem
+    Rollen-Deckel fuer agent-gebundene Tokens ist der geerbte Snapshot auf
+    `editor` beschnitten — die MFA-Schwelle aus #469 ist hier nicht gefallen,
+    sondern ueberholt: was sie schuetzte, entsteht auf diesem Pfad nicht mehr.
+    Sie steht weiterhin auf `rotate` (naechster Test), wo ein Bestands-Token
+    noch `admin` tragen kann.
+
+    Der Test belegt beides: die aal1-Session wird nicht mehr blockiert, und der
+    Grund dafuer ist die gedeckelte Rolle — nicht ein weggefallenes Gate.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -396,18 +424,23 @@ def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
     try:
         with TestClient(app) as client:
             aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
-            blocked = client.post(
-                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal1_auth
+            inherited = client.post(
+                base, json={"name": "geerbt", "agent_id": agent_id}, headers=aal1_auth
             )
-            assert blocked.status_code == 403
-            assert blocked.json()["reason"] == "mfa_required"
+            assert inherited.status_code == 201
+            assert inherited.json()["role"] == "editor"
 
+            # Ausdruecklich angefordert bleibt es eine Absage — und zwar mit dem
+            # fachlichen Grund, nicht mit `mfa_required`: auch eine aal2-Session
+            # bekommt kein admin-Token mehr.
             aal2_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal2')}"}
-            created = client.post(
-                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal2_auth
+            explicit = client.post(
+                base,
+                json={"name": "admin-token", "agent_id": agent_id, "role": "admin"},
+                headers=aal2_auth,
             )
-            assert created.status_code == 201
-            assert created.json()["role"] == "admin"
+            assert explicit.status_code == 403
+            assert explicit.json()["reason"] == "agent_bound_role_capped"
     finally:
         cleanup_workspaces([owner_id])
 
@@ -416,9 +449,10 @@ def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
 def test_admin_token_rotate_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
     """#469 AC2: das Rotieren eines bestehenden `admin`-Tokens verlangt aal2.
 
-    Ohne das Gate koennte eine aal1-Session die Ausstellungs-Schwelle aus
-    `create` umgehen, indem sie einfach ein neues Secret fuer ein bestehendes
-    admin-Token anfordert.
+    Ohne das Gate koennte eine aal1-Session ein Bestands-Token aus der Zeit vor
+    dem Rollen-Deckel weiterbetreiben, indem sie einfach ein neues Secret dafuer
+    anfordert. `create` kann ein solches Token nicht mehr ausstellen — der Test
+    stellt es deshalb direkt in der DB her, so wie es im Bestand vorkommt.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -439,6 +473,7 @@ def test_admin_token_rotate_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
             assert created.status_code == 201
             token_id = created.json()["id"]
             old_plaintext = created.json()["token"]
+            _set_token_role(UUID(token_id), "admin")
 
             aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
             blocked = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
@@ -489,5 +524,103 @@ def test_editor_token_create_and_rotate_unaffected_by_admin_mfa_gate(
 
             rotated = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
             assert rotated.status_code == 200
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_token_quota_blocks_create_but_never_existing_tokens_or_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#538 AK1-AK4 gegen die echte DB — die vier Zusagen in einem Ablauf.
+
+    Der Zaehler ist der interessante Teil und laeuft deshalb gegen echte
+    `api_token`-Zeilen; gefakt ist nur, was diese Umgebung nicht hat: die
+    Cloud-Edition und ein Entitlement mit einer kleinen Grenze.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: True)
+
+    class _Port:
+        async def resolve(self, _org_id: UUID) -> Entitlement:
+            return Entitlement(status="active", features=frozenset({"core"}), token_quota=2)
+
+    monkeypatch.setattr(
+        "who2be_api.services.token_quota_service.build_entitlement_port",
+        lambda _pool, _settings: _Port(),
+    )
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    base = f"/v1/workspaces/{ws}/tokens"
+    payload = {"name": "agent", "agent_id": agent_id}
+
+    try:
+        with TestClient(app) as client:
+            first = client.post(base, json=payload, headers=jwt_auth)
+            assert first.status_code == 201
+            first_id = first.json()["id"]
+            first_plaintext = first.json()["token"]
+            assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
+
+            # AK1: der dritte Create ueber der Grenze => 402, stabiler Grund,
+            # Grenze in `params` (ADR-0051).
+            blocked = client.post(base, json=payload, headers=jwt_auth)
+            assert blocked.status_code == 402
+            body = blocked.json()
+            assert body["reason"] == "token_quota_exceeded"
+            assert body["params"] == {"limit": 2}
+
+            # AK2: der bestehende Token authentifiziert unveraendert weiter.
+            first_auth = {"Authorization": f"Bearer {first_plaintext}"}
+            assert client.get("/v1/me", headers=first_auth).status_code == 200
+
+            # AK3: und er laesst sich rotieren — Rotation ersetzt, sie legt
+            # nicht an. Waere das gegatet, sperrte die Grenze die
+            # Secret-Rotation aus (RUNBOOK §Secret-Rotation).
+            rotated = client.post(f"{base}/{first_id}/rotate", headers=jwt_auth)
+            assert rotated.status_code == 200
+            rotated_auth = {"Authorization": f"Bearer {rotated.json()['token']}"}
+            assert client.get("/v1/me", headers=rotated_auth).status_code == 200
+
+            # AK4: ein widerrufener Token belegt keinen Slot mehr — danach
+            # geht der zuvor abgewiesene Create wieder durch.
+            assert client.delete(f"{base}/{first_id}", headers=jwt_auth).status_code == 204
+            assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_token_quota_does_not_apply_onprem(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#538 AK4, zweite Haelfte: On-Prem/OSS bleibt unbegrenzt.
+
+    Identischer Aufbau wie oben, nur ohne die Cloud-Wache: dieselbe kleine
+    Grenze im Entitlement bleibt folgenlos.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: False)
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    base = f"/v1/workspaces/{ws}/tokens"
+    payload = {"name": "agent", "agent_id": agent_id}
+
+    try:
+        with TestClient(app) as client:
+            for _ in range(3):
+                assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
     finally:
         cleanup_workspaces([owner_id])

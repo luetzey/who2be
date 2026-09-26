@@ -390,9 +390,12 @@ filtert serverseitig nach `owner_id` — Zero-Trust, keine implizite Freigabe.
 - Supply-Chain-Gate (MS-3 H6): `.github/workflows/ci.yml` faehrt
   `pip-audit` und `npm audit --omit=dev --audit-level=high`. CI failed
   bei High/Critical; Moderate werden als PR-Kommentar gemeldet.
-- Backup-Strategie (ADR-0011): `pg_dump -Fc` mit GPG verschluesselt,
-  `restic` synct ins Hetzner-Storage-Box-Repo. Daily Cron, Retention
-  7 daily / 4 weekly / 6 monthly. Restore-Drill (MS-3 H4) ist Vertrag.
+- Backup-Strategie (ADR-0011): `pg_dump -Fc` mit GPG verschluesselt, dazu
+  Objekt-Store-Spiegel (ADR-0048) und `VACUUM INTO`-Snapshots des
+  Tabellen-Stores (ADR-0049); `restic` synct alle drei in einem Snapshot
+  ins Hetzner-Storage-Box-Repo. Daily Cron, Retention 7 daily / 4 weekly /
+  6 monthly. Ein Teilerfolg endet rot und ohne Heartbeat. Restore-Drill
+  (MS-3 H4) ist Vertrag.
 
 ## 7. Test-Plan (Testpyramide)
 
@@ -410,8 +413,10 @@ Acceptance Criteria → Tests:
 - **AC4** (Brainstormer auf Who2Be): E2E-Smoke in Phase 4 — Brainstormer-Stack migrieren und im Claude-Chat verifizieren.
 
 TDD-Disziplin: bei Bugfixes zuerst ein reproduzierender, fehlschlagender Test.
-DoD pro Stack: `pytest` gruen, `ruff`/`mypy` ohne Findings — bzw. `vitest`,
-`eslint`, `tsc` fuer die Web-UI.
+Definition of Done: die Kommandos aus [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+§Definition of Done — dort steht die einzige DoD-Kommandoliste (inkl.
+Coverage-, Skip-Budget- und Lizenz-Gates, identisch zur CI); hier bewusst
+keine Kopie.
 
 ## 8. Umsetzungs-Roadmap
 

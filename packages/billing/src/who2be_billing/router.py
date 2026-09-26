@@ -440,6 +440,9 @@ async def create_override(
         expires_at=expires_at,
         mcp_monthly_quota=plan.mcp_monthly_quota,
         mcp_rate_per_min=plan.mcp_rate_per_min,
+        token_quota=plan.token_quota,
+        storage_quota_bytes=plan.storage_quota_bytes,
+        workspace_quota=plan.workspace_quota,
         grace_until=None,
     )
     pool = get_pool()

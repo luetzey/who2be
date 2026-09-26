@@ -1161,6 +1161,12 @@ bleiben)._
   Erfolg wertet, ist dokumentiertes Verhalten, im Repo aber nicht nachweisbar,
   solange Branch-Protection aus ist (`"protected": false`, GIT-1). Mit #338 O2
   gegenzuprüfen; der Gate ist in beiden Zuständen korrekt.
+- **Nachtrag 2026-09-22:** Die Annahme ist nicht mehr offen. Branch-Protection
+  ist seit diesem Tag scharf — Ruleset `16707501` führt `all-green` als
+  einzigen Required Check (`enforcement: active`, siehe
+  [`docs/branch-protection-main.md`](../../docs/branch-protection-main.md)).
+  Der Satz oben beschreibt den Stand vom 2026-09-05 und bleibt als
+  Entscheidungsgrund stehen.
 
 ## 2026-09-05 — Cloud-Gating läuft über Quota, nicht über Feature-Codes
 - **Entscheidung:** Der Unterschied zwischen Free und Pro ist das Nutzungskontingent,
@@ -1737,6 +1743,108 @@ Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
 Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
 auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.
 
+## 2026-09-21 — GoTrue-Zielversion ist v2.196.0, nicht die neueste stabile
+
+**Entscheidung:** Alle drei Compose-Stacks werden auf
+`supabase/gotrue:v2.196.0` gepinnt (Issue #499), obwohl zum Zeitpunkt der
+Umsetzung `v2.197.0` stabil verfuegbar war.
+
+**Warum nicht die neueste:** Der Breaking-Change-Check fuer diesen Sprung ist
+am 2026-09-08 gegen `supabase/auth` @ `0907af9` gemacht worden. `v2.197.0`
+bringt fuenf Migrationen, die nach diesem Stand liegen (SCIM-Users,
+SCIM-Tokens, Recovery-Codes-Faktor, Recovery-Codes-Tabellen,
+One-Time-Token-Expiry) — sie sind schlicht nicht geprueft. `v2.196.0` ist die
+hoechste Version, die der Check traegt: der Tag ist vom 2026-08-18, der
+gepruefte Commit vom 2026-09-03, `gh api compare v2.196.0...0907af9` meldet
+`ahead_by: 38, behind_by: 0` — der geprüfte Commit liegt also 38 Commits *vor*
+der Zielversion. Der Check hat damit einen Stand *nach* v2.196.0 gelesen und
+traegt die Zielversion vollstaendig (Gegenprobe: `v2.197.0...0907af9` →
+`behind_by: 1`, v2.197.0 traegt er gerade nicht mehr).
+
+**Die Untergrenze ist v2.190.0, nicht v2.163.0.** v2.163.0 ist die Version,
+in der der WebAuthn-Faktor erscheint — aber erst v2.190.0 macht die
+Relying-Party-Konfiguration ueber Environment setzbar und warnt bei
+unvollstaendiger Konfiguration, statt den Start abzubrechen. Dazwischen ist
+eine fehlende RP-Variable ein toter Stack. Die Grenze eines Features und die
+Grenze seines Betriebs sind nicht dieselbe Zahl.
+
+**Regel daraus:** Ein Versionssprung ueber Migrationen hinweg darf nur so weit
+gehen, wie die Pruefung reicht, die ihn traegt. „Die neueste stabile" ist
+kein Argument gegen „die hoechste geprueft". Wer weiter will, prueft weiter —
+er verschiebt nicht die Grenze und behaelt den Beleg.
+
+## 2026-09-24 — Issue-Bezug im PR verbindlich, aber (noch) ohne CI-Check
+- **Entscheidung:** `.github/pull_request_template.md` fragt den Issue-Bezug mit
+  drei benannten Faellen ab (`Closes #___` / `Refs #___` / `n/a (kein Issue)` mit
+  Begruendung); `CONTRIBUTING.md` §Issue reference traegt die Regel als Norm.
+  Kein erzwingender CI-Check in diesem Schritt.
+- **Begruendung:** GitHub schliesst ein Issue nur bei `Closes`/`Fixes`/`Resolves`.
+  In Welle 3 trugen elf von zwoelf PRs keine solche Zeile — neun erledigte Issues
+  blieben offen und mussten von Hand nachgeschlossen werden (#625). `Refs` ist der
+  bewusste Gegenfall: Teilarbeit an einem Tracking-/Epic-Issue darf es nicht
+  vorzeitig schliessen (Queue-Regel 19, #442).
+- **Verworfen:** CI-Check jetzt — er schlaegt bei Dependabot- und reinen
+  Doku-PRs falsch an und braucht eine Ausnahmeliste. Erst messen, ob Template +
+  CONTRIBUTING reichen; wenn nicht, eigene Karte.
+
+## 2026-09-25 — Sign in with Apple haengt an der Edition, Google/GitHub nicht
+- **Entscheidung:** `isAppleAuthEnabled()` gated den Apple-Button ueber das
+  bestehende `__CLOUD_BUILD__` (ADR-0029) im schon vorhandenen Modul
+  `features/auth/lib/password-auth.ts` — **kein zweiter Schalter**, keine neue
+  Datei. Google und GitHub bleiben in beiden Editionen ungegatet.
+- **Begruendung:** Apple verlangt ein zahlungspflichtiges Developer-Konto *und*
+  eine bei Apple registrierte HTTPS-Domain (kein `localhost`, keine IP). Im
+  Self-Hosting hat niemand beides, die Schaltflaeche waere dort garantiert tote
+  Flaeche. Google/GitHub kann jeder Betreiber selbst konfigurieren — die
+  Asymmetrie kommt von Apples Anforderungen, nicht von einer Produktmeinung.
+  Funktion statt Konstante, weil `__CLOUD_BUILD__` ein Literal-Replacement ist
+  und in Vitest nicht stubbar — dieselbe Begruendung wie bei
+  `isPasswordAuthEnabled` (2026-09-24).
+- **Betriebsfolge, die kein Code abfangen kann:** Das Apple-Client-Secret ist
+  ein ES256-JWT mit max. sechs Monaten Laufzeit (15 777 000 s). GoTrue liest es
+  als opaken String, erneuert es nicht und warnt nicht; nach Ablauf antwortet
+  Apple `invalid_client` und GoTrue macht daraus eine generische 500. **Nur
+  Apple faellt aus, Google/GitHub laufen weiter** — der Ausfall ist darum leicht
+  zu uebersehen. Gegenmittel ist bewusst Doku plus Werkzeug, nicht Automatik:
+  `scripts/gen_apple_client_secret.py` nennt das Ablaufdatum in seiner Ausgabe,
+  `deploy/hetzner/supabase/README.md` traegt es in Tabelle und Gotchas.
+- **Verworfen:** Runtime-Env-Flag fuer Apple (zweite Konfigurationsquelle neben
+  der Edition, ohne Gewinn); Secret-Rotation im Code (braucht den `.p8`-Key im
+  laufenden Stack — mehr Angriffsflaeche als der Kalendereintrag kostet).
+
+## 2026-09-25 — Agent-Bindung als eigenes Gate in `core/security.py`, zwei Huellen um ein Praedikat
+- **Entscheidung:** Die Pruefung „ist der Aufrufer an einen Agenten gebunden?"
+  liegt als `is_agent_bound(ctx)` in `core/security.py`, daneben zwei duenne
+  Gate-Funktionen: `deny_agent_bound_token_management` (`ApiError`,
+  `reason: token_management_forbidden`, bestehender Vertrag mit Locale-Key) und
+  `deny_agent_bound_workspace_admin` (`ApiGateError`/RFC 7807,
+  `reason: workspace_administration_forbidden`, `actionable_by: "human"`, ohne
+  Locale-Key). `TokenService._deny_agent_bound` ist entfallen; seine sechs
+  Aufrufer rufen die erste Funktion, die sieben `require_role(ctx, admin)`-Stellen
+  in `invitations.py`/`members.py`/`workspaces.py` die zweite.
+- **Begruendung:** Ein agent-gebundener Token mit Rollen-Snapshot `admin` kam an
+  allen sieben Stellen durch (gemessen, Karte `t_ea83420c`) und konnte sich per
+  Einladung, Rollen-Patch oder Workspace-Delete Rechte ausserhalb seiner
+  Pro-Agent-Policy beschaffen — derselbe Eskalationsweg, den die
+  Token-Verwaltung seit je verbaut. Das Praedikat ist in beiden Faellen
+  identisch, der Fehlervertrag nicht: der Token-Pfad ist veroeffentlicht und
+  muss wortgleich bleiben, der Admin-Pfad ist ein Autorisierungs-Gate wie
+  `require_role` daneben. Abstrahiert wird deshalb nur das Praedikat.
+  Das Praedikat prueft **beide** Indikatoren (`tool_policy is not None or
+  agent_id is not None`) nach dem Muster von `memory_service._require_human`:
+  `_load_agent_tool_policy` faellt bei einem Race mit Agent-Delete defensiv auf
+  `None` zurueck, und in diesem Fenster waere ein Ein-Indikator-Gate offen.
+- **Verworfen:** eine parametrisierte `deny_agent_bound(ctx, scope)` mit
+  Mapping-Tabelle — kompakter, muesste aber die Exception-**Klasse** aus einer
+  Tabelle ziehen und verschleiert damit genau die Information, auf die es
+  ankommt (welcher Aufrufer welchen Serialisierungs-Vertrag hat). Ebenfalls
+  verworfen: das Gate als FastAPI-Dependency — es braucht den
+  `WorkspaceContext` und saesse dann vor `require_role`, was die
+  Fehler-Reihenfolge (`insufficient_role` zuerst) umdreht.
+- **Nicht mit entschieden:** Klasse 2 (`get_current_user`-Router `me.py`,
+  `organizations.py`, `gdpr.py`) verwirft die Agent-Bindung strukturell und ist
+  eine offene Owner-Weiche (Karte `t_1b046ae7`).
+
 ## 2026-09-26 — `DTZ` als Linter-Gate: ein Zeitbegriff im Repo, und zwar UTC
 
 **Entscheidung:** `DTZ` (flake8-datetimez) steht in `[tool.ruff.lint] select`.
@@ -1763,4 +1871,3 @@ Abstraktion einziehen (Variabilitaets-Schwelle nicht erreicht, es gibt genau
 einen Zeitbegriff); die Platzhalter-Aufloesung auf Ortszeit umstellen (waere eine
 fachliche Weiche ohne Beleg — das Repo kennt keine nutzerbezogene Zeitzone, und
 die Karte schliesst deren Einfuehrung aus).
-

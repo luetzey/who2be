@@ -61,3 +61,23 @@ describe('KbSearchPage', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Vertrag #572 (AK 5). jsdom hat kein Layout — Klassen-Vertrag zu
+// den gerenderten Messungen in
+// .claude/plan/2026-09-23-1100_572-w3-workarea-responsive-audit.md.
+describe('KbSearchPage — Responsive (#572)', () => {
+  it('laesst den Treffer-Text umbrechen statt abschneiden', async () => {
+    // KB-Snippets tragen Belege ohne Trennstelle (`sha256:…`). Gemessen schnitt
+    // der Link bei 320 px ab (297 px Inhalt in 238 px sichtbar).
+    stubFetch([
+      ['/kb-search', [hit({ snippet: 'Beleg sha256:9f86d081884c7d659a2feaa0c55ad015' })]],
+    ])
+    renderAt(<KbSearchPage />, PATH, ['/w/ws-1/workarea/kb?q=preis'])
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Beleg sha256:9f86d081884c7d659a2feaa0c55ad015' }),
+      ).toHaveClass('break-words')
+    })
+  })
+})

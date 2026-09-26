@@ -225,4 +225,28 @@ describe('DashboardPage', () => {
     expect(screen.queryByText(/Gedächtniseint/)).not.toBeInTheDocument()
     expect(screen.queryByText(/liegt zur Review|liegen zur Review/)).not.toBeInTheDocument()
   })
+
+  // §4.4 Checklistenpunkt 5: Flex-Kinder mit Textinhalt tragen `min-w-0`,
+  // damit lange Statuslabels auf 320px nicht aus der Legende laufen.
+  it('haelt die Legenden-Eintraege der Statusverteilung schrumpffaehig', async () => {
+    vi.stubGlobal('fetch', jsonFetch(sampleData))
+
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Alice/)).toBeInTheDocument()
+    })
+    // Nur die Legende der Statusverteilung, nicht jede `<li>` der Seite: die
+    // Legende haengt im CardHeader neben dem Titel.
+    const legendItems = screen
+      .getByRole('heading', { name: 'Status-Verteilung' })
+      .parentElement!.querySelectorAll('li')
+    expect(legendItems.length).toBeGreaterThan(0)
+    for (const item of legendItems) {
+      expect(item).toHaveClass('min-w-0')
+    }
+  })
 })

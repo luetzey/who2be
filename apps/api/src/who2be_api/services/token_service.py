@@ -14,6 +14,8 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
+    cap_agent_bound_role,
+    deny_agent_bound_token_management,
     hash_token,
     new_token,
     require_aal2,
@@ -22,6 +24,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.token_repository import TokenRepository
 from who2be_api.services.audit_service import AuditService
+from who2be_api.services.token_quota_service import TokenQuotaService
 from who2be_models import TokenCreate, TokenCreated, TokenRead, WorkspaceRole, encode_cursor
 
 
@@ -40,22 +43,6 @@ class TokenService:
         self._repo = token_repo
         self._audit = audit_service
         self._pool = pool
-
-    @staticmethod
-    def _deny_agent_bound(ctx: WorkspaceContext) -> None:
-        """Agent-gebundene Tokens duerfen keine Tokens verwalten.
-
-        Sonst koennte ein eingeschraenkter Agent einen ungebundenen Token mit
-        voller Rolle minten und so seine Pro-Agent-Policy komplett umgehen
-        (Privilege-Escalation). Token-Verwaltung bleibt menschlichen Sessions
-        und nicht-gebundenen Tokens vorbehalten.
-        """
-        if ctx.tool_policy is not None:
-            raise ApiError(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
-                reason="token_management_forbidden",
-            )
 
     async def _assert_agent_in_workspace(self, workspace_id: UUID, agent_id: UUID) -> None:
         """404, wenn der zu bindende Agent nicht in diesem Workspace existiert."""
@@ -98,20 +85,44 @@ class TokenService:
         )
         return WorkspaceRole(value) if value is not None else None
 
+    async def _enforce_token_quota(self, ctx: WorkspaceContext) -> None:
+        """Tarif-Deckel fuer die Anzahl aktiver Tokens (Issue #538).
+
+        Im Service und nicht als Router-Dependency, weil hier bereits die
+        uebrigen Anlage-Gates sitzen (Rolle, MFA, Agent-Bindung) und der Service
+        auch ausserhalb des Routers aufrufbar bleiben soll. Ohne Pool (aeltere
+        Test-Fakes) ein No-Op — dieselbe Konvention wie
+        `_assert_agent_in_workspace`. Bewusst NUR hier und nicht in `rotate`:
+        Rotation ersetzt ein Secret, sie legt keinen Token an.
+        """
+        if self._pool is None:
+            return
+        await TokenQuotaService(self._pool).enforce(ctx)
+
     async def create(self, ctx: WorkspaceContext, data: TokenCreate) -> TokenCreated:
         """Legt einen Token an; der Klartext wird genau einmal zurueckgegeben.
 
         Token-CRUD verlangt mindestens `editor` (ADR-0023). Die Token-Rolle ist
         ein Snapshot: ohne explizite Angabe erbt der Token die aktuelle Rolle
         des Erstellers; eine explizit hoehere Rolle als die des Erstellers ist
-        verboten (ein editor kann kein admin-Token erzeugen). Ist die effektive
-        Rolle `admin`, verlangt die Ausstellung zusaetzlich eine aal2-Session
-        (#469) — dieselbe Schwelle, die `require_role(ctx, admin)` fuer jede
-        andere Admin-Aktion setzt (`require_aal2` traegt die API-Token- und
-        On-Prem-Ausnahmen bereits, siehe `core/security.py`).
+        verboten (ein editor kann kein admin-Token erzeugen).
+
+        Darueber liegt seit der Haertung des kontoweiten Pfades eine zweite,
+        absolute Grenze: Tokens sind zwingend agent-gebunden (Migration 0048),
+        und ein agent-gebundener Token erhaelt hoechstens `editor`
+        (`cap_agent_bound_role`). Eine ausdruecklich angeforderte `admin`-Rolle
+        wird mit 403 `agent_bound_role_capped` abgelehnt; der reine Snapshot
+        eines Admins wird still auf `editor` gedeckelt, damit ein Admin weiter
+        Tokens anlegen kann. Das Admin-MFA-Gate (#469) entfaellt damit hier —
+        siehe Kommentar unten; in `rotate` bleibt es fuer Bestands-Tokens stehen.
+
+        In der Cloud-Edition gilt zusaetzlich der Tarif-Deckel fuer die Anzahl
+        aktiver Tokens des Workspaces (Issue #538): ueber der Grenze `402` mit
+        `token_quota_exceeded`. Bestehende Tokens bleiben davon unberuehrt —
+        nutzbar und rotierbar.
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         role = data.role if data.role is not None else ctx.role
         if not role_satisfies(ctx.role, role):
             # NICHT `insufficient_role`: das ist der Grund des Rollen-Gates
@@ -123,12 +134,39 @@ class TokenService:
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
                 reason="token_role_escalation",
             )
-        if role == WorkspaceRole.admin:
-            require_aal2(ctx)
+        capped = cap_agent_bound_role(role)
+        if capped != role:
+            if data.role is not None:
+                # Ausdruecklich angefordert ⇒ ausdrueckliche Absage. Ein stiller
+                # Deckel waere hier irrefuehrend: der Ersteller waehlt die Rolle
+                # im Formular und bekaeme ein Token, das weniger kann, als die
+                # Anzeige versprach.
+                raise ApiError(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"Ein an einen Agenten gebundener Token erhaelt hoechstens die "
+                        f"Rolle '{capped.value}'. Die Rolle '{role.value}' verschafft "
+                        "einem Maschinen-Token Reichweite, die seine Agent-Policy nicht "
+                        "begrenzt — fuehre solche Aktionen als angemeldete Person aus."
+                    ),
+                    reason="agent_bound_role_capped",
+                )
+            # Ohne explizite Angabe ist die Rolle der Snapshot der
+            # Ersteller-Rolle, keine Wahl — ein Admin soll weiter Tokens anlegen
+            # koennen, sie erben dann `editor` statt seiner eigenen Rolle.
+            role = capped
+        # Kein `require_aal2` mehr: nach dem Deckel ist `role` hier nie `admin`,
+        # der Zweig waere toter Code. Die Schwelle aus #469 ist damit nicht
+        # gefallen, sondern ueberholt — ein admin-Token entsteht auf diesem Pfad
+        # gar nicht mehr. In `rotate` bleibt das Gate stehen: dort kann ein
+        # Bestands-Token aus der Zeit vor dem Deckel noch `admin` tragen.
         # Pflicht-Agent-Bindung: der Agent muss im selben Workspace leben. Der
         # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
         # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
         await self._assert_agent_in_workspace(ctx.workspace_id, data.agent_id)
+        # Tarif-Deckel erst hier: nach allen Berechtigungs-Gates, aber VOR
+        # `new_token()`, damit ueber der Grenze kein Secret entsteht.
+        await self._enforce_token_quota(ctx)
         plaintext = new_token()
         stored = await self._repo.insert(
             ctx.workspace_id,
@@ -161,7 +199,7 @@ class TokenService:
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[TokenRead], str | None]:
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         if len(rows) > limit:
             items = rows[:limit]
@@ -178,7 +216,7 @@ class TokenService:
     ) -> tuple[list[TokenRead], str | None]:
         """Listet die Tokens eines bestimmten Agenten (Agent-Konfig-Sektion)."""
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         await self._assert_agent_in_workspace(ctx.workspace_id, agent_id)
         rows = await self._repo.list_by_agent(ctx.workspace_id, agent_id, limit + 1, cursor)
         if len(rows) > limit:
@@ -193,7 +231,7 @@ class TokenService:
         Nur der Name ist editierbar — Secret/Rolle/Agent-Bindung bleiben (ADR-0023).
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         renamed = await self._repo.rename(ctx.workspace_id, token_id, name)
         if renamed is None:
             raise ApiError(
@@ -223,9 +261,13 @@ class TokenService:
         einem bestehenden admin-Token umgehbar. Das Gate wird VOR dem Rotate
         geprueft (`_current_role`), damit kein neues Secret entsteht, bevor
         die Pruefung feststeht.
+
+        **Kein** Token-Quota-Gate (Issue #538): Rotation ersetzt ein Secret, sie
+        legt keinen Token an. Ein Gate hier wuerde die Secret-Rotation (RUNBOOK
+        §Secret-Rotation) ueber der Grenze aussperren.
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         current_role = await self._current_role(ctx.workspace_id, token_id)
         if current_role == WorkspaceRole.admin:
             require_aal2(ctx)
@@ -250,7 +292,7 @@ class TokenService:
     async def revoke(self, ctx: WorkspaceContext, token_id: UUID) -> None:
         """Widerruft einen eigenen Token; 404, wenn er nicht (mehr) existiert."""
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         revoked = await self._repo.revoke(ctx.workspace_id, token_id)
         if not revoked:
             raise ApiError(

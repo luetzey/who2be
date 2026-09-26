@@ -57,8 +57,14 @@ function PersonaModesInfoPill({ onJumpToModes }: { onJumpToModes?: () => void })
       size="sm"
       onClick={handleJump}
       className={cn(
-        'h-auto self-start rounded-full border-brand/30 bg-brand/5 px-3 py-1',
-        'text-xs font-normal text-foreground hover:bg-brand/10',
+        // `h-auto` setzt die 36px des size="sm"-Buttons ausser Kraft; gemessen
+        // blieben 32px. `min-h-10` unterhalb `md` bringt die Pille auf die von
+        // AK 3 (#571) geforderten 40px — die Norm (§11) laesst size="sm" zu.
+        // `max-w-full whitespace-normal text-left`: bei 320px misst die Pille
+        // 355px in 238px verfuegbarer Breite und lief 118px ueber; der
+        // Default-Modusname ist frei waehlbar und hat keine Laengengrenze.
+        'h-auto min-h-10 max-w-full flex-wrap self-start rounded-full border-brand/30 bg-brand/5 px-3 py-1 md:min-h-0',
+        'text-left text-xs font-normal break-words whitespace-normal text-foreground hover:bg-brand/10',
       )}
       data-testid="persona-modes-info-pill"
       aria-label={t('editor.modes.infoAriaLabel', { count: modes.length, defaultLabel })}
@@ -167,7 +173,13 @@ export function PersonaProfileFields({
         >
           <p className="font-medium">{t('editor.legacy.title')}</p>
           <p className="mt-1 text-xs">{t('editor.legacy.body')}</p>
-          <pre className="mt-2 max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs whitespace-pre-wrap dark:bg-amber-900/40">
+          {/* `break-words`: ein Legacy-System-Prompt traegt fremdbestimmte
+              Bezeichner ohne Trennstelle; `whitespace-pre-wrap` allein bricht
+              nur an Leerzeichen (gemessen 462px Inhalt in 212px bei 320px,
+              #571). Der Block scrollt weiterhin in sich (`overflow-auto`) —
+              das ist nach §4.4 Punkt 1 zulaessig, der Text soll aber nicht
+              unnoetig seitlich weglaufen. */}
+          <pre className="mt-2 max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs break-words whitespace-pre-wrap dark:bg-amber-900/40">
             {legacySystemPrompt}
           </pre>
         </div>

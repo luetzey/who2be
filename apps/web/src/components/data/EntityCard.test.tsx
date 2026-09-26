@@ -39,6 +39,23 @@ describe('EntityCard', () => {
     expect(screen.getByRole('button', { name: 'Kopieren' })).toBeInTheDocument()
   })
 
+  it('bricht lange Bezeichner ohne Trennstellen im description-Slot um', () => {
+    // 320px: ein MCP-Server-Name ohne Trennstelle (features/tools fuellt den
+    // Slot mit `display_name || mcp_server_name`) liefe sonst ueber den Rand.
+    renderCard(
+      <EntityCard
+        icon={FileText}
+        iconTone="tools"
+        title="Langer Name"
+        href="/tools/1"
+        description="supercalifragilisticexpialidocious-mcp-server-produktion"
+      />,
+    )
+    expect(
+      screen.getByText('supercalifragilisticexpialidocious-mcp-server-produktion'),
+    ).toHaveClass('break-words')
+  })
+
   it('rendert ohne Expander keinen Toggler', () => {
     renderCard(<EntityCard icon={FileText} iconTone="tools" title="Onboarding" href="/sp/3" />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()

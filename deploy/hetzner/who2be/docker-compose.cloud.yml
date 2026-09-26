@@ -83,6 +83,13 @@ services:
       # Oeffentliche https-Webhook-URL. Mollie ruft sie nach Zahlung — zeigt auf
       # die API hinter Caddy: https://api.<DOMAIN>/v1/billing/mollie/webhook.
       MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Betreiber-Allowlist des Override-Endpoints (ADR-0028). Ohne diese Zeile
+      # kommt die Variable NIE im Container an und der als Default beworbene Weg
+      # „Pro ohne Mollie setzen" endet garantiert in 403 — das Gate ist
+      # fail-closed
+      # (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
+      # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
+      WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
       # Invitation-/Account-Delete-Mails via GoTrue-Admin (service_role-JWT).
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       # Basis-URL der Web-App fuer Mail-/Redirect-Links.

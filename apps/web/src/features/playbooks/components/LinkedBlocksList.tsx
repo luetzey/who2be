@@ -75,10 +75,14 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
         return (
           <li
             key={`${link.resource_id}-${link.link_scope ?? 'block'}-${link.block_id ?? 'resource'}`}
-            className="flex items-center justify-between gap-3 rounded-md border p-3"
+            // `flex-wrap` + `basis-full`: die Aktionsspalte ist `shrink-0` und
+            // belegt 144,1px. Gemessen am gebauten CSS bei 320px blieben dem
+            // Resource-Namen davor nur 105,9px, er lief 78px aus seiner Box.
+            // Unterhalb `md` bekommt die Textspalte jetzt eine eigene Zeile.
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
           >
-            <span className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm font-medium">{link.resource_name}</span>
+            <span className="flex min-w-0 basis-full flex-col gap-1 md:basis-0 md:flex-1">
+              <span className="text-sm font-medium break-words">{link.resource_name}</span>
               <span className="truncate text-xs text-muted-foreground">{subline}</span>
             </span>
             <span className="flex shrink-0 items-center gap-2">
@@ -90,6 +94,11 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
                   size="sm"
                   onClick={() => onRemove(link)}
                   disabled={disabled}
+                  // Zeilen-Aktion: `size="sm"` misst 36px. Issue #573 AK 5
+                  // fordert unterhalb `md` mindestens 40px — `h-10` loest per
+                  // tailwind-merge das `h-9` der Variante ab, ab `md` bleibt
+                  // die Verdichtung der Zeile erhalten.
+                  className="h-10 md:h-9"
                 >
                   {t('common:actions.remove')}
                 </Button>

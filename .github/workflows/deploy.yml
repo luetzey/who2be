@@ -9,8 +9,104 @@ permissions:
   contents: read
   packages: write
 
+env:
+  # Debounce-Fenster fuer push-getriggerte Deploys, in Sekunden.
+  # Bewusst als sichtbare Konstante im Workflow statt als Repo-Variable:
+  # `vars.DEPLOY_HOST` hat real Stunden gekostet, WEIL sein Zustand im Repo
+  # nicht sichtbar war (siehe `deploy-not-configured` unten). Ein Wert, den
+  # man nur im Settings-UI sieht, ist ein Wert, den beim Debuggen niemand
+  # nachschlaegt.
+  # 600 s = 10 min. Die Breite ist eine LATENZ-Entscheidung, keine
+  # Buendelungs-Grenze: ein breiteres Fenster buendelt durchaus mehr.
+  # Gemessen ueber die letzten 100 push-Laeufe (2026-08-22 … 2026-09-24,
+  # `gh run list --workflow=deploy.yml --limit 100`, Abstaende zwischen
+  # aufeinanderfolgenden Laeufen):
+  #   Fenster  600 s (10 min) → 59 Deploys
+  #   Fenster 1800 s (30 min) → 49 Deploys
+  # 30 min sparen also ueber einen Monat 10 weitere Deploys (~17 %), kosten
+  # aber auf JEDEM Merge bis zu 30 statt 10 min bis Live. Zehn Luecken liegen
+  # im Bereich (600 s, 1800 s], die groesste 1592 s = 26,5 min
+  # (33986784452 → 33988114659). Die dichten Serien, um die es in der
+  # Owner-Entscheidung ging, faengt schon das 10-min-Fenster vollstaendig:
+  # innerhalb der vier Serien vom 2026-09-23/24 war der groesste Abstand
+  # zwischen aufeinanderfolgenden Laeufen 3 min 35 s = 215 s
+  # (35956597187 → 35956848991); ueber alle 100 Laeufe liegt der groesste
+  # Abstand unterhalb der Schwelle bei 390 s = 6,5 min
+  # (35707161164 → 35707756898). Der Rest waere Latenz fuer einen
+  # Grenznutzen — deshalb 10. Wer 30 will, aendert diese eine Zahl.
+  DEPLOY_DEBOUNCE_SECONDS: "600"
+
 jobs:
+  # Buendelt eine Merge-Serie zu EINEM Deploy. Vorher loeste jeder Push auf
+  # `main` einen eigenen Lauf aus: am 2026-09-23 um 20:05 Uhr waren das NEUN
+  # Laeufe in 36 Sekunden (35913613271 … 35913678893), jeder mit vier
+  # Image-Builds und einem Service-Neustart. Acht davon waren wertlos, weil nur
+  # der letzte Stand zaehlt.
+  #
+  # Mechanismus: ein Wartefenster, geschuetzt von einer concurrency-Gruppe mit
+  # `cancel-in-progress: true` — ein Debounce. Jeder weitere Push cancelt den
+  # wartenden Lauf und startet sein eigenes Fenster; nach dem letzten Merge
+  # einer Serie ueberlebt genau einer und deployt den neuesten Stand.
+  #
+  # Kosten: keine. Das Repo ist public und faehrt Standard-Runner, und fuer die
+  # ist die Actions-Nutzung laut GitHub-Billing-Doku frei ("GitHub Actions usage
+  # is free … for public repositories that use standard GitHub-hosted runners").
+  # Ein wartender Job verbrennt hier also kein Minuten-Kontingent — er belegt
+  # nur einen von 20 Job-Slots, und es wartet zu jedem Zeitpunkt genau einer.
+  #
+  # Die Gruppe traegt den Event-Namen: ein manueller `workflow_dispatch` cancelt
+  # damit keinen wartenden Push-Lauf und wird von keinem gecancelt. Er wartet
+  # ausserdem gar nicht erst (siehe `if:` am Sleep-Step) — der manuelle Weg
+  # bleibt der sofortige.
+  debounce:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-debounce-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Merge-Serie sammeln
+        if: github.event_name == 'push'
+        run: |
+          echo "Warte ${DEPLOY_DEBOUNCE_SECONDS}s. Jeder weitere Push auf \
+          ${GITHUB_REF_NAME} bricht diesen Lauf ab und startet sein eigenes \
+          Fenster — deployt wird der letzte."
+          sleep "${DEPLOY_DEBOUNCE_SECONDS}"
+
+      # Diagnose, KEIN Abbruch. Die naheliegende Variante waere, hier hart
+      # abzubrechen, wenn der eigene SHA nicht mehr HEAD ist. Das waere ein
+      # Fehler: der Abbruch setzt voraus, dass fuer den neuen HEAD garantiert
+      # ein Deploy-Lauf existiert — ein Commit mit `[skip ci]` in der Nachricht
+      # startet aber keinen. Der wartende Lauf braeche ab, der neue triggerte
+      # nie einen, und dieser Stand bliebe DAUERHAFT unausgeliefert.
+      # Deshalb: im Zweifel einmal zu viel deployen (harmlos, der serialisierte
+      # Nachfolgelauf korrigiert unmittelbar) statt einen Stand liegen zu lassen
+      # (nicht harmlos).
+      - name: Stand pruefen (nur Bericht)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}" \
+            --jq .sha 2>/dev/null || echo unknown)"
+          if [ "${head}" = "${GITHUB_SHA}" ]; then
+            echo "Eigener SHA ist HEAD von ${GITHUB_REF_NAME}." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice title=Stand hat sich bewegt::HEAD ist ${head}, \
+            dieser Lauf traegt ${GITHUB_SHA}. Es wird trotzdem deployt; der \
+            Folgelauf liefert ${head} unmittelbar danach nach."
+            {
+              echo "## Stand hat sich waehrend des Fensters bewegt"
+              echo
+              echo "- Lauf-SHA: \`${GITHUB_SHA}\`"
+              echo "- HEAD: \`${head}\`"
+              echo
+              echo "Es wird bewusst trotzdem deployt — siehe Kommentar am"
+              echo "\`debounce\`-Job."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   build-and-push:
+    needs: debounce
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -45,7 +141,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -63,7 +159,7 @@ jobs:
             # bare Commit-SHA entspricht, das deploy.sh in *_IMAGE_TAG setzt.
             type=sha,format=long,prefix=
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -111,7 +207,21 @@ jobs:
     runs-on: ubuntu-latest
     # Laeuft NUR mit konfiguriertem Host. Der Gegenpart `deploy-not-configured`
     # oben meldet den anderen Fall sichtbar — nie wieder stumm.
-    if: vars.DEPLOY_HOST != ''
+    # Zusaetzlich an `main` gebunden: `workflow_dispatch` laesst sich auf jedem
+    # Ref ausloesen, und ein Produktiv-Deploy von einem Testbranch waere eine
+    # offene Flanke. Der Build oben bleibt ref-unabhaengig (ein manueller Build
+    # eines Branches ist harmlos und nuetzlich).
+    if: vars.DEPLOY_HOST != '' && github.ref == 'refs/heads/main'
+    # Deploys serialisieren, NIEMALS abbrechen. `cancel-in-progress: false` ist
+    # hier die eigentliche Aussage: ein laufender Deploy steckt mitten in
+    # `docker compose up -d` auf der Produktivbox — den abzuschiessen hiesse,
+    # den Stack halb hochgefahren zurueckzulassen. Kommt waehrenddessen ein
+    # Merge, wird sein Lauf `pending` ("the queued job or workflow will be
+    # pending", Workflow-Syntax-Doku) und faehrt danach. Beide Staende werden
+    # ausgeliefert, in Reihenfolge — es bleibt keiner liegen.
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
     steps:
       - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:

@@ -122,20 +122,23 @@ export function PlaybookComposesPicker({
               {selected.map((id, index) => (
                 <li
                   key={id}
-                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                  // Umbruch statt Overflow-Menue (#573, Vorentscheidung 1 des
+                  // Issues): gemessen brauchte die Zeile 319 px min-content in
+                  // einem 238 px breiten Dialog-Innenraum bei 320 px Viewport.
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <span className="w-5 text-right text-xs text-muted-foreground">
                       {index + 1}.
                     </span>
-                    <span className="font-medium">{nameOf(id)}</span>
+                    <span className="min-w-0 font-medium break-words">{nameOf(id)}</span>
                   </span>
                   <span className="flex items-center gap-1">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0"
+                      className="h-10 w-10 p-0 md:h-6 md:w-6"
                       onClick={() => move(id, 'up')}
                       disabled={index === 0}
                       aria-label={t('composesPicker.moveUp', { name: nameOf(id) })}
@@ -146,7 +149,7 @@ export function PlaybookComposesPicker({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0"
+                      className="h-10 w-10 p-0 md:h-6 md:w-6"
                       onClick={() => move(id, 'down')}
                       disabled={index === selected.length - 1}
                       aria-label={t('composesPicker.moveDown', { name: nameOf(id) })}
@@ -157,7 +160,7 @@ export function PlaybookComposesPicker({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-xs text-muted-foreground"
+                      className="h-10 px-2 text-xs text-muted-foreground md:h-6"
                       onClick={() => toggle(id)}
                     >
                       {t('common:actions.remove')}

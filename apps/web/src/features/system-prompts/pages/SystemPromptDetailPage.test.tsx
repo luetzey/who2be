@@ -244,3 +244,41 @@ describe('SystemPromptDetailPage', () => {
     ).not.toBeInTheDocument()
   })
 })
+
+// Responsive-Audit #566 (W3, Epic #431). jsdom hat kein Layout — geprueft wird
+// der Klassen-Vertrag. Die Layout-Aussagen sind am gerenderten Baum belegt
+// (Plandatei .claude/plan/2026-09-23-0700_566-…): bei 320px Viewport misst der
+// Slug-Badge 497px (body.scrollWidth 577), und die Label-Zeile ueber dem Editor
+// bricht ohne `flex-wrap` nicht um — mit einem laengeren Label schiebt sie den
+// Trigger auf right 335 bei 320px Viewport.
+describe('SystemPromptDetailPage — Umbruch bei 320px (#566)', () => {
+  const LONG_SLUG = 'kundenonboarding_systemprompt_vertriebsteam_langbezeichner_q4_2026'
+
+  function renderWithSlug() {
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/system-prompts/sp1`]: () =>
+        jsonResponse(template({ slug: LONG_SLUG })),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions`]: () =>
+        jsonResponse([version('draft')]),
+    })
+    renderPage()
+  }
+
+  it('laesst den umbruchfeindlichen Slug mitten im Wort brechen', async () => {
+    renderWithSlug()
+
+    const classes = (await screen.findByText(LONG_SLUG)).className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  // AK 3: die `justify-between`-Zeile ueber dem Editor (Label links,
+  // Placeholder-Hilfe rechts) muss umbrechen duerfen statt ueberzulaufen.
+  it('laesst die Label-Zeile ueber dem Editor umbrechen', async () => {
+    renderWithSlug()
+
+    const trigger = await screen.findByTestId('placeholder-help-trigger')
+    const row = trigger.parentElement
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+  })
+})

@@ -17,9 +17,9 @@
 ## Befehle (die Verifikations-Schleife)
 
 - Dependencies: `uv sync` (Python, Root-Workspace) · `npm ci` (in `apps/web/`)
-- Tests: `uv run pytest -q` · `npm test`
+- Tests: `uv run pytest -q` · `npm run test:coverage`
 - Lint: `uv run ruff check .` · `npm run lint`
-- Typecheck: `uv run mypy .` · `npx tsc --noEmit`
+- Typecheck: `uv run mypy .` · `npx tsc -b`
 - Build: `docker compose build` · `npm run build` (in `apps/web/`)
 
 ## Cloud-Environment

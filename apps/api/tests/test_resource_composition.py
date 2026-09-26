@@ -286,6 +286,7 @@ def _agent_in(ws: UUID) -> str:
     return asyncio.run(_run())
 
 
+@pytest.mark.integration
 def test_sub_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """MCP-/API-Token-Pfad blendet Sub-Resources ohne aktive Kind-Version aus.
 

@@ -199,6 +199,11 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
             size="sm"
             onClick={addMode}
             disabled={disabled}
+            // Gemessen 36px hoch. AK 2 aus #571 verlangt, dass „Modus anlegen"
+            // auf 320px bedienbar ist; AK 3 setzt die Schwelle dieses Pakets auf
+            // 40px unterhalb `md`. Die Norm (§11) laesst size="sm" zu — die Zahl
+            // stammt aus dem Akzeptanzkriterium, nicht aus der Norm.
+            className="min-h-10 md:min-h-0"
           >
             <Plus className="size-4" />
             {t('modes.addFirst')}
@@ -230,6 +235,9 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
           size="sm"
           onClick={addMode}
           disabled={disabled}
+          // Siehe Kommentar am „Ersten Modus anlegen"-Button: gemessen 36px,
+          // AK 2/AK 3 aus #571 heben ihn unterhalb `md` auf 40px.
+          className="min-h-10 md:min-h-0"
         >
           <Plus className="size-4" />
           {t('modes.add')}
@@ -271,8 +279,12 @@ function PersonaModeCard({
         showDefault ? 'border-brand/30 bg-brand/5' : 'bg-card',
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* `flex-wrap` an Kopfzeile und Titelgruppe: bei 320px messen Nummernchip,
+          Modusname und Default-Badge zusammen 160px in 39px verfuegbarer Breite —
+          das Badge lief 121px ueber (gemessen am gebauten CSS, #571).
+          Vorentscheidung 1 des Issues: umbrechen, kein Overflow-Menue. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
             className="flex size-7 flex-none items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground"
             aria-hidden="true"
@@ -292,7 +304,10 @@ function PersonaModeCard({
               size="sm"
               onClick={onSetDefault}
               disabled={disabled}
-              className="text-xs"
+              // Gemessen 36px hoch. AK 2 („als Default markieren" auf 320px
+              // bedienbar) + AK 3 aus #571 heben die beiden Modus-Aktionen
+              // unterhalb `md` auf 40px. Die Norm (§11) laesst size="sm" zu.
+              className="min-h-10 text-xs md:min-h-0"
             >
               {t('modes.card.setDefault')}
             </Button>
@@ -304,7 +319,7 @@ function PersonaModeCard({
             onClick={onRemove}
             disabled={disabled}
             aria-label={t('modes.card.remove', { number: index + 1 })}
-            className="text-destructive hover:text-destructive"
+            className="min-h-10 text-destructive hover:text-destructive md:min-h-0"
           >
             <Trash2 className="size-4" />
           </Button>

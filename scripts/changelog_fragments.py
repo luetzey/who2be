@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""Changelog-Fragmente statt Sammeldatei (towncrier-Muster).
+
+Warum es das gibt
+-----------------
+``CHANGELOG.md`` ist eine *Sammeldatei*: jeder PR schreibt in dieselbe Datei,
+meist an dieselbe Stelle (oben unter ``## [Unreleased]``). Genau dort merged
+git messbar oft still falsch — ohne Konfliktmarker, ohne Warnung. In einer
+Welle dieses Repos stand danach ein Warnabsatz doppelt im CHANGELOG, gefunden
+nur durch einen Cherry-pick-Gegencheck der Baum-Identitaet.
+
+Das Gegenmittel ist strukturell, nicht werkzeuggestuetzt: jeder PR legt eine
+*eigene kleine Datei* unter ``changelog.d/`` an. Zwei PRs beruehren dann nie
+dieselbe Datei, und der Konflikt kann nicht entstehen. Vor dem Release fuehrt
+``collect`` die Fragmente in den CHANGELOG zusammen.
+
+Ausdruecklich **nicht** benutzt wird ``merge=union`` in ``.gitattributes``.
+Die git-Dokumentation warnt selbst davor ("Do not use this if you do not
+understand the implications."), und der dokumentierte Verlauf in scikit-learn
+(Issue #21516) ist exakt unser Fehlerfall: ein bereits entfernter Eintrag kam
+durch ``union`` zurueck. Es tauscht einen sichtbaren Konflikt gegen einen
+stillen Fehler — die falsche Richtung.
+
+Warum ein eigenes Skript statt towncrier
+----------------------------------------
+towncrier ist das Referenz-Werkzeug fuer dieses Muster, passt hier aber nicht:
+Das Repo traegt Python **und** TypeScript, towncrier waere eine reine
+Python-Dependency fuer einen CHANGELOG, der beide Staecke beschreibt. Vor
+allem aber baut towncrier den CHANGELOG aus einem eigenen Template neu auf und
+kennt die *Keep a Changelog*-Struktur dieses Repos (``## [Unreleased]`` mit
+``### Fixed``/``### Security``-Unterabschnitten, mehrabsaetzige Fliesstexte
+mit Einrueckung) nicht. Der Zusammenbau selbst ist trivial; das Wertvolle am
+Muster ist das Verzeichnis, nicht das Werkzeug.
+
+Form eines Fragments
+--------------------
+``changelog.d/<slug>.<typ>.md``
+
+* ``<slug>``  — frei, sinnvoll ist der Branch- oder PR-Bezug (``oauth-issuer``,
+  ``pr-560``). Er taucht im CHANGELOG nicht auf; er sorgt nur dafuer, dass zwei
+  PRs verschiedene Dateien anlegen.
+* ``<typ>``   — eine der *Keep a Changelog*-Kategorien:
+  ``added``, ``changed``, ``deprecated``, ``removed``, ``fixed``, ``security``.
+* Inhalt      — der Markdown-Listenpunkt, so wie er im CHANGELOG stehen soll,
+  inklusive fuehrendem ``- ``. Mehrere Absaetze: Folgezeilen um zwei
+  Leerzeichen einruecken, genau wie im bestehenden CHANGELOG.
+
+Kommandos
+---------
+``check``    prueft alle Fragmente auf Namensform, bekannten Typ und Inhalt.
+``collect``  fuehrt sie in die ``## [Unreleased]``-Sektion ein und loescht sie.
+             ``--dry-run`` schreibt nichts und gibt das Ergebnis auf stdout aus.
+``guard``    weist einen direkten ``CHANGELOG.md``-Hunk in einem normalen PR ab.
+             ``--base <ref>`` nennt die Vergleichsbasis (in CI der Base-SHA des
+             PRs). Laeuft in ``.github/workflows/ci.yml``, Job ``changelog-guard``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+#: Kategorien von *Keep a Changelog* 1.1.0 in ihrer kanonischen Reihenfolge.
+#: Die Reihenfolge ist normativ: ``collect`` legt fehlende Unterabschnitte
+#: genau hier ein, damit der CHANGELOG nicht je nach Fragment-Reihenfolge
+#: anders aussieht.
+CATEGORIES: tuple[str, ...] = (
+    "added",
+    "changed",
+    "deprecated",
+    "removed",
+    "fixed",
+    "security",
+)
+
+#: Ueberschrift, unter der die Fragmente landen.
+UNRELEASED_HEADING = "## [Unreleased]"
+
+#: Dateien im Fragment-Verzeichnis, die keine Fragmente sind.
+IGNORED_NAMES = frozenset({"README.md", ".gitkeep", ".gitignore"})
+
+
+def heading_for(category: str) -> str:
+    """``### Fixed`` fuer ``fixed`` — die Schreibweise des bestehenden CHANGELOG."""
+    return f"### {category.capitalize()}"
+
+
+@dataclass(frozen=True)
+class Fragment:
+    """Ein eingelesenes Fragment."""
+
+    path: Path
+    category: str
+    body: str
+
+    @property
+    def slug(self) -> str:
+        return self.path.name.split(".")[0]
+
+
+class FragmentError(Exception):
+    """Ein Fragment ist unbrauchbar — mit einer Meldung, die den Pfad nennt."""
+
+
+def parse_fragment(path: Path) -> Fragment:
+    """Liest ein Fragment ein und validiert Name wie Inhalt.
+
+    :raises FragmentError: bei falscher Namensform, unbekanntem Typ oder
+        leerem Inhalt. Die Meldung nennt immer den Dateinamen und die
+        erwartete Form — sie landet unveraendert in der CI-Ausgabe.
+    """
+    name = path.name
+    parts = name.split(".")
+    if len(parts) != 3 or parts[2] != "md":
+        raise FragmentError(
+            f"{name}: erwartete Form ist <slug>.<typ>.md "
+            f"(Typ: {', '.join(CATEGORIES)}), z. B. oauth-issuer.fixed.md"
+        )
+
+    slug, category, _ = parts
+    if not slug:
+        raise FragmentError(f"{name}: der <slug>-Teil vor dem Typ ist leer")
+    if category not in CATEGORIES:
+        raise FragmentError(
+            f"{name}: unbekannter Typ {category!r} — erlaubt sind {', '.join(CATEGORIES)}"
+        )
+
+    body = path.read_text(encoding="utf-8").strip("\n")
+    if not body.strip():
+        raise FragmentError(f"{name}: leer — das Fragment ist der CHANGELOG-Eintrag selbst")
+    if not body.lstrip().startswith("- "):
+        raise FragmentError(
+            f"{name}: muss ein Markdown-Listenpunkt sein und mit '- ' beginnen "
+            "(Folgeabsaetze um zwei Leerzeichen eingerueckt)"
+        )
+
+    return Fragment(path=path, category=category, body=body)
+
+
+def collect_fragments(directory: Path) -> list[Fragment]:
+    """Alle Fragmente eines Verzeichnisses, nach Dateiname sortiert.
+
+    Sortiert, damit ``collect`` bei gleichem Bestand immer dasselbe Ergebnis
+    liefert — die Reihenfolge des Dateisystems ist keine Zusage.
+
+    :raises FragmentError: sammelt *alle* Fehler und meldet sie gemeinsam,
+        damit ein Beitragender nicht pro Lauf einen einzelnen Fehler erfaehrt.
+    """
+    if not directory.is_dir():
+        return []
+
+    problems: list[str] = []
+    fragments: list[Fragment] = []
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.name in IGNORED_NAMES:
+            continue
+        try:
+            fragments.append(parse_fragment(path))
+        except FragmentError as exc:
+            problems.append(str(exc))
+
+    if problems:
+        raise FragmentError("\n".join(problems))
+    return fragments
+
+
+def _find_unreleased_bounds(lines: Sequence[str]) -> tuple[int, int]:
+    """Index der ``## [Unreleased]``-Zeile und des Endes ihres Abschnitts.
+
+    Das Ende ist die naechste ``## ``-Ueberschrift (also der naechste Release)
+    oder das Dateiende.
+
+    :raises FragmentError: wenn es die Sektion nicht gibt — dann stimmt eine
+        Annahme dieses Skripts nicht mehr, und stilles Anhaengen waere der
+        Fehler, den es verhindern soll.
+    """
+    try:
+        start = next(i for i, line in enumerate(lines) if line.strip() == UNRELEASED_HEADING)
+    except StopIteration:
+        raise FragmentError(
+            f"CHANGELOG.md hat keine Zeile {UNRELEASED_HEADING!r} — "
+            "ohne sie weiss dieses Skript nicht, wohin die Fragmente gehoeren."
+        ) from None
+
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    return start, end
+
+
+def _section_index(section: Sequence[str], category: str) -> int | None:
+    """Index der ``### Typ``-Ueberschrift innerhalb der Unreleased-Sektion."""
+    wanted = heading_for(category)
+    for i, line in enumerate(section):
+        if line.strip() == wanted:
+            return i
+    return None
+
+
+def _insert_into_section(section: list[str], category: str, bodies: Iterable[str]) -> list[str]:
+    """Traegt Eintraege in den ``### Typ``-Unterabschnitt ein.
+
+    Existiert der Unterabschnitt, werden die Eintraege ans *Ende* angehaengt —
+    der Bestand bleibt unveraendert, neue Eintraege stehen unten. Existiert er
+    nicht, wird er an der nach :data:`CATEGORIES` richtigen Stelle angelegt.
+    """
+    block: list[str] = []
+    for body in bodies:
+        block.extend(body.split("\n"))
+        block.append("")
+
+    index = _section_index(section, category)
+    if index is not None:
+        # Ende des Unterabschnitts: naechste ###/##-Ueberschrift oder Ende.
+        end = len(section)
+        for i in range(index + 1, len(section)):
+            if section[i].startswith("#"):
+                end = i
+                break
+        # Nachlaufende Leerzeilen gehoeren hinter den neuen Block, nicht davor.
+        while end > index + 1 and not section[end - 1].strip():
+            end -= 1
+        return section[:end] + [""] + block[:-1] + section[end:]
+
+    # Neuer Unterabschnitt: vor dem ersten Typ, der in CATEGORIES spaeter kommt.
+    order = CATEGORIES.index(category)
+    insert_at = len(section)
+    for later in CATEGORIES[order + 1 :]:
+        found = _section_index(section, later)
+        if found is not None:
+            insert_at = found
+            break
+    else:
+        # Kein spaeterer Typ vorhanden -> ans Ende, ohne nachlaufende Leerzeilen.
+        while insert_at > 1 and not section[insert_at - 1].strip():
+            insert_at -= 1
+
+    new_block = ["", heading_for(category), ""] + block[:-1] + [""]
+    return section[:insert_at] + new_block + section[insert_at:]
+
+
+def render(changelog_text: str, fragments: Sequence[Fragment]) -> str:
+    """Der CHANGELOG-Text mit eingearbeiteten Fragmenten.
+
+    Rein funktional: liest keine Dateien und schreibt keine. Das macht die
+    Einfuegelogik testbar, ohne ein Repo nachzubauen.
+    """
+    if not fragments:
+        return changelog_text
+
+    lines = changelog_text.split("\n")
+    start, end = _find_unreleased_bounds(lines)
+    section = lines[start:end]
+
+    for category in CATEGORIES:
+        bodies = [f.body for f in fragments if f.category == category]
+        if bodies:
+            section = _insert_into_section(section, category, bodies)
+
+    return "\n".join(lines[:start] + section + lines[end:])
+
+
+#: Pfad (repo-relativ) der Sammeldatei, die dieses Verfahren ersetzt.
+CHANGELOG_PATH = "CHANGELOG.md"
+
+#: Verzeichnis-Praefix der Fragmente, repo-relativ mit Schraegstrich.
+FRAGMENT_DIR_PREFIX = "changelog.d/"
+
+#: Meldung fuer den Verstossfall. Sie muss den Weg heraus nennen, nicht nur das
+#: Verbot — sie ist das Einzige, was ein Beitragender vom Gate zu sehen bekommt.
+GUARD_MESSAGE = (
+    f"{CHANGELOG_PATH} wird nicht direkt bearbeitet.\n"
+    "\n"
+    "Dieser Diff aendert die Sammeldatei, ohne ein einziges Fragment unter\n"
+    f"{FRAGMENT_DIR_PREFIX} zu loeschen — er ist also kein Release-Lauf von\n"
+    "'collect', sondern ein direkter Eintrag. Genau daran merged git still\n"
+    "falsch (siehe CONTRIBUTING.md, Abschnitt 'Changelog: ein Fragment, keine\n"
+    "Sammeldatei').\n"
+    "\n"
+    "Weg heraus (gilt auch fuer Alt-PRs aus der Zeit vor #587):\n"
+    f"  1. den {CHANGELOG_PATH}-Hunk verwerfen,\n"
+    "  2. denselben Text WORTGLEICH als Fragment ablegen:\n"
+    f"     {FRAGMENT_DIR_PREFIX}<slug>.<typ>.md  (Typ: " + ", ".join(CATEGORIES) + ")\n"
+    "  3. pruefen mit: uv run python scripts/changelog_fragments.py check"
+)
+
+
+def _is_fragment(path: str) -> bool:
+    """Ist ``path`` ein Fragment — also eine Datei, die ``collect`` loescht?
+
+    ``changelog.d/README.md`` und die uebrigen :data:`IGNORED_NAMES` zaehlen
+    bewusst nicht: sonst liesse sich das Gate durch das Loeschen der Anleitung
+    aushebeln.
+    """
+    if not path.startswith(FRAGMENT_DIR_PREFIX):
+        return False
+    name = path[len(FRAGMENT_DIR_PREFIX) :]
+    if "/" in name:  # Unterverzeichnisse sind keine Fragmente.
+        return False
+    return name not in IGNORED_NAMES
+
+
+def guard_violation(changed: Iterable[str], deleted: Iterable[str]) -> str | None:
+    """Die Verstoss-Meldung fuer einen Diff — oder ``None``, wenn er in Ordnung ist.
+
+    Rein funktional ueber zwei Dateilisten (alle geaenderten Pfade, davon die
+    geloeschten), damit die Entscheidung ohne git unter pytest steht.
+
+    Zulaessig ist eine ``CHANGELOG.md``-Aenderung nur als Signatur eines
+    ``collect``-Laufs: derselbe Diff loescht mindestens ein Fragment. Bewusst
+    kein Label und kein Branch-Praefix — beide haengen an menschlicher
+    Disziplin und waeren damit so weich wie die Konvention, die das Gate
+    ersetzen soll.
+    """
+    if CHANGELOG_PATH not in set(changed):
+        return None
+    if any(_is_fragment(path) for path in deleted):
+        return None
+    return GUARD_MESSAGE
+
+
+def _git(args: Sequence[str]) -> str:
+    """``git`` aufrufen und stdout zurueckgeben.
+
+    :raises FragmentError: wenn git fehlschlaegt — mit dem Kommando und stderr,
+        damit ein CI-Fehlschlag ohne Nachstellen lesbar ist.
+    """
+    try:
+        proc = subprocess.run(  # noqa: S603 - festes Argv, keine Shell
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:  # pragma: no cover - ohne git laeuft hier nichts
+        raise FragmentError("git ist nicht verfuegbar") from None
+    except subprocess.CalledProcessError as exc:
+        raise FragmentError(f"git {' '.join(args)} fehlgeschlagen: {exc.stderr.strip()}") from None
+    return proc.stdout
+
+
+def diff_against(base: str, head: str = "HEAD") -> tuple[list[str], list[str]]:
+    """Geaenderte und geloeschte Pfade zwischen Merge-Base und ``head``.
+
+    Verglichen wird gegen die *Merge-Base*, nicht gegen die Basis-Spitze: sonst
+    zaehlten Aenderungen, die inzwischen auf main gelandet sind, als Teil dieses
+    PRs — und ein fremder CHANGELOG-Eintrag auf main brechte jeden offenen PR.
+    """
+    merge_base = _git(["merge-base", base, head]).strip()
+    raw = _git(["diff", "--name-status", "-z", merge_base, head])
+
+    changed: list[str] = []
+    deleted: list[str] = []
+    fields = [f for f in raw.split("\0") if f]
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        # Rename/Copy tragen ZWEI Pfade (alt, neu); alle uebrigen genau einen.
+        # Der alte Pfad zaehlt dabei NICHT als geloescht: ein Rename laesst die
+        # Datei unter neuem Namen bestehen, ist also keine ``collect``-Signatur.
+        # Sonst genuegte ein ``git mv`` eines Fragments, um einen direkten
+        # CHANGELOG-Hunk am Gate vorbeizuschleusen. Ein echter ``collect``-Lauf
+        # loescht Fragmente ersatzlos und erzeugt nie ein Rename.
+        if status.startswith(("R", "C")):
+            old, new = fields[i + 1], fields[i + 2]
+            changed.extend((old, new))
+            i += 3
+            continue
+        path = fields[i + 1]
+        changed.append(path)
+        if status.startswith("D"):
+            deleted.append(path)
+        i += 2
+
+    return changed, deleted
+
+
+def cmd_guard(base: str) -> int:
+    try:
+        changed, deleted = diff_against(base)
+    except FragmentError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    violation = guard_violation(changed, deleted)
+    if violation is None:
+        print(f"changelog-guard: in Ordnung ({len(changed)} Datei(en) gegen {base}).")
+        return 0
+
+    print(violation, file=sys.stderr)
+    return 1
+
+
+def cmd_check(directory: Path) -> int:
+    try:
+        fragments = collect_fragments(directory)
+    except FragmentError as exc:
+        print(f"Fragmente fehlerhaft:\n{exc}", file=sys.stderr)
+        return 1
+
+    if not fragments:
+        print(f"Keine Fragmente in {directory}/ — in Ordnung.")
+        return 0
+
+    print(f"{len(fragments)} Fragment(e) in {directory}/ in Ordnung:")
+    for fragment in fragments:
+        print(f"  {fragment.path.name:<40} {heading_for(fragment.category)}")
+    return 0
+
+
+def cmd_collect(directory: Path, changelog: Path, *, dry_run: bool) -> int:
+    try:
+        fragments = collect_fragments(directory)
+    except FragmentError as exc:
+        print(f"Fragmente fehlerhaft:\n{exc}", file=sys.stderr)
+        return 1
+
+    if not fragments:
+        print(f"Keine Fragmente in {directory}/ — nichts zu tun.")
+        return 0
+
+    try:
+        rendered = render(changelog.read_text(encoding="utf-8"), fragments)
+    except FragmentError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if dry_run:
+        sys.stdout.write(rendered)
+        return 0
+
+    changelog.write_text(rendered, encoding="utf-8")
+    for fragment in fragments:
+        fragment.path.unlink()
+    print(f"{len(fragments)} Fragment(e) in {changelog.name} uebernommen und geloescht.")
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    parser = argparse.ArgumentParser(
+        prog="changelog_fragments",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--dir",
+        type=Path,
+        default=repo_root / "changelog.d",
+        help="Fragment-Verzeichnis (Default: changelog.d/ im Repo-Root)",
+    )
+    parser.add_argument(
+        "--changelog",
+        type=Path,
+        default=repo_root / "CHANGELOG.md",
+        help="Ziel-CHANGELOG (Default: CHANGELOG.md im Repo-Root)",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("check", help="Fragmente auf Namensform, Typ und Inhalt pruefen")
+    collect = sub.add_parser("collect", help="Fragmente in den CHANGELOG uebernehmen")
+    collect.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Ergebnis auf stdout ausgeben, nichts schreiben und nichts loeschen",
+    )
+    guard = sub.add_parser(
+        "guard",
+        help="einen direkten CHANGELOG.md-Hunk abweisen (CI-Gate)",
+    )
+    guard.add_argument(
+        "--base",
+        required=True,
+        help=(
+            "Vergleichsbasis, z. B. 'origin/main' lokal oder der Base-SHA des PRs "
+            "in CI. Bewusst ohne Default: ein geratener Basis-Ref waere ein Gate, "
+            "das mal prueft und mal nicht."
+        ),
+    )
+
+    args = parser.parse_args(argv)
+    if args.command == "check":
+        return cmd_check(args.dir)
+    if args.command == "guard":
+        return cmd_guard(args.base)
+    return cmd_collect(args.dir, args.changelog, dry_run=args.dry_run)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

@@ -212,7 +212,7 @@ export function FeedbackDetailPage() {
                       />
                     ))}
                   </div>
-                  <div className="flex items-center justify-between gap-3 border-t pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
                     <span className="text-sm text-muted-foreground">{t('detail.successRate')}</span>
                     <span className="inline-flex items-baseline gap-1.5">
                       <span className="text-lg font-semibold tabular-nums">{successRate}%</span>
@@ -224,7 +224,7 @@ export function FeedbackDetailPage() {
 
               {/* Signale */}
               <Card>
-                <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+                <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
                   <CardTitle>{t('detail.signalsTitle')}</CardTitle>
                   <span className="text-xs text-muted-foreground">
                     {t('detail.signalsTotal', { count: signalTotal })}
@@ -299,7 +299,7 @@ export function FeedbackDetailPage() {
 
             {/* Einzel-Ereignisse (Drill-down, lazy) */}
             <Card>
-              <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+              <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
                 <CardTitle>{t('detail.eventsTitle')}</CardTitle>
                 <Button
                   type="button"

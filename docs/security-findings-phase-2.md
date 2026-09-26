@@ -361,11 +361,13 @@ Empfehlung fuer den spaeteren Flip.**
   Defense-in-Depth-Hinweise ohne realen Leak.
 - **F-Phase2-01** benennt konkret die Endpunkte ohne `write_limit` und einen
   403-Timing-Probe-Gedanken. Das ist der einzige fuer einen Angreifer leicht
-  verwertbare Detailgrad. Bewertung: **nicht redigieren, sondern schliessen** —
-  der Finding ist als „TODO vor Public-Switch" (oben, Punkt 1) ohnehin
-  blockierend; eine Kuerzung der Beschreibung wuerde nur Tracking-Wert kosten,
-  solange das Repo privat ist.
+  verwertbare Detailgrad. Bewertung damals: **nicht redigieren, sondern
+  schliessen** — der Finding war als „TODO vor Public-Switch" (oben, Punkt 1)
+  ohnehin blockierend; eine Kuerzung der Beschreibung haette nur Tracking-Wert
+  gekostet. Der Finding ist seit 2026-06-03 geschlossen, die Beschreibung damit
+  historisch und weiterhin unredigiert.
 
-Hinweis: Der tatsaechliche Public-Flip ist **nicht** Teil dieses Schritts (Repo
-bleibt privat). Die obigen „TODO vor Public-Switch"-Punkte (insb. F-Phase2-01
-Rate-Limits und der CSP/Header-Pass) bleiben Voraussetzung fuer den Flip.
+Hinweis: Der tatsaechliche Public-Flip war **nicht** Teil dieses Schritts. Das
+Repo ist inzwischen oeffentlich, und die damaligen „TODO vor
+Public-Switch"-Punkte (F-Phase2-01 Rate-Limits und der CSP/Header-Pass) sind
+beide geschlossen — die Voraussetzung ist also erfuellt und nicht uebergangen.

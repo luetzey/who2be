@@ -40,6 +40,7 @@ from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.resource_service import ResourceService
 from who2be_api.services.status_history_service import StatusHistoryService
+from who2be_api.services.storage_quota_service import enforce_storage_quota
 from who2be_api.services.wa_artifacts import ArtifactExportFormat, WaArtifactService
 from who2be_api.services.wa_promote import PromoteUnsupportedArtifact, WaPromoteService
 from who2be_models import (
@@ -99,7 +100,15 @@ Anchor = Annotated[str | None, Query(min_length=1, max_length=64)]
 ExportFormat = Annotated[ArtifactExportFormat, Query()]
 
 
-@router.post("/work-areas/{area_id}/artifacts", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/work-areas/{area_id}/artifacts",
+    status_code=status.HTTP_201_CREATED,
+    # Artifact-Text zaehlt in die Speicher-Quota (Karte W8/P5, Owner-Entscheidung
+    # 2026-09-24: „ein Limit fuer alles"). Ohne dieses Gate war der Pfad durch
+    # KEIN Kontingent gedeckelt — bis ARTIFACT_CONTENT_MAX_LENGTH je Aufruf,
+    # gebremst nur durch `write_limit`.
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def create_artifact(
     request: Request, area_id: UUID, data: ArtifactCreate, ctx: Ctx, service: Service
@@ -109,7 +118,11 @@ async def create_artifact(
     return await service.create(ctx, area_id, data)
 
 
-@router.post("/artifacts", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/artifacts",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def create_artifact_in_private_area(
     request: Request, data: ArtifactCreate, ctx: Ctx, service: Service
@@ -131,7 +144,14 @@ async def create_artifact_in_private_area(
     return await service.create(ctx, None, data)
 
 
-@router.post("/wa-artifacts/{artifact_id}/append")
+@router.post(
+    "/wa-artifacts/{artifact_id}/append",
+    # Der Append zaehlt seinen ZUWACHS in die Speicher-Quota (W8/P5): die
+    # `content_bytes`-Spalte traegt nach dem UPDATE die neue Gesamtgroesse der
+    # Zeile, die Summe ueber alle Artifacts waechst dadurch genau um das
+    # Angehaengte (Migration 0087).
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def append_artifact(
     request: Request, artifact_id: UUID, data: ArtifactAppend, ctx: Ctx, service: Service
@@ -141,7 +161,14 @@ async def append_artifact(
     return await service.append(ctx, artifact_id, data)
 
 
-@router.patch("/wa-artifacts/{artifact_id}")
+@router.patch(
+    "/wa-artifacts/{artifact_id}",
+    # Ebenfalls gedeckelt (W8/P5): der Patch ERSETZT den Content vollstaendig
+    # und ist damit der groesste Einzelpfad — derselbe 500k-Hebel wie `append`,
+    # nur ohne dessen kumulativen Block-Cap. Schrumpft der Content, gibt die
+    # neu berechnete `content_bytes` den Platz wieder frei.
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def patch_artifact(
     request: Request, artifact_id: UUID, data: ArtifactPatch, ctx: Ctx, service: Service

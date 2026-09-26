@@ -233,3 +233,70 @@ describe('ArtifactDetailPage', () => {
     expect(anchorClick).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Vertrag #572 (AK 3 und AK 5). jsdom hat kein Layout —
+// Klassen-Vertrag zu den gerenderten Messungen in
+// .claude/plan/2026-09-23-1100_572-w3-workarea-responsive-audit.md.
+describe('ArtifactDetailPage — Responsive (#572)', () => {
+  it('laesst die Quell-Angabe umbrechen (AK 5)', async () => {
+    // Gemessen schnitt die Quell-Pille bei 320 px ab (510 px Inhalt in 288 px).
+    stubFetch([
+      [
+        '/wa-artifacts/art-1',
+        { artifact_id: 'art-1', title: 'Preisliste 2026', rev: 2, markdown: MARKDOWN },
+      ],
+      [
+        '/work-areas/area-1/artifacts',
+        [
+          artifact({
+            source_url: 'https://www.beispielgesellschaft.example/berichte/2026/q3/analyse.pdf',
+          }),
+        ],
+      ],
+    ])
+    renderAt(<ArtifactDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Quelle: https://www.beispielgesellschaft.example/berichte/2026/q3/analyse.pdf',
+        ),
+      ).toHaveClass('break-all')
+    })
+  })
+
+  it('laesst den Rohtext auch ohne Leerzeichen umbrechen (AK 5)', async () => {
+    // Das Issue fuehrt `:237` (`min-w-0 … whitespace-pre-wrap`) zu Recht als
+    // erfuellt: an Leerzeichen bricht der Rohtext um. Gemessen laeuft ein
+    // trennstellenfreies Token trotzdem ueber (207 px in 170 px sichtbar) —
+    // `break-words` ergaenzt den Fall, `min-w-0`/`whitespace-pre-wrap` bleiben.
+    stubArtifact()
+    renderAt(<ArtifactDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Der Preis stieg um 8 %/)).toBeInTheDocument()
+    })
+    const block = screen.getByText(/Der Preis stieg um 8 %/)
+    expect(block).toHaveClass('break-words')
+    expect(block).toHaveClass('min-w-0')
+    expect(block).toHaveClass('whitespace-pre-wrap')
+  })
+
+  it('haelt den Anker-Knopf auf dem 40-px-Hit-Target aus AK 3', async () => {
+    // Die Zahl kommt aus AK 3 dieses Issues, nicht aus der Norm:
+    // design-language.md §11 setzt den Floor auf >= 32 px, womit die gemessenen
+    // 36 px (`size="sm"`) zulaessig waren; 40 px ist dort die Praeferenz
+    // `size="default"`. Ab `md` faellt die Block-Aktion auf die Desktop-Dichte
+    // zurueck.
+    stubArtifact()
+    renderAt(<ArtifactDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Anker kopieren' }).length).toBeGreaterThan(0)
+    })
+    for (const button of screen.getAllByRole('button', { name: 'Anker kopieren' })) {
+      expect(button).toHaveClass('min-h-10')
+      expect(button).toHaveClass('md:min-h-0')
+    }
+  })
+})

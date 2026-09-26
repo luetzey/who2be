@@ -21,7 +21,7 @@ state), `docs/adr/` (decisions), and the plan documents under
   workspace per agent (documents, file/URL ingest with content-addressed
   blob store, read-only SQL tables, timeline), evidence-backed knowledge
   base with typed edges, promotion into curated resources, agent access
-  log; 81 MCP tools in total, table UI + CSV/XLSX/Markdown/HTML exports
+  log; 83 MCP tools in total, table UI + CSV/XLSX/Markdown/HTML exports
 - **Semantic search & passage retrieval (ADR-0046):** content chunking,
   `search_content` passages, optional local embeddings with hybrid RRF
   ranking, semantic agent memory
@@ -40,7 +40,10 @@ Tracked in issues #338–#341:
 
 1. **Owner steps** (#338): branch protection + repo settings, CLA
    Assistant, visibility flip private → public. (The CI gate used to be
-   listed here — it has been running again since 2026-08-16.)
+   listed here — it has been running again since 2026-08-16. Branch
+   protection is done as well: since 2026-09-22 ruleset `16707501` enforces
+   `all-green` as the only required status check on `main`, see
+   [`docs/branch-protection-main.md`](docs/branch-protection-main.md).)
 2. **Release blockers** (#339): npm audit cleanup,
    `THIRD-PARTY-LICENSES.md`, documented pre-publish evidence.
 3. **Publish artifacts** (#340): code of conduct, roadmap, README

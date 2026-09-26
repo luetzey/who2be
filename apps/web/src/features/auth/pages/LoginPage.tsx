@@ -20,8 +20,12 @@ import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
 
 import { OAuthButtons } from '../components/OAuthButtons'
+import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
+import { isPasswordAuthEnabled } from '../lib/password-auth'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
+import { useCaptcha } from '../lib/use-captcha'
 
 type LoginValues = { email: string; password: string; remember: boolean }
 type MfaValues = { code: string }
@@ -75,6 +79,20 @@ export function LoginPage() {
   // Zweite Login-Stufe: Passwort war korrekt, aber der Account braucht eine
   // TOTP-Challenge (Step-up auf aal2), bevor die Session in die App darf.
   const [mfaRequired, setMfaRequired] = useState(false)
+  // Turnstile (Issue #539 / Folgebefund). Diese Maske traegt ZWEI
+  // captcha-pflichtige Aktionen — den Passwort-Login (`/token`) und „Mail
+  // erneut senden" (`/resend`). Sie teilen sich EIN Widget: zwei Challenges
+  // untereinander waeren fuer den Nutzer ein doppeltes Raetsel fuer dieselbe
+  // Seite. Weil ein Token einmalig gueltig ist, stellt `captcha.reset()` es
+  // nach jedem verbrauchenden Request neu.
+  const captcha = useCaptcha()
+
+  // Cloud: nur externe Provider (Owner-Entscheidung 2026-09-24). Das
+  // Passwortformular wird dann gar nicht erst gerendert — die harte
+  // Durchsetzung liegt bei GoTrue (`GOTRUE_EXTERNAL_EMAIL_ENABLED=false`,
+  // `POST /token` antwortet mit 422 `email_provider_disabled`), dieses Flag
+  // entfernt nur die dann tote UI. Im Self-Hosting unveraendert `true`.
+  const passwordAuth = isPasswordAuthEnabled()
 
   // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
   // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
@@ -115,7 +133,16 @@ export function LoginPage() {
     setError(null)
     setUnconfirmed(false)
     try {
-      const { mfaRequired: needsMfa } = await signIn(values.email, values.password, values.remember)
+      const { mfaRequired: needsMfa } = await signIn(
+        values.email,
+        values.password,
+        values.remember,
+        captcha.token ?? undefined,
+      )
+      // Token ist mit dem Request verbraucht — GoTrue loest es serverseitig
+      // ein. Steht gleich die TOTP-Stufe an oder klickt der Nutzer danach auf
+      // „Mail erneut senden", braucht es eine frische Challenge.
+      captcha.reset()
       if (needsMfa) {
         // Session noch nicht committed — erst die Challenge, dann navigiert der
         // reaktive `session !== null`-Guard von selbst.
@@ -124,12 +151,16 @@ export function LoginPage() {
       }
       navigate(next)
     } catch (cause) {
+      captcha.reset()
       if (isUnconfirmedEmail(cause)) {
         setUnconfirmed(true)
         setError(t('login.unconfirmedEmail'))
         return
       }
-      setError(cause instanceof Error ? cause.message : t('login.loginFailed'))
+      // `translateAuthError` faengt die GoTrue-Captcha-Abweisung ab; alle
+      // anderen Meldungen bleiben im Wortlaut. Der letzte Fallback greift,
+      // wenn gar keine Error-Instanz ankommt.
+      setError(cause instanceof Error ? translateAuthError(cause, t) : t('login.loginFailed'))
     }
   }
 
@@ -154,17 +185,22 @@ export function LoginPage() {
     const { error: resendError } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: buildRedirectTo('/auth/callback', next) },
+      options: {
+        emailRedirectTo: buildRedirectTo('/auth/callback', next),
+        ...captcha.option(),
+      },
     })
+    // Auch nach Erfolg: das Token hat den Request bezahlt und ist tot.
+    captcha.reset()
     if (resendError) {
-      notify.error(resendError.message)
+      notify.error(translateAuthError(resendError, t))
       return
     }
     notify.success(t('login.confirmationResent'))
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -212,6 +248,7 @@ export function LoginPage() {
             </Form>
           ) : (
           <div className="flex flex-col gap-4">
+            {passwordAuth ? (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 <FormField
@@ -232,7 +269,7 @@ export function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between">
                         <FormLabel>{t('fields.password')}</FormLabel>
                         <Link
                           to={
@@ -283,8 +320,30 @@ export function LoginPage() {
                   )}
                 />
                 {error !== null ? <ErrorAlert message={error} /> : null}
+                {captcha.required ? (
+                  <TurnstileWidget
+                    key={captcha.nonce}
+                    siteKey={config.turnstileSiteKey}
+                    action="login"
+                    onToken={captcha.setToken}
+                    onExpire={captcha.clearToken}
+                    className="flex justify-center"
+                  />
+                ) : null}
                 {unconfirmed ? (
-                  <Button type="button" variant="outline" size="sm" onClick={() => void resendConfirmation()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    // Weiche 4 aus #569: unterhalb `md` auf den 40px-Regelfall
+                    // heben. `size="sm"` liefert 36px (gemessen) — das haelt
+                    // den verbindlichen Floor (§11: >= 32px) bereits, ist hier
+                    // aber nicht dicht genug gewollt. Ab `md` bleibt die
+                    // Verdichtung.
+                    className="h-10 md:h-9"
+                    disabled={captcha.blocked}
+                    onClick={() => void resendConfirmation()}
+                  >
                     {t('login.resendConfirmation')}
                   </Button>
                 ) : null}
@@ -292,17 +351,25 @@ export function LoginPage() {
                   type="submit"
                   variant="brand"
                   className="w-full"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || captcha.blocked}
                 >
                   {t('login.submit')}
                 </Button>
+                {captcha.blocked ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t('captcha.pending')}
+                  </p>
+                ) : null}
               </form>
             </Form>
+            ) : null}
+            {passwordAuth ? (
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
               {t('or')}
               <span className="h-px flex-1 bg-border" />
             </div>
+            ) : null}
             <OAuthButtons next={next} />
             {/* Registrieren-Link zeigen, wenn entweder der "Wir arbeiten
                 noch"-Modus aktiv ist (fuehrt zur Hinweisseite, Issue #429)

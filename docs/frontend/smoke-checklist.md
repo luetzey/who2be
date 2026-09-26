@@ -103,8 +103,8 @@ grep -r "<label" src/features src/components/{layout,data}    # leer (jsx-a11y +
 ```
 cd apps/web
 npm run lint
-npx tsc --noEmit
-npm test
+npx tsc -b
+npm run test:coverage
 npm run build
 ```
 

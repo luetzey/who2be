@@ -57,14 +57,22 @@ was die Platzhalter konkret ersetzen muss. Befunde **L1** (Impressum) und **L2**
 | Registrierung & Konto | `…account.body` | verarbeitete Stammdaten, Zweck (Art. 6 I b), Speicherdauer (→ `data-retention-and-erasure.md`) |
 | Authentifizierung (GoTrue) | `…auth.body` | GoTrue-Auth, verarbeitete Daten, OAuth-Provider (falls aktiv: Google/GitHub + Drittland) |
 | Zahlungsabwicklung | `…payment.body` | Mollie als PSP, uebermittelte Daten, Mollie-Datenschutzhinweis, Rechtsgrundlage |
+| Bot-Schutz bei der Registrierung | `…captcha.body` | Cloudflare Turnstile (nur wenn aktiviert): verarbeitete Daten (IP, Browser-Signale), Zweck (Missbrauchs-/Bot-Abwehr, Art. 6 I f), **Drittland USA** + Garantien, Cloudflare-Datenschutzhinweis |
 | E-Mail-Versand | `…email.body` | Mail-/SMTP-Provider + Standort, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage |
-| Empfaenger & Auftragsverarbeiter | `…processors.body` | AV-Liste (Hetzner, Mollie, Mail), Drittlandtransfer + Garantien — Quelle: `vvt.md` §5/§6 |
+| Empfaenger & Auftragsverarbeiter | `…processors.body` | AV-Liste (Hetzner, Mollie, Mail, **Cloudflare** falls Turnstile aktiv), Drittlandtransfer + Garantien — Quelle: `vvt.md` §5/§6 |
 | Speicherdauer | `…retention.body` | Loeschkonzept + gesetzliche Aufbewahrung — Quelle: `data-retention-and-erasure.md` |
 | Betroffenenrechte / Aufsichtsbehoerde | `…rights.authorityPlaceholder` | zustaendige Aufsichtsbehoerde benennen |
 
 **Zu pruefen / entscheiden:**
 - [ ] OAuth-Provider (Google/GitHub) aktiv? Falls ja: Drittland-USA + Garantien
       ergaenzen.
+- [ ] **Turnstile-Captcha aktiv?** (`GOTRUE_SECURITY_CAPTCHA_ENABLED=true` +
+      `WHO2BE_TURNSTILE_SITE_KEY` gesetzt, siehe `../signup-and-invites.md` §3).
+      Falls ja: Cloudflare als Empfaenger aufnehmen — Drittland USA, Garantien
+      (SCC/DPF), AVV abschliessen, und den Abschnitt „Bot-Schutz" in
+      `PrivacyPage.tsx` fuellen. Falls nein: entfaellt vollstaendig — ohne
+      Site-Key wird das Turnstile-Script gar nicht erst geladen, es gibt
+      keinen Transfer. Der Schalter ist ab Werk aus.
 - [ ] Mail-/SMTP-Provider + Standort festlegen (Drittland-Pruefung).
 - [ ] Konkrete Speicherfristen aus `data-retention-and-erasure.md` uebernehmen.
 

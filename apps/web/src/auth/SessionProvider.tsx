@@ -170,51 +170,66 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signIn = useCallback(async (email: string, password: string, remember: boolean) => {
-    // Marker + eingefrorenen Storage-Modus VOR `signInWithPassword`
-    // setzen/synchronisieren (Issue #430/#471): der delegierende
-    // Storage-Adapter (`lib/supabase.ts`) entscheidet seinen Modus nur EINMAL
-    // PRO TAB (Modul-Zustand, kein Live-Read des Markers mehr) —
-    // `syncStorageBackendForThisTab()` aktualisiert genau diesen
-    // eingefrorenen Wert fuer DIESEN Tab, damit die gleich folgende Session
-    // direkt ins richtige Backend geschrieben wird.
-    const previousMarker = readRememberMarker()
-    if (remember) {
-      markRememberedLogin()
-    } else {
-      clearRememberMarker()
-    }
-    syncStorageBackendForThisTab()
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      // Fehlversuch aendert den Modus nicht: Marker UND eingefrorenen
-      // Storage-Modus exakt auf den Vorzustand zurueckstellen, statt
-      // pauschal zu loeschen. Ein Tippfehler im Passwort duerfte sonst eine
-      // laufende "angemeldet bleiben"-Session in einem anderen Tab ins
-      // falsche Backend umlenken (und dieser Tab hier bliebe sonst auf dem
-      // fehlgeschlagenen Modus eingefroren).
-      restoreRememberMarker(previousMarker)
+  const signIn = useCallback(
+    async (email: string, password: string, remember: boolean, captchaToken?: string) => {
+      // Marker + eingefrorenen Storage-Modus VOR `signInWithPassword`
+      // setzen/synchronisieren (Issue #430/#471): der delegierende
+      // Storage-Adapter (`lib/supabase.ts`) entscheidet seinen Modus nur EINMAL
+      // PRO TAB (Modul-Zustand, kein Live-Read des Markers mehr) —
+      // `syncStorageBackendForThisTab()` aktualisiert genau diesen
+      // eingefrorenen Wert fuer DIESEN Tab, damit die gleich folgende Session
+      // direkt ins richtige Backend geschrieben wird.
+      const previousMarker = readRememberMarker()
+      if (remember) {
+        markRememberedLogin()
+      } else {
+        clearRememberMarker()
+      }
       syncStorageBackendForThisTab()
-      throw new Error(error.message)
-    }
-    // Der Moduswechsel laesst den Session-Blob des vorherigen Modus im nun
-    // unzustaendigen Backend liegen. Blieb er dort, war er eine Datenleiche
-    // ausserhalb jeder Ablaufpruefung — der Marker, an dem die Kappung haengt,
-    // wurde ja gerade umgestellt (Security-Review HIGH-1).
-    purgeStoredSessionFrom(remember ? 'session' : 'local')
-    // Steht eine Step-up-Challenge aus, die aal1-Session NICHT committen — die
-    // LoginPage fordert dann den TOTP-Code an. `apply()` (via onAuthStateChange)
-    // haelt dieselbe Session ohnehin zurueck; hier signalisieren wir es nur an
-    // den Aufrufer.
-    if (await mfaStepUpPending()) {
-      return { mfaRequired: true }
-    }
-    const resolved = await resolveMe(data.session?.access_token)
-    lastTokenRef.current = data.session?.access_token ?? null
-    setMe(resolved)
-    setSession(data.session)
-    return { mfaRequired: false }
-  }, [])
+      // `options` nur anhaengen, wenn ein Captcha-Token da ist: ohne
+      // konfiguriertes Captcha bleibt der Aufruf exakt der von vorher
+      // (`{ email, password }`), nicht `{ email, password, options: undefined }`.
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        ...(captchaToken !== undefined ? { options: { captchaToken } } : {}),
+      })
+      if (error) {
+        // Fehlversuch aendert den Modus nicht: Marker UND eingefrorenen
+        // Storage-Modus exakt auf den Vorzustand zurueckstellen, statt
+        // pauschal zu loeschen. Ein Tippfehler im Passwort duerfte sonst eine
+        // laufende "angemeldet bleiben"-Session in einem anderen Tab ins
+        // falsche Backend umlenken (und dieser Tab hier bliebe sonst auf dem
+        // fehlgeschlagenen Modus eingefroren).
+        restoreRememberMarker(previousMarker)
+        syncStorageBackendForThisTab()
+        // Den GoTrue-Code mitfuehren: die LoginPage unterscheidet daran den
+        // Captcha-Fall von einem falschen Passwort. `new Error(message)` allein
+        // haette ihn verschluckt.
+        throw Object.assign(new Error(error.message), {
+          code: (error as { code?: string }).code,
+        })
+      }
+      // Der Moduswechsel laesst den Session-Blob des vorherigen Modus im nun
+      // unzustaendigen Backend liegen. Blieb er dort, war er eine Datenleiche
+      // ausserhalb jeder Ablaufpruefung — der Marker, an dem die Kappung haengt,
+      // wurde ja gerade umgestellt (Security-Review HIGH-1).
+      purgeStoredSessionFrom(remember ? 'session' : 'local')
+      // Steht eine Step-up-Challenge aus, die aal1-Session NICHT committen — die
+      // LoginPage fordert dann den TOTP-Code an. `apply()` (via onAuthStateChange)
+      // haelt dieselbe Session ohnehin zurueck; hier signalisieren wir es nur an
+      // den Aufrufer.
+      if (await mfaStepUpPending()) {
+        return { mfaRequired: true }
+      }
+      const resolved = await resolveMe(data.session?.access_token)
+      lastTokenRef.current = data.session?.access_token ?? null
+      setMe(resolved)
+      setSession(data.session)
+      return { mfaRequired: false }
+    },
+    [],
+  )
 
   const signOut = useCallback(async () => {
     // Reihenfolge wichtig: `signOut()` entfernt den Session-Key ueber den

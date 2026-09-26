@@ -96,8 +96,8 @@ export function AccountPage() {
           </CardHeader>
           <CardContent>
             <Stack gap="md">
-              <div className="flex items-center justify-between gap-4">
-                <div className="text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 text-sm">
                   <div className="font-medium">{t('account.preferences.theme.title')}</div>
                   <p className="text-muted-foreground">{t('account.preferences.theme.description')}</p>
                 </div>
@@ -204,8 +204,8 @@ function LanguageRow() {
   const { locale, locales, setLocale } = useLocale()
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="min-w-0 text-sm">
         <Label htmlFor="language-select" className="font-medium">
           {t('language.label')}
         </Label>

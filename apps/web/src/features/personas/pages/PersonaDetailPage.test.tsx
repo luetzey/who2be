@@ -754,4 +754,18 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Feedback' })).not.toBeInTheDocument()
   })
+
+  // Responsive-Vertrag #571 (Haelfte A). jsdom hat kein Layout, deshalb ein
+  // Klassen-Vertrag; die Layout-Aussage ist in
+  // `.claude/plan/2026-09-23-1500_571a-w3-personas-responsive-audit.md`
+  // gerendert belegt (Chromium gegen das gebaute CSS).
+  it('laesst die Tab-Leiste auf schmalen Viewports umbrechen', async () => {
+    renderPersonaDetail(personaHandlers())
+
+    // Gemessen bei 320 px: die vier Trigger messen zusammen 461 px in 288 px
+    // verfuegbarer Breite — „Versionen\" lief 173 px ueber die Leiste hinaus
+    // und erzeugte horizontalen Body-Scroll (477 px Dokumentbreite).
+    const tablist = await screen.findByRole('tablist')
+    expect(tablist).toHaveClass('flex-wrap')
+  })
 })

@@ -22,9 +22,18 @@ export function LegalArticle({ title, intro, children }: LegalArticleProps) {
 
   return (
     <Container className="max-w-3xl">
-      <article className="flex flex-col gap-8">
+      {/* #567 (§4.4 Punkt 1 + 5): `break-words` einmal am gemeinsamen
+          Prose-Traeger statt je Seite — es deckt lange URLs, E-Mail- und
+          Registerangaben in allen vier Rechtstexten und die Placeholder-Chips
+          in einem Zug ab. `break-all` waere hier schaedlich: es zerlegt auch
+          normale Woerter und macht deutschen Fliesstext unleserlich. */}
+      <article className="flex flex-col gap-8 break-words">
         <header className="flex flex-col gap-2 border-b pb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+          {/* #567: `text-3xl` (30px) rendert den laengsten deutschen Titel
+              gemessen 337px breit gegen 288px Lesespalte (AGB-Seite, 320px
+              Viewport) und erzeugte horizontalen Body-Scroll. Mit `text-2xl`
+              sind es gemessen 288px; ab `sm` bleibt der bisherige Zustand. */}
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
           <p className="text-sm text-muted-foreground">
             {t('article.lastUpdated')}{' '}
             <Placeholder>{t('article.lastUpdatedPlaceholder')}</Placeholder>

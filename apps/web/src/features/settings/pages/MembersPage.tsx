@@ -197,6 +197,7 @@ export function MembersPage() {
                       <TableCell>
                         <Select
                           aria-label={t('members.list.roleAriaLabel', { email: member.email })}
+                          className="min-w-32"
                           value={member.role}
                           onChange={(event) =>
                             void onChangeRole(
@@ -307,8 +308,8 @@ export function MembersPage() {
                 const token = tokenFor(invitation)
                 return (
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Stack gap="xs">
-                      <div className="font-medium">{invitation.email}</div>
+                    <Stack gap="xs" className="min-w-0">
+                      <div className="font-medium break-all">{invitation.email}</div>
                       <div className="text-xs text-muted-foreground">
                         {roleLabel(invitation.role)} · {t('members.invitations.expiresLabel')}{' '}
                         {new Date(invitation.expires_at).toLocaleDateString()}

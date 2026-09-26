@@ -156,3 +156,58 @@ describe('PersonaModesEditor', () => {
     expect(screen.getAllByText('Default')).toHaveLength(1)
   })
 })
+
+// Responsive-Vertrag #571 (Haelfte A). Die 40 px stammen aus **AK 3 dieses
+// Issues**, nicht aus der Norm: `docs/frontend/design-language.md` §11 ist die
+// einzige Quelle des Floors und setzt ihn auf >= 32 px; die gemessenen 36 px
+// der `size="sm"`-Aktionen sind danach zulaessig. Dieses Paket hebt sie
+// unterhalb `md` an, weil sein Akzeptanzkriterium es verlangt — ab `md` faellt
+// die Hoehe auf die Desktop-Dichte zurueck.
+//
+// jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag. Die
+// Layout-Aussage selbst ist in
+// `.claude/plan/2026-09-23-1500_571a-w3-personas-responsive-audit.md` gerendert
+// belegt (Chromium gegen das gebaute CSS, 320/375/768/1024 px).
+describe('PersonaModesEditor — Responsive (#571)', () => {
+  it('bricht die Modus-Kopfzeile um, statt sie ueberlaufen zu lassen', () => {
+    const { container } = render(
+      <Harness initialModes={[emptyMode({ name: 'Coaching', is_default: true })]} />,
+    )
+
+    // Gemessen bei 320 px: Nummernchip + Modusname + Default-Badge messen
+    // zusammen 160 px in 39 px verfuegbarer Breite, das Badge lief 121 px
+    // ueber. Vorentscheidung 1 des Issues: umbrechen, kein Overflow-Menue.
+    const headerRow = container.querySelector('.justify-between')
+    expect(headerRow).not.toBeNull()
+    expect(headerRow).toHaveClass('flex-wrap')
+
+    const titleGroup = headerRow?.firstElementChild
+    expect(titleGroup).toHaveClass('min-w-0')
+    expect(titleGroup).toHaveClass('flex-wrap')
+  })
+
+  it('haelt die Modus-Aktionen unterhalb md auf dem Hit-Target aus AK 3', () => {
+    render(
+      <Harness
+        initialModes={[
+          emptyMode({ name: 'Coaching', is_default: true }),
+          emptyMode({ name: 'Analyse', is_default: false }),
+        ]}
+      />,
+    )
+
+    for (const name of ['Als Default setzen', 'Modus 1 entfernen', 'Modus hinzufügen']) {
+      const button = screen.getByRole('button', { name })
+      expect(button).toHaveClass('min-h-10')
+      expect(button).toHaveClass('md:min-h-0')
+    }
+  })
+
+  it('haelt auch den Leer-Zustands-Button auf dem Hit-Target aus AK 3', () => {
+    render(<Harness />)
+
+    const button = screen.getByRole('button', { name: 'Ersten Modus anlegen' })
+    expect(button).toHaveClass('min-h-10')
+    expect(button).toHaveClass('md:min-h-0')
+  })
+})

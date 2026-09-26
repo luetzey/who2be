@@ -225,11 +225,15 @@ describe('OAuthConsentPage', () => {
       `?request=${blobOf({ client_name: 'Claude', agent_id: 'a2' })}`,
     )
 
-    // Gepinnter Agent: readonly Input mit Name + Workspace aus der Preview
-    // (nicht aus der — hier gar nicht geladenen — Workspace-Agentenliste).
+    // Gepinnter Agent: der Name steht in einem umbrechenden Anzeige-Element
+    // in Feld-Optik (#569 Weiche 5 — Einwilligungen werden umgebrochen, nicht
+    // gekuerzt; ein `readOnly`-Input schnitt lange Agentennamen bei 320px ab,
+    // gemessen scrollWidth 366 gegen clientWidth 236). Kein Formularfeld: der
+    // Wert ist nicht editierbar und nicht Teil des Submits.
     const locked = await screen.findByLabelText(/über die Verbindungs-URL festgelegt/)
-    expect(locked).toHaveValue('Writer')
-    expect(locked).toHaveAttribute('readonly')
+    expect(locked).toHaveTextContent('Writer')
+    expect(locked.tagName.toLowerCase()).toBe('output')
+    expect(locked.className).toContain('break-words')
     expect(screen.getByText('Workspace: Anderer Workspace')).toBeInTheDocument()
     expect(screen.queryByLabelText('Agent')).toBeNull()
     expect(screen.getByText(/kann hier nicht gewechselt werden/)).toBeInTheDocument()
@@ -393,5 +397,17 @@ describe('OAuthConsentPage', () => {
     })
     expect(await screen.findByText('Lädt…')).toBeInTheDocument()
     expect(calls.some((c) => c.url.includes('/agents'))).toBe(false)
+  })
+
+  // Responsive-Audit (#569): der Consent ist die inhaltlich dichteste Seite
+  // der Domaene und traegt mit Client-Name, Agentenname und Redirect-Host
+  // gleich drei fremdbestimmte, potenziell ungebrochene Zeichenketten.
+  it('laesst fremdbestimmte Bezeichner in der ganzen Karte umbrechen (#569)', async () => {
+    stubApi({ agents: [builder] })
+
+    renderConsent(authedSession, `?request=${blobWith('Claude')}`)
+    await screen.findByLabelText('Agent')
+
+    expect(document.querySelector('main')?.className).toContain('break-words')
   })
 })

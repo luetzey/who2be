@@ -131,6 +131,7 @@ def test_grant_event_maps_features_from_metadata() -> None:
         license_policy="core, sso audit_export",
         mcp_monthly_quota="20000",
         mcp_rate_per_min="120",
+        token_quota="7",
     )
     update = map_event_to_entitlement(event)
     assert update is not None
@@ -139,6 +140,9 @@ def test_grant_event_maps_features_from_metadata() -> None:
     assert update.entitlement.features == frozenset({"core", "sso", "audit_export"})
     assert update.entitlement.mcp_monthly_quota == 20000
     assert update.entitlement.mcp_rate_per_min == 120
+    # Issue #538: die Token-Grenze kommt aus derselben Metadata, nicht aus
+    # einem hartkodierten Produkt→Limit-Mapping im Webhook-Pfad.
+    assert update.entitlement.token_quota == 7
     assert update.entitlement.expires_at == datetime.fromtimestamp(period_end, tz=UTC)
     assert update.external_ref == "sub_123"
 

@@ -195,3 +195,121 @@ describe('SubResourcePicker', () => {
     ])
   })
 })
+
+// Responsive-Audit #564 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
+// deshalb der Klassen-Vertrag. Die Layout-Aussage ist am gerenderten Baum
+// belegt (Plandatei .claude/plan/2026-09-23-0130_564-…): bei 320px Viewport
+// misst die Anker-Pill 463px, die Zeilen-Aktionen 19x32px und die
+// Segment-Gruppe 54px bei 86px Inhalt — alle drei unter dem 40px-Floor aus
+// design-language.md §11 bzw. ueberlaufend.
+describe('SubResourcePicker — 320px (#564)', () => {
+  const LONG = 'kundenonboarding_wissensbasis_vertriebsteam_langbezeichner_q4'
+
+  it('laesst die Block-Anker-Pill mitten im Wort brechen', async () => {
+    listResourcesMock.mockResolvedValue([])
+    const anchor: SubResource = {
+      id: 'r-b',
+      name: 'Anker-Resource',
+      link_scope: 'block',
+      block_id: LONG,
+      position: 0,
+      fetch_call: "fetch_resource('r-b')",
+    }
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[anchor]}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+
+    const pill = await screen.findByText(`Im Text (Block ${LONG})`)
+    const classes = pill.className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  it('haelt die Zeilen-Aktionen unterhalb md auf 40px Hit-Target', async () => {
+    listResourcesMock.mockResolvedValue([rA])
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[makeSub('r-a', 'Glossar A')]}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+
+    const remove = await screen.findByRole('button', { name: 'Glossar A entfernen' })
+    const removeClasses = remove.className.split(/\s+/)
+    // size-10 = 40px unterhalb md, ab md zurueck auf die kompakten 32px.
+    expect(removeClasses).toContain('size-10')
+    expect(removeClasses).toContain('md:size-8')
+
+    const lazy = screen.getByRole('button', { name: 'Lazy' })
+    const lazyClasses = lazy.className.split(/\s+/)
+    expect(lazyClasses).toContain('h-10')
+    expect(lazyClasses).toContain('md:h-8')
+  })
+
+  it('bricht die Resource-Link-Zeile um, statt die Textspalte zu zerdruecken', async () => {
+    listResourcesMock.mockResolvedValue([rA])
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[makeSub('r-a', 'Glossar A')]}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+
+    const row = (await screen.findByRole('button', { name: 'Glossar A entfernen' })).closest('li')
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+
+    // Die Segment-Gruppe bleibt eine visuelle Einheit (Weiche 3 des Issues):
+    // kein Umbruch INNERHALB der Gruppe, sie wandert als Ganzes.
+    const group = screen.getByRole('group', { name: 'Einbettungs-Modus für Glossar A' })
+    expect(group.className.split(/\s+/)).toContain('shrink-0')
+  })
+
+  // Review-Runde 1: der Aktionsblock war mit `shrink-0` auf seine max-content-
+  // Breite genagelt (104px Segment-Gruppe + 3x40px Icons + 4x8px gap = 248px).
+  // Gemessen gegen die ZEILEN-Innenkante (nicht den Viewport) blieben bei 320px
+  // nur 214px — der Entfernen-Button lag 35px ausserhalb der Zeilenumrandung.
+  // Vertrag: unterhalb `md` bekommt der Block eine eigene volle Zeile
+  // (`basis-full`) und darf INNERHALB umbrechen (`flex-wrap`); ab `md` gilt
+  // wieder die kompakte, nicht umbrechende Fassung.
+  it('laesst den Aktionsblock unterhalb md selbst umbrechen, statt die Zeile zu ueberlaufen', async () => {
+    listResourcesMock.mockResolvedValue([rA])
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[makeSub('r-a', 'Glossar A')]}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+
+    const remove = await screen.findByRole('button', { name: 'Glossar A entfernen' })
+    const actions = remove.parentElement as HTMLElement
+    const classes = actions.className.split(/\s+/)
+
+    expect(classes).toContain('basis-full')
+    expect(classes).toContain('flex-wrap')
+    expect(classes).toContain('justify-end')
+    // Kein unbedingtes shrink-0 mehr: das war die Ursache des Ueberlaufs.
+    expect(classes).not.toContain('shrink-0')
+    expect(classes).toContain('md:basis-auto')
+    expect(classes).toContain('md:flex-nowrap')
+    expect(classes).toContain('md:shrink-0')
+
+    // Weiche 3 bleibt gewahrt: die Segment-Gruppe selbst bricht nicht.
+    const group = screen.getByRole('group', { name: 'Einbettungs-Modus für Glossar A' })
+    expect(group.className.split(/\s+/)).toContain('shrink-0')
+  })
+})

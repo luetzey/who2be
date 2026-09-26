@@ -116,7 +116,11 @@ export function SystemPromptsPage() {
                   href={wsPath(`/system-prompts/${template.id}`)}
                   badges={
                     <>
-                      <Badge variant="outline" className="font-mono">
+                      {/* #566: Slug ist serverseitig aus dem Namen abgeleitet —
+                          ein Wort ohne Trennstellen. `break-all` laesst es mitten
+                          im Wort brechen, `max-w-full` deckelt es gegen den
+                          Flex-Container. Gemessen bei 320px: 497px ohne Cap. */}
+                      <Badge variant="outline" className="max-w-full font-mono break-all">
                         {template.slug}
                       </Badge>
                       <Badge variant="secondary">v{template.current_version}</Badge>

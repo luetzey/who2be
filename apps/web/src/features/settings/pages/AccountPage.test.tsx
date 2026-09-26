@@ -496,3 +496,43 @@ describe('AccountPage — Sprachumschaltung', () => {
     expect(notifyError).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Responsive-Vertrag #568 (AK 1/§4.4 Punkt 5): die beiden Praeferenz-Zeilen
+// (Darstellung, Sprache) tragen `justify-between` ohne `flex-wrap` und ihre
+// Textspalte kein `min-w-0` — gemessen quetscht das die Beschreibung bei
+// 320 px auf 124 px Breite / 120 px Hoehe (sechs Zeilen fuer einen Satz).
+// `flex-wrap` + `min-w-0` loesen das; `flex-1` waere die naheliegende, aber
+// falsche Ergaenzung: sie bricht auch den Desktop um (gemessen in
+// .claude/plan/2026-09-23-0830_568-w3-settings-responsive-audit.md). Der Test
+// haelt diese Abwesenheit ausdruecklich fest, damit sie nicht still zurueckkehrt.
+// jsdom hat kein Layout — das hier ist der Klassen-Vertrag zur gerenderten
+// Messung, nicht ihr Ersatz.
+// ---------------------------------------------------------------------------
+
+describe('AccountPage — Responsive (#568)', () => {
+  it('laesst die Sprach-Zeile umbrechen und gibt ihrer Textspalte min-w-0', () => {
+    renderPage()
+
+    const label = screen.getByText('Sprache')
+    const textColumn = label.parentElement
+    const row = textColumn?.parentElement
+
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+    expect(textColumn?.className.split(/\s+/)).toContain('min-w-0')
+    // Desktop-Zusage: keine Flex-Grow-Spalte, sonst bricht auch 1024 px um.
+    expect(textColumn?.className.split(/\s+/)).not.toContain('flex-1')
+  })
+
+  it('laesst die Darstellungs-Zeile umbrechen und gibt ihrer Textspalte min-w-0', () => {
+    renderPage()
+
+    const title = screen.getByText('Darstellung')
+    const textColumn = title.parentElement
+    const row = textColumn?.parentElement
+
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+    expect(textColumn?.className.split(/\s+/)).toContain('min-w-0')
+    expect(textColumn?.className.split(/\s+/)).not.toContain('flex-1')
+  })
+})

@@ -842,3 +842,80 @@ describe('ResourceDetailPage — Export-Aktionen', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Audit #564 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
+// deshalb der Klassen-Vertrag. Die Layout-Aussage ist am gerenderten Baum
+// belegt (Plandatei .claude/plan/2026-09-23-0130_564-…): bei 320px Viewport
+// misst der Slug-Badge 541px, und in der Sub-Resource-Zeile drueckt die
+// 449px breite Scope-Badge den Link auf Breite 0.
+describe('ResourceDetailPage — Umbruch bei 320px (#564)', () => {
+  const LONG_SLUG = 'kundenonboarding_wissensbasis_vertriebsteam_langbezeichner_q4'
+  const LONG_TAG = 'produktivitaets-automatisierung-langer-tag-fuer-messung'
+
+  it('laesst den umbruchfeindlichen Slug mitten im Wort brechen', async () => {
+    renderDetailPage(
+      detailHandlers({
+        resource: {
+          ...resource(),
+          slug: LONG_SLUG,
+          content: { description: 'd', blocks: [], tags: [LONG_TAG] },
+        },
+      }),
+    )
+
+    const classes = (await screen.findByText(LONG_SLUG)).className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  it('laesst lange Tags an Wortgrenzen brechen', async () => {
+    renderDetailPage(
+      detailHandlers({
+        resource: {
+          ...resource(),
+          slug: LONG_SLUG,
+          content: { description: 'd', blocks: [], tags: [LONG_TAG] },
+        },
+      }),
+    )
+
+    const classes = (await screen.findByText(LONG_TAG)).className.split(/\s+/)
+    expect(classes).toContain('break-words')
+    expect(classes).toContain('max-w-full')
+  })
+
+  // AK 3: `justify-between` ohne `flex-wrap` — die read-only Sub-Resource-Liste
+  // (Viewer-Pfad, DataList statt Picker).
+  it('laesst die Sub-Resource-Zeile umbrechen statt den Link zu zerdruecken', async () => {
+    renderDetailPage(
+      detailHandlers({
+        subResources: [
+          {
+            id: 'r2',
+            name: 'Glossar',
+            link_scope: 'block',
+            block_id: `blk_${LONG_SLUG}`,
+            position: 0,
+            fetch_call: "fetch_resource('r2')",
+          },
+        ],
+      }),
+      { me: meWithRole('viewer') },
+    )
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sub-Resources' }))
+
+    const link = await screen.findByRole('link', { name: 'Glossar' })
+    const linkClasses = link.className.split(/\s+/)
+    expect(linkClasses).toContain('min-w-0')
+    expect(linkClasses).toContain('truncate')
+
+    const row = link.parentElement
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+
+    const badge = screen.getByText(`Block ${`blk_${LONG_SLUG}`}`)
+    const badgeClasses = badge.className.split(/\s+/)
+    expect(badgeClasses).toContain('break-all')
+    expect(badgeClasses).toContain('max-w-full')
+  })
+})

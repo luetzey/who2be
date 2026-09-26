@@ -87,6 +87,8 @@ ProblemReason = Literal[
     "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
     "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
+    "storage_quota_exceeded",  # 402 — Speichergrenze erreicht (params: limit, used)
+    "workspace_quota_exceeded",  # 402 — Workspace-Deckel der Organisation erreicht (params: limit)
     "persona_not_found",  # 404 — Persona unbekannt oder nicht sichtbar
     "resource_slug_conflict",  # 409 — Resource-Slug im Workspace bereits vergeben
     "sub_playbook_not_found",  # 404 — Sub-Playbook der Composition unbekannt/fremd
@@ -105,11 +107,31 @@ ProblemReason = Literal[
     "invalid_credentials",  # 401 — Anmeldedaten fehlen oder sind ungueltig
     "write_rate_limited",  # 429 — Schreibrate des Agenten erreicht (params: limit)
     "token_management_forbidden",  # 403 — agent-gebundener Token verwaltet keine Tokens
+    # 403 — agent-gebundener Token administriert keinen Workspace (Klasse 1:
+    # Einladungen, Mitglieder, Workspace-Einstellungen). Eigener Grund neben
+    # `token_management_forbidden`: anderer Text ⇒ anderer Grund (ADR-0051),
+    # und anders als jener ist dies ein Gate-Grund (`ApiGateError`, RFC 7807)
+    # ohne Locale-Key.
+    "workspace_administration_forbidden",
+    # Kontoweite Routen (`/v1/me`, `/v1/organizations`, `/v1/gdpr`,
+    # Invitation-Accept) verlangen eine angemeldete Person: sie liegen ausserhalb
+    # des Workspace-Pins, der auf dem Token-Pfad die Isolationsgrenze ist, und
+    # betreffen das Konto des Besitzers als Ganzes. Eigener Grund und nicht
+    # `token_management_forbidden`: anderer Text, anderer Gegenstand (ADR-0051,
+    # Muster `bound_agent_not_found`).
+    "account_route_requires_human",  # 403 — kontoweite Route braucht einen Menschen
+    # Ein agent-gebundener Token wird auf `editor` gedeckelt (die Rolle `admin`
+    # an einem Maschinen-Token ist die Wurzel der Eskalationswege). Getrennt von
+    # `token_role_escalation`: dort liegt die gewuenschte Rolle ueber der des
+    # Erstellers, hier ueber der Obergrenze fuer Maschinen-Tokens — ein Admin
+    # laeuft in diesen Grund, obwohl seine eigene Rolle genuegen wuerde.
+    "agent_bound_role_capped",  # 403 — agent-gebundener Token hoechstens `editor`
     "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
     "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen
+    "token_quota_exceeded",  # 402 — Token-Kontingent des Workspaces erreicht (params: limit)
     "subscription_inactive",  # 402 — kein aktives Abonnement der Organisation
-    "mcp_rate_limited",  # 429 — Per-Token-MCP-Rate erreicht (params: limit)
+    "mcp_rate_limited",  # 429 — MCP-Rate erreicht, Token- ODER Org-Fenster (params: limit)
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
     "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
     "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar

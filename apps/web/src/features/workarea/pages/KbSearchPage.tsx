@@ -78,9 +78,11 @@ export function KbSearchPage() {
                         <TierBadge tier={hit.tier} />
                         <StatusBadge status={hit.status} />
                       </span>
+                      {/* #572 (AK 5): KB-Snippets zitieren Belege ohne
+                          Trennstelle (`sha256:…`, `node:<id>`). */}
                       <Link
                         to={wsPath(`/workarea/kb/${hit.node_id}`)}
-                        className="text-sm font-medium tracking-tight hover:underline"
+                        className="text-sm font-medium tracking-tight break-words hover:underline"
                       >
                         {hit.snippet}
                       </Link>

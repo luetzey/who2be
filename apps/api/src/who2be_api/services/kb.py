@@ -55,11 +55,12 @@ from fastapi import status
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    is_agent_bound,
     require_capability,
     require_role,
     require_write_rate,
 )
-from who2be_api.core.workarea_scope import is_agent_bound, readable_area_ids
+from who2be_api.core.workarea_scope import readable_area_ids
 from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.kb_repository import KbRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository

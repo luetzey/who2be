@@ -128,3 +128,28 @@ describe('SystemPromptsPage', () => {
     expect(await screen.findByText('Support-Template')).toBeInTheDocument()
   })
 })
+
+// Responsive-Audit #566 (W3, Epic #431). jsdom hat kein Layout — geprueft wird
+// der Klassen-Vertrag. Die Layout-Aussage ist am gerenderten Baum belegt
+// (Plandatei .claude/plan/2026-09-23-0700_566-…): bei 320px Viewport misst der
+// Slug-Badge 497px und treibt body.scrollWidth auf 590.
+describe('SystemPromptsPage — Umbruch bei 320px (#566)', () => {
+  const LONG_SLUG = 'kundenonboarding_systemprompt_vertriebsteam_langbezeichner_q4_2026'
+
+  it('laesst den umbruchfeindlichen Slug mitten im Wort brechen', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify([template({ slug: LONG_SLUG })]), { status: 200 }),
+        ),
+    )
+
+    renderPage()
+
+    const classes = (await screen.findByText(LONG_SLUG)).className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+})

@@ -95,7 +95,7 @@ Owner-Entscheidungen, WP-14-Backlog).
   (`create/update/transition/restore_external_tool` — ADR-0043) und
   Agent-Memory (`search_memory`/`list_memories`/`save_memory` — kuratiertes
   Langzeitgedaechtnis pro Agent, `memory_mode`-gestuft, ADR-0044). Dazu die
-  WorkArea-/KB-Familien (**81 Tools gesamt**, ADR-0047): `tools/workarea.py`
+  WorkArea-/KB-Familien (**83 Tools gesamt**, ADR-0047): `tools/workarea.py`
   (Areas/Artifacts/Ingest/Suche/Promote), `tools/tables.py` (Tabellen +
   Timeline, read-only SQL) und `tools/kb.py` (belegpflichtige Aussagen +
   Kanten). `tools/list` ist pro Agent policy-gefiltert
@@ -149,7 +149,7 @@ Web (in `apps/web/`):
 - Tests: `npm run test:coverage` (Vitest mit Coverage-Gate wie in CI — lokal =
   CI, Coverage-Ratchet); Einzeldatei: `npm test -- src/App.test.tsx`
 - Lint: `npm run lint`
-- Typecheck: `npx tsc --noEmit`
+- Typecheck: `npx tsc -b`
 - Build: `npm run build`
 
 Lokale Infrastruktur: `docker compose up -d` (Postgres-Stub; wird in Phase 0/T1
@@ -231,7 +231,7 @@ Neue Header → Caddyfile, nicht
 
 ### DoD (Frontend-Aenderung)
 
-`npm run lint`, `npx tsc --noEmit`, `npm run test:coverage`, `npm run build` — alle gruen,
+`npm run lint`, `npx tsc -b`, `npm run test:coverage`, `npm run build` — alle gruen,
 lokal verifiziert vor jedem Push. Stack-uebergreifend siehe auch
 `docs/CLAUDE-PROFILE.md`.
 

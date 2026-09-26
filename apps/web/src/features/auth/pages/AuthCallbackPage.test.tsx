@@ -53,4 +53,22 @@ describe('AuthCallbackPage', () => {
     renderPage()
     expect(screen.getByText(/Anmeldung wird abgeschlossen/i)).toBeInTheDocument()
   })
+
+  // Responsive-Audit (#569): der OAuth-Rueckweg traegt Provider-Fehlertexte mit
+  // ungebrochenen Bezeichnern. Ohne `break-words` am §10.2-`<main>` blaeht ein
+  // solches Token die min-content-Breite der Karte auf und die Seite scrollt
+  // bei 320px horizontal (gemessen 522px gegen 320px Viewport).
+  it('laesst lange Provider-Fehlertexte umbrechen (kein Body-Scroll bei 320px)', async () => {
+    window.location.hash =
+      '#error=server_error&error_description=unverified_email_address_requires_confirmation'
+    sessionMock.current = { session: null }
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText(/unverified_email_address/)).toBeInTheDocument()
+    })
+    for (const main of document.querySelectorAll('main')) {
+      expect(main.className).toContain('break-words')
+    }
+  })
 })

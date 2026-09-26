@@ -244,3 +244,41 @@ describe('MfaSection — Fehlerpfade', () => {
     expect(success).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Responsive-Vertrag #568 (§4.4 Punkt 5): die Faktor-Zeile traegt
+// `justify-between` ohne `flex-wrap`. Gemessen drueckt der Entfernen-Button
+// (87 px) den Faktornamen bei 320 px auf 30 px Breite bei 187 px Inhalt —
+// `truncate` greift, rettet aber nichts, sichtbar bleiben zwei Zeichen.
+// `flex-wrap` an der Zeile plus `basis-full md:basis-auto` an der Textspalte
+// gibt ihr unterhalb `md` eine eigene Zeile (gemessen 30 -> 129 px), ab `md`
+// bleibt die kompakte einzeilige Fassung. jsdom hat kein Layout — die
+// Layout-Aussage steht gerendert in
+// .claude/plan/2026-09-23-0830_568-w3-settings-responsive-audit.md.
+// ---------------------------------------------------------------------------
+
+describe('MfaSection — Responsive (#568)', () => {
+  it('laesst die Faktor-Zeile unterhalb md umbrechen, statt den Namen zu zerquetschen', async () => {
+    listFactors.mockResolvedValue(listResult([verifiedFactor]))
+    render(<MfaSection />)
+
+    const name = await screen.findByText('iPhone')
+    const textColumn = name.parentElement
+    const row = textColumn?.parentElement
+
+    expect(row?.tagName).toBe('LI')
+    expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+    expect(textColumn?.className.split(/\s+/)).toContain('basis-full')
+    expect(textColumn?.className.split(/\s+/)).toContain('md:basis-auto')
+    // min-w-0 bleibt — ohne es greift `truncate` am Namen nicht.
+    expect(textColumn?.className.split(/\s+/)).toContain('min-w-0')
+  })
+
+  it('haelt das Status-Badge von der Schrumpfung frei', async () => {
+    listFactors.mockResolvedValue(listResult([verifiedFactor]))
+    render(<MfaSection />)
+
+    const badge = await screen.findByText('Aktiv')
+    expect(badge.className.split(/\s+/)).toContain('shrink-0')
+  })
+})

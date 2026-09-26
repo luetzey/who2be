@@ -1,5 +1,16 @@
 <!-- Titel: Conventional-Commit-Stil (feat/fix/docs/… + Scope), siehe CONTRIBUTING.md -->
 
+## Issue-Bezug (Pflicht — genau eine Zeile stehen lassen)
+
+<!-- `Closes` schliesst das Issue beim Merge automatisch, `Refs` verlinkt nur.
+     Teilarbeit an einem Tracking-/Epic-Issue traegt `Refs` — sonst schliesst
+     der erste Teil-PR das Issue vorzeitig (Queue-Regel 19, #442).
+     Siehe CONTRIBUTING.md §Issue reference. -->
+
+- Closes #___
+- Refs #___
+- n/a (kein Issue) — Begründung: <!-- z. B. Dependabot, Hotfix ohne Ticket -->
+
 ## Zusammenfassung
 
 <!-- Was ändert dieser PR und warum? Bei Befund-/Plan-Bezug: IDs bzw. Plan-Datei verlinken. -->

@@ -96,7 +96,14 @@ function FilterChip({
       variant={selected ? 'default' : 'outline'}
       aria-pressed={selected}
       onClick={onClick}
-      className="h-8 gap-1.5 rounded-full"
+      // `min-h-10` hebt das Hit-Target unterhalb `md` auf 40 px, wie es
+      // AK 4 von #570 verlangt; `md:min-h-0` gibt ab `md` die gewollte
+      // Chip-Dichte (32 px) wieder frei. Gemessen bei 320 px: `size="sm"`
+      // (h-9) plus `h-8` ergibt 32 px, weil `h-8` in `tailwind-merge`
+      // gewinnt. Die Zahl 40 stammt aus AK 4, nicht aus der Norm —
+      // design-language.md §11 setzt den Floor auf >= 32 px und erklaert
+      // `size="sm"` ausdruecklich fuer zulaessig.
+      className="h-8 min-h-10 gap-1.5 rounded-full md:min-h-0"
     >
       {token ? (
         <span
@@ -290,7 +297,7 @@ export function AgentsPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8 gap-1 px-2 text-xs"
+                        className="h-8 min-h-10 gap-1 px-2 text-xs md:min-h-0"
                         onClick={() => {
                           setStatus('all')
                           setQuery('')
@@ -351,7 +358,24 @@ export function AgentsPage() {
                                     {t('card.personaMissing')}
                                   </MetaPill>
                                 ) : agent.persona_name ? (
-                                  <MetaPill icon={Users} iconTone="persona">
+                                  // `min-w-0 truncate`: Persona-Namen sind
+                                  // technische Bezeichner. Gemessen bei 320 px
+                                  // genau 238 px — buendig an der Innenkante
+                                  // ohne jede Reserve (#570 AK 2, der „kuerzt
+                                  // kontrolliert" ausdruecklich zulaesst).
+                                  // Woertlich das Muster aus
+                                  // AgentHierarchyView.tsx:64/:98
+                                  // (Vorentscheidung 1). `break-all` waere hier
+                                  // falsch: sobald die Karte Zeilen-Aktionen
+                                  // traegt, kollabiert die Textspalte des
+                                  // EntityCard-Primitives auf 16 px, und
+                                  // `break-all` zieht die Pille dann gemessen
+                                  // auf 612 px Hoehe (Primitive-Fund 2).
+                                  <MetaPill
+                                    icon={Users}
+                                    iconTone="persona"
+                                    className="min-w-0 truncate"
+                                  >
                                     {agent.persona_name}
                                   </MetaPill>
                                 ) : null}
@@ -360,7 +384,16 @@ export function AgentsPage() {
                                     {t('card.templateMissing')}
                                   </MetaPill>
                                 ) : agent.template_name ? (
-                                  <MetaPill icon={FileText} iconTone="date">
+                                  // Gemessen bei 320 px: 256 px in einer 238 px
+                                  // breiten Spalte, +18 px Ueberlauf; ohne
+                                  // Version sogar 319,5 px (#570 AK 2). Gleiche
+                                  // Wahl und gleiche Begruendung wie an der
+                                  // Persona-Pille darueber.
+                                  <MetaPill
+                                    icon={FileText}
+                                    iconTone="date"
+                                    className="min-w-0 truncate"
+                                  >
                                     {agent.template_version != null
                                       ? t('card.templateWithVersion', {
                                           name: agent.template_name,
@@ -434,7 +467,7 @@ export function AgentsPage() {
                                     disabled={agent.status !== 'enabled'}
                                   />
                                 ) : (
-                                  <Button asChild variant="outline" size="sm">
+                                  <Button asChild variant="outline" size="sm" className="min-h-10 md:min-h-0">
                                     <Link to={wsPath(`/agents/${agent.id}`)}>
                                       <SlidersHorizontal className="h-4 w-4" />
                                       {t('card.setup')}

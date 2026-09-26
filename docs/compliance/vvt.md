@@ -87,8 +87,8 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | Knowledge-Base-Aussagen | `content` (die Aussage, Freitext), `source_ref` (Beleganker), `tier`, `sensitivity`, `created_by` (UUID), `occurred_at` | `kb_node`, `kb_edge`, `kb_edge_evidence`, `kb_conflict` | `migrations/0077` |
 | Agenten-Zugriffslog | `agent_id`, `ref_kind`/`ref_id`, `operation`, `sensitivity_at_access`, `model_provider_at_access`, `model_name_at_access`, `access_date` | `agent_access_log` | `migrations/0079`, `0080` |
 | Loesch-Lifecycle | `user_id`, `requested_at`, `purge_after`, `purged_at`; `organization.deleted_at/purge_after` | `account_deletion`, `organization` | `migrations/0038` |
-| Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy/App-Logs (nicht in der DB) | `deploy/hetzner/Caddyfile` |
-| Backup-Daten | verschluesselter Voll-Dump (enthaelt alle obigen Kategorien) | `*.pgc.gpg` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
+| Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy-Access-Log auf dem `caddy-logs`-Volume (nicht in der DB) | `deploy/hetzner/Caddyfile` |
+| Backup-Daten | verschluesselter Voll-Dump plus Objekt-Store-Spiegel und Tabellen-Store-Snapshots (enthaelt alle obigen Kategorien) | `*.pgc.gpg`, `blobs/`, `tablestore/` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
 
 > **Keine besonderen Kategorien (Art. 9 DSGVO)** werden bewusst verarbeitet.
 > Frei eingebbare Inhaltsfelder (Personas/Playbooks/Resources) koennen jedoch
@@ -115,6 +115,7 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | GoTrue (self-hosted, Supabase) | Authentifizierung | E-Mail, Auth-Metadaten | selbst gehostet (= Hetzner) | n/a (kein externer Verarbeiter, Eigenbetrieb) |
 | Mail-/SMTP-Provider | Transaktionsmails | E-Mail-Adresse + Mail-Inhalt | `<PLATZHALTER: Provider + Standort>` | `<PLATZHALTER: AVV-Status>` |
 | OAuth-Provider (optional: Google/GitHub) | Social-Login (falls aktiviert) | Login-Identifier/E-Mail | USA/global | `<PLATZHALTER: nur falls aktiviert — Drittland-Pruefung>` |
+| Cloudflare Inc. (Turnstile) — **nur wenn Captcha aktiviert** | Bot-/Missbrauchs-Abwehr vor der Registrierung (Captcha-Pruefung) | IP-Adresse + Browser-Signale des Registrierenden (kein Bilderraetsel, keine Konto-/Inhaltsdaten) | USA (Drittland), Anycast-global | `<PLATZHALTER: nur falls aktiviert — AVV mit Cloudflare + Drittland-Garantien (SCC/DPF)>` |
 | **Externe Modell-Anbieter** (z. B. Anthropic, OpenAI — je nach Agent-Konfiguration) | Sprachmodell-Inferenz **ausserhalb** von Who2Be, ausgeloest durch die Agent-Runtime des Nutzers | alle Elemente, die ein Agent liest oder schreibt: WorkArea-Artifacts, Blob-abgeleitete Texte, Tabellen-Ergebnisse, KB-Aussagen, Resources/Playbooks/Personas | je nach Anbieter, i. d. R. USA/global | `<PLATZHALTER: AVV/Drittland-Garantien je eingesetztem Anbieter — Pflicht des Betreibers bzw. des Nutzers, s. u.>` |
 
 > **Abgrenzung zu den Modell-Anbietern (wichtig, ADR-0047):** Who2Be ist
@@ -140,13 +141,22 @@ Technischer Stand siehe auch
 
 ## 6 · Drittlandtransfer (Art. 30 Abs. 1 lit. e)
 
-Nach aktuellem technischem Stand findet **kein** Drittlandtransfer statt — alle
-Kern-Verarbeiter (Hetzner, Mollie, self-hosted GoTrue) sitzen in der EU/im EWR.
+Nach aktuellem technischem Stand **im Werkszustand** findet **kein**
+Drittlandtransfer statt — alle Kern-Verarbeiter (Hetzner, Mollie, self-hosted
+GoTrue) sitzen in der EU/im EWR, und die optionalen Drittland-Empfaenger
+(Social-Login, Turnstile-Captcha) sind ab Werk **abgeschaltet**.
 
 **Ausnahmen, vom Betreiber zu pruefen:**
 - Mail-/SMTP-Provider, falls ausserhalb EU/EWR.
 - OAuth-Provider (Google/GitHub), falls Social-Login aktiviert wird → dann
   Garantien (SCC/Angemessenheitsbeschluss) pruefen und hier dokumentieren.
+- **Cloudflare (Turnstile), falls das Captcha vor der Registrierung aktiviert
+  wird** (`GOTRUE_SECURITY_CAPTCHA_ENABLED=true` + `WHO2BE_TURNSTILE_SITE_KEY`
+  gesetzt, siehe [`../signup-and-invites.md`](../signup-and-invites.md) §3) →
+  dann liegt ein Transfer in die **USA** vor (IP + Browser-Signale des
+  Registrierenden): Garantien (SCC/DPF) pruefen, AVV abschliessen und hier
+  dokumentieren. Solange kein Site-Key gesetzt ist, wird das Turnstile-Script
+  nicht geladen und es entsteht **kein** Transfer.
 - `<PLATZHALTER: Ergebnis der Drittland-Pruefung + ggf. Garantien>`.
 
 ---
@@ -170,7 +180,7 @@ Kurzfassung:
 | Agenten-Zugriffslog (`agent_access_log`) | Eintrag dauerhaft als Nachweis; beim Hard-Purge **geloescht** (expliziter DELETE vor der Org-CASCADE, FK `NO ACTION` seit 0080) |
 | Backups | lokal 7 Tage; Offsite restic `keep-daily 7 / keep-weekly 4 / keep-monthly 6` |
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
-| Server-Logs | `<PLATZHALTER: konkrete Log-Retention (z. B. 7–30 Tage)>` |
+| Server-Logs (Caddy-Access-Log) | **14 Tage**, durchgesetzt von einem Host-Cron, der taeglich `deploy/hetzner/scripts/rotate-access-log.sh` startet (rotiert die aktive Datei, loescht beide Generationen-Namensklassen; `deploy/hetzner/RUNBOOK.md` §Access-Logs). Das Skript ist der **einzige** Loeschpfad fuer die Frist — `roll_keep_for 336h` in `deploy/hetzner/Caddyfile` begrenzt nur Caddys eigene Generationen und ist kein Rueckfall; zusaetzlich groessenbegrenzt (`roll_size`/`roll_keep`). Container-Logs (stdout/stderr) je Dienst auf 3 x 10 MB gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien) |
 
 ---
 

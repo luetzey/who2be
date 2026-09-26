@@ -138,3 +138,29 @@ describe('CopyPromptButton', () => {
     expect(screen.getByTestId('copy-prompt-dropdown-trigger')).toBeDisabled()
   })
 })
+
+// Responsive-Vertrag #570 (AK 4): der Dropdown-Teil des Split-Buttons traegt
+// nur ein Chevron und war deshalb schmaler als hoch. Die Zahl 40 px kommt aus
+// AK 4 dieses Issues, nicht aus der Norm: `docs/frontend/design-language.md`
+// §11 ist die einzige Quelle des Floors und setzt ihn auf >= 32 px — die
+// gemessenen 33 px Breite lagen knapp darueber, 40 px ist dort die Praeferenz
+// `size="default"`, die dieses Paket unterhalb `md` verbindlich macht.
+//
+// Gemessen am gebauten Stylesheet in Chromium bei 320 px: `px-2` um ein 16-px-
+// Icon ergibt 33 px Breite bei 40 px Hoehe — ein Hit-Target, das in einer
+// Achse unter dem Regelfall bleibt. `w-10` macht daraus 40x40 px; ab `md`
+// gibt `md:w-auto` die Desktop-Dichte wieder frei.
+//
+// jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag; die
+// Layout-Aussage selbst ist in
+// .claude/plan/2026-09-23-1600_570-w3-agents-haelfte-b-responsive-audit.md
+// gerendert belegt (33x40 -> 40x40 px).
+describe('CopyPromptButton — Responsive (#570)', () => {
+  it('haelt am Dropdown-Trigger den 40-px-Hit-Target aus AK 4 unterhalb md und gibt ihn ab md wieder frei', () => {
+    render(<CopyPromptButton agentId="a1" />)
+
+    const trigger = screen.getByTestId('copy-prompt-dropdown-trigger')
+    expect(trigger).toHaveClass('w-10')
+    expect(trigger).toHaveClass('md:w-auto')
+  })
+})

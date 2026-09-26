@@ -578,3 +578,50 @@ describe('MembersPage — Invitations', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Responsive-Vertrag #568 (AK 3 + AK 6). Zwei gemessene Defekte:
+//
+// (a) Das Rollen-`Select` steht in einer Tabellenspalte, die es bei 320 px auf
+//     32 px Breite schrumpft — unter jede Bedienbarkeit. `min-w-32` an der
+//     Aufrufstelle gibt ihm eine Untergrenze (gemessen 32 -> 128 px); die
+//     Tabelle scrollt wie vorgesehen in ihrem Primitive-Wrapper (Weiche 2 des
+//     Issues), das `Select`-Primitive selbst bleibt unangetastet.
+// (b) Die Einladungs-E-Mail laeuft bei 320 px 39 px ueber die Zeilen-Innenkante:
+//     `flex-wrap` an der Zeile rettet nur die erste Umbruchebene, der Stack
+//     darin hat kein `min-w-0` und eine Adresse hat keine Trennstelle.
+//
+// jsdom hat kein Layout — das sind Klassen-Vertraege zur gerenderten Messung in
+// .claude/plan/2026-09-23-0830_568-w3-settings-responsive-audit.md.
+// ---------------------------------------------------------------------------
+
+describe('MembersPage — Responsive (#568)', () => {
+  it('haelt das Rollen-Select in der scrollenden Tabellenzelle bedienbar', async () => {
+    stubFetch(settingsHandlers({ members: () => [member()] }))
+
+    renderMembers('admin')
+
+    const select = await screen.findByLabelText('Rolle von coder@who2be.dev')
+    expect(select.className.split(/\s+/)).toContain('min-w-32')
+  })
+
+  it('laesst lange Einladungs-Adressen umbrechen, statt die Zeile zu ueberlaufen', async () => {
+    stubFetch(
+      settingsHandlers({
+        invitations: () => [
+          invitation({
+            email: 'maximiliankonstantinvonhohenzollernschmidt@unternehmensberatung.example',
+          }),
+        ],
+      }),
+    )
+
+    renderMembers('admin')
+
+    const address = await screen.findByText(
+      'maximiliankonstantinvonhohenzollernschmidt@unternehmensberatung.example',
+    )
+    expect(address.className.split(/\s+/)).toContain('break-all')
+    expect(address.parentElement?.className.split(/\s+/)).toContain('min-w-0')
+  })
+})

@@ -52,7 +52,9 @@ export function SystemPromptDetailPage() {
               backLabel={t('nav.backToList')}
               badges={
                 <>
-                  <Badge variant="outline" className="font-mono">
+                  {/* #566: siehe SystemPromptsPage — derselbe Slug, zweite
+                      Fundstelle. Gemessen bei 320px: 497px ohne Cap. */}
+                  <Badge variant="outline" className="max-w-full font-mono break-all">
                     {template.slug}
                   </Badge>
                   <StatusBadge

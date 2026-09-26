@@ -7,6 +7,8 @@ import {
   seedWorkspace,
   SESSION_STORAGE_KEY,
 } from './helpers/auth'
+import { decideCookieConsent } from './helpers/consent'
+import { expectNoHorizontalScroll } from './helpers/viewport'
 
 /**
  * Kritische User-Journeys (ADR-0041, Phase 4 — duenne Spitze, 4 Pfade) gegen
@@ -19,7 +21,19 @@ import {
  *
  * Selektoren ausschliesslich ueber `data-testid`/`data-status` — keine
  * lokalisierten Texte.
+ *
+ * `decideCookieConsent` steht in jedem Test mit `page`-Fixture **vor** der
+ * ersten Navigation (Welle 7 / K2): das Consent-Banner faengt sonst auf
+ * schmalen Viewports die Submit-Klicks ab. Es wird bewusst nicht als
+ * `beforeEach` gesetzt — der Agent-Read-Test hat gar keine `page`, und der
+ * Invitation-Test arbeitet mit zwei eigenen Browser-Contexts, deren Pages der
+ * Hook nicht erreichen wuerde. Ein `beforeEach` waere dort still wirkungslos.
+ *
+ * `expectNoHorizontalScroll` (`helpers/viewport.ts`) prueft an den
+ * interessanten Stationen (Formular, Detail, Editor) die Regel aus
+ * `docs/frontend/design-language.md` §4.4.
  */
+
 
 interface PersonaRead {
   id: string
@@ -34,9 +48,11 @@ test('Persona-Lifecycle: anlegen (Draft) -> Draft->Review->Active', async ({
 }) => {
   const user = await createUser(request)
   await loginAs(page, user)
+  await decideCookieConsent(page)
   const { workspaceId } = await seedWorkspace(request, user)
 
   await page.goto(`/w/${workspaceId}/personas/new`)
+  await expectNoHorizontalScroll(page, 'personas/new (Formular)')
   await page.getByTestId('persona-name-input').fill('E2E Lifecycle Persona')
   await page.getByTestId('persona-description-input').fill('Beschreibung v1')
   // Promote-Validierung (draft->review) verlangt einen nicht-leeren Body
@@ -47,6 +63,7 @@ test('Persona-Lifecycle: anlegen (Draft) -> Draft->Review->Active', async ({
 
   await page.waitForURL(/\/w\/[^/]+\/personas\/[^/]+$/)
   await expect(page.getByTestId('persona-status-badge')).toBeVisible()
+  await expectNoHorizontalScroll(page, 'personas/:id (Detail, Status draft)')
   await expect(page.locator('[data-testid="persona-status-badge"] [data-status]')).toHaveAttribute(
     'data-status',
     'draft',
@@ -69,6 +86,7 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
 }) => {
   const user = await createUser(request)
   await loginAs(page, user)
+  await decideCookieConsent(page)
   const { workspaceId } = await seedWorkspace(request, user)
   const token = user.session.access_token
 
@@ -108,6 +126,7 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
   )
 
   await page.goto(`/w/${workspaceId}/playbooks/new`)
+  await expectNoHorizontalScroll(page, 'playbooks/new (Formular + BlockNote-Editor)')
   await page.getByTestId('playbook-name-input').fill('E2E Backlink Playbook')
   // Description ist required (native HTML-Validierung) — ohne Wert blockt der
   // Submit still und die waitForURL-Navigation kommt nie.
@@ -134,6 +153,10 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
   await page.goto(`/w/${workspaceId}/resources/${resource.id}`)
   await page.getByTestId('tab-use').click()
   await expect(page.getByTestId(`used-by-item-${playbookId}`)).toBeVisible()
+  // Interessanteste Route der Karte: die Resource-Detailseite traegt den
+  // BlockNote-Editor. Geprueft wird nach dem Tab-Wechsel, wenn der
+  // Backlink-Inhalt (potenziell lange IDs/Namen) wirklich im DOM steht.
+  await expectNoHorizontalScroll(page, 'resources/:id (Detail mit BlockNote-Editor)')
 })
 
 test('Agent-Read liefert nur die aktive Version (MCP-Aequivalent)', async ({ request }) => {
@@ -219,6 +242,7 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   const wrongContext = await browser.newContext()
   const wrongPage = await wrongContext.newPage()
   await loginAs(wrongPage, wrongUser)
+  await decideCookieConsent(wrongPage)
   await wrongPage.goto(`/invitations/${invitation.token}/accept`)
   await wrongPage.getByTestId('invitation-accept-submit').click()
   await expect(wrongPage.getByTestId('error-alert')).toBeVisible()
@@ -229,6 +253,7 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   const rightContext = await browser.newContext()
   const rightPage = await rightContext.newPage()
   await loginAs(rightPage, rightUser)
+  await decideCookieConsent(rightPage)
   await rightPage.goto(`/invitations/${invitation.token}/accept`)
   await rightPage.getByTestId('invitation-accept-submit').click()
   await rightPage.waitForURL(/\/w\/.+/)
@@ -242,6 +267,7 @@ test('Angemeldet bleiben: neuer Tab bleibt eingeloggt (Issue #430 AC 1)', async 
 }) => {
   const user = await createUser(request)
   const { workspaceId } = await seedWorkspace(request, user)
+  await decideCookieConsent(page)
 
   // "Angemeldet bleiben"-Session direkt injizieren: derselbe Zustand, den ein
   // echter Login MIT gesetztem Haken hinterlaesst (Session in `localStorage`
@@ -284,6 +310,7 @@ test('Angemeldet bleiben: abgelaufene Session verlangt vollen Login (Issue #430 
 }) => {
   const user = await createUser(request)
   const { workspaceId } = await seedWorkspace(request, user)
+  await decideCookieConsent(page)
 
   // Zeitstempel weit VOR der Default-Obergrenze (12 h) -- `SessionProvider`
   // muss das beim Boot erkennen, die Session verwerfen und auf `/login`

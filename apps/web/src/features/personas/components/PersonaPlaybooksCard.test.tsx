@@ -87,7 +87,7 @@ function hookState(overrides: Partial<HookState> = {}): HookState {
 
 function renderCard(state: HookState, canEdit = true) {
   vi.mocked(usePersonaPlaybooks).mockReturnValue(state)
-  render(
+  return render(
     <MemoryRouter>
       <PersonaPlaybooksCard personaId="p1" canEdit={canEdit} />
     </MemoryRouter>,
@@ -319,5 +319,64 @@ describe('PersonaPlaybooksCard — Referenz-Hinweis (ehrlich, nicht sperrend)', 
     expect(remove).toBeEnabled()
     fireEvent.click(remove)
     expect(state.toggle).toHaveBeenCalledWith('pb1')
+  })
+})
+
+// Responsive-Vertrag #571 (Haelfte A). Die 40 px stammen aus **AK 3 dieses
+// Issues**, nicht aus der Norm: `docs/frontend/design-language.md` §11 ist die
+// einzige Quelle des Floors und setzt ihn auf >= 32 px, `size="sm"` (36 px)
+// bleibt dort ausdruecklich zulaessig. Dieses Paket hebt den Wert unterhalb
+// `md` an, weil sein Akzeptanzkriterium es verlangt.
+//
+// jsdom hat kein Layout, deshalb Klassen-Vertraege; die Layout-Aussagen sind in
+// `.claude/plan/2026-09-23-1500_571a-w3-personas-responsive-audit.md` gerendert
+// belegt (Chromium gegen das gebaute CSS, 320/375/768/1024 px).
+describe('PersonaPlaybooksCard — Responsive (#571)', () => {
+  it('bricht den Karten-Kopf um und haelt den Bearbeiten-Button auf dem Hit-Target aus AK 3', async () => {
+    const linked = [playbook()]
+    mockGetPersona.mockResolvedValue(personaContent())
+    const { container } = renderCard(hookState({ playbooks: linked, linked }))
+
+    // Gemessen bei 320 px: der Kopf misst 365 px in 286 px verfuegbarer
+    // Breite, der Bearbeiten-Button lief 104 px ueber die Karten-Innenkante.
+    const edit = await screen.findByRole('button', { name: 'Verknüpfungen bearbeiten' })
+    expect(edit).toHaveClass('min-h-10')
+    expect(edit).toHaveClass('md:min-h-0')
+
+    const header = container.querySelector('.justify-between')
+    expect(header).not.toBeNull()
+    expect(header).toHaveClass('flex-wrap')
+
+    const title = screen.getByRole('heading', { name: /Verknüpfte Playbooks/ })
+    expect(title).toHaveClass('min-w-0')
+    expect(title).toHaveClass('flex-wrap')
+  })
+
+  it('gibt dem Sub-Playbook-Namen eine Mindestbreite und der Zeile das Hit-Target aus AK 3', async () => {
+    // Composite mit einem Kind: die Sub-Playbook-Zeile ist eine klickbare
+    // Zeile mit Nummernchip, Name und Status-Badge. Gemessen bei 320 px blieben
+    // dem Namen 81 px von 329 px Textbreite — `truncate` schnitt nach rund
+    // acht Zeichen ab (AK 5). Mit `min-w-40` bricht der Badge um und der Name
+    // behaelt 178 px; `min-h-10` hebt die 36 px hohe Zeile unterhalb `md` an.
+    const child = playbook({ id: 'pb-child', name: 'Kind-Playbook' })
+    const parent = playbook({
+      id: 'pb1',
+      is_composite: true,
+      compose_children: [{ id: 'pb-child', name: 'Kind-Playbook' }],
+    } as Partial<Playbook>)
+    mockGetPersona.mockResolvedValue(personaContent())
+    renderCard(hookState({ playbooks: [parent, child], linked: [parent] }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /Sub-Playbook/ }))
+
+    const childLink = screen.getByRole('link', { name: /Kind-Playbook/ })
+    expect(childLink).toHaveClass('min-h-10')
+    expect(childLink).toHaveClass('md:min-h-0')
+    expect(childLink).toHaveClass('flex-wrap')
+
+    const name = childLink.querySelector('.truncate')
+    expect(name).not.toBeNull()
+    expect(name).toHaveTextContent('Kind-Playbook')
+    expect(name).toHaveClass('min-w-40')
   })
 })

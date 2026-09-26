@@ -115,6 +115,12 @@ export function AreaGrants({ areaId }: AreaGrantsProps) {
                   </Label>
                   <Select
                     id={`grant-level-${grant.agent_id}`}
+                    // #572 (AK 4): die Tabellenspalte schrumpfte das Control bei
+                    // 320 px auf 33 px Breite. `min-w-32` sitzt an der
+                    // Aufrufstelle — das `Select`-Primitive bleibt unberuehrt.
+                    // Woertlich die Loesung des Schwesterpakets #568 an der
+                    // Mitgliedertabelle.
+                    className="min-w-32"
                     value={grant.level}
                     disabled={isViewer || busy}
                     title={isViewer ? t('grants.viewerReadOnly') : undefined}
@@ -134,6 +140,11 @@ export function AreaGrants({ areaId }: AreaGrantsProps) {
                     type="button"
                     variant="ghost"
                     size="sm"
+                    // #572 (AK 3): unterhalb `md` 40 px Hit-Target — gemessen
+                    // 36 px (`size="sm"`). Die Zahl kommt aus AK 3 des Issues,
+                    // nicht aus der Norm: §11 setzt den Floor auf >= 32 px,
+                    // womit 36 px zulaessig waren.
+                    className="min-h-10 md:min-h-0"
                     disabled={isViewer || busy}
                     title={isViewer ? t('grants.viewerReadOnly') : undefined}
                     onClick={() => void removeGrant(grant.agent_id)}

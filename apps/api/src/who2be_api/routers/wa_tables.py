@@ -60,6 +60,7 @@ from who2be_api.repositories.wa_table_repository import PgWaTableRepository
 from who2be_api.routers.wa_artifacts import get_wa_artifact_service
 from who2be_api.services.audit_service import AuditService
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
+from who2be_api.services.storage_quota_service import enforce_storage_quota
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import WaRuleService
@@ -231,7 +232,15 @@ async def query_table(table_id: UUID, data: TableQuery, ctx: Ctx, service: Servi
     return result
 
 
-@router.post("/wa-tables/{table_id}/save-result", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/wa-tables/{table_id}/save-result",
+    status_code=status.HTTP_201_CREATED,
+    # Friert ein doc-Artifact ein und zaehlt damit in die Speicher-Quota
+    # (Karte W8/P5): der Content ist server-komponiert, aber genauso gross wie
+    # ein vom Agenten geschriebener (derselbe ARTIFACT_CONTENT_MAX_LENGTH-Cap,
+    # `wa_tables.save_query_result`).
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def save_query_result(
     request: Request, table_id: UUID, data: SaveQueryResult, ctx: Ctx, service: Service

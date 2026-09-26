@@ -134,7 +134,10 @@ export function ToolsPage() {
                     href={wsPath(`/tools/${tool.id}`)}
                     badges={
                       <>
-                        <Badge variant="outline" className="font-mono text-xs">
+                        <Badge
+                          variant="outline"
+                          className="max-w-full font-mono text-xs break-all"
+                        >
                           {tool.alias}
                         </Badge>
                         <Badge variant="secondary" className="tabular-nums">
@@ -142,7 +145,11 @@ export function ToolsPage() {
                         </Badge>
                         <LocaleBadge locale={tool.locale} />
                         {tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="max-w-full text-xs break-words"
+                          >
                             {tag}
                           </Badge>
                         ))}

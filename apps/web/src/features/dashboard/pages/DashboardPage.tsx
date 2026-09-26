@@ -194,7 +194,7 @@ export function DashboardPage() {
                     <CardTitle>{t('statusDistribution.title')}</CardTitle>
                     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       {LEGEND_STATUSES.map((status) => (
-                        <li key={status} className="flex items-center gap-1.5">
+                        <li key={status} className="flex min-w-0 items-center gap-1.5">
                           <span
                             className="inline-block size-2 rounded-full"
                             style={{ backgroundColor: `var(--status-${status})` }}

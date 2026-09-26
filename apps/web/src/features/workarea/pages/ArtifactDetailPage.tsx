@@ -211,7 +211,11 @@ export function ArtifactDetailPage() {
               }
             />
             {meta?.source_url !== null && meta?.source_url !== undefined ? (
-              <MetaPill tone="muted">{t('artifacts.source', { source: meta.source_url })}</MetaPill>
+              // #572 (AK 5): die Quell-URL schnitt bei 320 px ab. Keine
+              // Trennstelle, deshalb `break-all` statt `break-words`.
+              <MetaPill tone="muted" className="max-w-full break-all">
+                {t('artifacts.source', { source: meta.source_url })}
+              </MetaPill>
             ) : null}
             <Card>
               <CardContent className="flex flex-col gap-4 pt-6">
@@ -234,7 +238,11 @@ export function ArtifactDetailPage() {
                             : null,
                         )}
                       >
-                        <pre className="min-w-0 flex-1 font-sans text-sm whitespace-pre-wrap">
+                        {/* #572 (AK 5): an Leerzeichen bricht der Rohtext schon
+                            ueber `whitespace-pre-wrap` um; ein trennstellenfreies
+                            Token lief gemessen trotzdem ueber. `break-words`
+                            ergaenzt genau diesen Fall. */}
+                        <pre className="min-w-0 flex-1 font-sans text-sm break-words whitespace-pre-wrap">
                           {block.text}
                         </pre>
                         {block.blockId !== null ? (
@@ -242,7 +250,11 @@ export function ArtifactDetailPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="print:hidden"
+                            // #572 (AK 3): unterhalb `md` 40 px Hit-Target —
+                            // gemessen 36 px (`size="sm"`). Die Zahl kommt aus
+                            // AK 3 des Issues, nicht aus der Norm: §11 setzt den
+                            // Floor auf >= 32 px, womit 36 px zulaessig waren.
+                            className="min-h-10 print:hidden md:min-h-0"
                             aria-label={t('artifact.anchorCopy')}
                             title={t('artifact.anchorCopy')}
                             onClick={() => void copyAnchor(block.blockId as string)}

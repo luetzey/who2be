@@ -15,7 +15,7 @@ neue Schichten kommen zusaetzlich. Visual-Regression bleibt out-of-scope.
 | Page-Verhalten | Vitest + RTL | Page-Flow: load → render → user interaction → assert API-Call. Pflicht-Render via `renderInRoutes(page, { path })` (ab Phase 2). | bestehend + Phase 2 angepasst |
 | A11y | `vitest-axe` (Setup Phase 5.1) | `expect(container).toHaveNoViolations()` fuer 4 Hauptseiten + Layout-/Data-Komponenten. | Phase 5.2 |
 | Lint | `eslint-plugin-jsx-a11y` + bestehende Regeln | Strukturelle A11y-Verstoesse + rohe HTML-Tags + Cross-Feature-Deep-Imports. | jeder PR |
-| Build-Gate | `npx tsc --noEmit`, `npm run build` | TypeScript-Strict + Vite-Build. | jeder PR |
+| Build-Gate | `npx tsc -b`, `npm run build` | TypeScript-Strict + Vite-Build. | jeder PR |
 | Smoke (manuell) | Markdown-Checkliste (`docs/frontend/smoke-checklist.md`, Phase 8.2) | 7 Pages × 2 Themes × Toast-Flows × Form-Errors × Override-Token-Flow. | Phase-Ende |
 | Visual-Regression | Playwright-Screenshots | **OUT OF SCOPE.** Nachfolgeprojekt. | — |
 
@@ -43,8 +43,8 @@ Bestehende Pipeline `.github/workflows/ci.yml`:
 cd apps/web
 npm ci
 npm run lint
-npx tsc --noEmit
-npm test
+npx tsc -b
+npm run test:coverage
 npm run build
 ```
 

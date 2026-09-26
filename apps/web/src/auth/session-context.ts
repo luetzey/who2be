@@ -21,7 +21,16 @@ export interface SessionValue {
   // Tab + Browser-Neustart (localStorage) bis zur absoluten Obergrenze
   // (`config.sessionMaxAgeHours`); mit `false` das heutige Tab-Lifetime-
   // Verhalten (sessionStorage).
-  signIn: (email: string, password: string, remember: boolean) => Promise<{ mfaRequired: boolean }>
+  // `captchaToken` (Issue #539 / Folgebefund): GoTrue prueft das Captcha auch
+  // am Passwort-Login (`/token` mit `grant_type=password`, middleware.go:190-196
+  // nimmt nur die anderen Grant-Types aus). Weggelassen bleibt der Aufruf
+  // unveraendert — der Parameter ist optional, nicht `undefined`-gesetzt.
+  signIn: (
+    email: string,
+    password: string,
+    remember: boolean,
+    captchaToken?: string,
+  ) => Promise<{ mfaRequired: boolean }>
   signOut: () => Promise<void>
   // Expliziter Re-Fetch von `/v1/me` — wird von `DefaultWorkspaceRedirect`
   // genutzt, wenn der Lazy-Seed noch nicht abgeschlossen war (Fallback).

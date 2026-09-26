@@ -19,6 +19,10 @@ describe('PrivacyPage', () => {
     // Art.-13/14-Kernabschnitte.
     expect(getByRole('heading', { name: /Verantwortlicher/i })).toBeInTheDocument()
     expect(getByRole('heading', { name: /Cookies & Einwilligung/i })).toBeInTheDocument()
+    // Bot-Schutz: bedingter Drittland-Empfaenger (Turnstile), Quelle vvt.md §5/§6.
+    expect(
+      getByRole('heading', { name: /Bot-Schutz bei der Registrierung/i }),
+    ).toBeInTheDocument()
     expect(getByRole('heading', { name: /Deine Rechte/i })).toBeInTheDocument()
     expect(container.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0)
   })

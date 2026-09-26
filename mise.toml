@@ -1,0 +1,5 @@
+# Toolchain pin for the web stack — see CONTRIBUTING.md (Definition of Done)
+# for why this major matters. Keep in sync with .nvmrc, apps/web/package.json
+# (engines.node) and .github/workflows/ci.yml (node-version).
+[tools]
+node = "22"

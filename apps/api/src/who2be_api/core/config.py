@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     rate_limit_write: str = "30/minute"
     # Plan CL2 / §3.1 — pluggable Rate-Limit-Storage. Default `memory://` ⇒
     # Single-Process, Verhalten unveraendert. `redis://host:port` aktiviert ein
-    # geteiltes Backend (slowapi + Per-Token-Ceiling), damit mehrere API-Replicas
+    # geteiltes Backend (slowapi + MCP-Rate-Ceiling), damit mehrere API-Replicas
     # dasselbe Fenster sehen. Der Wert wird 1:1 an `storage_from_string` (limits)
     # bzw. an den slowapi-`Limiter` durchgereicht.
     rate_limit_storage_uri: str = Field(

@@ -52,6 +52,9 @@ from who2be_billing.plans import (
     META_MCP_RATE_PER_MIN,
     META_ORG_ID,
     META_PLAN_CODE,
+    META_STORAGE_QUOTA_BYTES,
+    META_TOKEN_QUOTA,
+    META_WORKSPACE_QUOTA,
     Plan,
     plan_by_code,
 )
@@ -199,6 +202,9 @@ def metadata_to_entitlement(metadata: dict[str, Any]) -> Entitlement:
         expires_at=None,
         mcp_monthly_quota=_metadata_int(metadata, META_MCP_MONTHLY_QUOTA),
         mcp_rate_per_min=_metadata_int(metadata, META_MCP_RATE_PER_MIN),
+        token_quota=_metadata_int(metadata, META_TOKEN_QUOTA),
+        storage_quota_bytes=_metadata_int(metadata, META_STORAGE_QUOTA_BYTES),
+        workspace_quota=_metadata_int(metadata, META_WORKSPACE_QUOTA),
     )
 
 

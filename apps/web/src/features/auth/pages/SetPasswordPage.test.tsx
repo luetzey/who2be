@@ -100,4 +100,12 @@ describe('SetPasswordPage', () => {
     })
     expect(updateUser).not.toHaveBeenCalled()
   })
+
+  // Responsive-Audit (#569): Passwort-Regeln und GoTrue-Feldfehler landen im
+  // selben ErrorAlert wie auf Login und Signup.
+  it('laesst lange Bezeichner in der ganzen Karte umbrechen (#569)', () => {
+    renderPage('/onboarding/set-password')
+
+    expect(document.querySelector('main')?.className).toContain('break-words')
+  })
 })

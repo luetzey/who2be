@@ -165,7 +165,18 @@ async def unfavorite_agent(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{agent_id}/copy", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{agent_id}/copy",
+    status_code=status.HTTP_201_CREATED,
+    # Dasselbe Gate wie `POST /agents`: die Kopie ist eine echte neue
+    # agent-Zeile und zaehlt in `entity_quota_service._COUNT_QUERY` mit.
+    #
+    # Granularitaet, bewusst: bei einem verwalteten Quell-Agenten faellt
+    # `AgentService.copy` auf `deep_copy`, das Persona, Playbooks und Template
+    # mitkopiert. Das Gate prueft den Einstieg, wie beim Workspace-Seed; eine
+    # feinere Rechnung gehoert in die Kontingent-Definition, nicht hierher.
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def copy_agent(
     request: Request,

@@ -127,7 +127,7 @@ export function PersonaProfileEditor({
     <>
       <div
         ref={containerRef}
-        className="bn-container rounded-md border bg-background py-2"
+        className="bn-container rounded-md border bg-background py-2 break-words"
         data-testid="persona-profile-editor"
         onFocusCapture={() => {
           userInteractedRef.current = true

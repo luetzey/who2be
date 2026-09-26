@@ -4,12 +4,12 @@ description: Code-, Komponenten- und Test-Konventionen fuer die React/TypeScript
 ---
 
 - Funktionale Komponenten + Hooks; Props typisiert; geteilte Logik in Custom Hooks.
-- Server- und Client-State trennen; TS strict (`tsc --noEmit` fehlerfrei).
+- Server- und Client-State trennen; TS strict (`tsc -b` fehlerfrei).
 - Tests (vitest): Verhalten testen, nicht Implementierung; bei Bugfixes erst
   reproduzierender Test. Bei UI-Refactors `data-testid` setzen, statt Tests
   auf DOM-Struktur umzuschreiben.
 - Auth-Tokens nicht im localStorage halten; API-Base-URL ueber Env (`VITE_`).
-- DoD: `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` — alle
+- DoD: `npm run lint`, `npx tsc -b`, `npm run test:coverage`, `npm run build` — alle
   gruen, lokal verifiziert vor jedem Push.
 
 ## Design-System (Pflicht)

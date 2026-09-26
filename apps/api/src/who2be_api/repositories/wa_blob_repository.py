@@ -70,11 +70,16 @@ _INSERT_BLOB_ARTIFACT_SQL = (
     "RETURNING id"
 )
 
+# `content_bytes` (Migration 0087) wird in der SQL aus dem geschriebenen Content
+# berechnet, nicht im Python uebergeben: ein Wert aus der Anwendung koennte von
+# der gespeicherten jsonb-Serialisierung abweichen, und die Speicher-Quota
+# summiert genau diese Spalte (`storage_quota_service.STORAGE_USED_SQL`).
 _INSERT_DOC_ARTIFACT_SQL = (
     "INSERT INTO wa_artifact "
     "(workspace_id, area_id, type, title, occurred_at, occurred_precision, "
-    " sensitivity, blob_sha256, source_url, fetched_at, content, updated_by) "
-    "VALUES ($1, $2, 'doc', $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11) "
+    " sensitivity, blob_sha256, source_url, fetched_at, content, content_bytes, updated_by) "
+    "VALUES ($1, $2, 'doc', $3, $4, $5, $6, $7, $8, $9, $10::jsonb, "
+    "        octet_length($10::jsonb::text), $11) "
     "RETURNING id"
 )
 

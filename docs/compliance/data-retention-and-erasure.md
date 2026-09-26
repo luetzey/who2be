@@ -97,8 +97,13 @@ Backups (siehe `deploy/hetzner/scripts/backup.sh`,
 
 | Pfad | Verfahren | Retention |
 |---|---|---|
-| Lokal (C5a) | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
-| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box) | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+| Lokal (C5a) — Postgres | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
+| Lokal (C5a) — Objekt-Store | `aws s3 sync --delete` des Buckets (ADR-0048) | genau **ein** Spiegel, in place ueberschrieben |
+| Lokal (C5a) — Tabellen-Store | `VACUUM INTO`-Snapshot je Area-SQLite (ADR-0049) | genau **ein** Snapshot je Area |
+| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box), alle drei in einem Snapshot | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+
+Das `--delete` im Objekt-Sync und die Bereinigung verwaister Area-Snapshots
+sorgen dafuer, dass geloeschte Daten nicht ueber den lokalen Spiegel weiterleben.
 
 **Problem:** Ein zwischen Loeschung und Backup-Ablauf gezogenes Backup enthaelt
 noch die geloeschten Daten. Eine selektive Loeschung **innerhalb** verschluesselter,
@@ -186,6 +191,12 @@ haengen an keinem FK: ein `DELETE FROM work_area` laesst die Datei stehen.
 `cleanup_deleted_area_stores` ist der Gegenpart und entfernt Datei + WAL/SHM
 jeder Area, die es in `work_area` nicht mehr gibt.
 
+**Karenzfrist (24 h):** eine Datei mit kuerzlicher Schreibaktivitaet (juengstes
+`mtime` aus `.sqlite`/`-wal`/`-shm`) bleibt liegen, damit ein noch laufender
+Schreibvorgang sein Ergebnis nicht verliert; der naechste Lauf nimmt sie. Die
+Loeschzusage verschiebt sich damit um maximal einen Cron-Lauf — Begruendung im
+ADR-0049-Nachtrag 2026-09-26.
+
 **Bewusst zurueckhaltend:** angefasst wird ein Workspace-Verzeichnis nur, wenn
 sein Name eine UUID ist **und** ein Workspace mit dieser ID existiert. Grund
 ist der teuerste Fehlfall: liefe der Purge versehentlich gegen die falsche
@@ -217,9 +228,46 @@ Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
 ## 5 · Server-Logs / Zugriffsdaten
 
-Reverse-Proxy-/App-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB
-(Caddy/Container-Logs). Retention/Loeschung: `<PLATZHALTER: konkrete Log-
-Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
+Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
+Caddy schreibt sie nach `/var/log/caddy/access.log` auf dem Volume `caddy-logs`
+(`deploy/hetzner/Caddyfile`, Snippet `access_log`).
+
+**Retention: 14 Tage.** Durchgesetzt wird sie von einem **Host-Cron**, der
+taeglich `deploy/hetzner/scripts/rotate-access-log.sh` startet: das Skript
+rotiert die aktive Datei und loescht aeltere Generationen
+(Einrichtung und Quartals-Pruefung: [`RUNBOOK.md` §Access-Logs](../../deploy/hetzner/RUNBOOK.md#access-logs--ressourcen-limits)).
+Die Caddy-Konfiguration allein traegt die Frist **nicht**: `roll_size 10MiB` /
+`roll_keep 10` begrenzen die Groesse, und `roll_keep_for 336h` wirkt nur auf
+bereits rotierte Generationen — bei geringem Anfrageaufkommen kann die aktive
+Datei laenger als 14 Tage bestehen.
+
+**Genau ein Loeschpfad, kein Rueckfall.** `roll_keep_for` erfasst
+ausschliesslich die von Caddy selbst erzeugten Generationen
+(`access-<ts>.log.gz`). Die taeglichen Generationen des Skripts heissen
+`access.log.<ts>.gz` und fallen nicht darunter; fuer sie ist das Skript der
+einzige Loeschpfad. Umgekehrt raeumt das Skript **beide** Namensklassen. Der
+Loeschzeitpunkt liegt bewusst zwei Tage vor der Frist, damit 14 Tage die
+Obergrenze und nicht der Mittelwert sind (Herleitung im Skript).
+
+**Restrisiko, benannt statt weggelassen:** Faellt der Cron aus, wird die Frist
+ueberschritten. Damit das nicht unbemerkt geschieht, endet jeder Fehlschlag mit
+Exit != 0, ein *erfolgreicher* Lauf schreibt einen Zeitstempel
+(`/var/log/who2be-logrotate.stamp`), und ein optionaler Dead-Man's-Switch wird
+nur bei Erfolg gepingt. Der Quartals-Check im RUNBOOK prueft zuerst diesen
+Stempel — ein leeres Log-Verzeichnis unterscheidet einen nie gelaufenen Cron
+nicht von einem, der nichts zu tun hatte. Die Wirkung des Verfahrens ist
+ausfuehrbar belegt (`deploy/hetzner/tests/test_access_log_rotation.sh`).
+
+**Was gar nicht erst geschrieben wird:** Caddy redigiert `Cookie`,
+`Set-Cookie`, `Authorization` und `Proxy-Authorization` per Default zu
+`REDACTED` (die Server-Option `log_credentials`, die das abschalten wuerde, ist
+nicht gesetzt). Query-Werte sind davon nicht erfasst — weil `api.<DOMAIN>` den
+OAuth-Authorization-Endpunkt traegt (ADR-0036), ersetzt ein `format
+filter`-Block die Parameter `code`, `token`, `access_token` und
+`refresh_token`, bevor die Zeile die Platte erreicht.
+
+Container-Logs (stdout/stderr je Dienst) sind unabhaengig davon auf 3 x 10 MB
+gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 ---
 
@@ -240,7 +288,7 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
-| Server-Logs | `<PLATZHALTER>` | Log-Rotation |
+| Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
 
 ---
 

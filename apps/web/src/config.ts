@@ -48,6 +48,13 @@ interface Config {
   // unberuehrt. Default 12, gueltiger Bereich 1-24 (siehe
   // `resolveSessionMaxAgeHours`).
   sessionMaxAgeHours: number
+  // Cloudflare-Turnstile-Site-Key fuer das Captcha auf `/signup` (Issue #539,
+  // `WHO2BE_TURNSTILE_SITE_KEY`). Leerstring = kein Captcha: das Widget wird
+  // nicht gerendert, das Script nicht geladen, `signUp` laeuft ohne Token —
+  // also exakt das Verhalten vor #539. Die Durchsetzung liegt wie immer beim
+  // Backend (`GOTRUE_SECURITY_CAPTCHA_*`); dieser Schluessel ist nur die
+  // Client-Haelfte und bewusst oeffentlich (er steht im ausgelieferten HTML).
+  turnstileSiteKey: string
 }
 
 /** Von `/config.js` gesetzte Runtime-Werte. Leerstring = „nicht gesetzt". */
@@ -60,6 +67,7 @@ export interface RuntimeConfig {
   launchMode?: string
   launchContact?: string
   sessionMaxAgeHours?: number
+  turnstileSiteKey?: string
 }
 
 declare global {
@@ -188,6 +196,14 @@ export function resolveConfig(): Config {
     launchMode,
     launchContact: rt.launchContact ?? '',
     sessionMaxAgeHours: resolveSessionMaxAgeHours(rt.sessionMaxAgeHours),
+    // Runtime (`/config.js`) → Build-Arg (`VITE_`) → leer. Bewusst OHNE
+    // `read()`: dessen PROD-Fallback auf den eigenen Origin ergaebe hier
+    // Unsinn (ein Origin ist kein Turnstile-Schluessel) und wuerde aus
+    // "kein Captcha" still "kaputtes Captcha" machen. Leer ist der
+    // richtige Default — fail-open, die harte Sperre sitzt in GoTrue.
+    turnstileSiteKey:
+      rt.turnstileSiteKey ??
+      ((import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? ''),
     // Rueckwaerts-kompatibel (Issue #429, Weiche 2a): der Altschalter
     // (`VITE_WHO2BE_SIGNUP_DISABLED`) UND `launchMode === 'coming_soon'`
     // fuehren beide zu `signupDisabled`. `40-who2be-runtime-config.sh`

@@ -154,8 +154,10 @@ class PgWaArtifactRepository:
         row = await conn.fetchrow(
             "INSERT INTO wa_artifact "
             "(workspace_id, area_id, type, title, occurred_at, occurred_precision, "
-            " sensitivity, source_system, source_url, fetched_at, content, updated_by) "
-            "VALUES ($1, $2, 'doc', $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11) "
+            " sensitivity, source_system, source_url, fetched_at, content, content_bytes, "
+            " updated_by) "
+            "VALUES ($1, $2, 'doc', $3, $4, $5, $6, $7, $8, $9, $10::jsonb, "
+            "        octet_length($10::jsonb::text), $11) "
             f"RETURNING {_FULL_COLUMNS}",
             workspace_id,
             area_id,
@@ -224,10 +226,19 @@ class PgWaArtifactRepository:
         `INGEST_MAX_BLOCKS` (Security-Review 2026-08-13 M7, geteilte
         H3b-Konstante): 0 Rows heisst „verschwunden ODER Cap erreicht" — die
         Unterscheidung (404 vs. 413) trifft der Service per Exists-Nachlese.
+
+        `content_bytes` wird aus dem ERGEBNIS-Content berechnet, nicht addiert
+        (Migration 0087): die Spalte traegt immer die aktuelle Gesamtgroesse der
+        Zeile, dadurch waechst die Summe ueber alle Artifacts genau um den
+        Zuwachs. Ein additiver Zaehler wuerde bei nebenlaeufigen Appends (beide
+        gewinnen, rev+2) oder nach einem Patch auseinanderlaufen — so rechnet
+        jedes UPDATE aus dem dann geltenden Content.
         """
         row = await conn.fetchrow(
             "UPDATE wa_artifact "
             "SET content = coalesce(content, '[]'::jsonb) || $3::jsonb, "
+            "    content_bytes = "
+            "        octet_length((coalesce(content, '[]'::jsonb) || $3::jsonb)::text), "
             "    rev = rev + 1, updated_at = now(), updated_by = $4 "
             "WHERE workspace_id = $1 AND id = $2 AND type = 'doc' "
             "  AND jsonb_array_length(coalesce(content, '[]'::jsonb)) + $5 <= $6 "
@@ -258,7 +269,8 @@ class PgWaArtifactRepository:
         """
         row = await conn.fetchrow(
             "UPDATE wa_artifact "
-            "SET content = $4::jsonb, rev = rev + 1, updated_at = now(), updated_by = $5 "
+            "SET content = $4::jsonb, content_bytes = octet_length($4::jsonb::text), "
+            "    rev = rev + 1, updated_at = now(), updated_by = $5 "
             "WHERE workspace_id = $1 AND id = $2 AND type = 'doc' AND rev = $3 "
             f"RETURNING {_FULL_COLUMNS}",
             workspace_id,

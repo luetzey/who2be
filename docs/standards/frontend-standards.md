@@ -25,5 +25,5 @@ Weitere repo-spezifische Quellen: [`../../CLAUDE.md`](../../CLAUDE.md)
 
 ## DoD (Frontend)
 
-`npm run lint && npx tsc --noEmit && npm test && npm run build` — alle grün,
+`npm run lint && npx tsc -b && npm run test:coverage && npm run build` — alle grün,
 lokal verifiziert vor jedem Push.

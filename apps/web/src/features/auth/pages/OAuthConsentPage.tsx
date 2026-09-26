@@ -12,7 +12,6 @@ import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LoadingState } from '@/components/data/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 
@@ -164,7 +163,7 @@ export function OAuthConsentPage() {
   const canApprove = locked === true ? lockedAgent !== null : selectedAgentId !== ''
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -192,7 +191,21 @@ export function OAuthConsentPage() {
                   lockedAgent !== null ? (
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="oauth-agent-locked">{t('connector.lockedLabel')}</Label>
-                      <Input id="oauth-agent-locked" readOnly value={lockedAgent.name} />
+                      {/* Anzeige, kein Formularfeld: der Wert ist nicht
+                          editierbar und nicht Teil des Submits (der Consent
+                          schickt `selectedAgentId`). Als `readOnly`-Input
+                          wurde ein langer Agentenname bei 320px abgeschnitten
+                          (gemessen scrollWidth 366 gegen clientWidth 236) —
+                          eine Einwilligung darf den Gegenstand der Freigabe
+                          nicht unvollstaendig darstellen (#569 Weiche 5:
+                          umbrechen, nicht kuerzen). Feld-Optik bleibt, damit
+                          der gesperrte Zustand als solcher lesbar ist. */}
+                      <output
+                        id="oauth-agent-locked"
+                        className="flex min-h-10 w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm break-words text-muted-foreground"
+                      >
+                        {lockedAgent.name}
+                      </output>
                       <p className="text-xs text-muted-foreground">
                         {t('connector.lockedWorkspace', { workspace: lockedAgent.workspace_name })}
                       </p>

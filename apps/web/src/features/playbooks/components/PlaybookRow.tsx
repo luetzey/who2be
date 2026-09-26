@@ -65,7 +65,13 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
 
   return (
     <article
-      className="relative flex gap-4 rounded-xl border bg-card p-4 shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover"
+      // Umbruch unterhalb `md` (#573 Weiche 3): die Meta-Spalte unten ist
+      // `shrink-0` und belegte mit zwei Tags gemessene 193,3px, wodurch die
+      // `min-w-0`-Textspalte bei 320px auf 0px gerechnet wurde und Name,
+      // Beschreibung und Kind-Links 102px aus ihrer Box liefen (gemessen am
+      // gebauten CSS). `shrink-0` bleibt — es schuetzt die Badges; geloest
+      // wird die einzeilige Anordnung, ab `md` unveraendert.
+      className="relative flex flex-wrap gap-4 rounded-xl border bg-card p-4 shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover md:flex-nowrap"
       data-testid="playbook-row"
     >
       {/* Icon-Kachel auf die geteilte `EntityIcon`-Geometrie (md: 44px,
@@ -73,7 +79,7 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
           dieselbe Kachel teilen — der typ-spezifische Icon-Glyph bleibt. */}
       <PlaybookTypeIcon type={playbook.type} className="size-11 rounded-xl" />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 basis-[calc(100%-3.75rem)] flex-col gap-1 md:basis-0">
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to={wsPath(`/playbooks/${playbook.id}`)}
@@ -141,7 +147,11 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
               size="sm"
               aria-expanded={expanded}
               onClick={() => setExpanded((open) => !open)}
-              className="h-auto w-full justify-start gap-2 px-3 py-2 text-xs font-normal text-pill-catalog-fg hover:bg-pill-catalog/60 hover:text-pill-catalog-fg"
+              // Gemessen 32px hoch (`h-auto px-3 py-2` bei `text-xs`).
+              // Issue #573 AK 5 fordert unterhalb `md` mindestens 40px;
+              // `min-h-10` gewinnt dort gegen das `h-auto`, ab `md` faellt
+              // die Zeile auf die alte Dichte zurueck.
+              className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-xs font-normal text-pill-catalog-fg hover:bg-pill-catalog/60 hover:text-pill-catalog-fg md:min-h-0"
             >
               <Layers className="size-3.5" aria-hidden="true" />
               <span className="font-semibold">
@@ -169,7 +179,7 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
                     <li key={child.id}>
                       <Link
                         to={wsPath(`/playbooks/${child.id}`)}
-                        className="flex items-center gap-2 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        className="flex min-h-10 items-center gap-2 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-0"
                       >
                         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-pill-catalog text-xs font-bold text-pill-catalog-fg">
                           {index + 1}
@@ -197,7 +207,7 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
         ) : null}
       </div>
 
-      <div className="flex shrink-0 flex-col items-end justify-between gap-2">
+      <div className="flex w-full shrink-0 flex-row items-center justify-between gap-2 md:w-auto md:flex-col md:items-end md:justify-between">
         {playbook.tags.length > 0 ? (
           <div className="flex flex-wrap justify-end gap-1" aria-label={t('common:fields.tags')}>
             {playbook.tags.map((tag) => (

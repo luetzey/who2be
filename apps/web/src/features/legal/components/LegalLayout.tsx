@@ -24,7 +24,11 @@ export function LegalLayout() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 sm:px-6">
-          <div className="flex items-center justify-between">
+          {/* #567 (Weiche 5): `flex-wrap` nach dem Repo-Muster
+              `PageHeader.tsx#PageHeader`. Kein gemessener Defekt auf 320px,
+              aber Vorsorge gegen laengere Marken-/Labeltexte — ohne
+              breakpoint-abhaengige Render-Variante. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             <Link to="/" className="text-sm font-semibold tracking-tight">
               {t('layout.brand')}
             </Link>

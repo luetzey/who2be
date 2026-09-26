@@ -31,7 +31,7 @@ export function StatusBar({ label, distribution, hrefFor }: StatusBarProps) {
 
   return (
     <div className="flex items-center gap-4">
-      <span className="w-24 flex-none text-sm font-medium">{label}</span>
+      <span className="w-20 flex-none truncate text-sm font-medium md:w-24">{label}</span>
       <div
         role="img"
         aria-label={ariaLabel}

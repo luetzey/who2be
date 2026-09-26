@@ -23,3 +23,13 @@ services:
   auth:
     environment:
       GOTRUE_MAILER_AUTOCONFIRM: "true"
+      # Explizit `true`, auch wenn das Cloud-Overlay inzwischen selbst auf
+      # ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true} steht: die CI-Journey legt ihren
+      # User ueber `POST /auth/v1/signup` an (`createUser`). Stuende in einer
+      # Umgebungs-`.env` GOTRUE_EXTERNAL_EMAIL_ENABLED=false, antwortete GoTrue
+      # mit 400 `email_provider_disabled`. Einen echten OAuth-Flow gegen
+      # Google/GitHub kann die CI nicht fahren; die Billing-Journey prueft die
+      # Billing-Oberflaeche, nicht den Anmeldeweg. Der Anmeldeweg selbst ist in
+      # `src/features/auth/pages/cloud-auth.test.tsx` abgedeckt — in BEIDE
+      # Richtungen (Cloud ohne, Self-Hosting mit Passwortformular).
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"

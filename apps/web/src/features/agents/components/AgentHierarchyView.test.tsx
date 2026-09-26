@@ -176,3 +176,42 @@ describe('AgentHierarchyView', () => {
     expect(screen.getByText('Keine Playbooks verknüpft.')).toBeInTheDocument()
   })
 })
+
+// Responsive-Vertrag #570 (AK 4): die Playbook-Zeilen der Zusammensetzungs-
+// Karte sind die primaeren Navigationsziele der Ansicht und halten unterhalb
+// `md` 40 px Hit-Target. Die Zahl kommt aus AK 4 dieses Issues, nicht aus der
+// Norm: `docs/frontend/design-language.md` §11 ist die einzige Quelle des
+// Floors und setzt ihn auf >= 32 px — die gemessenen 32 px lagen also genau
+// auf dem Floor, nicht darunter; 40 px ist dort die Praeferenz
+// `size="default"`, die dieses Paket unterhalb `md` verbindlich macht.
+//
+// Gemessen am gebauten Stylesheet in Chromium bei 320 px: `px-2 py-1.5` bei
+// `text-sm` ergibt 32 px Zeilenhoehe, `min-h-10` hebt sie auf 40 px, ab `md`
+// faellt sie auf 32 px zurueck. Die Klassenfolge `min-h-10 md:min-h-0` ist
+// woertlich die aus #568/#572 und der Schwesterkarte (Haelfte A) — eine
+// zweite Variante desselben Musters waere Pattern Drift. `min-h-*` kollidiert
+// in `tailwind-merge` nicht mit der Polsterung.
+//
+// jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag; die
+// Layout-Aussage selbst ist in
+// .claude/plan/2026-09-23-1600_570-w3-agents-haelfte-b-responsive-audit.md
+// gerendert belegt.
+describe('AgentHierarchyView — Responsive (#570)', () => {
+  it('haelt an den Playbook-Zeilen den 40-px-Hit-Target aus AK 4 unterhalb md und gibt ihn ab md wieder frei', () => {
+    renderView(
+      <AgentHierarchyView
+        agent={mockAgent()}
+        persona={mockPersona()}
+        template={mockTemplate()}
+        playbooks={mockPlaybooks()}
+      />,
+    )
+
+    const rows = screen.getAllByTestId('agent-hierarchy-playbook')
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row).toHaveClass('min-h-10')
+      expect(row).toHaveClass('md:min-h-0')
+    }
+  })
+})

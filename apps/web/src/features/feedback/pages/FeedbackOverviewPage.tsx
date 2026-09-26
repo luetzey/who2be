@@ -159,9 +159,12 @@ export function FeedbackOverviewPage() {
                             const negativePct = signalTotal > 0 ? 100 - helpfulPct : 0
                             return (
                               <li key={`${item.entity_type}-${item.entity_id}`} className="relative">
+                                {/* Unterhalb der Mobile-Schwelle `md` stapeln die drei
+                                    Spalten: 208 + 120 + 96 px feste Anteile plus Gaps
+                                    passen auf 320 px nicht nebeneinander (§4.4). */}
                                 <div
                                   className={cn(
-                                    'flex items-center gap-4 border-l-2 py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40',
+                                    'flex flex-col gap-2 border-l-2 py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40 md:flex-row md:items-center md:gap-4',
                                     item.negative_count >= 3
                                       ? 'border-l-destructive'
                                       : item.negative_count > 0
@@ -169,7 +172,7 @@ export function FeedbackOverviewPage() {
                                         : 'border-l-transparent',
                                   )}
                                 >
-                                  <span className="flex w-52 min-w-0 flex-none items-center gap-2.5">
+                                  <span className="flex w-full min-w-0 items-center gap-2.5 md:w-52 md:flex-none">
                                     <EntityIcon icon={meta.icon} tone={meta.tone} size="sm" />
                                     <span className="min-w-0">
                                       <Link
@@ -185,10 +188,12 @@ export function FeedbackOverviewPage() {
                                       </span>
                                     </span>
                                   </span>
-                                  {/* min-w-[7.5rem]: funktionale Mindestbreite, damit der
+                                  {/* md:min-w-[7.5rem]: funktionale Mindestbreite, damit der
                                       Signal-Balken auch bei schmalen Viewports lesbar bleibt —
-                                      die Spacing-Skala kennt diesen Wert nicht (§4.1). */}
-                                  <span className="flex min-w-[7.5rem] flex-1 flex-col gap-1.5">
+                                      die Spacing-Skala kennt diesen Wert nicht (§4.1). Gilt nur
+                                      oberhalb der Mobile-Schwelle; im gestapelten Phone-Fall
+                                      nimmt die Spalte ohnehin die volle Breite. */}
+                                  <span className="flex w-full flex-col gap-1.5 md:min-w-[7.5rem] md:flex-1">
                                     <span className="flex h-1.5 overflow-hidden rounded-full bg-muted">
                                       <span className="bg-brand" style={{ width: `${helpfulPct}%` }} />
                                       <span
@@ -214,13 +219,15 @@ export function FeedbackOverviewPage() {
                                       </span>
                                     </span>
                                   </span>
-                                  <span className="w-24 flex-none text-right text-xs text-muted-foreground">
+                                  <span className="text-xs text-muted-foreground md:w-24 md:flex-none md:text-right">
                                     {item.last_activity_at !== null
                                       ? new Date(item.last_activity_at).toLocaleDateString()
                                       : '—'}
                                   </span>
+                                  {/* Rein dekorativer Affordanz-Pfeil — im gestapelten
+                                      Phone-Fall wuerde er als eigene Zeile stehen. */}
                                   <ChevronRight
-                                    className="size-4 flex-none text-muted-foreground/60"
+                                    className="hidden size-4 flex-none text-muted-foreground/60 md:block"
                                     aria-hidden="true"
                                   />
                                 </div>
