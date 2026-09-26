@@ -12,7 +12,10 @@ Belegt auf der echten DB (Owner-Verbindung — wie der `who2be-purge`-Cron):
   Katalog-Zeile faellt nur, wenn der Store sein Alter kennt (`BlobAgeSource`).
 - **Tabellen-Store:** die SQLite-Datei einer geloeschten Area wird entfernt,
   die einer lebenden nicht — und ein Verzeichnis, dessen Workspace es nicht
-  (mehr) gibt, bleibt defensiv unberuehrt.
+  (mehr) gibt, bleibt defensiv unberuehrt. Die Karenzfrist fuer frisch
+  beschriebene Dateien (`AREA_STORE_GRACE`) belegt `test_purge_service.py`
+  DB-los; hier wird die Datei ueber die Frist hinaus gealtert, damit dieser
+  Test die Loeschzusage prueft und nicht die Frist.
 - **GDPR-Export:** das Art.-20-Buendel traegt Areas, Artifacts,
   Blob-Metadaten, Tabellen-Zeilen, KB und Zugriffslog.
 
@@ -21,6 +24,7 @@ ueber ``who2be_api.testing.workspace_setup``.
 """
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -37,6 +41,7 @@ from who2be_api.blobstore.adapters.memory import MemoryBlobStore
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.purge import (
+    AREA_STORE_GRACE,
     PurgeResult,
     cleanup_deleted_area_stores,
     cleanup_expired_artifacts,
@@ -355,6 +360,12 @@ def test_area_store_sweep_removes_only_dangling_files(tmp_path: Path) -> None:
         # Und ein Verzeichnis, dessen Name gar keine UUID ist.
         (tmp_path / "nicht-eine-uuid").mkdir()
 
+        # Die gerade angelegte Datei ist frisch geschrieben und faellt damit in
+        # die Karenzfrist (`AREA_STORE_GRACE`) — dieser Test prueft die
+        # Loeschzusage, also wird sie ueber die Frist hinaus gealtert. Dass die
+        # Frist selbst greift, belegen die Faelle in `test_purge_service.py`.
+        _age_area_files(store.db_path(workspace_id, dangling_area), AREA_STORE_GRACE)
+
         removed, unknown_dirs = await cleanup_deleted_area_stores(conn, store)
 
         assert removed == 1
@@ -367,6 +378,15 @@ def test_area_store_sweep_removes_only_dangling_files(tmp_path: Path) -> None:
         assert (await cleanup_deleted_area_stores(conn, store))[0] == 0
 
     _with_seed(_run)
+
+
+def _age_area_files(path: Path, age: timedelta) -> None:
+    """Setzt `mtime` einer Area-Datei samt WAL/SHM um `age` + 1 h zurueck."""
+    stamp = (datetime.now(UTC) - age - timedelta(hours=1)).timestamp()
+    for suffix in ("", "-wal", "-shm"):
+        target = Path(f"{path}{suffix}")
+        if target.exists():
+            os.utime(target, (stamp, stamp))
 
 
 @pytest.mark.integration

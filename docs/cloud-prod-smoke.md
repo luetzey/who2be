@@ -449,7 +449,7 @@ umgehen). Ein zweiter User/Org sieht die Daten aus diesem Smoke **nicht**.
 ## 8 — Header-/Hardening-Check (H5)
 
 ```bash
-export DOMAIN=<deine-domain>   # der Test leitet den Host-Header daraus ab
+export DOMAIN=<deine-domain>
 bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}
 ```
 
@@ -457,7 +457,19 @@ Prueft Security-Header (HSTS, XCTO, XFO, Referrer, Permissions, COOP, CSP inkl.
 `object-src`/`form-action`), den `/v1/internal/*`-Block (403) und den
 Docs-Toggle (`/docs` → 404 bei `WHO2BE_DOCS_PUBLIC=false`).
 
-- [ ] „alle Header-Checks gruen ✓".
+Die Adresse muss den Endpunkt **vollstaendig und verschluesselt** treffen
+(`https://api.<domain>`): auf eine Klartext-Anfrage antwortet Caddy mit einer
+Weiterleitung, und eine Weiterleitung traegt keine Security-Header. Der Test
+weist eine solche Antwort ausdruecklich ab, statt sie fuer ein Ergebnis zu
+halten.
+
+Der Header- und der `403`-Teil dieses Laufs sind zusaetzlich in CI abgedeckt
+(`compose-smoke`, gegen die echte `Caddyfile`). **Nur der Docs-Toggle ist hier
+Handlauf** — er prueft die App hinter dem Proxy und laesst sich in CI nicht
+ohne Scheingruen nachstellen; siehe `docs/security-findings.md` §F-12.
+
+- [ ] Die Bilanz-Zeile `CHECKS_RUN=…` nennt eine Zahl groesser 0 und der Lauf
+      endet mit „alle Header-Checks gruen ✓".
 
 ## 9 — Abnahme
 

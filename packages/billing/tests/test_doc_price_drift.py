@@ -6,12 +6,15 @@ keiner Pruefung hingen.
 
 `PRO_PLAN.price_eur` ist die fuehrende Quelle des Pro-Preises (der Checkout
 schreibt genau diesen String an Mollie, `mollie.py:451`). Wiederholt wird er
-in der Tarif-Tabelle von `docs/licensing/plans.md`, im Analysepapier
-`docs/cloud-hosting-owner-guide.md` und — als JS-Zahl — in der `TIERS`-Liste
-des Billing-Panels, weil das Backend den Preis nicht mitliefert
-(`BillingPanel.tsx`, Kommentar ueber `TIERS`). Befund 2026-09-25: alle vier
+in der Tarif-Tabelle von `docs/licensing/plans.md` und — als JS-Zahl — in der
+`TIERS`-Liste des Billing-Panels, weil das Backend den Preis nicht mitliefert
+(`BillingPanel.tsx`, Kommentar ueber `TIERS`). Befund 2026-09-25: alle
 Stellen trugen 29 €, obwohl der Owner 9,99 € entschieden hatte — genau der
 Drift, den dieser Guard ab jetzt rot macht.
+
+Das Analysepapier `docs/cloud-hosting-owner-guide.md` war eine vierte solche
+Stelle; es ist mit #655 aus dem oeffentlichen Repo genommen worden und
+deshalb hier nicht mehr geprueft.
 
 Zwei Arten von Pruefung, absichtlich getrennt:
 
@@ -25,7 +28,7 @@ Zwei Arten von Pruefung, absichtlich getrennt:
 Der Scan sucht bewusst nach dem Betrag, nicht nach der Formulierung. Die erste
 Fassung traf nur die Kurzform „<Betrag> €/Mon…" und liess damit jede Prosaform
 durch („49 € im Monat", „49 EUR pro Monat", „49 € monatlich", „zahlt heute
-49 €"). Zwei solcher Saetze stehen real im Analysepapier und hingen an keiner
+49 €"). Zwei solcher Saetze standen real im Analysepapier und hingen an keiner
 Pruefung. Eine Formulierungs-Liste waere immer unvollstaendig gewesen; die
 Menge der erlaubten Betraege dagegen ist klein, vollstaendig aufzaehlbar und
 haengt an `plans.py`.
@@ -44,21 +47,11 @@ from who2be_billing.plans import FREE_PLAN, PRO_PLAN
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _PLANS_DOC = "docs/licensing/plans.md"
-_OWNER_GUIDE = "docs/cloud-hosting-owner-guide.md"
 _BILLING_PANEL = "apps/web/src/features/billing/components/BillingPanel.tsx"
 
-# Der Team-Tarif ist ein VORSCHLAG des Analysepapiers, kein gebuchter Plan --
-# er steht deshalb nicht in `plans.py` und braucht hier einen Freibrief.
-# Verschwindet das Papier (Karte t_2ef0060d), fliegt der Eintrag mit raus.
+# Der Team-Tarif ist ein VORSCHLAG, kein gebuchter Plan -- er steht deshalb
+# nicht in `plans.py` und braucht hier einen Freibrief.
 _PROPOSED_TEAM_PRICE_EUR = Decimal("99")
-
-# Das Analysepapier rechnet den Gebuehrenunterschied Merchant-of-Record vs.
-# Mollie als Monatsbetrag aus (§Finanzen): 50 Kunden x Pro-Preis x (5 % - 1,8 %),
-# auf ganze Euro gerundet. Bewusst GERECHNET statt als Zahl erlaubt: aendert der
-# Pro-Preis, muss diese abgeleitete Zahl im Papier mitwandern, sonst bricht der
-# Test genau dort. Verschwindet die Passage, fliegt die Konstante mit raus.
-_MOR_CUSTOMERS = Decimal("50")
-_MOR_FEE_SPREAD = Decimal("0.05") - Decimal("0.018")
 
 
 # Punkt ohne Komma ist zweideutig: deutsche Tausendertrennung („9.990 €") oder
@@ -187,15 +180,12 @@ def test_price_anchor_matches_plans_py(relative_path: str, pattern: re.Pattern[s
 _EURO_AMOUNT = re.compile(r"(\d(?:[\d.,]*\d)?)\s*(?:€|EUR\b)")
 
 
-@pytest.mark.parametrize("relative_path", (_PLANS_DOC, _OWNER_GUIDE))
+@pytest.mark.parametrize("relative_path", (_PLANS_DOC,))
 def test_no_unknown_euro_amount(relative_path: str) -> None:
     allowed = {
         _eur(FREE_PLAN.price_eur),
         _eur(PRO_PLAN.price_eur),
         _PROPOSED_TEAM_PRICE_EUR,
-        # Abgeleiteter Differenzbetrag, kein Tarifpreis — aber ebenfalls
-        # preisabhaengig, deshalb gerechnet statt festgeschrieben.
-        (_MOR_CUSTOMERS * _eur(PRO_PLAN.price_eur) * _MOR_FEE_SPREAD).quantize(Decimal("1")),
     }
 
     found = {_eur(value) for value in _EURO_AMOUNT.findall(_read(relative_path))}
@@ -209,10 +199,9 @@ def test_no_unknown_euro_amount(relative_path: str) -> None:
     assert not unknown, (
         f"{relative_path} nennt {sorted(str(v) for v in unknown)} € — "
         f"bekannt sind nur {sorted(str(v) for v in allowed)} € (Free/Pro aus "
-        "`plans.py`, Team als Vorschlag des Analysepapiers, dazu der gerechnete "
-        "MoR-Differenzbetrag). Entweder ist der Preis gedriftet (Datei "
-        "nachziehen) oder es gibt einen neuen Tarif (dann zuerst `plans.py`, "
-        "dann diesen Test)."
+        "`plans.py`, Team als vorgeschlagener Tarif). Entweder ist der Preis "
+        "gedriftet (Datei nachziehen) oder es gibt einen neuen Tarif (dann "
+        "zuerst `plans.py`, dann diesen Test)."
     )
 
 

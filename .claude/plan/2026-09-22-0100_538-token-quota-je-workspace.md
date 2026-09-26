@@ -106,6 +106,7 @@ angefassten Dateien (`entitlement.py`, `plans.py`, `plans.md`,
 
 - Das Entitlement traegt die Metadaten des **Kaufzeitpunkts**: eine spaeter
   angehobene Zahl wirkt erst beim naechsten Checkout (wie #536).
-- Je Workspace, nicht je Org: wer Workspaces anlegt, vervielfacht sein
-  Kontingent, solange die Workspace-Zahl ungedeckelt ist (Folgekarte).
+- Je Workspace, nicht je Org: die Zusage ist erst zusammen mit einem Deckel auf
+  die Workspace-Zahl endlich (Folgekarte; inzwischen umgesetzt, siehe
+  `docs/licensing/plans.md` §Workspace-Deckel).
 - Bestandszeilen in `org_entitlement` tragen `NULL` = unbegrenzt.

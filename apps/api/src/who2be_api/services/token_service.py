@@ -14,6 +14,7 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
+    cap_agent_bound_role,
     deny_agent_bound_token_management,
     hash_token,
     new_token,
@@ -104,11 +105,16 @@ class TokenService:
         Token-CRUD verlangt mindestens `editor` (ADR-0023). Die Token-Rolle ist
         ein Snapshot: ohne explizite Angabe erbt der Token die aktuelle Rolle
         des Erstellers; eine explizit hoehere Rolle als die des Erstellers ist
-        verboten (ein editor kann kein admin-Token erzeugen). Ist die effektive
-        Rolle `admin`, verlangt die Ausstellung zusaetzlich eine aal2-Session
-        (#469) — dieselbe Schwelle, die `require_role(ctx, admin)` fuer jede
-        andere Admin-Aktion setzt (`require_aal2` traegt die API-Token- und
-        On-Prem-Ausnahmen bereits, siehe `core/security.py`).
+        verboten (ein editor kann kein admin-Token erzeugen).
+
+        Darueber liegt seit der Haertung des kontoweiten Pfades eine zweite,
+        absolute Grenze: Tokens sind zwingend agent-gebunden (Migration 0048),
+        und ein agent-gebundener Token erhaelt hoechstens `editor`
+        (`cap_agent_bound_role`). Eine ausdruecklich angeforderte `admin`-Rolle
+        wird mit 403 `agent_bound_role_capped` abgelehnt; der reine Snapshot
+        eines Admins wird still auf `editor` gedeckelt, damit ein Admin weiter
+        Tokens anlegen kann. Das Admin-MFA-Gate (#469) entfaellt damit hier —
+        siehe Kommentar unten; in `rotate` bleibt es fuer Bestands-Tokens stehen.
 
         In der Cloud-Edition gilt zusaetzlich der Tarif-Deckel fuer die Anzahl
         aktiver Tokens des Workspaces (Issue #538): ueber der Grenze `402` mit
@@ -128,8 +134,32 @@ class TokenService:
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
                 reason="token_role_escalation",
             )
-        if role == WorkspaceRole.admin:
-            require_aal2(ctx)
+        capped = cap_agent_bound_role(role)
+        if capped != role:
+            if data.role is not None:
+                # Ausdruecklich angefordert ⇒ ausdrueckliche Absage. Ein stiller
+                # Deckel waere hier irrefuehrend: der Ersteller waehlt die Rolle
+                # im Formular und bekaeme ein Token, das weniger kann, als die
+                # Anzeige versprach.
+                raise ApiError(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"Ein an einen Agenten gebundener Token erhaelt hoechstens die "
+                        f"Rolle '{capped.value}'. Die Rolle '{role.value}' verschafft "
+                        "einem Maschinen-Token Reichweite, die seine Agent-Policy nicht "
+                        "begrenzt — fuehre solche Aktionen als angemeldete Person aus."
+                    ),
+                    reason="agent_bound_role_capped",
+                )
+            # Ohne explizite Angabe ist die Rolle der Snapshot der
+            # Ersteller-Rolle, keine Wahl — ein Admin soll weiter Tokens anlegen
+            # koennen, sie erben dann `editor` statt seiner eigenen Rolle.
+            role = capped
+        # Kein `require_aal2` mehr: nach dem Deckel ist `role` hier nie `admin`,
+        # der Zweig waere toter Code. Die Schwelle aus #469 ist damit nicht
+        # gefallen, sondern ueberholt — ein admin-Token entsteht auf diesem Pfad
+        # gar nicht mehr. In `rotate` bleibt das Gate stehen: dort kann ein
+        # Bestands-Token aus der Zeit vor dem Deckel noch `admin` tragen.
         # Pflicht-Agent-Bindung: der Agent muss im selben Workspace leben. Der
         # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
         # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
