@@ -1139,6 +1139,14 @@ gemessen wurde. Wer den CI-Zustand lokal nachfahren will:
 BACKUP_ALARM_REQUIRE_ALL=1 bash deploy/hetzner/tests/test_backup_alarm.sh
 ```
 
+Auf Ubuntu 24.04 (und damit auch auf `ubuntu-latest` in CI) sind unprivilegierte
+User-Namespaces per AppArmor gesperrt — gemessen, nicht vermutet: der erste
+CI-Lauf dieses Jobs meldete `CASES_RUN=12` und wurde dadurch rot. Der Job
+schaltet sie deshalb per `sudo sysctl -w
+kernel.apparmor_restrict_unprivileged_userns=0` frei; wer die Fälle 12–14 lokal
+auf so einem System fahren will, braucht denselben Knopf. Der Kernel kann es
+(`max_user_namespaces` ist hoch), es ist allein die Distro-Härtung.
+
 Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
 (#454).
 

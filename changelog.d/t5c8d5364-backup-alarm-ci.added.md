@@ -18,6 +18,11 @@ Assertions hingen daran, dass jemand das Skript von Hand startet.
   14 Faelle auf dem Runner wirklich gelaufen sind, statt es zu vermuten — die
   Faelle 12–14 brauchen unprivilegierte User-Namespaces und ein eigenes tmpfs;
   ein eigener Job-Step misst diese Faehigkeiten und protokolliert sie.
+- Die Fälle 12–14 brauchen unprivilegierte User-Namespaces; `ubuntu-latest`
+  (24.04) sperrt die per AppArmor (gemessen: `CASES_RUN=12`, der Job wurde
+  dadurch rot). Ein Job-Step schaltet sie per
+  `kernel.apparmor_restrict_unprivileged_userns=0` frei und prüft die Fähigkeit
+  fail-closed; danach laufen auf dem Runner alle 14 Fälle (`CASES_SKIPPED=0`).
 - `scripts/ci/test_all_green_matrix.py` lief selbst in keinem Job (`testpaths`
   kennt `scripts/tests`, nicht `scripts/ci`). Der Wrapper
   `scripts/tests/test_ci_all_green_matrix.py` bindet die Wahrheitstabelle in die
