@@ -47,18 +47,17 @@
 #   * Die Direktiven unten deckeln die GROESSE, nicht die Zeit. `roll_keep_for`
 #     wirkt ausschliesslich auf bereits rotierte Generationen und laeuft erst,
 #     wenn eine neue Datei entsteht; die aktive `access.log` erfasst es nie.
-#     Ein zeitlicher Ausloeser fehlt: `roll_size` ist der einzige. Bei dem
-#     Anfrageaufkommen eines Solo-Betriebs rotiert die Datei damit seltener
-#     als alle 14 Tage — die Frist waere eine Zusage ohne Mechanismus.
-#   * Caddy 2.8.4 kennt weder `roll_at` noch `roll_interval` und verwirft beide
-#     STILL (`caddy adapt` zeigt sie nicht im JSON, `validate` meldet nichts) —
-#     dasselbe Muster wie beim `mode`-Unterbefehl unten. Eine solche Zeile
-#     waere ein wirkungsloser Platzhalter.
 #   * Den zeitlichen Teil traegt deshalb ein Host-Cron, wie schon bei Backup
 #     und Retention-Purge: taeglich rotieren, Generationen aelter als 14 Tage
 #     loeschen. Einrichtung und Nachweis: RUNBOOK §Access-Logs.
 #     `roll_keep_for` bleibt als zweite, unabhaengige Grenze gesetzt — faellt
 #     der Cron aus, raeumt es bei der naechsten groessenbedingten Rotation auf.
+#   * Seit der Anhebung auf Caddy 2.11 (Juni 2026) kennt der file-Writer
+#     `roll_at` und wuerde einen zeitlichen Ausloeser selbst tragen; unter 2.8
+#     verwarf er die Zeile still. Der Cron bleibt trotzdem der Mechanismus:
+#     `roll_at` rotiert nur, es LOESCHT nichts — die Frist braucht beides, und
+#     der Cron tut beides in einer Zeile. Ein Wechsel waere eine eigene
+#     Aenderung mit eigenem Nachweis, nicht ein Nebeneffekt des Versionssprungs.
 #   * Cookie/Set-Cookie/Authorization/Proxy-Authorization redigiert Caddy per
 #     Default zu `REDACTED`; die globale Server-Option `log_credentials`, die
 #     das abschalten wuerde, ist bewusst NICHT gesetzt.
@@ -67,10 +66,8 @@
 #     `token`-Werte in der URL. Der Filter ersetzt sie, BEVOR etwas auf Platte
 #     geht.
 #   * Dateirechte bleiben beim Writer-Default 0600 (nur der Caddy-Prozess).
-#     KEIN `mode`-Unterbefehl: den kennt Caddy 2.8 noch nicht und der
-#     file-Writer verwirft unbekannte Unterbefehle STILL (`caddy adapt` zeigt
-#     sie nicht im JSON, `validate` meldet nichts) — eine `mode`-Zeile waere
-#     also ein wirkungsloser Platzhalter, der Sicherheit nur vortaeuscht.
+#     Ein expliziter `mode`-Unterbefehl waere ab 2.11 wirksam (unter 2.8 wurde
+#     er still verworfen), wuerde hier aber nur den Default wiederholen.
 (access_log) {
     log {
         output file /var/log/caddy/access.log {
@@ -99,8 +96,17 @@ api.{$DOMAIN} {
     # H5 / ADR-0010: /v1/internal/* (z.B. /metrics fuer Prometheus) ist ausschliesslich
     # intern erreichbar. Caddy blockt externen Zugriff direkt — kein Round-Trip in den
     # Container, damit auch versehentlich offene Endpoints nicht raus-leaken.
-    @internal path /v1/internal/*
+    @internal path /v1/internal/* /v1/internal
     respond @internal "Forbidden" 403
+    # Zweite Regel, gleiche Aussage: der Bereich ist auch dann gesperrt, wenn er
+    # abweichend notiert wird (Trennzeichen, Prozent-Kodierung, Gross/Klein).
+    # Ein Pfad-Matcher vergleicht die Schreibweise, nicht die Absicht — die
+    # Zugriffsentscheidung darf aber nicht an der Notation haengen. Gegenprobe:
+    # `test_internal_matcher_against_image.sh` faehrt die Schreibweisen durch.
+    # Ausdruecklich NICHT erfasst: Pfade, bei denen `internal` nur der Anfang
+    # eines laengeren Wortes ist — die gehoeren nicht zu diesem Bereich.
+    @internal_alt path_regexp (?i)^/v1[^a-z0-9]+internal([^a-z0-9]|$)
+    respond @internal_alt "Forbidden" 403
     # Body-Limit VOR der App (Security-Review 2026-08-13 M1): das Ingest-Limit
     # ist 20 MiB Nutzdaten (WHO2BE_INGEST_MAX_BYTES) — 32 MB deckt Base64-
     # Overhead + JSON-Rahmen; groessere Bodies verwirft Caddy, bevor Starlette

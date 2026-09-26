@@ -11,10 +11,12 @@ Aktive Sektionen:
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
 - [Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits) — Zugriffe nachvollziehen, `mem_limit` pruefen und anheben (W8/S1-S3)
+- [Caddy-Version anheben](#caddy-version-anheben-reverse-proxy-update) — Reverse-Proxy-Update: Header-Gegenprobe VOR dem Deploy, Betroffenheitspruefung, Rueckweg (W8/S6)
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS auf dem Host (Hetzner verschluesselt **nicht** serverseitig) + Verifikation (Befund P4/S2)
+- [Provisioning-Nachweise](#provisioning-nachweise) — Protokoll fuer SSH-Zustand und Host-Update-Automatik (W8/S4)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
@@ -62,6 +64,118 @@ $EDITOR /home/deploy/.ssh/authorized_keys
 chown deploy:deploy /home/deploy/.ssh/authorized_keys
 chmod 600 /home/deploy/.ssh/authorized_keys
 ```
+
+#### 2a — SSH-Zugang explizit schliessen
+
+Das Hetzner-Ubuntu-Image kommt mit `PasswordAuthentication no` und
+`PermitRootLogin prohibit-password` — bisher verliess sich dieses Runbook
+darauf. Das ist genau die Sorte Annahme, die schweigend kippt: ein
+Image-Update, ein Anbieterwechsel, eine von Hand gesetzte Zeile in einem
+Drop-in, und der Zustand ist ein anderer. Niemand merkt es, weil der
+Schluessel-Login weiter funktioniert.
+
+Deshalb wird der Zustand **gesetzt und nachgesehen**, nicht angenommen. Als
+Drop-in, nicht durch Editieren von `/etc/ssh/sshd_config`: Drop-ins
+ueberleben ein Paket-Update der Hauptdatei, und die erste passende Zeile
+gewinnt bei sshd — eine Datei, die fruehestmoeglich sortiert, setzt sich
+gegen spaetere Defaults durch.
+
+```bash
+cat > /etc/ssh/sshd_config.d/00-who2be-hardening.conf <<'EOF'
+# Passwort-Login aus: der Zugang laeuft ausschliesslich ueber die
+# authorized_keys des deploy-Users (Schritt 2).
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+# Kein root-Login, auch nicht mit Schluessel. Administratives laeuft
+# ueber den deploy-User und sudo — das hinterlaesst eine Spur.
+PermitRootLogin no
+EOF
+chmod 644 /etc/ssh/sshd_config.d/00-who2be-hardening.conf
+
+# Syntax pruefen, BEVOR neu geladen wird. Ein Tippfehler hier und der
+# naechste Verbindungsversuch scheitert — samt Deploy.
+sshd -t && systemctl reload ssh
+```
+
+> ⚠️ **Die laufende SSH-Sitzung offen lassen**, bis der Check unten gruen ist.
+> `reload` trennt bestehende Sitzungen nicht; wer sie vorher schliesst und
+> einen Fehler gemacht hat, kommt nur noch ueber die Hetzner-Console rein.
+
+**Verifikation — den Ist-Zustand ansehen, nicht die Datei:**
+
+```bash
+# Der EFFEKTIVE Wert, wie sshd ihn nach allen Drop-ins und Defaults sieht.
+# `grep` in sshd_config beantwortet die Frage NICHT: eine kommentierte oder
+# von einem Drop-in ueberschriebene Zeile sieht identisch aus.
+sshd -T | grep -iE '^(passwordauthentication|permitrootlogin|kbdinteractiveauthentication)'
+# → passwordauthentication no
+# → permitrootlogin no
+# → kbdinteractiveauthentication no
+```
+
+Steht dort `yes`, ist der Zugang offen — unabhaengig davon, was in einer
+Konfigurationsdatei steht. Ergebnis in die Protokoll-Tabelle unter
+[Provisioning-Nachweise](#provisioning-nachweise) eintragen.
+
+#### 2b — Sicherheitsupdates des Hosts automatisieren
+
+Die Container-Images halten Dependabot und der `audit`-Job aktuell
+(`.github/dependabot.yml`, seit W8 inklusive der Compose-Images). Fuer den
+**Host** gilt das nicht: Kernel und OpenSSL liegen ausserhalb jedes
+Container-Images und damit ausserhalb jedes Verfahrens, das dieses Repo hat.
+Ein Solo-Betrieb sieht hier ohne Automatik monatelang nichts.
+
+```bash
+apt-get update && apt-get install -y unattended-upgrades apt-listchanges
+# Interaktive Aktivierung (setzt APT::Periodic::Unattended-Upgrade "1")
+dpkg-reconfigure -plow unattended-upgrades
+```
+
+Nur Sicherheitsquellen, und ein Reboot nur im Wartungsfenster — ein
+Automatik-Reboot mitten am Tag ist ein selbstgemachter Ausfall:
+
+```bash
+cat > /etc/apt/apt.conf.d/52who2be-unattended <<'EOF'
+// Nur Security-Pockets. Normale Updates bleiben Handarbeit: sie koennen
+// Verhalten aendern, und das soll nicht nachts unbeobachtet passieren.
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+};
+// Kernel-Updates wirken erst nach einem Reboot. Ohne diese Zeile laeuft die
+// Box mit gepatchtem Paket und ungepatchtem laufenden Kernel weiter — der
+// Patch ist dann installiert, aber nicht wirksam.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+// Aufraeumen, damit /boot nicht durch alte Kernel volllaeuft.
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+EOF
+```
+
+Der Stack kommt nach einem Reboot von selbst zurueck: alle Dauerdienste
+stehen auf `restart: unless-stopped`. Bei aktiviertem LUKS-Volume
+(Schritt 3b) ist das **nicht** so — das Volume muss entsperrt werden, und
+ein unbeaufsichtigter Nacht-Reboot laesst den Stack dann unten. In diesem
+Fall `Automatic-Reboot "false"` setzen und die Reboots von Hand fahren.
+
+**Verifikation:**
+
+```bash
+# a) Timer laeuft
+systemctl list-timers apt-daily-upgrade.timer --all
+# b) Probelauf, ohne etwas zu installieren
+unattended-upgrade --dry-run --debug 2>&1 | tail -20
+# c) Was wurde bisher tatsaechlich eingespielt?
+grep -h '^20' /var/log/unattended-upgrades/unattended-upgrades.log | tail -10
+# d) Laeuft der laufende Kernel noch hinter dem installierten her?
+#    (Ausgabe verschieden ⇒ Reboot steht aus)
+uname -r && dpkg-query -W -f='${Version}\n' "linux-image-$(uname -r)"
+[ -f /var/run/reboot-required ] && cat /var/run/reboot-required
+```
+
+Beides — SSH-Zustand und Update-Automatik — gehoert in die
+[Provisioning-Nachweise](#provisioning-nachweise).
 
 ### 3 — Docker + Compose-v2
 
@@ -408,11 +522,13 @@ auf dem Host eingerichtet:
 
 **Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
 schreibt nach einem `mv` in den alten Inode weiter — die neue `access.log`
-entsteht erst beim Neu-Oeffnen. Nachgemessen gegen `caddy:2.8-alpine` (v2.8.4):
-weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncate`
-(kopieren + `truncate`) fuehrt zu einer Datei voller Nullbytes, weil der Writer
-am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
-**0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
+entsteht erst beim Neu-Oeffnen. Nachgemessen gegen `caddy:2.8-alpine` (v2.8.4)
+und nach dem Versionssprung erneut gegen `caddy:2.11.4-alpine` (v2.11.4), mit
+identischem Ergebnis in beiden: weder `USR1` noch `HUP` noch `caddy reload`
+legen die Datei neu an, `copytruncate` (kopieren + `truncate`) fuehrt zu einer
+Datei voller Nullbytes, weil der Writer am alten Offset weiterschreibt. Der
+Neustart tut es; gemessene Unterbrechung **0,7 s**. Deshalb nachts, und deshalb
+`mv` statt `truncate`.
 
 Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
 Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
@@ -480,6 +596,168 @@ Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
 Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
 anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
 OOM im Normalbetrieb waere schlechter als gar kein Limit.
+
+---
+
+## Caddy-Version anheben (Reverse-Proxy-Update)
+
+**Trigger:** der Pin `caddy:<tag>` in
+`deploy/hetzner/who2be/docker-compose.yml` wird im Repo gehoben (zuletzt
+`2.8-alpine` → `2.11.4-alpine`, W8/S6) und soll auf den Host.
+
+**Warum eine eigene Prozedur:** Caddy hat keine Datenmigration und keinen
+Rueckweg-Zwang — der Rueckweg ist das alte Image. Das Risiko liegt woanders:
+das `Caddyfile` traegt vier Vhosts, die Security-Header und vier
+unterschiedliche CSPs. Verschiebt eine neue Version eine Direktive oder deren
+Auswertung, laeuft der Proxy weiter und liefert **stillschweigend** andere
+Header. Das faellt nicht beim Start auf, sondern irgendwann — oder nie.
+
+Deshalb ist die Reihenfolge hier umgekehrt zum GoTrue-Fall: **zuerst pruefen,
+dann anfassen.** Die Pruefung laeuft lokal, nicht auf dem Server.
+
+### 1 — Vor dem Deploy: gegen das neue Image pruefen (lokal)
+
+```bash
+# a) Adaptiert das neue Image dieselbe Konfiguration?
+#    Beide Aufrufe geben in Zeile 1 das Config-JSON aus; sind die identisch,
+#    versteht die neue Version das Caddyfile exakt wie die alte.
+for tag in 2.8-alpine 2.11.4-alpine; do
+  docker run --rm \
+    -e DOMAIN=example.test -e ACME_EMAIL=ops@example.test \
+    -e VITE_SUPABASE_URL=https://supabase.example.test \
+    -v "$(pwd)/deploy/hetzner/Caddyfile":/etc/caddy/Caddyfile:ro \
+    "caddy:$tag" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+    2>/dev/null | head -1 > "/tmp/caddy-adapt-$tag.json"
+done
+diff /tmp/caddy-adapt-2.8-alpine.json /tmp/caddy-adapt-2.11.4-alpine.json \
+  && echo "Config-JSON identisch"
+
+# b) Kommen die Header nach dem Sprung noch an? Das ist der eigentliche Check.
+#    Ohne Argument nimmt das Skript den Pin aus dem Compose.
+bash deploy/hetzner/tests/test_headers_against_image.sh
+# Gegenprobe mit der Altversion — beide muessen gruen sein:
+bash deploy/hetzner/tests/test_headers_against_image.sh 2.8-alpine
+
+# c) Haelt die Zugriffsregel des api-Vhosts nach dem Sprung noch? Header und
+#    Zugriffsentscheidung sind zwei verschiedene Fragen: (b) prueft, was
+#    zurueckkommt, (c) prueft, was ueberhaupt durchgelassen wird. Wie ein Proxy
+#    eine Anfrage vor dem Regelvergleich aufbereitet, ist Verhalten, das sich
+#    zwischen Versionen aendern darf — also wird es gemessen, nicht angenommen.
+bash deploy/hetzner/tests/test_internal_matcher_against_image.sh
+bash deploy/hetzner/tests/test_internal_matcher_against_image.sh 2.8-alpine
+```
+
+> ⛔ **Ist (b) nicht gruen, wird die Version nicht gehoben.** Ein kaputter
+> Reverse-Proxy auf dem Produktivserver kostet mehr als ein veralteter.
+
+**Messprotokoll des Sprungs 2.8.4 → 2.11.4** (2026-09-26, lokal gegen die
+echten Images gefahren):
+
+| Pruefung | 2.8.4 | 2.11.4 |
+|---|---|---|
+| `caddy validate` | gruen | gruen |
+| `caddy adapt` Config-JSON | Referenz | **byte-identisch** |
+| `test_headers.sh` (9 Header + 403 + 404) | gruen | gruen |
+| `test_internal_matcher_against_image.sh` | gruen | gruen |
+| CSP der Vhosts app/supabase/mcp | gesetzt | unveraendert |
+| Log-Rotation: legt nur `restart` die Datei neu an? | ja | ja |
+| Dateirechte `access.log` ohne `mode` | `0600` | `0600` |
+
+Verhaltensunterschiede, die dabei auffielen — beide ohne Wirkung auf diese
+Konfiguration, aber der Vollstaendigkeit wegen benannt:
+
+- **`Via: 1.1 Caddy`** kommt in 2.11 als neuer Antwort-Header hinzu. Er nennt
+  die Proxy-Stufe, nicht die Version, und steht nicht im Widerspruch zum
+  `-Server` im Snippet (das die Caddy-**Version** verbarg). Wer ihn nicht
+  will, setzt `header -Via` neben `-Server`.
+- **`roll_at`/`mode`** im file-Log-Writer sind ab 2.11 wirksam; 2.8 verwarf
+  beide still. Folgen fuer die Aufbewahrungsfrist: keine — siehe
+  [Access-Logs](#access-logs--ressourcen-limits), die Frist traegt weiter der
+  Host-Cron, weil `roll_at` rotiert, aber nicht loescht.
+
+### 2 — Betroffenheit der Version gegen DIESE Konfiguration pruefen
+
+Eine CVE-Liste im Release-Text sagt nicht, ob **dieser** Stack betroffen ist.
+Fuer 2.11.1 waren die sechs Meldungen `CVE-2026-27585` bis `-27590`; gegen das
+Caddyfile hier gelesen:
+
+| CVE | Betrifft | Hier |
+|---|---|---|
+| `-27590` FastCGI `split_path` | `php_fastcgi`/`fastcgi` | **nein** — keine FastCGI-Direktive im Caddyfile |
+| `-27589` Admin-API cross-origin | Admin-Endpoint erreichbar | **nein** — Default `127.0.0.1:2019`, kein `ports:`-Mapping |
+| `-27588` `host`-Matcher ab >100 Hosts | grosse Host-Listen | **nein** — vier Vhosts |
+| `-27587` `path`-Matcher mit `%xx` | path-basierte Zugriffsregeln | **die einzige relevante Stelle** (siehe unten) |
+| `-27586` TLS-Client-Auth faellt offen | `client_auth` konfiguriert | **nein** — nicht konfiguriert |
+| `-27585` Glob im `file`-Matcher | `file_server`/`file`-Matcher | **nein** — kein `file_server` |
+
+Die einzige Zugriffsentscheidung an einem Matcher ist die 403-Regel fuer
+`/v1/internal` im api-Vhost. Genau dort wurde die Betroffenheit deshalb
+ausgefahren statt angenommen: beide Versionen wurden mit einer Reihe
+abweichender Schreibweisen desselben Pfades beschickt (Gross/Klein,
+Prozent-Kodierung einfach und doppelt, alternative Trennzeichen,
+`.`-Segment, `..`-Aufstieg, Doppel-Trenner, Semikolon-Parameter, kodiertes
+NUL) — gegen ein Backend, das auf diesem Bereich absichtlich antwortet,
+damit ein 403 wirklich Caddy zuzuschreiben ist und nicht dem Zufall.
+
+Ergebnis: **2.8.4 und 2.11.4 verhalten sich identisch** — der Versionssprung
+aendert an dieser Stelle nichts, in keine Richtung. Das Verhalten haengt
+allerdings ueberhaupt an der Schreibweise, und wie ein Proxy eine Anfrage vor
+dem Regelvergleich aufbereitet, ist Implementierungsverhalten, das sich
+zwischen Versionen aendern darf. Eine Zugriffsentscheidung darf daran nicht
+haengen. Die Regel im `Caddyfile` erfasst deshalb seit diesem Stand zusaetzlich
+die abweichenden Notationen desselben Bereichs, waehrend Pfade, in denen
+`internal` nur der Wortanfang ist, weiterhin durchgehen. Dauerhaft belegt wird
+das von `test_internal_matcher_against_image.sh`, das bei jedem kuenftigen
+Versionssprung mitlaeuft (Schritt 1c) — der eigentliche Gewinn dieser Pruefung
+ist nicht der einmalige Befund, sondern dass die Frage ab jetzt gestellt wird.
+
+Der Sprung selbst schliesst hier also keine nachgewiesene offene Stelle; er
+schliesst den **Abstand** von zwei Jahren zur gepflegten Linie, und das ist der
+Grund, aus dem er gemacht wird.
+
+### 3 — Deploy
+
+```bash
+cd /opt/who2be
+
+# 1) Neuen Stand holen (traegt den neuen Pin)
+git pull --ff-only
+
+# 2) Nur das caddy-Image ziehen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env pull caddy
+
+# 3) Nur caddy neu starten — API, Web und MCP bleiben oben
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env up -d caddy
+```
+
+### 4 — Verifikation auf dem Server
+
+```bash
+# a) Das LAUFENDE Image traegt den neuen Tag (nicht nur das gezogene)
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env images caddy
+# → caddy   2.11.4-alpine
+
+# b) Header und CSPs gegen die echte Domain — derselbe Test wie in Schritt 1,
+#    jetzt gegen Produktion
+bash deploy/hetzner/tests/test_headers.sh "https://api.${DOMAIN}"
+
+# c) Das Zertifikat ist noch das gueltige LE-Cert (kein Rueckfall auf die
+#    interne CA nach dem Neustart)
+echo | openssl s_client -connect "api.${DOMAIN}:443" -servername "api.${DOMAIN}" 2>/dev/null \
+  | openssl x509 -noout -issuer -dates
+# → issuer= …Let's Encrypt…
+
+# d) Keine Fehler im Startvorgang
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env logs --tail 50 caddy | grep -i 'error\|warn'
+```
+
+**Rueckweg:** den alten Tag im Compose eintragen und Schritt 3 wiederholen.
+Caddy haelt keinen Zustand, der eine Version voraussetzt; `caddy-data`
+(Zertifikate) ist zwischen den Minors kompatibel.
 
 ---
 
@@ -935,6 +1213,46 @@ Klartext-Backups geschrieben.
 | Datum | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
 |---|---|---|---|
 | — | — | — | — |
+
+---
+
+## Provisioning-Nachweise
+
+Zwei Einstellungen aus dem Provisioning sind **nicht** aus dem laufenden
+Betrieb erkennbar: der SSH-Zugang (Schritt 2a) und die Host-Update-Automatik
+(Schritt 2b). Beide fallen nicht auf, wenn sie fehlen — der
+Schluessel-Login funktioniert auch bei offenem Passwort-Login, und ein Host
+ohne Sicherheitsupdates laeuft so zuverlaessig wie ein gepatchter. Genau
+deshalb wird das Ergebnis hier abgelegt: die Tabelle ist der einzige Ort, an
+dem eine spaetere Pruefung sehen kann, ob der Schritt je gelaufen ist.
+
+Eingetragen wird die **Ausgabe der Verifikations-Kommandos**, nicht „erledigt".
+Ein Haken ohne Ausgabe belegt nichts.
+
+### SSH-Zugang (Schritt 2a)
+
+Quelle: `sshd -T | grep -iE '^(passwordauthentication|permitrootlogin|kbdinteractiveauthentication)'`
+
+| Datum | Host | `passwordauthentication` | `permitrootlogin` | Ausgefuehrt von |
+|---|---|---|---|---|
+| — | — | — | — | — |
+
+### Host-Sicherheitsupdates (Schritt 2b)
+
+Quelle: `systemctl list-timers apt-daily-upgrade.timer --all` +
+`unattended-upgrade --dry-run`
+
+| Datum | Host | Timer aktiv | Dry-run ohne Fehler | Automatic-Reboot | Ausgefuehrt von |
+|---|---|---|---|---|---|
+| — | — | — | — | — | — |
+
+**Wiedervorlage.** Eine einmal gesetzte Automatik kann still ausfallen — ein
+kaputtes Drop-in, ein deaktivierter Timer, ein aufgebrauchtes `/boot`. Die
+vier Verifikations-Kommandos aus Schritt 2b gehoeren deshalb in denselben
+Quartals-Durchgang wie die uebrigen Betriebs-Checks (siehe
+[Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits)). Faellt
+Punkt (d) auf — laufender Kernel hinter dem installierten —, steht ein Reboot
+aus; das ist kein Fehler der Automatik, sondern ihr offener Rest.
 
 ---
 

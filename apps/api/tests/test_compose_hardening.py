@@ -188,19 +188,85 @@ def test_caddy_access_log_keeps_the_secondary_time_bound() -> None:
     assert "roll_keep_for 336h" in directives
 
 
-def test_caddy_does_not_use_directives_this_version_ignores() -> None:
-    """Keine Zeitrotations-Direktive, die Caddy 2.8 still verwirft.
+def test_caddy_image_stays_on_a_maintained_version() -> None:
+    """Der Caddy-Pin bleibt auf einem gepflegten Minor.
 
-    ``roll_at``/``roll_interval`` kennt der file-Writer dieser Version nicht
-    und laesst sie beim Adaptieren kommentarlos weg — gegen das Binary
-    geprueft. Eine solche Zeile saehe nach durchgesetzter Frist aus und waere
-    wirkungslos; genau davor schuetzt dieser Test.
+    Der Befund, der zu diesem Test fuehrte, war kein Konfigurationsfehler,
+    sondern Zeit: der Pin stand zwei Jahre auf 2.8.4 (Mai 2024), und niemandem
+    fiel es auf, weil ein alter Reverse-Proxy genauso zuverlaessig laeuft wie
+    ein neuer — bis zum Tag, an dem er es nicht tut. Dependabot meldet den
+    Rueckstand jetzt (``docker-compose``-Ecosystem), aber eine Meldung, die
+    niemand liest, ist kein Mechanismus.
+
+    Deshalb eine untere Grenze im Test: ein Rueckfall unter 2.11 faellt hier
+    auf und nicht erst in einem Audit. Die Grenze ist absichtlich ein Minor
+    und keine Patch-Version — sonst wuerde jeder Dependabot-Patch-PR diesen
+    Test rot faerben und der Test waere das Problem statt die Absicherung.
+    """
+    text = _APP_COMPOSE.read_text(encoding="utf-8")
+    pins = re.findall(r"^\s*image:\s*caddy:(\S+)\s*$", text, flags=re.MULTILINE)
+    assert pins, "kein caddy-Image-Pin gefunden — Dienst umbenannt oder entfernt?"
+    for pin in pins:
+        match = re.match(r"(\d+)\.(\d+)", pin)
+        assert match, f"Caddy-Pin {pin!r} nennt keine lesbare Version"
+        major, minor = int(match.group(1)), int(match.group(2))
+        assert (major, minor) >= (2, 11), (
+            f"Caddy-Pin {pin!r} liegt unter 2.11 — die Route-/Auth-Matcher- und "
+            "TLS-Client-Auth-Korrekturen dieses Minors fehlen dann wieder"
+        )
+
+
+def test_caddy_rotation_directives_match_the_documented_mechanism() -> None:
+    """Keine Zeitrotations-Direktive, solange der Cron die Frist traegt.
+
+    Der Grund hat sich mit dem Versionssprung geaendert, das Ergebnis nicht:
+    Unter 2.8 war ``roll_at`` wirkungslos — der file-Writer verwarf es beim
+    Adaptieren still. Ab 2.11 kennt er es (gegen beide Binaries geprueft), aber
+    ``roll_at`` **rotiert** nur; es loescht nichts. Die 14-Tage-Frist braucht
+    beides, und getragen wird sie vom Host-Cron aus dem RUNBOOK, der beides in
+    einer Zeile tut.
+
+    Eine ``roll_at``-Zeile hier waere deshalb keine zweite Absicherung, sondern
+    eine zweite, halbe Zustaendigkeit fuer dieselbe Frist — und die Sorte
+    Doppelung, bei der spaeter niemand mehr sagen kann, welche Seite die Frist
+    eigentlich durchsetzt. Wer auf ``roll_at`` umstellen will, nimmt dem Cron
+    die Rotation ausdruecklich ab und belegt das; als stille Ergaenzung nicht.
     """
     directives = _caddyfile_directives()
-    for ignored in ("roll_at", "roll_interval", "mode "):
+    for ignored in ("roll_at", "roll_interval"):
         assert ignored not in directives, (
-            f"{ignored!r} wird von Caddy 2.8 still verworfen — "
-            "wirkungsloser Platzhalter statt durchgesetzter Einstellung"
+            f"{ignored!r} neben dem RUNBOOK-Cron — zwei halbe Zustaendigkeiten "
+            "fuer dieselbe Frist statt einer ganzen"
+        )
+    # `mode` stand bis zur Anhebung mit in dieser Liste, und zwar mit demselben
+    # Argument wie `roll_at`: 2.8 verwarf es still. Ab 2.11 wird es gesetzt
+    # (gegen das Binary geprueft), es ist also kein Platzhalter mehr und hat in
+    # einer Verbotsliste nichts zu suchen. Ungeprueft bleibt es trotzdem nicht —
+    # siehe `test_caddy_access_log_does_not_widen_file_permissions`.
+
+
+def test_caddy_access_log_does_not_widen_file_permissions() -> None:
+    """Die Logdatei-Rechte bleiben beim Writer-Default 0600.
+
+    Nachgemessen in beiden Images (2.8.4 und 2.11.4): ohne ``mode``-Unterbefehl
+    legt der file-Writer ``access.log`` als ``-rw-------`` an, also nur fuer den
+    Caddy-Prozess lesbar. Das ist die Eigenschaft, die zaehlt — nicht die
+    Abwesenheit einer bestimmten Zeile.
+
+    Seit 2.11 ist ``mode`` wirksam und koennte die Rechte auch **weiter** machen,
+    still und ohne dass etwas ausfaellt: eine gruppen- oder weltlesbare
+    Logdatei mit IP-Adressen und User-Agents faellt im Betrieb durch nichts
+    auf. Deshalb wird hier nicht ``mode`` verboten, sondern nur das Lockern:
+    ein ``mode`` mit Rechten fuer Gruppe oder Andere ist abgewiesen, ein
+    ausdrueckliches ``mode 0600`` waere erlaubt.
+    """
+    for match in re.finditer(
+        r"^\s*mode\s+0?([0-7])([0-7])([0-7])\s*$", _caddyfile_directives(), flags=re.MULTILINE
+    ):
+        owner, group, others = (int(g) for g in match.groups())
+        assert group == 0 and others == 0, (
+            f"Access-Log-Modus 0{owner}{group}{others} oeffnet die Datei ueber den "
+            "Caddy-Prozess hinaus — sie traegt IP-Adressen und User-Agents (V12 im VVT)"
         )
 
 
@@ -290,3 +356,53 @@ def test_caddy_access_log_lives_on_a_volume() -> None:
     mounts = [str(v) for v in caddy["volumes"]]
     assert any(m.startswith("caddy-logs:/var/log/caddy") for m in mounts), mounts
     assert "caddy-logs" in data["volumes"]
+
+
+def test_internal_area_is_blocked_by_more_than_one_spelling() -> None:
+    """Die Zugriffsregel fuer den internen API-Bereich haengt nicht an der Notation.
+
+    Ein Pfad-Matcher vergleicht Zeichenfolgen. Ob zwei Schreibweisen desselben
+    Pfades vor diesem Vergleich auf eine Form gebracht werden, ist Verhalten des
+    Proxys und darf sich zwischen Versionen aendern — eine Zugriffsentscheidung
+    darf daran nicht haengen. Deshalb traegt der api-Vhost neben der
+    buchstaeblichen Regel eine zweite, die denselben Bereich unabhaengig von der
+    Notation erfasst.
+
+    Dieser Test ist die statische Haelfte des Nachweises: er haelt die zweite
+    Regel im Caddyfile fest und laeuft in jeder CI mit. Die dynamische Haelfte —
+    kommt gegen ein echtes Image wirklich nichts durch? — liegt in
+    ``deploy/hetzner/tests/test_internal_matcher_against_image.sh``, weil sie
+    einen laufenden Container braucht.
+    """
+    directives = _caddyfile_directives()
+    assert "respond @internal " in directives, (
+        "buchstaebliche 403-Regel fuer den internen Bereich fehlt"
+    )
+    assert "@internal_alt path_regexp" in directives, (
+        "zweite, notationsunabhaengige Regel fehlt — der Schutz haengt dann an "
+        "der Schreibweise; Gegenprobe: test_internal_matcher_against_image.sh"
+    )
+    assert "respond @internal_alt " in directives, (
+        "@internal_alt ist definiert, aber nichts antwortet darauf"
+    )
+
+
+def test_version_jump_docs_do_not_overclaim_the_matcher_result() -> None:
+    """Das Messprotokoll sagt, was gemessen wurde — nicht mehr.
+
+    Eine fruehere Fassung schloss aus „beide Versionen verhalten sich gleich"
+    auf „es kommt nichts durch". Das erste war gemessen, das zweite nicht, und
+    eine Doku, die mehr zusagt als sie geprueft hat, wird kein zweites Mal
+    nachgeprueft — geschlossen gemeldete Befunde sucht niemand erneut. Der Satz
+    steht zudem in einem oeffentlich lesbaren Repo.
+    """
+    for path in (
+        _HETZNER / "RUNBOOK.md",
+        _REPO_ROOT / "changelog.d",
+    ):
+        files = sorted(path.glob("*.md")) if path.is_dir() else [path]
+        for file in files:
+            text = file.read_text(encoding="utf-8")
+            assert "kein Durchgriff" not in text, (
+                f"{file.name}: Zusage, die ueber das Gemessene hinausgeht"
+            )
