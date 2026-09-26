@@ -230,6 +230,97 @@ class PlaybookWithResources(BaseModel):
     locale: str
 
 
+# ---------------------------------------------------------------------------
+# Payload-Budget (docs/mcp-payload-budget.md). Die Laufzeit des Konsumenten
+# deckelt eine EINZELNE Tool-Antwort; ueber der Schwelle wird die Antwort dort
+# weggelegt, statt dem Modell gezeigt zu werden — ohne Fehler an uns. Wer eine
+# zu grosse Antwort liefert, erfaehrt also nie, dass sie nicht angekommen ist.
+#
+# Gemessen ist die Ursache in allen Faellen dieselbe: die Antwort traegt den
+# BlockNote-Editor-Body mit, der denselben Text ein zweites Mal enthaelt — bei
+# `get_persona` sind rund 95 % der Antwort Struktur (`props`, `styles`,
+# `children`, Block-IDs) statt Inhalt. Der Zuschnitt `"text"` laesst genau
+# diese Struktur weg und behaelt den Inhalt.
+#
+# `"full"` bleibt ueberall Default — kein bestehender Konsument (Editor, Diff)
+# verliert etwas; der Agent waehlt den guenstigen Pfad selbst.
+_RESPONSE_FORMATS: frozenset[str] = frozenset({"full", "text"})
+
+
+def _validate_response_format(value: str) -> None:
+    """Weist einen unbekannten Zuschnitt ab, statt still `full` zu liefern."""
+    if value not in _RESPONSE_FORMATS:
+        allowed = ", ".join(sorted(_RESPONSE_FORMATS))
+        raise ToolError(f"Ungueltiges format: '{value}'. Erlaubt: {allowed}.")
+
+
+def _persona_without_blocks(persona: PersonaRead) -> PersonaRead:
+    """Persona-Kopie ohne den BlockNote-Profil-Body.
+
+    Der Profiltext steht im `body_rendered` der umgebenden Antwort bzw. im
+    gerenderten System-Prompt; `content.content.blocks` ist dieselbe Prosa als
+    Editor-Struktur. Alle uebrigen Felder (Beschreibung, Tags, Modi mit ihren
+    Triggern) bleiben unveraendert — der Agent braucht sie fuer seine Logik.
+    """
+    inner = persona.content.content
+    if inner is None:
+        return persona
+    return persona.model_copy(
+        update={
+            "content": persona.content.model_copy(
+                update={"content": inner.model_copy(update={"blocks": []})}
+            )
+        }
+    )
+
+
+def _playbook_without_body(playbook: PlaybookRead) -> PlaybookRead:
+    """Playbook-Kopie ohne das Editor-JSON in `content.body`.
+
+    Fuer Listen-Antworten: die Uebersicht beantwortet „welches Playbook passt\"
+    aus Name, Beschreibung, Tags und Triggern. Der Body gehoert in den
+    gezielten Einzelabruf, nicht in jeden Katalog-Eintrag.
+    """
+    return playbook.model_copy(update={"content": playbook.content.model_copy(update={"body": ""})})
+
+
+# Die inhaltstragenden („schweren\") Felder je Content-Modell und ihr leerer
+# Wert. Ein Versions-Snapshot traegt je nach Entitaet einen anderen Body; die
+# Historien-LISTE braucht keinen davon, weil sie die Frage „welche Versionen
+# gibt es\" beantwortet. Den Inhalt einer bestimmten Version liefert
+# `get_version`. Unbekannte Felder werden uebersprungen, damit ein neues
+# Content-Modell hier nichts bricht.
+_HEAVY_CONTENT_FIELDS: dict[str, object] = {
+    "body": "",  # PlaybookContent, SystemPromptTemplateContent
+    "blocks": [],  # ResourceContent, PersonaContent
+    "usage_notes": "",  # ExternalToolContent
+    "system_prompt": "",  # PersonaVersionContent (deprecated, aber bis 20k gross)
+}
+
+
+def _version_without_content_body(version: AnyVersionRead) -> AnyVersionRead:
+    """Versions-Snapshot ohne seinen Inhalts-Body (Metadaten bleiben).
+
+    Typ-agnostisch: jedes Content-Modell traegt seinen Body unter einem anderen
+    Namen (`body`, `blocks`, `usage_notes`). Geleert wird nur, was das jeweilige
+    Modell tatsaechlich hat; `version`, `status`, `locale`, `created_by` und
+    `created_at` bleiben unangetastet — sie sind der Zweck der Liste.
+    """
+    content = version.content
+    update = {
+        field: empty
+        for field, empty in _HEAVY_CONTENT_FIELDS.items()
+        if field in type(content).model_fields
+    }
+    if not update:
+        return version
+    inner = getattr(content, "content", None)
+    if inner is not None and "blocks" in type(inner).model_fields:
+        # PersonaVersionContent schachtelt das Profil noch eine Ebene tiefer.
+        update["content"] = inner.model_copy(update={"blocks": []})
+    return version.model_copy(update={"content": content.model_copy(update=update)})
+
+
 def _request_token(settings: Settings) -> str:
     """Der fuer DIESEN Aufruf gueltige API-Token.
 
@@ -373,9 +464,19 @@ async def whoami() -> WhoAmIRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
 async def get_persona(
-    identifier: str, locale: str | None = None, mode: str | None = None
+    identifier: str, locale: str | None = None, mode: str | None = None, format: str = "full"
 ) -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): die vollstaendige Antwort inklusive
+      `persona.content.content.blocks`, dem rohen BlockNote-Editor-Profil.
+      Fuer Konsumenten, die das Profil strukturell verarbeiten (Editor, Diff).
+    - `"text"`: die Bloecke bleiben leer; das Profil steht in `body_rendered`.
+      Beschreibung, Tags und `content.modes` (mit ihren Triggern) sind
+      unveraendert vorhanden. Fuer Agenten der guenstigere Pfad — das
+      Editor-JSON ist dasselbe Profil ein zweites Mal.
 
     Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
     deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
@@ -414,10 +515,15 @@ async def get_persona(
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
     nicht im `body_rendered`.
     """
+    _validate_response_format(format)
     client = await build_client()
     persona = await client.get_persona(identifier, locale)
     playbooks = await client.get_persona_playbooks(persona.id)
     body_rendered, applied_mode = await client.get_persona_rendered(persona.id, mode=mode)
+    if format == "text":
+        # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort bleibt
+        # unberuehrt. Das Profil kommt vollstaendig in `body_rendered` an.
+        persona = _persona_without_blocks(persona)
     return PersonaWithPlaybooks(
         persona=persona,
         playbooks=playbooks,
@@ -430,9 +536,24 @@ async def get_persona(
 @mcp.tool(output_schema=None)
 @with_tool_log("list_playbooks")
 async def list_playbooks(
-    tag: str | None = None, trigger: str | None = None, locale: str | None = None
+    tag: str | None = None,
+    trigger: str | None = None,
+    locale: str | None = None,
+    format: str = "full",
 ) -> list[PlaybookRead]:
     """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger.
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): jeder Eintrag traegt seinen vollstaendigen
+      `content.body` (Editor-JSON) — fuer Konsumenten, die den Katalog
+      strukturell verarbeiten.
+    - `"text"`: `content.body` bleibt je Eintrag leer. Name, Beschreibung,
+      Tags, Triggers, Typ und `compose_children` sind unveraendert vorhanden —
+      alles, was die Auswahl „welches Playbook passt\" traegt. Den Body holt
+      dann `fetch_playbook` fuer das EINE gewaehlte Playbook. Fuer einen
+      Katalog ist das der guenstigere Pfad: die Bodies aller Playbooks
+      zusammen sind ein Vielfaches dessen, was eine Uebersicht braucht.
 
     `locale` ist seit „Ein Element, eine Sprache" (Plan 2026-07-24) ein
     optionaler Sprachfilter: `None` (Default) liefert Playbooks aller Sprachen,
@@ -445,8 +566,12 @@ async def list_playbooks(
     — die Komposition ist so ohne `fetch_playbook`-Roundtrip sichtbar; die
     vollen Sub-Playbook-Inhalte liefert weiterhin `fetch_playbook`.
     """
+    _validate_response_format(format)
     client = await build_client()
-    return await client.list_playbooks(tag, trigger, locale)
+    playbooks = await client.list_playbooks(tag, trigger, locale)
+    if format == "text":
+        return [_playbook_without_body(playbook) for playbook in playbooks]
+    return playbooks
 
 
 @mcp.tool(output_schema=None)
@@ -577,8 +702,16 @@ async def list_resources(
 
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_agent")
-async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
+async def fetch_agent(agent_id: str, format: str = "full") -> AgentWithRenderedPrompt:
     """Laedt einen Agent samt Persona + gerendertem Systemprompt (Placeholder bereits expandiert).
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): inklusive `persona.content.content.blocks`, dem
+      rohen BlockNote-Editor-Profil.
+    - `"text"`: die Bloecke bleiben leer. Der gerenderte System-Prompt traegt
+      das Profil ohnehin schon als Plain-Text — die Bloecke sind dieselbe
+      Prosa ein zweites Mal. Alle uebrigen Felder bleiben unveraendert.
 
     Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
     (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
@@ -591,12 +724,17 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
     Agenten rendern (fremde UUID => „nicht gefunden"). Fuer die Konfig anderer
     Agenten — etwa direkt nach `create_agent` — nimm `get_agent`/`list_agents`.
     """
+    _validate_response_format(format)
     try:
         parsed = UUID(agent_id)
     except ValueError as exc:
         raise ToolError(f"Ungueltige Agent-UUID: '{agent_id}'.") from exc
     client = await build_client()
-    return await client.get_agent_rendered(parsed)
+    agent = await client.get_agent_rendered(parsed)
+    if format == "text":
+        # Nur die Antwort-Kopie; `system_prompt_rendered` behaelt das Profil.
+        agent = agent.model_copy(update={"persona": _persona_without_blocks(agent.persona)})
+    return agent
 
 
 @mcp.tool(output_schema=None)
@@ -814,9 +952,21 @@ async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyU
 @mcp.tool(output_schema=None)
 @with_tool_log("list_versions")
 async def list_versions(
-    entity_type: EntityType, entity_id: str, locale: str | None = None
+    entity_type: EntityType, entity_id: str, locale: str | None = None, format: str = "full"
 ) -> list[AnyVersionRead]:
     """Listet die Versions-Historie eines Persona-/Playbook-/Resource-Elements.
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): jeder Eintrag traegt seinen vollstaendigen `content`.
+    - `"text"`: der Inhalts-Body jedes Eintrags bleibt leer (`content.body` /
+      `content.blocks` / `content.usage_notes`, je Entitaet). `version`,
+      `status`, `locale`, `created_by` und `created_at` bleiben vollstaendig —
+      das ist, was die Frage „welche Versionen gibt es\" beantwortet. Den
+      Inhalt einer BESTIMMTEN Version holt dann `get_version`, den Unterschied
+      zweier Staende `diff_versions`. Bei einem Element mit langer Historie ist
+      der volle Zuschnitt die Historie mal dem Body — fast immer mehr, als die
+      Frage braucht.
 
     Jeder Eintrag traegt `version`, `status` (draft/review/active/inactive),
     `locale` (Historienwert — die Sprache, in der DIESE Version geschrieben
@@ -828,9 +978,13 @@ async def list_versions(
     Variantenwahl) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
     IGNORIERT — die Historie gehoert zu genau EINEM Element.
     """
+    _validate_response_format(format)
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
-    return await client.list_versions(entity_type, parsed, locale)
+    versions = await client.list_versions(entity_type, parsed, locale)
+    if format == "text":
+        return [_version_without_content_body(version) for version in versions]
+    return versions
 
 
 @mcp.tool(output_schema=None)
