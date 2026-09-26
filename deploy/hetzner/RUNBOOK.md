@@ -504,12 +504,23 @@ und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
 Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
 Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
 
-Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
-auf dem Host eingerichtet:
+Der Cron ruft **ein Skript**, keine Kommandokette:
+`deploy/hetzner/scripts/rotate-access-log.sh`. Das ist keine Stilfrage, sondern
+die Lehre aus einer verketteten Fassung: dort hing die Loeschung an der
+Rotation, und die Rotation scheitert im Normalbetrieb regelmaessig — Caddy legt
+`access.log` erst beim **ersten Request** an, eine Nacht ohne Anfrage hatte also
+gar keine aktive Datei. Das Skript trennt die drei Teile:
+
+1. **Rotieren** — nur, wenn eine aktive Datei existiert. Fehlt sie, ist das der
+   normale Zustand eines Tages ohne Anfragen und **kein** Fehler.
+2. **Loeschen** — laeuft **immer**, unabhaengig von Schritt 1, und deckt **beide**
+   Namensklassen: `access.log.<ts>.gz` (aus diesem Skript) und
+   `access-<ts>.log.gz` (Caddys eigene groessenbedingte Rotation).
+3. **Caddy neu starten** — nur nach einer Rotation.
 
 ```bash
 # Host-Crontab des Deploy-Users (crontab -e):
-30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+30 4 * * * cd /opt/who2be && bash deploy/hetzner/scripts/rotate-access-log.sh >> /var/log/who2be-logrotate.log 2>&1
 ```
 
 **Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
@@ -520,24 +531,57 @@ weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncat
 am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
 **0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
 
-Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
-Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
-Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
-ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
-Quartals-Check:
+**Die Loeschschwelle liegt zwei Tage unter der Frist** (12 statt 14). Grund:
+eine Generation entsteht bis zu 24 h nach dem letzten Eintrag darin, und
+`find -mtime +N` greift erst ab einem Alter von *mehr* als N vollen Tagen.
+Mit 14 als Schwelle waere der aelteste Eintrag beim Loeschen bis zu 16 Tage alt.
+So sind die 14 Tage eine **Obergrenze**, kein Mittelwert.
+
+**`roll_keep_for 336h` ist kein Rueckfall fuer die Frist.** Es erfasst nur
+Caddys eigene Generationen (`access-<ts>.log.gz`); die des Skripts
+(`access.log.<ts>.gz`) fallen nicht darunter, und die aktive Datei erfasst es
+ohnehin nie. Fuer die Generationen des Skripts ist das Skript der **einzige**
+Loeschpfad — faellt es aus, wird die Frist ueberschritten. Deshalb ist der
+Fehlschlag nicht still:
+
+- **Exit != 0** bei jedem Fehlschlag (Rotation, Loeschung, Neustart), mit
+  `FEHLER`-Zeile im Log.
+- **Erfolgsstempel** `/var/log/who2be-logrotate.stamp` — nur ein *erfolgreicher*
+  Lauf schreibt ihn. Das ist der Unterschied zwischen „Cron lief und hatte
+  nichts zu tun" und „Cron lief nie": ein leeres Log-Verzeichnis sieht in beiden
+  Faellen gleich aus, der Stempel nicht.
+- **Optionaler Dead-Man's-Switch:** `ACCESS_LOG_HEARTBEAT_URL` wird **nur** bei
+  vollstaendigem Erfolg gepingt, gleiche Mechanik und gleicher self-hosted
+  Empfaenger wie beim Backup (siehe [Alarmweg](#alarmweg-dead-mans-switch)).
+  Leer (Default) = aus.
+
+Pruefung im Quartals-Check — **zuerst der Stempel**, denn er faengt den Fall,
+den ein Blick ins Verzeichnis nicht faengt:
 
 ```bash
-# Aelteste Generation — darf nicht aelter als 14 Tage sein
-docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  find /var/log/caddy -name 'access.log.*' -mtime +14
+# 1) Lief der Cron ueberhaupt? Stempel darf nicht aelter als ~26 h sein.
+#    Kein Stempel = der Cron war NIE erfolgreich.
+stat -c '%y %n' /var/log/who2be-logrotate.stamp || echo "FEHLT — Cron nie erfolgreich"
+find /var/log/who2be-logrotate.stamp -mmin +1560 -printf 'ZU ALT: %t\n'
 
-# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+# 2) Aelteste Generation — darf nicht aelter als 14 Tage sein (beide Klassen).
+#    Klammern sind Pflicht: ohne sie bindet -o schwaecher als das implizite -a
+#    und -mtime gaelte nur fuer das zweite Muster.
 docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  ls -lt /var/log/caddy
+  find /var/log/caddy \( -name 'access.log.*' -o -name 'access-*.log*' \) -mtime +14
+
+# 3) Fehlschlaege der letzten Laeufe
+grep FEHLER /var/log/who2be-logrotate.log | tail
 ```
 
-Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
-Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
+Das Verhalten des Skripts ist ausfuehrbar belegt, nicht nur beschrieben:
+`bash deploy/hetzner/tests/test_access_log_rotation.sh` faehrt die Rotation
+gegen echte Verzeichnisse im echten Caddy-Image — inklusive der Faelle „keine
+aktive Datei", „beide Namensklassen" und „Fehlschlag ist nicht still".
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: der Default
+`ACCESS_LOG_RETENTION_DAYS` im Skript, `deploy/hetzner/Caddyfile`,
+`docs/compliance/vvt.md` §7 und
 `docs/compliance/data-retention-and-erasure.md` §5.
 
 **Was nicht im Log steht:** Cookie-, Authorization- und
@@ -897,7 +941,7 @@ RESTIC_PASSWORD=${NEW} restic -r sftp:… restore latest \
 diff /etc/hostname /tmp/restic-rotation-test/etc/hostname  # erwartet: identisch
 ```
 
-**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf Stand, der nicht greift → Backup-Cron bricht still ab.
+**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf einen Stand, der nicht greift → der Backup-Cron scheitert; der Dead-Man's-Switch (unten) ist der Weg, das zu merken.
 
 ### BACKUP_GPG_RECIPIENT (lokaler pg_dump-Pfad, ADR-0011 C5a)
 
@@ -1215,11 +1259,11 @@ Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Co
 
 ### Alarmweg (Dead-Man's-Switch)
 
-Bis 2026-09-21 war ein fehlgeschlagener Offsite-Sync **still**: das Skript beendete
-sich mit Exit 0, der Cron-Lauf galt als erfolgreich. Storage Box voll, SSH-Key
-abgelaufen, Netzwerk weg — in allen drei Fällen lief der lokale Dump weiter und
-niemand erfuhr, dass es seit Wochen kein Offsite-Backup mehr gab. Seit Issue #541
-gilt (Owner-Entscheidung, Nachtrag in ADR-0011):
+Bis 2026-09-21 meldete ein fehlgeschlagener Offsite-Sync **Erfolg**: das Skript
+beendete sich mit Exit 0, der Cron-Lauf galt als gelungen. Der lokale Dump lief
+dabei weiter, das Offsite-Backup konnte aber ueber laengere Zeit ausfallen, ohne
+dass es jemand erfuhr. Seit Issue #541 gilt (Owner-Entscheidung, Nachtrag in
+ADR-0011):
 
 1. **Ehrlicher Exit-Code.** Scheitert `restic backup` oder `restic forget`, endet der
    Lauf mit Exit != 0. Der **lokale GPG-Dump bleibt dabei unangetastet** — er ist zu
@@ -1341,12 +1385,14 @@ docker compose exec db psql -U supabase_admin who2be_restore \
 
 **H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
 (Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
-Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
-einmal durchziehen und Datum hier protokollieren:
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck). Auflage: **nach jedem
+prod-Cutover einmal durchziehen und protokollieren** — Datum, Backup-Quelle,
+Restore-Ziel, Ergebnis des Count-Vergleichs, Blob-/Tabellen-Pruefung und
+ausfuehrende Person. Ein Drill ohne Protokolleintrag gilt als nicht gefahren.
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
-|---|---|---|---|---|---|
-| — | — | — | — | — | — |
+Das Protokoll selbst wird **betreiberseitig** gefuehrt, nicht in diesem Repo:
+es ist ein Betriebsnachweis und gehoert zu den Abnahme-Unterlagen (siehe
+`docs/compliance/c5-mapping.md`, betreiberseitige Nachweise).
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
@@ -1544,6 +1590,12 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
+- **Parallelitaet zum Retention-Cron ist unbedenklich** (gemessen 2026-09-26,
+  ADR-0049-Nachtrag): `VACUUM INTO` laeuft als **Leser** — ein 6 s offener
+  Snapshot liess 692 parallele Commits mit 0 Fehlern durch, `integrity_check`
+  danach `ok`. Es ist also **keine** Betriebsregel einzuhalten, die Backup und
+  `who2be-purge` auseinanderhaelt; dass die Cron-Zeiten (03:15 bzw. 03:30 UTC)
+  auseinanderliegen, ist Bequemlichkeit, keine Bedingung.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
@@ -1595,6 +1647,18 @@ Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
 `WHO2BE_TABLESTORE_DIR`-Werte wie die API — `docker compose run api` bringt
 beides mit, ein Lauf ausserhalb des Compose-Kontexts nicht.
 
+**Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
+ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert
+weder den Purge noch den Schreibpfad der API. Es ist also keine
+Reihenfolge-Regel einzuhalten.
+
+**Karenzfrist im Area-Store-Sweep:** eine Area-Datei mit kuerzlicher
+Schreibaktivitaet (juengstes `mtime` aus `.sqlite`/`-wal`/`-shm` unter 24 h)
+wird uebersprungen und im Log vermerkt, damit ein noch laufender Schreibvorgang
+sein Ergebnis nicht verliert. Das ist **kein Rueckstand und keine Aktion**: der
+naechste Lauf betrachtet die Datei erneut, und im Normalfall (keine
+Schreibaktivitaet) verschwindet sie wie bisher im selben Lauf.
+
 Ausgabe (zwei Zeilen, beide ins Log):
 
 ```
@@ -1608,6 +1672,7 @@ Worauf im Log zu achten ist:
 |---|---|---|
 | `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
 | `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `… bleibt in der Karenzfrist liegen` | Area-Datei mit kuerzlicher Schreibaktivitaet | **keine** — der naechste Lauf nimmt sie |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 

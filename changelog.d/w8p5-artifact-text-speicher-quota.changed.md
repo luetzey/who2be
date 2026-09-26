@@ -3,9 +3,7 @@
   Platz als vorher.
 
   Bisher zaehlte die Speichergrenze nur die abgelegten Dateien
-  (`wa_blob.size_bytes`); Artifact-Text fiel unter kein Kontingent und war damit
-  praktisch unbegrenzt (bis 500.000 Zeichen je Aufruf, gebremst nur durch das
-  Schreib-Rate-Limit — rechnerisch 15 MB/min, auch im Free-Tarif). Jetzt gilt
+  (`wa_blob.size_bytes`); Artifact-Text fiel unter kein Kontingent. Jetzt gilt
   ein Limit fuer alles: Artifact-Text zaehlt wie eine Datei, es gibt kein
   zweites Kontingent fuer Artifacts. Gezaehlt werden Bytes (UTF-8), nicht
   Zeichen; bei `append` der Zuwachs, und ein Loeschen oder ein schrumpfender

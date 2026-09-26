@@ -66,12 +66,14 @@ bzw. Dokumentations-Standards).
   [`oauth-e2e-staging.md`](oauth-e2e-staging.md),
   [`oauth-e2e-dokploy.md`](oauth-e2e-dokploy.md),
   [`frontend/smoke-checklist.md`](frontend/smoke-checklist.md)
-- [`cloud-hosting-owner-guide.md`](cloud-hosting-owner-guide.md) —
-  Owner-Leitfaden Cloud-Hosting bei Hetzner: Schritt-fuer-Schritt von der
-  leeren Box zum Launch, Tarif-/Limit-Diskussion, Missbrauchsschutz,
-  Datenhaltung, Backup-Strategie (Betreiber) — Analyse-/Vorschlagspapier,
-  Stand 2026-09-19; verbindlich fuer Tarife/Limits ist
-  [`licensing/plans.md`](licensing/plans.md)
+- Cloud-Hosting bei Hetzner: Der frueher hier verlinkte Owner-Leitfaden war ein
+  internes Analyse-/Vorschlagspapier an den Betreiber und liegt nicht mehr in
+  diesem Repo. Oeffentlich und aktuell sind seine Nachfolger:
+  [`cloud-erstinbetriebnahme.md`](cloud-erstinbetriebnahme.md) (was der Owner
+  vorbereiten muss),
+  [`../deploy/hetzner/RUNBOOK.md`](../deploy/hetzner/RUNBOOK.md) (Provisioning,
+  Betrieb, Backup/Restore) und
+  [`licensing/plans.md`](licensing/plans.md) (Tarife und Limits, verbindlich)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
 - [`auto-merge-agenten.md`](auto-merge-agenten.md) — der eine erlaubte Weg,

@@ -102,11 +102,11 @@ weiterer Workspaces. **Das ist eine bewusste Owner-Entscheidung vom
 2026-09-22, keine uebersehene Luecke** — bitte nicht als offener Befund wieder
 aufmachen. Zwei Gruende tragen sie:
 
-* **Der Umgehungspfad ist um Faktor 100 teurer.** Eine frisch angelegte Org hat
-  kein Mollie-Abo und faellt auf `CLOUD_FREE_ENTITLEMENT`, also 100 MiB statt
-  10 GiB je Workspace. Fuer die 50 GiB, die ein einzelnes Pro-Abo zusagt,
-  braeuchte es rund **500 Orgs** — jede mit bestaetigter Mailadresse und,
-  sobald das Captcha scharf geschaltet ist, je einem geloesten Captcha.
+* **Der Umgehungspfad ist teurer als der gedeckte Weg.** Eine frisch angelegte
+  Org hat kein Mollie-Abo und faellt auf `CLOUD_FREE_ENTITLEMENT`, also auf die
+  Free-Speichergrenze statt auf die des bezahlten Tarifs. Jede zusaetzliche Org
+  verlangt ausserdem eine eigene bestaetigte Mailadresse und, sobald das Captcha
+  scharf geschaltet ist, ein eigenes geloestes Captcha.
 * **Ein Org-Deckel traefe zuerst den ehrlichen Nutzer.** Organisationen sind
   das Mandanten-Modell dieses Produkts; eine Agentur mit acht Kunden legt
   berechtigt acht Orgs an. Speicher- und Token-Quote treffen, wer viel
@@ -115,9 +115,10 @@ aufmachen. Zwei Gruende tragen sie:
 
 **Gueltigkeitsbereich dieser Entscheidung.** Sie traegt, solange eine Free-Org
 nichts bekommt, was echtes Geld kostet. Kaemen LLM-Aufrufe, Mailversand in
-Menge oder Rechenzeit ins Free-Kontingent, ist die Rechnung neu zu machen: der
-Faktor 100 oben ist dann nicht mehr der richtige Massstab. Das ist kein offenes
-TODO, sondern die Bedingung, unter der die Entscheidung gilt.
+Menge oder Rechenzeit ins Free-Kontingent, ist sie neu zu bewerten: der
+Kostenabstand zwischen Free und bezahltem Tarif ist dann nicht mehr der
+richtige Massstab. Das ist kein offenes TODO, sondern die Bedingung, unter der
+die Entscheidung gilt.
 
 **Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
 Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**

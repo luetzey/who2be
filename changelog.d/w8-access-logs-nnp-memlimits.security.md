@@ -5,12 +5,20 @@
   SYS.1.6.A7, a basic requirement: storing container logging data "MUSS
   ausserhalb des Containers, mindestens auf dem Container-Host, erfolgen").
   Rotation is part of the same configuration — roughly 10 MiB per file and ten
-  compressed generations — so the log cannot fill the disk. The 14-day
-  retention period is enforced separately, by a nightly host cron that rotates
-  the active file and removes older generations; the Caddy directives cap size
-  rather than age, so on their own they would not hold the period. The runbook
-  documents the cron, why a restart rather than a signal is needed, and the
-  quarterly check that catches a silent cron failure.
+  compressed generations from Caddy's own size-based rotation — so the log
+  cannot fill the disk. The 14-day retention period is enforced separately, by
+  a nightly host cron running `deploy/hetzner/scripts/rotate-access-log.sh`:
+  the Caddy directives cap size rather than age, so on their own they would not
+  hold the period. That script is the only deletion path for the period;
+  Caddy's `roll_keep_for` only covers the generations Caddy itself creates and
+  is not a fallback for it. Each part of the script fails independently and
+  visibly — a night without a single request leaves no active file to rotate,
+  which must not stop the deletion — and only a successful run writes its
+  timestamp, so a cron that never ran is distinguishable from one that had
+  nothing to do. The runbook documents the cron, why a restart rather than a
+  signal is needed, and a quarterly check that starts from that timestamp. The
+  behaviour is covered by an executable test that runs the rotation against
+  real directories in the real Caddy image.
 
   Access logs carry IP addresses and user agents, a processing activity the
   record of processing activities already lists (V12, Art. 6(1)(f)); what it
