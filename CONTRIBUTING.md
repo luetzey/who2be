@@ -53,6 +53,61 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+### What must not go public
+
+This repository is public, and the history does not forget. Two classes of
+information stay out of committed files, commit bodies and PR descriptions:
+**(a)** security holes and ways around a limit, and **(b)** business internals
+(pricing strategy, margin, customer numbers). Planning and roadmap are
+explicitly *not* in scope here — they stay public. The rule itself lives in
+[`CLAUDE.md` § Security](CLAUDE.md#security), right next to the operator-host
+rule that has the same shape; the decision test below is its operational half.
+
+Apply it before you write, not after. Four questions, the order matters, the
+first "yes" decides. The test is quoted verbatim in the language it was
+reviewed in — do not paraphrase or translate it here, a second wording would be
+a second, diverging source:
+
+```text
+1. Nenne ich Route, Datei oder Zeile einer Luecke, die HEUTE offen ist?
+   → nicht oeffentlich. (Geschlossene Luecke: erlaubt und erwuenscht.)
+
+2. Koennte ein Leser meinen Text als Schritt-fuer-Schritt-Anleitung lesen,
+   um eine Grenze zu ueberschreiten? Nenne ich den Grenzwert, ab dem ein
+   Schutz nicht mehr greift?
+   → nicht oeffentlich.
+
+3. Rechne ich vor, was ein Umgehungsweg kostet oder einbringt?
+   → die Rechnung nicht oeffentlich; die Tatsache darf bleiben.
+
+4. Nenne ich einen Preis, eine Marge, einen Deckungsbeitrag, eine Kunden-
+   oder Umsatzzahl, die nicht schon auf der Website steht?
+   → nicht oeffentlich.
+
+Viermal Nein → oeffentlich, und zwar mit voller Begruendung.
+Die Auflage "begruende deine Entscheidung" bleibt bestehen — sie war richtig.
+```
+
+**The obligation to justify your decision in the commit is not withdrawn.**
+It was right, and it stays. A measurement of the recent history found 93 % of
+commit bodies to be detailed and harmless; deriving "justify less" from that
+finding trades internal traceability away for a problem that hangs on four
+narrow questions. Write the full reasoning — the test removes addresses and
+calculations, not thinking.
+
+**Where the reasoning cannot go public, it has a place.** It belongs in the
+card description on the board — not in the repository, not public — and the
+commit carries a pointer instead: *"Der Umgehungsweg ist in der Karte
+beschrieben."* That costs one sentence and resolves the conflict entirely.
+Note that **`.claude/plan/` is public as well and is not an escape hatch**: a
+plan file is committed like any other file and is covered by the same four
+questions. Neither is a PR description, a code comment or a test fixture.
+
+There is deliberately no CI keyword gate for this. A grep on words like
+"limit" or "gap" was measured against real commits and produced a 63 % false
+positive rate; a gate that noisy gets switched off. This is a review
+responsibility.
+
 ## Issue reference
 
 Every pull request states its issue reference in the body — `Closes #NNN`
@@ -213,7 +268,33 @@ python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
 # OSS license gate (ADR-0033) — fail-closed against copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
   --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
+# New tests must exercise behaviour (reports, does not block):
+uv run python scripts/check_effectful_tests.py --base origin/main
 ```
+
+### A test must exercise behaviour, not just text
+
+A test that reads a file and asserts a string in it stays green as long as the
+text is there — even when the thing the text describes does not work. It checks
+the description, not the behaviour. This error type occurred three times in one
+day and passed every existing check twice.
+
+`scripts/check_effectful_tests.py` flags **newly added** Python tests that read
+file contents, assert on them and never call the subject under test. It
+**reports without blocking**: roughly a fifth of its hits are legitimate string
+tests (documentation-drift guards, golden-file contracts), and a gate that
+blocks on day one is switched off by day three.
+
+A test that is rightly a text check carries a justified marker next to it:
+
+```python
+# effect-exempt: holds a documented figure against the registry, has no subject
+```
+
+The rule, the exemption path, the measurement behind the reporting-only
+decision and the method's limits (it parses Python — not the shell suites, not
+the web tests) are in
+[`docs/effectful-tests.md`](docs/effectful-tests.md).
 
 ### A skipped test is not a passing test
 

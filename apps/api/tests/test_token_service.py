@@ -162,26 +162,64 @@ def test_agent_bound_token_cannot_rotate() -> None:
     assert exc.value.status_code == 403
 
 
-# --- Admin-MFA-Gate (#469): `create`/`rotate` verlangen aal2 fuer `admin` ---
+# --- Rollen-Deckel: agent-gebundene Tokens erhalten hoechstens `editor` -----
+#
+# Diese Gruppe hat die frueheren `create`-Faelle des Admin-MFA-Gates (#469)
+# ersetzt, nicht verloren: `create` kann kein admin-Token mehr ausstellen, der
+# aal2-Zweig dort waere unerreichbar. Die MFA-Schwelle selbst steht unveraendert
+# weiter unten auf `rotate`, wo ein Bestands-Token aus der Zeit vor dem Deckel
+# noch `admin` tragen kann. Geprueft wird das VERHALTEN (welche Rolle der
+# erzeugte Token traegt bzw. welcher Grund kommt), nicht die Existenz eines
+# Aufrufs.
 
 
-def test_create_admin_role_from_aal1_session_requires_mfa() -> None:
-    ctx = _human_ctx(role=WorkspaceRole.admin, aal="aal1")
-    with pytest.raises(ApiGateError) as exc:
-        _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="admin-token", agent_id=uuid4())))
-    assert exc.value.status == 403
-    assert exc.value.reason == "mfa_required"
-
-
-def test_create_admin_role_from_aal2_session_succeeds() -> None:
+def test_create_rejects_explicitly_requested_admin_role() -> None:
+    # Ausdruecklich angefordert ⇒ ausdrueckliche Absage; ein stiller Deckel
+    # laege unter dem, was das Formular anzeigte.
     ctx = _human_ctx(role=WorkspaceRole.admin, aal="aal2")
-    result = _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="admin-token", agent_id=uuid4())))
-    assert result.role == WorkspaceRole.admin
+    with pytest.raises(ApiError) as exc:
+        _run(
+            _svc(_FakeRepo()).create(
+                ctx, TokenCreate(name="admin-token", role=WorkspaceRole.admin, agent_id=uuid4())
+            )
+        )
+    assert exc.value.status_code == 403
+    assert exc.value.reason == "agent_bound_role_capped"
+    # Die Meldung nennt den Grund fachlich, nicht bloss „verboten".
+    assert "editor" in exc.value.detail
+
+
+def test_create_caps_inherited_admin_role_to_editor() -> None:
+    # Ohne explizite Angabe ist die Rolle der Snapshot der Ersteller-Rolle und
+    # keine Wahl — ein Admin soll weiter Tokens anlegen koennen, sie erben dann
+    # `editor`. Kein 403: sonst koennte ein Admin ueberhaupt keinen Token mehr
+    # ausstellen.
+    ctx = _human_ctx(role=WorkspaceRole.admin, aal="aal2")
+    result = _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="token", agent_id=uuid4())))
+    assert result.role == WorkspaceRole.editor
     assert result.token.startswith("w2b_")
 
 
-def test_create_editor_role_from_aal1_session_unaffected_by_admin_gate() -> None:
-    # AC3: editor-Tokens sind vom Admin-MFA-Gate nicht betroffen.
+def test_create_caps_admin_role_regardless_of_mfa_session() -> None:
+    # Der Deckel ist absolut, nicht per MFA aufhebbar: eine aal1-Session laeuft
+    # in denselben Deckel, nicht in `mfa_required`. Sonst waere der Deckel nur
+    # eine Huerde und keine Grenze.
+    ctx = _human_ctx(role=WorkspaceRole.admin, aal="aal1")
+    result = _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="token", agent_id=uuid4())))
+    assert result.role == WorkspaceRole.editor
+
+
+def test_create_caps_admin_role_on_api_token_path() -> None:
+    # Auch der Maschinen-Pfad (ungebundener Bestands-Token, von `require_aal2`
+    # ausgenommen) kann kein admin-Token mehr weitergeben — genau der Weg, auf
+    # dem sich eine Admin-Rolle sonst selbst reproduziert haette.
+    ctx = _api_token_ctx(WorkspaceRole.admin)
+    result = _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="token", agent_id=uuid4())))
+    assert result.role == WorkspaceRole.editor
+
+
+def test_create_editor_role_unaffected_by_cap() -> None:
+    # Gegenprobe: der Regelfall bleibt unveraendert.
     ctx = _human_ctx(role=WorkspaceRole.editor, aal="aal1")
     result = _run(
         _svc(_FakeRepo()).create(
@@ -191,48 +229,21 @@ def test_create_editor_role_from_aal1_session_unaffected_by_admin_gate() -> None
     assert result.role == WorkspaceRole.editor
 
 
-def test_create_admin_role_via_api_token_is_exempt_from_mfa_gate() -> None:
-    # AC4: ein bestehender (ungebundener) API-Token ist vom Admin-MFA-Gate
-    # ausgenommen (Maschinen-Pfad, `require_aal2`s `is_api_token`-Ausnahme).
-    ctx = _api_token_ctx(WorkspaceRole.admin)
-    result = _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="admin-token", agent_id=uuid4())))
-    assert result.role == WorkspaceRole.admin
-
-
-def test_create_admin_role_without_aal_claim_allowed_onprem_fail_open(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # AC5: On-Prem ohne aal-Claim + WHO2BE_REQUIRE_MFA_ONPREM=false laeuft
-    # durch, emittiert aber das Warn-Event `aal_missing_onprem`.
-    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
-    monkeypatch.setattr(
-        "who2be_api.core.security.get_settings",
-        lambda: Settings(_env_file=None, require_mfa_onprem=False),  # type: ignore[call-arg]
-    )
-    ctx = _human_ctx(role=WorkspaceRole.admin, aal=None)
-    with capture_logs() as logs:
-        result = _run(
-            _svc(_FakeRepo()).create(ctx, TokenCreate(name="admin-token", agent_id=uuid4()))
+def test_create_editor_cannot_still_request_admin() -> None:
+    # Die aeltere Grenze bleibt zuerst wirksam: ein editor bekommt weiterhin
+    # `token_role_escalation` und nicht den neuen Deckel-Grund — die beiden
+    # Gruende beschreiben verschiedene Sachverhalte.
+    ctx = _human_ctx(role=WorkspaceRole.editor, aal="aal2")
+    with pytest.raises(ApiError) as exc:
+        _run(
+            _svc(_FakeRepo()).create(
+                ctx, TokenCreate(name="up", role=WorkspaceRole.admin, agent_id=uuid4())
+            )
         )
-    assert result.role == WorkspaceRole.admin
-    events = [entry for entry in logs if entry.get("event") == "aal_missing_onprem"]
-    assert len(events) == 1
-    assert events[0]["log_level"] == "warning"
+    assert exc.value.reason == "token_role_escalation"
 
 
-def test_create_admin_role_without_aal_claim_blocked_when_onprem_mfa_required(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # AC5: mit WHO2BE_REQUIRE_MFA_ONPREM=true greift das Gate auch On-Prem.
-    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
-    monkeypatch.setattr(
-        "who2be_api.core.security.get_settings",
-        lambda: Settings(_env_file=None, require_mfa_onprem=True),  # type: ignore[call-arg]
-    )
-    ctx = _human_ctx(role=WorkspaceRole.admin, aal=None)
-    with pytest.raises(ApiGateError) as exc:
-        _run(_svc(_FakeRepo()).create(ctx, TokenCreate(name="admin-token", agent_id=uuid4())))
-    assert exc.value.reason == "mfa_required"
+# --- Admin-MFA-Gate (#469) auf `rotate` (Bestands-Tokens mit `admin`) -------
 
 
 def test_rotate_admin_token_from_aal1_session_requires_mfa_before_new_secret_exists() -> None:
@@ -270,6 +281,45 @@ def test_rotate_admin_token_via_api_token_is_exempt_from_mfa_gate() -> None:
     repo = _FakeRepo(rotate_ret=_token(role=WorkspaceRole.admin))
     result = _run(_svc(repo, _FakePool(WorkspaceRole.admin)).rotate(ctx, uuid4()))
     assert result.token.startswith("w2b_")
+
+
+def test_rotate_admin_token_without_aal_claim_allowed_onprem_fail_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # AC5, vom `create`- auf den `rotate`-Pfad gezogen: `create` stellt seit dem
+    # Rollen-Deckel keine admin-Tokens mehr aus, ein Bestands-Token kann die
+    # Rolle aber noch tragen — die On-Prem-Ausnahme muss weiter belegt sein.
+    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
+    monkeypatch.setattr(
+        "who2be_api.core.security.get_settings",
+        lambda: Settings(_env_file=None, require_mfa_onprem=False),  # type: ignore[call-arg]
+    )
+    ctx = _human_ctx(role=WorkspaceRole.admin, aal=None)
+    repo = _FakeRepo(rotate_ret=_token(role=WorkspaceRole.admin))
+    with capture_logs() as logs:
+        result = _run(_svc(repo, _FakePool(WorkspaceRole.admin)).rotate(ctx, uuid4()))
+    assert result.token.startswith("w2b_")
+    events = [entry for entry in logs if entry.get("event") == "aal_missing_onprem"]
+    assert len(events) == 1
+    assert events[0]["log_level"] == "warning"
+
+
+def test_rotate_admin_token_without_aal_claim_blocked_when_onprem_mfa_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # AC5: mit WHO2BE_REQUIRE_MFA_ONPREM=true greift das Gate auch On-Prem —
+    # und zwar vor dem Rotate, es entsteht kein neues Secret.
+    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
+    monkeypatch.setattr(
+        "who2be_api.core.security.get_settings",
+        lambda: Settings(_env_file=None, require_mfa_onprem=True),  # type: ignore[call-arg]
+    )
+    ctx = _human_ctx(role=WorkspaceRole.admin, aal=None)
+    repo = _FakeRepo(rotate_ret=_token(role=WorkspaceRole.admin))
+    with pytest.raises(ApiGateError) as exc:
+        _run(_svc(repo, _FakePool(WorkspaceRole.admin)).rotate(ctx, uuid4()))
+    assert exc.value.reason == "mfa_required"
+    assert repo.rotated_hash is None
 
 
 def test_rotate_missing_token_skips_mfa_gate_and_still_raises_404() -> None:
