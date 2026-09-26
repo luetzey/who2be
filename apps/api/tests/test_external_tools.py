@@ -419,10 +419,16 @@ def test_external_tool_write_gates_require_capability(make_auth_headers: AuthFac
 def test_external_tool_transition_requires_promote_retire_for_active(
     make_auth_headers: AuthFactory,
 ) -> None:
-    """draft->review genuegt `external_tool_write`; review->active braucht
-    zusaetzlich `promote_retire` (WP-3-Luecke geschlossen: vorher war
-    `external_tool` NICHT in `version_status._WRITE_CAPABILITY`, jeder
-    agent-gebundene Token bekam dort hart 403/`none`)."""
+    """draft->review genuegt `external_tool_write`; review->active ist fuer einen
+    agent-gebundenen Token nicht mehr erreichbar.
+
+    Der Uebergang nach `active` verlangt laut ADR-0023 die Rolle `admin`
+    (`required_role_for_transition`), und die kann ein agent-gebundener Token
+    seit dem Rollen-Deckel nicht mehr tragen: das Rollen-Gate schlaegt vor dem
+    Capability-Gate zu, deshalb `insufficient_role` statt
+    `missing_capability`. Die Capability `promote_retire` allein genuegt damit
+    nicht mehr — Promote/Retire ist eine menschliche Handlung geworden.
+    """
     owner = fresh_user_id()
     ws = setup_workspace(owner)
     auth = make_auth_headers(owner)
@@ -441,13 +447,16 @@ def test_external_tool_transition_requires_promote_retire_for_active(
             )
             assert to_review.status_code == 200, to_review.text
 
-            # review -> active NICHT erlaubt ohne promote_retire.
+            # review -> active NICHT erlaubt: der agent-gebundene Token ist
+            # `editor`, der Uebergang verlangt `admin`.
             denied_active = client.post(
                 f"{base}/{tid}/versions/1/transition", json={"to": "active"}, headers=write_only
             )
             assert denied_active.status_code == 403, denied_active.text
-            assert denied_active.json()["reason"] == "missing_capability"
+            assert denied_active.json()["reason"] == "insufficient_role"
 
+            # Auch MIT `promote_retire` bleibt es bei 403 — die Capability kann
+            # die fehlende Rolle nicht ersetzen.
             _, with_promote = agent_token(
                 client,
                 prefix,
@@ -455,8 +464,15 @@ def test_external_tool_transition_requires_promote_retire_for_active(
                 {"external_tool_write": True, "promote_retire": True},
                 auth,
             )
-            allowed_active = client.post(
+            still_denied = client.post(
                 f"{base}/{tid}/versions/1/transition", json={"to": "active"}, headers=with_promote
+            )
+            assert still_denied.status_code == 403, still_denied.text
+            assert still_denied.json()["reason"] == "insufficient_role"
+
+            # Der Mensch kann es unveraendert.
+            allowed_active = client.post(
+                f"{base}/{tid}/versions/1/transition", json={"to": "active"}, headers=auth
             )
             assert allowed_active.status_code == 200, allowed_active.text
     finally:
