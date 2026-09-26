@@ -107,6 +107,19 @@ ProblemReason = Literal[
     "invalid_credentials",  # 401 — Anmeldedaten fehlen oder sind ungueltig
     "write_rate_limited",  # 429 — Schreibrate des Agenten erreicht (params: limit)
     "token_management_forbidden",  # 403 — agent-gebundener Token verwaltet keine Tokens
+    # Kontoweite Routen (`/v1/me`, `/v1/organizations`, `/v1/gdpr`,
+    # Invitation-Accept) verlangen eine angemeldete Person: sie liegen ausserhalb
+    # des Workspace-Pins, der auf dem Token-Pfad die Isolationsgrenze ist, und
+    # betreffen das Konto des Besitzers als Ganzes. Eigener Grund und nicht
+    # `token_management_forbidden`: anderer Text, anderer Gegenstand (ADR-0051,
+    # Muster `bound_agent_not_found`).
+    "account_route_requires_human",  # 403 — kontoweite Route braucht einen Menschen
+    # Ein agent-gebundener Token wird auf `editor` gedeckelt (die Rolle `admin`
+    # an einem Maschinen-Token ist die Wurzel der Eskalationswege). Getrennt von
+    # `token_role_escalation`: dort liegt die gewuenschte Rolle ueber der des
+    # Erstellers, hier ueber der Obergrenze fuer Maschinen-Tokens — ein Admin
+    # laeuft in diesen Grund, obwohl seine eigene Rolle genuegen wuerde.
+    "agent_bound_role_capped",  # 403 — agent-gebundener Token hoechstens `editor`
     "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
     "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen

@@ -12,12 +12,14 @@ unangetastet bleiben (gleiches Muster wie `test_phase21_migrations.py` /
 """
 
 import asyncio
+import json
 import secrets
 import shutil
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypeVar
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
@@ -372,5 +374,106 @@ def test_mollie_dunning_dedupe_migration(tmp_path: Path) -> None:
         # Statement-Replay der 0039-Datei muss No-op sein (IF NOT EXISTS / idempotent).
         sql = (MIGRATIONS_DIR / "0039_mollie_dunning_dedupe.sql").read_text(encoding="utf-8")
         await conn.execute(sql)
+
+    asyncio.run(_with_isolated_schema(_run))
+
+
+# --- 0088: Rollen-Deckel fuer agent-gebundene Tokens (Bestand) --------------
+
+
+@pytest.mark.integration
+def test_agent_bound_admin_tokens_are_capped_and_audited(tmp_path: Path) -> None:
+    """0088: aktive agent-gebundene admin-Tokens werden auf `editor` gezogen.
+
+    Der Deckel in `token_service`/`oauth_service` gilt nur fuer neue Tokens —
+    ohne diese Migration liefen die vorhandenen admin-Tokens unveraendert
+    weiter, und die Grenze waere eine Aussage ueber die Zukunft statt ueber den
+    Zustand. Getestet wird an einem Bestand, der vor der Migration angelegt
+    wurde: dazu erst alle Migrationen AUSSER 0088 anwenden, dann die Zeilen
+    schreiben, dann 0088 nachziehen.
+
+    Drei Zeilen decken die Abgrenzung ab: der aktive admin-Token (wird gedeckelt
+    und auditiert), ein widerrufener admin-Token (bleibt — ungueltig, seine
+    Rolle ist Audit-Historie) und ein aktiver editor-Token (Gegenprobe, kein
+    Audit-Eintrag). Zuletzt der zweite Lauf: er darf weder etwas aendern noch
+    ein zweites Audit-Ereignis schreiben.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+
+    cap_file = "0088_agent_bound_token_role_cap.sql"
+    _copy_migrations(tmp_path, [m for m in _ALL_MIGRATIONS if m != cap_file])
+
+    async def _run(conn: asyncpg.Connection) -> None:
+        await apply_migrations(conn, tmp_path)
+
+        org_id = await conn.fetchval(
+            "INSERT INTO organization (name, slug, kind) VALUES ('o', 'cap', 'company') "
+            "RETURNING id"
+        )
+        ws_id = await conn.fetchval(
+            "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', 'cap-w') RETURNING id",
+            org_id,
+        )
+        owner = uuid4()
+        agent_id = await conn.fetchval(
+            "INSERT INTO agent (workspace_id, owner_id, name) VALUES ($1, $2, 'a') RETURNING id",
+            ws_id,
+            owner,
+        )
+
+        async def _insert(name: str, role: str, *, revoked: bool, bound: bool) -> UUID:
+            token_id = await conn.fetchval(
+                "INSERT INTO api_token "
+                "(workspace_id, owner_id, name, token_hash, role, agent_id, revoked_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+                ws_id,
+                owner,
+                name,
+                f"hash-{name}",
+                role,
+                agent_id if bound else None,
+                datetime.now(UTC) if revoked else None,
+            )
+            assert isinstance(token_id, UUID)
+            return token_id
+
+        active_admin = await _insert("aktiv-admin", "admin", revoked=False, bound=True)
+        revoked_admin = await _insert("weg-admin", "admin", revoked=True, bound=True)
+        active_editor = await _insert("aktiv-editor", "editor", revoked=False, bound=True)
+
+        # Erst jetzt 0088 — auf einem Bestand, den es vor der Migration gab.
+        shutil.copy(MIGRATIONS_DIR / cap_file, tmp_path / cap_file)
+        applied = await apply_migrations(conn, tmp_path)
+        assert applied == [cap_file]
+
+        async def _role(token_id: UUID) -> str:
+            role = await conn.fetchval("SELECT role FROM api_token WHERE id = $1", token_id)
+            assert isinstance(role, str)
+            return role
+
+        assert await _role(active_admin) == "editor"
+        # Der widerrufene bleibt `admin`: ungueltig, und die Rolle ist Historie.
+        assert await _role(revoked_admin) == "admin"
+        assert await _role(active_editor) == "editor"
+
+        events = await conn.fetch(
+            "SELECT target, detail FROM audit_log WHERE action = 'token.role_capped'"
+        )
+        assert [row["target"] for row in events] == [str(active_admin)]
+        detail = json.loads(events[0]["detail"])
+        assert detail["from_role"] == "admin"
+        assert detail["to_role"] == "editor"
+        assert detail["agent_id"] == str(agent_id)
+
+        # Zweiter Lauf: kein weiteres UPDATE, kein zweites Audit-Ereignis. Die
+        # Migration laeuft in jeder Umgebung genau einmal, das Statement-Replay
+        # belegt die Idempotenz unabhaengig vom Runner-Ledger.
+        await conn.execute((MIGRATIONS_DIR / cap_file).read_text(encoding="utf-8"))
+        assert await _role(active_admin) == "editor"
+        count = await conn.fetchval(
+            "SELECT count(*) FROM audit_log WHERE action = 'token.role_capped'"
+        )
+        assert count == 1
 
     asyncio.run(_with_isolated_schema(_run))

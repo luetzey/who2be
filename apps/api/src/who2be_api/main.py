@@ -267,6 +267,8 @@ _PROBLEM_TITLES: dict[str, str] = {
     "invalid_credentials": "Anmeldedaten ungueltig oder fehlend",
     "write_rate_limited": "Schreib-Rate-Limit erreicht",
     "token_management_forbidden": "Token-Verwaltung nicht erlaubt",
+    "account_route_requires_human": "Kontoweite Aktion erfordert eine angemeldete Person",
+    "agent_bound_role_capped": "Agent-gebundene Tokens erhalten hoechstens die Rolle 'editor'",
     "bound_agent_not_found": "Zu bindender Agent nicht gefunden",
     "token_role_escalation": "Token-Rolle hoeher als die des Erstellers",
     "token_not_found": "Token nicht gefunden",

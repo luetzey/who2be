@@ -21,7 +21,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import (
     CurrentPrincipal,
     WorkspaceContext,
-    get_current_principal,
+    get_current_human_principal,
     get_current_workspace,
     require_role,
 )
@@ -46,7 +46,7 @@ def get_invitation_service(
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
-Principal = Annotated[CurrentPrincipal, Depends(get_current_principal)]
+Principal = Annotated[CurrentPrincipal, Depends(get_current_human_principal)]
 Service = Annotated[InvitationService, Depends(get_invitation_service)]
 
 
