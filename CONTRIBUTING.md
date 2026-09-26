@@ -53,6 +53,61 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+### What must not go public
+
+This repository is public, and the history does not forget. Two classes of
+information stay out of committed files, commit bodies and PR descriptions:
+**(a)** security holes and ways around a limit, and **(b)** business internals
+(pricing strategy, margin, customer numbers). Planning and roadmap are
+explicitly *not* in scope here — they stay public. The rule itself lives in
+[`CLAUDE.md` § Security](CLAUDE.md#security), right next to the operator-host
+rule that has the same shape; the decision test below is its operational half.
+
+Apply it before you write, not after. Four questions, the order matters, the
+first "yes" decides. The test is quoted verbatim in the language it was
+reviewed in — do not paraphrase or translate it here, a second wording would be
+a second, diverging source:
+
+```text
+1. Nenne ich Route, Datei oder Zeile einer Luecke, die HEUTE offen ist?
+   → nicht oeffentlich. (Geschlossene Luecke: erlaubt und erwuenscht.)
+
+2. Koennte ein Leser meinen Text als Schritt-fuer-Schritt-Anleitung lesen,
+   um eine Grenze zu ueberschreiten? Nenne ich den Grenzwert, ab dem ein
+   Schutz nicht mehr greift?
+   → nicht oeffentlich.
+
+3. Rechne ich vor, was ein Umgehungsweg kostet oder einbringt?
+   → die Rechnung nicht oeffentlich; die Tatsache darf bleiben.
+
+4. Nenne ich einen Preis, eine Marge, einen Deckungsbeitrag, eine Kunden-
+   oder Umsatzzahl, die nicht schon auf der Website steht?
+   → nicht oeffentlich.
+
+Viermal Nein → oeffentlich, und zwar mit voller Begruendung.
+Die Auflage "begruende deine Entscheidung" bleibt bestehen — sie war richtig.
+```
+
+**The obligation to justify your decision in the commit is not withdrawn.**
+It was right, and it stays. A measurement of the recent history found 93 % of
+commit bodies to be detailed and harmless; deriving "justify less" from that
+finding trades internal traceability away for a problem that hangs on four
+narrow questions. Write the full reasoning — the test removes addresses and
+calculations, not thinking.
+
+**Where the reasoning cannot go public, it has a place.** It belongs in the
+card description on the board — not in the repository, not public — and the
+commit carries a pointer instead: *"Der Umgehungsweg ist in der Karte
+beschrieben."* That costs one sentence and resolves the conflict entirely.
+Note that **`.claude/plan/` is public as well and is not an escape hatch**: a
+plan file is committed like any other file and is covered by the same four
+questions. Neither is a PR description, a code comment or a test fixture.
+
+There is deliberately no CI keyword gate for this. A grep on words like
+"limit" or "gap" was measured against real commits and produced a 63 % false
+positive rate; a gate that noisy gets switched off. This is a review
+responsibility.
+
 ## Issue reference
 
 Every pull request states its issue reference in the body — `Closes #NNN`
