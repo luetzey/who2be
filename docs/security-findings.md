@@ -238,11 +238,25 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 
   `object-src 'none'` killt Plugin-XSS, `form-action` ist explizit, weil die
   Direktive **nicht** auf `default-src` zurueckfaellt. Zusaetzlich Pfad-Block
-  `/v1/internal/*` → 403 (ADR-0010). Vertrag/Smoke:
-  `deploy/hetzner/tests/test_headers.sh` (assertiert HSTS, XCTO, XFO, Referrer,
-  Permissions, COOP, CSP inkl. `object-src`/`form-action` sowie den
-  `/v1/internal/`-Block und den `/docs`-Toggle). F-13 (`/docs` public) bleibt
-  per Env-Toggle `WHO2BE_DOCS_PUBLIC=false` (Default) abgedeckt.
+  `/v1/internal/*` → 403 (ADR-0010).
+
+  **Wie der Befund belegt wird** (seit 2026-09-26 in CI, vorher nur Handlauf):
+
+  | Zusage | Beleg | Wo |
+  | --- | --- | --- |
+  | Header und `/v1/internal/*`-Block kommen auf der Leitung an | `deploy/hetzner/tests/test_headers_ci.sh` faehrt Caddy mit der echten `Caddyfile` und misst die Antwort | CI-Job `compose-smoke` |
+  | Die Header-**Werte** sind unveraendert (`max-age`, `DENY`, `nosniff`, CSP-Direktiven je Site) | `apps/api/tests/test_compose_hardening.py` | CI-Job `python` |
+  | `/docs` folgt `WHO2BE_DOCS_PUBLIC` | `apps/api/tests/test_docs_toggle.py` (App-Ebene) | CI-Job `python` |
+
+  **Ausdruecklich NICHT in CI:** der `/docs`-Fall aus `test_headers.sh` prueft
+  die App hinter dem Proxy, nicht Caddy; gegen den Platzhalter-Upstream des
+  CI-Laufs waere er scheingruen. Er bleibt Handlauf im Prod-Smoke
+  (`docs/cloud-prod-smoke.md` §8) und ist im CI-Lauf sichtbar uebersprungen —
+  die Bilanz-Zeile `CHECKS_RUN`/`CHECKS_SKIPPED` benennt ihn. Die Zusage selbst
+  haengt nicht daran: sie ist auf App-Ebene abgedeckt (Zeile 3 oben).
+
+  F-13 (`/docs` public) bleibt per Env-Toggle `WHO2BE_DOCS_PUBLIC=false`
+  (Default) abgedeckt.
 
 ### F-13 — `/docs` und `/openapi.json` oeffentlich (Info, Accepted)
 
@@ -256,7 +270,7 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | Block            | Status                                                                     |
 | ---------------- | -------------------------------------------------------------------------- |
 | Patches gemerged | F-01/03/05/06/07/08/10 in PR aus MS-3 H3; F-02/F-09 in diesem Branch.      |
-| Followups        | F-12 (Security-Header / CSP) **Closed (2026-06-03)** — Caddyfile finalisiert, Smoke `deploy/hetzner/tests/test_headers.sh`. |
+| Followups        | F-12 (Security-Header / CSP) **Closed (2026-06-03)** — Caddyfile finalisiert; seit 2026-09-26 in CI belegt (`compose-smoke` misst die Antwort, `python` die Werte), nicht mehr nur per Handlauf. |
 | Akzeptiert       | F-04, F-11, F-13 sind ohne weitere Aktion abgenommen (Rationale s. o.).    |
 | User-Sign-Off    | Pending — bei Merge dieses PRs als implizit abgenommen.                    |
 

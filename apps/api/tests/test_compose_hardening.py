@@ -329,6 +329,85 @@ def test_caddy_access_log_redacts_oauth_query_values() -> None:
     assert "log_credentials" not in directives
 
 
+def _site_block_body(site: str) -> str:
+    """Rumpf eines Site-Blocks (ohne Kommentare), bis zur schliessenden Klammer.
+
+    Die CSP steht je Site einzeln und unterscheidet sich zwischen ihnen — ein
+    Test gegen die ganze Datei koennte den Wert der einen Site fuer den der
+    anderen halten.
+    """
+    directives = _caddyfile_directives().splitlines()
+    start = directives.index(f"{site} {{") + 1
+    body: list[str] = []
+    for line in directives[start:]:
+        if line == "}":
+            return "\n".join(body)
+        body.append(line)
+    raise AssertionError(f"Site-Block {site} hat keine schliessende Klammer")
+
+
+def test_caddy_security_header_values_are_the_promised_ones() -> None:
+    """Die Header-WERTE stehen exakt so da, wie sie zugesagt sind.
+
+    ``test_caddy_access_log_is_enabled_for_every_site`` prueft nur, dass jeder
+    Site-Block das Snippet importiert — nicht, was darin steht. Eine geaenderte
+    Zahl (``max-age``), ein aufgeweichtes ``SAMEORIGIN`` statt ``DENY`` oder ein
+    entfernter Eintrag faellt dort nicht auf.
+
+    Der laufende Gegenpart ist ``deploy/hetzner/tests/test_headers_ci.sh``: er
+    misst die Antwort auf der Leitung. Dieser Test hier greift auch dann, wenn
+    der Container gar nicht erst startet — dann faellt der andere aus, statt zu
+    greifen.
+    """
+    directives = _caddyfile_directives()
+    expected = {
+        "Strict-Transport-Security": '"max-age=31536000; includeSubDomains"',
+        "X-Content-Type-Options": '"nosniff"',
+        "X-Frame-Options": '"DENY"',
+        "Referrer-Policy": '"no-referrer"',
+        "Cross-Origin-Opener-Policy": '"same-origin"',
+    }
+    for name, value in expected.items():
+        assert f"{name} {value}" in directives, (
+            f"{name} fehlt oder hat einen anderen Wert als zugesagt ({value})"
+        )
+    # Permissions-Policy: die vier Sensoren einzeln, damit ein herausgeloeschter
+    # Eintrag nicht durchrutscht.
+    for feature in ("accelerometer=()", "camera=()", "geolocation=()", "microphone=()"):
+        assert feature in directives, f"Permissions-Policy deckt {feature} nicht mehr ab"
+    # `-Server` versteckt das Caddy-Banner (Versions-Fingerprint).
+    assert "-Server" in directives
+
+
+def test_caddy_csp_of_every_site_closes_the_known_gaps() -> None:
+    """Jede Site hat eine CSP, und jede schliesst die drei bekannten Luecken.
+
+    ``form-action`` faellt **nicht** auf ``default-src`` zurueck — fehlt es, ist
+    Form-Hijacking offen, obwohl die CSP streng aussieht. ``object-src`` und
+    ``base-uri`` fallen zwar zurueck, werden aber explizit gefuehrt, damit eine
+    spaeter aufgeweichte ``default-src`` sie nicht mitreisst.
+    """
+    sites = _site_blocks()
+    assert len(sites) >= 4, f"Site-Bloecke nicht gefunden ({sites}) — Struktur geaendert?"
+    for site in sites:
+        body = _site_block_body(site)
+        assert "header Content-Security-Policy" in body, f"{site}: keine eigene CSP"
+        for gap in ("object-src 'none'", "frame-ancestors 'none'", "form-action", "base-uri"):
+            assert gap in body, f"{site}: CSP fuehrt {gap!r} nicht mehr"
+
+
+def test_caddy_blocks_internal_paths_before_the_app() -> None:
+    """``/v1/internal/*`` wird im Proxy abgewiesen, nicht erst in der App.
+
+    ADR-0010: der Pfad traegt u. a. ``/metrics``. Wird der Block entfernt, geht
+    die Anfrage in den Container — ein versehentlich offener Endpunkt waere von
+    aussen erreichbar.
+    """
+    body = _site_block_body("api.{$DOMAIN}")
+    assert "@internal path /v1/internal/*" in body
+    assert "respond @internal" in body and "403" in body
+
+
 def test_caddy_access_log_lives_on_a_volume() -> None:
     """Das Log-Verzeichnis ist gemountet (BSI SYS.1.6.A7).
 
