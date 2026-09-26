@@ -6,7 +6,7 @@ zu ihrem Output auf (Klick-Overlay). Laeuft nur mit erreichbarer Datenbank —
 """
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -79,16 +79,21 @@ def test_placeholder_preview_resolves_and_misses(
             # Unauthentifiziert -> 401
             assert client.get(base, params={"kind": "date"}).status_code == 401
 
-            # date (ISO) -> heutiges Datum, nicht unresolved
+            # date (ISO) -> heutiges Datum in UTC, nicht unresolved.
+            # Der Endpunkt rechnet in UTC (placeholder_preview_service.py:
+            # `RenderContext(now=datetime.now(UTC))`) — der Test muss denselben
+            # Zeitbegriff verwenden. Mit `date.today()` (Ortszeit) war die
+            # Assertion zwischen 0:00 und 2:00 CEST strukturell rot, weil in UTC
+            # dann noch der Vortag laeuft.
             iso = client.get(base, params={"kind": "date", "target_id": ""}, headers=auth)
             assert iso.status_code == 200
-            assert iso.json()["text"] == date.today().isoformat()
+            assert iso.json()["text"] == datetime.now(UTC).date().isoformat()
             assert iso.json()["unresolved"] is False
 
             # date (human) -> deutscher Monatsname enthalten
             human = client.get(base, params={"kind": "date", "target_id": "human"}, headers=auth)
             assert human.status_code == 200
-            assert str(date.today().year) in human.json()["text"]
+            assert str(datetime.now(UTC).year) in human.json()["text"]
             assert human.json()["unresolved"] is False
 
             # tools-overview -> statische Markdown-Liste, nie unresolved

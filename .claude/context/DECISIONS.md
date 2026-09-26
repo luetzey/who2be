@@ -1736,3 +1736,31 @@ irrefuehrend, weil es zwei Dinge gleich faerbte. Beide Male galt: Ein
 Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
 Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
 auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.
+
+## 2026-09-26 — `DTZ` als Linter-Gate: ein Zeitbegriff im Repo, und zwar UTC
+
+**Entscheidung:** `DTZ` (flake8-datetimez) steht in `[tool.ruff.lint] select`.
+Zeitnahme im Python-Code ist damit ausnahmslos tz-aware; naives `date.today()`
+oder `datetime.now()` in Ortszeit scheitert lokal am Linter. Der Zeitbegriff des
+Repos ist UTC — so rechnet jeder `RenderContext`, so stempelt `wa_render.py`.
+
+**Warum:** Ein Test verglich einen UTC-Endpunkt gegen `date.today()` in Ortszeit
+und war dadurch zwischen 0:00 und 2:00 CEST strukturell rot, in CI (UTC) aber
+immer gruen. Ein Fehler, den die Pipeline **konstruktionsbedingt nicht sehen
+kann**: er existiert nur auf Rechnern mit Offset und nur nachts. Genau solche
+Fehler gehoeren an einen Linter, nicht an die Aufmerksamkeit des naechsten
+Nachtlaeufers — der Rueckfall kostet sonst jedes Mal erneut eine Diagnose.
+
+**Warum ohne Kosten:** Die Regel wurde vor dem Aktivieren gemessen
+(`ruff --select DTZ`), nicht geschaetzt: sie fand repo-weit genau die zwei Zeilen
+dieses Bugs und keine weitere. Kein Bestands-Refactoring, keine Ausnahmeliste.
+Haette sie breit gefeuert, waere sie ein eigenes Arbeitspaket gewesen statt eine
+Zeile in diesem.
+
+**Verworfen:** nur die zwei Zeilen fixen (laesst die Klasse offen — derselbe
+Fehler kommt als naechstes in einem neuen Test wieder); eine Clock-/Zeit-Port-
+Abstraktion einziehen (Variabilitaets-Schwelle nicht erreicht, es gibt genau
+einen Zeitbegriff); die Platzhalter-Aufloesung auf Ortszeit umstellen (waere eine
+fachliche Weiche ohne Beleg — das Repo kennt keine nutzerbezogene Zeitzone, und
+die Karte schliesst deren Einfuehrung aus).
+

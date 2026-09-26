@@ -1,6 +1,45 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
+_Stand: 2026-09-26 (48. Lauf — Zeitzonen-Flake im Placeholder-Preview-Test: der Test rechnete in Ortszeit gegen einen UTC-Endpunkt. Fix im Test, `DTZ` als Linter-Regel gegen den Rückfall)_
+
+## Zeitzonen-Flake: Test rechnete in Ortszeit, Endpunkt in UTC (2026-09-26, 48. Lauf)
+
+**Symptom:** `test_placeholder_preview.py::test_placeholder_preview_resolves_and_misses`
+war zwischen 0:00 und 2:00 Ortszeit (CEST) strukturell rot —
+`AssertionError: '2026-09-25' == '2026-09-26'`. In CI (UTC) immer grün, deshalb
+nur bei lokalen Nachtläufen sichtbar. Aufgefallen bei Karte `t_4c4a13d8`; der
+Reviewer hatte die Suite dort bewusst unter `TZ=UTC` gefahren und den Fall damit
+umgangen statt geprüft.
+
+**Befund:** Der Endpunkt rechnet durchgängig in UTC
+(`placeholder_preview_service.py:70` → `RenderContext(now=datetime.now(UTC))`,
+formatiert in `placeholders/resolvers/date.py`). Der Test verglich gegen
+`date.today()` — Ortszeit. Zwischen Mitternacht und 2 Uhr lokal läuft in UTC noch
+der Vortag.
+
+**Keine Design-Weiche.** Ob die Platzhalter-Auflösung fachlich in Ortszeit
+rechnen *soll*, ist durch das Repo belegt beantwortet, nicht durch Urteil: es
+gibt im Repo keinen Ortszeit-Zeitbegriff — `date.today()`/`datetime.now()` ohne
+tz fand sich **ausschließlich** in diesen zwei Testzeilen, jede andere Zeitnahme
+in `apps/` und `packages/` ist explizit `datetime.now(UTC)`. Die Unit-Tests des
+Resolvers legen UTC schon als Vertrag fest, `wa_render.py` stempelt sichtbar
+`"%Y-%m-%d %H:%M UTC"`. Also: Test korrigiert, Produktion unberührt.
+
+**Fix an der Klasse, nicht an der Zeile.** `ruff --select DTZ` als Messung statt
+`grep` als Suche: die Regel findet repo-weit genau die zwei Zeilen dieses Bugs
+und sonst nichts — damit ist `DTZ` kostenlos scharf schaltbar und steht jetzt in
+`pyproject.toml`. Der Rückfall scheitert ab sofort lokal am Linter.
+
+**Rotprobe, weil ein grüner Test hier wenig heißt.** Der Test skippt ohne DB, ein
+Skip hätte nichts bewiesen — eigene pgvector-DB via podman hochgezogen (der
+laufende Fremd-Stack `who2be-ndtest` blieb unberührt). Grün unter
+`Europe/Berlin`, `UTC` und zusätzlich `Pacific/Kiritimati` (+14) und
+`Pacific/Midway` (-11), wo der Tagesversatz *rund um die Uhr* besteht statt nur
+nachts. Gegenprobe: die alte Fassung unter Kiritimati reproduziert den
+Originalfehler byte-genau (`'2026-09-26' == '2026-09-27'`) — die Assertion greift
+also, der grüne Test ist keine Tautologie.
+
+Details: `.claude/plan/2026-09-26-1302_zeitzonen-flake-placeholder-preview.md`.
 
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
