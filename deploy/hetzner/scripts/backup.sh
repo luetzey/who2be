@@ -55,6 +55,13 @@
 # wird trotzdem geschrieben — aber mit --tag incomplete statt --tag dump, damit er
 # sich beim Restore nicht als vollstaendiger Stand ausgeben kann.
 #
+# Ein LEERER Bestand ist dabei ausdruecklich kein Erfolg (2026-09-26): jede Stufe
+# haelt ihren Ist-Stand gegen den Postgres-Katalog (`wa_table`, `wa_blob`) in
+# derselben Datenbank, die ohnehin gedumpt wird. Ein Volume-Mount, der nicht
+# griff, ein umbenanntes Bucket, ein verschobener WHO2BE_TABLESTORE_DIR — alle
+# drei sahen vorher aus wie "nichts zu sichern" und endeten gruen. Begruendung
+# und verworfene Alternativen: Kopf von catalog_query, ADR-0011 Nachtrag.
+#
 # Retention:
 #   lokal:   dumps aelter als 7 Tage geloescht. Blob-Spiegel und Tabellen-Snapshots
 #            sind je GENAU EINE Kopie (in place ueberschrieben) — sie vervielfachen
@@ -103,6 +110,68 @@ FAILURES=()
 fail_stage() {
   FAILURES+=("$1")
   log "FEHLER: $1"
+}
+
+# --- Zweite Wahrheitsquelle: der Postgres-Katalog ------------------------
+# Ein LEERER Bestand ist von aussen nicht von einem VERLORENEN zu
+# unterscheiden: ein Volume-Mount, der nicht griff, ein umbenanntes Bucket, ein
+# verschobener ${WHO2BE_TABLESTORE_DIR} — alle drei sehen aus wie "nichts zu
+# sichern". Bis 2026-09-26 endete so ein Lauf gruen, raeumte im Vorbeigehen den
+# letzten lokalen Spiegel und markierte den Snapshot als --tag dump.
+#
+# Die Unterscheidung braucht eine zweite Quelle, und die richtige ist der
+# Katalog in DERSELBEN Datenbank, die dieser Lauf ohnehin dumpt:
+#
+#   `wa_table`  (ADR-0049) traegt workspace_id + area_id je Tabelle. Der
+#               Dateipfad des Stores ist {base}/{workspace_id}/{area_id}.sqlite
+#               (tablestore/engine.py) — der Katalog nennt damit nicht nur eine
+#               ZAHL, sondern die erwarteten PFADE.
+#   `wa_blob`   (ADR-0048) traegt eine Zeile je Objekt.
+#
+# Die Pruefung ist bewusst ASYMMETRISCH ("Ist >= Soll", jeder erwartete Pfad
+# muss existieren) und nicht "Ist == Soll": Katalog-Zeile impliziert Datei
+# (WaTableService.create legt beides in einer Transaktion an und rollt die
+# Zeile bei DDL-Fehler zurueck), die Umkehrung gilt NICHT — `drop_table`
+# loescht die Tabelle, nicht die Area-Datei, und ein Bucket darf Objekte
+# tragen, die kein Katalog mehr nennt. Ueberzaehliges ist kein Datenverlust.
+#
+# Warum nicht eine Marker-Datei im Volume: die erkennt den nicht gegriffenen
+# Mount, sagt aber nichts ueber den INHALT — ein Volume mit Marker und ohne
+# Areas gilt weiter als gesund. Warum keine Mindestanzahl per Env: die driftet
+# mit jeder neuen Area und muss von Hand nachgezogen werden; eine Zusage, die
+# an Disziplin haengt, ist genau die Klasse Fehler, die #541 geschlossen hat.
+#
+# Kosten: keine. `psql` liegt im Image (postgresql16-client, s. Dockerfile),
+# Credentials und Netzweg sind dieselben wie fuer pg_dump — kein neuer Dienst,
+# kein neues Secret, kein Auftragsverarbeiter, kein VVT-Eintrag.
+catalog_query() {
+  psql --no-psqlrc --quiet --no-align --tuples-only \
+       -v ON_ERROR_STOP=1 \
+       -h "${POSTGRES_HOST}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+       -c "$1"
+}
+
+# Bewusst frueh und hart, dieselbe Linie wie beim Heartbeat-Werkzeug oben: ein
+# Abgleich, der erst nach dem pg_dump am fehlenden Werkzeug scheitert, waere
+# selbst die stille Luecke, die er schliessen soll.
+if [[ "${BACKUP_BLOBS}" != "off" || "${BACKUP_TABLESTORE}" != "off" ]] \
+   && ! command -v psql >/dev/null 2>&1; then
+  log "FATAL: psql fehlt im Backup-Image — der Soll-Ist-Abgleich gegen den"
+  log "       Katalog (wa_table/wa_blob) ist damit nicht moeglich. Ohne ihn"
+  log "       ist ein leerer Bestand nicht von einem verlorenen zu"
+  log "       unterscheiden (postgresql16-client, s. backup/Dockerfile)."
+  exit 1
+fi
+
+# Existiert die Katalog-Tabelle ueberhaupt? Ein frischer Stack vor Migration
+# 0078/0075 hat sie nicht — das ist ein legitimer Zustand mit Soll 0 und kein
+# Fehler. Gefragt wird ueber to_regclass, damit die Antwort "nein" nicht als
+# unterdrueckter SQL-Fehler daherkommt: ein echter Verbindungsfehler muss
+# unterscheidbar bleiben.
+catalog_table_exists() {
+  local answer
+  answer="$(catalog_query "SELECT to_regclass('public.$1') IS NOT NULL")" || return 2
+  [[ "${answer//[[:space:]]/}" == "t" ]]
 }
 
 # --- Dead-Man's-Switch (#541) --------------------------------------------
@@ -219,6 +288,54 @@ backup_blobs() {
   local scheme="http"
   [[ "${WHO2BE_BLOBSTORE_SECURE:-false}" == "true" ]] && scheme="https"
 
+  local -a aws_env=(
+    "AWS_ACCESS_KEY_ID=${access}"
+    "AWS_SECRET_ACCESS_KEY=${secret}"
+    "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}"
+  )
+
+  # --- Soll-Ist-Abgleich VOR dem Sync (s. Kopf von catalog_query) ---------
+  # `aws s3 sync --delete` unten raeumt im Spiegel, was im Bucket fehlt. Zeigt
+  # die Konfiguration auf ein leeres oder falsches Bucket, leert derselbe
+  # Aufruf den letzten lokalen Blob-Spiegel — mit Exit 0. Deshalb wird HIER
+  # gemessen und nicht erst danach: ein zu kleines Inventar laesst den Sync gar
+  # nicht erst laufen, der Spiegel bleibt unberuehrt.
+  local want_blobs=0
+  catalog_table_exists wa_blob
+  case "$?" in
+    0)
+      if ! want_blobs="$(catalog_query "SELECT count(*) FROM wa_blob")"; then
+        fail_stage "Objekt-Store: Soll-Stand nicht aus dem Katalog (wa_blob) lesbar — ohne zweite Wahrheitsquelle ist ein leeres Bucket nicht von einem verlorenen zu unterscheiden"
+        return 1
+      fi
+      want_blobs="${want_blobs//[[:space:]]/}"
+      ;;
+    1) want_blobs=0 ;;   # wa_blob gibt es nicht — frischer Stack, Soll 0
+    *)
+      fail_stage "Objekt-Store: Katalog (wa_blob) nicht befragbar — Soll-Ist-Abgleich nicht moeglich"
+      return 1
+      ;;
+  esac
+
+  if (( want_blobs > 0 )); then
+    local inventory have_blobs
+    # Die Ausgabe erst einsammeln und DANN zaehlen: eine Pipe nach `grep -c`
+    # wuerde den Exit-Code von aws verschlucken, und ein gescheitertes `s3 ls`
+    # saehe dann aus wie ein leeres Bucket.
+    if ! inventory="$(env "${aws_env[@]}" \
+         aws --endpoint-url "${scheme}://${endpoint}" \
+             s3 ls --recursive "s3://${bucket}")"; then
+      fail_stage "Objekt-Store: Bucket-Inventar nicht lesbar (s3 ls auf ${bucket} @ ${endpoint}) — Sync NICHT ausgefuehrt, damit --delete den lokalen Spiegel nicht leert"
+      return 1
+    fi
+    have_blobs="$(printf '%s' "${inventory}" | grep -c . || true)"
+    if (( have_blobs < want_blobs )); then
+      fail_stage "Objekt-Store: Bucket ${bucket} @ ${endpoint} traegt ${have_blobs} Objekt(e), der Katalog (wa_blob) nennt ${want_blobs} — Sync NICHT ausgefuehrt, damit --delete den letzten lokalen Spiegel nicht leert; Bucket-Name und Endpoint pruefen"
+      return 1
+    fi
+    log "Katalog-Abgleich: ${have_blobs} Objekt(e) im Bucket, ${want_blobs} laut wa_blob erwartet"
+  fi
+
   mkdir -p "${BLOB_MIRROR_DIR}"
   log "s3 sync ${scheme}://${endpoint}/${bucket} → ${BLOB_MIRROR_DIR} (inkrementell)"
 
@@ -226,16 +343,22 @@ backup_blobs() {
   # damit ein DSGVO-Purge nicht ueber das Backup wieder auflebt. Die
   # Snapshot-Historie haelt die Objekte bis zum Retention-Ablauf
   # ("Restore-only-Re-Deletion", Loeschkonzept §4).
-  if ! AWS_ACCESS_KEY_ID="${access}" \
-       AWS_SECRET_ACCESS_KEY="${secret}" \
-       AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
+  if ! env "${aws_env[@]}" \
        aws --endpoint-url "${scheme}://${endpoint}" \
            s3 sync --delete "s3://${bucket}" "${BLOB_MIRROR_DIR}"; then
     fail_stage "Objekt-Store: s3 sync fehlgeschlagen (Bucket ${bucket} @ ${endpoint})"
     return 1
   fi
 
-  log "Objekt-Spiegel: $(find "${BLOB_MIRROR_DIR}" -type f | wc -l | tr -d ' ') Objekte, $(du -sh "${BLOB_MIRROR_DIR}" | cut -f1)"
+  local mirrored
+  mirrored="$(find "${BLOB_MIRROR_DIR}" -type f | wc -l | tr -d ' ')"
+  # Zweite Lage: ein Sync, der Exit 0 liefert, aber nichts uebertraegt, ist
+  # kein Erfolg. Gemessen wird der Spiegel selbst, nicht die Zusage des Tools.
+  if (( mirrored < want_blobs )); then
+    fail_stage "Objekt-Store: Spiegel traegt nach dem Sync ${mirrored} Objekt(e), der Katalog (wa_blob) nennt ${want_blobs}"
+    return 1
+  fi
+  log "Objekt-Spiegel: ${mirrored} Objekte, $(du -sh "${BLOB_MIRROR_DIR}" | cut -f1)"
 }
 
 # --- Stufe 3: Tabellen-Store-Snapshots (ADR-0049) ------------------------
@@ -307,6 +430,22 @@ tablestore_foreign_sidecars() {
   done
 }
 
+# Erwartete Area-Dateien laut Katalog — relative Pfade, wie sie unter
+# ${WHO2BE_TABLESTORE_DIR} liegen muessten. Schreibt sie nach stdout (eine je
+# Zeile). Rueckgabe 2 = Katalog nicht befragbar (der Aufrufer macht daraus
+# einen Fehlschlag, kein Soll 0).
+tablestore_expected_areas() {
+  catalog_table_exists wa_table
+  case "$?" in
+    0) ;;
+    1) return 0 ;;   # Tabelle gibt es nicht — frischer Stack, Soll 0
+    *) return 2 ;;
+  esac
+  # DISTINCT: mehrere Tabellen einer Area liegen in EINER Datei.
+  catalog_query "SELECT DISTINCT workspace_id || '/' || area_id || '.sqlite'
+                   FROM wa_table" || return 2
+}
+
 backup_tablestore() {
   if [[ "${BACKUP_TABLESTORE}" == "off" ]]; then
     log "BACKUP_TABLESTORE=off — Tabellen-Store bewusst abgewaehlt"
@@ -320,6 +459,17 @@ backup_tablestore() {
   fi
   if ! command -v sqlite3 >/dev/null 2>&1; then
     fail_stage "Tabellen-Store: sqlite3 fehlt im Backup-Image"
+    return 1
+  fi
+
+  # Soll-Stand VOR dem Sichern holen: schlaegt die Abfrage fehl, wird gar nicht
+  # erst gesichert und vor allem nicht geraeumt. Der Lauf ist dann rot — eine
+  # Datenbank, die Sekunden nach einem erfolgreichen pg_dump keine Auskunft
+  # mehr gibt, ist selbst ein Befund und kein Grund, den Abgleich zu
+  # ueberspringen.
+  local expected_areas
+  if ! expected_areas="$(tablestore_expected_areas)"; then
+    fail_stage "Tabellen-Store: Soll-Stand nicht aus dem Katalog (wa_table) lesbar — ohne zweite Wahrheitsquelle ist ein leerer Store nicht von einem verlorenen zu unterscheiden"
     return 1
   fi
 
@@ -427,6 +577,32 @@ backup_tablestore() {
   # ein liegengebliebener Vorlauf als Snapshot mit.
   rm -rf "${scratch}"
 
+  # --- Soll-Ist-Abgleich gegen den Katalog -------------------------------
+  # Der Kern dieser Pruefung (s. Kopf von catalog_query): bis 2026-09-26 war
+  # "im Store lag nichts" nicht von "der Store war nicht da" zu unterscheiden.
+  # Gemessen wird gegen die ERWARTETEN PFADE, nicht gegen eine Zahl — so
+  # faellt auch der Fall auf, in dem die richtige ANZAHL Dateien da liegt,
+  # aber nicht die richtigen (falsches Volume mit fremdem Inhalt).
+  local absent=0 want
+  while IFS= read -r want; do
+    [[ -n "${want}" ]] || continue
+    [[ -f "${src}/${want}" ]] && continue
+    log "  ✗ Katalog nennt eine Area, die im Store fehlt: ${want}"
+    absent=$((absent + 1))
+  done <<<"${expected_areas}"
+
+  # Die Verwaisten-Frage haengt am Gesundheitszustand DIESER Stufe: raeumt der
+  # Sweep bei einem Fehlschlag, loescht er den letzten guten Spiegel in genau
+  # dem Lauf, der scheitert — also den Stand, auf den ein Restore
+  # zurueckfallen will. Reste eines hart abgebrochenen Vorlaufs sind davon
+  # ausgenommen: sie tragen das Praefix `.scratch.` und waren nie ein guter
+  # Stand, sie muessen in jedem Fall weg (sonst landeten sie im Snapshot).
+  local sweep_orphans=1
+  if (( errors > 0 || absent > 0 )); then
+    sweep_orphans=0
+    log "  · Stufe rot — verwaiste Snapshots werden NICHT geraeumt (der letzte gute Spiegel bleibt)"
+  fi
+
   # Verwaiste Snapshots raeumen: eine geloeschte Area soll nicht ueber den
   # lokalen Spiegel weiterleben (gleiche Begruendung wie --delete oben). Reste
   # eines hart abgebrochenen Vorlaufs fallen hier ebenfalls weg — sie tragen
@@ -434,17 +610,24 @@ backup_tablestore() {
   local orphan
   while IFS= read -r orphan; do
     rel="${orphan#"${TABLESTORE_SNAPSHOT_DIR}"/}"
-    if ! grep -qxF "${rel}" "${seen}"; then
-      log "  · verwaisten Snapshot entfernt: ${rel}"
-      rm -f "${orphan}"
+    grep -qxF "${rel}" "${seen}" && continue
+    if [[ "${rel}" != .scratch.* ]] && (( sweep_orphans == 0 )); then
+      continue
     fi
+    log "  · verwaisten Snapshot entfernt: ${rel}"
+    rm -f "${orphan}"
   done < <(find "${TABLESTORE_SNAPSHOT_DIR}" -type f -name '*.sqlite' 2>/dev/null | sort)
   find "${TABLESTORE_SNAPSHOT_DIR}" -mindepth 1 -type d -empty -delete 2>/dev/null || true
   rm -f "${seen}"
   trap - RETURN
 
+  if (( absent > 0 )); then
+    fail_stage "Tabellen-Store: ${absent} laut Katalog (wa_table) erwartete Area-Datei(en) fehlen in ${src} — Mount, Bucket-Name oder WHO2BE_TABLESTORE_DIR pruefen; ein leerer Store bei nichtleerem Katalog ist Datenverlust, kein Leerlauf"
+  fi
   if (( errors > 0 )); then
     fail_stage "Tabellen-Store: ${errors} von $((snapshots + errors)) Area-Snapshots fehlgeschlagen"
+  fi
+  if (( absent > 0 || errors > 0 )); then
     return 1
   fi
   log "Tabellen-Snapshots: ${snapshots} Datei(en), $(du -sh "${TABLESTORE_SNAPSHOT_DIR}" | cut -f1)"

@@ -149,15 +149,96 @@ gekostet haette. Sie wird geschlossen:
   abgebrochen werden kann und das Ziel dabei ueberschreibt. Der letzte gute
   Snapshot ist genau der Stand, auf den ein Restore zurueckfaellt; er darf durch
   einen gescheiterten Lauf weder beschaedigt noch als Erfolg gezaehlt werden.
-- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (14 Faelle,
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (17 Faelle,
   stub-basiert, kein Docker-Daemon noetig) — insbesondere Fall 7–9:
-  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`; Fall 12–13:
+  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`; Fall 15–16:
   Backup-Lauf und Store unter verschiedenen Kennungen, mit und ohne
-  `CAP_CHOWN`; Fall 14: volllaufendes Backup-Ziel auf einem eigenen
+  `CAP_CHOWN`; Fall 17: volllaufendes Backup-Ziel auf einem eigenen
   Dateisystem ⇒ Lauf rot, kein Heartbeat, Vortags-Snapshot unversehrt.
 
 Weiterhin offen: der Restore-Drill (M2 / #454) — er ist der Beleg, dass die drei
 Bestaende zusammen auch wirklich zurueckkommen.
 
-</content>
-</invoke>
+## Nachtrag 2026-09-26 — Ein leerer Bestand ist kein Erfolg (Soll-Ist-Abgleich)
+
+Der Nachtrag oben schloss „eine Stufe **scheitert**". Offen blieb der leisere
+Fall: eine Stufe **findet nichts** und meldet Erfolg. `backup.sh` erkannte ein
+**fehlendes** Store-Verzeichnis, nicht ein vorhandenes und **leeres** — und ein
+`aws s3 sync --delete` gegen ein leeres oder falsches Bucket liefert Exit 0.
+
+Selbst nachgestellt (Stubs, zwei Laeufe auf dasselbe `${BACKUP_DIR}`, Lauf 2 mit
+leerem `WHO2BE_TABLESTORE_DIR`): `EXIT=0`, ein Heartbeat-Ping, `--tag dump` — und
+der Verwaisten-Sweep raeumte den Snapshot aus Lauf 1 weg, weil die Merkliste
+leer geblieben war. Praktische Ausloeser: ein Volume-Mount, der nicht griff, ein
+umbenanntes Bucket, ein verschobener `WHO2BE_TABLESTORE_DIR`. Alle drei still,
+alle drei mit gruenem Alarmweg.
+
+### Entscheidung: der Postgres-Katalog ist die Soll-Quelle
+
+Null Areas ist ein **legitimer** Zustand (frischer Stack ohne WorkArea-Tabellen).
+„Leer, weil nichts da" von „leer, weil der Mount nicht griff" zu unterscheiden
+braucht deshalb eine zweite Wahrheitsquelle. Gewaehlt: der Katalog in derselben
+Datenbank, die der Lauf ohnehin dumpt.
+
+| Stufe | Soll-Quelle |
+|---|---|
+| Objekt-Store | `SELECT count(*) FROM wa_blob` |
+| Tabellen-Store | `SELECT DISTINCT workspace_id \|\| '/' \|\| area_id \|\| '.sqlite' FROM wa_table` |
+
+`wa_table` traegt `workspace_id` + `area_id`, und genau daraus baut
+`TableStore.db_path` den Dateipfad (`{base}/{workspace_id}/{area_id}.sqlite`,
+ADR-0049). Der Katalog nennt damit nicht nur eine Zahl, sondern die **erwarteten
+Pfade** — so faellt auch der Fall auf, in dem die richtige Anzahl Dateien da
+liegt, aber nicht die richtigen.
+
+Die Pruefung ist bewusst **asymmetrisch** („Ist >= Soll", jeder erwartete Pfad
+muss existieren): eine Katalog-Zeile impliziert eine Datei
+(`WaTableService.create` legt beides in einer Postgres-Transaktion an und rollt
+die Zeile bei DDL-Fehler zurueck), die Umkehrung nicht — `drop_table` loescht die
+Tabelle, nicht die Area-Datei, und ein Bucket darf Objekte tragen, die kein
+Katalog mehr nennt. Ueberzaehliges ist kein Datenverlust.
+
+**Verworfene Alternativen:**
+
+- **Marker-Datei im Volume.** Erkennt den nicht gegriffenen Mount, sagt aber
+  nichts ueber den Inhalt: ein Volume mit Marker und ohne Areas gilt weiter als
+  gesund. Braucht ausserdem einen Deploy-Schritt, der sie anlegt und pflegt.
+- **Mindestanzahl per Env** (`BACKUP_TABLESTORE_MIN_AREAS`). Driftet mit jeder
+  neuen Area und muss von Hand nachgezogen werden; ein zu niedriger Wert macht
+  die Pruefung wirkungslos, ohne dass es auffaellt. Eine Zusage, die an Disziplin
+  haengt, ist genau die Klasse Fehler, die #541 geschlossen hat.
+
+Kosten der gewaehlten Loesung: keine. `psql` liegt im Backup-Image
+(`postgresql16-client`), Credentials und Netzweg sind dieselben wie fuer
+`pg_dump` — kein neuer Dienst, kein neues Secret, kein Auftragsverarbeiter, kein
+VVT-Eintrag.
+
+### Folgen
+
+- **Abweichung Soll/Ist ⇒ Stufe rot** ⇒ kein Heartbeat ⇒ `--tag incomplete`
+  (unveraenderte Mechanik, `fail_stage`).
+- **Stufe 2 prueft VOR dem Sync.** Traegt das Bucket weniger Objekte als
+  `wa_blob` nennt, laeuft `s3 sync --delete` gar nicht erst — sonst leerte genau
+  dieser Aufruf den letzten lokalen Blob-Spiegel. Nach dem Sync wird zusaetzlich
+  der Spiegel selbst gezaehlt: ein Sync, der Exit 0 liefert, aber nichts
+  uebertraegt, ist kein Erfolg.
+- **Der Verwaisten-Sweep setzt bei roter Stufe aus.** Bis hierher loeschte er den
+  letzten guten Spiegel in genau dem Lauf, der scheitert — also den Stand, auf
+  den ein Restore zurueckfallen will. Ausgenommen bleiben Reste eines hart
+  abgebrochenen Vorlaufs (`.scratch.*`): die waren nie ein guter Stand und
+  muessen weg, sonst landeten sie im Snapshot.
+- **Ein nicht befragbarer Katalog ist ein Fehlschlag**, kein stilles Soll 0 —
+  sonst waere die Zusage mit einem `psql`-Ausfall abwaehlbar. Fehlt die
+  Katalog-Tabelle dagegen ganz (Stack vor Migration 0075/0078), gilt Soll 0;
+  gefragt wird ueber `to_regclass`, damit „gibt es nicht" nicht als
+  unterdrueckter SQL-Fehler daherkommt.
+- Belegt durch die Faelle 12–14 derselben Suite: leerer Store bei nichtleerem
+  Katalog ⇒ Exit 1, 0 Pings, `--tag incomplete`, **Spiegel nicht geraeumt**;
+  legitimer Leerfall (leerer Katalog + leerer Store) ⇒ gruen; leeres Bucket bei
+  nichtleerem `wa_blob` ⇒ rot, ohne dass `s3 sync` lief. Gegen die Vorfassung
+  sind 12 und 14 rot (nachgemessen) — sie sind damit echter
+  Regressionsschutz.
+
+**Grenze:** der Abgleich erkennt einen **fehlenden** Bestand, nicht einen
+inhaltlich veralteten. Eine Area-Datei, die da liegt, aber Tage alt ist, faellt
+hier nicht auf — dafuer ist der Restore-Drill (M2 / #454) zustaendig.

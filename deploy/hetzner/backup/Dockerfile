@@ -1,5 +1,8 @@
 # Backup-Container fuer den Hetzner-Stack (C5a + C5b).
-# - postgresql16-client liefert `pg_dump`/`pg_restore`
+# - postgresql16-client liefert `pg_dump`/`pg_restore` — und `psql` fuer den
+#   Soll-Ist-Abgleich gegen den Katalog (`wa_table`/`wa_blob`): ohne ihn ist ein
+#   leerer Bestand nicht von einem verlorenen zu unterscheiden (backup.sh,
+#   Kopf von catalog_query)
 # - gnupg verschluesselt den Dump mit dem Recipient-Public-Key (ADR-0011)
 # - restic + openssh-client sind der Offsite-Pfad (SFTP zur Hetzner-Storage-Box)
 # - curl pingt den self-hosted Heartbeat-Empfaenger (BACKUP_HEARTBEAT_URL, #541)
