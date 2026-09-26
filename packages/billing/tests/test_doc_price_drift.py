@@ -61,13 +61,88 @@ _MOR_CUSTOMERS = Decimal("50")
 _MOR_FEE_SPREAD = Decimal("0.05") - Decimal("0.018")
 
 
+# Punkt ohne Komma ist zweideutig: deutsche Tausendertrennung („9.990 €") oder
+# englischer Dezimalpunkt („9.99 EUR"). Entschieden wird an der Stelligkeit der
+# Gruppen: genau drei Ziffern hinter jedem Punkt und hoechstens drei davor ist
+# Tausendertrennung, alles andere ein Dezimalpunkt. Damit wird „9.990" zu 9990
+# statt zu 9,99 — vorher kollabierten genau die Tausenderbetraege, deren
+# Punktform auf einen erlaubten Preis faellt (9.990 -> Pro, 99.000 -> Team),
+# still auf gruen.
+_THOUSANDS_GROUPED = re.compile(r"^\d{1,3}(?:\.\d{3})+$")
+
+
 def _eur(value: str) -> Decimal:
-    """„9,99" / „9.99" / „0" -> Decimal. Deutsche Doku, englischer Code."""
-    return Decimal(value.replace(".", "").replace(",", ".") if "," in value else value)
+    """„9,99" / „9.99" / „9.990" / „1.234,56" / „0" -> Decimal.
+
+    Deutsche Doku, englischer Code — beide Notationen laufen durch dieselbe
+    Funktion: die Doku schreibt „9,99 €", `plans.py` den Mollie-String „9.99".
+
+    Ein Komma ist eindeutig: es ist der Dezimaltrenner, Punkte davor sind
+    Tausender. Ohne Komma entscheidet `_THOUSANDS_GROUPED`.
+
+    Die Zweideutigkeit, die bleibt: ein dreistelliger Nachkommateil ohne Komma
+    („1.234") wird als Tausender gelesen, nicht als Betrag mit drei
+    Nachkommastellen. Das ist fuer Euro-Betraege die richtige Seite des Irrtums
+    — Cent-Betraege haben zwei Nachkommastellen, nicht drei — und im Zweifel die
+    sichere: die Tausender-Lesart ergibt die groessere Zahl und faellt damit
+    eher aus der Liste der erlaubten Preise, macht den Guard also rot statt
+    stumm.
+    """
+    if "," in value:
+        return Decimal(value.replace(".", "").replace(",", "."))
+    if _THOUSANDS_GROUPED.match(value):
+        return Decimal(value.replace(".", ""))
+    return Decimal(value)
 
 
 def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+
+# `_eur()` traegt die gesamte Betragslogik dieses Guards — beide Pruefarten
+# vergleichen ihre Funde ueber sie. Bis 2026-09-26 wurde sie nur indirekt ueber
+# die Doku-Dateien geprueft; eine Fehl-Lesart blieb damit still, solange keine
+# Doku-Zeile sie ausloeste. Der Tabellentest ist die guenstigere Absicherung.
+_EUR_PARSING = (
+    # Deutsche Doku-Notation.
+    ("0", "0"),
+    ("99", "99"),
+    ("9,99", "9.99"),
+    ("1.234,56", "1234.56"),
+    ("1.234.567,89", "1234567.89"),
+    # Mollie-/JS-Notation aus `plans.py` bzw. `BillingPanel.tsx` — Punkt als
+    # Dezimaltrenner, zwei Nachkommastellen.
+    ("9.99", "9.99"),
+    ("12.50", "12.50"),
+    # Deutsche Tausendertrennung ohne Komma: der Fall, der vorher auf einen
+    # erlaubten Preis kollabierte.
+    ("9.990", "9990"),
+    ("99.000", "99000"),
+    ("1.000", "1000"),
+    ("100.000", "100000"),
+    ("1.234", "1234"),
+)
+
+
+@pytest.mark.parametrize(("raw", "expected"), _EUR_PARSING, ids=[raw for raw, _ in _EUR_PARSING])
+def test_eur_reads_german_and_mollie_notation(raw: str, expected: str) -> None:
+    assert _eur(raw) == Decimal(expected)
+
+
+def test_eur_does_not_collapse_thousands_onto_allowed_prices() -> None:
+    """Die Rot-Probe als Behauptung: Tausenderform != Tarifpreis.
+
+    Beide Betraege liefen gruen durch, solange der Punkt ohne Komma als
+    Dezimaltrenner gelesen wurde: „9.990 €" wurde zum Pro-Preis, „99.000 €" zum
+    Team-Vorschlag. Ein `assert _eur(...) == Decimal(...)` allein wuerde das
+    nicht sichern — `Decimal("99.000") == Decimal("99")` ist wahr, die falsche
+    Lesart haette also eine naive Gleichheitspruefung passiert.
+
+    Nicht dabei: „0.000 €". Das ist in beiden Lesarten null und bleibt damit
+    zu Recht erlaubt — kein Fall fuer diese Unterscheidung.
+    """
+    assert _eur("9.990") != _eur(PRO_PLAN.price_eur)
+    assert _eur("99.000") != _PROPOSED_TEAM_PRICE_EUR
 
 
 # Je Eintrag: Datei + Muster mit EINER Gruppe, die den Betrag traegt.
