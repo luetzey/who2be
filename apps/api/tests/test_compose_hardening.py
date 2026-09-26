@@ -356,3 +356,53 @@ def test_caddy_access_log_lives_on_a_volume() -> None:
     mounts = [str(v) for v in caddy["volumes"]]
     assert any(m.startswith("caddy-logs:/var/log/caddy") for m in mounts), mounts
     assert "caddy-logs" in data["volumes"]
+
+
+def test_internal_area_is_blocked_by_more_than_one_spelling() -> None:
+    """Die Zugriffsregel fuer den internen API-Bereich haengt nicht an der Notation.
+
+    Ein Pfad-Matcher vergleicht Zeichenfolgen. Ob zwei Schreibweisen desselben
+    Pfades vor diesem Vergleich auf eine Form gebracht werden, ist Verhalten des
+    Proxys und darf sich zwischen Versionen aendern — eine Zugriffsentscheidung
+    darf daran nicht haengen. Deshalb traegt der api-Vhost neben der
+    buchstaeblichen Regel eine zweite, die denselben Bereich unabhaengig von der
+    Notation erfasst.
+
+    Dieser Test ist die statische Haelfte des Nachweises: er haelt die zweite
+    Regel im Caddyfile fest und laeuft in jeder CI mit. Die dynamische Haelfte —
+    kommt gegen ein echtes Image wirklich nichts durch? — liegt in
+    ``deploy/hetzner/tests/test_internal_matcher_against_image.sh``, weil sie
+    einen laufenden Container braucht.
+    """
+    directives = _caddyfile_directives()
+    assert "respond @internal " in directives, (
+        "buchstaebliche 403-Regel fuer den internen Bereich fehlt"
+    )
+    assert "@internal_alt path_regexp" in directives, (
+        "zweite, notationsunabhaengige Regel fehlt — der Schutz haengt dann an "
+        "der Schreibweise; Gegenprobe: test_internal_matcher_against_image.sh"
+    )
+    assert "respond @internal_alt " in directives, (
+        "@internal_alt ist definiert, aber nichts antwortet darauf"
+    )
+
+
+def test_version_jump_docs_do_not_overclaim_the_matcher_result() -> None:
+    """Das Messprotokoll sagt, was gemessen wurde — nicht mehr.
+
+    Eine fruehere Fassung schloss aus „beide Versionen verhalten sich gleich"
+    auf „es kommt nichts durch". Das erste war gemessen, das zweite nicht, und
+    eine Doku, die mehr zusagt als sie geprueft hat, wird kein zweites Mal
+    nachgeprueft — geschlossen gemeldete Befunde sucht niemand erneut. Der Satz
+    steht zudem in einem oeffentlich lesbaren Repo.
+    """
+    for path in (
+        _HETZNER / "RUNBOOK.md",
+        _REPO_ROOT / "changelog.d",
+    ):
+        files = sorted(path.glob("*.md")) if path.is_dir() else [path]
+        for file in files:
+            text = file.read_text(encoding="utf-8")
+            assert "kein Durchgriff" not in text, (
+                f"{file.name}: Zusage, die ueber das Gemessene hinausgeht"
+            )

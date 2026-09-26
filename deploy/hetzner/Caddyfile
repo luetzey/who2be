@@ -96,8 +96,17 @@ api.{$DOMAIN} {
     # H5 / ADR-0010: /v1/internal/* (z.B. /metrics fuer Prometheus) ist ausschliesslich
     # intern erreichbar. Caddy blockt externen Zugriff direkt — kein Round-Trip in den
     # Container, damit auch versehentlich offene Endpoints nicht raus-leaken.
-    @internal path /v1/internal/*
+    @internal path /v1/internal/* /v1/internal
     respond @internal "Forbidden" 403
+    # Zweite Regel, gleiche Aussage: der Bereich ist auch dann gesperrt, wenn er
+    # abweichend notiert wird (Trennzeichen, Prozent-Kodierung, Gross/Klein).
+    # Ein Pfad-Matcher vergleicht die Schreibweise, nicht die Absicht — die
+    # Zugriffsentscheidung darf aber nicht an der Notation haengen. Gegenprobe:
+    # `test_internal_matcher_against_image.sh` faehrt die Schreibweisen durch.
+    # Ausdruecklich NICHT erfasst: Pfade, bei denen `internal` nur der Anfang
+    # eines laengeren Wortes ist — die gehoeren nicht zu diesem Bereich.
+    @internal_alt path_regexp (?i)^/v1[^a-z0-9]+internal([^a-z0-9]|$)
+    respond @internal_alt "Forbidden" 403
     # Body-Limit VOR der App (Security-Review 2026-08-13 M1): das Ingest-Limit
     # ist 20 MiB Nutzdaten (WHO2BE_INGEST_MAX_BYTES) — 32 MB deckt Base64-
     # Overhead + JSON-Rahmen; groessere Bodies verwirft Caddy, bevor Starlette

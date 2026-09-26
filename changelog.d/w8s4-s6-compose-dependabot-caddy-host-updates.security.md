@@ -24,10 +24,21 @@
   content security policies, and the two status-code assertions. The published
   advisories for 2.11.1 were checked against this configuration rather than
   adopted wholesale: five of the six concern features this Caddyfile does not
-  use. The sixth touches path matching, which this configuration does rely on,
-  so both versions were exercised with thirteen spellings of the same path;
-  behaviour is identical in both, and the documented outcome of the review is
-  that the jump closes the version gap rather than a demonstrated hole. Two
+  use. The sixth touches path matching, which this configuration does rely on
+  for the single access decision it makes at the proxy — the internal area of
+  the API — so both versions were exercised against that rule with a range of
+  differing spellings of the same path, answered by a backend that deliberately
+  replies there, so that a refusal is attributable to the proxy rather than to
+  chance. Both versions behave identically, so the jump changes nothing at that
+  point in either direction. The behaviour does depend on spelling, though, and
+  how a proxy prepares a request before comparing it against a rule is
+  implementation behaviour that is allowed to change between releases; an access
+  decision should not rest on it. The rule therefore now also covers alternative
+  notations of the same area, while paths that merely start with the same word
+  continue through, and a new check runs that comparison against a live image so
+  the question gets asked again at every future version jump rather than once.
+  The documented outcome of the review is that the jump closes the version gap;
+  it is not a fix for a demonstrated hole. Two
   behavioural differences are recorded in the runbook: 2.11 adds a `Via`
   response header naming the proxy hop, and the file log writer now honours
   `roll_at` and `mode`, which 2.8 discarded silently. Neither changes the

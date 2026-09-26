@@ -637,6 +637,14 @@ diff /tmp/caddy-adapt-2.8-alpine.json /tmp/caddy-adapt-2.11.4-alpine.json \
 bash deploy/hetzner/tests/test_headers_against_image.sh
 # Gegenprobe mit der Altversion — beide muessen gruen sein:
 bash deploy/hetzner/tests/test_headers_against_image.sh 2.8-alpine
+
+# c) Haelt die Zugriffsregel des api-Vhosts nach dem Sprung noch? Header und
+#    Zugriffsentscheidung sind zwei verschiedene Fragen: (b) prueft, was
+#    zurueckkommt, (c) prueft, was ueberhaupt durchgelassen wird. Wie ein Proxy
+#    eine Anfrage vor dem Regelvergleich aufbereitet, ist Verhalten, das sich
+#    zwischen Versionen aendern darf — also wird es gemessen, nicht angenommen.
+bash deploy/hetzner/tests/test_internal_matcher_against_image.sh
+bash deploy/hetzner/tests/test_internal_matcher_against_image.sh 2.8-alpine
 ```
 
 > ⛔ **Ist (b) nicht gruen, wird die Version nicht gehoben.** Ein kaputter
@@ -650,6 +658,7 @@ echten Images gefahren):
 | `caddy validate` | gruen | gruen |
 | `caddy adapt` Config-JSON | Referenz | **byte-identisch** |
 | `test_headers.sh` (9 Header + 403 + 404) | gruen | gruen |
+| `test_internal_matcher_against_image.sh` | gruen | gruen |
 | CSP der Vhosts app/supabase/mcp | gesetzt | unveraendert |
 | Log-Rotation: legt nur `restart` die Datei neu an? | ja | ja |
 | Dateirechte `access.log` ohne `mode` | `0600` | `0600` |
@@ -681,15 +690,30 @@ Caddyfile hier gelesen:
 | `-27586` TLS-Client-Auth faellt offen | `client_auth` konfiguriert | **nein** — nicht konfiguriert |
 | `-27585` Glob im `file`-Matcher | `file_server`/`file`-Matcher | **nein** — kein `file_server` |
 
-Die einzige Zugriffsentscheidung an einem Matcher ist
-`@internal path /v1/internal/*` → 403. Dagegen wurden beide Versionen mit
-13 Schreibweisen desselben Pfades geprueft (Gross/Klein, einfach und doppelt
-prozentkodiert, `.`-Segment, `..`-Aufstieg, Rueckwaerts-Trenner,
-Doppel-Trenner, Semikolon-Parameter, kodiertes NUL). Ergebnis: **in beiden
-Versionen identisch, kein Durchgriff** — was Caddy passieren liess, traf
-danach keine geschuetzte Route. Der Sprung schliesst hier also keine
-nachgewiesene offene Stelle; er schliesst den **Abstand** von zwei Jahren zur
-gepflegten Linie, und das ist der Grund, aus dem er trotzdem gemacht wird.
+Die einzige Zugriffsentscheidung an einem Matcher ist die 403-Regel fuer
+`/v1/internal` im api-Vhost. Genau dort wurde die Betroffenheit deshalb
+ausgefahren statt angenommen: beide Versionen wurden mit einer Reihe
+abweichender Schreibweisen desselben Pfades beschickt (Gross/Klein,
+Prozent-Kodierung einfach und doppelt, alternative Trennzeichen,
+`.`-Segment, `..`-Aufstieg, Doppel-Trenner, Semikolon-Parameter, kodiertes
+NUL) — gegen ein Backend, das auf diesem Bereich absichtlich antwortet,
+damit ein 403 wirklich Caddy zuzuschreiben ist und nicht dem Zufall.
+
+Ergebnis: **2.8.4 und 2.11.4 verhalten sich identisch** — der Versionssprung
+aendert an dieser Stelle nichts, in keine Richtung. Das Verhalten haengt
+allerdings ueberhaupt an der Schreibweise, und wie ein Proxy eine Anfrage vor
+dem Regelvergleich aufbereitet, ist Implementierungsverhalten, das sich
+zwischen Versionen aendern darf. Eine Zugriffsentscheidung darf daran nicht
+haengen. Die Regel im `Caddyfile` erfasst deshalb seit diesem Stand zusaetzlich
+die abweichenden Notationen desselben Bereichs, waehrend Pfade, in denen
+`internal` nur der Wortanfang ist, weiterhin durchgehen. Dauerhaft belegt wird
+das von `test_internal_matcher_against_image.sh`, das bei jedem kuenftigen
+Versionssprung mitlaeuft (Schritt 1c) — der eigentliche Gewinn dieser Pruefung
+ist nicht der einmalige Befund, sondern dass die Frage ab jetzt gestellt wird.
+
+Der Sprung selbst schliesst hier also keine nachgewiesene offene Stelle; er
+schliesst den **Abstand** von zwei Jahren zur gepflegten Linie, und das ist der
+Grund, aus dem er gemacht wird.
 
 ### 3 — Deploy
 
