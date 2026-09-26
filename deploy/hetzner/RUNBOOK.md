@@ -1126,6 +1126,19 @@ unter anderem, dass bei gescheitertem Sync der lokale Dump liegen bleibt:
 bash deploy/hetzner/tests/test_backup_alarm.sh
 ```
 
+Der Test läuft seit Karte `t_5c8d5364` im **CI-Job `backup-alarm`** (an
+`all-green` gebunden) und nicht mehr nur von Hand. Dort ist
+`BACKUP_ALARM_REQUIRE_ALL=1` gesetzt: jeder übersprungene Fall ist ein
+Fehlschlag, weil die Fälle 12–14 unprivilegierte User-Namespaces bzw. ein
+eigenes tmpfs brauchen — und genau sie tragen die Zusage. Lokal ohne diese
+Fähigkeiten überspringen sich die Fälle mit einer Warnung; die Bilanz am Ende
+des Laufs (`CASES_RUN`, `CASES_SKIPPED`, `SKIPPED_CASES`) sagt, was wirklich
+gemessen wurde. Wer den CI-Zustand lokal nachfahren will:
+
+```bash
+BACKUP_ALARM_REQUIRE_ALL=1 bash deploy/hetzner/tests/test_backup_alarm.sh
+```
+
 Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
 (#454).
 

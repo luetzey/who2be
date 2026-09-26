@@ -38,8 +38,16 @@ SKIP = "skipped"
 RED = "failure"
 STOP = "cancelled"
 
-# Reihenfolge der sechs pfadgefilterten Jobs in `gated`.
-GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud", "e2e-mobile")
+# Reihenfolge der sieben pfadgefilterten Jobs in `gated`.
+GATED_JOBS = (
+    "python",
+    "web",
+    "compose-smoke",
+    "e2e",
+    "e2e-billing-cloud",
+    "e2e-mobile",
+    "backup-alarm",
+)
 
 # Jobs, die ABSICHTLICH nicht in `all-green.needs` stehen.
 #
@@ -73,47 +81,82 @@ class Case(NamedTuple):
     name: str
     changes: str
     code: str
-    gated: tuple[str, str, str, str, str, str]
+    gated: Gated
     audit: str
     expected_exit: int
     changelog_guard: str = OK
 
     def env(self) -> dict[str, str]:
-        python, web, compose_smoke, e2e, e2e_billing_cloud, e2e_mobile = self.gated
-        return {
-            "CHANGES_RESULT": self.changes,
-            "CODE": self.code,
-            "PYTHON_RESULT": python,
-            "WEB_RESULT": web,
-            "COMPOSE_SMOKE_RESULT": compose_smoke,
-            "E2E_RESULT": e2e,
-            "E2E_BILLING_CLOUD_RESULT": e2e_billing_cloud,
-            "E2E_MOBILE_RESULT": e2e_mobile,
-            "AUDIT_RESULT": self.audit,
-            "CHANGELOG_GUARD_RESULT": self.changelog_guard,
+        if len(self.gated) != len(GATED_JOBS):
+            raise AssertionError(
+                f"Fall {self.name!r} nennt {len(self.gated)} gegatete Ergebnisse, "
+                f"GATED_JOBS kennt {len(GATED_JOBS)}: {GATED_JOBS}"
+            )
+        # Die Env-Namen werden aus den Job-Ids ABGELEITET, nicht zweitgepflegt:
+        # eine zweite Liste von Hand driftet genau dann von `ci.yml` weg, wenn
+        # ein Job hinzukommt — der Fall, den diese Datei bewachen soll.
+        env = {
+            f"{job.upper().replace('-', '_')}_RESULT": result
+            for job, result in zip(GATED_JOBS, self.gated, strict=True)
         }
+        env.update(
+            {
+                "CHANGES_RESULT": self.changes,
+                "CODE": self.code,
+                "AUDIT_RESULT": self.audit,
+                "CHANGELOG_GUARD_RESULT": self.changelog_guard,
+            }
+        )
+        return env
 
 
-Gated = tuple[str, str, str, str, str, str]
+Gated = tuple[str, ...]
 
-ALL_OK: Gated = (OK, OK, OK, OK, OK, OK)
-ALL_SKIP: Gated = (SKIP, SKIP, SKIP, SKIP, SKIP, SKIP)
+ALL_OK: Gated = tuple(OK for _ in GATED_JOBS)
+ALL_SKIP: Gated = tuple(SKIP for _ in GATED_JOBS)
+
+
+def gated_with(**overrides: str) -> Gated:
+    """`ALL_OK`, aber die benannten Jobs tragen ein anderes Ergebnis.
+
+    Positionsbehaftete Tupel wurden mit jedem neuen Job laenger und die Faelle
+    damit unlesbar — schlimmer: ein vergessenes Element verschob stillschweigend
+    alle folgenden Zuordnungen. Hier steht der Job-Name am Ergebnis.
+    """
+    keyed = {job.replace("-", "_"): job for job in GATED_JOBS}
+    results: dict[str, str] = dict(zip(GATED_JOBS, ALL_OK, strict=True))
+    for key, value in overrides.items():
+        results[keyed[key]] = value
+    return tuple(results[job] for job in GATED_JOBS)
+
 
 CASES: tuple[Case, ...] = (
     # --- die zwei Faelle, die auch in CI belegt werden ---
     Case("Voller Lauf, alles gruen", OK, "true", ALL_OK, OK, 0),
     Case("Doku-PR: gegatete Jobs uebersprungen", OK, "false", ALL_SKIP, OK, 0),
     # --- gewoehnliche Fehlschlaege ---
-    Case("Ein Job rot (python)", OK, "true", (RED, OK, OK, OK, OK, OK), OK, 1),
-    Case("Ein Job abgebrochen (e2e)", OK, "true", (OK, OK, OK, STOP, OK, OK), OK, 1),
+    Case("Ein Job rot (python)", OK, "true", gated_with(python=RED), OK, 1),
+    Case("Ein Job abgebrochen (e2e)", OK, "true", gated_with(e2e=STOP), OK, 1),
     # --- Welle 7 / K3: das Mobile-Gate ist scharf. Vor K3 war dieser Fall
     #     gruen — der Job stand weder in `needs` noch im Auswertungs-Step. ---
-    Case("Mobile-Profil rot (e2e-mobile)", OK, "true", (OK, OK, OK, OK, OK, RED), OK, 1),
+    Case("Mobile-Profil rot (e2e-mobile)", OK, "true", gated_with(e2e_mobile=RED), OK, 1),
     Case(
         "Mobile-Job uebersprungen trotz code=true",
         OK,
         "true",
-        (OK, OK, OK, OK, OK, SKIP),
+        gated_with(e2e_mobile=SKIP),
+        OK,
+        1,
+    ),
+    # --- Karte t_5c8d5364: die Backup-Alarm-Suite ist gebunden. Vor dieser
+    #     Karte lief sie in keinem Job; beide Faelle waeren gruen gewesen, weil
+    #     der Job in `needs` und im Auswertungs-Step fehlte. ---
+    Case("Backup-Alarm rot", OK, "true", gated_with(backup_alarm=RED), OK, 1),
+    Case(
+        "Backup-Alarm uebersprungen trotz code=true",
+        OK,
+        "true",
+        gated_with(backup_alarm=SKIP),
         OK,
         1,
     ),
@@ -125,12 +168,12 @@ CASES: tuple[Case, ...] = (
     Case("audit rot bei Doku-PR", OK, "false", ALL_SKIP, RED, 1),
     Case("audit uebersprungen (darf nie passieren)", OK, "true", ALL_OK, SKIP, 1),
     # --- Ergebnis passt nicht zur Klassifikation ---
-    Case("code=true, aber Job uebersprungen", OK, "true", (SKIP, OK, OK, OK, OK, OK), OK, 1),
+    Case("code=true, aber Job uebersprungen", OK, "true", gated_with(python=SKIP), OK, 1),
     Case(
         "code=false, aber Job gelaufen",
         OK,
         "false",
-        (OK, SKIP, SKIP, SKIP, SKIP, SKIP),
+        tuple(OK if job == "python" else SKIP for job in GATED_JOBS),
         OK,
         1,
     ),
@@ -253,11 +296,46 @@ def check_structure(jobs: dict[str, Any]) -> list[str]:
     return problems
 
 
+def check_expect_wiring(jobs: dict[str, Any]) -> list[str]:
+    """Jeder verdrahtete Vorgaenger braucht `env` UND eine `expect`-Zeile.
+
+    Ein Job wird an drei Stellen scharf: `needs`, eine eigene `env`-Variable und
+    eine eigene `expect`-Zeile im Auswertungs-Step. Je zwei davon allein setzen
+    nichts durch — `needs` ohne `expect` prueft einen Wert, den niemand liest;
+    `expect` ohne `env` liest eine leere Variable und vergleicht sie gegen die
+    Erwartung, was zwar rot faerbt, aber aus dem falschen Grund.
+
+    Bisher stand diese Regel nur als Kommentar an `e2e-mobile` in `ci.yml` und
+    wurde bei jedem neuen Job von Hand nachgezogen. Hier wird sie geprueft.
+    """
+    step: dict[str, Any] = jobs["all-green"]["steps"][0]
+    script: str = step["run"]
+    env: dict[str, Any] = step.get("env") or {}
+    problems: list[str] = []
+    for name in jobs["all-green"].get("needs", []):
+        if name == "changes":
+            # Sonderfall mit eigener Behandlung oben im Skript (harter Abbruch
+            # statt `expect`), weil ohne das Tor jede weitere Aussage wertlos ist.
+            continue
+        var = f"{name.upper().replace('-', '_')}_RESULT"
+        if var not in env:
+            problems.append(
+                f"Job '{name}' steht in `all-green.needs`, aber der Auswertungs-Step hat kein "
+                f"`env`-Feld '{var}'. Ohne die Variable wird sein Ergebnis nie gelesen."
+            )
+        if f"expect {name} " not in script and f"expect {name}\n" not in script:
+            problems.append(
+                f"Job '{name}' steht in `all-green.needs`, aber der Auswertungs-Step hat keine "
+                f"`expect {name} …`-Zeile. `needs` allein prueft nichts."
+            )
+    return problems
+
+
 def main() -> int:
     workflow: dict[str, Any] = yaml.safe_load(CI_YML.read_text(encoding="utf-8"))
     jobs: dict[str, Any] = workflow["jobs"]
 
-    problems = check_structure(jobs) + check_playwright_projects(jobs)
+    problems = check_structure(jobs) + check_playwright_projects(jobs) + check_expect_wiring(jobs)
     for problem in problems:
         print(f"FAIL  Struktur: {problem}")
 

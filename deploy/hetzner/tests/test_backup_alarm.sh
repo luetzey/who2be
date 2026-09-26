@@ -28,6 +28,16 @@
 #
 # Aufruf:
 #   bash deploy/hetzner/tests/test_backup_alarm.sh
+#   BACKUP_ALARM_REQUIRE_ALL=1 bash deploy/hetzner/tests/test_backup_alarm.sh
+#
+# BACKUP_ALARM_REQUIRE_ALL=1 macht jeden uebersprungenen Fall zum Fehlschlag —
+# dasselbe Prinzip wie WHO2BE_REQUIRE_DB=1 fuer die pytest-Suite (ADR-0041) und
+# wie `scripts/ci/assert_skips_within_budget.py`: uebersprungen ist nicht
+# bestanden. Ohne die Variable bleibt das Verhalten unveraendert (Warnung statt
+# Fehlschlag), damit die Suite auf gehaerteten Arbeitsplaetzen ohne
+# unprivilegierte User-Namespaces weiterhin ihre lauffaehigen Faelle belegt.
+# Der CI-Job `backup-alarm` setzt den Schalter; die Faehigkeiten des Runners
+# werden dort in einem eigenen Step gemessen und protokolliert.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,6 +46,43 @@ BACKUP_SH="${SCRIPT_DIR}/../scripts/backup.sh"
 log()  { printf '\033[1;34m[backup-alarm]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[backup-alarm:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 ok()   { printf '  ✓ %s\n' "$*"; }
+
+# --- Bilanz: welche Faelle liefen wirklich? ------------------------------
+# Die Suite darf nicht nur "gruen" sagen, sondern muss zaehlbar machen, WAS
+# gruen war: die Faelle 12-14 brauchen unprivilegierte User-Namespaces bzw. ein
+# eigenes tmpfs und ueberspringen sich, wo das fehlt. Ohne diese Zeilen waere in
+# einem CI-Log nicht zu unterscheiden, ob 14 oder 11 Faelle belegt wurden — und
+# genau diese Verwechslung ist der Anlass dieser Bilanz (Karte t_5c8d5364).
+TOTAL_CASES=14
+SKIPPED_CASES=()
+
+summary() {
+  local n=${#SKIPPED_CASES[@]}
+  printf 'CASES_TOTAL=%s\n' "${TOTAL_CASES}"
+  printf 'CASES_RUN=%s\n' "$((TOTAL_CASES - n))"
+  printf 'CASES_SKIPPED=%s\n' "${n}"
+  printf 'SKIPPED_CASES=%s\n' "${SKIPPED_CASES[*]-}"
+}
+
+# skip_case <fall-nummern> <grund> — ein Fall kann nicht laufen.
+#
+# Unter BACKUP_ALARM_REQUIRE_ALL=1 ist das ein FEHLSCHLAG, nicht eine Warnung:
+# uebersprungen ist nicht bestanden. Der Schalter existiert, weil die
+# uebersprungenen Faelle hier nicht die Randfaelle sind, sondern die, die die
+# Zusage tragen — Fall 13 ist der einzige, der die Vorfassung rot faerbt, Fall 14
+# der einzige mit echter Dateisystem-Grenze. Eine Suite, die sie stillschweigend
+# weglaesst und gruen meldet, schuetzt den naechsten Umbau nicht.
+skip_case() {
+  local cases="$1" why="$2" n
+  for n in ${cases}; do
+    SKIPPED_CASES+=("${n}")
+  done
+  if [[ "${BACKUP_ALARM_REQUIRE_ALL:-0}" == "1" ]]; then
+    summary
+    fail "Fall ${cases} uebersprungen (${why}). BACKUP_ALARM_REQUIRE_ALL=1 ist gesetzt: uebersprungen ist nicht bestanden."
+  fi
+  printf '  ⚠ %s uebersprungen: %s\n' "${cases}" "${why}"
+}
 
 [[ -r "${BACKUP_SH}" ]] || fail "backup.sh nicht gefunden: ${BACKUP_SH}"
 command -v sqlite3 >/dev/null 2>&1 || fail "sqlite3 wird fuer die Tabellen-Store-Faelle gebraucht"
@@ -402,7 +449,12 @@ log "12/13 Cross-UID mit CAP_CHOWN: Backup als root, Store gehoert der API"
 if ! command -v unshare >/dev/null 2>&1 \
    || ! command -v setpriv >/dev/null 2>&1 \
    || ! unshare -rm --map-auto true 2>/dev/null; then
-  printf '  ⚠ 12+13 uebersprungen: unprivilegierte User-Namespaces (unshare --map-auto) nicht verfuegbar\n'
+  skip_case "12 13" "unprivilegierte User-Namespaces (unshare --map-auto) nicht verfuegbar"
+  # Fall 14 braucht denselben Namespace plus ein eigenes tmpfs — fehlt der
+  # Namespace, ist auch er nicht lauffaehig. Ohne diesen Vermerk zaehlte die
+  # Bilanz ihn als gelaufen, obwohl das Skript hier endet.
+  skip_case "14" "haengt am selben User-Namespace wie 12+13"
+  summary
   printf '\033[1;32m[backup-alarm]\033[0m alle lauffaehigen Faelle gruen\n'
   exit 0
 fi
@@ -583,7 +635,7 @@ unshare -rm --map-auto bash "${ROOT}/case14-inner.sh" "${BACKUP_SH}" "${BIN}" >"
 sed 's/^/  /' "${CASE14_OUT}"
 
 if grep -q '^MOUNT_FAILED' "${CASE14_OUT}"; then
-  printf '  ⚠ 14 uebersprungen: eigenes tmpfs im User-Namespace nicht mountbar\n'
+  skip_case "14" "eigenes tmpfs im User-Namespace nicht mountbar"
 else
   grep -q '^RUN1_EXIT=0' "${CASE14_OUT}" \
     || fail "Volles Ziel: Vorlauf (Lauf 1) war schon nicht gruen — Aufbau taugt nicht"
@@ -614,4 +666,9 @@ else
   ok "Volles Ziel: kein Vorlauf-Rest im Backup-Ziel"
 fi
 
-printf '\033[1;32m[backup-alarm]\033[0m alle Faelle gruen\n'
+if (( ${#SKIPPED_CASES[@]} == 0 )); then
+  printf '\033[1;32m[backup-alarm]\033[0m alle Faelle gruen\n'
+else
+  printf '\033[1;32m[backup-alarm]\033[0m alle lauffaehigen Faelle gruen\n'
+fi
+summary
