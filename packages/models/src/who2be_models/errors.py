@@ -107,6 +107,12 @@ ProblemReason = Literal[
     "invalid_credentials",  # 401 — Anmeldedaten fehlen oder sind ungueltig
     "write_rate_limited",  # 429 — Schreibrate des Agenten erreicht (params: limit)
     "token_management_forbidden",  # 403 — agent-gebundener Token verwaltet keine Tokens
+    # 403 — agent-gebundener Token administriert keinen Workspace (Klasse 1:
+    # Einladungen, Mitglieder, Workspace-Einstellungen). Eigener Grund neben
+    # `token_management_forbidden`: anderer Text ⇒ anderer Grund (ADR-0051),
+    # und anders als jener ist dies ein Gate-Grund (`ApiGateError`, RFC 7807)
+    # ohne Locale-Key.
+    "workspace_administration_forbidden",
     "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
     "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen

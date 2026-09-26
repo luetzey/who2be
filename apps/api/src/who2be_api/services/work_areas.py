@@ -34,6 +34,7 @@ from fastapi import status
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    is_agent_bound,
     require_capability,
     require_role,
     require_write_rate,
@@ -41,7 +42,6 @@ from who2be_api.core.security import (
 from who2be_api.core.workarea_scope import (
     agent_not_found,
     area_not_found,
-    is_agent_bound,
     readable_area_ids,
 )
 from who2be_api.repositories.work_area_repository import WorkAreaRepository

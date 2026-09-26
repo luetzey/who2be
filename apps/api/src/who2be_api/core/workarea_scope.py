@@ -43,7 +43,12 @@ import asyncpg
 from fastapi import Depends, status
 
 from who2be_api.core.errors import ApiError, ApiGateError
-from who2be_api.core.security import WorkspaceContext, get_current_workspace, role_satisfies
+from who2be_api.core.security import (
+    WorkspaceContext,
+    get_current_workspace,
+    is_agent_bound,
+    role_satisfies,
+)
 from who2be_models import WorkAreaGrantLevel, WorkspaceRole
 
 # `Pool | Connection`: Services reichen den Pool durch, Transaktions-Pfade eine
@@ -92,16 +97,6 @@ def agent_not_found() -> ApiError:
         detail="Agent nicht gefunden.",
         reason="agent_not_found",
     )
-
-
-def is_agent_bound(ctx: WorkspaceContext) -> bool:
-    """True, wenn der Aufruf ueber einen agent-gebundenen Token kommt.
-
-    Beide Indikatoren pruefen (Defense-in-Depth, Muster
-    `memory_service._require_human`): heute impliziert `agent_id` eine Policy,
-    aber die Scope-Entscheidung soll nicht an dieser DB-Invariante haengen.
-    """
-    return ctx.tool_policy is not None or ctx.agent_id is not None
 
 
 def require_agent_bound_token(

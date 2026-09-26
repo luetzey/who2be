@@ -1786,3 +1786,36 @@ er verschiebt nicht die Grenze und behaelt den Beleg.
 - **Verworfen:** CI-Check jetzt — er schlaegt bei Dependabot- und reinen
   Doku-PRs falsch an und braucht eine Ausnahmeliste. Erst messen, ob Template +
   CONTRIBUTING reichen; wenn nicht, eigene Karte.
+
+## 2026-09-25 — Agent-Bindung als eigenes Gate in `core/security.py`, zwei Huellen um ein Praedikat
+- **Entscheidung:** Die Pruefung „ist der Aufrufer an einen Agenten gebunden?"
+  liegt als `is_agent_bound(ctx)` in `core/security.py`, daneben zwei duenne
+  Gate-Funktionen: `deny_agent_bound_token_management` (`ApiError`,
+  `reason: token_management_forbidden`, bestehender Vertrag mit Locale-Key) und
+  `deny_agent_bound_workspace_admin` (`ApiGateError`/RFC 7807,
+  `reason: workspace_administration_forbidden`, `actionable_by: "human"`, ohne
+  Locale-Key). `TokenService._deny_agent_bound` ist entfallen; seine sechs
+  Aufrufer rufen die erste Funktion, die sieben `require_role(ctx, admin)`-Stellen
+  in `invitations.py`/`members.py`/`workspaces.py` die zweite.
+- **Begruendung:** Ein agent-gebundener Token mit Rollen-Snapshot `admin` kam an
+  allen sieben Stellen durch (gemessen, Karte `t_ea83420c`) und konnte sich per
+  Einladung, Rollen-Patch oder Workspace-Delete Rechte ausserhalb seiner
+  Pro-Agent-Policy beschaffen — derselbe Eskalationsweg, den die
+  Token-Verwaltung seit je verbaut. Das Praedikat ist in beiden Faellen
+  identisch, der Fehlervertrag nicht: der Token-Pfad ist veroeffentlicht und
+  muss wortgleich bleiben, der Admin-Pfad ist ein Autorisierungs-Gate wie
+  `require_role` daneben. Abstrahiert wird deshalb nur das Praedikat.
+  Das Praedikat prueft **beide** Indikatoren (`tool_policy is not None or
+  agent_id is not None`) nach dem Muster von `memory_service._require_human`:
+  `_load_agent_tool_policy` faellt bei einem Race mit Agent-Delete defensiv auf
+  `None` zurueck, und in diesem Fenster waere ein Ein-Indikator-Gate offen.
+- **Verworfen:** eine parametrisierte `deny_agent_bound(ctx, scope)` mit
+  Mapping-Tabelle — kompakter, muesste aber die Exception-**Klasse** aus einer
+  Tabelle ziehen und verschleiert damit genau die Information, auf die es
+  ankommt (welcher Aufrufer welchen Serialisierungs-Vertrag hat). Ebenfalls
+  verworfen: das Gate als FastAPI-Dependency — es braucht den
+  `WorkspaceContext` und saesse dann vor `require_role`, was die
+  Fehler-Reihenfolge (`insufficient_role` zuerst) umdreht.
+- **Nicht mit entschieden:** Klasse 2 (`get_current_user`-Router `me.py`,
+  `organizations.py`, `gdpr.py`) verwirft die Agent-Bindung strukturell und ist
+  eine offene Owner-Weiche (Karte `t_1b046ae7`).
