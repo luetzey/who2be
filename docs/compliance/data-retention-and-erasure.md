@@ -191,6 +191,12 @@ haengen an keinem FK: ein `DELETE FROM work_area` laesst die Datei stehen.
 `cleanup_deleted_area_stores` ist der Gegenpart und entfernt Datei + WAL/SHM
 jeder Area, die es in `work_area` nicht mehr gibt.
 
+**Karenzfrist (24 h):** eine Datei mit kuerzlicher Schreibaktivitaet (juengstes
+`mtime` aus `.sqlite`/`-wal`/`-shm`) bleibt liegen, damit ein noch laufender
+Schreibvorgang sein Ergebnis nicht verliert; der naechste Lauf nimmt sie. Die
+Loeschzusage verschiebt sich damit um maximal einen Cron-Lauf — Begruendung im
+ADR-0049-Nachtrag 2026-09-26.
+
 **Bewusst zurueckhaltend:** angefasst wird ein Workspace-Verzeichnis nur, wenn
 sein Name eine UUID ist **und** ein Workspace mit dieser ID existiert. Grund
 ist der teuerste Fehlfall: liefe der Purge versehentlich gegen die falsche

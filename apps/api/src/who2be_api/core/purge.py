@@ -57,6 +57,19 @@ logger = logging.getLogger(__name__)
 # Sweep damit unabhaengig von der Laufzeit einzelner Ingests.
 ORPHAN_BLOB_GRACE = timedelta(hours=24)
 
+# Schonfrist fuer Area-Dateien (ADR-0049). Der Sweep unten entfernt Dateien
+# ohne `work_area`-Zeile — eine Area, deren Agent geloescht wurde, verschwindet
+# per FK-CASCADE aus der Datenbank, waehrend eine Operation noch auf ihre Datei
+# schreibt. Das Ergebnis waere kein Fehler, sondern ein stiller Verlust: der
+# Schreibvorgang gelingt, das Ergebnis ist danach nicht mehr erreichbar.
+# Wie bei `ORPHAN_BLOB_GRACE` deckt die Frist die laengste plausible
+# EINZELoperation ab: die teuerste gemessene ist der Snapshot einer grossen
+# Area mit 0,56 s (308 MB / 150.000 Zeilen, Messung im ADR-0049-Nachtrag
+# 2026-09-26). 24 h liegen um Groessenordnungen darueber und machen den Sweep
+# damit unabhaengig von der Laufzeit einzelner Operationen — dieselbe
+# Ueberlegung, deshalb bewusst derselbe Wert.
+AREA_STORE_GRACE = timedelta(hours=24)
+
 # Deckel des Objekt-Sweeps (Teil 2 von `cleanup_orphan_blobs`). Der Sweep
 # listet ein Praefix vollstaendig — auf einem grossen Bucket ist das teuer,
 # und der Purge ist ein Cron-Job neben dem Live-Betrieb, kein Wartungsfenster.
@@ -332,6 +345,7 @@ async def _sweep_orphan_objects(
 async def cleanup_deleted_area_stores(
     conn: asyncpg.Connection,
     store: TableStore,
+    now: datetime | None = None,
 ) -> tuple[int, int]:
     """Loescht SQLite-Dateien, deren WorkArea es nicht mehr gibt (ADR-0049).
 
@@ -351,6 +365,11 @@ async def cleanup_deleted_area_stores(
     Org-/Workspace-Hard-Purge bleiben die Dateien liegen und muessen vom
     Betreiber entfernt werden (siehe `docs/compliance/data-retention-and-erasure.md`).
 
+    **Karenzfrist:** eine Datei mit frischer Schreibspur bleibt liegen, auch
+    wenn ihre `work_area`-Zeile schon weg ist (`AREA_STORE_GRACE`, Details dort
+    und im ADR-0049-Nachtrag 2026-09-26). Das ist kein Rueckstand: der naechste
+    Lauf betrachtet sie erneut.
+
     Idempotent (`delete_area_store` ist ein No-op auf fehlende Dateien).
     Liefert `(geloeschte Area-Stores, unbekannte Verzeichnisse)`.
     """
@@ -358,6 +377,7 @@ async def cleanup_deleted_area_stores(
     if not base_dir.is_dir():
         return 0, 0
 
+    reference = now or datetime.now(UTC)
     removed = 0
     unknown_dirs = 0
     for workspace_dir in sorted(base_dir.iterdir(), key=lambda path: path.name):
@@ -383,7 +403,9 @@ async def cleanup_deleted_area_stores(
                 workspace_dir,
             )
             continue
-        removed += await _remove_dangling_area_files(conn, store, workspace_id, workspace_dir)
+        removed += await _remove_dangling_area_files(
+            conn, store, workspace_id, workspace_dir, reference
+        )
     if removed:
         logger.info("Retention: %d verwaiste(r) Area-Store(s) geloescht.", removed)
     return removed, unknown_dirs
@@ -394,10 +416,12 @@ async def _remove_dangling_area_files(
     store: TableStore,
     workspace_id: UUID,
     workspace_dir: Path,
+    reference: datetime,
 ) -> int:
     """Dateien EINES Workspace-Verzeichnisses ohne `work_area`-Zeile loeschen."""
     area_rows = await conn.fetch("SELECT id FROM work_area WHERE workspace_id = $1", workspace_id)
     known_areas = {row["id"] for row in area_rows}
+    cutoff = reference - AREA_STORE_GRACE
     removed = 0
     # Nur `*.sqlite`; die WAL-/SHM-Seitendateien raeumt `delete_area_store` mit
     # ab, und alles andere im Verzeichnis geht den Purge nichts an.
@@ -405,10 +429,48 @@ async def _remove_dangling_area_files(
         area_id = _as_uuid(path.stem)
         if area_id is None or area_id in known_areas:
             continue
+        last_write = _area_store_last_write(path)
+        if last_write is not None and last_write > cutoff:
+            # Frische Schreibspur: eine laufende Operation koennte gerade in
+            # diese Datei schreiben. Bewusst NICHT als `unknown_store_dirs`
+            # gemeldet — der Zaehler bedeutet „manuell pruefen", und hier ist
+            # nichts zu pruefen: der naechste Lauf nimmt die Datei.
+            logger.info(
+                "Retention: Tabellen-Store der geloeschten Area %s hat frische "
+                "Schreibspur (%s) — bleibt in der Karenzfrist liegen, der "
+                "naechste Lauf betrachtet sie erneut.",
+                area_id,
+                last_write.isoformat(),
+            )
+            continue
         await store.delete_area_store(workspace_id, area_id)
         removed += 1
         logger.info("Retention: Tabellen-Store der geloeschten Area %s entfernt.", area_id)
     return removed
+
+
+def _area_store_last_write(path: Path) -> datetime | None:
+    """Jüngste Schreibspur einer Area: `mtime` aus Datei UND Seitendateien.
+
+    Die eigentliche Schreibspur liegt im WAL-Modus im `-wal`: ein Commit haengt
+    Seiten dort an, ohne die `.sqlite` zwangslaeufig anzufassen. Wer nur die
+    Haupt-Datei prueft, sieht genau im Schreibfall eine alte Datei — die
+    Karenzfrist waere dann wirkungslos. `None` heisst „keine der drei Dateien
+    existiert", dann gibt es nichts zu schonen.
+
+    `OSError` wird geschluckt statt vorher `exists()` zu fragen: zwischen Frage
+    und `stat()` kann eine Seitendatei verschwinden (ein Checkpoint raeumt das
+    `-wal` weg), und ein Sweep soll daran nicht abbrechen.
+    """
+    stamps: list[float] = []
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            stamps.append(Path(f"{path}{suffix}").stat().st_mtime)
+        except OSError:
+            continue
+    if not stamps:
+        return None
+    return datetime.fromtimestamp(max(stamps), tz=UTC)
 
 
 def _as_uuid(value: str) -> UUID | None:
@@ -440,7 +502,9 @@ async def run_retention_sweeps(
     blob_rows, blob_objects, store_skipped = await cleanup_orphan_blobs(
         conn, build_blob_store(), reference
     )
-    area_stores, unknown_dirs = await cleanup_deleted_area_stores(conn, get_table_store())
+    area_stores, unknown_dirs = await cleanup_deleted_area_stores(
+        conn, get_table_store(), reference
+    )
     return replace(
         result,
         expired_artifacts=expired,
