@@ -1104,10 +1104,64 @@ nicht als vollstaendiger Stand ausgeben. Begruendung: ein gruener Lauf ist die
 Zusage „dieser Snapshot traegt den vollstaendigen Zustand"; sie waere genau dann
 falsch, wenn sie gebraucht wird. Belegt durch
 `deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9). Dass der Lauf den
-Schreibpfad der API nicht verbiegt, belegen die Faelle 12–13 desselben Tests
+Schreibpfad der API nicht verbiegt, belegen die Faelle 15–16 desselben Tests
 (Backup und Store unter verschiedenen Kennungen; Details unter
 „Tabellen-Store-Backup"). Dass ein volllaufendes Backup-Ziel den Lauf rot macht
-und den letzten guten Snapshot unversehrt laesst, belegt Fall 14.
+und den letzten guten Snapshot unversehrt laesst, belegt Fall 17.
+
+**Ein leerer Bestand ist ebenfalls kein Erfolg** (seit 2026-09-26). Bis dahin
+erkannte der Lauf nur ein **fehlendes** Store-Verzeichnis, nicht ein
+vorhandenes und **leeres** — ein Volume-Mount, der nicht griff, ein umbenanntes
+Bucket, ein verschobener `WHO2BE_TABLESTORE_DIR` sahen alle aus wie „nichts zu
+sichern" und endeten gruen, mit Heartbeat-Ping und `--tag dump`. Schlimmer: der
+Verwaisten-Sweep raeumte dabei den letzten guten lokalen Spiegel, und
+`aws s3 sync --delete` tat auf einem leeren Bucket dasselbe mit dem
+Blob-Spiegel.
+
+Dass „leer, weil nichts da" von „leer, weil der Mount nicht griff" unterscheidbar
+ist, leistet eine **zweite Wahrheitsquelle**: der Katalog in derselben
+Datenbank, die der Lauf ohnehin dumpt.
+
+| Stufe | Soll-Quelle | Pruefung |
+|---|---|---|
+| Objekt-Store | `SELECT count(*) FROM wa_blob` | Bucket-Inventar (`s3 ls`) **vor** dem Sync; zu wenige Objekte ⇒ der Sync laeuft gar nicht, damit `--delete` den Spiegel nicht leert. Danach zusaetzlich der Spiegel selbst. |
+| Tabellen-Store | `SELECT DISTINCT workspace_id \|\| '/' \|\| area_id \|\| '.sqlite' FROM wa_table` | Jeder laut Katalog erwartete Pfad muss unter `${WHO2BE_TABLESTORE_DIR}` liegen (ADR-0049-Layout). |
+
+Die Pruefung ist bewusst asymmetrisch („Ist >= Soll"): eine Katalog-Zeile
+impliziert eine Datei, die Umkehrung nicht. Ueberzaehlige Dateien oder
+Bucket-Objekte sind kein Datenverlust und machen den Lauf nicht rot.
+
+**Der legitime Leerfall bleibt gruen:** leerer Katalog + leerer Store (frischer
+Stack ohne WorkArea-Tabellen) ist erwartungskonform, ebenso ein Stack, dessen
+Migrationen `wa_table`/`wa_blob` noch nicht angelegt haben. Ist der Katalog
+dagegen **nicht befragbar**, ist der Lauf rot — sonst waere die Zusage mit einem
+`psql`-Ausfall abwaehlbar. Belegt durch die Faelle 12–14 desselben Tests.
+
+**Bei einer roten Stufe raeumt der Lauf nicht auf.** Der Verwaisten-Sweep und
+`s3 sync --delete` setzen aus, solange die Stufe Fehler zaehlt: sonst loeschte
+genau der scheiternde Lauf den Stand, auf den ein Restore zurueckfallen will.
+Ausgenommen sind Reste eines hart abgebrochenen Vorlaufs (`.scratch.*`) — die
+waren nie ein guter Stand und muessen in jedem Fall weg, sonst landeten sie im
+Snapshot.
+
+**Wird der Lauf deswegen rot, pruefe in dieser Reihenfolge:**
+
+```bash
+# 1) Greift der Volume-Mount? (Der Container sieht /data/tablestore.)
+docker compose --profile backup run --rm --entrypoint sh backup \
+  -c 'ls -la /data/tablestore'
+
+# 2) Was erwartet der Katalog?
+docker compose exec db psql -U supabase_admin -d postgres -Atc \
+  "SELECT DISTINCT workspace_id || '/' || area_id || '.sqlite' FROM wa_table"
+
+# 3) Stimmt der Bucket-Name? (WHO2BE_BLOBSTORE_BUCKET vs. tatsaechliches Bucket)
+docker compose exec seaweedfs \
+  sh -c 'echo "s3.bucket.list" | weed shell' 2>/dev/null || true
+```
+
+Der lokale Spiegel des letzten guten Laufs liegt dabei unangetastet unter
+`${BACKUP_DIR}` — er ist die Rueckfallebene, bis die Ursache behoben ist.
 
 **Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
 Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
@@ -1485,7 +1539,7 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   geprueft; ein gescheiterter Austausch macht die Area zum Fehlschlag und den
   Lauf rot. Scheitert eine Area, bleibt ihr bisheriger Snapshot unveraendert
   stehen (auch der Verwaisten-Lauf raeumt ihn nicht weg) — der Lauf wird
-  trotzdem rot. Belegt durch Fall 14 in `test_backup_alarm.sh`: Backup-Ziel auf
+  trotzdem rot. Belegt durch Fall 17 in `test_backup_alarm.sh`: Backup-Ziel auf
   einem zu kleinen Dateisystem, Lauf endet rot, kein Heartbeat, der Snapshot
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
@@ -1493,7 +1547,12 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
-  Begruendung wie `--delete` beim Blob-Sync.
+  Begruendung wie `--delete` beim Blob-Sync — aber **nur bei gruener Stufe**:
+  zaehlt die Stufe Fehler (gescheiterte Area oder eine laut `wa_table`
+  fehlende), setzt der Sweep aus, damit nicht ausgerechnet der scheiternde Lauf
+  den letzten guten Spiegel loescht. Reste eines hart abgebrochenen Vorlaufs
+  (`.scratch.*`) fallen dennoch immer weg. Siehe „Ein leerer Bestand ist
+  ebenfalls kein Erfolg" oben.
 - **Restore:** Snapshot-Dateien zurueck nach
   `${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite` kopieren
   (WAL-/SHM-Seitendateien werden **nicht** mitgesichert und sind nicht noetig —
