@@ -77,7 +77,7 @@ E-Mail-Adresse mit, wird der Nutzer direkt bestaetigt — der Zweig
 
 ## Phase 0 · Sofort anfangen (Vorlauf: Tage, nicht in deiner Hand)
 
-Diese vier Punkte kannst du heute vom Handy aus anstossen. Alles danach wartet
+Diese Punkte kannst du heute vom Handy aus anstossen. Alles danach wartet
 auf sie.
 
 - [ ] **1 · Mollie-Konto eroeffnen und verifizieren, Test-API-Key (`test_…`)
@@ -168,11 +168,26 @@ auf sie.
       > Apple-Karte ist offen. Wenn du Apple willst, mach es nach dem Testlauf
       > — und rechne damit, dass du die Schritte selbst zusammensuchst.
 
+- [ ] **5 · AVV mit Hetzner abschliessen.**
+      *Wer: nur du · Dauer: 15 min in der Console, Gegenzeichnung kann Tage
+      dauern · Danach anders: die Datenschutzerklaerung traegt.*
+      Hetzner verarbeitet als Hoster die gesamte Datenbank und die Backups in
+      deinem Auftrag. Der Auftragsverarbeitungsvertrag wird in der
+      Hetzner-Console unter den Vertragsdokumenten abgeschlossen. Ohne ihn
+      fehlt der Unterbau fuer die Aussagen, die die Datenschutzerklaerung ueber
+      den Hoster macht — und der Eintrag im Verzeichnis der Verarbeitungen
+      bleibt ein Platzhalter (`docs/compliance/vvt.md`, Zeile Hetzner). Dasselbe
+      gilt fuer die weiteren Verarbeiter, sobald sie im Spiel sind
+      (Mail-Provider, Mollie, Cloudflare bei aktivem Captcha).
+      **Kein Rechtsrat** — welche Fassung du brauchst und was in die Texte
+      gehoert, klaert der Betreiber bzw. eine anwaltliche Pruefung;
+      `docs/compliance/legal-texts-checklist.md` listet den Inhalt.
+
 ---
 
 ## Phase 1 · Am Schreibtisch, bevor du die Box anfasst (Stunden)
 
-- [ ] **5 · Secrets erzeugen und ablegen.**
+- [ ] **6 · Secrets erzeugen und ablegen.**
       *Wer: du · Dauer: 45–60 min · Danach anders: die beiden `.env` sind
       vollstaendig, der Stack kann starten.*
 
@@ -220,7 +235,7 @@ auf sie.
       `.env.example` kommentiert — **jedes `CHANGE_ME` ersetzen**, keines
       stehen lassen.
 
-- [ ] **6 · OAuth-Zugangsdaten eintragen — in dieser Reihenfolge.**
+- [ ] **7 · OAuth-Zugangsdaten eintragen — in dieser Reihenfolge.**
       *Wer: du · Dauer: 10 min · Danach anders: die Anmeldung funktioniert.*
       In `deploy/hetzner/supabase/.env`:
 
@@ -251,25 +266,25 @@ auf sie.
 Ab hier folge den bestehenden Dokumenten. Die Liste sagt nur, **in welcher
 Reihenfolge** und **wo die Reihenfolge nicht verhandelbar ist**.
 
-- [ ] **7 · Provisioning durchziehen** — deploy-User, Docker, Firewall
+- [ ] **8 · Provisioning durchziehen** — deploy-User, Docker, Firewall
       (22/80/443), Repo nach `/opt/who2be`, beide `.env` aus Phase 1 einsetzen.
       RUNBOOK „Provisioning" Schritte 2–6.
       *Wer: du · Dauer: 1–2 h · Danach anders: die Box kann Container fahren.*
 
-- [ ] **8 · Stacks hochfahren — Supabase zuerst, dann das Cloud-Overlay.**
+- [ ] **9 · Stacks hochfahren — Supabase zuerst, dann das Cloud-Overlay.**
       `deploy/hetzner/README.md` §Cloud-Edition. **Immer beide `-f`-Dateien**,
       sonst laeuft der On-Prem-Kern und alle Cloud-Schalter sind wirkungslos.
       *Wer: du (oder ein Agent) · Dauer: 30–60 min · Danach anders: die API
       antwortet.*
 
-- [ ] **9 · TLS + Security-Header gruen** — RUNBOOK „Provisioning" Schritt 7.
+- [ ] **10 · TLS + Security-Header gruen** — RUNBOOK „Provisioning" Schritt 7.
       *Wer: du · Dauer: 15 min, plus Wartezeit falls DNS noch propagiert ·
       Danach anders: `https://api.<DOMAIN>/v1/health` antwortet mit gueltigem
       Zertifikat.*
       Scheitert das Zertifikat, ist es fast immer DNS (Phase 0 Punkt 2) oder
       Port 80 in der Firewall — nichts an der Anwendung.
 
-- [ ] **10 · Zum ersten Mal anmelden.** `https://app.<DOMAIN>` → „Mit Google
+- [ ] **11 · Zum ersten Mal anmelden.** `https://app.<DOMAIN>` → „Mit Google
       anmelden" bzw. GitHub.
       *Wer: du · Dauer: 2 min · Danach anders: **jetzt erst** existieren deine
       User-UUID, deine Organisation und dein Workspace.*
@@ -279,10 +294,10 @@ Reihenfolge** und **wo die Reihenfolge nicht verhandelbar ist**.
 
       **Das ist der Reihenfolge-Stolperstein Nummer eins:** deine eigene
       User-UUID kannst du **vorher nicht kennen**. Alles, was sie braucht —
-      insbesondere die Betreiber-Allowlist in Schritt 12 — geht erst **nach**
+      insbesondere die Betreiber-Allowlist in Schritt 13 — geht erst **nach**
       diesem Signup.
 
-- [ ] **11 · TOTP-Faktor anlegen und damit neu anmelden.**
+- [ ] **12 · TOTP-Faktor anlegen und damit neu anmelden.**
       Web-UI → Konto-Einstellungen → Sicherheit → Zwei-Faktor → Authenticator
       hinzufuegen. Danach abmelden und **mit Code** neu anmelden.
       *Wer: du · Dauer: 10 min · Danach anders: deine Sitzung ist `aal2` — die
@@ -290,10 +305,10 @@ Reihenfolge** und **wo die Reihenfolge nicht verhandelbar ist**.
       Details: [`mfa-admin.md`](mfa-admin.md).
 
       **Stolperstein Nummer zwei:** ohne verifizierten Faktor kommt keine
-      Sitzung je auf `aal2`, und der Billing-Override in Schritt 12 antwortet
+      Sitzung je auf `aal2`, und der Billing-Override in Schritt 13 antwortet
       garantiert `403`. Diesen Schritt nicht aufschieben.
 
-- [ ] **12 · Betreiber-Allowlist fuellen und pruefen, dass sie ankommt.**
+- [ ] **13 · Betreiber-Allowlist fuellen und pruefen, dass sie ankommt.**
       Deine User-UUID (der `sub`-Claim deiner Sitzung) in
       `deploy/hetzner/.env`:
 
@@ -333,7 +348,7 @@ Reihenfolge** und **wo die Reihenfolge nicht verhandelbar ist**.
 Ab hier fuehrt [`cloud-prod-smoke.md`](cloud-prod-smoke.md). Nichts davon
 wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
 
-- [ ] **13 · Free-Grenzen gegen die Wand fahren.**
+- [ ] **14 · Free-Grenzen gegen die Wand fahren.**
       *Wer: du · Dauer: 1–2 h · Danach anders: du hast gesehen, dass die
       Limits durchgesetzt werden und nicht nur angezeigt.*
 
@@ -353,7 +368,7 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
       Tarif-Quoten (Speicher/Token/Workspaces) fuehrt dich
       `cloud-prod-smoke.md` §5b Schritt fuer Schritt.
 
-- [ ] **14 · Kaufen — Mollie-Test-Checkout.** `cloud-prod-smoke.md` §4
+- [ ] **15 · Kaufen — Mollie-Test-Checkout.** `cloud-prod-smoke.md` §4
       Variante B.
       *Wer: du · Dauer: 30 min · Danach anders: der Webhook hat das Entitlement
       auf Pro gehoben.*
@@ -368,10 +383,10 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
       > **Kommt der Webhook nicht an** (Box down, falsche
       > `MOLLIE_WEBHOOK_URL`), bleibt das Entitlement auf Free — es gibt keinen
       > periodischen Abgleich, der das nachholt. Der vorgesehene Reparaturweg
-      > ist genau der Override aus Schritt 12. Das ist der zweite Grund, warum
-      > Schritt 12 vorher stehen muss.
+      > ist genau der Override aus Schritt 13. Das ist der zweite Grund, warum
+      > Schritt 13 vorher stehen muss.
 
-- [ ] **15 · Pro-Grenzen gegenpruefen.** `cloud-prod-smoke.md` §4
+- [ ] **16 · Pro-Grenzen gegenpruefen.** `cloud-prod-smoke.md` §4
       Entitlement-Check und §5.
       *Wer: du · Dauer: 30 min · Danach anders: die Reise ist belegt.*
 
@@ -390,7 +405,7 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
       **Minuten-Rate** (240/min); 100 000 Reads von Hand auszuschoepfen ist
       nicht sinnvoll.
 
-- [ ] **16 · Downgrade pruefen.** `cloud-prod-smoke.md` §6 — belegt den Fall
+- [ ] **17 · Downgrade pruefen.** `cloud-prod-smoke.md` §6 — belegt den Fall
       „Kuendigung / Override abgelaufen": die Zahlen fallen auf Free zurueck,
       ein Pro-Endpunkt antwortet `402`.
       *Wer: du · Dauer: 15 min · Danach anders: auch der Rueckweg ist belegt.*
@@ -405,14 +420,14 @@ in dieser Reihenfolge abarbeitet.
 | Symptom | Ursache | Abhilfe |
 |---|---|---|
 | **`403` beim Override, obwohl du Admin bist** | Du hast einen API-Token (`w2b_…`) benutzt. Der Endpunkt lehnt Maschinen-Tokens **kategorisch** ab — auch wenn du in der Allowlist stehst (`packages/billing/src/who2be_billing/router.py#_require_override_operator`). | Mit dem **Web-JWT deiner `aal2`-Sitzung** wiederholen, nicht mit `$TOK`. Der Smoke fuehrt dich sonst genau in diesen Fehler. |
-| **`403` beim Override, auch mit Web-JWT** | Die Allowlist ist im Container leer — `.env` nicht gesetzt oder die API nach der Aenderung nicht neu erzeugt. Das Gate ist fail-closed: leere Liste ⇒ **immer** 403. | `printenv WHO2BE_BILLING_OVERRIDE_OPERATORS` im `api`-Container (Kommando in Schritt 12). Leer ⇒ Schritt 12. Steht dort wirklich die **User**-UUID, nicht die Org- oder Workspace-Id? |
-| **`403` beim Override, Allowlist steht, Web-JWT benutzt** | Die Sitzung ist nur `aal1` — TOTP beim Login nicht beantwortet oder Sitzung abgelaufen. | Neu anmelden **inklusive Code** (Schritt 11). |
-| **Niemand kann sich anmelden, Fehlermeldung nichtssagend** | `JWT_SECRET` weicht zwischen den beiden `.env` ab. | Beide Dateien vergleichen (Schritt 5). |
+| **`403` beim Override, auch mit Web-JWT** | Die Allowlist ist im Container leer — `.env` nicht gesetzt oder die API nach der Aenderung nicht neu erzeugt. Das Gate ist fail-closed: leere Liste ⇒ **immer** 403. | `printenv WHO2BE_BILLING_OVERRIDE_OPERATORS` im `api`-Container (Kommando in Schritt 13). Leer ⇒ Schritt 13. Steht dort wirklich die **User**-UUID, nicht die Org- oder Workspace-Id? |
+| **`403` beim Override, Allowlist steht, Web-JWT benutzt** | Die Sitzung ist nur `aal1` — TOTP beim Login nicht beantwortet oder Sitzung abgelaufen. | Neu anmelden **inklusive Code** (Schritt 12). |
+| **Niemand kann sich anmelden, Fehlermeldung nichtssagend** | `JWT_SECRET` weicht zwischen den beiden `.env` ab. | Beide Dateien vergleichen (Schritt 6). |
 | **`redirect_uri_mismatch` beim Provider-Login** | Redirect-URI im Portal weicht ab — Schraegstrich, `http`, oder falsche Subdomain. | Exakt `https://supabase.<DOMAIN>/auth/v1/callback` (Phase 0 Punkt 4). |
 | **`provider_email_needs_verification`** | Die E-Mail-Adresse beim Provider ist nicht verifiziert. | Beim Provider verifizieren — oder SMTP einrichten. |
 | **Zertifikat wird nicht ausgestellt** | DNS noch nicht aufgeloest oder Port 80 zu. | `docker compose … logs caddy` nennt den ACME-Fehler im Klartext. Nicht in Schleife neu versuchen — Let's Encrypt hat Ratelimits. |
-| **`503` auf Checkout/Webhook** | `MOLLIE_API_KEY` fehlt oder ist leer. | Test-Key setzen, `api` neu erzeugen. Oder den Override-Weg (Schritt 12) nehmen. |
-| **Compose bricht ab, bevor irgendetwas startet** | `SEAWEEDFS_S3_SECRET_KEY` fehlt (harter Guard). | Wert setzen (Schritt 5). |
+| **`503` auf Checkout/Webhook** | `MOLLIE_API_KEY` fehlt oder ist leer. | Test-Key setzen, `api` neu erzeugen. Oder den Override-Weg (Schritt 13) nehmen. |
+| **Compose bricht ab, bevor irgendetwas startet** | `SEAWEEDFS_S3_SECRET_KEY` fehlt (harter Guard). | Wert setzen (Schritt 6). |
 | **Kein `429` im MCP-Check** | Edition ist nicht `cloud`, oder du hast mit einem Web-JWT statt einem `w2b_…`-Token gerufen. | Beide `-f`-Dateien beim Bring-up, und einen API-Token verwenden. |
 
 ---

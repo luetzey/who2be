@@ -897,7 +897,7 @@ RESTIC_PASSWORD=${NEW} restic -r sftp:… restore latest \
 diff /etc/hostname /tmp/restic-rotation-test/etc/hostname  # erwartet: identisch
 ```
 
-**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf Stand, der nicht greift → Backup-Cron bricht still ab.
+**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf einen Stand, der nicht greift → der Backup-Cron scheitert; der Dead-Man's-Switch (unten) ist der Weg, das zu merken.
 
 ### BACKUP_GPG_RECIPIENT (lokaler pg_dump-Pfad, ADR-0011 C5a)
 
@@ -1215,11 +1215,11 @@ Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Co
 
 ### Alarmweg (Dead-Man's-Switch)
 
-Bis 2026-09-21 war ein fehlgeschlagener Offsite-Sync **still**: das Skript beendete
-sich mit Exit 0, der Cron-Lauf galt als erfolgreich. Storage Box voll, SSH-Key
-abgelaufen, Netzwerk weg — in allen drei Fällen lief der lokale Dump weiter und
-niemand erfuhr, dass es seit Wochen kein Offsite-Backup mehr gab. Seit Issue #541
-gilt (Owner-Entscheidung, Nachtrag in ADR-0011):
+Bis 2026-09-21 meldete ein fehlgeschlagener Offsite-Sync **Erfolg**: das Skript
+beendete sich mit Exit 0, der Cron-Lauf galt als gelungen. Der lokale Dump lief
+dabei weiter, das Offsite-Backup konnte aber ueber laengere Zeit ausfallen, ohne
+dass es jemand erfuhr. Seit Issue #541 gilt (Owner-Entscheidung, Nachtrag in
+ADR-0011):
 
 1. **Ehrlicher Exit-Code.** Scheitert `restic backup` oder `restic forget`, endet der
    Lauf mit Exit != 0. Der **lokale GPG-Dump bleibt dabei unangetastet** — er ist zu
@@ -1341,12 +1341,14 @@ docker compose exec db psql -U supabase_admin who2be_restore \
 
 **H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
 (Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
-Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
-einmal durchziehen und Datum hier protokollieren:
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck). Auflage: **nach jedem
+prod-Cutover einmal durchziehen und protokollieren** — Datum, Backup-Quelle,
+Restore-Ziel, Ergebnis des Count-Vergleichs, Blob-/Tabellen-Pruefung und
+ausfuehrende Person. Ein Drill ohne Protokolleintrag gilt als nicht gefahren.
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
-|---|---|---|---|---|---|
-| — | — | — | — | — | — |
+Das Protokoll selbst wird **betreiberseitig** gefuehrt, nicht in diesem Repo:
+es ist ein Betriebsnachweis und gehoert zu den Abnahme-Unterlagen (siehe
+`docs/compliance/c5-mapping.md`, betreiberseitige Nachweise).
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
