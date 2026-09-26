@@ -38,7 +38,7 @@ interface BillingTier {
  */
 const TIERS: readonly BillingTier[] = [
   { code: 'free', name: 'Free', priceEur: 0, mcpMonthlyQuota: 1_000, mcpRatePerMin: 30, entityLimit: 50 },
-  { code: 'pro', name: 'Pro', priceEur: 29, mcpMonthlyQuota: 100_000, mcpRatePerMin: 240, entityLimit: null },
+  { code: 'pro', name: 'Pro', priceEur: 9.99, mcpMonthlyQuota: 100_000, mcpRatePerMin: 240, entityLimit: null },
 ]
 
 const FREE_QUOTA = TIERS[0].mcpMonthlyQuota

@@ -176,7 +176,7 @@ describe('BillingPanel', () => {
       expect(screen.getByRole('button', { name: 'Pro aktiv' })).toBeDisabled()
     })
     expect(screen.queryByRole('button', { name: 'Jetzt upgraden' })).not.toBeInTheDocument()
-    expect(screen.getByText('29 €/Monat')).toBeInTheDocument()
+    expect(screen.getByText('9,99 €/Monat')).toBeInTheDocument()
     // "unbegrenzt" steht sowohl bei "Gueltig bis" (kein Ablauf) als auch beim
     // Entity-Limit — deshalb ueber den zugehoerigen dt-Nachbarn pruefen statt
     // ueber den (zweifach vorkommenden) Text allein.

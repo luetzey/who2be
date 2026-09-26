@@ -26,7 +26,7 @@ verkaufsrelevante Tabelle:
 | Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Workspaces je Org | Features (Metadaten, s. u.) |
 |------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|-------------------|------------------------------|
 | Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | 1                 | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | 5                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Pro  | 9,99 €/Monat   | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | 5                 | `core` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
@@ -139,10 +139,13 @@ unbegrenzt. Die **einzelnen** Codes (`composite_playbooks`, `agents`,
 `audit_export`) werden dagegen nirgends im Repo gegatet (keine
 `has_feature()`-Pruefung greift auf sie zu; fuer `audit_export` existiert
 nicht einmal ein Endpunkt) und sind deshalb **kein Leistungsversprechen** —
-nur `core` selbst und das daraus abgeleitete Entity-Limit sind wirksam. Sie
-tauchen weiterhin in `whoami`- und `entitlement`-Responses auf und bleiben
-Teil des Datenmodells (ADR-0028 baut den On-Prem-Lizenz-Flow darauf auf) —
-nur als Verkaufsversprechen zaehlen sie nicht.
+nur `core` selbst und das daraus abgeleitete Entity-Limit sind wirksam.
+**Genau deshalb stehen sie nicht in der Tarif-Tabelle oben:** eine
+Tarifdarstellung darf nur nennen, was auch durchgesetzt wird. Sie bleiben
+Teil des Datenmodells, werden weiterhin in die Mollie-Metadata geschrieben
+(`PRO_PLAN.features`, Beispiel unten) und tauchen in `whoami`- und
+`entitlement`-Responses auf (ADR-0028 baut den On-Prem-Lizenz-Flow darauf
+auf) — nur als Verkaufsversprechen zaehlen sie nicht.
 
 - **Free** ist der Default jeder frisch registrierten Cloud-Org (ohne Mollie-Abo).
   Entspricht 1:1 `CLOUD_FREE_ENTITLEMENT` in `licensing/entitlement.py`.
