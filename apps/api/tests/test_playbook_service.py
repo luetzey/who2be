@@ -824,3 +824,135 @@ def test_blocknote_create_with_cycle_pill_raises_409() -> None:
             service.create(ctx, PlaybookCreate(name="Cyclic", content=_blocknote_content(body)))
         )
     assert exc.value.status_code == 409
+
+
+# --------------------------------------------------------------------------
+# Blockselektion: Gliederung + Section-Schnitt auf dem Render-Pfad.
+# --------------------------------------------------------------------------
+
+
+def _heading(block_id: str, text: str, level: int = 1) -> dict[str, Any]:
+    return {
+        "id": block_id,
+        "type": "heading",
+        "props": {"level": level},
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
+def _paragraph(block_id: str, text: str) -> dict[str, Any]:
+    return {
+        "id": block_id,
+        "type": "paragraph",
+        "props": {},
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
+def _sectioned_body() -> str:
+    """Drei h1-Sections, die mittlere mit einer h2-Untersection."""
+    import json
+
+    return json.dumps(
+        [
+            _heading("h-ziel", "Ziel"),
+            _paragraph("p-ziel", "Zieltext"),
+            _heading("h-ablauf", "Ablauf"),
+            _paragraph("p-ablauf", "Ablauftext"),
+            _heading("h-schritt1", "Schritt 1", level=2),
+            _paragraph("p-schritt1", "Schritttext"),
+            _heading("h-ende", "Ende"),
+            _paragraph("p-ende", "Endetext"),
+        ]
+    )
+
+
+def _sectioned_playbook() -> tuple[PlaybookService, WorkspaceContext, UUID]:
+    service, ctx = _service_with_pool(_FakePool())
+    created = asyncio.run(
+        service.create(
+            ctx, PlaybookCreate(name="Sections", content=_blocknote_content(_sectioned_body()))
+        )
+    )
+    return service, ctx, created.id
+
+
+def test_render_exposes_outline_without_selection() -> None:
+    """Die Gliederung liegt jeder Antwort bei — der Katalog fuer den Schnitt."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid))
+    assert [(s.block_id, s.level, s.text) for s in result.sections] == [
+        ("h-ziel", 1, "Ziel"),
+        ("h-ablauf", 1, "Ablauf"),
+        ("h-schritt1", 2, "Schritt 1"),
+        ("h-ende", 1, "Ende"),
+    ]
+
+
+def test_render_selection_returns_only_that_section() -> None:
+    """Der Schnitt liefert genau eine Section — Verhalten, nicht Feldname."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid, ["h-ziel"]))
+    assert result.body_rendered == "Ziel\n\nZieltext"
+    # Die uebrigen Sections sind WEG, nicht nur anders sortiert.
+    assert "Ablauftext" not in result.body_rendered
+    assert "Endetext" not in result.body_rendered
+
+
+def test_render_selection_keeps_nested_subsections() -> None:
+    """Eine h1-Section nimmt ihre h2-Untersection mit (ADR-0021-Regel)."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid, ["h-ablauf"]))
+    assert "Ablauftext" in result.body_rendered
+    assert "Schritt 1" in result.body_rendered
+    assert "Schritttext" in result.body_rendered
+    # Aber nicht ueber die naechste gleichrangige Section hinaus.
+    assert "Endetext" not in result.body_rendered
+
+
+def test_render_selection_keeps_document_order() -> None:
+    """Die Ausgabe folgt dem Dokument, nicht der Anfrage-Reihenfolge."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid, ["h-ende", "h-ziel"]))
+    assert result.body_rendered.index("Zieltext") < result.body_rendered.index("Endetext")
+
+
+def test_render_selection_still_carries_full_outline() -> None:
+    """Nach dem Schnitt bleibt die Gliederung vollstaendig — sonst kein Nachfassen."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid, ["h-ziel"]))
+    assert [s.block_id for s in result.sections] == [
+        "h-ziel",
+        "h-ablauf",
+        "h-schritt1",
+        "h-ende",
+    ]
+
+
+def test_render_unknown_anchor_yields_empty_not_full_body() -> None:
+    """Ein Tippfehler im Anker liefert nichts — nicht still das Volldokument."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(service.render(ctx, pid, ["gibt-es-nicht"]))
+    assert result.body_rendered == ""
+
+
+def test_render_without_selection_is_unchanged() -> None:
+    """Additiv: ohne Auswahl ist der gerenderte Body der alte."""
+    service, ctx, pid = _sectioned_playbook()
+    full = asyncio.run(service.render(ctx, pid))
+    assert "Zieltext" in full.body_rendered
+    assert "Ablauftext" in full.body_rendered
+    assert "Endetext" in full.body_rendered
+
+
+def test_render_selection_on_plain_body_returns_raw() -> None:
+    """Ein Legacy-Plaintext-Body hat keine Anker — er bleibt unangetastet."""
+    service, ctx = _service_with_pool(_FakePool())
+    created = asyncio.run(
+        service.create(ctx, PlaybookCreate(name="Plain", content=_content("Desc")))
+    )
+    result = asyncio.run(service.render(ctx, created.id, ["h-ziel"]))
+    assert result.body_rendered == "1. Do it."
+    assert result.sections == []
