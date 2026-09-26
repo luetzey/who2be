@@ -43,6 +43,11 @@ auf die alle drei Punkte zutreffen:
    Code, kein Prozess-Start, kein HTTP-Aufruf gegen die App.
 3. Alle ihre Zusicherungen sind Vergleiche oder Containment-Prüfungen.
 
+Was als „eigener Code" unter Punkt 2 gilt, wird abgeleitet, nicht gepflegt: die
+Anwendungspakete plus alle importierbaren Module unter `scripts/`. Ein neu
+angelegtes Skript zählt damit ab dem ersten Tag mit — eine handgepflegte Liste
+hätte es vergessen, und dessen Tests wären als wirkungslos gemeldet worden.
+
 ```bash
 uv run python scripts/check_effectful_tests.py --base origin/main   # wie in der CI
 uv run python scripts/check_effectful_tests.py                      # Gesamtbestand

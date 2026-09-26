@@ -72,18 +72,41 @@ def test_config_enables_the_thing() -> None:
 
 
 def test_test_that_starts_a_process_is_not_flagged() -> None:
-    """Ein Skript wirklich auszufuehren ist Wirkung, auch ohne Python-Import."""
+    """Ein Skript wirklich auszufuehren ist Wirkung, auch ohne Python-Import.
+
+    Der Fall liest absichtlich auch eine Datei und sichert Text darauf zu. Ohne
+    das waere er gruen, weil Bedingung 1 nie greift -- er wuerde auch dann
+    gruen bleiben, wenn ``_executes_effect`` nie wieder Wirkung erkennt, und
+    seine eigene Begruendung nicht belegen. Der Gegenbeweis steht als eigener
+    Testfall direkt darunter.
+    """
     source = """
 import subprocess
 from pathlib import Path
 
 def test_rotation_script_deletes_old_generations() -> None:
-    Path("/tmp/old.log").write_text("x")
+    assert "find" in Path("rotate.sh").read_text()
     result = subprocess.run(["bash", "rotate.sh"], capture_output=True)
     assert result.returncode == 0
-    assert not Path("/tmp/old.log").exists()
 """
     assert _names(source) == set()
+
+
+def test_the_same_case_without_the_process_start_is_flagged() -> None:
+    """Gegenprobe zum Fall darueber: der Prozess-Start ist der Grund.
+
+    Derselbe Quelltext ohne die ``subprocess``-Zeile wird markiert. Erst
+    dadurch belegt der Fall darueber seine Begruendung, statt sie bloss im
+    Docstring zu behaupten.
+    """
+    source = """
+import subprocess
+from pathlib import Path
+
+def test_rotation_script_deletes_old_generations() -> None:
+    assert "find" in Path("rotate.sh").read_text()
+"""
+    assert _names(source) == {"test_rotation_script_deletes_old_generations"}
 
 
 def test_grep_shellout_counts_as_reading_not_as_effect() -> None:
@@ -113,6 +136,24 @@ def test_health_route_answers(client) -> None:
     assert "ok" in expected
 """
     assert _names(source) == set()
+
+
+def test_assertion_whose_root_is_a_call_is_still_a_text_check() -> None:
+    """``assert read_text().startswith("x")`` ist derselbe Fehlertyp.
+
+    Der Wurzelknoten der Zusicherung ist hier ein Aufruf, kein Vergleich --
+    inhaltlich prueft der Test aber weiterhin nur Text in einer Datei. Faellt
+    ``ast.Call`` aus der Liste zulaessiger Zusicherungs-Strukturen, schluepft
+    jeder Test durch, der seine Textpruefung als ``.startswith``/``.endswith``
+    schreibt.
+    """
+    source = """
+from pathlib import Path
+
+def test_unit_file_starts_with_the_header() -> None:
+    assert Path("who2be.service").read_text().startswith("[Unit]")
+"""
+    assert _names(source) == {"test_unit_file_starts_with_the_header"}
 
 
 def test_call_inside_the_assertion_is_effect() -> None:
@@ -186,10 +227,65 @@ def test_file_is_readable() -> None:
     assert _names(source) == set()
 
 
+def test_bare_open_without_a_read_attribute_counts_as_reading() -> None:
+    """``open(...)`` als Argument zaehlt, auch ohne ``.read()`` daran.
+
+    ``yaml.safe_load(open(p))`` liest eine Datei, ohne dass irgendwo ein
+    ``read``-Attribut im Quelltext steht. Ohne den eigenen Zweig fuer ``open``
+    faellt diese Form durch -- und sie ist die uebliche Schreibweise, wenn
+    Konfiguration gegen eine Datei geprueft wird.
+    """
+    source = """
+import yaml
+
+def test_registry_lists_the_tool() -> None:
+    data = yaml.safe_load(open("registry.yml"))
+    assert "who2be" in data["tools"]
+"""
+    assert _names(source) == {"test_registry_lists_the_tool"}
+
+
 def test_test_that_reads_nothing_is_not_flagged() -> None:
     source = """
 def test_two_plus_two() -> None:
     assert 2 + 2 == 4
+"""
+    assert _names(source) == set()
+
+
+def test_every_script_module_counts_as_first_party() -> None:
+    """Jedes Skript unter ``scripts/`` gilt als eigener Code, ohne Pflegeliste.
+
+    Vorher war das eine handgepflegte Aufzaehlung, die vier von neun Skripten
+    nannte. Ein neu angelegtes Skript fehlte darin zwangslaeufig, und dessen
+    Tests waeren fortan markiert worden, obwohl sie den Prueflung aufrufen --
+    ein Fehlalarm, an den nichts im Repo erinnert haette.
+    """
+    from check_effectful_tests import _FIRST_PARTY_PREFIXES
+
+    on_disk = {
+        path.stem
+        for path in (_REPO_ROOT / "scripts").glob("*.py")
+        if path.stem.isidentifier() and not path.stem.startswith("_")
+    }
+    assert on_disk, "Vorbedingung: unter scripts/ liegen importierbare Module"
+    missing = on_disk - set(_FIRST_PARTY_PREFIXES)
+    assert not missing, f"Skripte gelten nicht als eigener Code: {sorted(missing)}"
+
+
+def test_a_script_under_test_is_not_flagged() -> None:
+    """Ein Test, der ein Repo-Skript aufruft, ist kein Befund.
+
+    Die Wirkung laeuft hier ueber ein Modul, dessen Name erst aus dem
+    Verzeichnis abgeleitet wird -- faellt die Ableitung aus, meldet dieser Fall.
+    """
+    source = """
+from pathlib import Path
+from conflict_hotspots import summarise
+
+def test_hotspot_summary_counts_the_file() -> None:
+    raw = Path("log.txt").read_text()
+    assert summarise(raw)["a.py"] == 3
 """
     assert _names(source) == set()
 
@@ -374,6 +470,113 @@ def test_backup_case_is_out_of_reach_and_says_so() -> None:
     assert shell_suite.exists(), "Pfad der Shell-Testsuite geaendert — Grenze neu bewerten"
     findings = analyse_source(shell_suite.read_text(encoding="utf-8"), str(shell_suite))
     assert findings == [], "Shell wird nicht geparst — dieser Befund waere ein Zufall"
+
+
+# --- Diff-Modus: nur NEUE Befunde --------------------------------------------
+
+# ``new_findings_against`` ist der Pfad, den die CI faehrt. Er zieht die Befunde
+# ab, die in der Basis schon standen -- ohne diesen Abzug meldete der Schritt
+# statt einer Handvoll Diff-Treffer den gesamten Altbestand an jedem PR, also
+# genau das Gate, das nach dem dritten Fehlalarm abgeschaltet wird. Diese Regel
+# laesst sich nur an einem echten Repository mit zwei Commits belegen; der
+# Testfall baut sich deshalb eines.
+
+_STRING_ONLY_TEST = """
+from pathlib import Path
+
+
+def test_alpha_is_documented() -> None:
+    assert "alpha" in Path("notes.md").read_text()
+"""
+
+_ADDED_STRING_ONLY_TEST = """
+
+def test_beta_is_documented() -> None:
+    assert "beta" in Path("notes.md").read_text()
+"""
+
+
+def _git_in(cwd: Path, *args: str) -> str:
+    """Ein git-Kommando im Wegwerf-Repo -- Fehler faerben rot, nicht still."""
+    result = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def test_finding_already_in_the_base_is_not_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Befund aus der Basis wird nicht gemeldet, ein neu hinzugefuegter schon.
+
+    Beides in EINEM Fall, weil die Behauptung erst dann traegt: die Datei
+    enthaelt am Ende zwei markierungswuerdige Tests, und gemeldet werden darf
+    nur der, der im Diff dazugekommen ist. Die Zwischenzusicherung auf
+    ``analyse_source`` haelt fest, dass die Heuristik tatsaechlich beide sieht
+    -- sonst koennte der Fall gruen sein, weil der Abzug wirkt, oder weil die
+    Heuristik den zweiten Test gar nicht faengt.
+    """
+    from check_effectful_tests import new_findings_against
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_in(repo, "init", "-b", "main")
+
+    test_file = repo / "test_thing.py"
+    test_file.write_text(_STRING_ONLY_TEST, encoding="utf-8")
+    _git_in(repo, "add", "test_thing.py")
+    _git_in(repo, "commit", "-m", "basis")
+    base_sha = _git_in(repo, "rev-parse", "HEAD")
+
+    test_file.write_text(_STRING_ONLY_TEST + _ADDED_STRING_ONLY_TEST, encoding="utf-8")
+    _git_in(repo, "add", "test_thing.py")
+    _git_in(repo, "commit", "-m", "neuer stringtest")
+
+    head_names = {
+        f.test for f in analyse_source(test_file.read_text(encoding="utf-8"), "x_test.py")
+    }
+    assert head_names == {"test_alpha_is_documented", "test_beta_is_documented"}, (
+        "Vorbedingung des Falls: die Heuristik muss BEIDE Tests sehen, sonst "
+        f"belegt er den Basisabzug nicht. Gesehen: {sorted(head_names)}"
+    )
+
+    monkeypatch.chdir(repo)
+    reported = {f.test for f in new_findings_against(base_sha)}
+    assert reported == {"test_beta_is_documented"}, (
+        "Nur der neu hinzugefuegte Befund darf gemeldet werden. Gemeldet: "
+        f"{sorted(reported)} -- steht 'test_alpha_is_documented' dabei, fehlt "
+        "der Basisabzug und der Schritt meldet den Altbestand an jedem PR."
+    )
+
+
+def test_unchanged_test_file_yields_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Commit, der die Testdatei nicht anfasst, meldet nichts.
+
+    Der Bestandsbefund bleibt dabei unveraendert im Baum liegen -- ein Lauf,
+    der ihn hier melden wuerde, meldete ihn an jedem folgenden PR erneut.
+    """
+    from check_effectful_tests import new_findings_against
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_in(repo, "init", "-b", "main")
+    (repo / "test_thing.py").write_text(_STRING_ONLY_TEST, encoding="utf-8")
+    _git_in(repo, "add", "test_thing.py")
+    _git_in(repo, "commit", "-m", "basis")
+    base_sha = _git_in(repo, "rev-parse", "HEAD")
+
+    (repo / "README.md").write_text("nur Prosa\n", encoding="utf-8")
+    _git_in(repo, "add", "README.md")
+    _git_in(repo, "commit", "-m", "doku")
+
+    monkeypatch.chdir(repo)
+    assert new_findings_against(base_sha) == []
 
 
 # --- Aufruf ------------------------------------------------------------------

@@ -70,17 +70,38 @@ from pathlib import Path
 # Ein Aufruf in eines dieser Pakete ist Wirkung: da laeuft der Prueflung.
 # Relative Importe (``from .conftest import ...``) zaehlen ebenfalls, weil
 # Testhelfer im selben Paket den Prueflung kapseln.
-_FIRST_PARTY_PREFIXES = (
+#
+# Die Modulnamen unter ``scripts/`` werden ABGELEITET, nicht aufgezaehlt. Eine
+# handgepflegte Liste waere ein leiser Fehlalarmgeber: wer ein neues Skript
+# anlegt, denkt nicht an sie, und dessen Tests werden fortan markiert, obwohl
+# sie den Prueflung sehr wohl aufrufen. Nichts im Repo wuerde daran erinnern.
+_PACKAGE_PREFIXES = (
     "who2be_api",
     "who2be_mcp",
     "who2be_models",
     "who2be_billing",
     "scripts",
-    "check_code_refs",
-    "changelog_fragments",
-    "check_effectful_tests",
-    "conflict_hotspots",
 )
+
+
+def _script_module_names() -> tuple[str, ...]:
+    """Die importierbaren Modulnamen unter ``scripts/``.
+
+    Ein Skript wird als ``import check_code_refs`` eingebunden (die Testdateien
+    haengen ``scripts/`` an ``sys.path``), nicht als ``scripts.check_code_refs``
+    -- deshalb reicht das Paket-Prefix ``scripts`` fuer sie nicht.
+    """
+    scripts_dir = Path(__file__).resolve().parent
+    return tuple(
+        sorted(
+            path.stem
+            for path in scripts_dir.glob("*.py")
+            if path.stem.isidentifier() and not path.stem.startswith("_")
+        )
+    )
+
+
+_FIRST_PARTY_PREFIXES = _PACKAGE_PREFIXES + _script_module_names()
 
 # Lesende Zugriffe auf Dateiinhalte.
 _READ_ATTRS = frozenset({"read_text", "read_bytes", "readlines", "readline", "read"})
