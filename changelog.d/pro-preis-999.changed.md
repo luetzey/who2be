@@ -15,7 +15,7 @@
 
   `packages/billing/tests/test_doc_price_drift.py` prüft zweierlei: bekannte
   Stellen nennen exakt `PRO_PLAN.price_eur` (und melden, wenn ihr Muster nicht
-  mehr trifft, statt still durchzulaufen), und *jeder* Monatsbetrag in den
+  mehr trifft, statt still durchzulaufen), und *jeder* Euro-Betrag in den
   preistragenden Dateien muss ein bekannter Betrag sein — eine neue Fundstelle
   mit fremder Zahl ist damit ein roter Test, kein stiller Fund.
 

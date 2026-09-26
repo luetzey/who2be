@@ -18,9 +18,17 @@ Zwei Arten von Pruefung, absichtlich getrennt:
 * **Anker** (`test_price_anchor_*`) — eine bekannte Stelle nennt exakt den
   Preis aus `plans.py`. Jeder Anker prueft zuerst, dass sein Muster ueberhaupt
   noch trifft: ein stumm durchlaufender Guard ist schlimmer als keiner.
-* **Scan** (`test_no_unknown_monthly_price`) — *jedes* Vorkommen der Form
-  „<Betrag> €/Mon…" in den Preis-tragenden Dateien muss ein bekannter Betrag
-  sein. Das fangt die neue Fundstelle, die noch niemand als Anker kennt.
+* **Scan** (`test_no_unknown_euro_amount`) — *jeder* Euro-Betrag in den
+  Preis-tragenden Dateien muss ein bekannter Betrag sein. Das fangt die neue
+  Fundstelle, die noch niemand als Anker kennt.
+
+Der Scan sucht bewusst nach dem Betrag, nicht nach der Formulierung. Die erste
+Fassung traf nur die Kurzform „<Betrag> €/Mon…" und liess damit jede Prosaform
+durch („49 € im Monat", „49 EUR pro Monat", „49 € monatlich", „zahlt heute
+49 €"). Zwei solcher Saetze stehen real im Analysepapier und hingen an keiner
+Pruefung. Eine Formulierungs-Liste waere immer unvollstaendig gewesen; die
+Menge der erlaubten Betraege dagegen ist klein, vollstaendig aufzaehlbar und
+haengt an `plans.py`.
 """
 
 from __future__ import annotations
@@ -94,12 +102,18 @@ def test_price_anchor_matches_plans_py(relative_path: str, pattern: re.Pattern[s
     )
 
 
-# Jede Monatspreis-Angabe in Prosa: "29 €/Mon", "9,99 €/Monat", "| Pro | 99 €/Mon |".
-_MONTHLY_PRICE = re.compile(r"([\d.,]+)\s*€/Mon")
+# Jeder Euro-Betrag, egal wie er formuliert ist: "9,99 €/Monat", "99 €/Mon",
+# "49 € im Monat", "49 € monatlich", "zahlt heute 9,99 €", "49 EUR pro Monat",
+# "| Free | 0 € |". Absichtlich KEINE Liste von Zeitraum-Formulierungen: die
+# waere immer unvollstaendig (genau daran ist die erste Fassung gescheitert),
+# waehrend die Menge der erlaubten Betraege endlich und an `plans.py` gehaengt
+# ist. Der Betrag endet auf einer Ziffer, damit Satzzeichen ("9,99 €.") nicht
+# in die Gruppe rutschen.
+_EURO_AMOUNT = re.compile(r"(\d(?:[\d.,]*\d)?)\s*(?:€|EUR\b)")
 
 
 @pytest.mark.parametrize("relative_path", (_PLANS_DOC, _OWNER_GUIDE))
-def test_no_unknown_monthly_price(relative_path: str) -> None:
+def test_no_unknown_euro_amount(relative_path: str) -> None:
     allowed = {
         _eur(FREE_PLAN.price_eur),
         _eur(PRO_PLAN.price_eur),
@@ -109,20 +123,21 @@ def test_no_unknown_monthly_price(relative_path: str) -> None:
         (_MOR_CUSTOMERS * _eur(PRO_PLAN.price_eur) * _MOR_FEE_SPREAD).quantize(Decimal("1")),
     }
 
-    found = {_eur(value) for value in _MONTHLY_PRICE.findall(_read(relative_path))}
+    found = {_eur(value) for value in _EURO_AMOUNT.findall(_read(relative_path))}
     assert found, (
-        f"{relative_path}: keine einzige Monatspreis-Angabe gefunden. Entweder ist "
-        "die Datei umformuliert (Muster `_MONTHLY_PRICE` nachziehen) oder sie traegt "
+        f"{relative_path}: kein einziger Euro-Betrag gefunden. Entweder ist "
+        "die Datei umformuliert (Muster `_EURO_AMOUNT` nachziehen) oder sie traegt "
         "keine Preise mehr (dann aus der Parametrisierung entfernen)."
     )
 
     unknown = found - allowed
     assert not unknown, (
-        f"{relative_path} nennt {sorted(str(v) for v in unknown)} € pro Monat — "
+        f"{relative_path} nennt {sorted(str(v) for v in unknown)} € — "
         f"bekannt sind nur {sorted(str(v) for v in allowed)} € (Free/Pro aus "
-        "`plans.py`, Team als Vorschlag des Analysepapiers). Entweder ist der Preis "
-        "gedriftet (Datei nachziehen) oder es gibt einen neuen Tarif (dann zuerst "
-        "`plans.py`, dann diesen Test)."
+        "`plans.py`, Team als Vorschlag des Analysepapiers, dazu der gerechnete "
+        "MoR-Differenzbetrag). Entweder ist der Preis gedriftet (Datei "
+        "nachziehen) oder es gibt einen neuen Tarif (dann zuerst `plans.py`, "
+        "dann diesen Test)."
     )
 
 
