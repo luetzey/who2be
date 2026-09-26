@@ -661,6 +661,23 @@ jobs:
           # `--no-project`: das Skript braucht nur die Standardbibliothek; ein
           # `uv sync` des Workspaces waere Minuten fuer nichts.
           uv run --no-project python scripts/changelog_fragments.py guard --base "$BASE_SHA"
+      - name: Fragment-Bestand auf Namensform pruefen (changelog.d/)
+        # BEWUSST ein eigener Step neben dem `guard` darueber, nicht derselbe:
+        # die beiden treffen verschiedene Aussagen, und bei Rot soll der
+        # Step-Name sagen, welche gebrochen ist.
+        #   guard -> die gegen die Basis GEAENDERTEN Dateien
+        #   check -> der BESTAND in changelog.d/
+        #
+        # Gemessener Anlass: ein Fragment mit falscher Namensform kam ueber
+        # PR #666 auf main. `guard --base origin/main` blieb gruen, weil die
+        # Datei in keinem spaeteren Diff mehr auftaucht — `check` ueber den
+        # Bestand war rot. Ohne diesen Step faellt derselbe Fall erst beim
+        # `collect`-Lauf zum Release auf, also an der teuersten Stelle.
+        #
+        # Kein PR-Kontext und kein Base-SHA noetig: `check` liest nur das
+        # Verzeichnis. Der Step laeuft deshalb auch beim Push auf main, wo
+        # sich der `guard`-Step oben absichtlich ueberspringt.
+        run: uv run --no-project python scripts/changelog_fragments.py check
 
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
