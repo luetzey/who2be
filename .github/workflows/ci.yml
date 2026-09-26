@@ -565,6 +565,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: User-Namespaces freischalten (ubuntu-24.04 sperrt sie per AppArmor)
+        # GEMESSEN, nicht vermutet: der erste Lauf dieses Jobs (Run 36214622853,
+        # Job 108328036706) hat auf `ubuntu-latest` ergeben
+        #   apparmor_restrict_unprivileged_userns=1
+        #   userns: unshare -rm --map-auto NICHT verfuegbar
+        #   tmpfs im userns: NICHT verfuegbar
+        # Damit haetten die Faelle 12-14 in CI nie gelaufen — und das sind die
+        # drei, die die Zusage tragen (Fall 13 ist der einzige, der die
+        # Vorfassung rot faerbt, Fall 14 der einzige mit echter
+        # Dateisystem-Grenze). Der Schalter im Test-Step hat den Job deshalb rot
+        # gefaerbt statt still gruen zu melden; dieser Step nimmt die Ursache weg.
+        #
+        # Die Sperre ist eine Ubuntu-24.04-Haertung (AppArmor-Profil fuer
+        # unprivilegierte userns), kein Kernel-Feature-Mangel: `max_user_namespaces`
+        # steht bei 63838, `unshare` und `setpriv` sind vorhanden. Der sysctl-Knopf
+        # hebt genau diese Haertung auf. Runner sind ephemer und pro Job frisch —
+        # die Aenderung wirkt nur in diesem Lauf.
+        #
+        # FAIL-CLOSED: laesst sich die Faehigkeit nicht herstellen, bricht dieser
+        # Step ab, statt den Test-Step in einen Skip laufen zu lassen. Ein
+        # gruener Job ohne die Faelle 12-14 waere schlimmer als gar keiner.
+        run: |
+          set -uo pipefail
+          before="$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+          echo "apparmor_restrict_unprivileged_userns (vorher)=${before}"
+          if [ "${before}" = "1" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          if ! unshare -rm --map-auto true 2>/dev/null; then
+            echo "::error title=User-Namespaces nicht verfuegbar::Die Faelle 12-14 von \
+          test_backup_alarm.sh brauchen unprivilegierte User-Namespaces \
+          (unshare -rm --map-auto). Sie liessen sich auf diesem Runner nicht \
+          freischalten (apparmor_restrict_unprivileged_userns=${before}). Der Job \
+          bricht hier ab statt die drei Faelle stillschweigend zu ueberspringen — \
+          uebersprungen ist nicht bestanden."
+            exit 1
+          fi
+          echo "User-Namespaces verfuegbar."
       - name: Runner-Faehigkeiten fuer die Faelle 12-14 messen
         # Die Faelle 12-14 brauchen unprivilegierte User-Namespaces
         # (`unshare -rm --map-auto`) und ein eigenes tmpfs darin. Ob ein Runner
