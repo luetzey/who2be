@@ -1379,6 +1379,12 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
+- **Parallelitaet zum Retention-Cron ist unbedenklich** (gemessen 2026-09-26,
+  ADR-0049-Nachtrag): `VACUUM INTO` laeuft als **Leser** — ein 6 s offener
+  Snapshot liess 692 parallele Commits mit 0 Fehlern durch, `integrity_check`
+  danach `ok`. Es ist also **keine** Betriebsregel einzuhalten, die Backup und
+  `who2be-purge` auseinanderhaelt; dass die Cron-Zeiten (03:15 bzw. 03:30 UTC)
+  auseinanderliegen, ist Bequemlichkeit, keine Bedingung.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
@@ -1425,6 +1431,18 @@ Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
 `WHO2BE_TABLESTORE_DIR`-Werte wie die API — `docker compose run api` bringt
 beides mit, ein Lauf ausserhalb des Compose-Kontexts nicht.
 
+**Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
+ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert
+weder den Purge noch den Schreibpfad der API. Es ist also keine
+Reihenfolge-Regel einzuhalten.
+
+**Karenzfrist im Area-Store-Sweep:** eine Area-Datei mit kuerzlicher
+Schreibaktivitaet (juengstes `mtime` aus `.sqlite`/`-wal`/`-shm` unter 24 h)
+wird uebersprungen und im Log vermerkt, damit ein noch laufender Schreibvorgang
+sein Ergebnis nicht verliert. Das ist **kein Rueckstand und keine Aktion**: der
+naechste Lauf betrachtet die Datei erneut, und im Normalfall (keine
+Schreibaktivitaet) verschwindet sie wie bisher im selben Lauf.
+
 Ausgabe (zwei Zeilen, beide ins Log):
 
 ```
@@ -1438,6 +1456,7 @@ Worauf im Log zu achten ist:
 |---|---|---|
 | `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
 | `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `… bleibt in der Karenzfrist liegen` | Area-Datei mit kuerzlicher Schreibaktivitaet | **keine** — der naechste Lauf nimmt sie |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 
