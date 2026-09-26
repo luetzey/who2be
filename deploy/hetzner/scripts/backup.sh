@@ -171,7 +171,14 @@ fi
 catalog_table_exists() {
   local answer
   answer="$(catalog_query "SELECT to_regclass('public.$1') IS NOT NULL")" || return 2
-  [[ "${answer//[[:space:]]/}" == "t" ]]
+  case "${answer//[[:space:]]/}" in
+    t) return 0 ;;
+    f) return 1 ;;
+    # Leere oder unerwartete Antwort bei Exit 0: das darf nicht als "Tabelle
+    # gibt es nicht ⇒ Soll 0" durchgehen — dieselbe Linie wie sonst im
+    # Skript, nicht befragbar ist rot und nicht still 0.
+    *) return 2 ;;
+  esac
 }
 
 # --- Dead-Man's-Switch (#541) --------------------------------------------

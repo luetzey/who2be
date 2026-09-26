@@ -231,13 +231,21 @@ VVT-Eintrag.
   sonst waere die Zusage mit einem `psql`-Ausfall abwaehlbar. Fehlt die
   Katalog-Tabelle dagegen ganz (Stack vor Migration 0075/0078), gilt Soll 0;
   gefragt wird ueber `to_regclass`, damit „gibt es nicht" nicht als
-  unterdrueckter SQL-Fehler daherkommt.
+  unterdrueckter SQL-Fehler daherkommt. Dieselbe Linie gilt fuer den Grenzfall
+  dazwischen: antwortet `psql` mit Exit 0, aber **leer** oder unerwartet, ist
+  auch das rot — nur ein ausdrueckliches `f` heisst „Tabelle gibt es nicht".
 - Belegt durch die Faelle 12–14 derselben Suite: leerer Store bei nichtleerem
   Katalog ⇒ Exit 1, 0 Pings, `--tag incomplete`, **Spiegel nicht geraeumt**;
   legitimer Leerfall (leerer Katalog + leerer Store) ⇒ gruen; leeres Bucket bei
   nichtleerem `wa_blob` ⇒ rot, ohne dass `s3 sync` lief. Gegen die Vorfassung
   sind 12 und 14 rot (nachgemessen) — sie sind damit echter
   Regressionsschutz.
+- Die beiden Faelle, die den Spiegel messen, teilen sich bewusst ein
+  `BACKUP_DIR` (nur so ist „Spiegel ueberlebt den roten Lauf" pruefbar),
+  raeumen aber vor jedem Lauf die Dumps des Vorlaufs weg. Sonst haengt die
+  Dump-Zusage an der Sekunde, in die der Lauf fiel — der Dump-Name ist
+  sekundengenau — und der Test wuerde die Laufzeit der Maschine messen statt
+  das Verhalten.
 
 **Grenze:** der Abgleich erkennt einen **fehlenden** Bestand, nicht einen
 inhaltlich veralteten. Eine Area-Datei, die da liegt, aber Tage alt ist, faellt

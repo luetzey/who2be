@@ -138,6 +138,8 @@ STUB
 # Abfragen, die backup.sh stellt — gesteuert ueber Env:
 #   STUB_PSQL_FAIL=1              -> jede Abfrage scheitert
 #   STUB_PSQL_NO_CATALOG=1        -> to_regclass sagt "Tabelle gibt es nicht"
+#   STUB_PSQL_BLANK_REGCLASS=1    -> to_regclass antwortet LEER bei Exit 0
+#                                    (darf nicht als "Soll 0" durchgehen)
 #   STUB_PSQL_AREAS="a/b.sqlite"  -> Zeilen der wa_table-Abfrage (leer = Soll 0)
 #   STUB_PSQL_BLOBS=N             -> count(*) aus wa_blob (Default 0)
 cat >"${BIN}/psql" <<'STUB'
@@ -155,7 +157,9 @@ if [[ "${STUB_PSQL_FAIL:-0}" == "1" ]]; then
 fi
 case "${sql}" in
   *to_regclass*)
-    if [[ "${STUB_PSQL_NO_CATALOG:-0}" == "1" ]]; then echo "f"; else echo "t"; fi
+    if [[ "${STUB_PSQL_BLANK_REGCLASS:-0}" == "1" ]]; then
+      :   # leere Antwort, Exit 0 — der Grenzfall
+    elif [[ "${STUB_PSQL_NO_CATALOG:-0}" == "1" ]]; then echo "f"; else echo "t"; fi
     ;;
   *wa_table*)
     [[ -n "${STUB_PSQL_AREAS:-}" ]] && printf '%s\n' "${STUB_PSQL_AREAS}"
@@ -468,6 +472,14 @@ mkdir -p "${SHARED_DIR}"
 
 run_shared() {
   RUN_DIR="${ROOT}/case-empty-store"
+  # Das Verzeichnis ist ABSICHTLICH geteilt (nur so ist messbar, dass der
+  # Spiegel ueberlebt) — die Dump-Zusage gilt aber je Lauf. backup.sh:97
+  # benennt den Dump sekundengenau: liefen beide Laeufe in derselben Sekunde,
+  # ueberschriebe Lauf 2 den von Lauf 1, sonst lagen zwei Dateien da. Eine
+  # Absolutzahl wuerde damit die Laufzeit der Maschine messen statt das
+  # Verhalten. Deshalb startet jeder Lauf ohne fremde Dumps; der Spiegel unter
+  # tablestore/ bleibt unberuehrt.
+  find "${SHARED_DIR}" -maxdepth 1 -name 'dump-*.pgc.gpg' -delete
   export HEARTBEAT_LOG="${RUN_DIR}/heartbeat.log"
   export RESTIC_LOG="${RUN_DIR}/restic.log"
   export AWS_LOG="${RUN_DIR}/aws.log"
@@ -572,6 +584,20 @@ assert_exit nonzero "Katalog unerreichbar"
 assert_pings 0 "Katalog unerreichbar"
 assert_restic_tag incomplete "Katalog unerreichbar"
 
+# Und der Grenzfall dazwischen: psql antwortet mit Exit 0, aber LEER. Das ist
+# weder "Tabelle gibt es nicht" noch eine brauchbare Antwort — es darf nicht in
+# den Zweig "Soll 0" fallen, sonst waere die Zusage mit einer stummen Antwort
+# abwaehlbar. Gleiche Linie wie 13c, nur eine Ebene subtiler.
+log "13d/17 Katalog antwortet leer bei Exit 0 — rot statt stillem Soll 0"
+WHO2BE_TABLESTORE_DIR="${EMPTY_STORE2}" \
+STUB_PSQL_BLANK_REGCLASS=1 \
+RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
+BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
+  run catalog-blank
+assert_exit nonzero "Katalog antwortet leer"
+assert_pings 0 "Katalog antwortet leer"
+assert_restic_tag incomplete "Katalog antwortet leer"
+
 # --- 14) Dieselbe Klasse in Stufe 2: leeres Bucket + --delete ------------
 # `aws s3 sync --delete` auf einem leeren oder falschen Bucket leert den
 # Blob-Spiegel und meldet Exit 0. Der Abgleich zaehlt das Bucket-Inventar VOR
@@ -582,6 +608,10 @@ mkdir -p "${BLOB_SHARED}"
 
 run_blob_shared() {
   RUN_DIR="${ROOT}/case-empty-bucket"
+  # Gleiche Begruendung wie bei run_shared: geteiltes Verzeichnis fuer den
+  # Spiegel, Dump-Zusage je Lauf — sonst haengt die Zahl an der Sekunde, in die
+  # der Lauf fiel (backup.sh:97). blobs/ bleibt unberuehrt.
+  find "${BLOB_SHARED}" -maxdepth 1 -name 'dump-*.pgc.gpg' -delete
   export HEARTBEAT_LOG="${RUN_DIR}/heartbeat.log"
   export RESTIC_LOG="${RUN_DIR}/restic.log"
   export AWS_LOG="${RUN_DIR}/aws.log"

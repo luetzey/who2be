@@ -14,7 +14,8 @@
   erwartete Objektzahl. Fehlt etwas, ist der Lauf rot, der Heartbeat bleibt aus
   und der Snapshot traegt `--tag incomplete`. Der legitime Leerfall — leerer
   Katalog, leerer Store auf einem frischen Stack — bleibt gruen; ein **nicht
-  befragbarer** Katalog ist dagegen ein Fehlschlag und kein stilles „Soll 0".
+  befragbarer** Katalog ist dagegen ein Fehlschlag und kein stilles „Soll 0"
+  (das gilt auch, wenn `psql` mit Exit 0 antwortet, aber leer).
 
   Zwei Raeumvorgaenge setzen bei einer roten Stufe aus, weil sie sonst genau im
   scheiternden Lauf den Stand loeschen, auf den ein Restore zurueckfallen will:
