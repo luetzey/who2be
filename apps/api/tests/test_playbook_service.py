@@ -14,6 +14,7 @@ from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.playbook_composition_repository import SetCompositionResult
 from who2be_api.repositories.playbook_repository import PlaybookUpdateOutcome
 from who2be_api.repositories.playbook_resource_link_repository import SetLinksResult
+from who2be_api.routers.playbooks import render_playbook
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
 from who2be_api.services.playbook_service import PlaybookService
@@ -956,3 +957,47 @@ def test_render_selection_on_plain_body_returns_raw() -> None:
     result = asyncio.run(service.render(ctx, created.id, ["h-ziel"]))
     assert result.body_rendered == "1. Do it."
     assert result.sections == []
+
+
+# --------------------------------------------------------------------------
+# Der Endpoint selbst: `?sections=` muss vom Draht in den Service kommen.
+# Die Service-Tests oben rufen render() direkt und koennen diese
+# Durchreichung darum nicht belegen.
+# --------------------------------------------------------------------------
+
+
+def test_endpoint_forwards_sections_query_to_the_service() -> None:
+    """`?sections=h-ziel` schneidet wirklich — sonst kaeme still das Volldokument."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(render_playbook(pid, ctx, service, sections="h-ziel"))
+    assert result.body_rendered == "Ziel\n\nZieltext"
+    assert "Ablauftext" not in result.body_rendered
+
+
+def test_endpoint_forwards_multiple_anchors() -> None:
+    """Mehrere Anker kommen als Liste an, nicht als eine Zeichenkette."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(render_playbook(pid, ctx, service, sections=" h-ziel , h-ende "))
+    assert "Zieltext" in result.body_rendered
+    assert "Endetext" in result.body_rendered
+    assert "Ablauftext" not in result.body_rendered
+
+
+def test_endpoint_without_sections_returns_the_whole_body() -> None:
+    """Ungesetzt heisst Vollabruf — der additive Default."""
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(render_playbook(pid, ctx, service))
+    assert "Zieltext" in result.body_rendered
+    assert "Endetext" in result.body_rendered
+
+
+@pytest.mark.parametrize("empty", ["", "   ", " , "])
+def test_endpoint_empty_sections_is_a_selection_without_hits(empty: str) -> None:
+    """Gesetzt-aber-leer ist eine Auswahl ohne Treffer, kein stiller Vollabruf.
+
+    Die Zusage im Query-Parameter muss genau das sagen — ein REST-Client, der
+    `sections=` aus einer leeren Variable baut, bekommt einen leeren Body.
+    """
+    service, ctx, pid = _sectioned_playbook()
+    result = asyncio.run(render_playbook(pid, ctx, service, sections=empty))
+    assert result.body_rendered == ""

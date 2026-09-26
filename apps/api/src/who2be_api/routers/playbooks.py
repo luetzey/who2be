@@ -215,8 +215,10 @@ async def render_playbook(
         str | None,
         Query(
             description=(
-                "Kommagetrennte Heading-Anker (block_id). Gesetzt: nur diese "
-                "Sections werden gerendert. Leer/ungesetzt: der ganze Body."
+                "Kommagetrennte Heading-Anker (block_id). Ungesetzt: der ganze "
+                "Body. Gesetzt — auch leer: nur die genannten Sections werden "
+                "gerendert; ohne Treffer bleibt der Body leer (ein Tippfehler "
+                "liefert also nicht still das Volldokument)."
             )
         ),
     ] = None,
