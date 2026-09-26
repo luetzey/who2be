@@ -49,7 +49,7 @@ class Plan:
     """Ein buchbarer Plan-Tier.
 
     `price_eur` ist der monatliche Preis als Mollie-Decimal-String (z. B.
-    ``"29.00"``); `interval` folgt der Mollie-Syntax (``"1 month"``). `features`
+    ``"9.99"``); `interval` folgt der Mollie-Syntax (``"1 month"``). `features`
     ist ein **Superset**-Set: Pro enthaelt `core`, damit core-gated Reads fuer
     zahlende Orgs nicht fehlschlagen.
     """
@@ -105,7 +105,7 @@ FREE_PLAN = Plan(
 PRO_PLAN = Plan(
     code="pro",
     name="Pro",
-    price_eur="29.00",
+    price_eur="9.99",
     interval="1 month",
     features=frozenset(
         {

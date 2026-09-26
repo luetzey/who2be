@@ -43,7 +43,7 @@ ersten zahlenden Kunden geschlossen sein sollten — sie stehen in
 **Die teuerste Lücke ist nicht die Request-Zahl, sondern der Speicher.**
 Requests sind gedeckelt (`mcp_monthly_quota`, pro Org atomar gezählt).
 Hochgeladene Dateien sind es **nicht**: es gibt im ganzen Repo keine
-Speicher-Quota. Ein Pro-Kunde für 29 €/Monat darf heute unbegrenzt viele
+Speicher-Quota. Ein Pro-Kunde für 9,99 €/Monat darf heute unbegrenzt viele
 20-MiB-Dateien ablegen. Das ist der einzige Posten, bei dem ein einzelner
 Kunde dich real Geld kosten kann.
 
@@ -255,7 +255,7 @@ zurückgespielt wurde, ist kein Backup.**
 | Tier | Preis | MCP-Req/Monat | Req/Minute | Entities/Workspace | Speicher | Seats |
 |---|---|---|---|---|---|---|
 | Free | 0 € | 1.000 | 30 | 50 | **unbegrenzt** | **unbegrenzt** |
-| Pro | 29 €/Mon | 100.000 | 240 | **unbegrenzt** | **unbegrenzt** | **unbegrenzt** |
+| Pro | 9,99 €/Mon | 100.000 | 240 | **unbegrenzt** | **unbegrenzt** | **unbegrenzt** |
 
 Quelle: `docs/licensing/plans.md`, `packages/billing/src/who2be_billing/plans.py:69`.
 
@@ -265,7 +265,7 @@ Quelle: `docs/licensing/plans.md`, `packages/billing/src/who2be_billing/plans.py
 Stelle, wo es Geld kostet.** Requests sind gedeckelt und werden atomar pro
 Org gezählt (`mcp_limit_service.py:117`). Speicher, Sitze und Entities im
 Pro-Tarif sind es nicht. Ein einziger Kunde mit einem Ingest-Skript kann für
-29 €/Monat dein Volume füllen — das Ingest-Limit von 20 MiB gilt **pro
+9,99 €/Monat dein Volume füllen — das Ingest-Limit von 20 MiB gilt **pro
 Datei** (`config.py:159`), nicht in Summe.
 
 **2. Das Minutenlimit hängt am Token, nicht an der Org.** `rate_limit_key()`
@@ -287,7 +287,7 @@ Skript mit einem GoTrue-JWT liest **ungedrosselt**. Für Schreibzugriffe
 greift `rate_limit_write` (30/min), für Lesezugriffe nichts.
 
 **4. Sitze werden nicht bepreist.** RBAC und Einladungen existieren
-(ADR-0023). Eine 30-köpfige Firma zahlt heute 29 € — genauso viel wie eine
+(ADR-0023). Eine 30-köpfige Firma zahlt heute 9,99 € — genauso viel wie eine
 Einzelperson. Das ist bei B2B-SaaS die teuerste unbeabsichtigte Preisstufe.
 
 ### Vorschlag
@@ -295,7 +295,7 @@ Einzelperson. Das ist bei B2B-SaaS die teuerste unbeabsichtigte Preisstufe.
 Drei Tarife statt zwei, und jedes „unbegrenzt" durch eine Zahl ersetzt, die
 hoch genug ist, dass ehrliche Nutzer sie nie sehen:
 
-| | **Free** | **Pro** 29 €/Mon | **Team** 99 €/Mon |
+| | **Free** | **Pro** 9,99 €/Mon | **Team** 99 €/Mon |
 |---|---|---|---|
 | MCP-Req/Monat (Org) | 1.000 | 100.000 | 500.000 |
 | Req/Minute **pro Org** | 60 | 300 | 900 |
@@ -317,7 +317,7 @@ hoch genug ist, dass ehrliche Nutzer sie nie sehen:
   Ohne sie ist dein Deckungsbeitrag pro Kunde unbestimmt.
 - **2.000 statt unbegrenzt bei Entities** kostet dich keinen echten Kunden
   und hält den Free→Pro-Sprung trotzdem groß (40×).
-- **Sitze** sind der Hebel, mit dem aus 29 € irgendwann 99 € werden. Ohne
+- **Sitze** sind der Hebel, mit dem aus 9,99 € irgendwann 99 € werden. Ohne
   Sitz-Grenze im Pro-Tarif gibt es keinen Grund, je auf Team zu wechseln.
 - **Was du *nicht* limitieren solltest:** Versionen pro Element und
   Lesezugriffe im Web-UI. Beides ist billig und beides ist der Grund, warum
@@ -451,7 +451,7 @@ atomar in der DB (`mollie.py:482`).
 Wochen Arbeit plus laufende Pflicht. Ein **Merchant of Record** (Paddle,
 Lemon Squeezy) tritt selbst als Verkäufer auf, stellt die Rechnung und
 führt die Steuer ab — dafür ~5 % statt Mollies ~1,8 %. Bei 50 Kunden ×
-29 € sind das ~46 €/Monat Unterschied; dagegen steht die gesamte
+9,99 € sind das ~16 €/Monat Unterschied; dagegen steht die gesamte
 Rechnungs- und Steuerlogik, die du nicht baust. **Empfehlung: für den Start
 MoR.** Der Umbau ist überschaubar, weil das Entitlement-Modell
 anbieteragnostisch ist (ADR-0028) und der generische HMAC-Webhookpfad
@@ -547,7 +547,7 @@ und der Snapshot wird als `incomplete` markiert — ein halbes Backup meldet nie
 
 **1. Dein RPO ist 24 Stunden.** Ein Dump pro Tag heißt: bei einem
 Totalausfall um 03:14 Uhr ist ein Tag Kundenarbeit weg. Für ein kostenloses
-Produkt vertretbar, für 29 €/Monat grenzwertig. **Empfehlung:**
+Produkt vertretbar, für 9,99 €/Monat grenzwertig. **Empfehlung:**
 WAL-Archivierung dazu (pgBackRest oder WAL-G gegen dieselbe Storage Box)
 — damit sinkt der RPO auf Minuten. Alternative für den Anfang: den
 Backup-Cron auf alle 6 Stunden stellen, das kostet nichts außer Platz.
