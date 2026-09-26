@@ -37,10 +37,14 @@ def test_fetch_reports_token_workspace_alongside_default() -> None:
 
     me = asyncio.run(service.fetch(uuid4(), token_workspace_id=token_ws))
 
-    # Beide Felder stehen nebeneinander — `default_workspace_id` bleibt, was das
-    # Web fuer seinen `/w/{id}`-Redirect erwartet.
+    # Auf dem Token-Pfad wird die Antwort auf den gebundenen Workspace
+    # geschnitten; `default_workspace_id` zeigt deshalb ebenfalls dorthin.
+    # Bliebe es die erste Membership des Menschen, benennte die Antwort einen
+    # Workspace, der in ihrer eigenen (geschnittenen) Liste nicht vorkommt.
+    # Der `/w/{id}`-Redirect des Webs haengt davon nicht ab: er laeuft ueber den
+    # JWT-Pfad, und der bleibt unveraendert (naechster Test).
     assert me.token_workspace_id == token_ws
-    assert me.default_workspace_id == default_ws
+    assert me.default_workspace_id == token_ws
 
 
 def test_fetch_without_token_binding_leaves_field_none() -> None:

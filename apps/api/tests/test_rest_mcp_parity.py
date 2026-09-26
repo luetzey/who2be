@@ -428,12 +428,26 @@ def test_mcp_external_tool_write_path_matches_rest(
                 assert rest_get.status_code == 200, rest_get.text
                 assert rest_get.json()["content"]["usage_notes"] == "v1"
 
+                # draft -> review geht via MCP (agent-erreichbar); review ->
+                # active nicht mehr: das Aktivieren verlangt `admin`, und ein
+                # agent-gebundener Token ist auf `editor` gedeckelt. Der
+                # Promote laeuft deshalb ueber den menschlichen REST-Aufruf —
+                # was die Parity-Aussage nicht beruehrt, denn sie gilt dem
+                # Schreibpfad, nicht der Veroeffentlichung.
+                async def _publish(version: int) -> None:
+                    await mcp.transition_external_tool_version(
+                        created.id, version, VersionTransitionRequest(to=VersionStatus.review)
+                    )
+                    promoted = await rest.post(
+                        f"{base}/{created.id}/versions/{version}/transition",
+                        json={"to": "active"},
+                        headers=jwt_headers,
+                    )
+                    assert promoted.status_code == 200, promoted.text
+
                 # v1 muss erst aktiv sein, bevor PUT eine neue Draft (v2) anlegt
                 # (`draft_exists`-409, solange v1 selbst noch draft ist).
-                for target in (VersionStatus.review, VersionStatus.active):
-                    await mcp.transition_external_tool_version(
-                        created.id, 1, VersionTransitionRequest(to=target)
-                    )
+                await _publish(1)
 
                 updated = await mcp.update_external_tool(
                     created.id,
@@ -447,10 +461,7 @@ def test_mcp_external_tool_write_path_matches_rest(
                 assert rest_get.json()["content"]["usage_notes"] == "v2"
                 assert rest_get.json()["current_status"] == "draft"
 
-                for target in (VersionStatus.review, VersionStatus.active):
-                    await mcp.transition_external_tool_version(
-                        created.id, 2, VersionTransitionRequest(to=target)
-                    )
+                await _publish(2)
                 rest_get = await rest.get(f"{base}/{created.id}", headers=jwt_headers)
                 assert rest_get.json()["current_status"] == "active"
                 assert rest_get.json()["current_version"] == 2
