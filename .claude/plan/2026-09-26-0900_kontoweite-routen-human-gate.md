@@ -1,7 +1,7 @@
 # Kontoweite Routen verlangen einen menschlichen Aufrufer; agent-gebundene Tokens auf `editor` gedeckelt
 
 Karte: `t_c119c5e6` · Vorgaenger: `t_ea83420c` (Klasse 1, Commit `e0b4ccb7`)
-Basis: `origin/main` @ `a2bf65df`
+Basis: `origin/main` @ `d00c1088`
 
 ## Ausgangslage (gelesen, nicht vermutet)
 
@@ -121,6 +121,20 @@ Betriebshinweis als Kommentarkopf der Migration und im Changelog-Fragment.
 8. OpenAPI-Referenz regenerieren, Gate-/Contract-Goldens pruefen.
 9. Changelog-Fragment, DoD (ruff, format, mypy, pytest mit Coverage-Gate,
    Lizenz-Gate, Web-Gates).
+
+## Nebenwirkung des Deckels: Veroeffentlichen wird menschlich
+
+`required_role_for_transition` (`services/version_status.py:119-136`, ADR-0023)
+verlangt fuer `review → active`, `active → inactive` und `active → draft` die
+Rolle `admin`, und das Rollen-Gate laeuft vor dem Capability-Gate. Ein
+agent-gebundener Token erreicht diese Uebergaenge deshalb nicht mehr — auch
+nicht mit der Capability `promote_retire`, die dort damit wirkungslos wird.
+
+Das ist die beabsichtigte Wirkung und nicht ein Kollateralschaden: ADR-0040
+kennt dieselbe Trennung fuer System-Prompt-Templates (verfassen darf der Agent,
+scharfschalten der Mensch); der Deckel zieht sie auf alle Entitaeten durch. Zwei
+Bestandstests beschrieben den alten Zustand und wurden nachgezogen
+(`test_external_tools`, `test_rest_mcp_parity`). Als Kommentar an @pm gemeldet.
 
 ## Nicht in diesem Paket
 
