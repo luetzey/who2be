@@ -32,10 +32,14 @@ const { signInWithPassword, signUp, getSession, onAuthStateChange, signInWithOAu
     signUp: vi.fn(),
     // Argument-Typ explizit, nicht `() => …`: sonst leitet TypeScript fuer den
     // Mock die Parameterliste `[]` ab und `mock.calls[0][0]` ist ein Fehler
-    // (TS2493) — genau die Zusicherung, die der Apple-Test braucht.
-    signInWithOAuth: vi.fn(
-      async (_args: { provider: string; options?: { redirectTo?: string } }) => ({ error: null }),
-    ),
+    // (TS2493) — genau die Zusicherung, die der Apple-Test braucht. Der Typ
+    // steht als Generic an `vi.fn` und nicht als Parameter der Implementierung:
+    // ein nur zum Typen da stehender Parameter ist ungenutzt und laeuft in
+    // `@typescript-eslint/no-unused-vars` (`after-used`), weil er der letzte
+    // der Liste ist — die `_`-Praefix-Ausnahme greift dort nicht.
+    signInWithOAuth: vi.fn<
+      (args: { provider: string; options?: { redirectTo?: string } }) => Promise<{ error: null }>
+    >(async () => ({ error: null })),
     getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
     onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   }),
