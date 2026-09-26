@@ -100,6 +100,15 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Volle Historie, aus zwei Gruenden. (1) Der Wirkungs-Pruefer unten
+          # bildet die Merge-Base zwischen Basis und HEAD; ein flacher Checkout
+          # hat sie nicht. (2) Die Tests des Pruefers belegen ihre
+          # Begruendungsfaelle an den Commit-Fassungen, in denen sie eingecheckt
+          # wurden (`git show <sha>:<pfad>`) — ohne Historie wuerden sie
+          # uebersprungen, und ein Gate, das seine eigene Kalibrierung
+          # stillschweigend nicht mehr prueft, ist ein leeres Versprechen.
+          fetch-depth: 0
       - name: Install uv
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: Sync dependencies
@@ -138,6 +147,41 @@ jobs:
         run: >-
           uv run --with pip-licenses python -m piplicenses --partial-match
           --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;CPAL;NPL;Sleepycat;UNKNOWN"
+      - name: Neue Tests fuehren Wirkung aus (meldend)
+        # Ein Test, der eine Datei liest und eine Zeichenkette darin zusichert,
+        # bleibt gruen, solange der Text steht — auch wenn die beschriebene
+        # Sache nicht funktioniert. An einem Tag trat dieser Fehlertyp dreimal
+        # auf und kam zweimal durch alle Pruefungen; einmal konnten dreizehn
+        # bestehende Testfaelle einen abgeschnittenen Datenbank-Dump
+        # prinzipbedingt nicht fangen.
+        #
+        # Als SCHRITT und nicht als Regel in einem Dokument, weil gemessen
+        # wurde, dass die Anweisungs-Dokumente in 89 % der Laeufe nicht im
+        # Kontext des arbeitenden Agenten sind. Eine Regel, die niemand liest,
+        # wirkt nicht; dieser Schritt greift auch dann.
+        #
+        # MELDEND, mit Absicht: gemessen markiert die Heuristik in 10 von 27
+        # Commits mit Testdatei-Aenderung, davon rund ein Fuenftel klare
+        # Fehlalarme (Doku-Drift-Waechter, Golden-File-Vertraege). Ein Gate,
+        # das am ersten Tag blockt, ist am dritten abgeschaltet. `--strict`
+        # steht bereit, wenn die Signalqualitaet im Betrieb belegt ist.
+        #
+        # `continue-on-error` wird NICHT gesetzt: das Skript endet ohne
+        # `--strict` von sich aus in 0 und unterscheidet damit weiter zwischen
+        # „nichts gefunden" (0) und „konnte nicht pruefen" (2). Ein Schritt,
+        # der gruen wird, weil er nicht pruefen konnte, waere schlimmer als
+        # keiner — dieselbe Regel wie beim OSV-Schritt weiter unten.
+        #
+        # `--no-project`: das Skript braucht nur die Standardbibliothek.
+        # Ohne PR-Kontext (Push auf main) gibt es keine Basis fuer den
+        # Diff-Modus; dann wird nichts geprueft statt gegen einen geratenen
+        # Ref. Regel + Ausnahmeweg: docs/effectful-tests.md
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          uv run --no-project python scripts/check_effectful_tests.py
+          --base "$BASE_SHA"
       - name: Test (coverage ratchet + DB-Skip-Guard)
         # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
         # (conftest.py, ADR-0041) — kein stilles "gruen durch Skip" mehr.

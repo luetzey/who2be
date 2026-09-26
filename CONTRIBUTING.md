@@ -268,7 +268,33 @@ python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
 # OSS license gate (ADR-0033) — fail-closed against copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
   --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
+# New tests must exercise behaviour (reports, does not block):
+uv run python scripts/check_effectful_tests.py --base origin/main
 ```
+
+### A test must exercise behaviour, not just text
+
+A test that reads a file and asserts a string in it stays green as long as the
+text is there — even when the thing the text describes does not work. It checks
+the description, not the behaviour. This error type occurred three times in one
+day and passed every existing check twice.
+
+`scripts/check_effectful_tests.py` flags **newly added** Python tests that read
+file contents, assert on them and never call the subject under test. It
+**reports without blocking**: roughly a fifth of its hits are legitimate string
+tests (documentation-drift guards, golden-file contracts), and a gate that
+blocks on day one is switched off by day three.
+
+A test that is rightly a text check carries a justified marker next to it:
+
+```python
+# effect-exempt: holds a documented figure against the registry, has no subject
+```
+
+The rule, the exemption path, the measurement behind the reporting-only
+decision and the method's limits (it parses Python — not the shell suites, not
+the web tests) are in
+[`docs/effectful-tests.md`](docs/effectful-tests.md).
 
 ### A skipped test is not a passing test
 
