@@ -230,6 +230,12 @@ class PlaybookWithResources(BaseModel):
     locale: str
 
 
+# Zuschnitte der `fetch_playbook`-Antwort. "full" ist der unveraenderte
+# Default (mit Editor-JSON), "text" laesst `content.body` weg — die Prozedur
+# steht dann allein in `body_rendered`.
+_PLAYBOOK_FORMATS: frozenset[str] = frozenset({"full", "text"})
+
+
 def _request_token(settings: Settings) -> str:
     """Der fuer DIESEN Aufruf gueltige API-Token.
 
@@ -487,8 +493,23 @@ async def list_placeholders() -> PlaceholderCatalog:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_playbook")
-async def fetch_playbook(playbook_id: str, locale: str | None = None) -> PlaybookWithResources:
+async def fetch_playbook(
+    playbook_id: str,
+    locale: str | None = None,
+    format: str = "full",
+) -> PlaybookWithResources:
     """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): die vollstaendige Antwort inklusive
+      `playbook.content.body`, dem rohen BlockNote-Editor-JSON. Fuer
+      Konsumenten, die den Body strukturell verarbeiten (Editor, Diff).
+    - `"text"`: `playbook.content.body` bleibt leer; die Prozedur steht in
+      `body_rendered`. Alle uebrigen Felder (Metadaten, Tags, Triggers,
+      Links, Composites) sind unveraendert vorhanden. Fuer Agenten der
+      guenstigere Pfad — das Editor-JSON ist dieselbe Prozedur ein zweites
+      Mal und macht bei grossen Playbooks den Loewenanteil der Payload aus.
 
     `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
     ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
@@ -513,6 +534,9 @@ async def fetch_playbook(playbook_id: str, locale: str | None = None) -> Playboo
     Inline-Pills werden zu Plain-Text aufgeloest. Nutze `body_rendered` statt
     `playbook.content.body` — letzterer ist nur stringifiziertes BlockNote-JSON.
     """
+    if format not in _PLAYBOOK_FORMATS:
+        allowed = ", ".join(sorted(_PLAYBOOK_FORMATS))
+        raise ToolError(f"Ungueltiges format: '{format}'. Erlaubt: {allowed}.")
     try:
         parsed = UUID(playbook_id)
     except ValueError as exc:
@@ -538,6 +562,13 @@ async def fetch_playbook(playbook_id: str, locale: str | None = None) -> Playboo
     resources = [await client.get_resource(rid) for rid in inline_resource_ids]
     composed = await client.get_playbook_composes(parsed)
     body_rendered = await client.get_playbook_rendered(parsed)
+    if format == "text":
+        # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort selbst
+        # bleibt unberuehrt, also verliert kein struktureller Konsument
+        # (Editor, Diff) etwas. `body_rendered` traegt dieselbe Prozedur.
+        playbook = playbook.model_copy(
+            update={"content": playbook.content.model_copy(update={"body": ""})}
+        )
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,

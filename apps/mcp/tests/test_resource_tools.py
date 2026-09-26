@@ -7,8 +7,9 @@ gepatcht.
 """
 
 import asyncio
+import json
 from collections.abc import Callable
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -690,3 +691,154 @@ def test_fetch_playbook_returns_rendered_body(monkeypatch: pytest.MonkeyPatch) -
     result = asyncio.run(fetch_playbook(str(pid)))
     assert isinstance(result, PlaybookWithResources)
     assert result.body_rendered == "Schritt 1\n\nSub-Playbook-Inhalt"
+
+
+# Obergrenze fuer den Text-Pfad. Das Ergebnisbudget der Laufzeit liegt bei
+# 50_000 Zeichen; der Fixture-Body unten ist so bemessen, dass der
+# Default-Pfad (`format="full"`) daran vorbeischrammt und der Text-Pfad
+# deutlich darunter bleibt. Verhalten, nicht Feldname: gemessen wird die
+# serialisierte Antwort, nicht ob ein Schluessel existiert.
+_TEXT_PATH_CHAR_LIMIT = 50_000
+
+
+def _fat_blocknote_body(paragraphs: int) -> str:
+    """Realistisch fetter BlockNote-Body als String (wie ihn die API liefert).
+
+    Ein Editor-Block traegt pro Absatz ~250 Zeichen Struktur-Overhead
+    (props, styles, children) auf ~60 Zeichen Nutztext — genau das Verhaeltnis,
+    das die Payload aufblaeht.
+    """
+    blocks = [
+        {
+            "id": f"p{index}",
+            "type": "paragraph",
+            "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"Schritt {index}: Prozedurtext dieses Playbook-Absatzes.",
+                    "styles": {},
+                }
+            ],
+            "children": [],
+        }
+        for index in range(paragraphs)
+    ]
+    return json.dumps(blocks, ensure_ascii=False)
+
+
+def _rendered_text(paragraphs: int) -> str:
+    return "\n\n".join(
+        f"Schritt {index}: Prozedurtext dieses Playbook-Absatzes." for index in range(paragraphs)
+    )
+
+
+def _payload_chars(result: PlaybookWithResources) -> int:
+    """Groesse der Antwort so, wie sie beim Agenten ankommt (serialisiert)."""
+    return len(result.model_dump_json())
+
+
+def _fat_playbook_handler(
+    pid: UUID, playbook: dict[str, object]
+) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            body = playbook["content"]["body"]  # type: ignore[index]
+            paragraphs = body.count('"type": "paragraph"') or body.count('"type":"paragraph"')
+            return httpx.Response(
+                200,
+                json={"body_rendered": _rendered_text(paragraphs), "unresolved": []},
+            )
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    return handler
+
+
+def test_fetch_playbook_text_format_stays_under_payload_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rot-Probe: der Text-Pfad haelt das Ergebnisbudget, der Default nicht.
+
+    Gemessen wird die serialisierte Antwortgroesse, nicht ein Feldname. Ohne
+    den `format="text"`-Pfad liefert `fetch_playbook` fuer beide Aufrufe
+    dieselbe Payload und die Obergrenze reisst.
+    """
+    pid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["content"]["body"] = _fat_blocknote_body(180)  # type: ignore[index]
+
+    monkeypatch.setattr(server, "build_client", _factory(_fat_playbook_handler(pid, playbook)))
+
+    full = asyncio.run(fetch_playbook(str(pid)))
+    text = asyncio.run(fetch_playbook(str(pid), format="text"))
+
+    full_chars = _payload_chars(full)
+    text_chars = _payload_chars(text)
+
+    # Regressionsanker: das Fixture ist gross genug, dass der Default das
+    # Budget tatsaechlich reisst — sonst wuerde der Test unten nichts zeigen.
+    assert full_chars > _TEXT_PATH_CHAR_LIMIT, (
+        f"Fixture zu klein ({full_chars} Zeichen) — der Default muss die "
+        "Obergrenze reissen, sonst beweist der Text-Pfad nichts."
+    )
+    assert text_chars <= _TEXT_PATH_CHAR_LIMIT, (
+        f"Text-Pfad {text_chars} Zeichen > Obergrenze {_TEXT_PATH_CHAR_LIMIT}."
+    )
+    # Der Prozedurtext kommt vollstaendig an — gekuerzt wird das Editor-JSON,
+    # nicht der Inhalt.
+    assert "Schritt 179" in text.body_rendered
+
+
+def test_fetch_playbook_default_format_keeps_editor_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Additiv: ohne `format` bleibt die Antwort unveraendert vollstaendig.
+
+    Bestehende Konsumenten — allen voran der Editor — brauchen das
+    BlockNote-JSON zum Rendern und duerfen die Struktur nicht verlieren.
+    """
+    pid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    raw_body = _fat_blocknote_body(12)
+    playbook["content"]["body"] = raw_body  # type: ignore[index]
+
+    monkeypatch.setattr(server, "build_client", _factory(_fat_playbook_handler(pid, playbook)))
+
+    default = asyncio.run(fetch_playbook(str(pid)))
+    explicit_full = asyncio.run(fetch_playbook(str(pid), format="full"))
+
+    assert default.playbook.content.body == raw_body
+    assert explicit_full.playbook.content.body == raw_body
+    # Metadaten bleiben in BEIDEN Pfaden erhalten — nur der Editor-Body faellt weg.
+    text = asyncio.run(fetch_playbook(str(pid), format="text"))
+    assert text.playbook.content.body == ""
+    assert text.playbook.name == default.playbook.name
+    assert text.playbook.content.description == default.playbook.content.description
+    assert text.playbook.tags == default.playbook.tags
+    assert text.playbook.triggers == default.playbook.triggers
+    assert text.locale == default.locale
+
+
+def test_fetch_playbook_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Tippfehler im `format` faellt auf, statt still den Default zu liefern."""
+    pid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+
+    monkeypatch.setattr(server, "build_client", _factory(_fat_playbook_handler(pid, playbook)))
+
+    with pytest.raises(ToolError):
+        asyncio.run(fetch_playbook(str(pid), format="plain"))
