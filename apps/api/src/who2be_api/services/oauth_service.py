@@ -30,7 +30,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.config import get_settings
-from who2be_api.core.security import hash_token, new_token
+from who2be_api.core.security import cap_agent_bound_role, hash_token, new_token
 from who2be_api.core.tenancy import tenant_scope
 from who2be_api.repositories.oauth_repository import PgOAuthRepository
 from who2be_api.repositories.token_repository import TokenRepository
@@ -435,13 +435,25 @@ class OAuthService:
         client = await self._oauth.get_client(client_id)
         client_name = client.client_name if client else None
         name = f"OAuth: {client_name}" if client_name else "OAuth-Connector"
+        # OAuth-Tokens sind immer agent-gebunden (`agent_id` ist Pflicht), also
+        # gilt hier dieselbe Obergrenze wie in `token_service.create`. Ohne
+        # diesen Deckel waere die Grenze loecherig: ein Admin, der einen
+        # Remote-Connector verbindet, bekaeme ueber diesen Pfad weiterhin ein
+        # agent-gebundenes admin-Token, ohne `create` je zu beruehren.
+        #
+        # Still gedeckelt, nicht abgelehnt (anders als bei einer ausdruecklichen
+        # Rollen-Anforderung in `create`): die Rolle wird hier aus der Membership
+        # abgeleitet, niemand hat sie gewaehlt. Ein 403 im Consent-Flow wuerde
+        # jedem Admin den Connector verweigern, statt ihm einen ausreichenden zu
+        # geben. Die tatsaechlich gepinnte Rolle steht im Audit-Detail.
+        effective_role = cap_agent_bound_role(WorkspaceRole(role))
         access_plain = new_token()
         stored = await self._tokens.insert(
             workspace_id=workspace_id,
             owner_id=owner_id,
             name=name,
             token_hash=hash_token(access_plain),
-            role=WorkspaceRole(role),
+            role=effective_role,
             agent_id=agent_id,
             expires_at=datetime.now(UTC) + _ACCESS_TTL,
         )
@@ -460,7 +472,12 @@ class OAuthService:
                 actor_id=owner_id,
                 workspace_id=workspace_id,
                 target=stored.id,
-                detail={"via": "oauth", "client_id": client_id, "agent_id": str(agent_id)},
+                detail={
+                    "via": "oauth",
+                    "client_id": client_id,
+                    "agent_id": str(agent_id),
+                    "role": effective_role.value,
+                },
             )
         return OAuthTokenResponse(
             access_token=access_plain,

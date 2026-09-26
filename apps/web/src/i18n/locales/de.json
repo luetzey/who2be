@@ -154,6 +154,8 @@
       "invalid_credentials": "Ungueltige oder fehlende Anmeldedaten.",
       "write_rate_limited": "Schreib-Rate-Limit dieses Agenten erreicht ({{limit}}/min) — bitte spaeter erneut versuchen.",
       "token_management_forbidden": "Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
+      "account_route_requires_human": "Diese Aktion betrifft dein gesamtes Konto und ist nur als angemeldete Person moeglich — ein API-Token kann sie nicht ausfuehren.",
+      "agent_bound_role_capped": "Ein an einen Agenten gebundener Token erhaelt hoechstens die Rolle 'editor'. Fuehre Aktionen, die mehr verlangen, als angemeldete Person aus.",
       "bound_agent_not_found": "Der zu bindende Agent existiert nicht in diesem Workspace.",
       "token_role_escalation": "Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
       "token_not_found": "Token nicht gefunden.",

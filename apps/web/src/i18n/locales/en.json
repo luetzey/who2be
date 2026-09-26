@@ -154,6 +154,8 @@
       "invalid_credentials": "Invalid or missing credentials.",
       "write_rate_limited": "Write rate limit for this agent reached ({{limit}}/min) — please try again later.",
       "token_management_forbidden": "Agent-bound tokens cannot manage API tokens.",
+      "account_route_requires_human": "This action affects your whole account and is only available to a signed-in person — an API token cannot perform it.",
+      "agent_bound_role_capped": "A token bound to an agent gets at most the 'editor' role. Perform actions that need more as a signed-in person.",
       "bound_agent_not_found": "The agent to bind does not exist in this workspace.",
       "token_role_escalation": "A token cannot have a higher role than its creator.",
       "token_not_found": "Token not found.",
