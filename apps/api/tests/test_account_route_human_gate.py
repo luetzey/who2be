@@ -102,12 +102,23 @@ def test_machine_token_is_blocked_on_every_account_wide_route(
                 ("POST", f"/v1/invitations/{uuid4().hex}/accept", None),
             ]
 
+            # Alle Faelle sammeln statt beim ersten abzubrechen: bei der
+            # Rot-Probe soll sichtbar werden, welche Routen das Gate braucht —
+            # ein Abbruch bei der ersten sagt ueber die uebrigen nichts.
+            # Gemeldet werden nur Status und `reason`: der Body einer offenen
+            # kontoweiten Route ist im Zweifel ein Vollexport, und der gehoert
+            # nicht in ein CI-Log.
+            missed: list[str] = []
             for method, path, body in cases:
                 res = client.request(method, path, json=body, headers=token_auth)
-                assert res.status_code == 403, f"{method} {path}: {res.status_code} {res.text}"
-                assert res.json()["reason"] == "account_route_requires_human", (
-                    f"{method} {path}: {res.text}"
+                reason = (
+                    res.json().get("reason")
+                    if res.headers.get("content-type", "").startswith("application/")
+                    else None
                 )
+                if res.status_code != 403 or reason != "account_route_requires_human":
+                    missed.append(f"{method} {path}: {res.status_code} reason={reason}")
+            assert not missed, "Kontoweite Routen ohne menschliches Gate:\n" + "\n".join(missed)
 
             # Der Account des Besitzers steht noch: `DELETE /v1/me` hat das Gate
             # nicht passiert. Ohne diese Zeile belegt der 403 oben nur den
