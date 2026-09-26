@@ -30,6 +30,10 @@ bzw. Dokumentations-Standards).
   in Issues, Karten, Plaenen und Reviews: SHA-Permalink und Symbolanker
   statt `datei:zeile`, plus der Pruefer
   `scripts/check_code_refs.py` (intern + Contributor)
+- [`mcp-payload-budget.md`](mcp-payload-budget.md) — Antwort-Budget der
+  MCP-Lese-Werkzeuge: die 50.000-Zeichen-Grenze der Konsumenten-Laufzeit, das
+  gemessene Inventar, `format="text"` als Zuschnitt (intern + Agenten; vor
+  jedem neuen Lese-Werkzeug lesen)
 
 ## Konzept
 
