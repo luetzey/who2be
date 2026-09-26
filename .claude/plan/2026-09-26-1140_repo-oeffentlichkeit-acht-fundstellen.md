@@ -91,7 +91,9 @@ Bei der Umsetzung geprueft und **auf einen Punkt zusammengeschrumpft**:
 * `docs/cloud-erstinbetriebnahme.md` Phase 0: Owner-Schritt „AVV mit Hetzner
   abschliessen" **ergaenzt** — er war bisher nur ein `<PLATZHALTER>` in
   `docs/compliance/vvt.md` und nirgends ein Handlungsschritt. Mit
-  „kein Rechtsrat"-Hinweis.
+  „kein Rechtsrat"-Hinweis. Er steht als Phase-0-Punkt 5; die durchlaufende
+  Nummerierung der Datei (1–17) wurde dabei mitgezogen und alle
+  `Schritt N`/`Punkt N`-Querverweise nachgefuehrt (Review Runde 1).
 
 ### AP2 — F3 `docs/licensing/plans.md` „Bekannte Grenze 3"
 
@@ -104,10 +106,17 @@ braucht eigene Bestaetigung — bleibt stehen, ohne Zahlen. Selbsttragend pruefe
 
 ### AP3 — F5 `deploy/hetzner/RUNBOOK.md`
 
-* Restore-Drill-Protokolltabelle: die leere Platzhalterzeile entfernen und durch
-  die Auflage ersetzen, jeden Drill dort einzutragen. Der **Abschnitt** bleibt
-  vollstaendig; was geht, ist eine oeffentlich lesbare Aussage ueber den
-  Protokollstand (Betriebszustand, im Code nicht enthalten).
+* Restore-Drill-Protokolltabelle: **Review Runde 1 hat hier nachgeschaerft.**
+  Erster Versuch (Platzhalterzeile raus, Auflage rein) liess die leere Tabelle
+  stehen und machte die Leere durch den Zusatz „ein Drill, der nicht in dieser
+  Tabelle steht, gilt als nicht gefahren" sogar ausdruecklich lesbar — also
+  strenger als vorher, statt entschaerft. Jetzt: die **Tabelle entfaellt**, die
+  **Auflage bleibt** (nach jedem prod-Cutover durchziehen und protokollieren,
+  inklusive der zu protokollierenden Felder), und das Protokoll wird
+  betreiberseitig gefuehrt — wie die uebrigen betreiberseitigen Nachweise in
+  `docs/compliance/c5-mapping.md`. Der **Abschnitt** bleibt vollstaendig; was
+  geht, ist allein die oeffentlich lesbare Aussage ueber den Protokollstand
+  (Betriebszustand, im Code nicht enthalten).
 * Rotations-Abschnitt („bricht … **still** ab") → den Fehlerfall benennen und auf
   den Alarmweg zeigen, statt die Stille als Eigenschaft zu behaupten.
 * Alarmweg-Abschnitt: beschreibt einen **behobenen** Zustand (Testfrage 1:

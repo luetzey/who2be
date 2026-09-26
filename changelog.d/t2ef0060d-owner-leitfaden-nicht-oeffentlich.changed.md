@@ -18,4 +18,7 @@
   bleiben die Architecture Decision Records, die Security-Findings mit ihren
   Begruendungen und die Compliance-Dokumentation. In den beiden
   Findings-Dateien wurde je ein Satz nachgezogen, der noch davon ausging, dass
-  das Repository nicht oeffentlich ist.
+  das Repository nicht oeffentlich ist. Das Protokoll der Restore-Drills wird
+  nicht mehr im Repository gefuehrt, sondern betreiberseitig zu den
+  Abnahme-Unterlagen genommen; die Auflage, nach jedem Produktions-Cutover einen
+  Drill zu fahren und zu protokollieren, bleibt im RUNBOOK bestehen.

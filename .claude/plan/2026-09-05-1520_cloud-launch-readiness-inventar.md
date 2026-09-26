@@ -102,7 +102,7 @@ Abschnitt „Zusätzliche Grenzen").
 | Übrige Prod-Secrets gesetzt | Owner-Schritt | `deploy/hetzner/.env.example:15` | Owner | `JWT_SECRET`, `DATABASE_URL`, `APP_DB_PASSWORD`, `SUPABASE_SERVICE_KEY`, `POSTGRES_PASSWORD`, `RESTIC_PASSWORD` tragen `CHANGE_ME`. |
 | Smoke-Skript vorhanden | fertig | `scripts/smoke.sh:26` | Coder | Sechs Checks: Health, Web-Title, `/v1/me`, MCP-Tools, Same-Origin, MCP-HTTP-401. |
 | Smoke prüft Billing | fehlt | `scripts/smoke.sh:26` enthält keine Billing-Route | Coder | Nötig: Cloud antwortet auf `…/billing/entitlement`, On-Prem 404 auf `…/billing/checkout`. |
-| Restore-Drill protokolliert | Owner-Schritt | `deploy/hetzner/RUNBOOK.md:704` | Owner | Protokollzeilen leer — Compliance-Nachweis vor Launch. |
+| Restore-Drill protokolliert | Owner-Schritt | `deploy/hetzner/RUNBOOK.md:704` | Owner | Compliance-Nachweis vor Launch; Protokoll wird betreiberseitig gefuehrt (nicht im Repo). |
 
 ## 6 · Smoke-Reise lokal (`docs/cloud-local-smoke.md`)
 
@@ -133,7 +133,7 @@ Abschnitt „Zusätzliche Grenzen").
 | §6 Downgrade auf 402 | Owner-Schritt | `docs/cloud-prod-smoke.md:17` | Owner | Entitlement-Zeile löschen, 402 prüfen. |
 | §7 RLS-Nachweis | Owner-Schritt | `docs/cloud-prod-smoke.md:17` | Owner | Nicht-privilegierte DB-Rolle in Prod. |
 | §8 Header-/Hardening-Check | fertig | `deploy/hetzner/Caddyfile:1`, `docs/cloud-prod-smoke.md:17` | Owner | Skript `test_headers.sh` vorhanden; Lauf unbelegt (braucht Live-Lauf). |
-| §9 Abnahme + Restore-Drill | Owner-Schritt | `deploy/hetzner/RUNBOOK.md:704` | Owner | Protokoll noch leer. |
+| §9 Abnahme + Restore-Drill | Owner-Schritt | `deploy/hetzner/RUNBOOK.md:704` | Owner | Protokoll betreiberseitig (nicht im Repo). |
 
 ## 8 · Compliance (kein Rechtsrat)
 

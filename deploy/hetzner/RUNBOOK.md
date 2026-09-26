@@ -1181,12 +1181,14 @@ docker compose exec db psql -U supabase_admin who2be_restore \
 
 **H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
 (Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
-Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
-einmal durchziehen und Datum hier protokollieren. Ein Drill, der nicht in
-dieser Tabelle steht, gilt als nicht gefahren:
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck). Auflage: **nach jedem
+prod-Cutover einmal durchziehen und protokollieren** — Datum, Backup-Quelle,
+Restore-Ziel, Ergebnis des Count-Vergleichs, Blob-/Tabellen-Pruefung und
+ausfuehrende Person. Ein Drill ohne Protokolleintrag gilt als nicht gefahren.
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
-|---|---|---|---|---|---|
+Das Protokoll selbst wird **betreiberseitig** gefuehrt, nicht in diesem Repo:
+es ist ein Betriebsnachweis und gehoert zu den Abnahme-Unterlagen (siehe
+`docs/compliance/c5-mapping.md`, betreiberseitige Nachweise).
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
