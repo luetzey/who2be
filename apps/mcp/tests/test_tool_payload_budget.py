@@ -31,10 +31,12 @@ faellt der `text`-Pfad weg, werden beide Pfade gleich gross und der Test wird
 rot.
 """
 
+import ast
 import asyncio
 import importlib
 import inspect
 import json
+import pathlib
 import pkgutil
 from collections.abc import Callable
 from uuid import UUID, uuid4
@@ -42,12 +44,13 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from fastmcp.exceptions import ToolError
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from who2be_mcp import server
 from who2be_mcp import tools as tools_pkg
 from who2be_mcp.client import AnyVersionRead, ApiClient
 from who2be_mcp.server import (
+    _RESPONSE_FORMATS,
     fetch_agent,
     get_persona,
     list_playbooks,
@@ -56,6 +59,7 @@ from who2be_mcp.server import (
 )
 from who2be_models.playbook import PlaybookContent
 from who2be_models.resource import ResourceContent
+from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
 # Baseline 2026-08-13: 71 Tools / 110_133 Bytes (utf-8, name+description+
 # inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
@@ -242,6 +246,102 @@ def _playbook_payload(name: str, body: str) -> dict[str, object]:
     }
 
 
+def _text_format_tools() -> set[str]:
+    """Registrierte Tools, deren `format` der Budget-Zuschnitt ist (`full`/`text`).
+
+    Gezielt ueber den Wertebereich, nicht ueber den Parameternamen: `query_table`
+    hat auch ein `format`, meint damit aber das Ausgabeformat (`json`/`markdown`/
+    `csv`) und deckelt seine Antwort ueber `limit`. Ein Guard, der nur auf den
+    Namen schaut, zieht diesen Fall zu Unrecht herein.
+    """
+    tools = asyncio.run(mcp.list_tools(run_middleware=False))
+    found = set()
+    for tool in tools:
+        schema = ((tool.parameters or {}).get("properties") or {}).get("format")
+        if not isinstance(schema, dict):
+            continue
+        if set(schema.get("enum") or []) == _RESPONSE_FORMATS or schema.get("default") == "full":
+            found.add(tool.name)
+    return found
+
+
+def _budget_test_names() -> set[str]:
+    """Alle Testfunktionsnamen des MCP-Testverzeichnisses (per AST, nicht per Import).
+
+    Ueber das ganze Verzeichnis, weil die Tests da liegen, wo ihr Werkzeug
+    getestet wird: `fetch_playbook` etwa in `test_resource_tools.py`. Ein Guard,
+    der nur die eigene Datei kennt, meldet einen gedeckten Fall als Luecke.
+    """
+    names: set[str] = set()
+    for path in pathlib.Path(__file__).parent.glob("test_*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names |= {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+        }
+    return names
+
+
+def test_every_format_aware_tool_has_a_budget_test() -> None:
+    """Ein neues `format`-Werkzeug ohne Budget-Nachweis faellt hier auf.
+
+    Der Zuschnitt ist nur so gut wie sein Beleg: ein Werkzeug, das `format`
+    anbietet, aber keinen Test mit eigener Rot-Probe hat, sieht geschuetzt aus
+    und ist es nicht. Der Guard liest die tatsaechlichen Tool-Schemata und die
+    tatsaechlichen Testnamen — keine zweite Liste, die veraltet.
+
+    Reisst er, ist die Antwort: einen Test nach dem Muster der bestehenden
+    schreiben (Fixture, dessen `full`-Pfad die Grenze reisst, dann die Zusage
+    fuer `text`) — nicht den Namen hier eintragen.
+    """
+    format_aware = _text_format_tools()
+    assert format_aware, "Kein Werkzeug mit Budget-`format` gefunden — der Guard misst nichts."
+
+    test_names = _budget_test_names()
+    missing = {
+        tool
+        for tool in format_aware
+        if not any(tool in name and "format" in name for name in test_names)
+    }
+    assert not missing, (
+        f"Werkzeuge mit `format`, aber ohne Budget-Test: {sorted(missing)}. "
+        "Jeder Zuschnitt braucht seinen eigenen Nachweis (Rot-Probe), sonst ist er "
+        "nur behauptet — siehe docs/mcp-payload-budget.md, Abschnitt Regressionsschutz."
+    )
+
+
+def test_system_prompt_body_cannot_be_emptied_for_a_cheap_response() -> None:
+    """Belegt, WARUM `list_system_prompts`/`get_system_prompt` keinen `format` haben.
+
+    Das Schema verlangt einen nicht-leeren Body (`min_length=1`) — der Zuschnitt
+    „Body leeren\" wuerde hier eine schema-ungueltige Antwort erzeugen, also
+    einen Validierungsfehler statt einer kleineren Antwort. Der Fall braucht ein
+    eigenes Summary-Modell (`docs/mcp-payload-budget.md`, Abschnitt „Offen\").
+
+    Wird das Limit irgendwann gelockert, faellt dieser Test — und genau dann ist
+    der billige Zuschnitt moeglich und soll nachgezogen werden.
+    """
+    with pytest.raises(ValidationError):
+        SystemPromptTemplateContent(description="Template", body="")
+
+    # Gegenprobe: derselbe Aufruf mit Inhalt gelingt — der Fehler oben kommt von
+    # `min_length`, nicht von einem anderen Feld.
+    assert SystemPromptTemplateContent(description="Template", body="x").body == "x"
+
+    # Und: ein Body am erlaubten Maximum sprengt das Antwortbudget allein, ohne
+    # jeden Rahmen — deshalb ist `get_system_prompt` ein struktureller Fall.
+    field = SystemPromptTemplateContent.model_fields["body"]
+    max_length = next(
+        m.max_length for m in field.metadata if getattr(m, "max_length", None) is not None
+    )
+    assert max_length >= _RESPONSE_CHAR_LIMIT, (
+        f"`body` ist auf {max_length} Zeichen begrenzt und liegt damit unter dem "
+        f"Antwortbudget {_RESPONSE_CHAR_LIMIT} — `get_system_prompt` ist dann kein "
+        "struktureller Fall mehr; docs/mcp-payload-budget.md nachziehen."
+    )
+
+
 def test_get_persona_text_format_stays_under_response_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -332,6 +432,57 @@ def test_get_persona_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> 
     assert asyncio.run(get_persona(str(persona_id))).persona.name == "Coder"
     with pytest.raises(ToolError, match="Ungueltiges format"):
         asyncio.run(get_persona(str(persona_id), format="plain"))
+
+
+def test_get_persona_text_format_empties_linked_playbook_bodies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Regelfall: eine Persona MIT verknuepften Playbooks.
+
+    `get_persona` liefert `PersonaWithPlaybooks` — die Playbook-Bodies liegen in
+    derselben Antwort wie das Profil. Das Fixture ist absichtlich so gebaut,
+    dass die Persona selbst klein ist und der `full`-Pfad die Grenze **allein
+    ueber die Playbooks** reisst: greift der Zuschnitt nur am Profil, bleibt der
+    text-Pfad ueber der Grenze und dieser Test faellt. Eine Persona ohne
+    verknuepfte Playbooks ist beim Boot-Schritt der Ausnahmefall, nicht der
+    Regelfall.
+    """
+    persona_id = uuid4()
+    payload = _persona_payload(persona_id, _fat_blocks(20))
+    body = _fat_blocknote_body(60)
+    linked = [_playbook_payload(f"Playbook {index}", body) for index in range(5)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/personas/{persona_id}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "Profil", "unresolved": []})
+        if path.endswith(f"/personas/{persona_id}/playbooks"):
+            return httpx.Response(200, json=linked)
+        if path.endswith(f"/personas/{persona_id}"):
+            return httpx.Response(200, json=payload)
+        return httpx.Response(404, json={"detail": "weg"})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    full = asyncio.run(get_persona(str(persona_id)))
+    text = asyncio.run(get_persona(str(persona_id), format="text"))
+
+    # Gegenprobe zur Abgrenzung: die Persona-Bloecke allein tragen die Antwort
+    # NICHT ueber die Grenze — was sie reisst, sind die Playbook-Bodies.
+    persona_only = len(full.persona.model_dump_json())
+    assert persona_only <= _RESPONSE_CHAR_LIMIT, (
+        f"Fixture verfehlt seinen Zweck: die Persona allein ist mit {persona_only} "
+        "Zeichen schon zu gross — dann belegt der Test nicht den Playbook-Zuschnitt."
+    )
+
+    _assert_text_path_fits(full, text, "get_persona(mit Playbooks)")
+    # Der Katalog bleibt brauchbar: was die Auswahl traegt, ist vollstaendig da.
+    assert len(text.playbooks) == len(full.playbooks) == 5
+    assert [p.name for p in text.playbooks] == [p.name for p in full.playbooks]
+    assert all(p.triggers == "arbeite Task [X] ab" for p in text.playbooks)
+    assert all(p.content.description.startswith("Beschreibung von") for p in text.playbooks)
+    assert all(p.content.body == "" for p in text.playbooks)
+    assert all(p.content.body == body for p in full.playbooks)
 
 
 def test_fetch_agent_text_format_stays_under_response_limit(

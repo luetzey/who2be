@@ -64,19 +64,34 @@ geschaetzt.
 | --- | --- | --- |
 | `list_playbooks` | 277.151 | jeder Katalog-Eintrag traegt den vollen `content.body` |
 | `get_persona` | 225.559 | `persona.content.content.blocks` + Playbook-Bodies |
+| `list_versions` | 139.925 (Persona `Coder`, 11 Snapshots) | Historien-Laenge **mal** Body |
 | `fetch_playbook` | 64.971 | `content.body` neben `body_rendered` |
 | `fetch_agent` | 54.912 | Persona-Bloecke neben `system_prompt_rendered` |
+| `diff_versions` | 52.116 | `before_text` + `after_text` tragen den Body **zweimal** |
+| `list_system_prompts` | 50.766 (6 Templates x 8.000 Zeichen) | jeder Eintrag traegt `content.body` |
+| `get_system_prompt` | 50.441 (Body am Modell-Maximum) | der Body **ist** der Zweck — strukturell |
 
-`list_versions` steht nicht in der Tabelle, weil die Messung von der Historie
-des gewaehlten Elements abhaengt: die Antwort ist Historien-Laenge **mal** Body.
-Bei einem vielfach versionierten Playbook reisst sie, bei einem neuen nicht —
-die gefaehrlichste Sorte, weil sie mit dem Alter des Workspace erst entsteht.
+Die `list_versions`-Zahl gilt fuer ein konkretes Element: die Antwort ist
+Historien-Laenge **mal** Body. Bei einem vielfach versionierten Element reisst
+sie, bei einem neuen nicht — die gefaehrlichste Sorte, weil sie mit dem Alter
+des Workspace erst entsteht und kein Testdatensatz sie vorwegnimmt.
+
+`list_system_prompts` reisst schon bei **einem einzigen** Template am
+Modell-Maximum (50.473 Zeichen), weil `SystemPromptTemplateContent.body` auf
+50.000 Zeichen validiert ist — das Antwortbudget ist damit strukturell
+ueberschritten, bevor ein zweiter Eintrag dazukommt.
+
+**Beobachtungsposten** (unter der Grenze, aber nah dran):
+
+| Werkzeug | Zeichen | warum beobachtet |
+| --- | --- | --- |
+| `get_version` | 49.223 (Body 49.000) | ein Body am Modell-Maximum (50.000) reisst |
+| `list_external_tools` | 41.430 | Listen-Fall, skaliert mit dem Workspace |
 
 **Unter der Grenze (kein Handlungsbedarf):**
 
 | Werkzeug | Zeichen |
 | --- | --- |
-| `list_external_tools` | 41.430 |
 | `fetch_resource` (groesste Resource, 92 Bloecke) | ~22.000 |
 | `search` (`limit=50`) | 13.928 |
 | `list_triggers` | 11.712 |
@@ -104,10 +119,17 @@ Was `format="text"` **nicht** wegnimmt:
 
 | Werkzeug | leer | bleibt vollstaendig |
 | --- | --- | --- |
-| `get_persona` | `persona.content.content.blocks` | `body_rendered`, Beschreibung, Traits, Tags, **Modi** |
+| `get_persona` | `persona.content.content.blocks` **und** `content.body` jedes verknuepften Playbooks | `body_rendered`, Beschreibung, Traits, Tags, **Modi**; je Playbook Name, Beschreibung, Tags, Triggers |
+| `fetch_playbook` | `playbook.content.body` | `body_rendered`, `linked_blocks`, `linked_resources`, `composed_playbooks` |
 | `fetch_agent` | Persona-Bloecke | `system_prompt_rendered`, Name, Locale, Template-ID |
 | `list_playbooks` | `content.body` je Eintrag | Name, Beschreibung, Tags, Triggers, Typ, `compose_children` |
 | `list_versions` | `content.body` / `.blocks` / `.usage_notes` | `version`, `status`, `locale`, `created_by`, `created_at`, Beschreibung |
+
+Bei `get_persona` gehoeren **beide** Haelften zum Zuschnitt: die Antwort ist
+`PersonaWithPlaybooks`, und gemessen tragen die Playbook-Bodies mehr bei als das
+Persona-Profil selbst. Wird nur das Profil geleert, reisst die Antwort ab etwa
+vier verknuepften Playbooks weiterhin — eine Persona ohne Playbooks ist beim
+Boot-Schritt der Ausnahmefall.
 
 Der Zuschnitt betrifft **nur die Antwort-Kopie** (`model_copy`); die Daten in
 der Datenbank und die REST-Antwort bleiben unberuehrt.
@@ -118,6 +140,42 @@ jeweilige Modell wirklich hat (`_HEAVY_CONTENT_FIELDS` in
 `apps/mcp/src/who2be_mcp/server.py`). Ein neues Content-Modell bricht hier
 nichts — es wird bloss nicht zugeschnitten, bis sein Body-Feld in der Liste
 steht.
+
+## Offen: drei Werkzeuge mit benanntem Weg, aber ohne Zuschnitt
+
+Diese drei reissen die Grenze gemessen und haben **noch keinen** `format`-Pfad.
+Der Weg darunter ist je Fall benannt; keiner davon ist ein Einzeiler, deshalb
+stehen sie hier statt halbfertig im Code.
+
+**`list_system_prompts` (50.766)** — derselbe Listen-Fall wie `list_playbooks`,
+aber `format="text"` traegt hier **nicht**: `SystemPromptTemplateContent.body`
+ist mit `min_length=1` validiert, ein leerer Body ist schema-ungueltig. Ein
+Konsument, der die Antwort erneut validiert, bekaeme statt einer grossen Antwort
+einen Validierungsfehler — schlechter als der Ist-Zustand.
+*Weg darunter:* ein eigenes Summary-Modell nach dem Vorbild von
+`ResourceSummary` (`body_chars` statt `body`), wie `list_resources` es mit 786
+Zeichen vormacht. Das ist ein neues Modell plus Client-Anpassung plus eine
+Pruefung der Web-Konsumenten — ein eigenes Arbeitspaket.
+
+**`get_system_prompt` (50.441)** — reisst **strukturell**, nicht durch Ballast:
+der Body ist der Zweck des Aufrufs, und `max_length=50_000` liegt selbst schon
+am Antwortbudget. Es gibt hier nichts wegzulassen.
+*Weg darunter:* Paginierung des Bodys (Offset/Limit wie `read_file`) oder das
+Modell-Maximum auf einen Wert senken, der samt Rahmen unter 50.000 bleibt.
+Beides aendert einen bestehenden Vertrag und braucht eine Entscheidung.
+
+**`diff_versions` (52.116)** — `before_text` und `after_text` tragen denselben
+Inhalt **zweimal**, jeweils vollstaendig, auch wenn sich eine Zeile geaendert
+hat.
+*Weg darunter:* die beiden Klartext-Felder auf die geaenderten Abschnitte
+beschraenken (die `changes`-Liste weiss bereits, welche das sind) oder sie hinter
+ein `format` legen, das nur `changes` liefert. Der Diff-Konsument im Web nutzt
+`before_text`/`after_text` fuer die Zeilenansicht — das ist ein Frontend-Vertrag,
+kein reiner Server-Zuschnitt.
+
+Gemeinsam ist den drei Faellen, dass der Zuschnitt einen **Vertrag** beruehrt
+(Schema, Modell-Limit, Frontend-Ansicht) statt nur eine Antwort-Kopie. Deshalb
+sind sie hier gemessen und benannt, aber nicht nebenbei umgebaut.
 
 ## Regressionsschutz
 
@@ -142,6 +200,20 @@ Nachweis: ein Fixture, das den `full`-Pfad ueber die Grenze bringt, und eine
 Zusage fuer den Zuschnitt. Eine Liste, die ein inhaltstragendes Feld je Eintrag
 mitliefert, ist der Verdachtsfall — Listen skalieren mit dem Workspace, und ein
 Werkzeug, das heute bei acht Eintraegen passt, reisst bei achtzig.
+
+Dass das nicht vergessen wird, haelt ein eigener Guard:
+`test_every_format_aware_tool_has_a_budget_test` liest die registrierten
+Tool-Schemata und die vorhandenen Testnamen und meldet jedes Werkzeug mit
+Budget-`format`, zu dem kein Test existiert. Er faellt also, wenn ein neuer
+`format`-Pfad **ohne** Rot-Probe dazukommt — oder wenn ein bestehender Nachweis
+verschwindet. Die Antwort darauf ist ein Test, nicht ein Eintrag in einer
+Ausnahmeliste.
+
+Ein zweiter Guard, `test_system_prompt_body_cannot_be_emptied_for_a_cheap_
+response`, haelt die Begruendung des Abschnitts „Offen\" nachpruefbar: er belegt,
+dass `min_length=1` den billigen Zuschnitt dort verbietet. Wird das Limit
+gelockert, faellt er — und genau dann ist der Zuschnitt moeglich und soll
+nachgezogen werden.
 
 ## Verwandt
 

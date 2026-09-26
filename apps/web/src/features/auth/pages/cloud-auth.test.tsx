@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,17 +19,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * sie gelesen wird, und damit der Angriffspunkt fuer beide Richtungen.
  */
 
-const { isPasswordAuthEnabled } = vi.hoisted(() => ({
+const { isPasswordAuthEnabled, isAppleAuthEnabled } = vi.hoisted(() => ({
   isPasswordAuthEnabled: vi.fn(() => true),
+  isAppleAuthEnabled: vi.fn(() => false),
 }))
 
-vi.mock('../lib/password-auth', () => ({ isPasswordAuthEnabled }))
+vi.mock('../lib/password-auth', () => ({ isPasswordAuthEnabled, isAppleAuthEnabled }))
 
 const { signInWithPassword, signUp, getSession, onAuthStateChange, signInWithOAuth } = vi.hoisted(
   () => ({
     signInWithPassword: vi.fn(),
     signUp: vi.fn(),
-    signInWithOAuth: vi.fn(async () => ({ error: null })),
+    // Argument-Typ explizit, nicht `() => …`: sonst leitet TypeScript fuer den
+    // Mock die Parameterliste `[]` ab und `mock.calls[0][0]` ist ein Fehler
+    // (TS2493) — genau die Zusicherung, die der Apple-Test braucht. Der Typ
+    // steht als Generic an `vi.fn` und nicht als Parameter der Implementierung:
+    // ein nur zum Typen da stehender Parameter ist ungenutzt und laeuft in
+    // `@typescript-eslint/no-unused-vars` (`after-used`), weil er der letzte
+    // der Liste ist — die `_`-Praefix-Ausnahme greift dort nicht.
+    signInWithOAuth: vi.fn<
+      (args: { provider: string; options?: { redirectTo?: string } }) => Promise<{ error: null }>
+    >(async () => ({ error: null })),
     getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
     onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   }),
@@ -116,6 +126,7 @@ function passwordInputs(): Element[] {
 
 beforeEach(() => {
   isPasswordAuthEnabled.mockReturnValue(true)
+  isAppleAuthEnabled.mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -125,6 +136,7 @@ afterEach(() => {
 describe('Cloud-Edition: nur externe Provider', () => {
   beforeEach(() => {
     isPasswordAuthEnabled.mockReturnValue(false)
+    isAppleAuthEnabled.mockReturnValue(true)
   })
 
   it('Login zeigt kein Passwortfeld, aber die Provider-Schaltflaechen', () => {
@@ -134,6 +146,7 @@ describe('Cloud-Edition: nur externe Provider', () => {
     expect(screen.queryByLabelText('E-Mail')).toBeNull()
     expect(screen.getByRole('button', { name: /Google/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /GitHub/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Apple/ })).toBeInTheDocument()
   })
 
   it('Login zeigt weder "Passwort vergessen" noch "Angemeldet bleiben"', () => {
@@ -189,5 +202,57 @@ describe('Self-Hosting: Passwort-Login unveraendert', () => {
     renderAt('/reset-password')
 
     expect(screen.getByRole('button', { name: 'Reset-Link senden' })).toBeInTheDocument()
+  })
+
+  it('zeigt KEINE Apple-Schaltflaeche — Google und GitHub bleiben da', () => {
+    renderAt('/login')
+
+    // Apple verlangt ein zahlungspflichtiges Developer-Konto UND eine im
+    // Apple-Portal registrierte HTTPS-Domain; im Self-Hosting hat niemand
+    // beides, die Schaltflaeche waere dort tote Flaeche. Google/GitHub kann
+    // jeder selbst konfigurieren und bleiben deshalb sichtbar.
+    expect(screen.queryByRole('button', { name: /Apple/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Google/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /GitHub/ })).toBeInTheDocument()
+  })
+})
+
+/**
+ * Sign in with Apple (Karte t_41742af8) — der Provider-Name, der an GoTrue
+ * geht, und das Zusammenspiel mit dem Consent-Gate. Beides ist nicht aus dem
+ * Sichtbarkeits-Test oben ableitbar: ein Tippfehler im Provider-String
+ * (`'Apple'` statt `'apple'`) wuerde die Schaltflaeche unveraendert rendern und
+ * erst beim echten Klick gegen GoTrue scheitern ("Unsupported provider").
+ */
+describe('Sign in with Apple', () => {
+  beforeEach(() => {
+    isPasswordAuthEnabled.mockReturnValue(false)
+    isAppleAuthEnabled.mockReturnValue(true)
+  })
+
+  it('startet den OAuth-Flow mit dem Provider-Namen "apple"', async () => {
+    renderAt('/login')
+
+    fireEvent.click(screen.getByRole('button', { name: /Apple/ }))
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalledTimes(1))
+    expect(signInWithOAuth.mock.calls[0]?.[0]).toMatchObject({ provider: 'apple' })
+  })
+
+  it('leitet auf unsere eigene Callback-Route zurueck, nicht auf einen Fremd-Origin', async () => {
+    renderAt('/login')
+
+    fireEvent.click(screen.getByRole('button', { name: /Apple/ }))
+
+    await waitFor(() => expect(signInWithOAuth).toHaveBeenCalledTimes(1))
+    const redirectTo = signInWithOAuth.mock.calls[0]?.[0]?.options?.redirectTo as string
+    expect(redirectTo).toContain('/auth/callback')
+    expect(new URL(redirectTo).origin).toBe(window.location.origin)
+  })
+
+  it('ist auf /signup bis zur Einwilligung gesperrt — wie Google und GitHub', () => {
+    renderAt('/signup')
+
+    expect(screen.getByRole('button', { name: /Apple/ })).toBeDisabled()
   })
 })

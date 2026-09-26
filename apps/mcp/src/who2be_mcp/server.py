@@ -474,9 +474,12 @@ async def get_persona(
       `persona.content.content.blocks`, dem rohen BlockNote-Editor-Profil.
       Fuer Konsumenten, die das Profil strukturell verarbeiten (Editor, Diff).
     - `"text"`: die Bloecke bleiben leer; das Profil steht in `body_rendered`.
-      Beschreibung, Tags und `content.modes` (mit ihren Triggern) sind
-      unveraendert vorhanden. Fuer Agenten der guenstigere Pfad — das
-      Editor-JSON ist dasselbe Profil ein zweites Mal.
+      Auch die Bodies der verknuepften Playbooks bleiben leer — sie stehen hier
+      als Katalog, ihren Inhalt liefert `fetch_playbook` fuer das EINE
+      gewaehlte Playbook. Beschreibung, Tags und `content.modes` (mit ihren
+      Triggern) sind unveraendert vorhanden, ebenso Name, Tags und Triggers
+      jedes Playbooks. Fuer Agenten der guenstigere Pfad — das Editor-JSON ist
+      dasselbe Profil ein zweites Mal.
 
     Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
     deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
@@ -523,7 +526,15 @@ async def get_persona(
     if format == "text":
         # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort bleibt
         # unberuehrt. Das Profil kommt vollstaendig in `body_rendered` an.
+        #
+        # Die verknuepften Playbooks werden MITGESCHNITTEN: sie stehen hier als
+        # Katalog („welche Playbooks hat diese Persona\"), und ihre Bodies sind
+        # gemessen der groessere Anteil der Antwort als das Persona-Profil
+        # selbst — eine Persona mit fuenf Playbooks reisst die Schwelle allein
+        # ueber die Bodies. Den Body des EINEN gewaehlten Playbooks holt
+        # `fetch_playbook`.
         persona = _persona_without_blocks(persona)
+        playbooks = [_playbook_without_body(playbook) for playbook in playbooks]
     return PersonaWithPlaybooks(
         persona=persona,
         playbooks=playbooks,
@@ -612,8 +623,23 @@ async def list_placeholders() -> PlaceholderCatalog:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_playbook")
-async def fetch_playbook(playbook_id: str, locale: str | None = None) -> PlaybookWithResources:
+async def fetch_playbook(
+    playbook_id: str,
+    locale: str | None = None,
+    format: str = "full",
+) -> PlaybookWithResources:
     """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
+
+    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+
+    - `"full"` (Default): die vollstaendige Antwort inklusive
+      `playbook.content.body`, dem rohen BlockNote-Editor-JSON. Fuer
+      Konsumenten, die den Body strukturell verarbeiten (Editor, Diff).
+    - `"text"`: `playbook.content.body` bleibt leer; die Prozedur steht in
+      `body_rendered`. Alle uebrigen Felder (Metadaten, Tags, Triggers,
+      Links, Composites) sind unveraendert vorhanden. Fuer Agenten der
+      guenstigere Pfad — das Editor-JSON ist dieselbe Prozedur ein zweites
+      Mal und macht bei grossen Playbooks den Loewenanteil der Payload aus.
 
     `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
     ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
@@ -638,6 +664,7 @@ async def fetch_playbook(playbook_id: str, locale: str | None = None) -> Playboo
     Inline-Pills werden zu Plain-Text aufgeloest. Nutze `body_rendered` statt
     `playbook.content.body` — letzterer ist nur stringifiziertes BlockNote-JSON.
     """
+    _validate_response_format(format)
     try:
         parsed = UUID(playbook_id)
     except ValueError as exc:
@@ -663,6 +690,11 @@ async def fetch_playbook(playbook_id: str, locale: str | None = None) -> Playboo
     resources = [await client.get_resource(rid) for rid in inline_resource_ids]
     composed = await client.get_playbook_composes(parsed)
     body_rendered = await client.get_playbook_rendered(parsed)
+    if format == "text":
+        # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort selbst
+        # bleibt unberuehrt, also verliert kein struktureller Konsument
+        # (Editor, Diff) etwas. `body_rendered` traegt dieselbe Prozedur.
+        playbook = _playbook_without_body(playbook)
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,

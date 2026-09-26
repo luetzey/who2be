@@ -18,25 +18,20 @@ Die Schwelle 50 000 ist keine Who2Be-Einstellung, sondern die Vorgabe der
 Laufzeit des Konsumenten. Sie ist damit nicht verhandelbar, sondern eine
 Randbedingung.
 
-## Inventar (gemessen 2026-09-26)
+## Inventar
 
-| Werkzeug | gemessen | Faktor zur Schwelle | Ursache |
-|---|---|---|---|
-| `list_playbooks()` | **277 151** | 5,5x ueber | jeder Eintrag traegt `content.body` (BlockNote-JSON) |
-| `get_persona("Coder")` | **225 559** | 4,5x ueber | `content.blocks` + `body_rendered` = Profil doppelt |
-| `list_versions(persona, Coder)` | **139 925** | 2,8x ueber | 11 Snapshots x vollem Content |
-| `fetch_playbook(Code-Task-Flow)` | **64 971** | 1,3x ueber | wird in `t_4ce1b187` behandelt (PR #666) |
-| `fetch_agent("Coder")` | **54 912** | 1,1x ueber | Persona-`content` + gerenderter Prompt |
-| `list_external_tools()` | ~24 000 | unter | `usage_notes` als BlockNote-String |
-| `fetch_resource(92 Bloecke)` | ~22 000 | unter | Bloecke sind der Nutzinhalt |
-| `list_triggers()` | ~11 700 | unter | — |
-| `search(limit=50)` | ~8 700 | unter | Snippets statt Volltext |
-| `list_agents()` | ~1 900 | unter | — |
-| `list_resources()` | **786** | unter | **liefert `block_count` statt Bloecke** |
+**Die maßgebliche Inventar-Tabelle steht in
+[`docs/mcp-payload-budget.md`](../../docs/mcp-payload-budget.md)** — dort wird
+sie gepflegt. Dieser Plan hielt zwischenzeitlich eigene Zahlen; zwei davon
+(`list_external_tools`, `search(limit=50)`) stammten aus einem frueheren,
+kleineren Messlauf und wichen von der Doku ab. Eine Messung, eine Quelle: die
+Zahlen stehen ab jetzt nur noch im Budget-Dokument, hier steht das Vorgehen.
 
-`list_resources` ist der Beleg, dass das Muster loesbar ist: dieselbe Menge
-Inhalt, 786 statt 277 151 Zeichen — weil die Uebersicht zaehlt, statt den
-Volltext mitzuschleppen.
+Kurzfassung des Befunds, gemessen 2026-09-26: ueber der Grenze lagen
+`list_playbooks`, `get_persona`, `list_versions`, `fetch_playbook`,
+`fetch_agent`, `diff_versions`, `list_system_prompts` und `get_system_prompt`;
+`list_resources` liegt mit 786 Zeichen am anderen Ende und ist das Vorbild
+(Summary statt Volltext).
 
 ## Befund
 
@@ -64,7 +59,34 @@ es zu viel Inhalt haette.
    tut er das nicht, faellt der Test mit eigener Meldung. Damit kann der Test
    nicht gruen bleiben, wenn der Text-Pfad wegfaellt.
 
-`fetch_playbook` wird **nicht angefasst** (Kollisionsschutz gegen `t_4ce1b187`).
+`fetch_playbook` wird **nicht inhaltlich veraendert** (`t_4ce1b187` / PR #666 hat
+den Fall geloest). Bei der Konfliktaufloesung gegen `origin/main` wird es aber
+auf die gemeinsame Quelle `_RESPONSE_FORMATS` und `_playbook_without_body`
+umgestellt — verhaltensgleich, weil sonst zwei konkurrierende Quellen fuer
+denselben Begriff in einer Datei stehen (`AGENTS.md`, Single Source of Truth).
+
+## Runde 2 (nach Review)
+
+Drei Blocker, alle innerhalb des Zuschnitts geloest:
+
+1. **`get_persona(format="text")` griff nur halb.** Die Antwort ist
+   `PersonaWithPlaybooks`; geleert wurden nur die Persona-Bloecke, die
+   Playbook-Bodies in derselben Antwort blieben. Ab etwa vier verknuepften
+   Playbooks reisst die Antwort dadurch weiter — und eine Persona ohne
+   Playbooks ist beim Boot-Schritt der Ausnahmefall. Die Rot-Probe traf ins
+   Leere, weil alle Fixtures `/playbooks` mit `[]` beantworteten. Jetzt schneidet
+   `format="text"` beide Haelften, und ein Test mit fuenf verknuepften Playbooks
+   belegt es — sein Fixture ist so gebaut, dass die Persona allein unter der
+   Grenze bleibt und erst die Bodies sie reissen (86.448 Zeichen ohne Zuschnitt).
+2. **Konflikt gegen `origin/main`** aufgeloest, `fetch_playbook` auf die
+   gemeinsame Quelle umgestellt (siehe oben).
+3. **Inventar vervollstaendigt.** `list_system_prompts` (50.766),
+   `get_system_prompt` (50.441) und `diff_versions` (52.116) reissen gemessen und
+   fehlten; `get_version` (49.223) steht als Beobachtungsposten. Keiner der drei
+   ist trivial zuschneidbar — bei den System-Prompts verbietet `min_length=1` den
+   leeren Body, bei `diff_versions` haengt ein Frontend-Vertrag daran. Sie stehen
+   daher mit Messwert und benanntem Weg im Budget-Dokument, nicht halbfertig im
+   Code. Zwei neue Guards halten das nachpruefbar statt behauptet.
 
 ## Zuschnitt
 
