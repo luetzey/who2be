@@ -107,12 +107,15 @@ Mollie-Billing-Env, und es baut das `runtime-cloud`-Image (mit
 # 1) Supabase-Stack — fuer echte Cloud-Paritaet mit Mail-Pflicht + echtem SMTP
 #    (supabase/.env: GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_*). Fuer einen
 #    ersten Solo-Smoke darf autoconfirm voruebergehend true bleiben.
-#    ACHTUNG Anmeldeweg: In der Cloud laeuft der Login NUR ueber Google/GitHub
-#    (supabase/.env: GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_* + Client-Credentials,
+#    ACHTUNG Anmeldeweg: In der Cloud laeuft der Login NUR ueber Google,
+#    GitHub oder Apple
+#    (supabase/.env: GOTRUE_EXTERNAL_{GOOGLE,GITHUB,APPLE}_* + Client-
+#    Credentials,
 #    danach GOTRUE_EXTERNAL_EMAIL_ENABLED=false). Die Redirect-URI, die bei
-#    Google und GitHub eingetragen werden MUSS, lautet zeilengenau
+#    allen dreien eingetragen werden MUSS, lautet zeilengenau
 #    https://supabase.<DOMAIN>/auth/v1/callback — Schritt fuer Schritt in
-#    supabase/README.md, Abschnitt "Cloud-Edition: nur externe Provider".
+#    supabase/README.md, Abschnitt "Cloud-Edition: nur externe Provider"
+#    (Apple zusaetzlich: "Sign in with Apple").
 #    SMTP wird trotzdem weiter gebraucht (Team-Einladungen, E-Mail-Wechsel).
 docker compose \
   -f deploy/hetzner/supabase/docker-compose.yml \

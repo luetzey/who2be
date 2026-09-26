@@ -121,7 +121,7 @@ bleibt nur ein harmloser Default. Wichtig ist, dass `SITE_URL` dem App-Origin
 (`WEB_BASE_URL`, Default `https://app.<DOMAIN>`) entspricht, damit das
 `redirect_to`-Ziel die GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
 
-## Cloud-Edition: nur externe Provider (Google, GitHub)
+## Cloud-Edition: nur externe Provider (Google, GitHub, Apple)
 
 In der **Cloud-Edition** meldet man sich ausschliesslich ueber externe Provider
 an — E-Mail/Passwort ist dort abgeschaltet (Owner-Entscheidung 2026-09-24). Im
@@ -129,6 +129,12 @@ an — E-Mail/Passwort ist dort abgeschaltet (Owner-Entscheidung 2026-09-24). Im
 `GOTRUE_EXTERNAL_EMAIL_ENABLED=true`, Passwort-Login und Registrierung
 funktionieren wie bisher. Es wurde nichts entfernt — das ist ein Schalter, kein
 Rueckbau, und jederzeit umkehrbar.
+
+Dieser Abschnitt beschreibt **Google und GitHub**. Der dritte Cloud-Provider,
+**Sign in with Apple**, hat eigene Portal-Schritte und ein Secret mit
+Ablaufdatum — er steht im eigenen Abschnitt [„Sign in with
+Apple"](#sign-in-with-apple-cloud-edition) weiter unten. Es genuegt fuer den
+Anmeldeweg, dass **mindestens einer** der drei Provider laeuft.
 
 Dafuer sind **drei** Dinge noetig, alle drei gehoeren zusammen:
 

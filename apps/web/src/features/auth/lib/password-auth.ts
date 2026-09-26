@@ -1,7 +1,7 @@
 // Passwort-Login: in der Cloud-Edition ausgeblendet, im Self-Hosting aktiv.
 //
 // Owner-Entscheidung 2026-09-24: In der Cloud meldet man sich ausschliesslich
-// ueber externe Provider an (Google, GitHub). Das ist **Sichtbarkeit und
+// ueber externe Provider an (Google, GitHub, Apple). Das ist **Sichtbarkeit und
 // Erreichbarkeit**, kein Code-Rueckbau — `signInWithPassword` & Co. bleiben
 // unveraendert im Bundle und im Self-Hosting der Normalweg. Jederzeit
 // umkehrbar, indem das Edition-Flag umgestellt wird.
@@ -43,4 +43,3 @@ export function isPasswordAuthEnabled(): boolean {
 export function isAppleAuthEnabled(): boolean {
   return __CLOUD_BUILD__
 }
-
