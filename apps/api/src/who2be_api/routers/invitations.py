@@ -21,6 +21,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import (
     CurrentPrincipal,
     WorkspaceContext,
+    deny_agent_bound_workspace_admin,
     get_current_principal,
     get_current_workspace,
     require_role,
@@ -62,12 +63,18 @@ async def create_invitation(
     request: Request, data: InvitationCreate, ctx: Ctx, service: Service
 ) -> InvitationCreated:
     require_role(ctx, WorkspaceRole.admin)
+    # Zusaetzlich zum Rollen-Gate: ein agent-gebundener Token mit
+    # Rollen-Snapshot `admin` koennte sich hier sonst eine Admin-Einladung
+    # (samt Klartext-Token im 201-Body) ausstellen und damit seine
+    # Pro-Agent-Policy umgehen.
+    deny_agent_bound_workspace_admin(ctx)
     return await service.create(ctx, data)
 
 
 @router.get("")
 async def list_invitations(ctx: Ctx, service: Service) -> list[InvitationRead]:
     require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
     return await service.list_pending(ctx)
 
 
@@ -77,6 +84,7 @@ async def revoke_invitation(
     request: Request, invitation_id: UUID, ctx: Ctx, service: Service
 ) -> None:
     require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
     await service.revoke(ctx, invitation_id)
 
 

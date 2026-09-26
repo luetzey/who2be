@@ -12873,6 +12873,7 @@
               "invalid_credentials",
               "write_rate_limited",
               "token_management_forbidden",
+              "workspace_administration_forbidden",
               "bound_agent_not_found",
               "token_role_escalation",
               "token_not_found",

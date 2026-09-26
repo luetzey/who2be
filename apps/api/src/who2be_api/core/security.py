@@ -317,6 +317,83 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
         )
 
 
+def is_agent_bound(ctx: WorkspaceContext) -> bool:
+    """True, wenn der Aufruf ueber einen an einen Agenten gebundenen Token kam.
+
+    **Beide Indikatoren**, nicht nur die Policy — dasselbe Muster wie
+    `memory_service._require_human` und aus demselben Grund: heute impliziert
+    `agent_id` eine Policy (NOT-NULL-Default in `agent.tool_policy`), aber eine
+    Sicherheits-Schleuse soll nicht an dieser DB-Invariante haengen.
+    `_load_agent_tool_policy` faellt ausserdem **defensiv auf `None`** zurueck,
+    wenn der gebundene Agent zwischen Token-Auth und Policy-Load verschwindet
+    (Race mit Agent-Delete). In genau diesem Fenster waere ein Gate, das nur
+    `tool_policy` prueft, offen — der Token traegt dann noch `agent_id`.
+
+    `False` heisst: Mensch/JWT oder ungebundener API-Token.
+
+    Die eine Quelle dieses Praedikats: es lag zuvor dreifach im Repo
+    (`workarea_scope.is_agent_bound`, `agent_service._is_agent_bound` und die
+    Inline-Pruefung des Token-Gates). Drei gleichlautende Kopien einer
+    Security-Bedingung sind drei Stellen, an denen sie auseinanderlaufen kann.
+    """
+    return ctx.tool_policy is not None or ctx.agent_id is not None
+
+
+def deny_agent_bound_token_management(ctx: WorkspaceContext) -> None:
+    """Agent-gebundene Tokens duerfen keine API-Tokens verwalten.
+
+    Sonst koennte ein eingeschraenkter Agent einen ungebundenen Token mit
+    voller Rolle minten und so seine Pro-Agent-Policy komplett umgehen
+    (Privilege-Escalation). Token-Verwaltung bleibt menschlichen Sessions
+    und nicht-gebundenen Tokens vorbehalten.
+
+    Bis zur Zusammenfuehrung lag dieses Gate als private Statik in
+    `TokenService`, obwohl es reine Security-Logik ohne Token-Bezug ist; hier
+    steht es neben den uebrigen Gates. Die **Huelle bleibt `ApiError`** (schlank,
+    ``application/json``) und der `reason` bleibt `token_management_forbidden`
+    — beides ist veroeffentlichter Fehlervertrag mit Locale-Key (ADR-0051).
+    """
+    if is_agent_bound(ctx):
+        raise ApiError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
+            reason="token_management_forbidden",
+        )
+
+
+def deny_agent_bound_workspace_admin(ctx: WorkspaceContext) -> None:
+    """Agent-gebundene Tokens fuehren keine Workspace-Administration aus.
+
+    Mitglieder-, Einladungs- und Workspace-Verwaltung sind genau derselbe
+    Umweg, den `deny_agent_bound_token_management` fuer Tokens verbaut: ein
+    Agent mit Rollen-Snapshot `admin` kann sich per Einladung einen
+    Admin-Zugang, per Rollen-Patch mehr Rechte oder per Workspace-Delete einen
+    Schaden ausserhalb seiner Pro-Agent-Policy beschaffen. `require_role`
+    allein greift nicht, weil die Rolle im Token gepinnt ist und die Policy
+    daneben steht, statt sie zu begrenzen.
+
+    Eigener `reason` statt `token_management_forbidden`: der Text ist ein
+    anderer, und unterschiedlicher Text heisst unterschiedlicher Grund
+    (ADR-0051, Muster `bound_agent_not_found`). Die Huelle ist hier
+    `ApiGateError` (RFC 7807) — es ist ein Autorisierungs-Gate wie
+    `require_role`/`require_capability` daneben. `actionable_by="human"`: der
+    Agent kann es nicht selbst beheben, der Workspace-Besitzer kann einen
+    ungebundenen Token verwenden.
+    """
+    if is_agent_bound(ctx):
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="workspace_administration_forbidden",
+            actionable_by="human",
+            detail=(
+                "Agent-gebundene Tokens duerfen die Workspace-Verwaltung "
+                "(Mitglieder, Einladungen, Workspace-Einstellungen) nicht aendern. "
+                "Der Workspace-Besitzer kann dafuer einen ungebundenen API-Token "
+                "verwenden oder die Aktion in der Oberflaeche ausfuehren."
+            ),
+        )
+
+
 def require_memory_mode(ctx: WorkspaceContext, minimum: MemoryMode) -> None:
     """Wirft 403, wenn der Agent den geforderten Gedaechtnis-Modus nicht hat (ADR-0044).
 

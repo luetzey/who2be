@@ -14,6 +14,7 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
+    deny_agent_bound_token_management,
     hash_token,
     new_token,
     require_aal2,
@@ -41,22 +42,6 @@ class TokenService:
         self._repo = token_repo
         self._audit = audit_service
         self._pool = pool
-
-    @staticmethod
-    def _deny_agent_bound(ctx: WorkspaceContext) -> None:
-        """Agent-gebundene Tokens duerfen keine Tokens verwalten.
-
-        Sonst koennte ein eingeschraenkter Agent einen ungebundenen Token mit
-        voller Rolle minten und so seine Pro-Agent-Policy komplett umgehen
-        (Privilege-Escalation). Token-Verwaltung bleibt menschlichen Sessions
-        und nicht-gebundenen Tokens vorbehalten.
-        """
-        if ctx.tool_policy is not None:
-            raise ApiError(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
-                reason="token_management_forbidden",
-            )
 
     async def _assert_agent_in_workspace(self, workspace_id: UUID, agent_id: UUID) -> None:
         """404, wenn der zu bindende Agent nicht in diesem Workspace existiert."""
@@ -131,7 +116,7 @@ class TokenService:
         nutzbar und rotierbar.
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         role = data.role if data.role is not None else ctx.role
         if not role_satisfies(ctx.role, role):
             # NICHT `insufficient_role`: das ist der Grund des Rollen-Gates
@@ -184,7 +169,7 @@ class TokenService:
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[TokenRead], str | None]:
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         if len(rows) > limit:
             items = rows[:limit]
@@ -201,7 +186,7 @@ class TokenService:
     ) -> tuple[list[TokenRead], str | None]:
         """Listet die Tokens eines bestimmten Agenten (Agent-Konfig-Sektion)."""
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         await self._assert_agent_in_workspace(ctx.workspace_id, agent_id)
         rows = await self._repo.list_by_agent(ctx.workspace_id, agent_id, limit + 1, cursor)
         if len(rows) > limit:
@@ -216,7 +201,7 @@ class TokenService:
         Nur der Name ist editierbar — Secret/Rolle/Agent-Bindung bleiben (ADR-0023).
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         renamed = await self._repo.rename(ctx.workspace_id, token_id, name)
         if renamed is None:
             raise ApiError(
@@ -252,7 +237,7 @@ class TokenService:
         §Secret-Rotation) ueber der Grenze aussperren.
         """
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         current_role = await self._current_role(ctx.workspace_id, token_id)
         if current_role == WorkspaceRole.admin:
             require_aal2(ctx)
@@ -277,7 +262,7 @@ class TokenService:
     async def revoke(self, ctx: WorkspaceContext, token_id: UUID) -> None:
         """Widerruft einen eigenen Token; 404, wenn er nicht (mehr) existiert."""
         require_role(ctx, WorkspaceRole.editor)
-        self._deny_agent_bound(ctx)
+        deny_agent_bound_token_management(ctx)
         revoked = await self._repo.revoke(ctx.workspace_id, token_id)
         if not revoked:
             raise ApiError(
