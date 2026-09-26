@@ -113,6 +113,20 @@
       ]
     }
   ],
+  "service_gated": [
+    {
+      "path": "/tokens",
+      "name": "create_token",
+      "gate": "TokenService._enforce_token_quota",
+      "issue": "#538"
+    },
+    {
+      "path": "/v1/organizations/{organization_id}/workspaces",
+      "name": "create_organization_workspace",
+      "gate": "WorkspaceService._enforce_workspace_quota",
+      "issue": "#576"
+    }
+  ],
   "ungated": [
     {
       "path": "/agent-memories",
@@ -235,11 +249,6 @@
       "reason": "Reiner Statuswechsel einer bestehenden Version, legt nichts an."
     },
     {
-      "path": "/tokens",
-      "name": "create_token",
-      "reason": "GRENZE DER METHODE, kein Befund: die Route IST gedeckelt (token_quota, Issue #538), aber ihr Gate sitzt als TokenService._enforce_token_quota im Service und nicht als FastAPI-Dependency — ueber route.dependant also nicht sichtbar. Verschwindet dieses Gate, faengt dieser Test es nicht."
-    },
-    {
       "path": "/tokens/{token_id}/rotate",
       "name": "rotate_token",
       "reason": "Ersetzt ein bestehendes Token; die Zahl nutzbarer Tokens bleibt gleich — den Bestand deckelt das token_quota-Gate an create_token."
@@ -258,11 +267,6 @@
       "path": "/v1/organizations",
       "name": "create_organization",
       "reason": "Legt die Organisation an, die ein Entitlement erst traegt — vor diesem Aufruf existiert kein org_entitlement, gegen das ein Gate pruefen koennte."
-    },
-    {
-      "path": "/v1/organizations/{organization_id}/workspaces",
-      "name": "create_organization_workspace",
-      "reason": "GRENZE DER METHODE, kein Befund: die Route IST gedeckelt (workspace_quota, Issue #576), aber ihr Gate sitzt als WorkspaceService._enforce_workspace_quota im Service und nicht als FastAPI-Dependency — ueber route.dependant also nicht sichtbar. Verschwindet dieses Gate, faengt dieser Test es nicht."
     },
     {
       "path": "/wa-tables/{table_id}/rows",
