@@ -43,6 +43,9 @@ test-results/
 # Claude Code local overrides
 .claude/settings.local.json
 .claude/worktrees/
+# Git-Worktrees im Repo-Root (`git worktree add .worktrees/<name>`) — der
+# tatsaechlich benutzte Pfad; `git status` listete sie bisher als untracked.
+.worktrees/
 .claude/scheduled_tasks.lock
 
 # Lokale Agent-/Projekt-Kopplung (nicht im oeffentlichen Repo)

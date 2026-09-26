@@ -24,8 +24,74 @@
     }
 }
 
+# Access-Logs. Ohne sie faellt nur ein AUSFALL auf, nie ein Zugriff — eine
+# nachtraegliche Rekonstruktion waere unmoeglich, weil die Daten gar nicht erst
+# entstehen. Wird in jeden Site-Block importiert.
+#
+# Ablage auf einem Volume (`caddy-logs`, s. who2be/docker-compose.yml) statt im
+# Container-Dateisystem: BSI SYS.1.6.A7 (Basis-Anforderung, Edition 2023)
+# verlangt woertlich, dass „[d]ie Speicherung der Protokollierungsdaten der
+# Container … ausserhalb des Containers, mindestens auf dem Container-Host,
+# erfolgen" MUSS. A7 fordert NICHT die Existenz von Access-Logs — nur, dass
+# vorhandene Protokolldaten den Container ueberleben.
+#
+# Rotation ist Pflicht und nicht Kuer: eine unbegrenzt wachsende Logdatei ist
+# ein selbstgebauter Ausfall (volle Platte). Obergrenze hier ~10 MiB aktiv +
+# 10 gzip-komprimierte Generationen.
+#
+# Datenschutz (V12 im VVT, Art. 6 Abs. 1 lit. f): Access-Logs enthalten
+# IP-Adressen und User-Agents. Aufbewahrung: 14 Tage, im Korridor von
+# docs/compliance/data-retention-and-erasure.md §5 (7–30 Tage).
+#
+# WIE die Frist durchgesetzt wird — und warum nicht hier:
+#   * Die Direktiven unten deckeln die GROESSE, nicht die Zeit. `roll_keep_for`
+#     wirkt ausschliesslich auf bereits rotierte Generationen und laeuft erst,
+#     wenn eine neue Datei entsteht; die aktive `access.log` erfasst es nie.
+#     Ein zeitlicher Ausloeser fehlt: `roll_size` ist der einzige. Bei dem
+#     Anfrageaufkommen eines Solo-Betriebs rotiert die Datei damit seltener
+#     als alle 14 Tage — die Frist waere eine Zusage ohne Mechanismus.
+#   * Caddy 2.8.4 kennt weder `roll_at` noch `roll_interval` und verwirft beide
+#     STILL (`caddy adapt` zeigt sie nicht im JSON, `validate` meldet nichts) —
+#     dasselbe Muster wie beim `mode`-Unterbefehl unten. Eine solche Zeile
+#     waere ein wirkungsloser Platzhalter.
+#   * Den zeitlichen Teil traegt deshalb ein Host-Cron, wie schon bei Backup
+#     und Retention-Purge: taeglich rotieren, Generationen aelter als 14 Tage
+#     loeschen. Einrichtung und Nachweis: RUNBOOK §Access-Logs.
+#     `roll_keep_for` bleibt als zweite, unabhaengige Grenze gesetzt — faellt
+#     der Cron aus, raeumt es bei der naechsten groessenbedingten Rotation auf.
+#   * Cookie/Set-Cookie/Authorization/Proxy-Authorization redigiert Caddy per
+#     Default zu `REDACTED`; die globale Server-Option `log_credentials`, die
+#     das abschalten wuerde, ist bewusst NICHT gesetzt.
+#   * Query-Werte sind NICHT per Default geschuetzt: api.{$DOMAIN} traegt den
+#     OAuth-Authorization-Endpunkt (ADR-0036), also stehen dort `code`- und
+#     `token`-Werte in der URL. Der Filter ersetzt sie, BEVOR etwas auf Platte
+#     geht.
+#   * Dateirechte bleiben beim Writer-Default 0600 (nur der Caddy-Prozess).
+#     KEIN `mode`-Unterbefehl: den kennt Caddy 2.8 noch nicht und der
+#     file-Writer verwirft unbekannte Unterbefehle STILL (`caddy adapt` zeigt
+#     sie nicht im JSON, `validate` meldet nichts) — eine `mode`-Zeile waere
+#     also ein wirkungsloser Platzhalter, der Sicherheit nur vortaeuscht.
+(access_log) {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MiB
+            roll_keep 10
+            roll_keep_for 336h
+        }
+        format filter {
+            request>uri query {
+                replace code REDACTED
+                replace token REDACTED
+                replace access_token REDACTED
+                replace refresh_token REDACTED
+            }
+        }
+    }
+}
+
 api.{$DOMAIN} {
     import security_headers
+    import access_log
     # API liefert JSON — Inline-Scripts, Frames, Plugins, Form-Posts und externe
     # Connects sind alle aus. `object-src`/`form-action` explizit, weil Letzteres
     # NICHT auf `default-src` zurueckfaellt (sonst Form-Hijack-Luecke).
@@ -47,6 +113,7 @@ api.{$DOMAIN} {
 
 app.{$DOMAIN} {
     import security_headers
+    import access_log
     # SPA-CSP: Vite-Build hat keine Inline-Scripts, aber Inline-Styles (CSSinJS,
     # BlockNote-Insel ADR-0022). connect-src haelt die eigene API + die
     # Supabase-Instanz erlaubt. `object-src 'none'` killt Plugin-XSS,
@@ -57,6 +124,7 @@ app.{$DOMAIN} {
 
 supabase.{$DOMAIN} {
     import security_headers
+    import access_log
     # GoTrue-Endpunkt (Auth). CORS macht der auth-gateway-Container selbst,
     # CSP hier bewusst sehr restriktiv, weil es keine HTML-Antworten gibt.
     header Content-Security-Policy "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
@@ -71,6 +139,7 @@ supabase.{$DOMAIN} {
 # serverseitig gescopter Token/Agent.
 mcp.{$DOMAIN} {
     import security_headers
+    import access_log
     # Streamable-HTTP liefert SSE-Frames (`text/event-stream`); HTML-Inline-Code
     # gibt es nicht, deshalb harte CSP — Browser sollten den Endpoint sowieso
     # nicht direkt anfassen (MCP-Clients sind native bzw. Server-to-Server).
