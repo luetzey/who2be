@@ -6,8 +6,8 @@ unbemerkt, fliegt nicht EIN Tool raus, sondern die GESAMTE Tool-Liste.
 Dieser Guard macht das Wachstum messbar statt gefuehlt:
 
 - **Gesamt-Budget:** Baseline bei Einfuehrung (2026-08-13, 71 Tools) war
-  110.133 Bytes; das Budget ist Baseline x ~1,45 und laesst damit Raum fuer
-  die geplanten Phase-2-Tools (WP19, 71 -> 81), aber nicht fuer schleichende
+  110.133 Bytes; das Budget ist Baseline x ~1,45 und hat die Phase-2-Tools
+  (WP19, 71 -> 83) aufgenommen, laesst aber keinen Raum fuer schleichende
   Docstring-Inflation. Reisst der Guard, zuerst Beschreibungen kuerzen bzw.
   die Fold-Reihenfolge aus dem Plan ziehen (`list_category_rules` ->
   `set_convention`), NICHT das Budget anheben.
@@ -28,7 +28,8 @@ from who2be_mcp import tools as tools_pkg
 from who2be_mcp.server import mcp
 
 # Baseline 2026-08-13: 71 Tools / 110_133 Bytes (utf-8, name+description+
-# inputSchema). Budget ~x1,45 — Headroom fuer WP19 (81 Tools), nicht mehr.
+# inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
+# nachgezogenen `list_tables`/`delete_table`), mehr nicht.
 _PAYLOAD_BUDGET_BYTES = 160_000
 _NEW_TOOL_DOC_CAP = 1_100
 

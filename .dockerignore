@@ -1,6 +1,14 @@
 .git
 .github
 .claude
+# Git-Worktrees (`git worktree add .worktrees/<name>`). Liegen im Repo-Root und
+# sind damit Teil des Build-Kontexts — beide Dockerfiles bauen mit
+# `context: .`. Jeder Worktree ist ein vollstaendiger Checkout samt
+# `node_modules`/`.venv`; gemessen waren es hier 7 GB, und `podman compose up
+# --build` lief in einen Timeout, weil der Kontext-Upload nicht fertig wurde.
+# Unabhaengig von der Container-Runtime: trifft jeden, der mit Worktrees
+# arbeitet.
+.worktrees
 .venv
 __pycache__
 *.py[cod]

@@ -254,8 +254,12 @@ docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
 > und ist bewusst kein HTTP-Endpoint. In Prod fuehrt der Mollie-Webhook das
 > Upsert; der auditierte Ersatz fuer manuelle Grants ist der Override-Endpoint
 > `POST /v1/workspaces/<ws-id>/billing/override` (`{"plan":"pro","days":30,
-> "reason":"…"}`, Admin + aal2/MFA + `WHO2BE_BILLING_OVERRIDE_OPERATORS`) —
-> siehe `docs/cloud-prod-smoke.md`.
+> "reason":"…"}`, Admin + aal2/MFA + Eintrag in
+> `WHO2BE_BILLING_OVERRIDE_OPERATORS`). Der Aufruf braucht ein **Web-JWT** aus
+> der Browser-Session nach TOTP-Step-up — ein `w2b_…`-API-Token wird
+> kategorisch abgewiesen
+> (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
+> Vollstaendige Schrittfolge: `docs/cloud-prod-smoke.md`.
 
 Fuer §5 (kleine Quota zwingt den 429-Fall in Sekunden, statt 1.000 Reads) die
 Limits direkt runterdruecken — das Pro-Featureset bleibt:

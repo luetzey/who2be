@@ -95,6 +95,11 @@ Was das Overlay umstellt: `WHO2BE_EDITION=cloud`, API verbindet als Rolle
 Mollie-Billing-Env, und es baut das `runtime-cloud`-Image (mit
 `who2be-billing`-Paket). Details siehe Kopf des Overlay-Files.
 
+> **Erstinbetriebnahme?** Was der Owner **vorher** besorgen muss (Mollie-Konto
+> mit Tagen Vorlauf, DNS, OAuth-Zugangsdaten inkl. exakter Redirect-URI, die
+> SMTP-Weiche) und in welcher Reihenfolge, steht als abhakbare Liste in
+> [`docs/cloud-erstinbetriebnahme.md`](../../docs/cloud-erstinbetriebnahme.md).
+
 ```bash
 # 0) .env um die Cloud-Vars ergaenzen (siehe .env.example, Sektion
 #    "Cloud-Edition"): APP_DB_PASSWORD, SUPABASE_SERVICE_KEY, optional MOLLIE_*.
@@ -138,14 +143,18 @@ docker compose \
 # → cloud / postgresql://who2be_app:***@db:5432/postgres / redis://redis:6379
 ```
 
-Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Downgrade →
-RLS-Nachweis): `docs/cloud-prod-smoke.md` gegen `https://api.${DOMAIN}` fahren.
-Pro-Entitlement ohne Mollie ueber den auditierten Override-Endpoint (Admin +
-aal2/MFA + `WHO2BE_BILLING_OVERRIDE_OPERATORS`):
+Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Tarif-Quoten
+402 → Downgrade → RLS-Nachweis): `docs/cloud-prod-smoke.md` gegen
+`https://api.${DOMAIN}` fahren. Pro-Entitlement ohne Mollie ueber den
+auditierten Override-Endpoint. Der verlangt dreierlei, sonst garantiert `403`:
+Rolle `admin`, ein **Web-JWT mit `aal2`** (TOTP-Step-up; ein API-Token `w2b_…`
+wird kategorisch abgelehnt) und die eigene User-UUID in
+`WHO2BE_BILLING_OVERRIDE_OPERATORS` (`deploy/hetzner/.env`, kommasepariert,
+leer ⇒ niemand). Vorbereitung Schritt fuer Schritt: RUNBOOK-Checkliste §6b.
 
 ```bash
 curl -s -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/override \
-  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
   -d '{"plan":"pro","days":30,"reason":"cloud smoke"}'
 ```
 
@@ -389,9 +398,11 @@ Build lokal aus dem ausgecheckten SHA).
 ## Datenschutz / Compliance (At-Rest + Standort)
 
 - **Verschluesselung at-Rest:** Das Postgres-Volume (`db-data`) muss at-Rest
-  verschluesselt liegen — entweder ueber ein verschluesseltes Hetzner-Volume
-  (Plattform-LUKS) oder selbst verwaltetes LUKS auf dem Host. Einrichtung +
-  reproduzierbarer Verifikationsschritt (`lsblk` / `cryptsetup status`) und die
+  verschluesselt liegen — **selbst verwaltetes LUKS auf dem Host**. Hetzner
+  verschluesselt Cloud Volumes **nicht** serverseitig; das ist laut Hetzners
+  eigenen TOMs Kundenpflicht (woertliches Zitat + Quelle im RUNBOOK).
+  Einrichtung **vor** dem ersten `docker compose up`, reproduzierbarer
+  Verifikationsschritt (`lsblk` / `cryptsetup status`) und die
   Protokoll-Tabelle stehen im RUNBOOK unter
   [Verschluesselung at-Rest](./RUNBOOK.md#verschluesselung-at-rest-postgres-volume).
   Adressiert die Audit-Befunde P4/S2. **Keine** Schluessel/Passphrasen ins Repo.

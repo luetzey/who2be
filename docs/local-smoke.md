@@ -17,6 +17,9 @@ noetig fuer den lokalen Smoke.
 ## 0 — Voraussetzungen
 
 - `docker` + `docker compose` lauffaehig (Docker Desktop oder Engine).
+  **Rootless Podman** funktioniert ebenfalls (`podman compose` mit
+  `docker-compose` als Provider) — siehe den Podman-Abschnitt unter
+  „Bekannte Stolpersteine".
 - Browser fuer den Web-Happy-Path.
 - Optional: `curl`, `python3` auf dem Host (fuer den Smoke-Script-Lauf;
   beides ist auf macOS/Linux meist vorhanden).
@@ -204,5 +207,35 @@ docker compose down -v   # `-v` loescht das Postgres-Volume (frischer Start)
   vergleichen.
 - **GoTrue-Signup gibt 422 "validation_failed"** → Passwort < 6 Zeichen
   oder schon vergebene Email.
-- **MCP "Nicht autorisiert"** → `WHO2BE_API_TOKEN` falsch oder in
+- **MCP „Nicht autorisiert"** → `WHO2BE_API_TOKEN` falsch oder in
   `/settings/tokens` revoked.
+
+### Rootless Podman
+
+Der Stack laeuft unter rootless Podman ohne Anpassung. Zwei Dinge sind
+Podman-spezifisch und der Vollstaendigkeit halber festgehalten:
+
+- **Der DNS-Resolver kommt aus dem Container, nicht aus der Config.** Die
+  beiden nginx-Container (`web`, `auth-gateway`) sprechen ihre Upstreams ueber
+  eine Variable an und brauchen dafuer ein `resolver`-Directive. Dessen Adresse
+  ist unter Docker `127.0.0.11` (eingebettetes DNS), unter rootless Podman eine
+  andere und nicht vorhersagbare (z. B. `10.89.1.1`).
+  `docker/10-who2be-nginx-resolver.sh` liest sie beim Container-Start aus
+  `/etc/resolv.conf` und schreibt `/etc/nginx/resolver.conf`; beide Configs
+  includieren die Datei. Braucht eine Umgebung einen festen Wert:
+  `WHO2BE_DNS_RESOLVER=<adresse>` im Environment des jeweiligen Containers.
+
+  War die Adresse falsch, sah man das **nur** als HTTP 502 auf
+  `/auth/v1/signup` — im Browser scheiterte das Registrierungsformular ohne
+  Meldung. Zum Nachpruefen:
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"probe@example.com","password":"secret1234"}' \
+    http://localhost:9999/auth/v1/signup     # erwartet: 200 (nicht 502)
+  ```
+
+- **`gateway.conf` ist gemountet — `--build` reicht nicht.** Aenderungen daran
+  greifen erst, wenn der Container neu erstellt wird:
+  `podman compose up -d --force-recreate auth-gateway`.

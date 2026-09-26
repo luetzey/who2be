@@ -7,17 +7,124 @@ CVE-Triage und Secret-Rotation. Setup-Anleitungen liegen in
 
 Aktive Sektionen:
 
-- [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
+- [Betriebsgrenze: genau EIN API-Container](#betriebsgrenze-genau-ein-api-container) — **vor jedem Skalieren lesen**: der Tabellen-Store vertraegt genau einen Schreiber
+- [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/LUKS/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
+- [Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits) — Zugriffe nachvollziehen, `mem_limit` pruefen und anheben (W8/S1-S3)
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
-- [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
+- [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS auf dem Host (Hetzner verschluesselt **nicht** serverseitig) + Verifikation (Befund P4/S2)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
+
+---
+
+## Betriebsgrenze: genau EIN API-Container
+
+> ⛔ **Der `api`-Dienst darf nie in mehr als einer laufenden Instanz existieren.**
+> Kein `replicas`, kein `docker compose up --scale api=2`, kein
+> `WEB_CONCURRENCY`/`--workers`, kein zweiter Host auf demselben Volume.
+
+**Warum.** Die Zeilen der Agenten-Tabellen liegen nicht in Postgres, sondern in
+einer SQLite-Datei pro WorkArea (ADR-0049, siehe §Tabellen-Store-Backup). Die API
+serialisiert Schreibzugriffe darauf ueber einen **prozesslokalen** Lock. Ein
+zweiter Prozess haette einen eigenen Lock auf derselben Datei; uebrig bliebe
+SQLites `busy_timeout`. Die Folge ist **stille Korruption**: kein Fehler, kein
+Alarm, kein Log-Eintrag — der Schaden faellt erst beim Lesen auf, moeglicherweise
+Wochen spaeter.
+
+Horizontal skaliert wird erst mit area-affinem Routing (offener ADR). Bis dahin
+ist „mehr API-Kapazitaet" **keine** Konfigurationsfrage.
+
+### Was das absichert
+
+| Schicht | Wo | Faengt |
+|---|---|---|
+| Start-Guard | `apps/api/.../main.py` | `WEB_CONCURRENCY` / `--workers N` im API-Prozess |
+| Compose-Drift-Tests | `apps/api/tests/test_single_writer_guard.py` | `replicas`, `scale`, `--workers`, `update_config`/`start-first` in **jeder** Compose-Datei mit `api`-Dienst |
+| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`-Container nach dem `up` → Abbruch mit Exit 3 |
+
+**Der Start-Guard ist kein Beleg.** Er sieht nur den eigenen Prozessbaum;
+mehrere *Container* kann kein In-Process-Check erkennen. Dass er schweigt, sagt
+nichts darueber, ob die Grenze eingehalten wird.
+
+### Erzeugt ein Deploy kurzzeitig zwei API-Container?
+
+**Nein.** `deploy.sh` faehrt `docker compose up -d --wait --remove-orphans` ohne
+`--scale`, und Compose recreated einen Service in dieser Reihenfolge: neuen
+Container **erzeugen** (nicht starten) → alten **stoppen** → alten entfernen →
+umbenennen → erst in der folgenden Start-Phase starten (`recreateContainer` in
+`pkg/compose/convergence.go`, identisch geprueft in Compose v2.20, v2.29 und
+v2.39). Eine Ueberlappung braeuchte `deploy.update_config.order: start-first`
+(„the new task is started first, and the running tasks briefly overlap",
+Compose Deploy Specification) — der Default ist `stop-first`, und keine
+Compose-Datei dieses Repos setzt `update_config`. Ein Drift-Test haelt das fest.
+
+Weil die auf der Box installierte Compose-Version nicht gepinnt ist
+(`get.docker.com` installiert das jeweils aktuelle Release), bleibt ein
+Restrisiko. `deploy.sh` setzt dagegen **keinen** Vorab-`stop api` — das waere der
+einzige Mechanismus, der das Recreate-Fenster versionsunabhaengig schliesst
+(ohne laufenden alten Container kann keine Reihenfolge zwei laufende erzeugen),
+kostet aber bei jedem Deploy einen vollen Start samt Healthcheck-`start_period`
+an Downtime. Die Abwaegung faellt gegen ihn aus, weil die Sequenz ueber
+v2.20 – v2.39 belegt ist und der Drift-Test `start-first` verbietet.
+
+Zusaetzlich **misst** `deploy.sh` nach dem `up`:
+
+```bash
+docker compose … ps --status running --quiet api | grep -c .   # muss 1 sein
+```
+
+Ist das Ergebnis nicht `1`, bricht der Deploy mit Exit-Code 3 ab. Wichtig fuer
+die Einordnung: diese Messung laeuft **nach** `--wait`, prueft also den
+**Endzustand**. Eine transiente Ueberlappung waehrend des Recreate waere zum
+Messzeitpunkt vorbei — sie faengt **dauerhafte** Zweitinstanzen (verwaister
+Container aus einem frueheren Bringup, von Hand gestartete Instanz, gar nicht
+gestarteter Container), nicht das Fenster selbst.
+
+### Wenn der Deploy mit Exit 3 abbricht
+
+```bash
+cd /opt/who2be
+
+# 1) Was laeuft wirklich?
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env ps -a api
+
+# 2) Bei ZWEI laufenden Containern: sofort einen stoppen — jede Minute mit
+#    zwei Schreibern ist Korruptionsrisiko. Danach Integritaet pruefen.
+docker stop <container-id-des-aelteren>
+
+# 3) Integritaet aller Area-Dateien pruefen (muss ueberall `ok` liefern)
+docker compose … exec api sh -c \
+  'for f in /data/tablestore/*/*.sqlite; do echo -n "$f: "; \
+     python -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute(\"PRAGMA integrity_check\").fetchone()[0])" "$f"; done'
+
+# 4) Bei NULL laufenden Containern: der Start ist gescheitert, nicht die
+#    Grenze verletzt. Logs lesen, dann normal neu deployen.
+docker compose … logs --tail 100 api
+
+# 5) Meldet das Skript stattdessen "'compose ps api' ist selbst
+#    fehlgeschlagen": die Zahl ist unbekannt, nicht 0. Ursache ist meist ein
+#    nicht laufender Docker-Daemon oder ein Projekt-/Env-Fehler.
+systemctl status docker
+```
+
+Liefert Schritt 3 irgendwo etwas anderes als `ok`: Restore der betroffenen Area
+aus dem letzten Snapshot (§Tabellen-Store-Backup).
+
+### Legitime zweite Prozesse
+
+Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
+die API laeuft: der Retention-Cron (`docker compose run --rm api who2be-purge`)
+und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
+kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
+Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
+waehrend eines Deploys starten.
 
 ---
 
@@ -41,10 +148,11 @@ Cloud-Abnahme in [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md).
   Protokoll-Tabelle unter [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter).
 - **OS:** Ubuntu 24.04 LTS. Beim Anlegen den eigenen **SSH-Public-Key**
   hinterlegen (kein Passwort-Login).
-- **At-Rest-Verschluesselung** des Daten-Volumes ist Pflicht und wird beim
-  Provisioning entschieden — Variante + Verifikation siehe
-  [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume). Bei
-  Variante B (LUKS) **vor** dem ersten `docker compose up` einrichten.
+- **At-Rest-Verschluesselung** des Daten-Volumes ist Pflicht. Hetzner
+  verschluesselt **nicht** fuer dich — das ist laut Hetzners eigenen TOMs
+  Kundenpflicht. Sie wird deshalb selbst per LUKS eingerichtet, und zwar in
+  [Schritt 3b](#3b--at-rest-verschluesselung-luks-vor-dem-ersten-bring-up)
+  **vor** dem ersten `docker compose up`.
 
 ### 2 — deploy-User + Grund-Hardening
 
@@ -72,6 +180,20 @@ usermod -aG docker deploy
 sudo -iu deploy docker compose version   # → Docker Compose version v2.x
 ```
 
+### 3b — At-Rest-Verschluesselung (LUKS), VOR dem ersten Bring-up
+
+> ⛔ **Jetzt, nicht spaeter.** Das Daten-Volume wird als LUKS-Container
+> angelegt, **bevor** Postgres das erste Mal startet. Danach ist es nur noch
+> mit Downtime und Restore-Risiko nachholbar, weil die Daten dafuer umziehen
+> muessen. Hetzner uebernimmt das **nicht** — At-Rest-Verschluesselung ist
+> laut Hetzners eigenen TOMs Kundenpflicht (woertliches Zitat + Quelle in
+> [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume)).
+
+Kommandos, Keyfile-Verwahrung und der reproduzierbare Verifikationsschritt
+stehen in [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume)
+(Variante B). Das Ergebnis gehoert in die Protokoll-Tabelle desselben
+Abschnitts. Erst danach weiter mit Schritt 4.
+
 ### 4 — Firewall (Ports 80/443, SSH 22)
 
 Caddy braucht **80** (ACME-HTTP-Challenge + Redirect) und **443** (HTTPS)
@@ -79,16 +201,33 @@ eingehend; **22** fuer SSH/Deploy. Alles andere bleibt zu — die API-, Web-,
 Redis- und DB-Container haben bewusst **kein** `ports:` und sind nur im internen
 Docker-Netz erreichbar.
 
-```bash
-# Variante a) UFW auf dem Host
-ufw default deny incoming && ufw default allow outgoing
-ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
-ufw enable && ufw status verbose
-```
+**Die wirksame Ebene ist die Hetzner-Cloud-Firewall, nicht `ufw`.** Grund:
+Docker haengt seine Regeln in die `nat`-Tabelle und leitet Pakete an
+veroeffentlichte Container-Ports damit **vor** den Ketten `INPUT`/`OUTPUT`
+um, die `ufw` benutzt — die `ufw`-Regel greift also gar nicht mehr. Docker
+dokumentiert das woertlich:
 
-> Bei Hetzner Cloud zusaetzlich/alternativ eine **Cloud-Firewall** in der
-> Console anlegen (Inbound nur 22/80/443) und der Box zuweisen — sie wirkt vor
-> der VM und ist die robustere Schranke.
+> When you publish a container's ports using Docker, traffic to and from that
+> container gets diverted before it goes through the ufw firewall settings.
+> […] Packets are routed before the firewall rules can be applied, effectively
+> ignoring your firewall configuration.
+
+— Docker Docs, *Packet filtering and firewalls*, Abschnitt „Docker and ufw",
+<https://docs.docker.com/engine/network/packet-filtering-firewalls/>, abgerufen
+**2026-09-25**.
+
+1. **Pflicht — Hetzner-Cloud-Firewall** in der Console anlegen (Inbound nur
+   22/80/443) und der Box zuweisen. Sie filtert **vor** der VM, kann von Docker
+   nicht umgangen werden und ueberlebt einen Konfigurationsfehler auf dem Host.
+2. **Ergaenzend — `ufw` auf dem Host.** Schuetzt Dienste, die direkt auf dem
+   Host lauschen (SSH), **nicht** aber veroeffentlichte Container-Ports. Kein
+   Ersatz fuer Punkt 1:
+
+   ```bash
+   ufw default deny incoming && ufw default allow outgoing
+   ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
+   ufw enable && ufw status verbose
+   ```
 
 ### 5 — DNS-A-Records (manuell, DNS-Anbieter)
 
@@ -174,8 +313,16 @@ Kompakte Bring-up-Checkliste fuer die **erste** Cloud-Inbetriebnahme nach dem
 **Service-Key**, **Mailer** und **Deploy-Pipeline** — mit dem Compose-Bring-up
 und der Abnahme. Reihenfolge einhalten:
 
-- [ ] **0 — Provisioning steht:** Box, Docker, Firewall (80/443/22), deploy-User,
-      DNS-A-Records aufgeloest, At-Rest-Verschluesselung verifiziert
+> **Was der Owner VORHER besorgen muss** — Mollie-Testkonto (Tage Vorlauf!),
+> DNS, OAuth-Zugangsdaten inkl. der exakten Redirect-URI, die SMTP-Weiche —
+> steht als abhakbare Liste in
+> [`docs/cloud-erstinbetriebnahme.md`](../../docs/cloud-erstinbetriebnahme.md).
+> Diese Checkliste hier ist der Ausfuehrungsteil und setzt sie voraus.
+
+- [ ] **0 — Provisioning steht:** Box, Docker, **LUKS-Verschluesselung des
+      Daten-Volumes verifiziert** (`cryptsetup status` = `is active`, Schritt 3b
+      — muss vor dem ersten Bring-up passiert sein), Cloud-Firewall (80/443/22),
+      deploy-User, DNS-A-Records aufgeloest
       ([Provisioning](#provisioning-track-sc1)).
 - [ ] **1 — Secrets in `deploy/hetzner/.env` (Mode 600):** `DOMAIN`, `ACME_EMAIL`,
       `JWT_SECRET` (≥ 32 Zeichen, **identisch** zu `supabase/.env`), `DATABASE_URL`,
@@ -206,6 +353,30 @@ und der Abnahme. Reihenfolge einhalten:
       ```
 - [ ] **6 — TLS + Header gruen:** [Provisioning §7](#provisioning-track-sc1) inkl.
       `bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}`.
+- [ ] **6b — Betreiber-Override startklar** (Voraussetzung fuer „Pro ohne
+      Mollie setzen", §4 Variante A des Prod-Smokes — ohne diesen Schritt
+      antwortet der Endpunkt garantiert `403`, das Gate ist fail-closed):
+      1. Am Admin-Account einen **TOTP-Faktor** anlegen und verifizieren
+         ([`docs/mfa-admin.md`](../../docs/mfa-admin.md#enrollment-nutzer-flow)) —
+         der Endpunkt verlangt ein **Web-JWT mit `aal2`** und weist API-Tokens
+         (`w2b_…`) kategorisch ab.
+      2. Die eigene **User-UUID** in `deploy/hetzner/.env` eintragen:
+         `WHO2BE_BILLING_OVERRIDE_OPERATORS=<user-uuid>` (mehrere kommasepariert;
+         leer ⇒ niemand darf schreiben).
+      3. API neu erzeugen und belegen, dass die Variable **im Container** ankommt:
+         ```bash
+         docker compose \
+           -f deploy/hetzner/who2be/docker-compose.yml \
+           -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+           --env-file deploy/hetzner/.env \
+           up -d --force-recreate api
+         docker compose \
+           -f deploy/hetzner/who2be/docker-compose.yml \
+           -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+           --env-file deploy/hetzner/.env \
+           exec api printenv WHO2BE_BILLING_OVERRIDE_OPERATORS
+         # → <user-uuid>   (leere Ausgabe ⇒ Override waere 403)
+         ```
 - [ ] **7 — Deploy-Pipeline (optional, fuer kuenftige Rollouts):** Repository-
       Variables/Secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, …) gemaess
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
@@ -299,6 +470,122 @@ curl -sf "https://api.${DOMAIN}/healthz"
 Deploy (`./deploy.sh <sha>` mit `WHO2BE_EDITION=cloud`) fahren — der zieht
 `api`/`migrate` wieder aus der Registry und ersetzt den Host-Build, damit
 Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
+
+---
+
+## Access-Logs & Ressourcen-Limits
+
+### Access-Logs lesen
+
+Caddy protokolliert jede Anfrage an alle vier Subdomains nach
+`/var/log/caddy/access.log`. Die Datei liegt im Volume `caddy-logs`, nicht im
+Container-Dateisystem — sie ueberlebt also jeden Redeploy (BSI SYS.1.6.A7
+verlangt die Speicherung „ausserhalb des Containers, mindestens auf dem
+Container-Host").
+
+```bash
+# Laufend mitlesen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  tail -f /var/log/caddy/access.log
+
+# Alle 4xx/5xx der aktuellen Datei, lesbar
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'cat /var/log/caddy/access.log' \
+  | jq -c 'select(.status >= 400) | {ts, status, req: .request.uri, ip: .request.remote_ip}'
+
+# Rotierte Generationen (gzip) mitnehmen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'zcat -f /var/log/caddy/access*.log*'
+```
+
+**Aufbewahrung: 14 Tage.** Sie wird von einem Host-Cron durchgesetzt, nicht von
+der Caddy-Konfiguration allein: `roll_size`/`roll_keep` deckeln die **Groesse**,
+und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
+Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
+Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
+
+Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
+auf dem Host eingerichtet:
+
+```bash
+# Host-Crontab des Deploy-Users (crontab -e):
+30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+```
+
+**Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
+schreibt nach einem `mv` in den alten Inode weiter — die neue `access.log`
+entsteht erst beim Neu-Oeffnen. Nachgemessen gegen `caddy:2.8-alpine` (v2.8.4):
+weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncate`
+(kopieren + `truncate`) fuehrt zu einer Datei voller Nullbytes, weil der Writer
+am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
+**0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
+
+Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
+Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
+Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
+ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
+Quartals-Check:
+
+```bash
+# Aelteste Generation — darf nicht aelter als 14 Tage sein
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  find /var/log/caddy -name 'access.log.*' -mtime +14
+
+# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  ls -lt /var/log/caddy
+```
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
+Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
+`docs/compliance/data-retention-and-erasure.md` §5.
+
+**Was nicht im Log steht:** Cookie-, Authorization- und
+Proxy-Authorization-Header sind `REDACTED` (Caddy-Default), und die
+Query-Parameter `code`/`token`/`access_token`/`refresh_token` werden ersetzt,
+bevor die Zeile geschrieben wird — der OAuth-Endpunkt liegt auf
+`api.<DOMAIN>`. Wer beim Debuggen einen dieser Werte vermisst: das ist Absicht,
+nicht ein Fehler.
+
+Container-Logs (stdout/stderr) liest wie gewohnt `docker compose logs <dienst>`;
+sie sind je Dienst auf 3 x 10 MB gedeckelt.
+
+### Ressourcen-Limits und was bei Ueberschreitung passiert
+
+Jeder Container beider Stacks hat ein `mem_limit` (BSI SYS.1.6.A15). Die Werte
+sind auf die Zielmaschine geeicht — **Hetzner CX32, 8 GB, beide Stacks auf
+derselben Maschine** — und je Dienst im Compose-File begruendet; die Herleitung
+steht in `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`.
+
+Die Deckel sind Obergrenzen, **keine Reservierungen**: die Summe aller Deckel
+darf das RAM ueberschreiten, solange die Summe der typischen Nutzung deutlich
+darunter liegt. Die dauerhaft laufenden Dienste summieren sich auf rund
+6,2 GiB von 8 GB; `apps/api/tests/test_compose_hardening.py` haelt diese Summe
+im Rahmen, damit ein neuer Dienst das Budget nicht unbemerkt sprengt.
+
+**Verhalten bei Ueberschreitung** (A15 Satz 2 verlangt, dass es dokumentiert
+ist): Reisst ein Container sein Limit, beendet der Kernel-OOM-Killer einen
+Prozess **innerhalb dieses Containers**. Host und uebrige Container bleiben
+unberuehrt — genau das ist der Zweck der Deckel. Vorher gab es keine, und der
+OOM-Killer suchte sich sein Opfer nach Speicherverbrauch selbst aus, also mit
+hoher Wahrscheinlichkeit Postgres. Dienste mit `restart: unless-stopped`
+starten anschliessend selbst neu.
+
+Diagnose:
+
+```bash
+# Hat ein Container OOM gesehen?
+docker inspect --format '{{.Name}} OOMKilled={{.State.OOMKilled}} RestartCount={{.RestartCount}}' \
+  $(docker ps -aq)
+
+# Aktueller Verbrauch gegen das Limit
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
+Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
+anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
+OOM im Normalbetrieb waere schlechter als gar kein Limit.
 
 ---
 
@@ -658,9 +945,9 @@ gpg --decrypt /tmp/latest.sql.gpg | head -5   # erwartet: '-- PostgreSQL databas
 > ⚠️ **Disclaimer:** Engineering-/Betriebs-Checkliste, **keine** Rechts- oder
 > Zertifizierungsberatung. Adressiert die Audit-Befunde **P4** (Encryption-at-Rest
 > nicht belegt) und **S2** (At-Rest-Verschluesselung Live-DB nicht nachweisbar)
-> aus `.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`. Die
-> tatsaechlich umgesetzte Variante ist vom Betreiber je nach Hetzner-Produkt zu
-> waehlen und unten zu protokollieren.
+> aus `.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`. Eine
+> Variantenwahl gibt es **nicht** — unabhaengig vom Hetzner-Produkt ist LUKS auf
+> dem Host einzurichten (siehe unten) und unten zu protokollieren.
 
 Die Live-Datenbank liegt im Docker-Volume `db-data` (siehe `docker-compose.yml`
 bzw. den self-hosted-Supabase-Stack). „At-Rest" heisst: die Bytes auf dem
@@ -670,38 +957,45 @@ preis. Anwendungs-/Transport-Verschluesselung (TLS via Caddy) und Backup-
 Verschluesselung (GPG + restic, siehe unten) sind **separat** und ersetzen das
 nicht.
 
-Es gibt zwei betrieblich uebliche Wege auf Hetzner — **genau einen** waehlen und
-die Wahl in der Protokoll-Tabelle unten festhalten:
+Es gibt **genau einen** gueltigen Weg: selbst verwaltetes LUKS auf dem Host
+(unten „Variante B"). Die frueher hier beschriebene „Variante A" (Hetzner
+verschluesselt das Volume fuer dich) beruhte auf einer falschen Annahme und ist
+**untauglich** — Begruendung direkt darunter. Die Einrichtung in der
+Protokoll-Tabelle am Ende des Abschnitts festhalten.
 
-### Variante A — verschluesseltes Hetzner Cloud Volume / Storage
+### Variante A — verschluesseltes Hetzner Cloud Volume / Storage · ⛔ NICHT VERWENDEN
 
-Hetzner Cloud Volumes werden serverseitig at-Rest verschluesselt (LUKS auf der
-Plattform-Ebene). Wenn das `db-data`-Volume auf einem Cloud-Volume liegt:
+> ⛔ **Diese Variante gibt es nicht.** Hetzner verschluesselt Cloud Volumes
+> **nicht** serverseitig at-Rest. Frueher stand hier das Gegenteil; die Aussage
+> war falsch.
 
-1. Bestaetigen, dass das Datenverzeichnis auf dem Cloud-Volume-Mount liegt
-   (nicht auf der lokalen Boot-Disk):
+Hetzner benennt das in den eigenen Technisch-organisatorischen Massnahmen
+(TOM) woertlich als Kundenpflicht:
 
-   ```bash
-   # Wo liegt der Docker-Volume-Mountpoint physisch?
-   docker volume inspect who2be_db-data --format '{{ .Mountpoint }}'
-   # Den Pfad gegen die Mounts halten — muss auf dem Cloud-Volume-Device sitzen:
-   findmnt -no SOURCE,TARGET --target "$(docker volume inspect who2be_db-data --format '{{ .Mountpoint }}')"
-   lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
-   ```
+> | Encryption of Data (at rest) | Client’s responsibility |
 
-2. **Nachweis** ist die Hetzner-Console/-API-Eigenschaft des Volumes
-   (Encryption „aktiv") plus ein Screenshot/Export in der Betreiber-Doku.
-   `<PLATZHALTER: Volume-ID + Hetzner-Console-Beleg>`.
+— Hetzner Docs, *Technical and Organizational Measures*, Abschnitt
+„Confidentiality" (ID `GE-68A66`, „Last change on 2025-04-01"),
+<https://docs.hetzner.com/general/security-and-identify/technical-and-organizational-measures/>,
+abgerufen **2026-09-25**. Dieselbe Seite stellt Cloud- und Dedicated-Server
+ausdruecklich in die Kundenverantwortung („You/the Client are completely
+responsible for the management, maintenance and security of the server"); die
+einzige serverseitige Ausnahme in der Tabelle betrifft **Backups bei Managed
+Servers** — nicht Cloud Volumes.
 
-> Hinweis: Bei reiner Plattform-Verschluesselung ist auf OS-Ebene **kein**
-> `crypt`-Device sichtbar (`lsblk` zeigt das Volume als normales `ext4`/`xfs`),
-> weil die Verschluesselung unterhalb der VM passiert. Der Beleg kommt dann aus
-> der Hetzner-Console, nicht aus `cryptsetup`.
+Praktische Folge: Es gibt **keine** Encryption-Eigenschaft eines Cloud Volumes,
+die man in der Console als Nachweis abhaken koennte. Wer diesen Weg waehlt,
+faehrt die Datenbank unverschluesselt und haelt sie faelschlich fuer geschuetzt.
+Der Abschnitt bleibt nur als Warnung stehen, weil aeltere Staende und
+Querverweise die Variante noch kennen.
 
-### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet)
+⇒ Weiter mit **Variante B**.
 
-Wenn das Volume auf einem dedizierten/Root-Server liegt, wird LUKS selbst
-eingerichtet (einmalig bei Provisioning, **vor** dem ersten `docker compose up`):
+### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet) · der gueltige Weg
+
+LUKS wird selbst eingerichtet — einmalig beim Provisioning, **vor** dem ersten
+`docker compose up`. Danach ist es nur noch mit Downtime und Restore-Risiko
+nachholbar, weil die Daten dafuer umziehen muessen:
 
 1. Block-Device als LUKS-Container initialisieren (Beispiel-Device — am realen
    Setup anpassen, **keine** Passphrase ins Repo):
@@ -727,25 +1021,26 @@ Nach jedem (Re-)Provisioning bzw. Host-Wechsel ausfuehren und das Ergebnis in de
 Tabelle unten protokollieren:
 
 ```bash
-# Variante B (LUKS sichtbar auf OS-Ebene): Datentyp muss "crypto_LUKS" sein,
+# LUKS muss auf OS-Ebene sichtbar sein: Datentyp "crypto_LUKS",
 # das Mapper-Device aktiv.
 lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
 sudo cryptsetup status cryptdata     # erwartet: "is active", cipher/keysize sichtbar
 
-# Variante A (Plattform-Volume): Mount auf dem Cloud-Volume-Device nachweisen
-findmnt --target /opt/who2be/data    # bzw. der reale Daten-Mount
-# Encryption-Beleg = Hetzner-Console-Eigenschaft des Volumes (siehe oben).
+# Und der Daten-Mount muss wirklich auf dem Mapper-Device liegen:
+findmnt --target /opt/who2be/data    # SOURCE → /dev/mapper/cryptdata
 ```
 
-**Akzeptanzkriterium:** Bei Variante B zeigt `cryptsetup status cryptdata`
-`is active` und `lsblk` `crypto_LUKS` fuer das Daten-Device; bei Variante A liegt
-der Daten-Mount nachweislich auf dem verschluesselten Hetzner-Volume + Console-
-Beleg. **Keine** Passphrase/kein Keyfile-Inhalt wird je ins Repo, in Logs oder in
+**Akzeptanzkriterium:** `cryptsetup status cryptdata` zeigt `is active`, `lsblk`
+zeigt `crypto_LUKS` fuer das Daten-Device, und `findmnt` weist den Daten-Mount
+auf `/dev/mapper/cryptdata` nach. Zeigt `lsblk` fuer das Daten-Device ein nacktes
+`ext4`/`xfs` ohne `crypto_LUKS` darunter, liegt die Datenbank **unverschluesselt**
+— unabhaengig davon, was die Hetzner-Console anzeigt (siehe Variante A oben).
+**Keine** Passphrase/kein Keyfile-Inhalt wird je ins Repo, in Logs oder in
 Klartext-Backups geschrieben.
 
-| Datum | Variante (A/B) | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
-|---|---|---|---|---|
-| — | — | — | — | — |
+| Datum | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
+|---|---|---|---|
+| — | — | — | — |
 
 ---
 
@@ -781,16 +1076,55 @@ ergaenzen. Querverweis: `docs/compliance/vvt.md`, `docs/compliance/c5-mapping.md
 
 ## Backup & Restore
 
-Zwei-Stufen-Backup pro ADR-0011:
+Drei-Bestaende-Backup pro ADR-0011 (Nachtrag 2026-09-25, W8/M3). Ein Restore
+braucht **alle drei** zusammen — Postgres allein ergibt eine DB mit toten
+Blob-Referenzen und leeren Tabellen:
 
-- **C5a — lokal:** `pg_dump -Fc | gpg --encrypt -r $BACKUP_GPG_RECIPIENT` ablegen unter
-  `/var/backups/who2be/dump-<ts>.pgc.gpg`. Retention 7 Tage.
-- **C5b — offsite:** `restic` schiebt das ganze Backup-Verzeichnis via SFTP auf eine
-  Hetzner-Storage-Box. Retention `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune.
+- **C5a — lokal:**
+  1. `pg_dump -Fc | gpg --encrypt -r $BACKUP_GPG_RECIPIENT` nach
+     `/var/backups/who2be/dump-<ts>.pgc.gpg`. Retention 7 Tage.
+  2. **Objekt-Store** (ADR-0048): `aws s3 sync --delete` spiegelt den
+     SeaweedFS-Bucket nach `/var/backups/who2be/blobs`.
+  3. **Tabellen-Store** (ADR-0049): `VACUUM INTO`-Snapshots aller Area-SQLites
+     nach `/var/backups/who2be/tablestore`.
+- **C5b — offsite:** `restic` schiebt das ganze Backup-Verzeichnis — und damit
+  alle drei Bestaende in **einem** Snapshot — via SFTP auf eine
+  Hetzner-Storage-Box. Retention `keep-daily 7 / keep-weekly 4 / keep-monthly 6`
+  + Prune.
 
-Beide Schritte fahren im selben Container (`backup`-Service, `--profile backup`).
-Wenn `RESTIC_REPOSITORY` leer ist, laeuft nur Schritt 1 — Lokal-only-Modus fuer
+Alle Schritte fahren im selben Container (`backup`-Service, `--profile backup`),
+automatisiert in `deploy/hetzner/scripts/backup.sh` — **kein Handbetrieb**.
+Wenn `RESTIC_REPOSITORY` leer ist, laeuft nur C5a — Lokal-only-Modus fuer
 Probelaeufe ohne Storage Box.
+
+**Teilerfolg ist kein Erfolg.** Scheitert eine der drei Stufen, endet der Lauf
+mit Exit != 0, der Dead-Man's-Switch bleibt **stumm**, und der restic-Snapshot
+traegt `--tag incomplete` statt `--tag dump` — er kann sich beim Restore also
+nicht als vollstaendiger Stand ausgeben. Begruendung: ein gruener Lauf ist die
+Zusage „dieser Snapshot traegt den vollstaendigen Zustand"; sie waere genau dann
+falsch, wenn sie gebraucht wird. Belegt durch
+`deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9). Dass der Lauf den
+Schreibpfad der API nicht verbiegt, belegen die Faelle 12–13 desselben Tests
+(Backup und Store unter verschiedenen Kennungen; Details unter
+„Tabellen-Store-Backup"). Dass ein volllaufendes Backup-Ziel den Lauf rot macht
+und den letzten guten Snapshot unversehrt laesst, belegt Fall 14.
+
+**Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
+Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
+Tabellen-Snapshots sind je genau **eine** Kopie, die in place ueberschrieben
+wird — sie vervielfachen sich nicht. Die Historie traegt restic (dedupliziert).
+Der `s3 sync` ist inkrementell, uebertragen wird nur die Differenz zum Vorlauf.
+Waehrend eines Laufs kommt kurzzeitig **eine weitere Kopie der gerade
+gesicherten Area** hinzu: der Tabellen-Snapshot wird in einen Vorlauf unter
+`${BACKUP_DIR}/tablestore/.scratch.*` geschrieben und erst danach an seinen Platz
+geschoben (Begruendung unter „Tabellen-Store-Backup"). Die groesste Area
+bestimmt diese Spitze. Alles, was der Lauf schreibt, liegt damit unter
+`${BACKUP_DIR}` — wer das Verzeichnis auf eine eigene Platte legt, bemisst damit
+den gesamten Bedarf.
+
+**Abwahl fuer On-Prem ohne diese Stores:** `BACKUP_BLOBS=off` bzw.
+`BACKUP_TABLESTORE=off`. Nur diese ausdrueckliche Abwahl ueberspringt eine Stufe
+— fehlende Konfiguration ist FATAL, nicht „still uebersprungen".
 
 ### Initial-Setup (einmalig nach C1-Hetzner-Provisioning)
 
@@ -907,19 +1241,31 @@ Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smok
 # Lokaler Dump vom heutigen Tag muss da sein
 ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -3
 
-# Offsite-Snapshot juenger als 26h
+# Objekt-Spiegel und Tabellen-Snapshots ebenfalls frisch (W8/M3)
+ls -la /var/backups/who2be/blobs /var/backups/who2be/tablestore
+du -sh /var/backups/who2be/*
+
+# Offsite-Snapshot juenger als 26h — und mit --tag dump, nicht incomplete
 restic -r "${RESTIC_REPOSITORY}" \
   -o "sftp.args=-i ${BACKUP_SSH_HOME}/storage_box_ed25519 -o StrictHostKeyChecking=accept-new" \
   snapshots --last 3
 ```
 
+> Ein Snapshot mit `--tag incomplete` bedeutet: der Lauf hat mindestens einen
+> der drei Bestaende nicht gesichert. Er ist als Restore-Quelle untauglich —
+> Ursache im Cron-Log (`/var/log/who2be-backup.log`, Zeile
+> „Backup UNVOLLSTAENDIG") nachsehen und den Lauf wiederholen.
+
 ### Restore (Recovery)
 
-Vollwiederherstellung gegen eine leere Test-DB:
+Vollwiederherstellung gegen eine leere Test-DB. **Alle drei Bestaende** kommen
+aus demselben Snapshot — Postgres allein ergibt eine DB mit toten
+Blob-Referenzen und leeren Tabellen:
 
 ```bash
-# 1) Optional offsite holen, sonst direkt /var/backups/who2be nutzen
-restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+# 1) Optional offsite holen, sonst direkt /var/backups/who2be nutzen.
+#    --tag dump ist Pflicht: nur so markierte Snapshots sind vollstaendig.
+restic -r "${RESTIC_REPOSITORY}" restore latest --tag dump --target /tmp/restore
 
 # 2) GPG-entschluesseln (Recipient-Private-Key muss verfuegbar sein)
 LATEST=$(ls -1t /tmp/restore/var/backups/who2be/dump-*.pgc.gpg | head -1)
@@ -931,27 +1277,31 @@ docker compose exec db psql -U supabase_admin postgres \
 docker compose exec -T db pg_restore -U supabase_admin -d who2be_restore \
   --clean --if-exists < /tmp/dump.pgc
 
-# 4) Verifizieren: Persona-Count entspricht der prod-DB
+# 4) Objekt-Store zurueckspielen  -> §SeaweedFS-/BlobStore-Backup, Abschnitt Restore
+# 5) Tabellen-Store zurueckspielen -> §Tabellen-Store-Backup, Abschnitt Restore
+
+# 6) Verifizieren: Persona-Count entspricht der prod-DB
 docker compose exec db psql -U supabase_admin who2be_restore \
   -c "SELECT count(*) FROM persona"
 ```
 
-**H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte (lokaler
-Dump + Restore in `who2be_restore` + Count-Vergleich), nach jedem prod-Cutover
+**H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
+(Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
 einmal durchziehen und Datum hier protokollieren:
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Ausgefuehrt von |
-|---|---|---|---|---|
-| — | — | — | — | — |
+| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
+|---|---|---|---|---|---|
+| — | — | — | — | — | — |
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
-Der `pg_dump`-Pfad oben sichert **nur Postgres**. Die Binaerinhalte der
-WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als Objekte im
-SeaweedFS-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`.
+Die Binaerinhalte der WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als
+Objekte im SeaweedFS-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`.
 Postgres kennt davon nur den Katalog (`wa_blob`): **ein Restore ohne Objekte
 ergibt eine DB, deren Blob-Referenzen ins Leere zeigen.** Beide Stufen
-gehoeren zusammen.
+gehoeren zusammen — seit 2026-09-25 erledigt das der naechtliche Lauf selbst
+(siehe unten).
 
 Der Dienst laeuft als Container `seaweedfs` (All-in-One `server -s3`,
 Apache-2.0 — Nachfolger von `minio`, #525/#528) + One-Shot
@@ -995,19 +1345,29 @@ unten.
 > Prod-Compose entfernen — ein separater, bewusster Schritt, kein Teil dieses
 > PRs.
 
-```bash
-# 1) Bucket in das Backup-Verzeichnis spiegeln (aws s3 sync ist inkrementell)
-docker run --rm --network app-net \
-  -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
-  -v /var/backups/who2be/blobs:/data amazon/aws-cli \
-  --endpoint-url http://seaweedfs:8333 s3 sync --delete s3://who2be-blobs /data
+**Automatisiert seit 2026-09-25 (W8/M3).** Der naechtliche Backup-Lauf macht das
+selbst — die folgenden Kommandos sind die Referenz dessen, was `backup.sh`
+ausfuehrt, kein Handbetrieb mehr:
 
-# 2) restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
-#    das der bestehende C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
+```bash
+# Stufe 2 aus backup.sh — Bucket in das Backup-Verzeichnis spiegeln
+# (aws s3 sync ist inkrementell; aws-cli liegt im Backup-Image)
+aws --endpoint-url "http://${WHO2BE_BLOBSTORE_ENDPOINT}" \
+  s3 sync --delete "s3://${WHO2BE_BLOBSTORE_BUCKET}" /var/backups/who2be/blobs
+
+# restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
+# das der C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
 ```
 
+- **Von Hand ausloesen** (Diagnose, Erstbefuellung) laeuft ueber den ganzen Lauf:
+  `cd /opt/who2be && docker compose --profile backup run --rm backup`.
+- **Netz:** der `backup`-Service haengt dafuer an `app-net` **und**
+  `supabase-net` — ohne `app-net` sieht er den Bucket nicht.
+- **Fehlschlag:** ein gescheiterter Sync macht den ganzen Lauf rot und
+  unterdrueckt den Heartbeat (s. o., „Teilerfolg ist kein Erfolg").
 - **Retention:** faellt mit dem restic-Repo zusammen (`keep-daily 7 /
-  keep-weekly 4 / keep-monthly 6`).
+  keep-weekly 4 / keep-monthly 6`). Der lokale Spiegel ist genau **eine** Kopie
+  und waechst nicht mit der 7-Tage-Dump-Retention.
 - **`--delete`** raeumt im Spiegel, was im Bucket nicht mehr existiert —
   gewollt, damit ein GDPR-Purge nicht ueber das Backup wieder auflebt.
   Die Snapshot-Historie haelt die Objekte dennoch bis zum Retention-Ablauf;
@@ -1016,10 +1376,12 @@ docker run --rm --network app-net \
   verschluesselt das Repo selbst.
 
 **Restore:** erst Objekte, dann DB (oder umgekehrt — die Reihenfolge ist egal,
-solange beide aus demselben Snapshot stammen).
+solange beide aus demselben Snapshot stammen). **`--tag dump` ist Pflicht:** nur
+so markierte Snapshots stammen aus einem vollstaendigen Lauf; `incomplete`
+bedeutet, dass mindestens ein Bestand fehlt.
 
 ```bash
-restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+restic -r "${RESTIC_REPOSITORY}" restore latest --tag dump --target /tmp/restore
 docker run --rm --network app-net \
   -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
   -v /tmp/restore/var/backups/who2be/blobs:/data amazon/aws-cli \
@@ -1060,39 +1422,78 @@ ${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite
 In Postgres steht nur der Katalog (`wa_table`, Schema + Name). **Ein
 `pg_dump`-Restore liefert also leere Tabellen**, wenn dieses Verzeichnis fehlt.
 
+> Diese Dateien sind der Grund fuer die Betriebsgrenze „genau EIN
+> API-Container" — siehe
+> [den Abschnitt oben](#betriebsgrenze-genau-ein-api-container), bevor du eine
+> zweite Instanz startest.
+
 **Nicht einfach kopieren:** eine SQLite-Datei im WAL-Modus ist waehrend eines
-laufenden Imports kein konsistenter Stand. Der Store bringt deshalb
-`VACUUM INTO` mit (`TableStore.snapshot_to`) — das erzeugt unter dem
-Area-Write-Lock eine kompaktierte, eigenstaendig lesbare Kopie.
+laufenden Imports kein konsistenter Stand. Gesichert wird deshalb mit
+`VACUUM INTO` — das laeuft als Leser in einer Transaktion und erzeugt eine
+kompaktierte, eigenstaendig lesbare Kopie.
+
+**Automatisiert seit 2026-09-25 (W8/M3).** Der naechtliche Backup-Lauf erzeugt
+die Snapshots selbst; der `backup`-Service mountet dafuer `tablestore-data` und
+bringt `sqlite3` mit. Referenz dessen, was `backup.sh` je Area-Datei tut:
 
 ```bash
-# Konsistente Snapshots aller Area-Dateien in das Backup-Verzeichnis
-docker compose exec api python - <<'PY'
-import asyncio, pathlib
-from who2be_api.services.tablestore_provider import get_table_store
-
-async def main() -> None:
-    store = get_table_store()
-    target_root = pathlib.Path("/backup/tablestore")
-    for workspace_dir in store.base_dir.iterdir():
-        if not workspace_dir.is_dir():
-            continue
-        for path in workspace_dir.glob("*.sqlite"):
-            target = target_root / workspace_dir.name / path.name
-            target.unlink(missing_ok=True)   # VACUUM INTO lehnt ein existierendes Ziel ab
-            await store.snapshot_to(
-                __import__("uuid").UUID(workspace_dir.name),
-                __import__("uuid").UUID(path.stem),
-                target,
-            )
-            print("snapshot", target)
-
-asyncio.run(main())
-PY
+# Stufe 3 aus backup.sh, sinngemaess je ${WHO2BE_TABLESTORE_DIR}/**/*.sqlite.
+# Das `su-exec <uid>:<gid>` ist kein Beiwerk — Begruendung direkt darunter.
+# ${tmp} liegt BEWUSST unter ${BACKUP_DIR}/tablestore/.scratch.* — Begruendung
+# beim Punkt „Vorlauf und `mv`" weiter unten.
+su-exec "$(stat -c '%u:%g' "${src}")" \
+  sqlite3 "file:${src}?mode=ro" "VACUUM INTO '${tmp}'"
+sqlite3 "${tmp}" 'PRAGMA quick_check'         # muss 'ok' liefern
+mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert geprueft
 ```
 
-- `/backup/tablestore` liegt unter `/var/backups/who2be` und faellt damit in
-  denselben restic-Lauf wie Dump und Blob-Spiegel.
+- **Der Lauf laeuft unter der Kennung des Datei-Eigentuemers.** Eine
+  WAL-Datenbank legt ihre Seitendateien (`-wal`, `-shm`) **beim Oeffnen** an —
+  auch bei einem reinen Leser und auch bei `mode=ro`. Nachts ist genau das der
+  Regelfall: die API oeffnet je Query eine Verbindung und schliesst sie wieder,
+  um 03:15 UTC existieren die Seitendateien also in aller Regel nicht. Legte sie
+  der Backup-Lauf unter seiner eigenen Kennung an, koennte die API die
+  betroffene Area danach nur noch **lesen**, nicht mehr schreiben — ein stiller
+  Fehlermodus, der erst auffiele, wenn ein Nutzer eine Tabelle aendern will.
+  Deshalb `su-exec`. Nach jedem Snapshot prueft der Lauf die Kennung der
+  Seitendateien und macht die Area zum Fehlschlag, wenn sie nicht stimmt: die
+  Zusage wird gemessen, nicht angenommen. (Geloescht werden die Seitendateien
+  bewusst **nicht** — ein paralleler Leser der API koennte den WAL-Index gerade
+  gemappt haben.)
+
+- **Konsistenz und ihre Grenze.** `VACUUM INTO` garantiert einen in sich
+  konsistenten Punkt-in-der-Zeit-Stand: ein gleichzeitig schreibender Prozess
+  kann den Snapshot nicht halb-geschrieben sehen, die Zieldatei ist nie korrupt,
+  WAL-/SHM-Seitendateien werden nicht gebraucht. **Nicht** gehalten wird dabei
+  der API-interne Area-Write-Lock (`TableStore.snapshot_to`) — der wirkt
+  prozesslokal, und das Backup laeuft in einem eigenen Container. Ein
+  *fachlicher* Vorgang ueber mehrere SQLite-Transaktionen (z. B. ein
+  Tabellen-Import in Bloecken) kann deshalb mittendrin erwischt werden: das
+  Ergebnis ist eine technisch intakte Datei mit einem fachlich halben Import.
+  Dieselbe Eigenschaft hat `pg_dump` gegenueber laufenden Mehr-Schritt-Vorgaengen.
+  Der Lauf um 03:15 UTC trifft den Fall praktisch selten.
+- **Vorlauf und `mv`:** `VACUUM INTO` lehnt ein existierendes Ziel ab, und ein
+  abgebrochener Schreibvorgang soll den letzten guten Snapshot nicht zerstoeren.
+  Geschrieben wird deshalb zuerst in einen Vorlauf, der **im Zielverzeichnis
+  selbst** liegt (`${BACKUP_DIR}/tablestore/.scratch.*`) — und genau das ist die
+  Bedingung, unter der das anschliessende `mv` ein `rename(2)` ist: unteilbar,
+  ohne Kopiervorgang. Laege der Vorlauf auf einem anderen Dateisystem (etwa in
+  `/tmp`, also in der Writable-Layer des Containers statt im `backups`-Volume),
+  wuerde `mv` zu Kopieren-und-Loeschen: es kann an vollem Platz scheitern oder
+  abgebrochen werden, und beides ueberschreibt das Ziel waehrenddessen — der
+  letzte gute Snapshot waere dann ein Torso. Der Rueckgabewert von `mv` wird
+  geprueft; ein gescheiterter Austausch macht die Area zum Fehlschlag und den
+  Lauf rot. Scheitert eine Area, bleibt ihr bisheriger Snapshot unveraendert
+  stehen (auch der Verwaisten-Lauf raeumt ihn nicht weg) — der Lauf wird
+  trotzdem rot. Belegt durch Fall 14 in `test_backup_alarm.sh`: Backup-Ziel auf
+  einem zu kleinen Dateisystem, Lauf endet rot, kein Heartbeat, der Snapshot
+  vom Vortag besteht danach unveraendert `quick_check`.
+- **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
+  Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
+- `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
+  Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
+- **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
+  Begruendung wie `--delete` beim Blob-Sync.
 - **Restore:** Snapshot-Dateien zurueck nach
   `${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite` kopieren
   (WAL-/SHM-Seitendateien werden **nicht** mitgesichert und sind nicht noetig —

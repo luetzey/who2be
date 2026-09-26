@@ -45,9 +45,28 @@ rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
 also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
 
 **Zur Speicher-Spalte — was gezaehlt wird und was nicht.** Die Grenze gilt
-fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
-Datei- und URL-Ingest der WorkArea) und wird an den Ingest-Routen
-durchgesetzt (`services/storage_quota_service.py`).
+fuer die Summe aus abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also Datei-
+und URL-Ingest der WorkArea) **und Artifact-Text**
+(`wa_artifact.content_bytes` — die UTF-8-Groesse der gespeicherten
+Block-Liste). Ein Limit fuer alles: Artifact-Text zaehlt wie eine Datei, es gibt
+kein zweites Kontingent fuer Artifacts. Durchgesetzt wird die Grenze an allen
+Routen, die Speicher entstehen lassen — den beiden Ingest-Routen und den fuenf
+Artifact-Schreibpfaden (`POST /work-areas/{id}/artifacts`, `POST /artifacts`,
+`POST /wa-artifacts/{id}/append`, `PATCH /wa-artifacts/{id}`,
+`POST /wa-tables/{id}/save-result`), samtlich ueber
+`services/storage_quota_service.py`.
+
+Gezaehlt werden **Bytes, nicht Zeichen**: ein Zeichen belegt in UTF-8 1 bis 4
+Bytes, wer Zeichen zaehlte, gaebe je nach Sprache des Kunden ein- bis viermal so
+viel Platz. Bei `append` zaehlt der **Zuwachs** (die Spalte traegt die
+Gesamtgroesse der Zeile, die Summe waechst um das Angehaengte); ein Loeschen
+oder ein schrumpfender Patch gibt Platz wieder frei. **Nicht** mitgezaehlt wird
+der SQLite-Tabellen-Store je WorkArea (Dateisystem statt Postgres, ADR-0049).
+
+Die Grenze greift ausschliesslich bei NEUEN Schreibzugriffen: Bestand bleibt
+les-, export- und loeschbar, auch oberhalb der Grenze — Loeschen ist der Weg
+zurueck darunter. Abgewiesen wird mit `402` und `reason:
+storage_quota_exceeded`, die Grenze steht in `params`.
 
 **Zur Spalte „Workspaces je Org" — warum es sie gibt.** Die Speichergrenze
 zaehlt je Workspace (`STORAGE_USED_SQL` filtert auf `workspace_id`), jeder
@@ -102,7 +121,10 @@ TODO, sondern die Bedingung, unter der die Entscheidung gilt.
 
 **Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
 Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**
-Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`).
+Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`). Das gilt
+auch nach einer **Kuendigung**: die Org faellt auf das Free-Limit (100 MiB)
+zurueck, ihre bereits abgelegten Bytes bleiben vollstaendig les- und
+herunterladbar, nur der naechste Ingest antwortet mit `402`.
 Dasselbe gilt fuer den Workspace-Deckel: liegt eine Org nach einem Downgrade
 ueber ihrer Grenze, bleiben **alle** Workspaces vollstaendig nutzbar (lesen,
 schreiben, loeschen); nur die **Anlage** antwortet mit `402`,
@@ -145,7 +167,7 @@ leitet daraus das Org-Entitlement ab.
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
 | `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
 | `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
-| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
+| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes` + `wa_artifact.content_bytes`). |
 | `workspace_quota`   | Int    | Max. Anzahl Workspaces je **Organisation** (einziger Key der Konvention, der nicht je Workspace gilt). |
 
 **Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
@@ -174,16 +196,16 @@ Beispiel-Metadata für **Pro**:
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
 Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
-`mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
-unbegrenzt (`None`).
+`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
 
-Für `token_quota` **und `workspace_quota`** gilt das **nur außerhalb der Cloud**
-(On-Prem/OSS). Fehlt der
+Für `token_quota`, `storage_quota_bytes` **und `workspace_quota`** gilt das
+**nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
 Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
 angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
 Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
-„nicht gesetzt": `Entitlement.effective_token_quota` bzw.
-`effective_workspace_quota` fällt dann auf den
+„nicht gesetzt": `Entitlement.effective_token_quota`,
+`effective_storage_quota_bytes` bzw. `effective_workspace_quota` fällt dann auf
+den
 Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
 Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
 sie durchzusetzen.

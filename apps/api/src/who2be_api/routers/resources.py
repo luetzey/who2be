@@ -117,7 +117,13 @@ async def get_resource(resource_id: UUID, ctx: Ctx, service: Service) -> Resourc
     return await service.get(ctx, resource_id)
 
 
-@router.post("/{resource_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{resource_id}/duplicate",
+    status_code=status.HTTP_201_CREATED,
+    # Dasselbe Gate wie `POST /resources`: die Kopie ist eine echte neue
+    # resource-Zeile und zaehlt in `entity_quota_service._COUNT_QUERY` mit.
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def duplicate_resource(
     request: Request,

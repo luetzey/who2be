@@ -28,7 +28,7 @@ and serves them to agents at runtime through an **MCP server**.
 - **System prompt templates & external tools** — reusable prompt building
   blocks (ADR-0040) and MCP tool bindings with `tool-ref` placeholders
   (ADR-0043)
-- **MCP server** — 81 tools: read, write, full-text + semantic search
+- **MCP server** — 83 tools: read, write, full-text + semantic search
   (ADR-0046), discovery, and the feedback flywheel
   (`record_usage`/`submit_feedback`, ADR-0038); connect via stdio or the
   OAuth 2.1 remote connector (ADR-0036), e.g. to Claude Code or Claude.ai

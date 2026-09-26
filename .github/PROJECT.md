@@ -6,8 +6,9 @@ liegt in `.claude/plan/` und `docs/adr/`._
 
 ## Vorhaben: Cloud-Launch & Alltagstauglichkeit
 
-Getrackt in den Issues #402, #427–#440; Stand und Belege in
-`.claude/context/STATE.md`.
+Getrackt in #428 (Cloud-Launch) und #535 (Cloud-Härtung); Stand und Belege in
+`.claude/context/STATE.md`. Der Responsive-Block #431 ist am 2026-09-25
+geschlossen.
 
 ### Outcome
 
@@ -58,47 +59,43 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
 Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
-Stand 2026-09-05 nach dem Backlog-Aufbereitungslauf; #440 und #434 sind
-erledigt und stehen im Queue-Issue abgehakt.
+**Stand 2026-09-25 nach Aufbereitungslauf 31, gegen `main` @ `cee6478`
+gemessen.**
 
-Harte Blocker sind die drei Vorbedingungen des Cloud-Deploys (#429, #450,
-#451 → alle blockieren #454). Daneben erzwingen Datei-Kollisionen eine
-Reihenfolge, ohne echte Blocker zu sein (#453 nach #449, #452 nach #451, #430
-nach #429, #427 vor dem blockierten #436); der Rest ist Owner-Vorgabe und
-Priorität. Die Kollisionsdetails stehen im Queue-Issue, nicht hier.
+Der Cloud-Launch-Block und der Responsive-Block sind **durch**: alle Pakete aus
+#428 außer dem `human-only`-Rest (#454) liegen auf `main`, und #431 ist am
+2026-09-25 mit 6 von 6 Akzeptanzkriterien geschlossen worden. Was bleibt, ist
+schmal — die Reihenfolge folgt deshalb fast nur noch Kriterium 1 (harte
+Abhängigkeit).
 
 | Issue | Rolle in der Reihenfolge |
 |---|---|
-| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #454.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| #450 Registry-Pull als Regelweg | **Harte Abhängigkeit: blockiert #454.** Ohne den Umbau baut die Prod-Box ein anderes Artefakt, als die CI geprüft hat. Datei-disjunkt zu allem außer den Sammelpunkten. |
-| #451 Kettentest + Billing-Check im Smoke | **Harte Abhängigkeit: blockiert #454** — der Prod-Smoke braucht den Check. Reine Testarbeit, kein Produktivcode. |
-| #449 Tarife bewerben das Kontingent | Owner-Vorgabe (Cloud-Block). Vor #453 wegen der Datei-Kollision im Billing-Panel; stellt ein Produktversprechen richtig, das heute nicht zutrifft. |
-| #452 Webhook-Härtung | Owner-Vorgabe (Cloud-Block). Nach #451 — beide fassen `packages/billing/tests/` an. Geprüft und heute nicht ausnutzbar: Härtung, kein Notfall. |
-| #453 E2E-Journey „Upgrade auf Pro“ | Owner-Vorgabe (Cloud-Block), letztes Paket darin. Nach #449, sonst testet die Journey eine Oberfläche im Umbau. |
-| #438 Responsive-Fundament W0 | **Fundament vor Fläche:** öffnet #431 W1–W4. Die Owner-Vorgabe „nach dem Cloud-Launch-Block“ bindet es an den Block, nicht ans Listenende — innerhalb des Restes schlägt Fundament die Fläche. **Teils Präferenz:** wer „nach dem Block“ als „ganz hinten“ liest, schiebt es hinter #427. |
-| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. Nach #429 (Datei-Kollision) und nach #453 (weiche Kollision an `LoginPage.tsx`). Vor #427 nur wegen AC 3 unten — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht; revidiert ADR-0035, braucht also eine ablösende ADR-0052. |
-| #427 Agent-Favoriten | Fläche, öffnet nichts. Stand ursprünglich nach #436; seit #436 blockiert ist, rückt es davor — ein blockiertes Paket hält kein startbares auf. |
-| #436 Fehlercodes W0 (ADR-0051) | **`needs-decision` — nicht starten.** Wäre nach „Fundament vor Fläche“ das stärkste Paket dieser Hälfte (öffnet die Router-Wellen W1–Wn von #402) und stünde vor #438. Es steht allein deshalb hinten, weil eine Architektur-Weiche offen ist: `packages/models/.../errors.py` trägt mit `ApiProblem`/`ProblemReason` bereits einen maschinenlesbaren Fehlerschlüssel, das Issue plant die Datei als Neuanlage. Offen ist damit, ob Who2Be zwei Fehler-Vokabulare nebeneinander bekommt. Drei Optionen stehen als Kommentar am Issue; nach der Entscheidung rückt #436 vor #438. |
+| **#632** Passkey registrieren (#435 W2a) | **Fundament vor Fläche:** öffnet #633. Einziges Paket, das heute ohne Owner-Antwort und ohne Docker startbar ist. Fasst `e2e/helpers/auth.ts` bewusst **nicht** an. |
+| **#633** Step-up mit Passkey (#435 W2b) | **Harte Abhängigkeit: nach #632** — ohne registrierbaren Faktor ist der Step-up nicht testbar. Zusätzlich nach PR #631 (beide ändern `LoginPage.tsx`). |
+| **#624** Statusaktionen auf dem Phone | **`needs-decision` — nicht starten.** Alle Felder stehen, die Design-Weiche (Bottom-Bar / Sticky / `DetailHeader`) ist Produktverhalten und nicht aus dem Repo belegbar. Drei Optionen mit Empfehlung stehen als Kommentar; nach der Antwort ohne weiteres Refinement startbar. |
+| **#540** Rate-Limit an der Kante | **`needs-decision` und umgebungsblockiert.** Letztes offenes Kind von #535. Braucht die Mechanismus-Entscheidung (A/B/C im Issue) **und** einen Docker-Daemon — in Cloud-Sessions seit neunzehn Läufen nicht vorhanden. Steht hinten wegen der Umgebung, nicht wegen geringer Bedeutung. |
 
-Erledigt und deshalb aus der Tabelle genommen: **#440** (CI überspringt
-Doku-Jobs, PR #445) und **#434** (Cloud-Readiness-Inventar, PR #448) — beide
-am 2026-09-05 gemergt. #434 hat den Zuschnitt von #449 bis #454 freigegeben.
+Erledigt und deshalb aus der Tabelle genommen: der gesamte Cloud-Launch-Block
+(#429, #449–#453), der Responsive-Block (#438, #500, #513, #561–#573 sowie die
+Welle-7-Pakete #615–#623) und die fünf Härtungs-Kinder von #535
+(#536–#539, #576).
 
 Danach oder parallel, außerhalb der Warteschlange:
 
-- **#428, #402, #431** — Tracking-Issues (`size/M`). Sie folgen ihren Kindern
-  und werden erst nach deren Abschluss neu zugeschnitten. #428 ist am
-  2026-09-05 in sechs Kinder zerlegt (#449–#454), seine beiden
-  `needs-decision`-Weichen sind beantwortet. #402 → #436 und #431 → #438
-  haben je ihre nächste Welle herausgelöst.
-- **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Die Vorbedingung
-  ist mit W1 (#499) erfüllt: alle drei Stacks pinnen `supabase/gotrue:v2.196.0`
-  (`docker-compose.yml:63`, `deploy/hetzner/supabase/docker-compose.yml:63`,
-  `deploy/dokploy/docker-compose.yml:81`), der WebAuthn-Faktor ist
-  serverseitig verfügbar. Offen ist W2, die Passkey-UI.
+- **#428, #535** — Tracking-Issues (`size/M`, beide `needs-decision`). Sie
+  folgen ihren Kindern. #428: sieben von acht Kindern erledigt, offen nur #454.
+  #535: fünf von sechs, offen nur #540. Beide warten auf je eine Owner-Antwort,
+  die nichts blockiert.
+- **#435 Passkeys** (`size/M`) — Tracking. W1 (#499) ist gemergt: alle drei
+  Stacks pinnen `supabase/gotrue:v2.196.0` (`docker-compose.yml:63`,
+  `deploy/hetzner/supabase/docker-compose.yml:63`,
+  `deploy/dokploy/docker-compose.yml:81`), der WebAuthn-Faktor ist serverseitig
+  verfügbar. W2 ist am 2026-09-25 in **#632** und **#633** geschnitten.
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
-  Voraussetzungen: #429, #450, #451.
+  **Alle Code-Voraussetzungen sind erfüllt.**
+- **#542 Rechnungsstellung und Umsatzsteuer** (`human-only`) — braucht
+  steuerliche Beratung, kein Agent claimt das.
 - **#338 Owner-Checkliste** (`human-only`) — O2 (Merge-Strategie, Description,
   Topics) und O3 (CLA-Assistant). Jederzeit parallel, kein Agent claimt das.
   Die **Branch-Protection** aus O2 ist seit 2026-09-22 erledigt (Ruleset

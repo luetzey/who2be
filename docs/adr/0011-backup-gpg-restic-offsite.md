@@ -93,5 +93,71 @@ stillschweigend geloescht, sondern datiert ersetzt:
 Nicht Teil dieser Revision und weiterhin offen: RPO-Senkung / WAL-Archivierung, die
 ungetesteten SeaweedFS-Blob-Kommandos (#532), der Restore-Drill (MS-3 H4 / #454).
 
+## Nachtrag 2026-09-25 — Der Backup-Lauf umfasst alle drei Datenbestaende (W8/M3)
+
+Diese ADR und `backup.sh` kannten bis hierher nur Postgres. Seit ADR-0048
+(Objekt-Store) und ADR-0049 (Tabellen-Store je WorkArea) liegen zwei weitere
+Nutzdaten-Bestaende ausserhalb der Datenbank: Postgres fuehrt von beiden nur den
+Katalog (`wa_blob`, `wa_table`). Ein `pg_dump`-Restore allein ergibt damit eine
+DB, deren Blob-Referenzen ins Leere zeigen, und leere Agenten-Tabellen.
+
+Beschrieben war das im RUNBOOK laengst — als **Handarbeit**. Zwischen Doku und
+Automatisierung klaffte eine Luecke, die im Ernstfall zwei Drittel der Nutzdaten
+gekostet haette. Sie wird geschlossen:
+
+- **`backup.sh` sichert drei Bestaende**, alle nach `${BACKUP_DIR}` und damit in
+  **einen** restic-Snapshot: `pg_dump | gpg`, `aws s3 sync --delete` des
+  Objekt-Store-Buckets, `VACUUM INTO`-Snapshots aller Area-SQLites.
+- **Teilerfolg ist kein Erfolg.** Scheitert eine Stufe, endet der Lauf mit
+  Exit != 0 und der Dead-Man's-Switch aus dem Nachtrag 2026-09-21 bleibt stumm.
+  Ein gruener Lauf ist die Zusage „dieser Snapshot traegt den vollstaendigen
+  Zustand"; ein halb gesichertes Backup darf sie nicht abgeben. Die Stufen
+  brechen dabei nicht beim ersten Fehler ab — der Operator soll alle Baustellen
+  eines Laufs kennen.
+- **Unvollstaendige Snapshots sind als solche markiert:** `--tag incomplete`
+  statt `--tag dump`. Die Daten gehen trotzdem offsite (ein Ausfall des
+  Objekt-Stores soll den Dump nicht am Boden halten), koennen sich beim Restore
+  aber nicht als vollstaendiger Stand ausgeben; die RUNBOOK-Restore-Pfade
+  filtern auf `--tag dump`.
+- **Fehlende Store-Konfiguration ist FATAL**, nicht „still uebersprungen" —
+  stilles Ueberspringen ist genau der Fehlermodus, den dieser Nachtrag behebt.
+  Abwahl nur ausdruecklich per `BACKUP_BLOBS=off` / `BACKUP_TABLESTORE=off`
+  (On-Prem-Installationen ohne den jeweiligen Store).
+- **Konsistenz-Grenze des Tabellen-Store-Snapshots:** `VACUUM INTO` liefert
+  einen in sich konsistenten SQLite-Stand, haelt aber nicht den prozesslokalen
+  Area-Write-Lock der API — ein fachlicher Vorgang ueber mehrere Transaktionen
+  kann mittendrin erwischt werden (technisch intakte Datei, fachlich halber
+  Import). Dokumentiert im RUNBOOK unter „Tabellen-Store-Backup".
+- **Der Lauf darf den Schreibpfad der API nicht beruehren.** Eine WAL-Datenbank
+  legt ihre Seitendateien (`-wal`, `-shm`) beim Oeffnen an — auch bei einem
+  reinen Leser, und nachts ist genau das der Regelfall, weil die API je Query
+  oeffnet und schliesst. Entstuenden sie unter der Kennung des Backup-Laufs,
+  koennte die API die betroffene Area anschliessend nur noch lesen, nicht mehr
+  schreiben: ein stiller Fehlermodus, der erst beim naechsten Tabellen-Schreiben
+  auffiele. Deshalb laeuft der Lesevorgang je Datei unter der Kennung ihres
+  Eigentuemers (`su-exec`) — und das Ergebnis wird **gemessen**, nicht
+  angenommen: eine Seitendatei mit fremder Kennung macht die Area zum
+  Fehlschlag. Bewusst nicht gewaehlt: sich darauf zu verlassen, dass SQLite die
+  Kennung selbst nachzieht (das gelingt nur mit `CAP_CHOWN` und faellt still um,
+  wenn die Capability entzogen wird), und die Seitendateien nachtraeglich zu
+  loeschen (ein paralleler Leser der API koennte den WAL-Index gemappt haben).
+- Der Tabellen-Snapshot entsteht in einem Vorlauf **im Zielverzeichnis** und
+  wird erst nach bestandener Pruefung per `rename(2)` an seinen Platz geschoben;
+  der Rueckgabewert wird ausgewertet. Auf demselben Dateisystem ist der
+  Austausch unteilbar — ueber eine Grenze hinweg (Container-Writable-Layer vs.
+  Backups-Volume) waere er ein Kopiervorgang, der an vollem Platz scheitern oder
+  abgebrochen werden kann und das Ziel dabei ueberschreibt. Der letzte gute
+  Snapshot ist genau der Stand, auf den ein Restore zurueckfaellt; er darf durch
+  einen gescheiterten Lauf weder beschaedigt noch als Erfolg gezaehlt werden.
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (14 Faelle,
+  stub-basiert, kein Docker-Daemon noetig) — insbesondere Fall 7–9:
+  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`; Fall 12–13:
+  Backup-Lauf und Store unter verschiedenen Kennungen, mit und ohne
+  `CAP_CHOWN`; Fall 14: volllaufendes Backup-Ziel auf einem eigenen
+  Dateisystem ⇒ Lauf rot, kein Heartbeat, Vortags-Snapshot unversehrt.
+
+Weiterhin offen: der Restore-Drill (M2 / #454) — er ist der Beleg, dass die drei
+Bestaende zusammen auch wirklich zurueckkommen.
+
 </content>
 </invoke>

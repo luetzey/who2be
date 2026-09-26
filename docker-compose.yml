@@ -157,6 +157,12 @@ services:
     image: nginx:1.27-alpine
     volumes:
       - ./supabase/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      # Schreibt /etc/nginx/resolver.conf beim Start aus der DNS-Adresse des
+      # Containers — gateway.conf includiert sie. Ohne diesen Mount fehlt die
+      # Datei und nginx startet nicht. Unter Docker ist das Ergebnis
+      # `127.0.0.11` wie zuvor, unter rootless Podman die dort gueltige Adresse
+      # (fest verdrahtet lief jeder Signup stumm in ein 502).
+      - ./docker/10-who2be-nginx-resolver.sh:/docker-entrypoint.d/10-who2be-nginx-resolver.sh:ro
     ports:
       - "9999:9999"
     depends_on:

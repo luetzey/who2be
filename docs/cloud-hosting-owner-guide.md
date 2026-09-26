@@ -63,7 +63,7 @@ Kunde dich real Geld kosten kann.
 | RLS in der Cloud-Edition (Rolle `who2be_app`) | `deploy/hetzner/who2be/docker-compose.cloud.yml` |
 | Redis als geteilter Rate-Limit-Storage | `apps/api/src/who2be_api/core/rate_limit.py` |
 | Caddy: TLS, Security-Header, 32-MB-Body-Cap, `/v1/internal/*` geblockt | `deploy/hetzner/Caddyfile` |
-| Backup: GPG-pg_dump + restic-Offsite | `deploy/hetzner/scripts/backup.sh` |
+| Backup: GPG-pg_dump + Objekt-/Tabellen-Store + restic-Offsite | `deploy/hetzner/scripts/backup.sh` |
 | Lösch-Lebenszyklus Soft-Delete → 30 Tage → Hard-Purge | `docs/compliance/data-retention-and-erasure.md` |
 | DSGVO-Datenexport (Art. 20) | `apps/api/src/who2be_api/routers/gdpr.py:32` |
 | Coming-Soon-Modus (Registrierung zu, Login offen) | `apps/web/src/features/auth/pages/SignupPage.tsx:74` |
@@ -71,7 +71,8 @@ Kunde dich real Geld kosten kann.
 
 ### Fehlt — Owner-Schritte (kann nur der Owner)
 
-1. Hetzner-Box bestellen, DNS setzen, At-Rest-Verschlüsselung wählen.
+1. Hetzner-Box bestellen, DNS setzen, LUKS-Verschlüsselung des Daten-Volumes
+   einrichten (vor dem ersten Start).
 2. Repo-Variablen `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PROJECT_DIR` und
    das Secret `DEPLOY_SSH_KEY` setzen. **Solange `DEPLOY_HOST` fehlt,
    überspringt sich der Deploy-Job still** — die `if:`-Bedingung des Jobs
@@ -125,15 +126,19 @@ Hier die Reihenfolge mit den Entscheidungen, die *dabei* fallen.
 
 ### Schritt 2 — At-Rest-Verschlüsselung (VOR dem ersten `docker compose up`)
 
-Zwei Varianten, beide im
+Es gibt nur **einen** gültigen Weg, beschrieben im
 [RUNBOOK §Verschlüsselung at-Rest](../deploy/hetzner/RUNBOOK.md#verschluesselung-at-rest-postgres-volume):
+**selbst verwaltetes LUKS auf dem Host.**
 
-- **Variante A:** verschlüsseltes Hetzner-Cloud-Volume (Plattform-LUKS).
-  Einfach, der Nachweis ist eine Eigenschaft in der Hetzner-Konsole.
-- **Variante B:** selbst verwaltetes LUKS auf dem Host. Mehr Kontrolle,
-  aber: **Der Passphrase-Prompt beim Boot bedeutet, dass ein Neustart
-  manuelle Arbeit ist.** Wer nachts nicht aufstehen will, nimmt A oder legt
-  sich ein Key-File plus dokumentiertes Risiko zurecht.
+Die früher hier genannte „Variante A" (verschlüsseltes Hetzner-Cloud-Volume,
+Plattform-LUKS) **existiert nicht** — Hetzner verschlüsselt Cloud Volumes nicht
+serverseitig, die eigenen TOMs führen „Encryption of Data (at rest)" als
+*Client’s responsibility*. Es gibt also auch keine Console-Eigenschaft, die man
+als Nachweis abhaken könnte.
+
+Praktisch heißt das: Der Boot braucht ein **Key-File** (Mode 600, nicht im Repo,
+nicht im Klartext-Backup) in `/etc/crypttab`, sonst ist jeder Neustart manuelle
+Arbeit am Passphrase-Prompt. Verwahrung des Key-Files dokumentieren.
 
 Nachträglich lässt sich das nur mit Downtime und Datenumzug nachholen —
 deshalb jetzt.
@@ -152,9 +157,13 @@ sudo systemctl reload ssh
 sudo apt-get install -y unattended-upgrades fail2ban
 ```
 
-**Zusätzlich die Hetzner-Cloud-Firewall** (nicht nur UFW auf dem Host)
-aktivieren: sie filtert, bevor Pakete die VM erreichen, und überlebt einen
-Konfigurationsfehler im Host.
+**Die Hetzner-Cloud-Firewall ist Pflicht, nicht Kür** — und nicht durch UFW
+ersetzbar. Docker leitet Pakete an veröffentlichte Container-Ports in der
+`nat`-Tabelle um, *bevor* sie die `INPUT`-Kette erreichen, die UFW benutzt; die
+UFW-Regel greift dann gar nicht mehr (Docker Docs, „Docker and ufw"). Die
+Cloud-Firewall filtert dagegen vor der VM und überlebt einen
+Konfigurationsfehler im Host. UFW bleibt sinnvoll für Dienste, die direkt auf
+dem Host lauschen (SSH) — als zweite Schicht, nicht als die erste.
 
 ### Schritt 4 — DNS
 
@@ -523,11 +532,16 @@ Architektur — aber du musst sie kennen und behandeln:
 
 ### Was läuft
 
-Täglich um 03:15 UTC: `pg_dump -Fc` → GPG → lokal unter
-`/var/backups/who2be`, dann restic nach Hetzner Storage Box. Retention
-lokal 7 Tage, offsite 7 täglich / 4 wöchentlich / 6 monatlich. Dazu
-dokumentierte Pfade für den Blob-Store (SeaweedFS) und die
-SQLite-Tabellenspeicher.
+Täglich um 03:15 UTC sichert ein Lauf **alle drei Datenbestände**: `pg_dump -Fc`
+→ GPG, den Blob-Store (SeaweedFS) per inkrementellem `s3 sync` und die
+SQLite-Tabellenspeicher per `VACUUM INTO`-Snapshot — alles lokal unter
+`/var/backups/who2be`, dann restic in **einem** Snapshot nach Hetzner Storage
+Box. Retention lokal 7 Tage (nur die Dumps; Spiegel und Snapshots sind je eine
+Kopie), offsite 7 täglich / 4 wöchentlich / 6 monatlich.
+
+Scheitert eine der drei Stufen, endet der Lauf rot, der Heartbeat bleibt aus,
+und der Snapshot wird als `incomplete` markiert — ein halbes Backup meldet nie
+„alles gut".
 
 ### Vier Dinge, die du wissen musst
 

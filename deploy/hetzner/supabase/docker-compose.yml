@@ -7,6 +7,23 @@
 #   1. supabase-Stack starten (dieser File) — erzeugt supabase-net.
 #   2. who2be-Stack (deploy/hetzner/who2be/docker-compose.yml) — haengt
 #      sich per `external: true` ins supabase-net rein.
+#
+# --- Container-Haertung (W8/S1-S3) -------------------------------------------
+# Gleiche drei Blöcke wie im App-Stack, an JEDEM Dienst inkl. der
+# `studio`-Profil-Dienste. Begruendung und Norm-Bezug (BSI SYS.1.6.A15/A17):
+# siehe ../who2be/docker-compose.yml; die Werte-Herleitung steht in
+# `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`. Beide Stacks
+# teilen sich die 8 GB der CX32, deshalb sind die Deckel aufeinander geeicht.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+
 services:
   db:
     image: supabase/postgres:15.1.1.78
@@ -34,6 +51,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    <<: *hardening
+    # Groesster legitimer Verbraucher im Gesamtsystem und deshalb der hoechste
+    # Deckel: shared_buffers, work_mem je Verbindung, Autovacuum-Worker. Der
+    # Punkt ist nicht, Postgres zu beschraenken, sondern das Gegenteil — solange
+    # KEIN Container einen Deckel hat, sucht der Host-OOM-Killer sich das
+    # groesste Ziel, und das ist Postgres. Mit Deckeln an allen anderen
+    # Diensten trifft es kuenftig den Ausreisser statt die DB im Schreiben.
+    # 3g von 8 GB laesst dem Rest des Systems ausreichend Luft.
+    mem_limit: 3g
 
   # Einmal-Service: setzt das Passwort von supabase_auth_admin auf
   # POSTGRES_PASSWORD. Das supabase/postgres-Image legt diese GoTrue-Rolle an,
@@ -58,6 +84,9 @@ services:
         condition: service_healthy
     networks: [supabase-net]
     restart: "no"
+    <<: *hardening
+    # One-Shot: ein `psql -c "ALTER ROLE …"` in einer Warteschleife.
+    mem_limit: 128m
 
   auth:
     image: supabase/gotrue:v2.196.0
@@ -186,6 +215,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # GoTrue ist ein zustandsloser Go-Dienst: JWT-Signatur/-Pruefung, TOTP,
+    # OAuth-Weiterleitungen; der Zustand liegt in Postgres. Typischer
+    # Resident-Bedarf zweistellig MB. 512m ist ein Vielfaches davon.
+    mem_limit: 512m
 
   auth-gateway:
     image: nginx:1.27-alpine
@@ -203,6 +237,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # Reiner Pfad-/Header-Proxy vor GoTrue, liefert keine Dateien aus —
+    # niedrigster Dauerdienst-Deckel im Stack.
+    mem_limit: 128m
 
   meta:
     image: supabase/postgres-meta:v0.83.2
@@ -219,6 +257,10 @@ services:
         condition: service_healthy
     networks: [supabase-net]
     restart: unless-stopped
+    <<: *hardening
+    # Profil `studio` (default AUS): Node-Dienst, der Schema-Metadaten
+    # abfragt. Zaehlt nicht ins Dauerbudget.
+    mem_limit: 512m
 
   studio:
     image: supabase/studio:20240624-2eb04f3
@@ -239,6 +281,11 @@ services:
       - meta
     networks: [supabase-net]
     restart: unless-stopped
+    <<: *hardening
+    # Profil `studio` (default AUS): Next.js-Server, der hungrigste der
+    # Profil-Dienste. Wer Studio zuschaltet, tut das bewusst und
+    # voruebergehend — deshalb steht 1g hier NICHT im Dauerbudget.
+    mem_limit: 1g
 
 networks:
   supabase-net:

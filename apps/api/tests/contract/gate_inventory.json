@@ -1,0 +1,288 @@
+{
+  "gated": [
+    {
+      "path": "/agents",
+      "name": "create_agent",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/agents/{agent_id}/copy",
+      "name": "copy_agent",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/artifacts",
+      "name": "create_artifact_in_private_area",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/external_tools",
+      "name": "create_external_tool",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/ingest",
+      "name": "ingest_into_private_area",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/personas",
+      "name": "create_persona",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/personas/{persona_id}/duplicate",
+      "name": "duplicate_persona",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/playbooks",
+      "name": "create_playbook",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/resources",
+      "name": "create_resource",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/resources/{resource_id}/duplicate",
+      "name": "duplicate_resource",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/wa-artifacts/{artifact_id}/append",
+      "name": "append_artifact",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/wa-artifacts/{artifact_id}/promote",
+      "name": "promote_artifact",
+      "gates": [
+        "enforce_entity_quota"
+      ]
+    },
+    {
+      "path": "/wa-tables/{table_id}/query",
+      "name": "query_table",
+      "gates": [
+        "enforce_mcp_read_limit"
+      ]
+    },
+    {
+      "path": "/wa-tables/{table_id}/save-result",
+      "name": "save_query_result",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/work-areas/{area_id}/artifacts",
+      "name": "create_artifact",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/work-areas/{area_id}/ingest",
+      "name": "ingest_into_area",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    }
+  ],
+  "ungated": [
+    {
+      "path": "/agent-memories",
+      "name": "save_memory",
+      "reason": "Memory-Vorschlag eines Agenten, keine Inhalts-Entity: agent_memory steht nicht in entity_quota_service._COUNT_QUERY. Gebremst nur durch write_limit."
+    },
+    {
+      "path": "/agents/{agent_id}/memories/{memory_id}/triage",
+      "name": "triage_memory",
+      "reason": "Statuswechsel an einem bestehenden Memory (approve/reject), legt nichts Neues an."
+    },
+    {
+      "path": "/external_tools/{tool_id}/versions/{version}/restore",
+      "name": "restore_external_tool_version",
+      "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
+    },
+    {
+      "path": "/external_tools/{tool_id}/versions/{version}/transition",
+      "name": "transition_external_tool_version",
+      "reason": "Reiner Statuswechsel einer bestehenden Version (draft/active/archived), legt nichts an."
+    },
+    {
+      "path": "/feedback",
+      "name": "submit_feedback",
+      "reason": "Qualitatives Feedback zu einem Element; zaehlt in keinem Kontingent, und ein Deckel darauf wuerde den Rueckmeldeweg verschliessen."
+    },
+    {
+      "path": "/feedback/{feedback_id}/resolution",
+      "name": "set_feedback_resolution",
+      "reason": "Setzt den Triage-Status eines bestehenden Feedbacks, legt nichts an."
+    },
+    {
+      "path": "/invitations",
+      "name": "create_invitation",
+      "reason": "Mitglieder-Einladung. Eine Sitzplatz-Grenze ist kein heutiges Entitlement-Feld (plans.md fuehrt keine Seat-Spalte); ein Gate hier waere eine Produktentscheidung, kein Nachziehen."
+    },
+    {
+      "path": "/kb/edges",
+      "name": "create_edge",
+      "reason": "Kante der kuratierten Knowledge Base; zaehlt in keinem Kontingent (plans.md fuehrt die KB in keiner Spalte)."
+    },
+    {
+      "path": "/kb/nodes",
+      "name": "create_node",
+      "reason": "Node der kuratierten Knowledge Base; zaehlt in keinem Kontingent (plans.md fuehrt die KB in keiner Spalte)."
+    },
+    {
+      "path": "/oauth/consent",
+      "name": "consent",
+      "reason": "Schritt im OAuth-Autorisierungsfluss (Zustimmung erteilen), kein Create einer kontingentierten Ressource."
+    },
+    {
+      "path": "/oauth/consent/preview",
+      "name": "consent_preview",
+      "reason": "Read in POST-Form (zeigt die angefragten Scopes vor der Zustimmung), legt nichts an."
+    },
+    {
+      "path": "/oauth/register",
+      "name": "register_client",
+      "reason": "Dynamische Client-Registrierung (RFC 7591) im OAuth-Fluss; liegt vor jeder Workspace-Bindung, gegen die ein Gate pruefen koennte."
+    },
+    {
+      "path": "/oauth/token",
+      "name": "token",
+      "reason": "Token-Endpunkt des OAuth-Flusses. Gehoert zum Zugang selbst — ein Quota-Gate hier deckelte die Anmeldung, nicht die Nutzung."
+    },
+    {
+      "path": "/personas/{persona_id}/versions/{version}/restore",
+      "name": "restore_persona_version",
+      "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
+    },
+    {
+      "path": "/personas/{persona_id}/versions/{version}/transition",
+      "name": "transition_persona_version",
+      "reason": "Reiner Statuswechsel einer bestehenden Version (draft/active/archived), legt nichts an."
+    },
+    {
+      "path": "/playbooks/{playbook_id}/versions/{version}/restore",
+      "name": "restore_playbook_version",
+      "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
+    },
+    {
+      "path": "/playbooks/{playbook_id}/versions/{version}/transition",
+      "name": "transition_playbook_version",
+      "reason": "Reiner Statuswechsel einer bestehenden Version (draft/active/archived), legt nichts an."
+    },
+    {
+      "path": "/resources/{resource_id}/versions/{version}/restore",
+      "name": "restore_resource_version",
+      "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
+    },
+    {
+      "path": "/resources/{resource_id}/versions/{version}/transition",
+      "name": "transition_resource_version",
+      "reason": "Reiner Statuswechsel einer bestehenden Version (draft/active/archived), legt nichts an."
+    },
+    {
+      "path": "/system-feedback",
+      "name": "submit_system_feedback",
+      "reason": "Problemmeldung an die Plattform selbst; ein Deckel darauf wuerde den Meldeweg verschliessen."
+    },
+    {
+      "path": "/system-prompts",
+      "name": "create_template",
+      "reason": "system_prompt_template steht nicht in entity_quota_service._COUNT_QUERY — die Entity-Grenze kennt diesen Typ nicht, ein Gate waere heute wirkungslos. Ob er mitzaehlen soll, ist eine Produktfrage (plans.md fuehrt ihn in keiner Spalte)."
+    },
+    {
+      "path": "/system-prompts/{template_id}/duplicate",
+      "name": "duplicate_template",
+      "reason": "Wie POST /system-prompts: system_prompt_template zaehlt in keinem Kontingent."
+    },
+    {
+      "path": "/system-prompts/{template_id}/versions/{version}/restore",
+      "name": "restore_template_version",
+      "reason": "Legt eine neue VERSION eines bestehenden Templates an; Versionen zaehlen in keinem Kontingent."
+    },
+    {
+      "path": "/system-prompts/{template_id}/versions/{version}/transition",
+      "name": "transition_template_version",
+      "reason": "Reiner Statuswechsel einer bestehenden Version, legt nichts an."
+    },
+    {
+      "path": "/tokens",
+      "name": "create_token",
+      "reason": "GRENZE DER METHODE, kein Befund: die Route IST gedeckelt (token_quota, Issue #538), aber ihr Gate sitzt als TokenService._enforce_token_quota im Service und nicht als FastAPI-Dependency — ueber route.dependant also nicht sichtbar. Verschwindet dieses Gate, faengt dieser Test es nicht."
+    },
+    {
+      "path": "/tokens/{token_id}/rotate",
+      "name": "rotate_token",
+      "reason": "Ersetzt ein bestehendes Token; die Zahl nutzbarer Tokens bleibt gleich — den Bestand deckelt das token_quota-Gate an create_token."
+    },
+    {
+      "path": "/usage-events",
+      "name": "record_usage",
+      "reason": "Append-only-Telemetrie (welches Element wurde genutzt). Ein Quota-Gate deckelte die Messung selbst; gebremst durch write_limit."
+    },
+    {
+      "path": "/v1/invitations/{token}/accept",
+      "name": "accept_invitation",
+      "reason": "Beitritt zu einer bestehenden Einladung. Der Deckel gehoert, wenn ueberhaupt, an das Ausstellen — nicht an das Annehmen, wo er einen eingeladenen Nutzer aussperren wuerde."
+    },
+    {
+      "path": "/v1/organizations",
+      "name": "create_organization",
+      "reason": "Legt die Organisation an, die ein Entitlement erst traegt — vor diesem Aufruf existiert kein org_entitlement, gegen das ein Gate pruefen koennte."
+    },
+    {
+      "path": "/v1/organizations/{organization_id}/workspaces",
+      "name": "create_organization_workspace",
+      "reason": "GRENZE DER METHODE, kein Befund: die Route IST gedeckelt (workspace_quota, Issue #576), aber ihr Gate sitzt als WorkspaceService._enforce_workspace_quota im Service und nicht als FastAPI-Dependency — ueber route.dependant also nicht sichtbar. Verschwindet dieses Gate, faengt dieser Test es nicht."
+    },
+    {
+      "path": "/wa-tables/{table_id}/rows",
+      "name": "insert_rows",
+      "reason": "Zeilen des Tabellen-Stores. Der Store zaehlt bewusst in keinem Speicherkontingent (ADR-0049, derselbe Vorbehalt steht in storage_quota_service)."
+    },
+    {
+      "path": "/work-areas",
+      "name": "create_work_area",
+      "reason": "WorkArea ist ein Container, keine Inhalts-Entity und steht nicht in _COUNT_QUERY. Gedeckelt wird der Inhalt (Ingest via enforce_storage_quota), nicht die Huelle."
+    },
+    {
+      "path": "/work-areas/{area_id}/category-rules",
+      "name": "upsert_category_rule",
+      "reason": "Konfiguration einer WorkArea (Kategorisierungs-Regel), keine Nutzdaten-Entity; zaehlt in keinem Kontingent."
+    },
+    {
+      "path": "/work-areas/{area_id}/tables",
+      "name": "create_table",
+      "reason": "Tabelle des Tabellen-Stores; wie insert_rows bewusst ausserhalb des Speicherkontingents (ADR-0049)."
+    }
+  ]
+}

@@ -97,8 +97,13 @@ Backups (siehe `deploy/hetzner/scripts/backup.sh`,
 
 | Pfad | Verfahren | Retention |
 |---|---|---|
-| Lokal (C5a) | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
-| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box) | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+| Lokal (C5a) — Postgres | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
+| Lokal (C5a) — Objekt-Store | `aws s3 sync --delete` des Buckets (ADR-0048) | genau **ein** Spiegel, in place ueberschrieben |
+| Lokal (C5a) — Tabellen-Store | `VACUUM INTO`-Snapshot je Area-SQLite (ADR-0049) | genau **ein** Snapshot je Area |
+| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box), alle drei in einem Snapshot | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+
+Das `--delete` im Objekt-Sync und die Bereinigung verwaister Area-Snapshots
+sorgen dafuer, dass geloeschte Daten nicht ueber den lokalen Spiegel weiterleben.
 
 **Problem:** Ein zwischen Loeschung und Backup-Ablauf gezogenes Backup enthaelt
 noch die geloeschten Daten. Eine selektive Loeschung **innerhalb** verschluesselter,
@@ -217,9 +222,33 @@ Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
 ## 5 · Server-Logs / Zugriffsdaten
 
-Reverse-Proxy-/App-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB
-(Caddy/Container-Logs). Retention/Loeschung: `<PLATZHALTER: konkrete Log-
-Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
+Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
+Caddy schreibt sie nach `/var/log/caddy/access.log` auf dem Volume `caddy-logs`
+(`deploy/hetzner/Caddyfile`, Snippet `access_log`).
+
+**Retention: 14 Tage.** Durchgesetzt wird sie von einem **Host-Cron**, der die
+aktive Datei taeglich rotiert und Generationen aelter als 14 Tage loescht
+(Einrichtung und Quartals-Pruefung: [`RUNBOOK.md` §Access-Logs](../../deploy/hetzner/RUNBOOK.md#access-logs--ressourcen-limits)).
+Die Caddy-Konfiguration allein traegt die Frist **nicht**: `roll_size 10MiB` /
+`roll_keep 10` begrenzen die Groesse, und `roll_keep_for 336h` wirkt nur auf
+bereits rotierte Generationen — bei geringem Anfrageaufkommen kann die aktive
+Datei laenger als 14 Tage bestehen. `roll_keep_for` ist deshalb die zweite,
+unabhaengige Grenze, nicht die erste.
+
+**Restrisiko, benannt statt weggelassen:** Faellt der Cron aus, wird die Frist
+ueberschritten, ohne dass etwas ausfaellt. Der Quartals-Check im RUNBOOK prueft
+genau das (aelteste Generation, letzter Rotationszeitpunkt).
+
+**Was gar nicht erst geschrieben wird:** Caddy redigiert `Cookie`,
+`Set-Cookie`, `Authorization` und `Proxy-Authorization` per Default zu
+`REDACTED` (die Server-Option `log_credentials`, die das abschalten wuerde, ist
+nicht gesetzt). Query-Werte sind davon nicht erfasst — weil `api.<DOMAIN>` den
+OAuth-Authorization-Endpunkt traegt (ADR-0036), ersetzt ein `format
+filter`-Block die Parameter `code`, `token`, `access_token` und
+`refresh_token`, bevor die Zeile die Platte erreicht.
+
+Container-Logs (stdout/stderr je Dienst) sind unabhaengig davon auf 3 x 10 MB
+gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 ---
 
@@ -240,7 +269,7 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
-| Server-Logs | `<PLATZHALTER>` | Log-Rotation |
+| Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron (taegliche Rotation + Loeschung aelter 14 Tage, RUNBOOK §Access-Logs); `roll_keep_for 336h` als zweite Grenze, `logging:`-Limits fuer Container-Logs |
 
 ---
 
