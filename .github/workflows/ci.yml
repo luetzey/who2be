@@ -541,6 +541,126 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  backup-alarm:
+    # Bindet `deploy/hetzner/tests/test_backup_alarm.sh` in die CI (Karte
+    # t_5c8d5364). Die Suite traegt 14 Faelle / 60 Assertions und belegt die
+    # Kernzusagen der Backup-Automatisierung (#541, W8/M3): ein Teilerfolg loest
+    # keinen gruenen Heartbeat aus, der Lauf verbiegt den SQLite-Schreibpfad der
+    # API nicht, ein volllaufendes Ziel macht den Lauf rot und laesst den letzten
+    # guten Snapshot unversehrt. Sie lief bis hierher in KEINEM Job — zwei
+    # Review-Runden haben in ihr zwei Regressionen gefunden, die sie nachtraeglich
+    # faengt; ohne CI-Bindung schuetzt sie den naechsten Umbau nicht.
+    #
+    # Eigener Job statt eines Steps in `python`: die Suite braucht weder uv noch
+    # Postgres (pg_dump/gpg/restic/curl/aws sind PATH-Stubs, nur `sqlite3` ist
+    # echt) und laeuft in rund 1,5 s. In `python` wartete sie hinter `uv sync`
+    # und dem Postgres-Service; hier ist ihr Signal unabhaengig ablesbar.
+    #
+    # Gegatet wie die anderen schweren Jobs: `deploy/hetzner/**` faellt nie unter
+    # die Doku-Allowlist des `changes`-Jobs, ein Diff an Suite oder `backup.sh`
+    # ergibt also immer `code=true`. Bei einem echten Doku-PR meldet der Job
+    # legitim `skipped` — genau die Erwartung, die `all-green` unten prueft.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: User-Namespaces freischalten (ubuntu-24.04 sperrt sie per AppArmor)
+        # GEMESSEN, nicht vermutet: der erste Lauf dieses Jobs (Run 36214622853,
+        # Job 108328036706) hat auf `ubuntu-latest` ergeben
+        #   apparmor_restrict_unprivileged_userns=1
+        #   userns: unshare -rm --map-auto NICHT verfuegbar
+        #   tmpfs im userns: NICHT verfuegbar
+        # Damit haetten die Faelle 12-14 in CI nie gelaufen — und das sind die
+        # drei, die die Zusage tragen (Fall 13 ist der einzige, der die
+        # Vorfassung rot faerbt, Fall 14 der einzige mit echter
+        # Dateisystem-Grenze). Der Schalter im Test-Step hat den Job deshalb rot
+        # gefaerbt statt still gruen zu melden; dieser Step nimmt die Ursache weg.
+        #
+        # Die Sperre ist eine Ubuntu-24.04-Haertung (AppArmor-Profil fuer
+        # unprivilegierte userns), kein Kernel-Feature-Mangel: `max_user_namespaces`
+        # steht bei 63838, `unshare` und `setpriv` sind vorhanden. Der sysctl-Knopf
+        # hebt genau diese Haertung auf. Runner sind ephemer und pro Job frisch —
+        # die Aenderung wirkt nur in diesem Lauf.
+        #
+        # FAIL-CLOSED: laesst sich die Faehigkeit nicht herstellen, bricht dieser
+        # Step ab, statt den Test-Step in einen Skip laufen zu lassen. Ein
+        # gruener Job ohne die Faelle 12-14 waere schlimmer als gar keiner.
+        run: |
+          set -uo pipefail
+          before="$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+          echo "apparmor_restrict_unprivileged_userns (vorher)=${before}"
+          if [ "${before}" = "1" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          if ! unshare -rm --map-auto true 2>/dev/null; then
+            echo "::error title=User-Namespaces nicht verfuegbar::Die Faelle 12-14 von \
+          test_backup_alarm.sh brauchen unprivilegierte User-Namespaces \
+          (unshare -rm --map-auto). Sie liessen sich auf diesem Runner nicht \
+          freischalten (apparmor_restrict_unprivileged_userns=${before}). Der Job \
+          bricht hier ab statt die drei Faelle stillschweigend zu ueberspringen — \
+          uebersprungen ist nicht bestanden."
+            exit 1
+          fi
+          echo "User-Namespaces verfuegbar."
+      - name: Runner-Faehigkeiten fuer die Faelle 12-14 messen
+        # Die Faelle 12-14 brauchen unprivilegierte User-Namespaces
+        # (`unshare -rm --map-auto`) und ein eigenes tmpfs darin. Ob ein Runner
+        # das kann, ist eine Eigenschaft des Images und keine, die man aus der
+        # Dokumentation ableiten sollte — dieser Step MISST sie und schreibt das
+        # Ergebnis ins Log. Er urteilt nicht: das Urteil faellt der Schalter im
+        # naechsten Step. Fehlt die Faehigkeit, ist der Lauf dort rot und dieses
+        # Log sagt, warum.
+        run: |
+          set -u
+          for c in unshare setpriv sqlite3; do
+            printf '%-10s %s\n' "$c" "$(command -v "$c" 2>/dev/null || echo FEHLT)"
+          done
+          printf 'apparmor_restrict_unprivileged_userns=%s\n' \
+            "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+          printf 'max_user_namespaces=%s\n' \
+            "$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo n/a)"
+          if unshare -rm --map-auto true 2>/dev/null; then
+            echo "userns: unshare -rm --map-auto OK"
+          else
+            echo "userns: unshare -rm --map-auto NICHT verfuegbar"
+          fi
+          if unshare -rm --map-auto sh -c 'mount -t tmpfs -o size=8M tmpfs /mnt && umount /mnt' 2>/dev/null; then
+            echo "tmpfs im userns: OK"
+          else
+            echo "tmpfs im userns: NICHT verfuegbar"
+          fi
+      - name: Backup-Alarm-Suite (uebersprungen != bestanden)
+        # BACKUP_ALARM_REQUIRE_ALL=1 macht jeden uebersprungenen Fall zum
+        # Fehlschlag — dieselbe Haltung wie `WHO2BE_REQUIRE_DB=1` fuer die
+        # pytest-Suite und wie `scripts/ci/assert_skips_within_budget.py`.
+        # Ohne den Schalter waere dieser Job das Gegenteil eines Belegs: die
+        # Suite ueberspringt 12-14 bei fehlender Faehigkeit mit Exit 0, der Job
+        # waere gruen, und genau die drei Faelle, die die Zusage tragen, liefen
+        # nie. Der Schalter ist in der Suite dokumentiert und mit einer
+        # Negativprobe belegt (erzwungener Skip: ohne Schalter gruen, mit
+        # Schalter rot) — siehe Plan-Datei der Karte.
+        #
+        # Die Suite gibt am Ende `CASES_TOTAL/CASES_RUN/CASES_SKIPPED/
+        # SKIPPED_CASES` aus. Diese Zeilen sind der gemessene Nachweis, welche
+        # Faelle auf dem Runner wirklich gelaufen sind; sie landen zusaetzlich in
+        # der Step-Summary, damit man sie nicht im Log suchen muss.
+        env:
+          BACKUP_ALARM_REQUIRE_ALL: "1"
+        run: |
+          set -uo pipefail
+          bash deploy/hetzner/tests/test_backup_alarm.sh 2>&1 | tee /tmp/backup-alarm.log
+          rc=${PIPESTATUS[0]}
+          {
+            echo "## Backup-Alarm-Suite"
+            echo
+            echo '```'
+            grep -E '^(CASES_TOTAL|CASES_RUN|CASES_SKIPPED|SKIPPED_CASES)=' /tmp/backup-alarm.log || \
+              echo "(keine Bilanz-Zeilen — Suite brach vor dem Ende ab)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
   changelog-guard:
     # Erzwingt das Fragment-Verfahren aus CONTRIBUTING.md (#587): ein normaler
     # PR darf `CHANGELOG.md` nicht direkt anfassen, er legt ein Fragment unter
@@ -762,6 +882,7 @@ jobs:
       - e2e
       - e2e-billing-cloud
       - e2e-mobile
+      - backup-alarm
       - audit
       - changelog-guard
     runs-on: ubuntu-latest
@@ -776,6 +897,7 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           E2E_BILLING_CLOUD_RESULT: ${{ needs['e2e-billing-cloud'].result }}
           E2E_MOBILE_RESULT: ${{ needs['e2e-mobile'].result }}
+          BACKUP_ALARM_RESULT: ${{ needs['backup-alarm'].result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
           CHANGELOG_GUARD_RESULT: ${{ needs['changelog-guard'].result }}
         run: |
@@ -845,6 +967,12 @@ jobs:
           # am selben `if: needs.changes.outputs.code == 'true'` und meldet bei
           # einem Doku-PR legitim `skipped`.
           expect e2e-mobile        "$E2E_MOBILE_RESULT"        "$gated_expected"
+          # Karte t_5c8d5364: die Backup-Alarm-Suite haengt am selben Gate
+          # (`deploy/hetzner/**` ist nie Doku) und meldet bei einem echten
+          # Doku-PR legitim `skipped`. Diese Zeile ist die dritte der drei
+          # Stellen, die den Job scharf machen — `needs` und `env` allein
+          # pruefen nichts.
+          expect backup-alarm      "$BACKUP_ALARM_RESULT"      "$gated_expected"
 
           # `audit` haengt bewusst an keinem Pfadfilter (fragt eine Live-CVE-
           # Datenbank ab) und muss deshalb immer wirklich gelaufen sein.

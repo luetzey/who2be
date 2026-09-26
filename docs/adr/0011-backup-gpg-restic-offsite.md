@@ -88,7 +88,9 @@ stillschweigend geloescht, sondern datiert ersetzt:
   kein solcher Eintrag.
 - Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (Stub-basiert, kein
   Docker-Daemon noetig); Einrichtung und Testanleitung im RUNBOOK unter
-  "Backup & Restore" → "Alarmweg (Dead-Man's-Switch)".
+  "Backup & Restore" → "Alarmweg (Dead-Man's-Switch)". Die Suite laeuft im
+  CI-Job `backup-alarm` (an `all-green` gebunden, `BACKUP_ALARM_REQUIRE_ALL=1`:
+  ein uebersprungener Fall ist ein Fehlschlag).
 
 Nicht Teil dieser Revision und weiterhin offen: RPO-Senkung / WAL-Archivierung, die
 ungetesteten SeaweedFS-Blob-Kommandos (#532), der Restore-Drill (MS-3 H4 / #454).

@@ -1126,6 +1126,27 @@ unter anderem, dass bei gescheitertem Sync der lokale Dump liegen bleibt:
 bash deploy/hetzner/tests/test_backup_alarm.sh
 ```
 
+Der Test läuft seit Karte `t_5c8d5364` im **CI-Job `backup-alarm`** (an
+`all-green` gebunden) und nicht mehr nur von Hand. Dort ist
+`BACKUP_ALARM_REQUIRE_ALL=1` gesetzt: jeder übersprungene Fall ist ein
+Fehlschlag, weil die Fälle 12–14 unprivilegierte User-Namespaces bzw. ein
+eigenes tmpfs brauchen — und genau sie tragen die Zusage. Lokal ohne diese
+Fähigkeiten überspringen sich die Fälle mit einer Warnung; die Bilanz am Ende
+des Laufs (`CASES_RUN`, `CASES_SKIPPED`, `SKIPPED_CASES`) sagt, was wirklich
+gemessen wurde. Wer den CI-Zustand lokal nachfahren will:
+
+```bash
+BACKUP_ALARM_REQUIRE_ALL=1 bash deploy/hetzner/tests/test_backup_alarm.sh
+```
+
+Auf Ubuntu 24.04 (und damit auch auf `ubuntu-latest` in CI) sind unprivilegierte
+User-Namespaces per AppArmor gesperrt — gemessen, nicht vermutet: der erste
+CI-Lauf dieses Jobs meldete `CASES_RUN=12` und wurde dadurch rot. Der Job
+schaltet sie deshalb per `sudo sysctl -w
+kernel.apparmor_restrict_unprivileged_userns=0` frei; wer die Fälle 12–14 lokal
+auf so einem System fahren will, braucht denselben Knopf. Der Kernel kann es
+(`max_user_namespaces` ist hoch), es ist allein die Distro-Härtung.
+
 Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
 (#454).
 
