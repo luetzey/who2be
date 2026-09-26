@@ -293,6 +293,19 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Smoke
         run: bash scripts/smoke.sh
+      - name: Access-Log-Rotation (Wirkung, im echten Caddy-Image)
+        # Der einzige Job mit Docker-Daemon — deshalb haengt dieser Test hier
+        # und nicht im `python`-Job: er faehrt das Rotations-Skript gegen das
+        # echte `caddy:2.8-alpine` (busybox-`find`/`gzip` verhalten sich nicht
+        # wie GNU-coreutils). Ohne das Image fiele er auf die Host-Shell
+        # zurueck und pruefte nur die Ablauf-Logik.
+        #
+        # Warum ueberhaupt in CI: die Vorgaenger-Pruefungen dieser Frist suchten
+        # Zeichenketten in Markdown und blieben gruen, waehrend die Loeschung
+        # nicht lief. Dieser Test fuehrt sie aus.
+        run: |
+          docker pull caddy:2.8-alpine
+          CADDY_IMAGE=caddy:2.8-alpine bash deploy/hetzner/tests/test_access_log_rotation.sh
       - name: Build runtime-cloud image (ADR-0029, build-only)
         # Cloud-Profil-Gegenprobe (LIC-4): das Docker-Target `runtime-cloud`
         # (inkl. who2be-billing) wurde in CI sonst nie gebaut — ein Bruch

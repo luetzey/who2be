@@ -176,13 +176,16 @@ def test_caddy_access_log_rotates_by_size() -> None:
     assert "roll_keep " in directives
 
 
-def test_caddy_access_log_keeps_the_secondary_time_bound() -> None:
-    """``roll_keep_for`` bleibt als zweite, unabhaengige Grenze gesetzt.
+def test_caddy_access_log_keeps_its_own_size_bound() -> None:
+    """``roll_keep_for`` bleibt gesetzt — aber nur fuer seine eigene Klasse.
 
-    Sie traegt die Frist NICHT allein: sie wirkt nur auf bereits rotierte
-    Generationen und laeuft erst, wenn eine neue Datei entsteht — die aktive
-    ``access.log`` erfasst sie nie. Sie ist der Rueckfall, falls der Cron
-    ausfaellt, und muss deshalb zur dokumentierten Frist passen.
+    Es ist **kein** unabhaengiger Rueckfall fuer die Frist: es erfasst
+    ausschliesslich die von Caddy selbst erzeugten Generationen
+    (``access-<ts>.log.gz``), laeuft nur bei einem Rotationsereignis und
+    beruehrt die aktive Datei nie. Die Generationen des Rotations-Skripts
+    (``access.log.<ts>.gz``) fallen nicht darunter — die raeumt allein das
+    Skript weg. Gesetzt bleibt es, weil es innerhalb seiner Klasse wirkt und
+    zur dokumentierten Frist passen muss.
     """
     directives = _caddyfile_directives()
     assert "roll_keep_for 336h" in directives
@@ -204,35 +207,43 @@ def test_caddy_does_not_use_directives_this_version_ignores() -> None:
         )
 
 
-def test_access_log_retention_is_enforced_by_a_documented_cron() -> None:
-    """Die 14-Tage-Frist hat einen Mechanismus, nicht nur eine Zusage.
+def test_access_log_retention_is_enforced_by_a_documented_script() -> None:
+    """Die 14-Tage-Frist hat einen Mechanismus, und er ist ausfuehrbar.
 
-    Die Caddy-Direktiven deckeln die Groesse, nicht die Zeit. Ohne einen
-    zeitlichen Ausloeser kann die aktive Logdatei bei geringem Aufkommen
-    laenger als die zugesagte Frist bestehen — personenbezogene Daten (IP,
-    User-Agent) blieben dann ueber die Frist hinaus liegen, ohne dass etwas
-    ausfaellt. Deshalb muss das RUNBOOK ein Verfahren nennen, das die Frist
-    tatsaechlich durchsetzt, und die Frist darin muss zur Konfiguration und
-    zu den beiden Compliance-Dokumenten passen.
+    Die Caddy-Direktiven deckeln die Groesse, nicht die Zeit. Den zeitlichen
+    Teil traegt ``deploy/hetzner/scripts/rotate-access-log.sh``, per Host-Cron
+    taeglich gestartet. Dieser Test haelt nur die Verdrahtung nach — dass
+    RUNBOOK und Compliance-Dokumente auf dasselbe Skript zeigen und die Frist
+    eine einzige Aussage ist.
+
+    Die **Wirkung** des Skripts prueft
+    ``deploy/hetzner/tests/test_access_log_rotation.sh``: es fuehrt die Rotation
+    gegen echte Verzeichnisse im echten Caddy-Image aus. Ein Test, der nur
+    Zeichenketten in Markdown sucht, ist hier ausdruecklich kein Nachweis — die
+    Vorgaenger-Pruefungen dieser Karte waren gruen, waehrend die Frist nicht
+    griff.
     """
+    script = _HETZNER / "scripts" / "rotate-access-log.sh"
+    assert script.is_file(), "Rotations-Skript fehlt — die Frist haette keinen Mechanismus"
+    script_text = script.read_text(encoding="utf-8")
+
+    # Die Frist steht im Skript als Default, nicht nur in der Doku.
+    assert "ACCESS_LOG_RETENTION_DAYS:-14" in script_text
+
     runbook = (_HETZNER / "RUNBOOK.md").read_text(encoding="utf-8")
-    assert "/var/log/caddy/access.log" in runbook
-
-    # Der Mechanismus, der fehlte: eine Zeile, die zeitbasiert LOESCHT. Der
-    # Quartals-Check listet dieselbe `-mtime`-Bedingung nur auf, ohne zu
-    # loeschen — deshalb muessen beide Teile in EINER Zeile stehen, sonst
-    # wuerde der Test von der blossen Pruefanleitung gruen gehalten.
-    delete_lines = [
-        line for line in runbook.splitlines() if "-mtime +14" in line and "-delete" in line
-    ]
-    assert delete_lines, (
-        "RUNBOOK nennt kein zeitbasiertes Loeschverfahren fuer die Access-Logs "
-        "(eine Zeile, die aeltere Generationen tatsaechlich entfernt)"
+    assert "scripts/rotate-access-log.sh" in runbook, (
+        "RUNBOOK nennt das Rotations-Skript nicht — dann richtet es niemand ein"
     )
-    # ... und rotiert die aktive Datei, die roll_keep_for nie erfasst.
-    assert "mv /var/log/caddy/access.log" in runbook
+    # Der Cron-Eintrag ruft das Skript, nicht eine handgeschriebene Kette. Genau
+    # diese Kette war der Fehler: der Loeschteil hing am Rotationsteil.
+    cron_lines = [
+        line
+        for line in runbook.splitlines()
+        if "rotate-access-log.sh" in line and line.lstrip().startswith(("30 4", "0 4", "15 4"))
+    ]
+    assert cron_lines, "RUNBOOK enthaelt keine Crontab-Zeile, die das Skript startet"
 
-    # Die Frist ist EINE Aussage an vier Stellen.
+    # Die Frist ist EINE Aussage an mehreren Stellen.
     for doc in (
         _REPO_ROOT / "docs" / "compliance" / "vvt.md",
         _REPO_ROOT / "docs" / "compliance" / "data-retention-and-erasure.md",
@@ -242,23 +253,64 @@ def test_access_log_retention_is_enforced_by_a_documented_cron() -> None:
         assert "RUNBOOK" in text, f"{doc.name} verweist nicht auf das Verfahren"
 
 
-def test_retention_docs_do_not_claim_a_failure_proof_mechanism() -> None:
-    """Kein Dokument behauptet, die Frist koenne nicht ausfallen.
+def test_retention_threshold_stays_below_the_promised_period() -> None:
+    """Die Loeschschwelle liegt unter der Frist — sonst ist die Frist ueberschritten.
 
-    Ein Host-Cron kann still ausfallen. Die Dokumente benennen dieses
-    Restrisiko; ein Satz, der das Gegenteil verspricht, wuerde einen spaeteren
-    Leser eine echte Pruefung ueberspringen lassen.
+    Rechnung, die das Skript im Kommentar fuehrt und die hier nachgerechnet
+    wird: eine Generation wird bis zu 24 h nach dem letzten Eintrag darin
+    erzeugt, und ``find -mtime +N`` greift erst ab einem Alter von mehr als N
+    vollen Tagen. Mit der Frist selbst als Schwelle waere der aelteste Eintrag
+    beim Loeschen bis zu zwei Tage ueber der Zusage. Deshalb Frist minus 2.
     """
+    script_text = (_HETZNER / "scripts" / "rotate-access-log.sh").read_text(encoding="utf-8")
+    match = re.search(r"DELETE_THRESHOLD_DAYS=\$\(\(RETENTION_DAYS\s*-\s*(\d+)\)\)", script_text)
+    assert match, "Loeschschwelle wird nicht aus der Frist abgeleitet"
+    subtracted = int(match.group(1))
+    assert subtracted >= 2, (
+        f"Schwelle ist nur {subtracted} Tag(e) unter der Frist. Rotationsfenster (bis 24 h) "
+        "und die -mtime-Semantik (+N greift ab N+1 Tagen) addieren sich auf zwei Tage — "
+        "mit weniger Abstand wird die zugesagte Frist im schlechtesten Fall ueberschritten."
+    )
+
+
+def test_retention_docs_do_not_claim_a_second_independent_limit() -> None:
+    """Kein Dokument behauptet einen Rueckfall, den es nicht gibt.
+
+    Zwei Zusagen sind hier verboten, weil beide nachweislich nicht zutrafen:
+
+    1. Die Frist koenne nicht ausfallen. Ein Host-Cron kann still ausfallen;
+       die Dokumente benennen dieses Restrisiko.
+    2. ``roll_keep_for`` sei eine *zweite, unabhaengige* Grenze fuer die Frist.
+       Es erfasst nur Caddys eigene Generationen (``access-<ts>.log.gz``), nicht
+       die des Rotations-Skripts (``access.log.<ts>.gz``) — die beiden
+       Namensklassen sind disjunkt. Fuer die Generationen des Skripts gibt es
+       genau einen Loeschpfad: das Skript selbst.
+
+    Geprueft wird auf die Aussage, nicht auf eine einzelne Formulierung: jede
+    Kombination aus „zweite/unabhaengige Grenze" und einer Ausfall-Zusage faellt
+    auf. Ein blosses Verbot der wortgleichen Vorgaenger-Zeile liesse denselben
+    Satz mit anderen Worten durch — genau das ist in Runde 2 passiert.
+    """
+    forbidden = (
+        "keinen, der ausfallen kann",
+        "zweite, unabhaengige Grenze",
+        "zweite, unabhängige Grenze",
+        "zweiter, unabhaengiger Mechanismus",
+        "als zweite Grenze",
+    )
     for path in (
         _CADDYFILE,
         _HETZNER / "RUNBOOK.md",
         _REPO_ROOT / "docs" / "compliance" / "vvt.md",
         _REPO_ROOT / "docs" / "compliance" / "data-retention-and-erasure.md",
+        *sorted((_REPO_ROOT / "changelog.d").glob("*access-logs*")),
     ):
         text = path.read_text(encoding="utf-8")
-        assert "keinen, der ausfallen kann" not in text, (
-            f"{path.name}: Zusage der Ausfallsicherheit, die das Verfahren nicht traegt"
-        )
+        for claim in forbidden:
+            assert claim not in text, (
+                f"{path.name}: behauptet einen Rueckfall fuer die Frist "
+                f"({claim!r}), den das Verfahren nicht traegt"
+            )
 
 
 def test_caddy_access_log_redacts_oauth_query_values() -> None:
