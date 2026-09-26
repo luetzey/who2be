@@ -66,6 +66,28 @@ Fehlertyps**. Drei der vier Historien-Testfälle wurden rot; erst dadurch fiel e
 auf. Die Fassung prüft jetzt die Struktur der Zusicherung, und ob ein Aufruf
 Wirkung ausführt, entscheidet allein `_executes_effect`.
 
+### Ein zweiter Fehler, den die CI gefunden hat
+
+Einer der Kalibrierungs-SHAs (`22371628`) war ein Commit auf einem
+Arbeitsbranch. Lokal lag er im Klon, alles war grün; im frischen CI-Klon fehlte
+er, und der Testfall wurde **übersprungen** — das Skip-Budget-Gate hat es
+gemeldet. Ein übersprungener Kalibrierungsfall ist genau die Sorte stilles Grün,
+gegen die diese Karte antritt.
+
+Drei Korrekturen, nicht eine:
+
+1. SHA auf den inhaltsgleichen Commit auf `main` getauscht (`c405ca2c`).
+2. Der Skip-Pfad ist jetzt ein **Fehler** (`pytest.fail`) — ein nicht
+   auflösender Ref darf die Suite nicht grün lassen.
+3. Zwei neue Testfälle halten das nach:
+   `test_every_history_sha_lives_on_main` prüft die Bedingung selbst, und
+   `test_unresolvable_ref_fails_instead_of_skipping` belegt, dass der
+   Fehlerpfad wirklich rot wird — sonst wäre (2) eine Behauptung.
+
+Das ist derselbe Fehlertyp, den der Prüfer sucht, begangen beim Bauen des
+Prüfers. Er steht hier, weil er die Karte belegt statt sie zu widerlegen: nur
+ein Gate hat ihn gefunden, kein Dokument.
+
 ### Nebenbefund: Negativnachweis mechanisieren (Bewertung, nicht Bau)
 
 Der Vorbericht schlägt vor, jeden neuen Test gegen die unveränderte Vorfassung
@@ -127,12 +149,12 @@ zwei Helferebenen tief liegt — beim ersten Prototyp-Lauf gemessen.
 
 ## Verifikation — gemessen
 
-- `uv run pytest scripts/tests/test_check_effectful_tests.py` → **24 passed**
+- `uv run pytest scripts/tests/test_check_effectful_tests.py` → **26 passed, 0 skipped**
 - Rot-Probe: absichtlich schlechter Test wird markiert, guter nicht — als
   Testfälle (`test_string_only_test_is_flagged` /
   `test_test_that_calls_the_subject_is_not_flagged`), nicht als Behauptung
 - Historien-Beleg: vier Testfälle fahren den Prüfer gegen die Commit-Fassungen
-  (`git show 8d4161cf:…`, `22371628`, `d00c1088`) — alle vier markiert
+  (`git show 8d4161cf:…`, `c405ca2c`, `d00c1088`) — alle vier markiert
 - Grenze als Testfall: `test_backup_case_is_out_of_reach_and_says_so`
 - `uv run ruff check . && uv run ruff format --check .` → **All checks passed**
 - `uv run mypy .` → **Success: no issues found in 495 source files**

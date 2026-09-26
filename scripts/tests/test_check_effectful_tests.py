@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _pytest.outcomes import Failed
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
@@ -253,6 +254,13 @@ def test_readme_states_the_tool_count() -> None:
 # Die Faelle, um derer willen dieser Pruefer existiert -- mit der Fassung, in
 # der sie damals eingecheckt wurden. Nachgemessen statt behauptet: ein Gate,
 # das seine Begruendungsfaelle nicht mehr faengt, ist ein leeres Versprechen.
+#
+# Die SHAs muessen auf `main` liegen, nicht auf einem Arbeitsbranch. Der erste
+# Entwurf nannte hier einen Branch-Commit; lokal war er im Klon vorhanden und
+# alles gruen, in der CI fehlte er und der Fall wurde uebersprungen. Ein
+# uebersprungener Kalibrierungsfall ist genau die Sorte stilles Gruen, gegen
+# die dieser Pruefer gebaut ist -- deshalb weiter unten ein `fail` statt eines
+# `skip`, wenn ein SHA nicht aufloest.
 _HISTORY = [
     pytest.param(
         "8d4161cf",
@@ -267,7 +275,7 @@ _HISTORY = [
         id="access-logs-loeschfrist",
     ),
     pytest.param(
-        "22371628",
+        "c405ca2c",
         "apps/api/tests/test_compose_hardening.py",
         "test_retention_threshold_stays_below_the_promised_period",
         id="access-logs-nachschaerfung",
@@ -282,6 +290,14 @@ _HISTORY = [
 
 
 def _blob_at(ref: str, path: str) -> str:
+    """Die Datei in der Fassung von ``ref``.
+
+    Loest der Ref nicht auf, ist das ein FEHLER, kein Skip. Ein
+    uebersprungener Kalibrierungsfall liesse die Suite gruen, ohne dass die
+    Heuristik an ihren Begruendungsfaellen gemessen wurde -- also genau das,
+    wogegen dieser Pruefer gebaut ist. Die CI checkt den `python`-Job mit
+    ``fetch-depth: 0`` aus, damit die Historie da ist.
+    """
     result = subprocess.run(
         ["git", "show", f"{ref}:{path}"],
         capture_output=True,
@@ -290,8 +306,47 @@ def _blob_at(ref: str, path: str) -> str:
         cwd=_REPO_ROOT,
     )
     if result.returncode != 0:
-        pytest.skip(f"{ref}:{path} nicht im Klon (shallow?) — {result.stderr.strip()}")
+        pytest.fail(
+            f"{ref}:{path} loest nicht auf — {result.stderr.strip()}\n"
+            "Liegt der SHA auf main und ist die Historie vollstaendig geholt "
+            "(fetch-depth: 0)? Ein Skip waere hier stilles Gruen."
+        )
     return result.stdout
+
+
+def test_every_history_sha_lives_on_main() -> None:
+    """Jeder Kalibrierungs-SHA liegt auf ``main``, nicht auf einem Arbeitsbranch.
+
+    Genau hier lag ein Fehler dieses PRs: ein Branch-Commit war lokal im Klon
+    vorhanden (alles gruen), in der CI fehlte er. Dieser Test macht die
+    Bedingung pruefbar, statt sie im Kommentar zu behaupten.
+    """
+    for param in _HISTORY:
+        ref = param.values[0]
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", str(ref), "origin/main"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=_REPO_ROOT,
+        )
+        if result.returncode == 128:
+            pytest.skip(f"origin/main im Klon nicht verfuegbar: {result.stderr.strip()}")
+        assert result.returncode == 0, (
+            f"{ref} liegt nicht auf origin/main — in einem frischen CI-Klon "
+            "fehlt der Commit und der Kalibrierungsfall faellt aus."
+        )
+
+
+def test_unresolvable_ref_fails_instead_of_skipping() -> None:
+    """Ein nicht aufloesbarer SHA faerbt rot -- er wird nicht uebersprungen.
+
+    Ohne diesen Fall waere die Skip-statt-Fehler-Entscheidung oben eine
+    Behauptung. Ein uebersprungener Kalibrierungsfall ist stilles Gruen, und
+    stilles Gruen ist der Fehlertyp, gegen den dieser Pruefer gebaut ist.
+    """
+    with pytest.raises(Failed):
+        _blob_at("0000000000000000000000000000000000000000", "README.md")
 
 
 @pytest.mark.parametrize(("ref", "path", "test_name"), _HISTORY)
