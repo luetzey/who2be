@@ -38,6 +38,7 @@ from who2be_api.core.agent_scope import agent_read_restrict
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    is_agent_bound,
     require_capability,
     require_role,
     require_unmanaged,
@@ -94,16 +95,6 @@ def _invalid_reference() -> ApiError:
         detail=("Persona oder Template existiert nicht in diesem Workspace."),
         reason="agent_reference_not_found",
     )
-
-
-def _is_agent_bound(ctx: WorkspaceContext) -> bool:
-    """True fuer einen agent-gebundenen Token (Defense-in-Depth, beide Indikatoren).
-
-    Muster `memory_service._require_human` / `workarea_scope.is_agent_bound`:
-    heute impliziert `agent_id` eine Policy, aber der Menschen-Vorbehalt soll
-    nicht an dieser DB-Invariante haengen.
-    """
-    return ctx.tool_policy is not None or ctx.agent_id is not None
 
 
 def _model_config_is_human_only() -> ApiGateError:
@@ -367,9 +358,7 @@ class AgentService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
-        if (data.model_provider is not None or data.model_name is not None) and _is_agent_bound(
-            ctx
-        ):
+        if (data.model_provider is not None or data.model_name is not None) and is_agent_bound(ctx):
             # VOR jedem Repo-Zugriff: der Versuch soll nichts anfassen (H4).
             raise _model_config_is_human_only()
         if data.tool_policy is not None:
@@ -509,7 +498,7 @@ class AgentService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
-        if _is_agent_bound(ctx):
+        if is_agent_bound(ctx):
             raise _delete_is_human_only()
         # Scope-Gate wie in `list_all`/`get` (Review H5). Heute unerreichbar —
         # der Menschen-Vorbehalt darueber hat jeden agent-gebundenen Aufrufer
@@ -545,7 +534,7 @@ class AgentService:
         Aufrufer, der den Agenten nicht sehen darf, darf ihn auch nicht
         markieren — sonst waere der Stern ein Existenz-Orakel.
         """
-        if _is_agent_bound(ctx):
+        if is_agent_bound(ctx):
             raise _favorite_is_human_only()
         restrict = agent_read_restrict(ctx)
         if restrict is not None and agent_id not in restrict:

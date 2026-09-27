@@ -7,6 +7,7 @@ CVE-Triage und Secret-Rotation. Setup-Anleitungen liegen in
 
 Aktive Sektionen:
 
+- [Betriebsgrenze: genau EIN API-Container](#betriebsgrenze-genau-ein-api-container) — **vor jedem Skalieren lesen**: der Tabellen-Store vertraegt genau einen Schreiber
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/LUKS/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
@@ -21,6 +22,111 @@ Aktive Sektionen:
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
+
+---
+
+## Betriebsgrenze: genau EIN API-Container
+
+> ⛔ **Der `api`-Dienst darf nie in mehr als einer laufenden Instanz existieren.**
+> Kein `replicas`, kein `docker compose up --scale api=2`, kein
+> `WEB_CONCURRENCY`/`--workers`, kein zweiter Host auf demselben Volume.
+
+**Warum.** Die Zeilen der Agenten-Tabellen liegen nicht in Postgres, sondern in
+einer SQLite-Datei pro WorkArea (ADR-0049, siehe §Tabellen-Store-Backup). Die API
+serialisiert Schreibzugriffe darauf ueber einen **prozesslokalen** Lock. Ein
+zweiter Prozess haette einen eigenen Lock auf derselben Datei; uebrig bliebe
+SQLites `busy_timeout`. Die Folge ist **stille Korruption**: kein Fehler, kein
+Alarm, kein Log-Eintrag — der Schaden faellt erst beim Lesen auf, moeglicherweise
+Wochen spaeter.
+
+Horizontal skaliert wird erst mit area-affinem Routing (offener ADR). Bis dahin
+ist „mehr API-Kapazitaet" **keine** Konfigurationsfrage.
+
+### Was das absichert
+
+| Schicht | Wo | Faengt |
+|---|---|---|
+| Start-Guard | `apps/api/.../main.py` | `WEB_CONCURRENCY` / `--workers N` im API-Prozess |
+| Compose-Drift-Tests | `apps/api/tests/test_single_writer_guard.py` | `replicas`, `scale`, `--workers`, `update_config`/`start-first` in **jeder** Compose-Datei mit `api`-Dienst |
+| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`-Container nach dem `up` → Abbruch mit Exit 3 |
+
+**Der Start-Guard ist kein Beleg.** Er sieht nur den eigenen Prozessbaum;
+mehrere *Container* kann kein In-Process-Check erkennen. Dass er schweigt, sagt
+nichts darueber, ob die Grenze eingehalten wird.
+
+### Erzeugt ein Deploy kurzzeitig zwei API-Container?
+
+**Nein.** `deploy.sh` faehrt `docker compose up -d --wait --remove-orphans` ohne
+`--scale`, und Compose recreated einen Service in dieser Reihenfolge: neuen
+Container **erzeugen** (nicht starten) → alten **stoppen** → alten entfernen →
+umbenennen → erst in der folgenden Start-Phase starten (`recreateContainer` in
+`pkg/compose/convergence.go`, identisch geprueft in Compose v2.20, v2.29 und
+v2.39). Eine Ueberlappung braeuchte `deploy.update_config.order: start-first`
+(„the new task is started first, and the running tasks briefly overlap",
+Compose Deploy Specification) — der Default ist `stop-first`, und keine
+Compose-Datei dieses Repos setzt `update_config`. Ein Drift-Test haelt das fest.
+
+Weil die auf der Box installierte Compose-Version nicht gepinnt ist
+(`get.docker.com` installiert das jeweils aktuelle Release), bleibt ein
+Restrisiko. `deploy.sh` setzt dagegen **keinen** Vorab-`stop api` — das waere der
+einzige Mechanismus, der das Recreate-Fenster versionsunabhaengig schliesst
+(ohne laufenden alten Container kann keine Reihenfolge zwei laufende erzeugen),
+kostet aber bei jedem Deploy einen vollen Start samt Healthcheck-`start_period`
+an Downtime. Die Abwaegung faellt gegen ihn aus, weil die Sequenz ueber
+v2.20 – v2.39 belegt ist und der Drift-Test `start-first` verbietet.
+
+Zusaetzlich **misst** `deploy.sh` nach dem `up`:
+
+```bash
+docker compose … ps --status running --quiet api | grep -c .   # muss 1 sein
+```
+
+Ist das Ergebnis nicht `1`, bricht der Deploy mit Exit-Code 3 ab. Wichtig fuer
+die Einordnung: diese Messung laeuft **nach** `--wait`, prueft also den
+**Endzustand**. Eine transiente Ueberlappung waehrend des Recreate waere zum
+Messzeitpunkt vorbei — sie faengt **dauerhafte** Zweitinstanzen (verwaister
+Container aus einem frueheren Bringup, von Hand gestartete Instanz, gar nicht
+gestarteter Container), nicht das Fenster selbst.
+
+### Wenn der Deploy mit Exit 3 abbricht
+
+```bash
+cd /opt/who2be
+
+# 1) Was laeuft wirklich?
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env ps -a api
+
+# 2) Bei ZWEI laufenden Containern: sofort einen stoppen — jede Minute mit
+#    zwei Schreibern ist Korruptionsrisiko. Danach Integritaet pruefen.
+docker stop <container-id-des-aelteren>
+
+# 3) Integritaet aller Area-Dateien pruefen (muss ueberall `ok` liefern)
+docker compose … exec api sh -c \
+  'for f in /data/tablestore/*/*.sqlite; do echo -n "$f: "; \
+     python -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute(\"PRAGMA integrity_check\").fetchone()[0])" "$f"; done'
+
+# 4) Bei NULL laufenden Containern: der Start ist gescheitert, nicht die
+#    Grenze verletzt. Logs lesen, dann normal neu deployen.
+docker compose … logs --tail 100 api
+
+# 5) Meldet das Skript stattdessen "'compose ps api' ist selbst
+#    fehlgeschlagen": die Zahl ist unbekannt, nicht 0. Ursache ist meist ein
+#    nicht laufender Docker-Daemon oder ein Projekt-/Env-Fehler.
+systemctl status docker
+```
+
+Liefert Schritt 3 irgendwo etwas anderes als `ok`: Restore der betroffenen Area
+aus dem letzten Snapshot (§Tabellen-Store-Backup).
+
+### Legitime zweite Prozesse
+
+Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
+die API laeuft: der Retention-Cron (`docker compose run --rm api who2be-purge`)
+und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
+kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
+Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
+waehrend eines Deploys starten.
 
 ---
 
@@ -512,12 +618,23 @@ und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
 Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
 Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
 
-Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
-auf dem Host eingerichtet:
+Der Cron ruft **ein Skript**, keine Kommandokette:
+`deploy/hetzner/scripts/rotate-access-log.sh`. Das ist keine Stilfrage, sondern
+die Lehre aus einer verketteten Fassung: dort hing die Loeschung an der
+Rotation, und die Rotation scheitert im Normalbetrieb regelmaessig — Caddy legt
+`access.log` erst beim **ersten Request** an, eine Nacht ohne Anfrage hatte also
+gar keine aktive Datei. Das Skript trennt die drei Teile:
+
+1. **Rotieren** — nur, wenn eine aktive Datei existiert. Fehlt sie, ist das der
+   normale Zustand eines Tages ohne Anfragen und **kein** Fehler.
+2. **Loeschen** — laeuft **immer**, unabhaengig von Schritt 1, und deckt **beide**
+   Namensklassen: `access.log.<ts>.gz` (aus diesem Skript) und
+   `access-<ts>.log.gz` (Caddys eigene groessenbedingte Rotation).
+3. **Caddy neu starten** — nur nach einer Rotation.
 
 ```bash
 # Host-Crontab des Deploy-Users (crontab -e):
-30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+30 4 * * * cd /opt/who2be && bash deploy/hetzner/scripts/rotate-access-log.sh >> /var/log/who2be-logrotate.log 2>&1
 ```
 
 **Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
@@ -530,24 +647,57 @@ Datei voller Nullbytes, weil der Writer am alten Offset weiterschreibt. Der
 Neustart tut es; gemessene Unterbrechung **0,7 s**. Deshalb nachts, und deshalb
 `mv` statt `truncate`.
 
-Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
-Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
-Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
-ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
-Quartals-Check:
+**Die Loeschschwelle liegt zwei Tage unter der Frist** (12 statt 14). Grund:
+eine Generation entsteht bis zu 24 h nach dem letzten Eintrag darin, und
+`find -mtime +N` greift erst ab einem Alter von *mehr* als N vollen Tagen.
+Mit 14 als Schwelle waere der aelteste Eintrag beim Loeschen bis zu 16 Tage alt.
+So sind die 14 Tage eine **Obergrenze**, kein Mittelwert.
+
+**`roll_keep_for 336h` ist kein Rueckfall fuer die Frist.** Es erfasst nur
+Caddys eigene Generationen (`access-<ts>.log.gz`); die des Skripts
+(`access.log.<ts>.gz`) fallen nicht darunter, und die aktive Datei erfasst es
+ohnehin nie. Fuer die Generationen des Skripts ist das Skript der **einzige**
+Loeschpfad — faellt es aus, wird die Frist ueberschritten. Deshalb ist der
+Fehlschlag nicht still:
+
+- **Exit != 0** bei jedem Fehlschlag (Rotation, Loeschung, Neustart), mit
+  `FEHLER`-Zeile im Log.
+- **Erfolgsstempel** `/var/log/who2be-logrotate.stamp` — nur ein *erfolgreicher*
+  Lauf schreibt ihn. Das ist der Unterschied zwischen „Cron lief und hatte
+  nichts zu tun" und „Cron lief nie": ein leeres Log-Verzeichnis sieht in beiden
+  Faellen gleich aus, der Stempel nicht.
+- **Optionaler Dead-Man's-Switch:** `ACCESS_LOG_HEARTBEAT_URL` wird **nur** bei
+  vollstaendigem Erfolg gepingt, gleiche Mechanik und gleicher self-hosted
+  Empfaenger wie beim Backup (siehe [Alarmweg](#alarmweg-dead-mans-switch)).
+  Leer (Default) = aus.
+
+Pruefung im Quartals-Check — **zuerst der Stempel**, denn er faengt den Fall,
+den ein Blick ins Verzeichnis nicht faengt:
 
 ```bash
-# Aelteste Generation — darf nicht aelter als 14 Tage sein
-docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  find /var/log/caddy -name 'access.log.*' -mtime +14
+# 1) Lief der Cron ueberhaupt? Stempel darf nicht aelter als ~26 h sein.
+#    Kein Stempel = der Cron war NIE erfolgreich.
+stat -c '%y %n' /var/log/who2be-logrotate.stamp || echo "FEHLT — Cron nie erfolgreich"
+find /var/log/who2be-logrotate.stamp -mmin +1560 -printf 'ZU ALT: %t\n'
 
-# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+# 2) Aelteste Generation — darf nicht aelter als 14 Tage sein (beide Klassen).
+#    Klammern sind Pflicht: ohne sie bindet -o schwaecher als das implizite -a
+#    und -mtime gaelte nur fuer das zweite Muster.
 docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
-  ls -lt /var/log/caddy
+  find /var/log/caddy \( -name 'access.log.*' -o -name 'access-*.log*' \) -mtime +14
+
+# 3) Fehlschlaege der letzten Laeufe
+grep FEHLER /var/log/who2be-logrotate.log | tail
 ```
 
-Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
-Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
+Das Verhalten des Skripts ist ausfuehrbar belegt, nicht nur beschrieben:
+`bash deploy/hetzner/tests/test_access_log_rotation.sh` faehrt die Rotation
+gegen echte Verzeichnisse im echten Caddy-Image — inklusive der Faelle „keine
+aktive Datei", „beide Namensklassen" und „Fehlschlag ist nicht still".
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: der Default
+`ACCESS_LOG_RETENTION_DAYS` im Skript, `deploy/hetzner/Caddyfile`,
+`docs/compliance/vvt.md` §7 und
 `docs/compliance/data-retention-and-erasure.md` §5.
 
 **Was nicht im Log steht:** Cookie-, Authorization- und
@@ -1069,7 +1219,7 @@ RESTIC_PASSWORD=${NEW} restic -r sftp:… restore latest \
 diff /etc/hostname /tmp/restic-rotation-test/etc/hostname  # erwartet: identisch
 ```
 
-**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf Stand, der nicht greift → Backup-Cron bricht still ab.
+**Side-Effects:** keine, **wenn Schritte 1-4 in dieser Reihenfolge ausgefuehrt werden**. Bei vertauschter Reihenfolge: Repo bleibt mit altem Passwort nutzbar, aber `.env` zeigt auf einen Stand, der nicht greift → der Backup-Cron scheitert; der Dead-Man's-Switch (unten) ist der Weg, das zu merken.
 
 ### BACKUP_GPG_RECIPIENT (lokaler pg_dump-Pfad, ADR-0011 C5a)
 
@@ -1316,10 +1466,64 @@ nicht als vollstaendiger Stand ausgeben. Begruendung: ein gruener Lauf ist die
 Zusage „dieser Snapshot traegt den vollstaendigen Zustand"; sie waere genau dann
 falsch, wenn sie gebraucht wird. Belegt durch
 `deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9). Dass der Lauf den
-Schreibpfad der API nicht verbiegt, belegen die Faelle 12–13 desselben Tests
+Schreibpfad der API nicht verbiegt, belegen die Faelle 15–16 desselben Tests
 (Backup und Store unter verschiedenen Kennungen; Details unter
 „Tabellen-Store-Backup"). Dass ein volllaufendes Backup-Ziel den Lauf rot macht
-und den letzten guten Snapshot unversehrt laesst, belegt Fall 14.
+und den letzten guten Snapshot unversehrt laesst, belegt Fall 17.
+
+**Ein leerer Bestand ist ebenfalls kein Erfolg** (seit 2026-09-26). Bis dahin
+erkannte der Lauf nur ein **fehlendes** Store-Verzeichnis, nicht ein
+vorhandenes und **leeres** — ein Volume-Mount, der nicht griff, ein umbenanntes
+Bucket, ein verschobener `WHO2BE_TABLESTORE_DIR` sahen alle aus wie „nichts zu
+sichern" und endeten gruen, mit Heartbeat-Ping und `--tag dump`. Schlimmer: der
+Verwaisten-Sweep raeumte dabei den letzten guten lokalen Spiegel, und
+`aws s3 sync --delete` tat auf einem leeren Bucket dasselbe mit dem
+Blob-Spiegel.
+
+Dass „leer, weil nichts da" von „leer, weil der Mount nicht griff" unterscheidbar
+ist, leistet eine **zweite Wahrheitsquelle**: der Katalog in derselben
+Datenbank, die der Lauf ohnehin dumpt.
+
+| Stufe | Soll-Quelle | Pruefung |
+|---|---|---|
+| Objekt-Store | `SELECT count(*) FROM wa_blob` | Bucket-Inventar (`s3 ls`) **vor** dem Sync; zu wenige Objekte ⇒ der Sync laeuft gar nicht, damit `--delete` den Spiegel nicht leert. Danach zusaetzlich der Spiegel selbst. |
+| Tabellen-Store | `SELECT DISTINCT workspace_id \|\| '/' \|\| area_id \|\| '.sqlite' FROM wa_table` | Jeder laut Katalog erwartete Pfad muss unter `${WHO2BE_TABLESTORE_DIR}` liegen (ADR-0049-Layout). |
+
+Die Pruefung ist bewusst asymmetrisch („Ist >= Soll"): eine Katalog-Zeile
+impliziert eine Datei, die Umkehrung nicht. Ueberzaehlige Dateien oder
+Bucket-Objekte sind kein Datenverlust und machen den Lauf nicht rot.
+
+**Der legitime Leerfall bleibt gruen:** leerer Katalog + leerer Store (frischer
+Stack ohne WorkArea-Tabellen) ist erwartungskonform, ebenso ein Stack, dessen
+Migrationen `wa_table`/`wa_blob` noch nicht angelegt haben. Ist der Katalog
+dagegen **nicht befragbar**, ist der Lauf rot — sonst waere die Zusage mit einem
+`psql`-Ausfall abwaehlbar. Belegt durch die Faelle 12–14 desselben Tests.
+
+**Bei einer roten Stufe raeumt der Lauf nicht auf.** Der Verwaisten-Sweep und
+`s3 sync --delete` setzen aus, solange die Stufe Fehler zaehlt: sonst loeschte
+genau der scheiternde Lauf den Stand, auf den ein Restore zurueckfallen will.
+Ausgenommen sind Reste eines hart abgebrochenen Vorlaufs (`.scratch.*`) — die
+waren nie ein guter Stand und muessen in jedem Fall weg, sonst landeten sie im
+Snapshot.
+
+**Wird der Lauf deswegen rot, pruefe in dieser Reihenfolge:**
+
+```bash
+# 1) Greift der Volume-Mount? (Der Container sieht /data/tablestore.)
+docker compose --profile backup run --rm --entrypoint sh backup \
+  -c 'ls -la /data/tablestore'
+
+# 2) Was erwartet der Katalog?
+docker compose exec db psql -U supabase_admin -d postgres -Atc \
+  "SELECT DISTINCT workspace_id || '/' || area_id || '.sqlite' FROM wa_table"
+
+# 3) Stimmt der Bucket-Name? (WHO2BE_BLOBSTORE_BUCKET vs. tatsaechliches Bucket)
+docker compose exec seaweedfs \
+  sh -c 'echo "s3.bucket.list" | weed shell' 2>/dev/null || true
+```
+
+Der lokale Spiegel des letzten guten Laufs liegt dabei unangetastet unter
+`${BACKUP_DIR}` — er ist die Rueckfallebene, bis die Ursache behoben ist.
 
 **Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
 Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
@@ -1373,11 +1577,11 @@ Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Co
 
 ### Alarmweg (Dead-Man's-Switch)
 
-Bis 2026-09-21 war ein fehlgeschlagener Offsite-Sync **still**: das Skript beendete
-sich mit Exit 0, der Cron-Lauf galt als erfolgreich. Storage Box voll, SSH-Key
-abgelaufen, Netzwerk weg — in allen drei Fällen lief der lokale Dump weiter und
-niemand erfuhr, dass es seit Wochen kein Offsite-Backup mehr gab. Seit Issue #541
-gilt (Owner-Entscheidung, Nachtrag in ADR-0011):
+Bis 2026-09-21 meldete ein fehlgeschlagener Offsite-Sync **Erfolg**: das Skript
+beendete sich mit Exit 0, der Cron-Lauf galt als gelungen. Der lokale Dump lief
+dabei weiter, das Offsite-Backup konnte aber ueber laengere Zeit ausfallen, ohne
+dass es jemand erfuhr. Seit Issue #541 gilt (Owner-Entscheidung, Nachtrag in
+ADR-0011):
 
 1. **Ehrlicher Exit-Code.** Scheitert `restic backup` oder `restic forget`, endet der
    Lauf mit Exit != 0. Der **lokale GPG-Dump bleibt dabei unangetastet** — er ist zu
@@ -1444,6 +1648,28 @@ unter anderem, dass bei gescheitertem Sync der lokale Dump liegen bleibt:
 bash deploy/hetzner/tests/test_backup_alarm.sh
 ```
 
+Der Test läuft seit Karte `t_5c8d5364` im **CI-Job `backup-alarm`** (an
+`all-green` gebunden) und nicht mehr nur von Hand. Dort ist
+`BACKUP_ALARM_REQUIRE_ALL=1` gesetzt: jeder übersprungene Fall ist ein
+Fehlschlag, weil die Fälle 15–17 unprivilegierte User-Namespaces bzw. ein
+eigenes tmpfs brauchen — und genau sie tragen die Zusage. Lokal ohne diese
+Fähigkeiten überspringen sich die Fälle mit einer Warnung; die Bilanz am Ende
+des Laufs (`CASES_RUN`, `CASES_SKIPPED`, `SKIPPED_CASES`) sagt, was wirklich
+gemessen wurde. Wer den CI-Zustand lokal nachfahren will:
+
+```bash
+BACKUP_ALARM_REQUIRE_ALL=1 bash deploy/hetzner/tests/test_backup_alarm.sh
+```
+
+Auf Ubuntu 24.04 (und damit auch auf `ubuntu-latest` in CI) sind unprivilegierte
+User-Namespaces per AppArmor gesperrt — gemessen, nicht vermutet: der erste
+CI-Lauf dieses Jobs meldete drei übersprungene Namespace-Fälle
+(`CASES_SKIPPED=3`) und wurde dadurch rot. Der Job
+schaltet sie deshalb per `sudo sysctl -w
+kernel.apparmor_restrict_unprivileged_userns=0` frei; wer die Fälle 15–17 lokal
+auf so einem System fahren will, braucht denselben Knopf. Der Kernel kann es
+(`max_user_namespaces` ist hoch), es ist allein die Distro-Härtung.
+
 Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
 (#454).
 
@@ -1499,12 +1725,14 @@ docker compose exec db psql -U supabase_admin who2be_restore \
 
 **H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
 (Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
-Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
-einmal durchziehen und Datum hier protokollieren:
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck). Auflage: **nach jedem
+prod-Cutover einmal durchziehen und protokollieren** — Datum, Backup-Quelle,
+Restore-Ziel, Ergebnis des Count-Vergleichs, Blob-/Tabellen-Pruefung und
+ausfuehrende Person. Ein Drill ohne Protokolleintrag gilt als nicht gefahren.
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
-|---|---|---|---|---|---|
-| — | — | — | — | — | — |
+Das Protokoll selbst wird **betreiberseitig** gefuehrt, nicht in diesem Repo:
+es ist ein Betriebsnachweis und gehoert zu den Abnahme-Unterlagen (siehe
+`docs/compliance/c5-mapping.md`, betreiberseitige Nachweise).
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
@@ -1634,6 +1862,11 @@ ${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite
 In Postgres steht nur der Katalog (`wa_table`, Schema + Name). **Ein
 `pg_dump`-Restore liefert also leere Tabellen**, wenn dieses Verzeichnis fehlt.
 
+> Diese Dateien sind der Grund fuer die Betriebsgrenze „genau EIN
+> API-Container" — siehe
+> [den Abschnitt oben](#betriebsgrenze-genau-ein-api-container), bevor du eine
+> zweite Instanz startest.
+
 **Nicht einfach kopieren:** eine SQLite-Datei im WAL-Modus ist waehrend eines
 laufenden Imports kein konsistenter Stand. Gesichert wird deshalb mit
 `VACUUM INTO` — das laeuft als Leser in einer Transaktion und erzeugt eine
@@ -1692,15 +1925,26 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   geprueft; ein gescheiterter Austausch macht die Area zum Fehlschlag und den
   Lauf rot. Scheitert eine Area, bleibt ihr bisheriger Snapshot unveraendert
   stehen (auch der Verwaisten-Lauf raeumt ihn nicht weg) — der Lauf wird
-  trotzdem rot. Belegt durch Fall 14 in `test_backup_alarm.sh`: Backup-Ziel auf
+  trotzdem rot. Belegt durch Fall 17 in `test_backup_alarm.sh`: Backup-Ziel auf
   einem zu kleinen Dateisystem, Lauf endet rot, kein Heartbeat, der Snapshot
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
+- **Parallelitaet zum Retention-Cron ist unbedenklich** (gemessen 2026-09-26,
+  ADR-0049-Nachtrag): `VACUUM INTO` laeuft als **Leser** — ein 6 s offener
+  Snapshot liess 692 parallele Commits mit 0 Fehlern durch, `integrity_check`
+  danach `ok`. Es ist also **keine** Betriebsregel einzuhalten, die Backup und
+  `who2be-purge` auseinanderhaelt; dass die Cron-Zeiten (03:15 bzw. 03:30 UTC)
+  auseinanderliegen, ist Bequemlichkeit, keine Bedingung.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
-  Begruendung wie `--delete` beim Blob-Sync.
+  Begruendung wie `--delete` beim Blob-Sync — aber **nur bei gruener Stufe**:
+  zaehlt die Stufe Fehler (gescheiterte Area oder eine laut `wa_table`
+  fehlende), setzt der Sweep aus, damit nicht ausgerechnet der scheiternde Lauf
+  den letzten guten Spiegel loescht. Reste eines hart abgebrochenen Vorlaufs
+  (`.scratch.*`) fallen dennoch immer weg. Siehe „Ein leerer Bestand ist
+  ebenfalls kein Erfolg" oben.
 - **Restore:** Snapshot-Dateien zurueck nach
   `${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite` kopieren
   (WAL-/SHM-Seitendateien werden **nicht** mitgesichert und sind nicht noetig —
@@ -1743,6 +1987,18 @@ Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
 `WHO2BE_TABLESTORE_DIR`-Werte wie die API — `docker compose run api` bringt
 beides mit, ein Lauf ausserhalb des Compose-Kontexts nicht.
 
+**Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
+ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert
+weder den Purge noch den Schreibpfad der API. Es ist also keine
+Reihenfolge-Regel einzuhalten.
+
+**Karenzfrist im Area-Store-Sweep:** eine Area-Datei mit kuerzlicher
+Schreibaktivitaet (juengstes `mtime` aus `.sqlite`/`-wal`/`-shm` unter 24 h)
+wird uebersprungen und im Log vermerkt, damit ein noch laufender Schreibvorgang
+sein Ergebnis nicht verliert. Das ist **kein Rueckstand und keine Aktion**: der
+naechste Lauf betrachtet die Datei erneut, und im Normalfall (keine
+Schreibaktivitaet) verschwindet sie wie bisher im selben Lauf.
+
 Ausgabe (zwei Zeilen, beide ins Log):
 
 ```
@@ -1756,6 +2012,7 @@ Worauf im Log zu achten ist:
 |---|---|---|
 | `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
 | `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `… bleibt in der Karenzfrist liegen` | Area-Datei mit kuerzlicher Schreibaktivitaet | **keine** — der naechste Lauf nimmt sie |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 

@@ -125,6 +125,24 @@ services:
       GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
       GOTRUE_EXTERNAL_GITHUB_SECRET: ${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
       GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-http://localhost:9999/auth/v1/callback}
+      # Sign in with Apple — lokal NICHT testbar: Apple lehnt `localhost` und
+      # IP-Adressen als Redirect-URI ab und verlangt HTTPS mit einer im
+      # Apple-Portal registrierten Domain (developer.apple.com,
+      # "Configuring your webpage for Sign in with Apple"). Die Default-URI hier
+      # ist deshalb nur ein Platzhalter fuer die Form; wer Apple lokal probieren
+      # will, braucht einen oeffentlichen HTTPS-Tunnel (wie beim Mollie-Webhook)
+      # und muss dessen Domain im Portal eintragen.
+      #
+      # ACHTUNG, anders als bei Google/GitHub: GOTRUE_EXTERNAL_APPLE_SECRET ist
+      # kein statischer String, sondern ein aus dem `.p8`-Key signiertes
+      # ES256-JWT mit HOECHSTENS SECHS MONATEN Laufzeit. GoTrue erneuert es
+      # nicht und warnt nicht; nach Ablauf antwortet Apple `invalid_client` und
+      # der Login scheitert mit einer generischen 500. Erneuerungs-Prozedur:
+      # deploy/hetzner/supabase/README.md.
+      GOTRUE_EXTERNAL_APPLE_ENABLED: ${GOTRUE_EXTERNAL_APPLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_APPLE_CLIENT_ID: ${GOTRUE_EXTERNAL_APPLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_APPLE_SECRET: ${GOTRUE_EXTERNAL_APPLE_SECRET:-}
+      GOTRUE_EXTERNAL_APPLE_REDIRECT_URI: ${GOTRUE_EXTERNAL_APPLE_REDIRECT_URI:-http://localhost:9999/auth/v1/callback}
       API_EXTERNAL_URL: http://localhost:9999
     depends_on:
       migrate:

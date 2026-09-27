@@ -2,6 +2,35 @@
 
 _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
 
+## Sieben Admin-Routen standen einem eingeschraenkten Agenten offen (2026-09-25, Karte t_ea83420c)
+
+Der Befund der Ursprungskarte betraf `POST /invitations`; die systematische
+Pruefung ergab **alle sieben** `require_role(ctx, WorkspaceRole.admin)`-Stellen
+der workspace-scoped Router. Ein agent-gebundener Token mit Rollen-Snapshot
+`admin` und einer Policy ohne `agent_write` stellte sich eine Admin-Einladung
+samt Klartext-Token aus, aenderte den Workspace-Namen (in der DB verifiziert)
+und passierte das Gate auch bei Mitglieder-Patch und Workspace-Delete.
+
+**Die Lehre steckt in den 404ern.** Drei der sieben Routen antworteten mit
+404/409 — und genau das sah aus wie Abwehr. Es war keine: das
+Autorisierungs-Gate war bereits durchlaufen, nur das Zielobjekt fehlte. Mit
+echter `user_id` bzw. in einer Org mit zwei Workspaces haetten die Aufrufe
+gegriffen. Ein Test, der „nicht 2xx" prueft, waere hier gruen geblieben und
+haette das Loch zugedeckt. Der Regressionstest fordert deshalb **403 plus
+`reason`** und faehrt tabellengetrieben alle sieben Routen, damit eine achte
+Admin-Route nicht stillschweigend ungeschuetzt bleibt.
+
+**Zweiter Fund beim Umbau:** das Praedikat „ist der Aufrufer agent-gebunden?"
+lag bereits zweifach im Repo (`workarea_scope`, `agent_service`). Eine dritte
+Kopie einzuziehen waere genau die Drift-Quelle gewesen, gegen die die Karte
+argumentiert — alle drei sind jetzt eine Definition in `core/security.py`.
+Detail-Entscheidung in DECISIONS 2026-09-25, Plan unter
+`.claude/plan/2026-09-25-2210_agent-bound-admin-gate.md`.
+
+**Offen (nicht hier):** Klasse 2 — `get_current_user` verwirft die
+Agent-Bindung strukturell (`me.py`, `organizations.py`, `gdpr.py`). Owner-Weiche,
+Karte `t_1b046ae7`.
+
 ## Der Issue-Bezug im PR ist jetzt Norm, nicht Gewohnheit (2026-09-24, #625)
 
 `.github/pull_request_template.md` fragt ihn als erste Sektion mit drei

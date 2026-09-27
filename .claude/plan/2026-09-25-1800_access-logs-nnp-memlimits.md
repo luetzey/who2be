@@ -91,9 +91,9 @@ Zusaetzlich, ohne dass die Karte es verlangt:
 
 1. `deploy/hetzner/Caddyfile`: Snippet `(access_log)`, in alle vier Site-Bloecke
    importiert. Output `file /var/log/caddy/access.log` (Volume → Host, A7),
-   `roll_size 10MiB`, `roll_keep 10`, `roll_keep_for 336h` (zweite Grenze);
-   Query-Redaction via `format filter`. Die 14-Tage-Frist traegt der Host-Cron
-   aus Schritt 7, nicht diese Direktiven.
+   `roll_size 10MiB`, `roll_keep 10`, `roll_keep_for 336h` — Groessengrenzen fuer
+   Caddys **eigene** Generationen; Query-Redaction via `format filter`. Die
+   14-Tage-Frist traegt das Skript aus Schritt 7, nicht diese Direktiven.
 2. `deploy/hetzner/who2be/docker-compose.yml`: `caddy-logs`-Volume;
    `logging:`-Limits (`json-file`, `max-size 10m`, `max-file 3`),
    `security_opt`, `mem_limit` an **allen** Diensten inkl. Profil-Diensten.
@@ -103,13 +103,22 @@ Zusaetzlich, ohne dass die Karte es verlangt:
    (Log-Zugriff + Verhalten bei Limit-Ueberschreitung, A15-Satz 2).
 5. Test `apps/api/tests/test_compose_hardening.py`: erzwingt Vollstaendigkeit
    (jeder Dienst in beiden Hetzner-Files traegt alle drei Bloecke) — damit ist
-   „vollstaendig, nicht stichprobenhaft" nicht nur heute wahr.
+   „vollstaendig, nicht stichprobenhaft" nicht nur heute wahr. Dazu
+   `deploy/hetzner/tests/test_access_log_rotation.sh`, das die **Wirkung** des
+   Rotationsverfahrens ausfuehrt statt Zeichenketten zu suchen; im CI-Job
+   `compose-smoke` verdrahtet, weil nur dort ein Docker-Daemon laeuft.
 6. Verifikation: `caddy validate` mit dem echten 2.8.4-Binary,
    YAML-Parse + Test-Suite, ruff/mypy. Zusaetzlich das Rotationsverfahren
    aus Schritt 7 real gegen einen laufenden `caddy:2.8-alpine`-Container.
-7. Host-Cron fuer die 14-Tage-Frist im RUNBOOK: die Caddy-Direktiven deckeln
-   Groesse, nicht Zeit, also braucht die Frist einen eigenen Ausloeser
-   (dasselbe Muster wie bei Backup und Retention-Purge).
+7. **`deploy/hetzner/scripts/rotate-access-log.sh`** + Host-Cron im RUNBOOK: die
+   Caddy-Direktiven deckeln Groesse, nicht Zeit, also braucht die Frist einen
+   eigenen Ausloeser (dasselbe Muster wie bei Backup und Retention-Purge). Ein
+   Skript und keine Kommandokette, weil die drei Teile unterschiedlich
+   fehlschlagen duerfen: die Rotation hat an einem Tag ohne Anfragen nichts zu
+   tun (Caddy legt `access.log` erst beim ersten Request an), die Loeschung muss
+   trotzdem laufen. Sie deckt beide Generationen-Namensklassen ab. Ein
+   Fehlschlag endet rot, schreibt keinen Erfolgsstempel und pingt keinen
+   Heartbeat.
 8. Changelog-Fragment unter `changelog.d/<slug>.security.md` — **nicht** direkt
    in `CHANGELOG.md`. Das Fragment-Verfahren aus CONTRIBUTING.md (#587) ist
    nicht Stilfrage, sondern vom CI-Job `changelog-guard` erzwungen; ein
@@ -201,22 +210,42 @@ moeglich — mehr als erwartet ist verifiziert:
   einen zu knappen Deckel erkennt (dauerhaft > 80 %) und wie man ihn anhebt.
   **Kein CI-Job schliesst diese Luecke:** `compose-smoke` startet
   `docker compose up` ohne `-f`, also das Root-`docker-compose.yml` der lokalen
-  Entwicklung; die Dateien unter `deploy/hetzner/` laufen in keinem Workflow
-  (nur `deploy.yml` referenziert sie, und das erst auf der Zielmaschine). Der
-  gruene `compose-smoke` belegt fuer diese Aenderung nur, dass der lokale Stack
-  weiterhin startet — nicht den Startpfad der geaenderten Stacks.
+  Entwicklung; die Compose-Dateien unter `deploy/hetzner/` laufen in keinem
+  Workflow (nur `deploy.yml` referenziert sie, und das erst auf der
+  Zielmaschine). Der gruene `compose-smoke` belegt fuer diese Aenderung nur,
+  dass der lokale Stack weiterhin startet — nicht den Startpfad der geaenderten
+  Stacks. **Ausnahme, und nur diese:** der Job faehrt zusaetzlich
+  `test_access_log_rotation.sh` gegen das echte `caddy:2.8-alpine`. Das belegt
+  das Rotationsverfahren, nicht den Stack-Start.
 
 - **Rotationsverfahren dagegen real geprueft** (podman, `caddy:2.8-alpine`,
   Binary v2.8.4), weil es die Frist traegt:
   - `roll_keep_for` erfasst die **aktive** Datei nicht: ohne Rotationsereignis
-    bleibt sie bestehen — der Grund, warum der Host-Cron existiert.
+    bleibt sie bestehen — der Grund, warum das Rotations-Skript existiert. Es
+    erfasst zudem nur Caddys **eigene** Generationen (`access-<ts>.log.gz`),
+    nicht die des Skripts (`access.log.<ts>.gz`): gemessen blieb eine 2000 Tage
+    alt datierte `access.log.*`-Datei nach zwei echten Rotationen liegen,
+    dieselbe im lumberjack-Namensformat wurde geloescht. Deshalb raeumt das
+    Skript beide Klassen und `roll_keep_for` ist **kein** Rueckfall fuer die
+    Frist.
   - `copytruncate` (kopieren + `truncate -s 0`) erzeugt eine Datei voller
     Nullbytes: der Writer schreibt am alten Offset weiter. Deshalb `mv`.
   - Weder `USR1` noch `HUP` noch `caddy reload` oeffnen die Datei neu.
     Deshalb der Container-Neustart; gemessene Unterbrechung **0,7 s**.
-  - Der RUNBOOK-Einzeiler wortgleich gefahren: aktive Datei neu angelegt
-    (Rechte `0600`, keine Nullbytes), 20 Tage alte Generation geloescht,
-    3 Tage alte erhalten, Caddy antwortet danach weiter.
+  - **Caddy legt `access.log` erst beim ersten Request an**, nicht beim Start.
+    Eine `&&`-Kette liess deshalb an einem Tag ohne Anfragen auch die Loeschung
+    ausfallen — der Grund, warum das Verfahren ein Skript mit drei getrennt
+    fehlschlagenden Teilen ist und keine Kommandokette.
+  - busybox-`gzip` erhaelt die mtime des Originals **nicht**: die Generation
+    traegt den Rotations-, nicht den Schreibzeitpunkt. Das ist der konservative
+    Bezugspunkt; zusammen mit der `-mtime +N`-Semantik (greift ab N+1 Tagen)
+    liegt die Loeschschwelle zwei Tage unter der Frist, damit 14 Tage die
+    Obergrenze sind.
+  - Das gesamte Verfahren laeuft jetzt als Test:
+    `deploy/hetzner/tests/test_access_log_rotation.sh`, im CI-Job
+    `compose-smoke`. Jeder der Faelle wurde einzeln **rot** gefahren (Loeschung
+    an der Rotation aufgehaengt, Loeschmuster auf eine Namensklasse reduziert,
+    Schwelle auf die Frist gesetzt).
 - **Coverage-Gate lokal:** `pytest --cov --cov-fail-under=85` scheitert hier
   mit 63,40 %, weil ohne erreichbare DB 485 Integrationstests uebersprungen
   werden. Gegenprobe auf `main`: identische 63,40 % und dieselben 485 Skips bei

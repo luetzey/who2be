@@ -2,5 +2,5 @@
   — die Zahl steht jetzt in beiden Dokumenten richtig.
 
   Ein neuer Guard (`packages/models/tests/test_doc_tool_count.py`) haelt die
-  Prosa-Zahl gegen `MCP_TOOL_REQUIREMENTS`, damit sie nicht wieder auseinander
-  laeuft.
+  Prosa-Zahl in `README.md`, `ROADMAP.md` und `CLAUDE.md` gegen
+  `MCP_TOOL_REQUIREMENTS`, damit sie nicht wieder auseinander laeuft.

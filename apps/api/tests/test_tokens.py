@@ -79,6 +79,25 @@ def _delete_agent(agent_id: UUID) -> None:
     asyncio.run(_run())
 
 
+def _set_token_role(token_id: UUID, role: str) -> None:
+    """Setzt die Rolle eines Tokens direkt in der DB.
+
+    Ueber die API entsteht seit dem Rollen-Deckel kein `admin`-Token mehr. Ein
+    Bestands-Token aus der Zeit davor laesst sich deshalb nur noch so
+    herstellen — und genau den brauchen die Tests, die das MFA-Gate auf
+    `rotate` belegen.
+    """
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute("UPDATE api_token SET role = $2 WHERE id = $1", token_id, role)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
 def _jwt(owner_id: UUID, *, aal: str | None = None) -> str:
     # `aal` (Authenticator Assurance Level, #469): unset by default, wie ein
     # aelteres/handsigniertes Test-JWT ohne den GoTrue-Claim. Explizit gesetzt
@@ -378,11 +397,19 @@ def test_token_listing_pagination_and_validation(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.integration
-def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
-    """#469 AC1: ein `admin`-Token laesst sich nur aus einer aal2-Session anlegen.
+def test_admin_token_create_is_capped_to_editor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#469 AC1, nachgezogen: `create` stellt gar kein `admin`-Token mehr aus.
 
-    Der Owner ist Workspace-`admin` (Seed) — ohne explizite `role` erbt der
-    Token also `admin` (Snapshot-Regel) und faellt unter das Admin-MFA-Gate.
+    Der Owner ist Workspace-`admin` (Seed). Frueher erbte der Token diese Rolle
+    (Snapshot-Regel) und fiel damit unter das Admin-MFA-Gate. Seit dem
+    Rollen-Deckel fuer agent-gebundene Tokens ist der geerbte Snapshot auf
+    `editor` beschnitten — die MFA-Schwelle aus #469 ist hier nicht gefallen,
+    sondern ueberholt: was sie schuetzte, entsteht auf diesem Pfad nicht mehr.
+    Sie steht weiterhin auf `rotate` (naechster Test), wo ein Bestands-Token
+    noch `admin` tragen kann.
+
+    Der Test belegt beides: die aal1-Session wird nicht mehr blockiert, und der
+    Grund dafuer ist die gedeckelte Rolle — nicht ein weggefallenes Gate.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -397,18 +424,23 @@ def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
     try:
         with TestClient(app) as client:
             aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
-            blocked = client.post(
-                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal1_auth
+            inherited = client.post(
+                base, json={"name": "geerbt", "agent_id": agent_id}, headers=aal1_auth
             )
-            assert blocked.status_code == 403
-            assert blocked.json()["reason"] == "mfa_required"
+            assert inherited.status_code == 201
+            assert inherited.json()["role"] == "editor"
 
+            # Ausdruecklich angefordert bleibt es eine Absage — und zwar mit dem
+            # fachlichen Grund, nicht mit `mfa_required`: auch eine aal2-Session
+            # bekommt kein admin-Token mehr.
             aal2_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal2')}"}
-            created = client.post(
-                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal2_auth
+            explicit = client.post(
+                base,
+                json={"name": "admin-token", "agent_id": agent_id, "role": "admin"},
+                headers=aal2_auth,
             )
-            assert created.status_code == 201
-            assert created.json()["role"] == "admin"
+            assert explicit.status_code == 403
+            assert explicit.json()["reason"] == "agent_bound_role_capped"
     finally:
         cleanup_workspaces([owner_id])
 
@@ -417,9 +449,10 @@ def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
 def test_admin_token_rotate_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
     """#469 AC2: das Rotieren eines bestehenden `admin`-Tokens verlangt aal2.
 
-    Ohne das Gate koennte eine aal1-Session die Ausstellungs-Schwelle aus
-    `create` umgehen, indem sie einfach ein neues Secret fuer ein bestehendes
-    admin-Token anfordert.
+    Ohne das Gate koennte eine aal1-Session ein Bestands-Token aus der Zeit vor
+    dem Rollen-Deckel weiterbetreiben, indem sie einfach ein neues Secret dafuer
+    anfordert. `create` kann ein solches Token nicht mehr ausstellen — der Test
+    stellt es deshalb direkt in der DB her, so wie es im Bestand vorkommt.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -440,6 +473,7 @@ def test_admin_token_rotate_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> No
             assert created.status_code == 201
             token_id = created.json()["id"]
             old_plaintext = created.json()["token"]
+            _set_token_role(UUID(token_id), "admin")
 
             aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
             blocked = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
