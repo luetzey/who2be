@@ -75,6 +75,11 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       RATE_LIMIT_WRITE: ${RATE_LIMIT_WRITE:-30/minute}
       LOG_FORMAT: ${LOG_FORMAT:-json}
+      # /docs, /redoc, /openapi.json (H5 / F-13). Default false — Caddy hat
+      # keinen Auth-Layer davor. Die Zeile muss hier stehen: der Stack nutzt
+      # kein `env_file`, eine nur in `.env` gesetzte Variable erreicht den
+      # Container nicht (Guard: apps/api/tests/test_compose_env_promises.py).
+      WHO2BE_DOCS_PUBLIC: ${WHO2BE_DOCS_PUBLIC:-false}
       # OAuth-Remote-MCP-Connector (ADR-0036): die API ist OAuth-2.1-AS. Die URLs
       # leiten sich aus ${DOMAIN} ab (wie Caddys api./app./mcp.-Bloecke).
       # MCP_RESOURCE_URL muss der vom MCP-Server advertisierten Resource gleichen
