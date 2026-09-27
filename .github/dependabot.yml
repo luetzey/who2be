@@ -107,6 +107,67 @@ updates:
           - "minor"
           - "patch"
 
+  # --- Compose-Images (Betriebs-Stacks) ------------------------------------
+  # `docker` oben erfasst ausschliesslich Dockerfiles. Die Images, die den
+  # Betrieb tragen — Caddy, Postgres, GoTrue, nginx, Redis, SeaweedFS — stehen
+  # aber nicht in einem Dockerfile, sondern als `image:`-Pin in Compose-Dateien.
+  # Ohne dieses Ecosystem laufen deren Updates durch kein Verfahren; der
+  # CI-`audit`-Job prueft Python- und npm-Pakete, nicht Container-Tags.
+  #
+  # Vollstaendigkeit ist hier der ganze Punkt: eine Teilabdeckung waere
+  # schlechter als keine, weil die nicht erfassten Dateien dann als geprueft
+  # gelten. Erfasst sind daher ALLE vier Verzeichnisse, in denen Compose-Dateien
+  # externe Images pinnen:
+  #   /                          docker-compose.yml, docker-compose.cloud.yml
+  #   /deploy/dokploy            docker-compose.yml, docker-compose.cloud.yml
+  #   /deploy/hetzner/supabase   docker-compose.yml
+  #   /deploy/hetzner/who2be     docker-compose.yml, .cloud.yml, .local.yml
+  # Gegen stilles Auseinanderlaufen gesichert: der Test
+  # `apps/api/tests/test_dependabot_compose_coverage.py` zaehlt die Compose-
+  # Dateien des Repos ab und failt, sobald eine in einem hier nicht genannten
+  # Verzeichnis auftaucht. Eine neue Datei darf nicht unbemerkt durchfallen.
+  #
+  # Nicht erfasst bleiben `docker-compose.images.yml` und
+  # `docker-compose.e2e-cloud.yml` im Root: beide pinnen kein externes Image
+  # (nur eigene ghcr.io-Tags bzw. gar keins) — sie liegen aber im ohnehin
+  # erfassten Root-Verzeichnis, es entsteht also keine Luecke.
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/"
+      - "/deploy/dokploy"
+      - "/deploy/hetzner/supabase"
+      - "/deploy/hetzner/who2be"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps(compose)"
+    groups:
+      compose-images:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major-Bumps der Datenhalter sind Migrationen, keine Bot-Arbeit: ein
+      # Postgres-Major verlangt `pg_upgrade` bzw. Dump/Restore, ein
+      # GoTrue-Major faehrt Auth-Migrationen im Startvorgang (RUNBOOK
+      # §GoTrue-Version anheben). Als Auto-PR waeren sie ein stiller
+      # Datenverlust-Pfad; minor/patch kommen weiter gruppiert.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pgvector/pgvector"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "supabase/postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "supabase/gotrue"
+        update-types: ["version-update:semver-major"]
+
   # --- Container-Base-Images (alle Dockerfiles) ----------------------------
   # `directories` (plural) buendelt alle vier Dockerfile-Pfade in EINE
   # Ecosystem-Konfiguration; Base-Image-Bumps (postgres, gotrue, caddy, …)

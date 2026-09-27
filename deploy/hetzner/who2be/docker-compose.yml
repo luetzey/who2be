@@ -339,7 +339,12 @@ services:
     mem_limit: 512m
 
   caddy:
-    image: caddy:2.8-alpine
+    # 2.11.4 (Juni 2026). Der Sprung von 2.8.4 (Mai 2024) ist eine reine
+    # Versionsanhebung: `caddy adapt` liefert fuer dieses Caddyfile in beiden
+    # Versionen byte-identisches Config-JSON, `caddy validate` ist in beiden
+    # gruen, und `tests/test_headers.sh` laeuft gegen beide Images gruen —
+    # Begruendung und Messprotokoll in ../RUNBOOK.md §Caddy-Version anheben.
+    image: caddy:2.11.4-alpine
     ports:
       - "80:80"
       - "443:443"
