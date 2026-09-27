@@ -37,7 +37,10 @@ const de = {
     },
     price: {
       free: 'Kostenlos',
-      perMonth: '{{amount}} €/Monat',
+      // Intl-Formatierung (i18next-Built-in): 9.99 wird im deutschen Locale zu
+      // „9,99". Ohne den `number`-Formatter stuende hier der rohe
+      // JS-Zahlenstring mit Dezimalpunkt.
+      perMonth: '{{amount, number}} €/Monat',
     },
     features: {
       label: 'Features',
@@ -84,7 +87,7 @@ const en = {
     },
     price: {
       free: 'Free',
-      perMonth: '€{{amount}}/month',
+      perMonth: '€{{amount, number}}/month',
     },
     features: {
       label: 'Features',
