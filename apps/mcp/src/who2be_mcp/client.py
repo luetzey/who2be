@@ -476,23 +476,45 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}")
         return AgentRead.model_validate(data)
 
-    async def get_playbook_rendered(self, playbook_id: UUID, locale: str | None = None) -> str:
-        """Laedt den serverseitig expandierten Playbook-Body (B5).
+    async def get_playbook_rendered(
+        self,
+        playbook_id: UUID,
+        locale: str | None = None,
+        block_ids: list[str] | None = None,
+    ) -> tuple[str, list[ResourceBlockAnchor]]:
+        """Laedt den serverseitig expandierten Playbook-Body (B5) + seine Gliederung.
 
         Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den BlockNote-Body
         durch den Placeholder-Renderer (Inline-Pills → Plain-Text). Der MCP-Prozess
         hat keinen DB-Zugriff — das Rendering MUSS daher ueber diesen Endpoint laufen.
 
-        Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist fuer
-        den Agent-Konsum nicht relevant (best-effort Expansion).
+        `block_ids` schneidet serverseitig auf die Sections dieser Heading-Anker.
+        Der Schnitt kann NICHT hier passieren: `body_rendered` ist flacher Text
+        ohne Anker, die Struktur existiert nur vor dem Rendern.
+
+        Gibt `(body_rendered, sections)` zurueck; `sections` ist immer die
+        vollstaendige Gliederung, auch bei geschnittenem Body. Die
+        `unresolved`-Liste ist fuer den Agent-Konsum nicht relevant (best-effort
+        Expansion).
         """
-        params = {"locale": locale} if locale is not None else None
+        params: dict[str, str] = {}
+        if locale is not None:
+            params["locale"] = locale
+        if block_ids is not None:
+            params["sections"] = ",".join(block_ids)
         data = await self._get(
             f"{self._workspace_prefix}/playbooks/{playbook_id}/rendered",
-            params=params,
+            params=params or None,
         )
-        body = data.get("body_rendered") if isinstance(data, dict) else None
-        return body if isinstance(body, str) else ""
+        if not isinstance(data, dict):
+            return "", []
+        body = data.get("body_rendered")
+        raw_sections = data.get("sections")
+        sections = [
+            ResourceBlockAnchor.model_validate(item)
+            for item in (raw_sections if isinstance(raw_sections, list) else [])
+        ]
+        return (body if isinstance(body, str) else ""), sections
 
     async def list_system_prompts(
         self, locale: str | None = None

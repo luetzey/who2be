@@ -212,6 +212,11 @@ class PlaybookWithResources(BaseModel):
     nachladen. Ein Composite-Agent folgt der Reihenfolge in `composed_playbooks`
     Schritt fuer Schritt.
 
+    `sections` ist die Gliederung des Playbook-Bodys (Heading-Anker: `block_id`,
+    `level`, `text`). Sie liegt in JEDER Antwort bei — auch im
+    `format="outline"`-Zuschnitt, der sonst nichts enthaelt — und ist damit der
+    Katalog, aus dem ein selektiver Folge-Abruf seine `block_ids` waehlt.
+
     `locale` spiegelt `playbook.locale` auf Top-Level (Plan „Ein Element, eine
     Sprache", 2026-07-24) — die Sprache des Playbooks als bequem erreichbares
     Metadatum.
@@ -227,6 +232,10 @@ class PlaybookWithResources(BaseModel):
     # stringifiziertes BlockNote-JSON ist. Additives Feld → bricht den
     # bestehenden ADR-0021-Vertrag nicht.
     body_rendered: str = ""
+    # Heading-Anker des Bodys. Immer vollstaendig, unabhaengig davon, ob der
+    # Body geschnitten wurde — sonst waere die Gliederung nach dem ersten
+    # selektiven Abruf nicht mehr auffindbar.
+    sections: list[ResourceBlockAnchor] = []
     locale: str
 
 
@@ -319,6 +328,16 @@ def _version_without_content_body(version: AnyVersionRead) -> AnyVersionRead:
         # PersonaVersionContent schachtelt das Profil noch eine Ebene tiefer.
         update["content"] = inner.model_copy(update={"blocks": []})
     return version.model_copy(update={"content": content.model_copy(update=update)})
+
+
+# Zuschnitte der `fetch_playbook`-Antwort. Eigener Wertebereich, weil dieses
+# Werkzeug einen dritten Modus hat, den kein anderes kennt:
+# - "outline": nur Metadaten + `sections` — der Einstieg, wenn die Ankernamen
+#   noch unbekannt sind. Kein Body, kein Editor-JSON.
+# - "text":    Prozedur als Plain-Text in `body_rendered`, ohne Editor-JSON.
+# - "full":    der unveraenderte Default (mit Editor-JSON) fuer strukturelle
+#              Konsumenten (Editor, Diff).
+_PLAYBOOK_FORMATS: frozenset[str] = frozenset({"full", "text", "outline"})
 
 
 def _request_token(settings: Settings) -> str:
@@ -625,21 +644,46 @@ async def list_placeholders() -> PlaceholderCatalog:
 @with_tool_log("fetch_playbook")
 async def fetch_playbook(
     playbook_id: str,
+    block_ids: list[str] | None = None,
     locale: str | None = None,
     format: str = "full",
 ) -> PlaybookWithResources:
-    """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
+    """Laedt ein Playbook per UUID — im Regelfall NUR den Abschnitt, den du brauchst.
+
+    **Der empfohlene Weg ist zweistufig und billig:**
+
+    1. `fetch_playbook(id, format="outline")` — liefert Metadaten und in
+       `sections` die Gliederung (je Eintrag `block_id`, `level`, `text`).
+       Kein Body, kein Editor-JSON: wenige hundert Zeichen.
+    2. `fetch_playbook(id, block_ids=["<block_id>", ...], format="text")` —
+       liefert in `body_rendered` genau die gewaehlten Abschnitte. Ein
+       Abschnitt ist das Heading plus alles bis zum naechsten Heading gleicher
+       Ebene; Unterabschnitte kommen mit.
+
+    Brauchst du wirklich die ganze Prozedur (etwa weil du ein Playbook von
+    vorn bis hinten abarbeitest), nimm `format="text"` ohne `block_ids`. Den
+    Vollabruf mit Editor-JSON (`format="full"`, der Default) brauchen nur
+    strukturelle Konsumenten wie Editor oder Diff — fuer einen Agenten ist er
+    die Ausnahme, nicht der Einstieg: er traegt dieselbe Prozedur ein zweites
+    Mal als BlockNote-JSON und macht bei grossen Playbooks den Loewenanteil
+    der Payload aus.
+
+    `block_ids` waehlt Abschnitte aus `sections`. Unbekannte Anker werden
+    ignoriert; eine Auswahl ohne Treffer liefert einen leeren
+    `body_rendered` (nicht etwa still das Volldokument). Weil ein Ausschnitt
+    sich als Editor-JSON nicht sinnvoll abbilden laesst, bleibt
+    `playbook.content.body` bei gesetztem `block_ids` immer leer — auch unter
+    `format="full"`. `sections` bleibt dabei stets vollstaendig, damit du
+    nachfassen kannst, ohne neu zu inventarisieren.
 
     `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
 
-    - `"full"` (Default): die vollstaendige Antwort inklusive
-      `playbook.content.body`, dem rohen BlockNote-Editor-JSON. Fuer
-      Konsumenten, die den Body strukturell verarbeiten (Editor, Diff).
-    - `"text"`: `playbook.content.body` bleibt leer; die Prozedur steht in
-      `body_rendered`. Alle uebrigen Felder (Metadaten, Tags, Triggers,
-      Links, Composites) sind unveraendert vorhanden. Fuer Agenten der
-      guenstigere Pfad — das Editor-JSON ist dieselbe Prozedur ein zweites
-      Mal und macht bei grossen Playbooks den Loewenanteil der Payload aus.
+    - `"outline"`: nur Metadaten + `sections`. Kein `body_rendered`, kein
+      Editor-JSON, keine inline-Resources. Der Einstieg.
+    - `"text"`: Prozedur als Plain-Text in `body_rendered`,
+      `playbook.content.body` bleibt leer.
+    - `"full"` (Default): zusaetzlich `playbook.content.body`, das rohe
+      BlockNote-Editor-JSON.
 
     `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
     ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
@@ -664,7 +708,9 @@ async def fetch_playbook(
     Inline-Pills werden zu Plain-Text aufgeloest. Nutze `body_rendered` statt
     `playbook.content.body` — letzterer ist nur stringifiziertes BlockNote-JSON.
     """
-    _validate_response_format(format)
+    if format not in _PLAYBOOK_FORMATS:
+        allowed = ", ".join(sorted(_PLAYBOOK_FORMATS))
+        raise ToolError(f"Ungueltiges format: '{format}'. Erlaubt: {allowed}.")
     try:
         parsed = UUID(playbook_id)
     except ValueError as exc:
@@ -677,20 +723,26 @@ async def fetch_playbook(
     # Nur 'resource'-scope-Links mit embedding_mode='inline' ziehen das
     # Volldokument mit; 'lazy'-Links bleiben reine Pointer in `linked_blocks`
     # (Default lazy → kleinerer Kontext, der Agent laedt via fetch_resource nach).
+    # Unter "outline" entfaellt auch das: der Zuschnitt soll billig sein.
     inline_resource_ids: list[UUID] = []
     seen: set[UUID] = set()
-    for link in linked:
-        if (
-            link.link_scope == "resource"
-            and link.embedding_mode == "inline"
-            and link.resource_id not in seen
-        ):
-            seen.add(link.resource_id)
-            inline_resource_ids.append(link.resource_id)
+    if format != "outline":
+        for link in linked:
+            if (
+                link.link_scope == "resource"
+                and link.embedding_mode == "inline"
+                and link.resource_id not in seen
+            ):
+                seen.add(link.resource_id)
+                inline_resource_ids.append(link.resource_id)
     resources = [await client.get_resource(rid) for rid in inline_resource_ids]
     composed = await client.get_playbook_composes(parsed)
-    body_rendered = await client.get_playbook_rendered(parsed)
-    if format == "text":
+    # Der Schnitt liegt serverseitig: `body_rendered` ist flacher Text ohne
+    # Anker, die Blockstruktur existiert nur VOR dem Rendern. "outline" fragt
+    # die leere Auswahl an — Gliederung ja, Prozedur nein.
+    selection = [] if format == "outline" else block_ids
+    body_rendered, sections = await client.get_playbook_rendered(parsed, block_ids=selection)
+    if format != "full" or block_ids is not None:
         # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort selbst
         # bleibt unberuehrt, also verliert kein struktureller Konsument
         # (Editor, Diff) etwas. `body_rendered` traegt dieselbe Prozedur.
@@ -701,6 +753,7 @@ async def fetch_playbook(
         linked_resources=resources,
         composed_playbooks=composed,
         body_rendered=body_rendered,
+        sections=sections,
         locale=playbook.locale,
     )
 

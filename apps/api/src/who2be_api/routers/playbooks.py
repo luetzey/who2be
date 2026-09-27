@@ -207,14 +207,34 @@ async def update_playbook_draft(
 
 
 @router.get("/{playbook_id}/rendered")
-async def render_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRenderResponse:
+async def render_playbook(
+    playbook_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    sections: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Kommagetrennte Heading-Anker (block_id). Ungesetzt: der ganze "
+                "Body. Gesetzt — auch leer: nur die genannten Sections werden "
+                "gerendert; ohne Treffer bleibt der Body leer (ein Tippfehler "
+                "liefert also nicht still das Volldokument)."
+            )
+        ),
+    ] = None,
+) -> PlaybookRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
 
     Track B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden
     serverseitig zu Plain-Text expandiert. Wird vom MCP-Tool `fetch_playbook`
     genutzt.
+
+    `sections` schneidet den Body vor dem Rendern auf die genannten
+    Heading-Anker. Die Gliederung selbst steht in jeder Antwort im Feld
+    `sections` — ein Agent findet die Ankernamen also ohne Vollabruf.
     """
-    return await service.render(ctx, playbook_id)
+    block_ids = None if sections is None else [p.strip() for p in sections.split(",") if p.strip()]
+    return await service.render(ctx, playbook_id, block_ids)
 
 
 @router.get("/{playbook_id}/versions")

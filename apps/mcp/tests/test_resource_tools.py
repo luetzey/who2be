@@ -842,3 +842,228 @@ def test_fetch_playbook_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ToolError):
         asyncio.run(fetch_playbook(str(pid), format="plain"))
+
+
+# --------------------------------------------------------------------------
+# Blockselektion: Gliederung finden, dann nur den Abschnitt holen.
+#
+# Die API schneidet serverseitig (`?sections=`); der Fake-Handler unten bildet
+# genau diesen Vertrag nach, damit die Messung unten die Groesse misst, die
+# beim Agenten ankommt — nicht ein Feld, das zufaellig leer ist.
+# --------------------------------------------------------------------------
+
+
+def _heading_block(block_id: str, text: str, level: int = 1) -> dict[str, object]:
+    return {
+        "id": block_id,
+        "type": "heading",
+        "props": {"level": level},
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
+def _paragraph_block(block_id: str, text: str) -> dict[str, object]:
+    return {
+        "id": block_id,
+        "type": "paragraph",
+        "props": {
+            "backgroundColor": "default",
+            "textColor": "default",
+            "textAlignment": "left",
+        },
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
+def _sectioned_blocks(sections: int, paragraphs_each: int) -> list[dict[str, object]]:
+    blocks: list[dict[str, object]] = []
+    for s in range(sections):
+        blocks.append(_heading_block(f"h{s}", f"Abschnitt {s}"))
+        for p in range(paragraphs_each):
+            blocks.append(
+                _paragraph_block(
+                    f"h{s}-p{p}",
+                    f"Abschnitt {s}, Schritt {p}: Prozedurtext dieses Playbook-Absatzes.",
+                )
+            )
+    return blocks
+
+
+def _sectioned_playbook_handler(
+    pid: UUID, playbook: dict[str, object], blocks: list[dict[str, object]]
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Fake-API, die `?sections=` wie der echte Endpoint auswertet."""
+
+    def _slice(selected: list[str]) -> list[dict[str, object]]:
+        keep: list[dict[str, object]] = []
+        taking = False
+        for block in blocks:
+            if block["type"] == "heading":
+                taking = block["id"] in selected
+            if taking:
+                keep.append(block)
+        return keep
+
+    def _plain(chosen: list[dict[str, object]]) -> str:
+        texts = []
+        for block in chosen:
+            inline = block["content"]
+            assert isinstance(inline, list)
+            texts.append(str(inline[0]["text"]))
+        return "\n\n".join(texts)
+
+    def _anchors() -> list[dict[str, object]]:
+        return [
+            {
+                "block_id": block["id"],
+                "level": block["props"]["level"],  # type: ignore[index]
+                "text": block["content"][0]["text"],  # type: ignore[index]
+            }
+            for block in blocks
+            if block["type"] == "heading"
+        ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            raw = request.url.params.get("sections")
+            chosen = blocks if raw is None else _slice([p for p in raw.split(",") if p])
+            return httpx.Response(
+                200,
+                json={
+                    "body_rendered": _plain(chosen),
+                    "unresolved": [],
+                    "sections": _anchors(),
+                },
+            )
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    return handler
+
+
+def _sectioned_fixture(
+    monkeypatch: pytest.MonkeyPatch, sections: int = 12, paragraphs_each: int = 15
+) -> UUID:
+    pid = uuid4()
+    blocks = _sectioned_blocks(sections, paragraphs_each)
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["content"]["body"] = json.dumps(blocks, ensure_ascii=False)  # type: ignore[index]
+    monkeypatch.setattr(
+        server, "build_client", _factory(_sectioned_playbook_handler(pid, playbook, blocks))
+    )
+    return pid
+
+
+def test_fetch_playbook_block_selection_is_a_fraction_of_the_full_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rot-Probe: ein Abschnitt kostet einen Bruchteil des Volldokuments.
+
+    Gemessen wird die serialisierte Antwortgroesse — nicht ob ein Feld
+    existiert. Ohne echten Schnitt liefert die Auswahl dieselbe Payload wie
+    der Vollabruf und der Faktor unten reisst.
+    """
+    pid = _sectioned_fixture(monkeypatch)
+
+    full = asyncio.run(fetch_playbook(str(pid)))
+    one = asyncio.run(fetch_playbook(str(pid), block_ids=["h3"], format="text"))
+
+    full_chars = _payload_chars(full)
+    one_chars = _payload_chars(one)
+
+    assert full_chars > _TEXT_PATH_CHAR_LIMIT, (
+        f"Fixture zu klein ({full_chars} Zeichen) — der Vollabruf muss das "
+        "Budget reissen, sonst beweist die Auswahl nichts."
+    )
+    # Eine von zwoelf Sections: die Auswahl muss um Groessenordnungen kleiner
+    # sein, nicht nur ein bisschen.
+    assert one_chars * 10 < full_chars, (
+        f"Blockauswahl {one_chars} Zeichen vs. Vollabruf {full_chars} — der Schnitt greift nicht."
+    )
+    # Und es ist der RICHTIGE Abschnitt.
+    assert "Abschnitt 3, Schritt 0" in one.body_rendered
+    assert "Abschnitt 4" not in one.body_rendered
+
+
+def test_fetch_playbook_outline_is_findable_without_full_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gliederung ist ohne Vollabruf erreichbar — sonst waere sie nutzlos."""
+    pid = _sectioned_fixture(monkeypatch)
+
+    outline = asyncio.run(fetch_playbook(str(pid), format="outline"))
+
+    assert [s.block_id for s in outline.sections][:3] == ["h0", "h1", "h2"]
+    assert outline.sections[0].text == "Abschnitt 0"
+    # Der Einstieg traegt KEINE Prozedur — sonst waere er kein Einstieg.
+    assert outline.body_rendered == ""
+    assert outline.playbook.content.body == ""
+    assert _payload_chars(outline) < 5_000
+
+
+def test_fetch_playbook_keeps_outline_after_slicing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach dem Schnitt bleibt die Gliederung vollstaendig — Nachfassen ohne Neuabruf."""
+    pid = _sectioned_fixture(monkeypatch)
+
+    one = asyncio.run(fetch_playbook(str(pid), block_ids=["h3"], format="text"))
+
+    assert len(one.sections) == 12
+
+
+def test_fetch_playbook_selection_forwards_anchors_to_the_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Schnitt MUSS serverseitig passieren — `body_rendered` hat keine Anker."""
+    pid = uuid4()
+    blocks = _sectioned_blocks(3, 2)
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["content"]["body"] = json.dumps(blocks, ensure_ascii=False)  # type: ignore[index]
+    seen: list[str | None] = []
+    inner = _sectioned_playbook_handler(pid, playbook, blocks)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/rendered"):
+            seen.append(request.url.params.get("sections"))
+        return inner(request)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    asyncio.run(fetch_playbook(str(pid), block_ids=["h1", "h2"], format="text"))
+    assert seen == ["h1,h2"]
+
+
+def test_fetch_playbook_without_selection_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Additiv: ohne `block_ids` bleibt der Default-Abruf der alte."""
+    pid = _sectioned_fixture(monkeypatch, sections=3, paragraphs_each=2)
+
+    default = asyncio.run(fetch_playbook(str(pid)))
+
+    assert default.playbook.content.body != ""
+    assert "Abschnitt 0" in default.body_rendered
+    assert "Abschnitt 2" in default.body_rendered
+
+
+def test_fetch_playbook_selection_drops_editor_json_even_under_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Ausschnitt gibt es nicht als Editor-JSON — der Body bleibt leer."""
+    pid = _sectioned_fixture(monkeypatch, sections=3, paragraphs_each=2)
+
+    sliced = asyncio.run(fetch_playbook(str(pid), block_ids=["h1"], format="full"))
+
+    assert sliced.playbook.content.body == ""
+    assert "Abschnitt 1" in sliced.body_rendered

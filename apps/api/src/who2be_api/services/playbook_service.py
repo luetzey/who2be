@@ -10,7 +10,9 @@ Builder) liest die Current-Version inkl. Draft/Review (`ctx.sees_drafts`), reine
 Konsum-Agenten bleiben auf `active`. Draft-on-Edit-Konflikt aus dem Repo → 409.
 """
 
+import json
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -28,6 +30,12 @@ from who2be_api.core.security import (
     require_write_tags,
 )
 from who2be_api.repositories.playbook_repository import PlaybookRepository
+from who2be_api.repositories.playbook_resource_link_repository import (
+    _heading_level,
+    block_plain_text,
+    block_section_text,
+    is_heading_block,
+)
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.repositories.workspace_repository import WorkspaceRepository
 from who2be_api.services.content_locale import resolve_content_locale
@@ -49,6 +57,7 @@ from who2be_models import (
     PlaybookUsage,
     PlaybookVersionRead,
     ReadScope,
+    ResourceBlockAnchor,
     ResourceLinkSet,
     TriggerOverview,
     VersionDiff,
@@ -64,10 +73,83 @@ class PlaybookRenderResponse(BaseModel):
     Spiegelt den Agent-Render-Vertrag: `body_rendered` ist der Plain-Text-Output
     von `render_template_body` (Track B: Body ist immer BlockNote). `unresolved`
     listet deduplizierte, lexikografisch sortierte Miss-Keys.
+
+    `sections` traegt die Gliederung des Bodys als Heading-Anker (dieselbe
+    Heading-Only-Semantik wie `ResourceBlockAnchor`, ADR-0021). Sie wird IMMER
+    mitgeliefert — auch beim Vollabruf — und ist der Katalog, aus dem ein
+    selektiver Folge-Abruf seine `block_ids` waehlt.
     """
 
     body_rendered: str
     unresolved: list[str]
+    sections: list[ResourceBlockAnchor] = []
+
+
+def _playbook_body_blocks(body: str) -> list[dict[str, Any]] | None:
+    """Parst den BlockNote-Body zur Top-Level-Block-Liste.
+
+    Toleriert beide Shapes, die der Renderer akzeptiert (Top-Level-Array und
+    `{"content": [...]}`-Wrapper). `None` bedeutet „kein BlockNote-Body\" —
+    dann gibt es keine Gliederung und nichts zu schneiden (Legacy-Plaintext,
+    frische Drafts).
+    """
+    try:
+        parsed: Any = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if isinstance(parsed, list):
+        return [block for block in parsed if isinstance(block, dict)]
+    if isinstance(parsed, dict):
+        nested = parsed.get("content")
+        if isinstance(nested, list):
+            return [block for block in nested if isinstance(block, dict)]
+    return None
+
+
+def playbook_sections(body: str) -> list[ResourceBlockAnchor]:
+    """Heading-Anker eines Playbook-Bodys (Gliederung ohne Vollabruf).
+
+    Spiegelt `ResourceService.list_blocks`: nur Heading-Bloecke sind Anker,
+    `level` ist `props.level` (Default 1), `text` der Heading-Klartext.
+    """
+    blocks = _playbook_body_blocks(body)
+    if blocks is None:
+        return []
+    return [
+        ResourceBlockAnchor(
+            block_id=block_id,
+            level=_heading_level(block),
+            text=block_plain_text(block),
+        )
+        for block in blocks
+        if is_heading_block(block) and isinstance(block_id := block.get("id"), str)
+    ]
+
+
+def slice_playbook_body(body: str, block_ids: list[str]) -> str:
+    """Schneidet den BlockNote-Body auf die Sections der gewaehlten Anker.
+
+    Die Section-Regel kommt aus `block_section_text` — derselben Funktion, die
+    der Resource-Pfad fuer Block-Refs nutzt (ADR-0021): Anker-Heading plus alle
+    folgenden Bloecke bis exklusive zum naechsten Heading gleicher Ebene,
+    tiefere Headings bleiben drin. Keine zweite Kopie dieser Regel.
+
+    Die Ausgabe folgt der Dokument-Reihenfolge, nicht der Anfrage-Reihenfolge;
+    ueberlappende Auswahlen werden dedupliziert. Unbekannte Anker werden
+    ignoriert — eine leere Auswahl ergibt einen leeren Body (und damit einen
+    leeren `body_rendered`), nicht den Vollabruf.
+    """
+    blocks = _playbook_body_blocks(body)
+    if blocks is None:
+        return body
+    keep: set[str] = set()
+    for block_id in block_ids:
+        section_ids, _ = block_section_text(blocks, block_id)
+        keep.update(section_ids)
+    return json.dumps(
+        [block for block in blocks if block.get("id") in keep],
+        ensure_ascii=False,
+    )
 
 
 def _not_found() -> ApiError:
@@ -174,14 +256,32 @@ class PlaybookService:
         await self._sync_body_pills(ctx, playbook.id, data.content)
         return playbook
 
-    async def render(self, ctx: WorkspaceContext, playbook_id: UUID) -> PlaybookRenderResponse:
+    async def render(
+        self,
+        ctx: WorkspaceContext,
+        playbook_id: UUID,
+        block_ids: list[str] | None = None,
+    ) -> PlaybookRenderResponse:
         """Expandiert den Playbook-Body durch den Placeholder-Renderer (B5).
 
         Track B: Der Body ist immer BlockNote-JSON; Inline-Pills werden
         serverseitig expandiert. MCP nutzt diesen Endpoint, da der MCP-Prozess
         keinen DB-Zugriff hat.
+
+        Ist `block_ids` gesetzt, wird der Body VOR dem Rendern auf die Sections
+        dieser Heading-Anker geschnitten — der Schnitt muss hier liegen, weil
+        `body_rendered` ein flacher Text ohne Anker ist und sich nachtraeglich
+        nicht mehr zerlegen laesst. Gerendert (und damit aufgeloest) werden nur
+        die Pills der gewaehlten Sections; das spart zusaetzlich die DB-Lookups
+        der uebrigen. `sections` traegt IMMER die vollstaendige Gliederung des
+        ungeschnittenen Bodys — sonst waere der Katalog nach dem ersten Schnitt
+        nicht mehr auffindbar.
         """
         playbook = await self.get(ctx, playbook_id)
+        body = playbook.content.body
+        sections = playbook_sections(body)
+        if block_ids is not None:
+            body = slice_playbook_body(body, block_ids)
         render_ctx = RenderContext(
             workspace_id=ctx.workspace_id,
             persona_id=None,
@@ -196,11 +296,15 @@ class PlaybookService:
         )
         async with self._pool.acquire() as conn:
             body_rendered, unresolved = await render_template_body(
-                playbook.content.body,
+                body,
                 render_ctx,
                 conn,
             )
-        return PlaybookRenderResponse(body_rendered=body_rendered, unresolved=unresolved)
+        return PlaybookRenderResponse(
+            body_rendered=body_rendered,
+            unresolved=unresolved,
+            sections=sections,
+        )
 
     async def _sync_body_pills(
         self, ctx: WorkspaceContext, playbook_id: UUID, content: PlaybookContent
