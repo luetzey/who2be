@@ -60,7 +60,7 @@ services:
     restart: "no"
 
   auth:
-    image: supabase/gotrue:v2.196.0
+    image: supabase/gotrue:v2.197.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -154,7 +154,7 @@ services:
       retries: 10
 
   auth-gateway:
-    image: nginx:1.27-alpine
+    image: nginx:1.29-alpine
     volumes:
       - ./supabase/gateway.conf:/etc/nginx/conf.d/default.conf:ro
       # Schreibt /etc/nginx/resolver.conf beim Start aus der DNS-Adresse des
@@ -328,7 +328,7 @@ services:
   seaweedfs:
     # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
     # impliziten Image-Sprung haengen.
-    image: chrislusf/seaweedfs:4.22@sha256:84429e5f21fad82246f5cfae7b39e9a17da18afb62f2b79c25ccd364ab02793b
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
     # All-in-One (`server`) statt des Vier-Service-Stacks master/volume/filer/s3
     # aus SeaweedFS' eigener Compose-Vorlage: fuer EINEN Bucket waeren vier
     # Container ein schlechter Tausch gegen den einen MinIO-Container.
