@@ -1,5 +1,3 @@
-### Added
-
 - `fetch_playbook` (MCP) accepts `format="text"`: the response then carries the
   rendered procedure in `body_rendered` and leaves `content.body` — the raw
   BlockNote editor JSON — out. Both hold the same procedure, so for a client
