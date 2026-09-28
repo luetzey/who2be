@@ -110,7 +110,7 @@ jobs:
           # stillschweigend nicht mehr prueft, ist ein leeres Versprechen.
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: Sync dependencies
         # `--group billing` installiert das optionale Cloud-Billing-Paket, damit
         # dessen Tests + Typecheck laufen. Die Build-Zeit-Isolation (kein Mollie
@@ -759,7 +759,7 @@ jobs:
           # muss beide Historie da sein, ein flacher Checkout reicht nicht.
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: CHANGELOG.md nicht direkt bearbeiten (Fragment-Verfahren)
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -781,6 +781,23 @@ jobs:
           # `--no-project`: das Skript braucht nur die Standardbibliothek; ein
           # `uv sync` des Workspaces waere Minuten fuer nichts.
           uv run --no-project python scripts/changelog_fragments.py guard --base "$BASE_SHA"
+      - name: Fragment-Bestand auf Namensform pruefen (changelog.d/)
+        # BEWUSST ein eigener Step neben dem `guard` darueber, nicht derselbe:
+        # die beiden treffen verschiedene Aussagen, und bei Rot soll der
+        # Step-Name sagen, welche gebrochen ist.
+        #   guard -> die gegen die Basis GEAENDERTEN Dateien
+        #   check -> der BESTAND in changelog.d/
+        #
+        # Gemessener Anlass: ein Fragment mit falscher Namensform kam ueber
+        # PR #666 auf main. `guard --base origin/main` blieb gruen, weil die
+        # Datei in keinem spaeteren Diff mehr auftaucht — `check` ueber den
+        # Bestand war rot. Ohne diesen Step faellt derselbe Fall erst beim
+        # `collect`-Lauf zum Release auf, also an der teuersten Stelle.
+        #
+        # Kein PR-Kontext und kein Base-SHA noetig: `check` liest nur das
+        # Verzeichnis. Der Step laeuft deshalb auch beim Push auf main, wo
+        # sich der `guard`-Step oben absichtlich ueberspringt.
+        run: uv run --no-project python scripts/changelog_fragments.py check
 
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
@@ -791,7 +808,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: Export non-workspace deps
         # Editable Workspace-Members (apps/api, apps/mcp, packages/models)
         # filtern, weil pip-audit fuer sie keinen Hash aufloesen kann.

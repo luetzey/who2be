@@ -58,7 +58,13 @@ target-version = "py311"
 src = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/billing/src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# DTZ (flake8-datetimez): Alle Zeitnahme im Repo laeuft in UTC
+# (`datetime.now(UTC)`). Ein naives `date.today()`/`datetime.now()` in Ortszeit
+# hat zu einem Test gefuehrt, der zwischen 0:00 und 2:00 CEST strukturell rot
+# und in CI (UTC) gruen war — also nur bei lokalen Nachtlaeufen aufgefallen.
+# Die Regel haelt den Zeitbegriff einheitlich, statt den Fehler bei jedem
+# Rueckfall erneut zu suchen.
+select = ["E", "F", "I", "UP", "B", "DTZ"]
 
 [tool.mypy]
 python_version = "3.11"

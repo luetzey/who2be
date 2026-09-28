@@ -2086,7 +2086,7 @@
           "playbooks"
         ],
         "summary": "Render Playbook",
-        "description": "Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).\n\nTrack B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden\nserverseitig zu Plain-Text expandiert. Wird vom MCP-Tool `fetch_playbook`\ngenutzt.",
+        "description": "Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).\n\nTrack B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden\nserverseitig zu Plain-Text expandiert. Wird vom MCP-Tool `fetch_playbook`\ngenutzt.\n\n`sections` schneidet den Body vor dem Rendern auf die genannten\nHeading-Anker. Die Gliederung selbst steht in jeder Antwort im Feld\n`sections` — ein Agent findet die Ankernamen also ohne Vollabruf.",
         "operationId": "render_playbook_v1_workspaces__workspace_id__playbooks__playbook_id__rendered_get",
         "security": [
           {
@@ -2113,6 +2113,24 @@
               "format": "uuid",
               "title": "Workspace Id"
             }
+          },
+          {
+            "name": "sections",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Kommagetrennte Heading-Anker (block_id). Ungesetzt: der ganze Body. Gesetzt — auch leer: nur die genannten Sections werden gerendert; ohne Treffer bleibt der Body leer (ein Tippfehler liefert also nicht still das Volldokument).",
+              "title": "Sections"
+            },
+            "description": "Kommagetrennte Heading-Anker (block_id). Ungesetzt: der ganze Body. Gesetzt — auch leer: nur die genannten Sections werden gerendert; ohne Treffer bleibt der Body leer (ein Tippfehler liefert also nicht still das Volldokument)."
           }
         ],
         "responses": {
@@ -17270,6 +17288,14 @@
             },
             "type": "array",
             "title": "Unresolved"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceBlockAnchor"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
           }
         },
         "type": "object",
@@ -17278,7 +17304,7 @@
           "unresolved"
         ],
         "title": "PlaybookRenderResponse",
-        "description": "Antwort des Render-Endpoints: expandierter Body + offene Placeholder-Keys.\n\nSpiegelt den Agent-Render-Vertrag: `body_rendered` ist der Plain-Text-Output\nvon `render_template_body` (Track B: Body ist immer BlockNote). `unresolved`\nlistet deduplizierte, lexikografisch sortierte Miss-Keys."
+        "description": "Antwort des Render-Endpoints: expandierter Body + offene Placeholder-Keys.\n\nSpiegelt den Agent-Render-Vertrag: `body_rendered` ist der Plain-Text-Output\nvon `render_template_body` (Track B: Body ist immer BlockNote). `unresolved`\nlistet deduplizierte, lexikografisch sortierte Miss-Keys.\n\n`sections` traegt die Gliederung des Bodys als Heading-Anker (dieselbe\nHeading-Only-Semantik wie `ResourceBlockAnchor`, ADR-0021). Sie wird IMMER\nmitgeliefert — auch beim Vollabruf — und ist der Katalog, aus dem ein\nselektiver Folge-Abruf seine `block_ids` waehlt."
       },
       "PlaybookType": {
         "type": "string",
