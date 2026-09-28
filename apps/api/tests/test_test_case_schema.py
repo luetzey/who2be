@@ -25,6 +25,7 @@ import asyncio
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import TypedDict
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -42,6 +43,7 @@ from who2be_models import (
     TestCaseStatus,
     TestCheckKind,
     TestRunCreate,
+    TestRunRead,
     TestVerdict,
 )
 
@@ -432,6 +434,16 @@ def _case_input(agent_id: UUID, **overrides: object) -> TestCaseCreate:
     return TestCaseCreate.model_validate(data)
 
 
+class _HumanAuthor(TypedDict):
+    created_by_kind: TestCaseCreatedByKind
+    created_by: UUID
+
+
+def _human(seed: _Seed) -> _HumanAuthor:
+    """Urheberschaft „Mensch" fuer Repository-Aufrufe (Seed-User)."""
+    return {"created_by_kind": TestCaseCreatedByKind.human, "created_by": seed.user}
+
+
 def _with_repo(
     body: Callable[[PgTestCaseRepository, _Env], Awaitable[None]],
 ) -> None:
@@ -510,26 +522,25 @@ def test_repository_active_for_element_is_union() -> None:
     async def body(repo: PgTestCaseRepository, env: _Env) -> None:
         s = env.seed
         element_id = uuid4()
-        human = {"created_by_kind": TestCaseCreatedByKind.human, "created_by": s.user}
         direct = await repo.create_case(
             s.ws_a,
             _case_input(s.agent_a2, entity_type="playbook", entity_id=element_id),
-            **human,
+            **_human(s),
         )
-        via_agent = await repo.create_case(s.ws_a, _case_input(s.agent_a), **human)
+        via_agent = await repo.create_case(s.ws_a, _case_input(s.agent_a), **_human(s))
         # Gleicher Agent UND direkt gebunden -> genau einmal in der Menge.
         both = await repo.create_case(
             s.ws_a,
             _case_input(s.agent_a, entity_type="playbook", entity_id=element_id),
-            **human,
+            **_human(s),
         )
         # Anderes Element, nicht betroffener Agent -> nicht dabei.
         await repo.create_case(
             s.ws_a,
             _case_input(s.agent_a2, entity_type="playbook", entity_id=uuid4()),
-            **human,
+            **_human(s),
         )
-        retired = await repo.create_case(s.ws_a, _case_input(s.agent_a), **human)
+        retired = await repo.create_case(s.ws_a, _case_input(s.agent_a), **_human(s))
         await repo.retire_case(s.ws_a, retired.id)
 
         result = await repo.list_active_for_element(s.ws_a, "playbook", element_id, [s.agent_a])
@@ -545,11 +556,10 @@ def test_repository_active_for_element_is_union() -> None:
 def test_repository_supersede_is_one_transaction() -> None:
     async def body(repo: PgTestCaseRepository, env: _Env) -> None:
         s = env.seed
-        human = {"created_by_kind": TestCaseCreatedByKind.human, "created_by": s.user}
-        old = await repo.create_case(s.ws_a, _case_input(s.agent_a), **human)
+        old = await repo.create_case(s.ws_a, _case_input(s.agent_a), **_human(s))
 
         new = await repo.supersede_case(
-            s.ws_a, old.id, _case_input(s.agent_a, title="Frist, korrigiert"), **human
+            s.ws_a, old.id, _case_input(s.agent_a, title="Frist, korrigiert"), **_human(s)
         )
         assert new is not None
         assert new.supersedes_id == old.id
@@ -559,11 +569,12 @@ def test_repository_supersede_is_one_transaction() -> None:
         assert reloaded.title == old.title  # Inhalt unveraendert
 
         # Ein zurueckgezogener Vorgaenger laesst sich nicht erneut korrigieren.
-        assert await repo.supersede_case(s.ws_a, old.id, _case_input(s.agent_a), **human) is None
+        again = await repo.supersede_case(s.ws_a, old.id, _case_input(s.agent_a), **_human(s))
+        assert again is None
 
         # Scheitert der Insert (fremder Agent), bleibt der Vorgaenger aktiv.
         with pytest.raises(asyncpg.ForeignKeyViolationError):
-            await repo.supersede_case(s.ws_a, new.id, _case_input(s.agent_b), **human)
+            await repo.supersede_case(s.ws_a, new.id, _case_input(s.agent_b), **_human(s))
         still = await repo.get_case(s.ws_a, new.id)
         assert still is not None
         assert still.status is TestCaseStatus.active
@@ -576,9 +587,8 @@ def test_repository_supersede_is_one_transaction() -> None:
 def test_repository_runs_latest_wins_and_batch_is_atomic() -> None:
     async def body(repo: PgTestCaseRepository, env: _Env) -> None:
         s = env.seed
-        human = {"created_by_kind": TestCaseCreatedByKind.human, "created_by": s.user}
-        case_1 = await repo.create_case(s.ws_a, _case_input(s.agent_a), **human)
-        case_2 = await repo.create_case(s.ws_a, _case_input(s.agent_a2), **human)
+        case_1 = await repo.create_case(s.ws_a, _case_input(s.agent_a), **_human(s))
+        case_2 = await repo.create_case(s.ws_a, _case_input(s.agent_a2), **_human(s))
         version = uuid4()
 
         def run(case_id: UUID, verdict: str, passed: int) -> TestRunCreate:
@@ -591,20 +601,20 @@ def test_repository_runs_latest_wins_and_batch_is_atomic() -> None:
                 }
             )
 
-        reported = {
-            "reported_by_agent_id": s.agent_a,
-            "reported_by_user_id": None,
-            "model_provider": "local",
-            "model_name": "m1",
-        }
-        first = await repo.insert_runs(
-            s.ws_a,
-            "playbook",
-            version,
-            [run(case_1.id, "fail", 1)],
-            attestation=TestAttestation.client_self_report,
-            **reported,
-        )
+        async def agent_report(version_id: UUID, results: list[TestRunCreate]) -> list[TestRunRead]:
+            return await repo.insert_runs(
+                s.ws_a,
+                "playbook",
+                version_id,
+                results,
+                attestation=TestAttestation.client_self_report,
+                reported_by_agent_id=s.agent_a,
+                reported_by_user_id=None,
+                model_provider="local",
+                model_name="m1",
+            )
+
+        first = await agent_report(version, [run(case_1.id, "fail", 1)])
         assert first[0].attestation is TestAttestation.client_self_report
         assert first[0].model_name == "m1"
         # Menschliche Bewertung danach -> zaehlt als letztes Ergebnis.
@@ -620,14 +630,7 @@ def test_repository_runs_latest_wins_and_batch_is_atomic() -> None:
             model_name=None,
         )
         # Ergebnis fuer eine ANDERE Version darf den Bericht nicht beeinflussen.
-        await repo.insert_runs(
-            s.ws_a,
-            "playbook",
-            uuid4(),
-            [run(case_2.id, "pass", 3)],
-            attestation=TestAttestation.client_self_report,
-            **reported,
-        )
+        await agent_report(uuid4(), [run(case_2.id, "pass", 3)])
 
         latest = await repo.latest_runs_for_version(s.ws_a, version, [case_1.id, case_2.id])
         assert set(latest) == {case_1.id}  # case_2 fehlt -> im Bericht „missing"
@@ -637,14 +640,7 @@ def test_repository_runs_latest_wins_and_batch_is_atomic() -> None:
         # Charge mit einem inkonsistenten Ergebnis: nichts wird geschrieben.
         before = await env.owner.fetchval("SELECT count(*) FROM test_run")
         with pytest.raises(asyncpg.CheckViolationError):
-            await repo.insert_runs(
-                s.ws_a,
-                "playbook",
-                version,
-                [run(case_2.id, "pass", 3), run(case_1.id, "pass", 2)],
-                attestation=TestAttestation.client_self_report,
-                **reported,
-            )
+            await agent_report(version, [run(case_2.id, "pass", 3), run(case_1.id, "pass", 2)])
         assert await env.owner.fetchval("SELECT count(*) FROM test_run") == before
 
     _with_repo(body)
