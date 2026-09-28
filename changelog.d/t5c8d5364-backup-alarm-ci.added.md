@@ -1,12 +1,12 @@
-### Backup-Alarm-Suite laeuft in der CI
+- Die Backup-Alarm-Suite laeuft in der CI.
 
-Der CI-Job `backup-alarm` fuehrt `deploy/hetzner/tests/test_backup_alarm.sh`
-aus und haengt an `all-green`. Die Suite (17 Faelle, 92 Assertions) belegt die
-Kernzusagen der Backup-Automatisierung — Teilerfolg loest keinen gruenen
-Heartbeat aus (#541, W8/M3), der Lauf verbiegt den SQLite-Schreibpfad der API
-nicht, ein volllaufendes Backup-Ziel macht den Lauf rot und laesst den letzten
-guten Snapshot unversehrt. Bis hierher lief sie in keinem Workflow; die
-Assertions hingen daran, dass jemand das Skript von Hand startet.
+  Der CI-Job `backup-alarm` fuehrt `deploy/hetzner/tests/test_backup_alarm.sh`
+  aus und haengt an `all-green`. Die Suite (17 Faelle, 92 Assertions) belegt die
+  Kernzusagen der Backup-Automatisierung — Teilerfolg loest keinen gruenen
+  Heartbeat aus (#541, W8/M3), der Lauf verbiegt den SQLite-Schreibpfad der API
+  nicht, ein volllaufendes Backup-Ziel macht den Lauf rot und laesst den letzten
+  guten Snapshot unversehrt. Bis hierher lief sie in keinem Workflow; die
+  Assertions hingen daran, dass jemand das Skript von Hand startet.
 
 - `BACKUP_ALARM_REQUIRE_ALL=1` macht jeden uebersprungenen Fall zum Fehlschlag
   (Haltung wie `WHO2BE_REQUIRE_DB=1` und `assert_skips_within_budget.py`:
