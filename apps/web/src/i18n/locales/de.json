@@ -211,7 +211,7 @@
       "dashboard": "Dashboard",
       "agents": "Agents",
       "systemPrompts": "System-Prompts",
-      "personas": "Personae",
+      "personas": "Personas",
       "playbooks": "Playbooks",
       "resources": "Resources",
       "tools": "Externe Tools",
@@ -786,13 +786,13 @@
     },
     "kpis": {
       "ariaLabel": "Kennzahlen",
-      "activePersonas": "Aktive Personae",
+      "activePersonas": "Aktive Personas",
       "activePlaybooks": "Aktive Playbooks",
       "pendingReviewsDescription": "Versionen warten auf Review"
     },
     "statusDistribution": {
       "title": "Status-Verteilung",
-      "personas": "Personae",
+      "personas": "Personas",
       "playbooks": "Playbooks",
       "resources": "Resources"
     },
@@ -829,7 +829,7 @@
       "ariaLabel": "Braucht jetzt deine Aufmerksamkeit",
       "eyebrow": "Braucht jetzt deine Aufmerksamkeit",
       "reviews": {
-        "description": "Prüfe die offenen Entwürfe in Personae und Playbooks."
+        "description": "Prüfe die offenen Entwürfe in Personas und Playbooks."
       },
       "memories": {
         "title_one": "1 neuer Gedächtniseintrag wartet auf Freigabe",
@@ -1140,16 +1140,16 @@
   },
   "personas": {
     "list": {
-      "title": "Personae",
+      "title": "Personas",
       "description": "Versionierte Persona-Definitionen für deine Agenten.",
       "newPersona": "Neue Persona",
       "empty": {
-        "title": "Noch keine Personae",
+        "title": "Noch keine Personas",
         "description": "Lege deine erste Persona an, um Agenten zu konfigurieren."
       }
     },
     "detail": {
-      "back": "Personae",
+      "back": "Personas",
       "description": {
         "activeDraft": " · Du arbeitest auf Draft v{{version}}",
         "activeReview": " · In Review: v{{version}}",
@@ -1200,7 +1200,7 @@
       "label": "Duplizieren",
       "success": "Persona dupliziert.",
       "error": "Duplizieren fehlgeschlagen.",
-      "viewerReadOnly": "Viewer können Personae nur ansehen"
+      "viewerReadOnly": "Viewer können Personas nur ansehen"
     },
     "new": {
       "title": "Neue Persona",
@@ -1326,7 +1326,7 @@
     "delete": {
       "dialogTitle": "Persona löschen?",
       "success": "Persona gelöscht.",
-      "viewerReadOnly": "Viewer können Personae nur ansehen",
+      "viewerReadOnly": "Viewer können Personas nur ansehen",
       "blockedMessage": "Diese Persona wird noch verwendet von:",
       "dangerZoneTitle": "Persona löschen",
       "dangerZoneDescription": "Entfernt diese Persona samt allen Versionen dauerhaft. Kein Undo."
@@ -1426,7 +1426,7 @@
         "draftOpen": "Entwurf: v{{version}}",
         "inactiveCurrent": "Inaktiv: v{{version}}"
       },
-      "usedInDescription": "Personae, die dieses Playbook nutzen.",
+      "usedInDescription": "Personas, die dieses Playbook nutzen.",
       "subPlaybooksFlowDescription": "Dieses Composite ruft beim Rendern nacheinander auf:"
     },
     "form": {
@@ -1769,7 +1769,7 @@
       "dataPrivacy": {
         "title": "Daten & Datenschutz",
         "description": "Exportiere eine Kopie all deiner Daten (DSGVO).",
-        "exportHint": "Lädt alle Organisationen, Workspaces, Personae, Playbooks, Resources, Agenten und deren Versionen als JSON-Datei herunter.",
+        "exportHint": "Lädt alle Organisationen, Workspaces, Personas, Playbooks, Resources, Agenten und deren Versionen als JSON-Datei herunter.",
         "exportButton": "Daten exportieren",
         "exportSuccess": "Datenexport heruntergeladen.",
         "exportError": "Export fehlgeschlagen."
@@ -1806,7 +1806,7 @@
         "title": "Workspaces",
         "openButton": "Öffnen",
         "addTitle": "Workspace hinzufügen",
-        "addDescription": "Ein neuer Workspace gruppiert eigene Personae, Playbooks und Tokens.",
+        "addDescription": "Ein neuer Workspace gruppiert eigene Personas, Playbooks und Tokens.",
         "nameLabel": "Name",
         "slugLabel": "Slug",
         "slugDescription": "Eindeutig innerhalb der Organisation, in der URL verwendet.",
@@ -1828,7 +1828,7 @@
       },
       "dangerZone": {
         "title": "Danger-Zone",
-        "description": "Das Löschen merkt die Organisation samt aller Workspaces, Personae, Playbooks, Resources, Agenten und Tokens zur endgültigen Entfernung vor (30-Tage-Frist). Nur der Owner kann das ausführen.",
+        "description": "Das Löschen merkt die Organisation samt aller Workspaces, Personas, Playbooks, Resources, Agenten und Tokens zur endgültigen Entfernung vor (30-Tage-Frist). Nur der Owner kann das ausführen.",
         "triggerButton": "Organisation löschen",
         "dialogTitle": "Organisation löschen",
         "dialogDescription": "Gib zur Bestätigung den Namen „{{name}}\" ein. Alle Inhalte aller Workspaces gehen nach Ablauf der Frist verloren.",
@@ -1900,7 +1900,7 @@
       },
       "dangerZone": {
         "title": "Danger-Zone",
-        "description": "Das Löschen entfernt den Workspace samt aller Personae, Playbooks, Resources, Templates, Agenten und Tokens. Diese Aktion ist unwiderruflich.",
+        "description": "Das Löschen entfernt den Workspace samt aller Personas, Playbooks, Resources, Templates, Agenten und Tokens. Diese Aktion ist unwiderruflich.",
         "lastWorkspace": "Dies ist der letzte Workspace der Organisation und kann nicht gelöscht werden.",
         "triggerButton": "Workspace löschen",
         "dialogTitle": "Workspace löschen",

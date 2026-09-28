@@ -83,7 +83,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
     expect(screen.getByText(/Alice/)).toBeInTheDocument()
     expect(screen.getByText(/Coaching/)).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /Personae:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Personas:/ })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /Playbooks:/ })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /Resources:/ })).toBeInTheDocument()
   })

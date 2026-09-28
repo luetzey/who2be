@@ -334,4 +334,38 @@ describe('die echten Locale-Dateien dieses Repos', () => {
         `mehr. Bitte aus der Baseline streichen:\n${stale.map((k) => `  ${k}`).join('\n')}`,
     ).toEqual([])
   })
+
+  it.each([
+    ['de', de],
+    ['en', en],
+  ])('%s.json sagt „Personas“, nie „Personae“ (Owner-Entscheidung E3)', (locale: string, tree: unknown) => {
+    // Ein Begriff statt zwei: Navigation, Titel und Beschreibungen fuehrten
+    // „Personae“ neben „Personas“ (Audit 2026-09-28, E3). Entschieden ist
+    // „Personas“ in beiden Sprachen, auch als deutscher Plural. Geprueft wird
+    // jeder Wert, nicht nur die bekannten Schluessel — ein neuer Text mit dem
+    // alten Wort soll hier auffallen, nicht erst im Screenshot.
+    const hits = Object.entries(flattenValues(tree as LocaleTree)).filter(([, value]) =>
+      /\bpersonae\b/i.test(value),
+    )
+
+    expect(
+      hits,
+      `${locale}.json fuehrt noch „Personae“:\n${hits.map(([k, v]) => `  ${k}: ${v}`).join('\n')}`,
+    ).toEqual([])
+    expect((tree as { layout: { nav: { personas: string } } }).layout.nav.personas).toBe('Personas')
+  })
 })
+
+/** Alle Blatt-Werte eines Locale-Baums als `pfad → text`. */
+function flattenValues(tree: LocaleTree, prefix = ''): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(tree)) {
+    const at = prefix ? `${prefix}.${key}` : key
+    if (typeof value === 'string') {
+      out[at] = value
+    } else if (value && typeof value === 'object') {
+      Object.assign(out, flattenValues(value as LocaleTree, at))
+    }
+  }
+  return out
+}
