@@ -811,9 +811,11 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
     }
   }
 
+  // Zaehlt JEDEN Diff-Abruf, egal fuer welche Version — sonst fiele ein
+  // Abruf fuer eine nicht existierende Version (`diff=99`) nicht auf.
   function diffCalls(fetchMock: ReturnType<typeof vi.fn>): number {
-    return fetchMock.mock.calls.filter(
-      ([input]) => new URL(String(input)).pathname === DIFF_PATH,
+    return fetchMock.mock.calls.filter(([input]) =>
+      /\/personas\/p1\/versions\/[^/]+\/diff$/.test(new URL(String(input)).pathname),
     ).length
   }
 
