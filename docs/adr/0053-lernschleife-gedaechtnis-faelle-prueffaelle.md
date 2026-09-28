@@ -1,8 +1,7 @@
 # ADR-0053 — Lernschleife: Gedächtnis 2.0, Fälle, Prüffälle, Feedback-Gespräch
 
 - Status: **Accepted** (Owner, 2026-09-28) — alle Weichen in Abschnitt 8 sind
-  entschieden, **außer P4** (welche Prüffälle für eine Elementversion gelten).
-  P4 steht auf „vorgeschlagen“; B2 und B5 starten erst nach ihrer Bestätigung.
+  entschieden, P4 per Nachtrag vom 2026-09-28.
 - Datum: 2026-09-28
 - Gemessen gegen: `origin/main` @ `ef0756a3`. Alle Code-Aussagen tragen einen
   Symbolanker oder einen SHA-Permalink (Konvention `docs/code-references.md`).
@@ -22,7 +21,7 @@
 5. Migrationsweg und Rückweg
 6. MCP- und API-Verträge (Phasen B–E)
 7. Abbildung auf OWASP ASI06 und ADR-0038
-8. Weichen (entschieden; P4 vorgeschlagen)
+8. Weichen (entschieden)
 9. Konsequenzen
 10. Anhang A — Kollisionsmatrix der Pakete
 11. Anhang B — gesetzte Zahlen und ihre Herleitung
@@ -377,18 +376,21 @@ wertlos.
 |---|---|
 | `id`, `workspace_id`, `test_case_id` | |
 | `subject_entity_type`, `subject_version_id` | die geprüfte **Version** (Entwurf oder aktiv). Keine FK, weil die Versionen in fünf Tabellen liegen; die Zugehörigkeit prüft der Service |
-| `runs_total`, `runs_passed` | mehrere Läufe je Fall (Feedback-Recherche §3.2, Stufe 3) |
-| `verdict` | `pass · fail · error` |
+| `runs_total`, `runs_passed` | mehrere Läufe je Fall (Feedback-Recherche §3.2, Stufe 3); `runs_total >= 1`, `0 <= runs_passed <= runs_total` |
+| `verdict` | `pass · fail · error`; `pass` nur bei `runs_passed = runs_total` (n/n). Inkonsistente Meldungen lehnt der Server mit 422 `test_run_verdict_inconsistent` ab (6.1) |
 | `output_excerpt` | ≤ 4 000 |
-| `attestation` | DB-CHECK, einziger Wert heute: `client_self_report` |
+| `attestation` | DB-CHECK mit zwei Werten: `client_self_report` (Meldung über Agent-Token/MCP) · `human_rating` (Meldung eines Menschen über die Web-Session; erfordert per CHECK `reported_by_user_id`) |
 | `model_provider`, `model_name` | Schnappschuss wie in `agent_access_log` (0080) |
 | `reported_by_agent_id`, `reported_by_user_id` | |
 | `created_at` | |
 
-`attestation` ist Pflicht und in der Oberfläche sichtbar. Ergebnisse sind
-Selbstauskunft des Clients (Weiche P1). Sollte Who2Be später selbst
-ausführen, bekommt das einen zweiten Wert — die Spalte ist dafür da, nicht
-für heute.
+`attestation` ist Pflicht und in der Oberfläche sichtbar. Der Server setzt
+den Wert aus dem Aufrufweg, nie aus dem Request-Body. Ergebnisse über
+Agent-Token/MCP sind Selbstauskunft des Clients (Weiche P1). Prüffälle mit
+`check_kind='human_rule'` meldet der Client-Runner nur mit Ausgabe und
+`verdict='error'`; die Bewertung macht ein Mensch in der Web-Oberfläche als
+neues `test_run` mit `attestation='human_rating'`. Es zählt das letzte
+Ergebnis. Sollte Who2Be später selbst ausführen, wäre das ein dritter Wert.
 
 Rechte:
 
@@ -398,7 +400,7 @@ Rechte:
 | Prüffälle anlegen / zurückziehen | `editor` | Builder mit `case_triage` (anlegen, nicht zurückziehen) |
 | Ergebnisse melden | `editor` | jeder Agent mit `test_report` für Prüffälle, die er lesen darf |
 
-#### 3.2.1 Welche Prüffälle gelten für eine Elementversion? (Weiche P4, vorgeschlagen)
+#### 3.2.1 Welche Prüffälle gelten für eine Elementversion? (Weiche P4)
 
 Aktiviert wird eine **Elementversion**
 (`apps/api/src/who2be_api/services/version_status.py#VersionStatusService.transition_playbook_version`
@@ -422,7 +424,7 @@ einem Agenten. Elemente werden geteilt:
   Rendern über ihren Alias aufgelöst
   (`apps/api/src/who2be_api/services/placeholders/resolvers/tool_ref.py#ToolRefResolver`).
 
-Empfohlene Auflösungsregel (Option (a) in P4): Für eine Version `V` des
+Auflösungsregel (Option (a) in P4, entschieden): Für eine Version `V` des
 Elements `E` gilt die Vereinigung aus
 
 1. **direkt gebundenen Prüffällen:** `status='active'` und
@@ -802,6 +804,7 @@ außer dort, wo ausdrücklich ein *anderer* Agent gemeint ist
 | `test_case_not_found` | 404 | |
 | `test_case_retired` | 409 | Ergebnis zu zurückgezogenem Prüffall |
 | `test_subject_version_not_found` | 404 | geprüfte Version gehört nicht zum Workspace |
+| `test_run_verdict_inconsistent` | 422 | `verdict='pass'` ohne `runs_passed = runs_total`, `runs_total < 1` oder `runs_passed` außerhalb `0..runs_total` (3.2) |
 | `test_results_incomplete` | 409 | Aktivierung ohne Bestätigung, obwohl Ergebnisse fehlen oder rot sind (6.3) |
 | `test_override_reason_required` | 409 | Aktivierung bestätigt, aber ohne nicht leeren `override_reason` (6.3) |
 | `case_not_found` | 404 | auch für Fälle, die der Aufrufer nicht sehen darf (kein Enumerieren) |
@@ -841,10 +844,18 @@ submit_test_results(subject_entity_type: str, subject_version_id: str,
                     model_provider: str | None, model_name: str | None)
     -> list[TestRunRead]
     # attestation wird serverseitig auf client_self_report gesetzt
+    # human_rule-Prüffälle: nur Ausgabe, verdict='error' (3.2)
 ```
 
+`POST /test-runs` setzt `attestation` aus dem Aufrufweg: Agent-Token →
+`client_self_report`, Web-Session → `human_rating` mit
+`reported_by_user_id`. Ein `attestation`-Feld im Request-Body gibt es nicht.
+Jedes Ergebnis muss `runs_total >= 1` und `0 <= runs_passed <= runs_total`
+erfüllen; `verdict='pass'` ist nur bei `runs_passed = runs_total` zulässig.
+
 Fehler: `test_case_not_found`, `test_case_retired`,
-`test_subject_version_not_found`, `missing_capability`.
+`test_subject_version_not_found`, `test_run_verdict_inconsistent`,
+`missing_capability`.
 
 ### 6.3 Phase B — Aktivierung mit Prüffall-Bericht (B5)
 
@@ -858,6 +869,9 @@ Neu nimmt der Transition-Aufruf zwei Felder
 |---|---|---|
 | `acknowledge_test_report` | bool, Default `false` | Bestätigung, dass der Bericht gelesen wurde |
 | `override_reason` | str \| None, nach Trimmen 1–1 000 Zeichen (gesetzte Annahme, Anhang B) | Grund, warum trotz roter oder fehlender Ergebnisse aktiviert wird |
+
+Eine Mindestlänge über ein Zeichen hinaus gibt es nicht; die
+10-Zeichen-Mindestlänge aus der Design-Spec gilt nicht.
 
 Ablauf bei `to='active'`:
 
@@ -1092,8 +1106,8 @@ verwalteter Inhalte legt Weiche E3 die Entscheidung vor.
 
 Jede Weiche: Optionen, Trade-off, Empfehlung. Der Owner hat am 2026-09-28
 alle Weichen dieses Abschnitts entschieden — jeweils die Empfehlung (a), bei
-P2 abweichend (siehe dort). **Ausnahme: P4** ist erst im Review
-hinzugekommen und steht auf **vorgeschlagen**. Die Kennung in Klammern
+P2 abweichend (siehe dort). P4 kam erst im Review hinzu und wurde am selben
+Tag per Nachtrag entschieden. Die Kennung in Klammern
 verweist auf den Plan.
 
 ### Gedächtnis
@@ -1221,8 +1235,7 @@ verweist auf den Plan.
 - (c) Frei editierbar. Vorher/Nachher-Messungen werden wertlos.
 
 **P4 — Welche Prüffälle gelten für eine Elementversion? (LW5, B2, B5)**
-- *Status: **vorgeschlagen** — kam im Review hinzu und ist nicht von der
-  Owner-Entscheidung vom 2026-09-28 gedeckt. B2 und B5 warten darauf.*
+- *Status: entschieden (Owner, 2026-09-28): (a).*
 - **(a) Vereinigung: direkt ans Element gebundene Prüffälle plus alle
   aktiven Prüffälle jedes Agenten, der das Element heute erreicht (Persona,
   Template direkt; Playbook über Persona-Link und Composites; Resource über
@@ -1376,7 +1389,9 @@ Negativ und bewusst in Kauf genommen:
 Offen, nicht Teil dieser ADR:
 
 - Anomalie-Erkennung über Schreibfrequenzen (ASI06 #5, zweite Hälfte).
-- Ein zweiter `attestation`-Wert für serverseitige Ausführung.
+- Serverseitige Ausführung von Prüffällen. `attestation` kennt ab Phase B
+  zwei Werte (`client_self_report`, `human_rating`); serverseitige
+  Ausführung wäre ein dritter.
 - Automatische Prompt-Optimierung (E5).
 
 ## 10. Anhang A — Kollisionsmatrix der Pakete
