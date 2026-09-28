@@ -877,8 +877,8 @@
     "cookie": {
       "regionLabel": "Cookie-Hinweis",
       "title": "Cookies & Datenschutz",
-      "body": "Wir speichern in deinem Browser nur, was technisch noetig ist (Anmeldung, Sprache, Darstellung). Keine Analyse, kein Tracking. Details in der",
-      "privacyLink": "Datenschutzerklaerung",
+      "body": "Wir speichern in deinem Browser nur, was technisch nötig ist (Anmeldung, Sprache, Darstellung). Keine Analyse, kein Tracking. Details in der",
+      "privacyLink": "Datenschutzerklärung",
       "acknowledgeButton": "Verstanden"
     },
     "impressum": {
