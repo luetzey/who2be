@@ -1,7 +1,7 @@
 
 import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
@@ -489,7 +489,10 @@ function personaHandlers(opts: PersonaHandlerOptions = {}): FetchHandler {
   }
 }
 
-function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
+function renderPersonaDetail(
+  handler: FetchHandler,
+  options: { me?: Me; entry?: string } = {},
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
     handler(new URL(String(input)).pathname, init?.method ?? 'GET', init),
   )
@@ -505,9 +508,17 @@ function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
       }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
+        <MemoryRouter initialEntries={[options.entry ?? '/w/ws-1/personas/p1']}>
           <Routes>
-            <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+            <Route
+              path="/w/:workspaceId/personas/:id"
+              element={
+                <>
+                  <PersonaDetailPage />
+                  <LocationProbe />
+                </>
+              }
+            />
             <Route path="/w/:workspaceId/personas" element={<div>PERSONAS-LISTE</div>} />
           </Routes>
         </MemoryRouter>
@@ -515,6 +526,12 @@ function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
     </SessionContext.Provider>,
   )
   return fetchMock
+}
+
+// Macht die aktuelle Such-Query sichtbar, damit Tests den Deep-Link pruefen.
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location-search">{location.search}</output>
 }
 
 describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
@@ -767,5 +784,113 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     // und erzeugte horizontalen Body-Scroll (477 px Dokumentbreite).
     const tablist = await screen.findByRole('tablist')
     expect(tablist).toHaveClass('flex-wrap')
+  })
+})
+
+// Audit E1 = A: „Aenderungen ansehen" aus der Statusleiste und der Deep-Link
+// `?tab=versions&diff=<n>` fuehren direkt zum aufgeklappten Diff.
+describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
+  const DIFF_PATH = `${WS_PREFIX}/personas/p1/versions/2/diff`
+
+  function reviewHandlers(): FetchHandler {
+    const base = personaHandlers({
+      persona: personaWith({ current_version: 2 }),
+      versions: [pVersion(2, 'review'), pVersion(1, 'active')],
+    })
+    return (path, method, init) => {
+      if (method === 'GET' && path === DIFF_PATH) {
+        return jsonResponse({
+          version: 2,
+          against: 'active',
+          against_version: 1,
+          identical: false,
+          changes: [{ path: 'description', op: 'changed', before: 'alt', after: 'neu' }],
+        })
+      }
+      return base(path, method, init)
+    }
+  }
+
+  function diffCalls(fetchMock: ReturnType<typeof vi.fn>): number {
+    return fetchMock.mock.calls.filter(
+      ([input]) => new URL(String(input)).pathname === DIFF_PATH,
+    ).length
+  }
+
+  it('Statusleiste im Review: ein Klick oeffnet den Versions-Tab mit aufgeklapptem Diff', async () => {
+    const fetchMock = renderPersonaDetail(reviewHandlers(), { me: meWithRole('admin') })
+
+    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(link).toHaveAttribute('href', '/w/ws-1/personas/p1?tab=versions&diff=2')
+    expect(screen.getByRole('tab', { name: /Bearbeiten/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(diffCalls(fetchMock)).toBe(0)
+
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Versionen/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Diff', pressed: true })).toBeInTheDocument()
+    expect(diffCalls(fetchMock)).toBe(1)
+  })
+
+  it('Deep-Link ?tab=versions&diff=2 oeffnet den Diff ohne Klick', async () => {
+    const fetchMock = renderPersonaDetail(reviewHandlers(), {
+      entry: '/w/ws-1/personas/p1?tab=versions&diff=2',
+    })
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Versionen/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(diffCalls(fetchMock)).toBe(1)
+  })
+
+  it('Tab-Wechsel schreibt ?tab= und verwirft den Diff-Wunsch', async () => {
+    renderPersonaDetail(reviewHandlers(), {
+      entry: '/w/ws-1/personas/p1?tab=versions&diff=2',
+    })
+    await screen.findByRole('list', { name: 'Änderungen' })
+
+    const modes = screen.getByRole('tab', { name: /Modi/ })
+    fireEvent.mouseDown(modes)
+    fireEvent.click(modes)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).toHaveTextContent(/^\?tab=modes$/)
+    })
+  })
+
+  it.each([
+    ['unbekannter Tab und kaputte Version', '?tab=bogus&diff=abc', /Bearbeiten/],
+    ['diff ohne tab=versions', '?diff=2', /Bearbeiten/],
+    ['Version, die es nicht gibt', '?tab=versions&diff=99', /Versionen/],
+    ['keine kanonische Ganzzahl', '?tab=versions&diff=2.0', /Versionen/],
+  ])('ignoriert ungueltige Parameter (%s)', async (_label, search, selectedTab) => {
+    const fetchMock = renderPersonaDetail(reviewHandlers(), {
+      entry: `/w/ws-1/personas/p1${search}`,
+    })
+
+    expect(await screen.findByRole('tab', { name: selectedTab })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // Seite ist fertig geladen (Status-Callout steht), trotzdem kein Diff.
+    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(screen.queryByRole('list', { name: 'Änderungen' })).not.toBeInTheDocument()
+    expect(diffCalls(fetchMock)).toBe(0)
+  })
+
+  it('Draft: kein Link „Änderungen ansehen"', async () => {
+    renderPersonaDetail(personaHandlers())
+
+    await screen.findByTestId('branch-action-submit')
+    expect(screen.queryByRole('link', { name: 'Änderungen ansehen' })).not.toBeInTheDocument()
   })
 })

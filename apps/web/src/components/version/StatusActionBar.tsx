@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShieldAlert } from 'lucide-react'
+import { FileDiff, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -12,7 +12,23 @@ import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 import { extractMissingFields, formatMissingFields } from '@/lib/promoteError'
 
+import { versionDiffSearch } from './versionDeepLink'
 import { canTransition } from './versionStatus'
+
+// Link „Aenderungen ansehen" (Audit E1 = A): oeffnet auf derselben Seite den
+// Tab „Versions" mit dem Diff der Review-Version — ein Klick aus der Leiste.
+// Geteilt mit `SystemPromptStatusActionBar` (wie `MfaPublishNotice`).
+export function ViewChangesLink({ version }: { version: number }) {
+  const { t } = useTranslation('common')
+  return (
+    <Button asChild variant="ghost" data-testid="status-view-changes">
+      <Link to={{ search: versionDiffSearch(version) }}>
+        <FileDiff aria-hidden="true" />
+        {t('statusBar.viewChanges')}
+      </Link>
+    </Button>
+  )
+}
 
 // Hinweis + Weg zur Einrichtung, an der Stelle des Publish-Knopfs (Audit A1,
 // Owner-Entscheidung E5 = A; Bedingung siehe `useNeedsMfaForPublish`).
@@ -61,6 +77,10 @@ interface StatusActionBarProps {
   // Button-Texten (z. B. Personas/Playbooks) uebergeben hier ihre Keys, ohne
   // dass sich Verhalten oder Testids aendern (Issue #391).
   labels?: Partial<Record<StatusActionKey, string>>
+  // Audit E1 = A: im Status „In review" verlinkt die Leiste den Diff dieser
+  // Version (Tab „Versions" mit aufgeklapptem Diff, gleicher Pfad). Ohne
+  // Wert entfaellt der Link — z. B. fuer Entities ohne Diff-Endpoint.
+  diffVersion?: number
 }
 
 // Aktionen pro Status laut §2.1.F. Reihenfolge: Promote (primary) vor
@@ -72,6 +92,7 @@ export function StatusActionBar({
   onTransition,
   onTransitioned,
   labels,
+  diffVersion,
 }: StatusActionBarProps) {
   const { t } = useTranslation('common')
   const role = useCurrentWorkspaceRole()
@@ -171,6 +192,9 @@ export function StatusActionBar({
           >
             {labels?.reactivate ?? t('statusBar.reactivate')}
           </Button>
+        ) : null}
+        {status === 'review' && diffVersion !== undefined ? (
+          <ViewChangesLink version={diffVersion} />
         ) : null}
       </div>
       {promoteError !== null ? (

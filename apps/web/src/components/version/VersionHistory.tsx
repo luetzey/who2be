@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ProvenanceEntry, VersionDiff, VersionStatus } from '@/api/types'
@@ -30,6 +30,12 @@ interface VersionHistoryProps {
   loadDiff?: (version: number) => Promise<VersionDiff>
   /** Lädt die Status-Historie der Version ("warum aktiv"). */
   loadProvenance: (version: number) => Promise<ProvenanceEntry[]>
+  /**
+   * Deep-Link `?diff=<n>` (Audit E1 = A): der Diff dieser Version ist beim
+   * Oeffnen bereits aufgeklappt. Ohne passende Version bzw. ohne `loadDiff`
+   * ohne Wirkung.
+   */
+  initialDiffVersion?: number
 }
 
 type PanelKind = 'diff' | 'provenance'
@@ -45,6 +51,7 @@ export function VersionHistory({
   onRestore,
   loadDiff,
   loadProvenance,
+  initialDiffVersion,
 }: VersionHistoryProps) {
   const { t } = useTranslation('version')
   const [openPanel, setOpenPanel] = useState<{ version: number; kind: PanelKind } | null>(null)
@@ -56,11 +63,7 @@ export function VersionHistory({
 
   const hasDraft = versions.some((version) => version.status === 'draft')
 
-  const togglePanel = async (version: number, kind: PanelKind) => {
-    if (openPanel?.version === version && openPanel.kind === kind) {
-      setOpenPanel(null)
-      return
-    }
+  const showPanel = async (version: number, kind: PanelKind) => {
     setOpenPanel({ version, kind })
     setPanelLoading(true)
     setPanelError(null)
@@ -78,6 +81,40 @@ export function VersionHistory({
       setPanelLoading(false)
     }
   }
+
+  const togglePanel = async (version: number, kind: PanelKind) => {
+    if (openPanel?.version === version && openPanel.kind === kind) {
+      setOpenPanel(null)
+      return
+    }
+    await showPanel(version, kind)
+  }
+
+  // Deep-Link (Audit E1 = A): den Diff der angefragten Version einmal vorab
+  // aufklappen — je neuem Wert, damit ein erneuter Link-Klick aus der
+  // Statusleiste bei bereits offenem Tab ebenfalls greift. Unbekannte
+  // Versionen und Entities ohne Diff-Endpoint ignorieren den Wunsch still.
+  const autoOpened = useRef<number | undefined>(undefined)
+  const targetRow = useRef<HTMLLIElement | null>(null)
+  const canOpenInitial =
+    initialDiffVersion !== undefined &&
+    loadDiff !== undefined &&
+    versions.some((version) => version.version === initialDiffVersion)
+  useEffect(() => {
+    if (initialDiffVersion === undefined) {
+      autoOpened.current = undefined
+      return
+    }
+    if (!canOpenInitial || autoOpened.current === initialDiffVersion) return
+    autoOpened.current = initialDiffVersion
+    void showPanel(initialDiffVersion, 'diff')
+    // Auf dem Phone liegt die Versionsliste unter dem Falz (Audit A13) —
+    // die angesprungene Zeile in den Blick holen. jsdom kennt die Methode nicht.
+    targetRow.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    // showPanel ist bewusst nicht in den Deps: es wechselt je Render die
+    // Identitaet, der Effekt soll aber nur auf einen neuen Wunsch reagieren.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDiffVersion, canOpenInitial])
 
   const restore = async (version: number) => {
     setRestoringVersion(version)
@@ -103,6 +140,7 @@ export function VersionHistory({
             return (
               <li
                 key={version.version}
+                ref={version.version === initialDiffVersion ? targetRow : undefined}
                 className="rounded-lg border border-border p-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
