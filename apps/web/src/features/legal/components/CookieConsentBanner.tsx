@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
 import { useCookieConsent } from '../hooks/useCookieConsent'
-import { Placeholder } from './Placeholder'
 
 /**
  * CSS-Variable, unter der das Banner seine **gemessene** Hoehe an das Dokument
@@ -17,13 +16,14 @@ import { Placeholder } from './Placeholder'
 export const BANNER_HEIGHT_VAR = '--cookie-banner-height'
 
 /**
- * Cookie-Consent-Banner (Opt-in). Erscheint global, solange keine Entscheidung
- * getroffen wurde. „Nur notwendige" lehnt optionales Tracking ab, „Alle
- * akzeptieren" willigt ein — bis dahin laeuft **kein** Tracking. Der Banner
- * blockiert die App nicht (kein Modal), bleibt aber sichtbar bis zur Wahl.
+ * Cookie-Hinweis. Erscheint global, bis er bestaetigt wurde. Die App setzt nur
+ * technisch notwendige Speicherung und laedt kein Tracking (Audit A5, siehe
+ * `useCookieConsent.ts`) — es gibt deshalb nichts zu waehlen, nur einen
+ * Knopf zum Bestaetigen. Zwei Knoepfe mit derselben Wirkung taeuschten eine
+ * Wahl vor. Der Banner blockiert die App nicht (kein Modal).
  */
 export function CookieConsentBanner() {
-  const { isDecided, accept, reject } = useCookieConsent()
+  const { isDecided, acknowledge } = useCookieConsent()
   const { t } = useTranslation('legal')
   const [card, setCard] = useState<HTMLDivElement | null>(null)
 
@@ -88,9 +88,6 @@ export function CookieConsentBanner() {
           <p className="text-sm font-medium">{t('cookie.title')}</p>
           <p className="text-sm text-muted-foreground">
             {t('cookie.body')}{' '}
-            <Placeholder>{t('cookie.bodyServices')}</Placeholder>
-            {') '}
-            {t('cookie.bodyEnd')}{' '}
             <Link
               to="/legal/datenschutz"
               className="font-medium text-foreground underline-offset-4 hover:underline"
@@ -100,27 +97,19 @@ export function CookieConsentBanner() {
             .
           </p>
         </div>
-        {/* #567 (§4.4 Punkt 4): die beiden `size="sm"`-Buttons massen gerendert
-            36px — §11 (Floor 32px) eingehalten, das 40px-Kriterium dieses
-            Issues nicht. Unterhalb `md` daher `h-10`; unterhalb `sm`, wo der
-            Banner stapelt, teilen sie sich die volle Kartenbreite (die Reihe
-            mass mit `shrink-0` 256px bei 254px Innenraum). */}
+        {/* #567 (§4.4 Punkt 4): `size="sm"` misst gerendert 36px — §11 (Floor
+            32px) eingehalten, das 40px-Kriterium dieses Issues nicht.
+            Unterhalb `md` daher `h-10`; unterhalb `sm`, wo der Banner stapelt,
+            nimmt der Knopf die volle Kartenbreite (mit `shrink-0` war die
+            Reihe auf ihre max-content-Breite genagelt). */}
         <div className="flex gap-2 sm:shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-10 flex-1 sm:flex-none md:h-9"
-            onClick={reject}
-          >
-            {t('cookie.rejectButton')}
-          </Button>
           <Button
             variant="brand"
             size="sm"
             className="h-10 flex-1 sm:flex-none md:h-9"
-            onClick={accept}
+            onClick={acknowledge}
           >
-            {t('cookie.acceptButton')}
+            {t('cookie.acknowledgeButton')}
           </Button>
         </div>
       </Card>
