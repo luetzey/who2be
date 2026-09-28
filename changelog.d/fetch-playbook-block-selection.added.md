@@ -1,5 +1,3 @@
-### Added
-
 - `fetch_playbook` (MCP) can return a single section instead of the whole
   playbook. The two-step path is now the documented default: `format="outline"`
   lists the body's headings as anchors (`sections`), and
@@ -14,12 +12,3 @@
 
   The full fetch (`format="full"`, still the default) is unchanged and remains
   the right choice for consumers that process the body structurally.
-
-### Changed
-
-- `GET /v1/workspaces/{workspace_id}/playbooks/{playbook_id}/rendered` accepts
-  an optional `sections` query parameter (comma-separated anchors) and its
-  response carries the body's outline in a new `sections` field. Without the
-  parameter the rendered body is byte-identical to before. Passing the parameter
-  is always a selection: an empty value selects nothing and yields an empty
-  body, so a typo never silently returns the whole document.
