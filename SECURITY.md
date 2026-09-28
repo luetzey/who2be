@@ -5,10 +5,14 @@
 Please do **not** report security vulnerabilities through public GitHub
 issues, pull requests, or discussions.
 
-Once the repository is public, use **GitHub Private Security Advisories**
-(tab "Security" → "Report a vulnerability") for a confidential report. While
-the repository is private, report directly by email to
-<luetzey@gmail.com>.
+Report privately through **GitHub Private Vulnerability Reporting**: open the
+[Security tab](https://github.com/luetzey/who2be/security) and choose
+"Report a vulnerability", or go straight to the
+[advisory form](https://github.com/luetzey/who2be/security/advisories/new).
+The report is visible only to you and the maintainers until an advisory is
+published.
+
+If you cannot use GitHub, email <luetzey@gmail.com> instead.
 
 Where possible, please include in your report:
 

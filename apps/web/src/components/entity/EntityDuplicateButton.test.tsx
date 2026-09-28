@@ -28,7 +28,7 @@ vi.mock('@/lib/feedback', () => ({
 const texts = {
   success: 'Persona dupliziert.',
   error: 'Duplizieren fehlgeschlagen.',
-  viewerReadOnly: 'Viewer können Personae nur ansehen',
+  viewerReadOnly: 'Viewer können Personas nur ansehen',
 }
 
 function renderButton() {

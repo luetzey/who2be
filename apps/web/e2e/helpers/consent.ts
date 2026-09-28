@@ -24,8 +24,9 @@ import type { Page } from '@playwright/test'
  * ausgefuehrt. Nach einem `page.goto` aufgerufen, greift er erst bei der
  * uebernaechsten Seite — und das Banner steht genau einmal im Weg.
  *
- * `rejected` statt `accepted`: der Test braucht keine Analytics, und die
- * datensparsame Variante ist der ehrlichere Ausgangszustand.
+ * `acknowledged` ist der Wert, den der Banner selbst beim Bestaetigen schreibt
+ * (`ACKNOWLEDGED_VALUE` in `useCookieConsent.ts`; die App kennt seit Audit A5
+ * keine Analytics-Wahl mehr).
  *
  * **Dies ersetzt keinen Fix.** Dass ein Banner auf einem 320-px-Geraet den
  * primaeren Button unerreichbar macht, ist ein Anwendungsdefekt; der wird
@@ -42,7 +43,7 @@ const CONSENT_STORAGE_KEY = 'who2be:cookie-consent'
 export async function decideCookieConsent(page: Page): Promise<void> {
   await page.addInitScript(
     (key: string) => {
-      window.localStorage.setItem(key, 'rejected')
+      window.localStorage.setItem(key, 'acknowledged')
     },
     CONSENT_STORAGE_KEY,
   )

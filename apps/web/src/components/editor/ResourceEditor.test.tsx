@@ -52,6 +52,6 @@ describe('ResourceEditor', () => {
     const props = blockNoteViewProps.mock.calls[0][0] as {
       portalElements?: { default?: unknown }
     }
-    expect(props.portalElements).toEqual({ default: null })
+    expect(props.portalElements).toEqual({ default: document.body })
   })
 })

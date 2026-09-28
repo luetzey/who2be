@@ -508,7 +508,7 @@ function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
         <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
           <Routes>
             <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
-            <Route path="/w/:workspaceId/personas" element={<div>PERSONAE-LISTE</div>} />
+            <Route path="/w/:workspaceId/personas" element={<div>PERSONAS-LISTE</div>} />
           </Routes>
         </MemoryRouter>
       </AuthTokenProvider>
@@ -518,7 +518,7 @@ function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
 }
 
 describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
-  it('leitet ohne :id-Routenparameter zur Personae-Liste um', async () => {
+  it('leitet ohne :id-Routenparameter zur Personas-Liste um', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => jsonResponse([])),
@@ -531,14 +531,14 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
           <MemoryRouter initialEntries={['/w/ws-1/persona-detail']}>
             <Routes>
               <Route path="/w/:workspaceId/persona-detail" element={<PersonaDetailPage />} />
-              <Route path="/w/:workspaceId/personas" element={<div>PERSONAE-LISTE</div>} />
+              <Route path="/w/:workspaceId/personas" element={<div>PERSONAS-LISTE</div>} />
             </Routes>
           </MemoryRouter>
         </AuthTokenProvider>
       </SessionContext.Provider>,
     )
 
-    expect(await screen.findByText('PERSONAE-LISTE')).toBeInTheDocument()
+    expect(await screen.findByText('PERSONAS-LISTE')).toBeInTheDocument()
   })
 
   it('Draft: "Draft abschliessen" reicht die Version zur Review ein', async () => {

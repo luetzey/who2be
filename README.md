@@ -1,60 +1,90 @@
-# Who2Be
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/brand/logo-light.svg">
+    <img src="docs/assets/brand/logo-light.svg" alt="Who2Be" height="48">
+  </picture>
+</h1>
 
-[![CI](https://github.com/luetzey/who2be/actions/workflows/ci.yml/badge.svg)](https://github.com/luetzey/who2be/actions/workflows/ci.yml)
-[![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue.svg)](LICENSE)
+<p align="center"><strong>Agent configuration you review — not agent behavior you hope for.</strong></p>
 
-Self-hosted **AgentDB** for versioned persona and playbook management — the
-central configuration source for AI agents.
+<p align="center">
+  Self-hosted hub for the personas, playbooks and knowledge your agents run on —
+  versioned, reviewed, and served to them over MCP.
+</p>
+
+<p align="center">
+  <a href="https://github.com/luetzey/who2be/actions/workflows/ci.yml"><img src="https://github.com/luetzey/who2be/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue.svg" alt="License: FSL-1.1-Apache-2.0"></a>
+</p>
+
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#connect-an-mcp-client">Connect an agent</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/luetzey/who2be/discussions">Discussions</a>
+</p>
+
+<p align="center">
+  <!-- screenshot: 2026-09-28, commit baf4da69 + contrast fix from #688, persona detail → Versions, diff v2 → v3, demo data -->
+  <a href="docs/assets/screenshots/version-review-light.png">
+    <img src="docs/assets/screenshots/version-review-light.png" width="880"
+         alt="Who2Be web UI: the version history of a persona. Version 3 is waiting in review, and its diff against the active version 2 is open.">
+  </a>
+</p>
+
+## Why Who2Be
 
 Instead of scattering system prompts, workflows, and knowledge documents
-across chat histories, notes, or repositories, Who2Be manages them as
-**versioned, status-tracked aggregates** (Draft → Review → Active → Archived)
-and serves them to agents at runtime through an **MCP server**.
+across chat histories, notes, or repositories, Who2Be keeps them in one
+self-hosted configuration store (the "AgentDB") and serves them to your
+agents at runtime through an MCP server.
+
+- **Stop re-typing the same instructions.** Personas, playbooks and reference
+  knowledge live in one place, and every agent loads them from there at
+  runtime.
+- **See what each agent runs on.** Every agent is one persona, one system
+  prompt template and an explicit tool policy, and every change leaves a
+  version and a status trail.
+- **Standards over probability.** A new version starts as a draft and has to
+  pass review before it goes live; there is no shortcut from draft to active.
+  Agents can propose changes, but by default they cannot publish them.
 
 ## Features
 
-- **Personae** — an agent's identity, tone, boundaries, and modes, versioned
+- **Personas** — an agent's identity, tone, boundaries, and modes, versioned
   with a status workflow and diff view
 - **Playbooks** — step-by-step workflows with trigger keywords, composable
-  into composite bundles (ADR-0024)
+  into composite bundles
 - **Resources** — knowledge documents with a block editor (BlockNote),
-  block refs, and reverse lookups (ADR-0022)
+  block refs, and reverse lookups
 - **Agents** — concrete agent configurations with an expanded system prompt,
-  tool policy, and curated long-term memory (ADR-0044)
+  tool policy, and curated long-term memory
+- **System prompt templates & external tools** — reusable prompt building
+  blocks and MCP tool bindings with `tool-ref` placeholders
+- **Review workflow** — every version moves draft → review → active (and
+  later inactive); draft → active is not a permitted transition. Putting a
+  version live takes the admin role, each change is recorded in a status
+  history, and any two versions can be diffed or an earlier one restored
+- **MCP server** — 83 tools: read, write, full-text + semantic search,
+  discovery, and the feedback flywheel (`record_usage`/`submit_feedback`);
+  connect via stdio or the OAuth 2.1 remote connector, e.g. to Claude Code
+  or Claude.ai. Writing personas, playbooks, resources or agents is off per
+  agent until you enable it
 - **Agent work area & knowledge base** — an unversioned workspace per agent
   (notes, file/URL ingest, read-only SQL tables, timeline) next to the
   curated resource axis, plus an evidence-backed knowledge base with typed
-  edges; promotion into resources is an explicit step (ADR-0047–0049)
-- **System prompt templates & external tools** — reusable prompt building
-  blocks (ADR-0040) and MCP tool bindings with `tool-ref` placeholders
-  (ADR-0043)
-- **MCP server** — 83 tools: read, write, full-text + semantic search
-  (ADR-0046), discovery, and the feedback flywheel
-  (`record_usage`/`submit_feedback`, ADR-0038); connect via stdio or the
-  OAuth 2.1 remote connector (ADR-0036), e.g. to Claude Code or Claude.ai
+  edges; promotion into resources is an explicit step
 - **Multi-tenancy & RBAC** — organizations → workspaces, roles
-  `admin > editor > viewer`, magic-link invitations, MFA step-up (ADR-0023)
+  `admin > editor > viewer`, magic-link invitations, MFA step-up
 - **Two editions from one codebase** — on-prem (signed license key) and
-  cloud (billing package), isolated at build time (ADR-0028/0029)
+  cloud (billing package), isolated at build time
 
-## Architecture
+The design decisions behind these features are recorded as ADRs in
+[`docs/adr/`](docs/adr/).
 
-| Component | Path | Stack |
-|---|---|---|
-| REST API | `apps/api/` | FastAPI, `/v1/workspaces/{ws_id}/...` |
-| MCP server | `apps/mcp/` | FastMCP (stdio + HTTP/OAuth) |
-| Web UI | `apps/web/` | Vite + React 18 + TypeScript, Tailwind v4, shadcn |
-| Shared models | `packages/models/` | Pydantic |
-| Cloud billing (optional) | `packages/billing/` | Mollie; cloud build only |
-| Blob store | `apps/api/.../blobstore/` | SeaweedFS (S3-compatible, Apache-2.0) / in-memory adapter, content-addressed (ADR-0048) |
-| Table store | `apps/api/.../tablestore/` | SQLite per work area, read-only query engine (ADR-0049) |
-| Database | — | Supabase (Postgres), locally via Docker Compose |
-| Deployment | `deploy/hetzner/` | Docker Compose + Caddy (auto-HTTPS) |
-
-Python runs as a uv workspace in the repo root; architecture decisions are
-documented as ADRs under [`docs/adr/`](docs/adr/).
-
-## Quickstart (local)
+## Quickstart
 
 **Docker is the only prerequisite** — no Python, no Node, no `.env` file.
 
@@ -125,6 +155,49 @@ see [`deploy/hetzner/README.md`](deploy/hetzner/README.md).
 | File upload returns 503 | The blob store is optional and off unless `WHO2BE_BLOBSTORE_*` is set (`.env.example`). Everything else works without it. |
 | MCP client reports 401 | Expected without a token — add `Authorization: Bearer w2b_…`. HTML instead of a 401 means you are hitting the SPA, not the MCP endpoint. |
 
+## Documentation
+
+- [`docs/mcp-claude-code.md`](docs/mcp-claude-code.md) — connect an agent:
+  Claude Code/Claude.ai over HTTP or stdio (German)
+- [`deploy/hetzner/README.md`](deploy/hetzner/README.md) — production
+  deployment (Compose, Caddy, backups, runbook) (German)
+- [`docs/README.md`](docs/README.md) — documentation index (all of `docs/`)
+  (German)
+- [`docs/reference/openapi.json`](docs/reference/openapi.json) — versioned
+  OpenAPI spec of the REST API (regenerate via
+  `uv run python scripts/export_openapi.py`); interactive docs at `/docs`
+  on a running API
+- [`docs/adr/`](docs/adr/) — architecture decision records (German)
+- [`docs/standards/`](docs/standards/) — engineering standards
+  (architecture, coding, testing, security, frontend, compliance) (German)
+- [`docs/frontend/design-language.md`](docs/frontend/design-language.md) —
+  the "Warm Citrus" design language (German)
+- [`ROADMAP.md`](ROADMAP.md) — what is done and what comes next
+
+## Architecture
+
+| Component | Path | Stack |
+|---|---|---|
+| REST API | `apps/api/` | FastAPI, `/v1/workspaces/{ws_id}/...` |
+| MCP server | `apps/mcp/` | FastMCP (stdio + HTTP/OAuth) |
+| Web UI | `apps/web/` | Vite + React 18 + TypeScript, Tailwind v4, shadcn |
+| Shared models | `packages/models/` | Pydantic |
+| Cloud billing (optional) | `packages/billing/` | Mollie; cloud build only |
+| Blob store | `apps/api/.../blobstore/` | SeaweedFS (S3-compatible, Apache-2.0) / in-memory adapter, content-addressed (ADR-0048) |
+| Table store | `apps/api/.../tablestore/` | SQLite per work area, read-only query engine (ADR-0049) |
+| Database | — | Supabase (Postgres), locally via Docker Compose |
+| Deployment | `deploy/hetzner/` | Docker Compose + Caddy (auto-HTTPS) |
+
+Python runs as a uv workspace in the repo root; architecture decisions are
+documented as ADRs under [`docs/adr/`](docs/adr/).
+
+## Contributing
+
+Workflow, conventions, the planned contributor license agreement, and the
+definition of done (lint, typecheck, tests with a coverage ratchet, license
+gates) are described in [`CONTRIBUTING.md`](CONTRIBUTING.md). Questions and
+ideas are welcome in [Discussions](https://github.com/luetzey/who2be/discussions).
+
 ### Development setup
 
 For working on the code you need [uv](https://docs.astral.sh/uv/) and Node 22
@@ -143,31 +216,11 @@ Start the MCP server: `uv run python -m who2be_mcp.server` — for connecting
 Claude Code/Claude.ai see [`docs/mcp-claude-code.md`](docs/mcp-claude-code.md).
 Cloud edition (including billing): `uv sync --group billing`.
 
-## Documentation
-
-- [`docs/README.md`](docs/README.md) — documentation index (all of `docs/`)
-- [`docs/reference/openapi.json`](docs/reference/openapi.json) — versioned
-  OpenAPI spec of the REST API (regenerate via
-  `uv run python scripts/export_openapi.py`); interactive docs at `/docs`
-  on a running API
-- [`docs/adr/`](docs/adr/) — architecture decision records
-- [`docs/standards/`](docs/standards/) — engineering standards
-  (architecture, coding, testing, security, frontend, compliance)
-- [`docs/frontend/design-language.md`](docs/frontend/design-language.md) —
-  the "Warm Citrus" design language
-- [`deploy/hetzner/README.md`](deploy/hetzner/README.md) — production
-  deployment (Compose, Caddy, backups, runbook)
-- [`ROADMAP.md`](ROADMAP.md) — what is done and what comes next
-
-## Development & contributions
-
-Workflow, conventions, and the definition of done (lint, typecheck, tests
-with a coverage ratchet, license gates) are described in
-[`CONTRIBUTING.md`](CONTRIBUTING.md). Repo setup for Claude Code:
-`CLAUDE.md`, `.claude/`, and `docs/CLAUDE-PROFILE.md`.
-
 Please do not report security vulnerabilities publicly — see
 [`SECURITY.md`](SECURITY.md).
+
+Repo setup for Claude Code: `CLAUDE.md`, `.claude/`, and
+`docs/CLAUDE-PROFILE.md`.
 
 ## License
 

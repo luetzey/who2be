@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useNeedsMfaForPublish } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Button } from '@/components/ui/button'
+import { MfaPublishNotice } from '@/components/version/StatusActionBar'
 import { notify } from '@/lib/feedback'
 
 interface SystemPromptStatusActionBarProps {
@@ -28,6 +30,7 @@ export function SystemPromptStatusActionBar({
   const { t } = useTranslation('systemPrompts')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
+  const needsMfa = useNeedsMfaForPublish()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
 
   const transition = async (to: VersionStatus, success: string) => {
@@ -46,6 +49,8 @@ export function SystemPromptStatusActionBar({
   }
 
   const canPromote = role === 'admin'
+  // Audit A1: dieselbe MFA-Vorankuendigung wie die zentrale StatusActionBar.
+  const promoteNeedsMfa = canPromote && needsMfa
   // State-Machine: draft → review; review → active|draft; inactive → draft.
   if (status === 'draft') {
     return (
@@ -63,19 +68,24 @@ export function SystemPromptStatusActionBar({
   }
   if (status === 'review') {
     return (
-      <div role="toolbar" aria-label={t('statusBar.ariaLabel')} className="flex gap-2">
+      <div role="toolbar" aria-label={t('statusBar.ariaLabel')} className="flex flex-wrap items-center gap-2">
+        {promoteNeedsMfa ? (
+          <MfaPublishNotice />
+        ) : (
+          <Button
+            type="button"
+            variant="brand"
+            disabled={busy !== null || !canPromote}
+            title={canPromote ? undefined : t('statusBar.adminOnlyTooltip')}
+            onClick={() => void transition('active', t('statusBar.toast.activated'))}
+          >
+            {t('statusBar.activate')}
+          </Button>
+        )}
+        {/* Audit A2: umkehrbar, nicht destruktiv (design-language §9.1). */}
         <Button
           type="button"
-          variant="brand"
-          disabled={busy !== null || !canPromote}
-          title={canPromote ? undefined : t('statusBar.adminOnlyTooltip')}
-          onClick={() => void transition('active', t('statusBar.toast.activated'))}
-        >
-          {t('statusBar.activate')}
-        </Button>
-        <Button
-          type="button"
-          variant="destructive"
+          variant="outline"
           disabled={busy !== null}
           onClick={() => void transition('draft', t('statusBar.toast.backToDraft'))}
         >

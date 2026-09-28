@@ -160,11 +160,11 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
 })
 
 test('Agent-Read liefert nur die aktive Version (MCP-Aequivalent)', async ({ request }) => {
-  // MCP-HTTP (ADR-0034/0036) braeuchte den vollen OAuth-2.1-Consent-Flow.
-  // Ein Agent-Token (`w2b_...`) laeuft ueber dieselbe serverseitige Policy
-  // (`active_only = not ctx.sees_drafts(...)`, persona_service.py), die auch
-  // das MCP-Tool `get_persona` durchsetzt — REST-Aequivalent, im
-  // Repo-Pflege-Plan ausdruecklich genehmigt.
+  // REST-Aequivalent: ein Agent-Token (`w2b_...`) laeuft ueber dieselbe
+  // serverseitige Policy (`active_only = not ctx.sees_drafts(...)`,
+  // persona_service.py), die auch das MCP-Tool `get_persona` durchsetzt.
+  // Den Abruf ueber den ECHTEN MCP-Dienst (Streamable-HTTP, `w2b_`-Bearer,
+  // kein OAuth-Consent noetig) belegt `review-gate.spec.ts`.
   const user = await createUser(request)
   const { workspaceId } = await seedWorkspace(request, user)
   const token = user.session.access_token

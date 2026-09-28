@@ -103,7 +103,7 @@ const NAV_LABELS = [
   'Dashboard',
   'Agents',
   'System-Prompts',
-  'Personae',
+  'Personas',
   'Playbooks',
   'Resources',
   'Externe Tools',

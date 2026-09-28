@@ -13,7 +13,7 @@ die verbindliche Quelle (siehe `CLAUDE.md` §Frontend-Standards).
 **Profil:** Hybrid aus macOS-HIG (Admin-App) und Apple-Marketing-Touch
 (Auth/Brand-Momente).
 
-- **Admin-Pages** (Personae, Playbooks, Resources, Settings, Detail/New) folgen HIG:
+- **Admin-Pages** (Personas, Playbooks, Resources, Settings, Detail/New) folgen HIG:
   dichte Surfaces, klare Hierarchie, dezente Tinten, funktional vor
   emotional.
 - **Marketing-Pages** (heute nur `LoginPage`) duerfen einen Hero-Moment:
@@ -43,10 +43,15 @@ Alle Farben sind OKLCH (ADR-0014) in
 | Token | Light | Dark | Verwendung |
 |---|---|---|---|
 | `--brand` | `oklch(0.72 0.17 55)` | `oklch(0.74 0.17 55)` | Primaere CTA-Fill |
-| `--brand-foreground` | `oklch(0.985 0 0)` (weiss) | `oklch(0.145 0 0)` (dunkel) | Text auf `--brand` |
+| `--brand-foreground` | `oklch(0.145 0 0)` (dunkel) | `oklch(0.145 0 0)` (dunkel) | Text auf `--brand` |
 | `--brand-hover` | `oklch(0.66 0.17 55)` (dunkler) | `oklch(0.80 0.16 55)` (heller) | Hover-State |
 
 Tailwind-Klassen: `bg-brand`, `text-brand-foreground`, `hover:bg-brand-hover`.
+
+**Schrift auf Brand ist in beiden Modi dunkel.** Weisse Schrift auf dem
+Light-Orange erreicht nur 2,5:1 (Hover 3,1:1) und faellt durch §11. Die
+Marke wird dafuer nicht abgedunkelt — ein Orange um `oklch(0.58 …)` kippt ins
+Braune. Gemessene Werte stehen in §11.
 
 **Anwendungsregel:** Maximal **eine** primaere `brand`-Aktion pro
 Page-Surface. Mehrere `bg-brand`-Buttons auf derselben Page = Review-Reject.
@@ -136,7 +141,7 @@ freigegeben. Auf Admin-Pages bleibt H1 = `text-2xl`.
 
 **Admin-Page-Header (PageHeader):**
 ```
-<h1 class="text-2xl font-semibold tracking-tight">Personae</h1>
+<h1 class="text-2xl font-semibold tracking-tight">Personas</h1>
 <p class="text-sm text-muted-foreground">Versionierte Persona-...</p>
 ```
 
@@ -380,7 +385,7 @@ Mit `icon`-Slot:
 ```
 <EmptyState
   icon={Users}
-  title="Noch keine Personae"
+  title="Noch keine Personas"
   description="Lege deine erste Persona an, um Agenten zu konfigurieren."
   action={<Button variant="brand">Neue Persona</Button>}
 />
@@ -492,8 +497,19 @@ Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
 ## 11. A11y-Minimum
 
 - **Kontrast:** Brand-Tinte (`--brand` ↔ `--brand-foreground`) muss
-  WCAG-AA-tauglich sein (>= 4.5:1). Werte aus §2.2 sind verifiziert
-  (siehe Plan-Anhang).
+  WCAG-AA-tauglich sein (>= 4.5:1), im Ruhe- **und** im Hover-Zustand.
+  Gemessen (OKLCH → sRGB nach Ottosson, WCAG-2.1-Relativluminanz), Schrift
+  jeweils `oklch(0.145 0 0)` ≈ `#0a0a0a`:
+
+  | Modus | Ruhe (`--brand`) | Hover (`--brand-hover`) |
+  |---|---|---|
+  | Light | `#f3821d` → **7,6:1** | `#de6f00` → **6,0:1** |
+  | Dark | `#fa8927` → **8,2:1** | `#ff9f4c` → **9,7:1** |
+
+  Die Werte rechnet `apps/web/src/styles/brand-contrast.test.ts` direkt aus
+  `globals.css` nach; ein Token-Wechsel unter 4,5:1 bricht dort den Test.
+  `vitest-axe` prueft Kontrast nicht (`color-contrast` ist in
+  `src/test/a11y.ts` abgeschaltet, jsdom hat kein Canvas).
 - **Hit-Targets — diese Stelle ist die einzige Quelle des Floors:**
   Verbindlich ist ein **Floor von ≥ 32px** (HIG). Kein interaktives Element
   darf darunter liegen, auf keinem Breakpoint. Alles darueber sind
