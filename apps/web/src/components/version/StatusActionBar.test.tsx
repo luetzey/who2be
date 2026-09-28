@@ -1,3 +1,4 @@
+import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/client'
 import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { SessionContext } from '@/auth/session-context'
+import i18n from '@/i18n'
 import { notify } from '@/lib/feedback'
 
 import { StatusActionBar, type StatusActionKey } from './StatusActionBar'
@@ -29,17 +31,27 @@ function buildMe(role: WorkspaceRole): Me {
   }
 }
 
+function buildSession(aal: string | null): Session {
+  // Nur der Payload-Teil zaehlt fuer `sessionAal`; Header/Signatur sind Attrappen.
+  const payload = btoa(JSON.stringify(aal === null ? { sub: 'u1' } : { sub: 'u1', aal }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return { access_token: `h.${payload}.s` } as unknown as Session
+}
+
 function renderBar(
   status: VersionStatus,
   onTransition = vi.fn().mockResolvedValue(undefined),
   onTransitioned = vi.fn(),
   role: WorkspaceRole = 'admin',
   labels?: Partial<Record<StatusActionKey, string>>,
+  session: Session | null = null,
 ) {
   return render(
     <SessionContext.Provider
       value={{
-        session: null,
+        session,
         me: buildMe(role),
         sessionLoaded: true,
         signIn: vi.fn(),
@@ -192,6 +204,63 @@ describe('StatusActionBar', () => {
         screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
       )
     })
+  })
+
+  // Audit A1 (E5 = A): die MFA-Pflicht wird VOR dem Klick sichtbar.
+  describe('MFA-Vorankuendigung (aal1 vs. aal2)', () => {
+    it('zeigt bei aal1 statt Aktivieren den Hinweis und den Weg zur Einrichtung', () => {
+      renderBar('review', undefined, undefined, 'admin', undefined, buildSession('aal1'))
+
+      expect(screen.queryByTestId('branch-action-publish')).toBeNull()
+      const toolbar = screen.getByRole('toolbar', { name: 'Status-Aktionen' })
+      expect(toolbar).toHaveTextContent('Veröffentlichen erfordert Zwei-Faktor-Anmeldung.')
+      const setup = screen.getByRole('link', { name: 'Zwei-Faktor einrichten' })
+      expect(setup).toHaveAttribute('href', '/w/ws-1/settings/account')
+      // „Zurueck zu Draft" bleibt nutzbar — nur Publish braucht aal2.
+      expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled()
+    })
+
+    it('zeigt bei aal2 den aktiven Aktivieren-Knopf und keinen Hinweis', () => {
+      renderBar('review', undefined, undefined, 'admin', undefined, buildSession('aal2'))
+
+      expect(screen.getByTestId('branch-action-publish')).toBeEnabled()
+      expect(screen.queryByTestId('publish-mfa-notice')).toBeNull()
+    })
+
+    it('kuendigt ohne aal-Claim nichts an (Server entscheidet wie bisher)', () => {
+      renderBar('review', undefined, undefined, 'admin', undefined, buildSession(null))
+
+      expect(screen.getByTestId('branch-action-publish')).toBeEnabled()
+      expect(screen.queryByTestId('publish-mfa-notice')).toBeNull()
+    })
+
+    it('laesst Editoren beim gesperrten Knopf mit Admin-Tooltip, auch bei aal1', () => {
+      renderBar('review', undefined, undefined, 'editor', undefined, buildSession('aal1'))
+
+      expect(screen.getByTestId('branch-action-publish')).toBeDisabled()
+      expect(screen.queryByTestId('publish-mfa-notice')).toBeNull()
+    })
+
+    it('zeigt den Hinweis in der englischen Oberflaeche auf Englisch', async () => {
+      await i18n.changeLanguage('en')
+      try {
+        renderBar('review', undefined, undefined, 'admin', undefined, buildSession('aal1'))
+        expect(screen.getByTestId('publish-mfa-notice')).toHaveTextContent(
+          'Publishing requires two-factor sign-in.',
+        )
+        expect(screen.getByRole('link', { name: 'Set up two-factor' })).toBeInTheDocument()
+      } finally {
+        await i18n.changeLanguage('de')
+      }
+    })
+  })
+
+  // Audit A2: „Zurueck zu Draft" ist umkehrbar, also keine rote Aktion.
+  it('rendert die Reject-Aktion im Review nicht destruktiv (outline)', () => {
+    renderBar('review')
+    const reject = screen.getByTestId('branch-action-reject')
+    expect(reject.className).not.toMatch(/bg-destructive/)
+    expect(reject.className).toMatch(/\bborder-input\b/)
   })
 
   describe('labels-Override', () => {

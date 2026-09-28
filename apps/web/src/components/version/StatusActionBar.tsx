@@ -1,14 +1,39 @@
 import { useState } from 'react'
+import { ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import type { VersionStatus } from '@/api/types'
+import { useNeedsMfaForPublish } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 import { extractMissingFields, formatMissingFields } from '@/lib/promoteError'
 
 import { canTransition } from './versionStatus'
+
+// Hinweis + Weg zur Einrichtung, an der Stelle des Publish-Knopfs (Audit A1,
+// Owner-Entscheidung E5 = A; Bedingung siehe `useNeedsMfaForPublish`).
+// Geteilt von dieser Leiste und `SystemPromptStatusActionBar`
+// (Cross-Feature-Import ist verboten, `@/components/version` ist der
+// gemeinsame Ort).
+export function MfaPublishNotice() {
+  const { t } = useTranslation('common')
+  const wsPath = useWorkspacePath()
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="publish-mfa-notice">
+      <span className="flex items-center gap-1.5 text-sm text-foreground">
+        <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
+        {t('statusBar.mfa.notice')}
+      </span>
+      <Button asChild variant="outline">
+        <Link to={wsPath('/settings/account')}>{t('statusBar.mfa.setup')}</Link>
+      </Button>
+    </div>
+  )
+}
 
 // Die vier Aktionen, die diese Bar ueberhaupt kennt (siehe showSubmit/
 // showPromote/showReject/showReactivate unten) — Basis fuer den optionalen
@@ -50,6 +75,7 @@ export function StatusActionBar({
 }: StatusActionBarProps) {
   const { t } = useTranslation('common')
   const role = useCurrentWorkspaceRole()
+  const needsMfa = useNeedsMfaForPublish()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
 
@@ -87,6 +113,9 @@ export function StatusActionBar({
 
   // Promote (Review → Active) ist Admin-only (ADR-0023, Reviewer-Rolle).
   const canPromote = role === 'admin'
+  // Nur wer ueberhaupt veroeffentlichen duerfte, bekommt den MFA-Hinweis —
+  // ein Editor sieht weiter den gesperrten Knopf mit dem Admin-Tooltip.
+  const promoteNeedsMfa = showPromote && canPromote && needsMfa
 
   return (
     <div className="flex flex-col gap-2">
@@ -95,7 +124,8 @@ export function StatusActionBar({
         role="toolbar"
         aria-label={t('statusBar.ariaLabel')}
       >
-        {showPromote ? (
+        {promoteNeedsMfa ? <MfaPublishNotice /> : null}
+        {showPromote && !promoteNeedsMfa ? (
           <Button
             type="button"
             variant="brand"
@@ -119,9 +149,11 @@ export function StatusActionBar({
           </Button>
         ) : null}
         {showReject ? (
+          // Audit A2: „Zurueck zu Draft" ist jederzeit umkehrbar — keine
+          // destruktive Aktion (design-language §9.1), also `outline`.
           <Button
             type="button"
-            variant="destructive"
+            variant="outline"
             data-testid={`branch-action-${TESTID_SUFFIX.reject}`}
             onClick={() => void transition('draft', t('statusBar.toast.rejected'))}
             disabled={busy !== null}
