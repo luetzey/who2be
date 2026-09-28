@@ -82,7 +82,7 @@ export function SystemPromptEditor({
     [],
   )
 
-  const portalElements = useMemo(() => ({ default: null }), [])
+  const portalElements = useMemo(() => ({ default: document.body }), [])
 
   // Picker-Callback: im Edit-Modus die bestehende Pill in-place aktualisieren,
   // sonst eine neue Placeholder-Inline einfuegen.

@@ -77,7 +77,7 @@ export function PlaybookBodyEditor({
     [],
   )
 
-  const portalElements = useMemo(() => ({ default: null }), [])
+  const portalElements = useMemo(() => ({ default: document.body }), [])
 
   function handlePickerConfirm(props: PlaceholderProps) {
     setOpenPicker(null)

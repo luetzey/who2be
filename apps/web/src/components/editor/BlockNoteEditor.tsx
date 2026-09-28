@@ -13,7 +13,7 @@ interface BlockNoteEditorProps {
 }
 
 // Geteilte BlockNote-Insel (ADR-0022) fuer Profil/System-Prompt/Playbook-Body/
-// Resource-Body. `portalElements.default = null` hebt Slash-/Side-/Drag-Menue
+// Resource-Body. `portalElements.default = document.body` hebt Slash-/Side-/Drag-Menue
 // auf `document.body`, damit kein `overflow:hidden`-Ancestor (Card, Section)
 // das Popover beschneidet (Phase 3-fixes Track 2). Theme-Surfaces fuer die
 // Popover-Layer kommen aus styles/globals.css §BlockNote-Insel.
@@ -27,7 +27,7 @@ export function BlockNoteEditor({
     initialContent:
       initialBlocks.length > 0 ? (initialBlocks as unknown as PartialBlock[]) : undefined,
   })
-  const portalElements = useMemo(() => ({ default: null }), [])
+  const portalElements = useMemo(() => ({ default: document.body }), [])
   // Welle 4-Fix: BlockNote normalisiert beim Mount sein Dokument (ergaenzt
   // Block-IDs, Default-Props, leeren Standard-Paragraph). Dabei feuert
   // `onChange` einmal mit dem normalisierten Stand, der NICHT identisch zu
