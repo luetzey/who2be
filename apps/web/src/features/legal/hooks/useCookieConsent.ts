@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
  * Die App laedt kein Analytics/Tracking und nutzt ausschliesslich technisch
  * notwendige Speicherung (Session/Auth, Sprache, Darstellung). Gemessen
  * (Audit A5): kein Request an Dritte beim Erstbesuch und keiner nach der
- * frueheren Wahl „Alle akzeptieren\", kein einziges Cookie. Die fruehere
+ * frueheren Wahl „Alle akzeptieren“, kein einziges Cookie. Die fruehere
  * Analytics-Kategorie (`accepted` + `hasAnalyticsConsent`) hatte keinen
  * Verbraucher im Code und ist deshalb entfallen (Owner-Freigabe 2026-09-28).
  *
@@ -23,7 +23,7 @@ export const CONSENT_STORAGE_KEY = 'who2be:cookie-consent'
 export const ACKNOWLEDGED_VALUE = 'acknowledged'
 
 /**
- * Gespeicherte Werte, die als „erledigt\" gelten. `accepted`/`rejected` stammen
+ * Gespeicherte Werte, die als „erledigt“ gelten. `accepted`/`rejected` stammen
  * aus der Zeit mit zwei Knoepfen: wer damals entschieden hat, bekommt den
  * Hinweis nicht erneut.
  */
@@ -34,7 +34,7 @@ function readAcknowledged(): boolean {
     const value = window.localStorage.getItem(CONSENT_STORAGE_KEY)
     return value !== null && DECIDED_VALUES.has(value)
   } catch {
-    // Private-Mode / blockierter Storage → wie „noch nicht gesehen\".
+    // Private-Mode / blockierter Storage → wie „noch nicht gesehen“.
     return false
   }
 }
