@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CONSENT_STORAGE_KEY } from '../hooks/useCookieConsent'
+import { ACKNOWLEDGED_VALUE, CONSENT_STORAGE_KEY } from '../hooks/useCookieConsent'
 import { BANNER_HEIGHT_VAR, CookieConsentBanner } from './CookieConsentBanner'
 
 function renderBanner() {
@@ -13,7 +13,8 @@ function renderBanner() {
   )
 }
 
-const region = { name: /Cookie-Einwilligung/i }
+const region = { name: /Cookie-Hinweis/i }
+const ackButton = { name: /Verstanden/i }
 
 describe('CookieConsentBanner', () => {
   beforeEach(() => {
@@ -23,69 +24,69 @@ describe('CookieConsentBanner', () => {
     window.localStorage.clear()
   })
 
-  it('zeigt das Banner, solange keine Entscheidung vorliegt (Opt-in)', () => {
+  it('zeigt das Banner, solange es nicht bestaetigt wurde', () => {
     renderBanner()
     expect(screen.getByRole('region', region)).toBeInTheDocument()
   })
 
-  it('blendet sich nach „Alle akzeptieren" aus und persistiert die Zustimmung', () => {
+  it('blendet sich nach „Verstanden“ aus und persistiert die Kenntnisnahme', () => {
     renderBanner()
-    fireEvent.click(screen.getByRole('button', { name: /Alle akzeptieren/i }))
-    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBe('accepted')
+    fireEvent.click(screen.getByRole('button', ackButton))
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBe(ACKNOWLEDGED_VALUE)
     expect(screen.queryByRole('region', region)).not.toBeInTheDocument()
   })
 
-  it('lehnt optionales Tracking via „Nur notwendige" ab', () => {
-    renderBanner()
-    fireEvent.click(screen.getByRole('button', { name: /Nur notwendige/i }))
-    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBe('rejected')
-    expect(screen.queryByRole('region', region)).not.toBeInTheDocument()
+  // Audit A5: die App laedt kein Tracking — der Banner darf weder einen
+  // Betreiber-Platzhalter zeigen noch eine Wahl vortaeuschen, die nichts
+  // bewirkt.
+  it('zeigt keinen Platzhalter und bietet keine Scheinwahl an', () => {
+    const { container } = renderBanner()
+    const banner = screen.getByRole('region', region)
+    expect(container.querySelector('[data-placeholder]')).toBeNull()
+    expect(banner.textContent).not.toMatch(/PLATZHALTER/)
+    expect(screen.getAllByRole('button')).toHaveLength(1)
   })
 
-  it('bleibt versteckt, wenn bereits eine Entscheidung gespeichert ist', () => {
-    window.localStorage.setItem(CONSENT_STORAGE_KEY, 'rejected')
+  it.each([ACKNOWLEDGED_VALUE, 'accepted', 'rejected'])(
+    'bleibt versteckt, wenn bereits „%s“ gespeichert ist (auch Altwerte der Zwei-Knopf-Zeit)',
+    (stored) => {
+      window.localStorage.setItem(CONSENT_STORAGE_KEY, stored)
+      renderBanner()
+      expect(screen.queryByRole('region', region)).not.toBeInTheDocument()
+    },
+  )
+
+  it('zeigt sich bei unbekanntem gespeichertem Wert', () => {
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, 'irgendwas')
     renderBanner()
-    expect(screen.queryByRole('region', region)).not.toBeInTheDocument()
+    expect(screen.getByRole('region', region)).toBeInTheDocument()
   })
 })
 
 // Responsive-Audit #567 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
 // deshalb der Klassen-Vertrag. Die Layout-Aussage ist am gerenderten Baum
-// belegt (Plandatei .claude/plan/2026-09-23-0750_567-…): bei 320px Viewport
-// messen die beiden `size="sm"`-Buttons 36x124px — §11 (Floor 32px) ist damit
-// eingehalten, AK 3 dieses Issues (>= 40px unterhalb `md`) nicht. Die
-// Button-Reihe misst dabei 256px bei 254px Innenraum.
+// belegt (Plandatei .claude/plan/2026-09-23-0750_567-…): `size="sm"` misst
+// gerendert 36px — §11 (Floor 32px) ist damit eingehalten, AK 3 dieses Issues
+// (>= 40px unterhalb `md`) nicht.
 describe('CookieConsentBanner — 320px (#567)', () => {
-  function buttons() {
-    return [
-      screen.getByRole('button', { name: /Nur notwendige/i }),
-      screen.getByRole('button', { name: /Alle akzeptieren/i }),
-    ]
-  }
-
-  it('haelt beide Buttons unterhalb md auf 40px Hit-Target', () => {
+  it('haelt den Knopf unterhalb md auf 40px Hit-Target', () => {
     renderBanner()
-    for (const button of buttons()) {
-      const classes = button.className.split(/\s+/)
-      // h-10 = 40px unterhalb md, ab md zurueck auf die kompakte sm-Hoehe.
-      expect(classes).toContain('h-10')
-      expect(classes).toContain('md:h-9')
-    }
+    const classes = screen.getByRole('button', ackButton).className.split(/\s+/)
+    // h-10 = 40px unterhalb md, ab md zurueck auf die kompakte sm-Hoehe.
+    expect(classes).toContain('h-10')
+    expect(classes).toContain('md:h-9')
   })
 
-  it('laesst die Buttons unterhalb sm die volle Kartenbreite teilen', () => {
+  it('laesst den Knopf unterhalb sm die volle Kartenbreite nehmen', () => {
     renderBanner()
-    const [reject, accept] = buttons()
-    for (const button of [reject, accept]) {
-      const classes = button.className.split(/\s+/)
-      expect(classes).toContain('flex-1')
-      expect(classes).toContain('sm:flex-none')
-    }
+    const button = screen.getByRole('button', ackButton)
+    const classes = button.className.split(/\s+/)
+    expect(classes).toContain('flex-1')
+    expect(classes).toContain('sm:flex-none')
 
     // Die Reihe selbst darf unterhalb sm schrumpfen — mit unbedingtem
-    // `shrink-0` war sie auf ihre max-content-Breite genagelt (gemessen 256px
-    // bei 254px Innenraum).
-    const row = reject.parentElement as HTMLElement
+    // `shrink-0` war sie auf ihre max-content-Breite genagelt.
+    const row = button.parentElement as HTMLElement
     const rowClasses = row.className.split(/\s+/)
     expect(rowClasses).not.toContain('shrink-0')
     expect(rowClasses).toContain('sm:shrink-0')
@@ -149,7 +150,7 @@ describe('CookieConsentBanner — Platzreservierung (B7)', () => {
   it('nimmt die Reservierung nach der Entscheidung zurueck', () => {
     renderBanner()
     expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).not.toBe('')
-    fireEvent.click(screen.getByRole('button', { name: /Nur notwendige/i }))
+    fireEvent.click(screen.getByRole('button', ackButton))
     expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe('')
   })
 

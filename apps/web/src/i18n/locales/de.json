@@ -875,14 +875,11 @@
       "lastUpdatedPlaceholder": "Datum der letzten Aktualisierung"
     },
     "cookie": {
-      "regionLabel": "Cookie-Einwilligung",
+      "regionLabel": "Cookie-Hinweis",
       "title": "Cookies & Datenschutz",
-      "body": "Wir nutzen nur technisch notwendige Cookies. Optionale Cookies (z. B.",
-      "bodyServices": "Analyse-/Tracking-Dienste benennen",
-      "bodyEnd": "setzen wir erst nach deiner Zustimmung. Details in der",
+      "body": "Wir speichern in deinem Browser nur, was technisch noetig ist (Anmeldung, Sprache, Darstellung). Keine Analyse, kein Tracking. Details in der",
       "privacyLink": "Datenschutzerklaerung",
-      "rejectButton": "Nur notwendige",
-      "acceptButton": "Alle akzeptieren"
+      "acknowledgeButton": "Verstanden"
     },
     "impressum": {
       "title": "Impressum",

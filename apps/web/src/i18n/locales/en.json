@@ -875,14 +875,11 @@
       "lastUpdatedPlaceholder": "Date of last update"
     },
     "cookie": {
-      "regionLabel": "Cookie consent",
+      "regionLabel": "Cookie notice",
       "title": "Cookies & Privacy",
-      "body": "We only use technically necessary cookies. Optional cookies (e.g.",
-      "bodyServices": "name analytics/tracking services",
-      "bodyEnd": "will only be set with your consent. Details in our",
+      "body": "We only store what is technically necessary in your browser (sign-in, language, theme). No analytics, no tracking. Details in our",
       "privacyLink": "Privacy Policy",
-      "rejectButton": "Necessary only",
-      "acceptButton": "Accept all"
+      "acknowledgeButton": "Got it"
     },
     "impressum": {
       "title": "Imprint",
