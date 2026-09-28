@@ -158,9 +158,11 @@
   --ring: oklch(0.708 0 0);
   --radius: 0.5rem;
 
-  /* Brand-Tinte (warm citrus). Siehe design-language.md §2.2. */
+  /* Brand-Tinte (warm citrus). Siehe design-language.md §2.2.
+   * Dunkle Schrift auch im Light-Mode: weiss auf Orange liegt bei 2,5:1
+   * (WCAG AA verlangt 4,5:1). Waechter: brand-contrast.test.ts. */
   --brand: oklch(0.72 0.17 55);
-  --brand-foreground: oklch(0.985 0 0);
+  --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
 
   /*
@@ -270,7 +272,7 @@
   --ring: oklch(0.708 0 0);
 
   --brand: oklch(0.72 0.17 55);
-  --brand-foreground: oklch(0.985 0 0);
+  --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
 
   --status-draft: oklch(0.7 0 0);

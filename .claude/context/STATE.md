@@ -1,6 +1,21 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-26 (48. Lauf — Zeitzonen-Flake im Placeholder-Preview-Test: der Test rechnete in Ortszeit gegen einen UTC-Endpunkt. Fix im Test, `DTZ` als Linter-Regel gegen den Rückfall)_
+_Stand: 2026-09-28 (49. Lauf — Markenknopf im hellen Modus auf dunkle Schrift umgestellt: weiss auf Orange lag bei 2,5:1. Neuer Token-Test rechnet den Kontrast aus `globals.css` nach)_
+
+## Brand-Knopf hell: weiss auf Orange fiel durch WCAG AA (2026-09-28, 49. Lauf, Karte t_176c07ed)
+
+**Befund:** `--brand-foreground` war im Light-Mode `oklch(0.985 0 0)` auf
+`--brand oklch(0.72 0.17 55)` — gemessen 2,50:1, Hover 3,14:1 (Soll ≥ 4,5:1).
+`design-language.md` §11 nannte die Werte „verifiziert", gemessen hatte sie
+niemand: `vitest-axe` prueft Kontrast hier nicht (`color-contrast` in
+`src/test/a11y.ts` abgeschaltet, jsdom hat kein Canvas).
+
+**Fix (Designentscheidung @designer):** dunkle Schrift `oklch(0.145 0 0)` auch
+im Light-Mode (`:root` und `[data-theme='light']`) — 7,58:1, Hover 6,03:1. Die
+Markenfarbe bleibt; Abdunkeln auf ~`oklch(0.58 …)` wurde verworfen (kippt ins
+Braune). Gegen den Rueckfall: `apps/web/src/styles/brand-contrast.test.ts`
+liest alle vier Theme-Bloecke aus `globals.css` und rechnet OKLCH → sRGB →
+WCAG-Kontrast fuer Ruhe und Hover. Test war vor dem Fix rot (2,50 < 4,5).
 
 ## Zeitzonen-Flake: Test rechnete in Ortszeit, Endpunkt in UTC (2026-09-26, 48. Lauf)
 
@@ -3088,8 +3103,11 @@ in #341):
    API `protected: false`" ist damit überholt). Offen bleibt die
    Merge-Strategie; **Description + Topics** setzen (Repo hat beides noch
    nicht; fertiger Text in #338 und PR #389). ~~Auto-delete head
-   branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; Secret-/Push-Protection und
-   Private vulnerability reporting noch bestätigen, ggf. Social-Preview.
+   branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; ~~Secret-/Push-Protection~~ ✅
+   und ~~Private vulnerability reporting~~ ✅ an (gemessen 2026-09-28:
+   `gh api repos/luetzey/who2be` → `security_and_analysis`,
+   `…/private-vulnerability-reporting` → `enabled: true`); ggf.
+   Social-Preview.
 4. CLA-Assistant aktivieren (vor den ersten externen PRs) — #338 O3;
    `CONTRIBUTING.md` §CLA hält die Stelle für den Link bereit.
 5. **Pflicht vor 1.0** (nicht mehr optional): Deploy-Verifikation
