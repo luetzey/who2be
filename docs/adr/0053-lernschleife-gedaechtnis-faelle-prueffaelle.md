@@ -1,7 +1,8 @@
 # ADR-0053 — Lernschleife: Gedächtnis 2.0, Fälle, Prüffälle, Feedback-Gespräch
 
-- Status: **Proposed** — jede Weiche unten steht auf „vorgeschlagen“, bis der
-  Owner sie einzeln bestätigt (Plan-Paket A4). Vorher entsteht kein Produktcode.
+- Status: **Accepted** (Owner, 2026-09-28) — alle Weichen in Abschnitt 8 sind
+  entschieden, **außer P4** (welche Prüffälle für eine Elementversion gelten).
+  P4 steht auf „vorgeschlagen“; B2 und B5 starten erst nach ihrer Bestätigung.
 - Datum: 2026-09-28
 - Gemessen gegen: `origin/main` @ `ef0756a3`. Alle Code-Aussagen tragen einen
   Symbolanker oder einen SHA-Permalink (Konvention `docs/code-references.md`).
@@ -21,7 +22,7 @@
 5. Migrationsweg und Rückweg
 6. MCP- und API-Verträge (Phasen B–E)
 7. Abbildung auf OWASP ASI06 und ADR-0038
-8. Weichen (alle „vorgeschlagen“)
+8. Weichen (entschieden; P4 vorgeschlagen)
 9. Konsequenzen
 10. Anhang A — Kollisionsmatrix der Pakete
 11. Anhang B — gesetzte Zahlen und ihre Herleitung
@@ -170,9 +171,9 @@ Prüffall, kein Regressionslauf; Nutzung und Signale ohne Bezug auf die Version.
 Gemeinsame Regeln für **jede** neue Tabelle:
 
 - `workspace_id uuid NOT NULL`, RLS aktiviert, Policy `tenant_isolation`
-  (USING und WITH CHECK auf `app.current_tenant`), Muster 0053.
+  (USING und WITH CHECK auf `app.current_tenant`), Muster aus Migration 0053.
 - Append-only-Tabellen erhalten für `who2be_app` nur `SELECT, INSERT`
-  (Muster 0053). Wo `UPDATE` oder `DELETE` nötig ist, steht es ausdrücklich
+  (Muster aus Migration 0053). Wo `UPDATE` oder `DELETE` nötig ist, steht es ausdrücklich
   dabei.
 - Freitexte sind Daten. Sie werden im Web escaped angezeigt und fließen in
   keinen gerenderten Prompt (ADR-0038). Ausnahmen gibt es genau zwei und sie
@@ -216,7 +217,8 @@ Invarianten (DB-CHECK):
   `apps/api/src/who2be_api/repositories/memory_repository.py#PgMemoryRepository.list_active`).
   Damit ist „Lernvorschläge fließen nie in den Prompt“ strukturell und nicht
   per Filter erzwungen, den ein neuer Abrufpfad vergessen könnte.
-- `scope='user'` ⇒ `subject_user_id IS NOT NULL` und `kind='user_fact'`.
+- `scope='user'` ⇒ `subject_user_id IS NOT NULL`, `kind='user_fact'` und
+  `agent_id IS NULL`.
 - `scope='agent'` ⇒ `agent_id IS NOT NULL`.
 - `status='converted'` ⇔ `converted_case_id IS NOT NULL`.
 
@@ -224,7 +226,10 @@ Invarianten (DB-CHECK):
 `created_by_agent_id uuid NULL REFERENCES agent ON DELETE SET NULL`. Grund:
 Ein Nutzerfakt darf nicht verschwinden, weil der Agent gelöscht wird, der ihn
 zuerst gehört hat. Der bestehende Cascade auf `agent_id` bleibt für
-`scope='agent'` unverändert.
+`scope='agent'` unverändert. Dass er einen Nutzerfakt nie erreicht, sichert
+die dritte Bedingung der ersten Invariante (`agent_id IS NULL` bei
+`scope='user'`) als DB-CHECK. Der Agent, der den Fakt eingereicht hat, steht
+ausschließlich in `created_by_agent_id`.
 
 #### 3.1.1 Nutzergedächtnis je Workspace — mit Abweichung vom Plan
 
@@ -346,8 +351,8 @@ Event, statt abzulehnen. Die Antwort ist 200 mit `merged_into=<id>`. Für
 | Spalte | Bedeutung |
 |---|---|
 | `id`, `workspace_id` | |
-| `agent_id` | Pflicht: der Agent, dessen Verhalten geprüft wird (FK ON DELETE CASCADE) |
-| `entity_type`, `entity_id` | optional: das Element, auf das der Prüffall zielt (`persona · playbook · resource · external_tool · system_prompt_template`) |
+| `agent_id` | Pflicht: der Agent, dessen Verhalten geprüft wird und in dessen Kontext der Client den Prüffall ausführt (FK ON DELETE CASCADE) |
+| `entity_type`, `entity_id` | optional: das Element, auf das der Prüffall zielt (`persona · playbook · resource · external_tool · system_prompt_template`). Welche Prüffälle für eine Elementversion gelten, regelt Abschnitt 3.2.1 (Weiche P4) |
 | `title` | ≤ 200 |
 | `input` | die Eingabe (Nutzernachricht, ggf. Kontext), ≤ 8 000 |
 | `expected_behavior` | die **vom Menschen formulierte** Regel, ≤ 2 000 |
@@ -356,11 +361,13 @@ Event, statt abzulehnen. Die Antwort ist 200 mit `merged_into=<id>`. Für
 | `origin_case_id` | optional: der Fall, aus dem der Prüffall stammt |
 | `origin_measure_id` | optional: die Maßnahme |
 | `status` | `active · retired` — `UPDATE` nur auf `status` |
+| `supersedes_id` | optional: der Prüffall, den dieser korrigiert (FK `test_case` ON DELETE SET NULL, gleicher Workspace) |
 | `created_by_kind`, `created_by` | `human · agent`; der Builder darf anlegen |
 | `created_at` | |
 
-Inhalt ist unveränderlich. Eine Korrektur ist ein neuer Prüffall plus
-`retired` am alten, mit Verweis `supersedes_id`. Grund: Ein Prüffall, dessen
+Inhalt ist unveränderlich. Eine Korrektur ist ein neuer Prüffall mit
+`supersedes_id` auf den alten plus `retired` am alten, beides in einer
+Transaktion. Grund: Ein Prüffall, dessen
 Erwartung sich still ändert, macht jede spätere Vorher/Nachher-Messung
 wertlos.
 
@@ -391,6 +398,68 @@ Rechte:
 | Prüffälle anlegen / zurückziehen | `editor` | Builder mit `case_triage` (anlegen, nicht zurückziehen) |
 | Ergebnisse melden | `editor` | jeder Agent mit `test_report` für Prüffälle, die er lesen darf |
 
+#### 3.2.1 Welche Prüffälle gelten für eine Elementversion? (Weiche P4, vorgeschlagen)
+
+Aktiviert wird eine **Elementversion**
+(`apps/api/src/who2be_api/services/version_status.py#VersionStatusService.transition_playbook_version`
+und die vier Geschwister), ohne Agent im Kontext. Ein Prüffall hängt aber an
+einem Agenten. Elemente werden geteilt:
+
+- Eine Persona kann mehreren Agenten gehören — `agent.persona_id` ist nur
+  indiziert, nicht eindeutig
+  (`apps/api/src/who2be_api/migrations/0023_agent.sql@28ea5c8c`); dasselbe gilt
+  für `agent.system_prompt_template_id`.
+- Playbooks hängen n:m an Personas
+  (`apps/api/src/who2be_api/migrations/0004_persona_playbook.sql@0615c441`) und
+  zusätzlich über Composites
+  (`apps/api/src/who2be_api/migrations/0028_playbook_composition.sql@fe0108c6`).
+- Resources hängen über Blockverweise an Playbooks und über Composites an
+  Resources — Rückwärtssuche heute in
+  `apps/api/src/who2be_api/repositories/usage_repository.py#PgUsageRepository.list_resource_usages`
+  und
+  `apps/api/src/who2be_api/repositories/usage_repository.py#PgUsageRepository.list_resource_parent_composites`.
+- External Tools haben **keine** gespeicherte Verknüpfung. Sie werden beim
+  Rendern über ihren Alias aufgelöst
+  (`apps/api/src/who2be_api/services/placeholders/resolvers/tool_ref.py#ToolRefResolver`).
+
+Empfohlene Auflösungsregel (Option (a) in P4): Für eine Version `V` des
+Elements `E` gilt die Vereinigung aus
+
+1. **direkt gebundenen Prüffällen:** `status='active'` und
+   `(entity_type, entity_id) = E`, gleich an welchem Agenten;
+2. **Prüffällen der betroffenen Agenten:** `status='active'` und `agent_id`
+   in der Menge der Agenten, die `E` **heute** erreichen:
+
+| Elementart | betroffene Agenten |
+|---|---|
+| `persona` | `agent.persona_id = E` |
+| `system_prompt_template` | `agent.system_prompt_template_id = E` |
+| `playbook` | Agenten, deren Persona `E` direkt verknüpft oder ein Composite verknüpft, das `E` (transitiv) enthält |
+| `resource` | Agenten der Playbooks, die `E` direkt oder über ein Resource-Composite referenzieren, dann weiter wie `playbook` |
+| `external_tool` | keine — nur Teil 1 (direkt gebunden). Der Bericht weist das aus (`scope_note='no_reference_index'`) |
+
+Regeln dazu:
+
+- **Maßgeblich ist die Verknüpfung zum Zeitpunkt der Berichtsabfrage**, nicht
+  die bei Anlage des Prüffalls. Die Verknüpfungstabellen sind nicht
+  versioniert (Kommentar in Migration 0004); eine historische Auflösung gäbe
+  es nicht.
+- **Gleiche Menge für Bericht (6.2) und Aktivierung (6.3).** Beide rufen
+  dieselbe Service-Funktion; der Bericht gruppiert nach Agent und nennt je
+  Agent, über welchen Weg er betroffen ist (`via`).
+- **Geteiltes Playbook, viele Agenten:** Alle Prüffälle aller betroffenen
+  Agenten gehören dazu — das ist die Regression aus LW5. Fehlende Ergebnisse
+  zählen als `missing` und führen in den Pfad „Bestätigung plus Grund“ aus
+  6.3, nicht in einen Block. Der Bericht zeigt die Zahl betroffener Agenten
+  vorn, damit die Breite einer Änderung sichtbar ist, bevor jemand aktiviert.
+- **Ausführung:** Der Client führt jeden Prüffall im Kontext von
+  `test_case.agent_id` aus und setzt dabei die zu prüfende Version an die
+  Stelle der aktiven; die Version liest er über `get_version`
+  (`apps/mcp/src/who2be_mcp/server.py#get_version`). Einen serverseitigen
+  Render mit Versionsersatz legt diese ADR nicht fest.
+- **Leere Menge** (kein Agent betroffen, kein direkter Prüffall): Der Bericht
+  ist leer, die Aktivierung braucht keine Bestätigung.
+
 ### 3.3 Fall
 
 `agent_case` — die Einzelrückmeldung nach SBI plus erwartetem Verhalten:
@@ -403,7 +472,7 @@ Rechte:
 | `reporter_user_id`, `reporter_agent_id` | |
 | `situation` | Pflicht, ≤ 4 000 |
 | `behavior` | Pflicht, ≤ 4 000 |
-| `impact` | Pflicht, ≤ 2 000 |
+| `impact` | optional, ≤ 2 000 (Spec-F1, siehe Abschnitt 8) |
 | `expected_behavior` | Pflicht, ≤ 2 000 |
 | `severity` | `low · medium · high`, Default `medium` |
 | `signal` | optional, das heutige Vier-Werte-Signal aus `packages/models/src/who2be_models/feedback.py#FeedbackSignal` als schnelle Kategorie |
@@ -734,6 +803,7 @@ außer dort, wo ausdrücklich ein *anderer* Agent gemeint ist
 | `test_case_retired` | 409 | Ergebnis zu zurückgezogenem Prüffall |
 | `test_subject_version_not_found` | 404 | geprüfte Version gehört nicht zum Workspace |
 | `test_results_incomplete` | 409 | Aktivierung ohne Bestätigung, obwohl Ergebnisse fehlen oder rot sind (6.3) |
+| `test_override_reason_required` | 409 | Aktivierung bestätigt, aber ohne nicht leeren `override_reason` (6.3) |
 | `case_not_found` | 404 | auch für Fälle, die der Aufrufer nicht sehen darf (kein Enumerieren) |
 | `case_transition_forbidden` | 409 | Übergang nach 3.3 nicht erlaubt |
 | `case_transition_human_only` | 403 | Agent-Token versucht `addressed`/`verified`/`dismissed` |
@@ -756,7 +826,7 @@ REST:
 | `GET /test-cases/{id}` | wie oben | `TestCaseRead` |
 | `POST /test-cases/{id}/retire` | `editor` | `TestCaseRead` |
 | `POST /test-runs` | `editor` / `test_report` | `list[TestRunRead]` 201 |
-| `GET /versions/{entity_type}/{version_id}/test-report` | `editor` | `TestReport` (je aktivem Prüffall des Agenten: letztes Ergebnis für diese Version oder `missing`) |
+| `GET /versions/{entity_type}/{version_id}/test-report` | `editor` | `TestReport`: Prüffall-Menge nach 3.2.1, gruppiert nach Agent mit `via`; je Prüffall letztes Ergebnis für diese Version oder `missing`; dazu `affected_agent_count` und ggf. `scope_note` |
 
 MCP:
 
@@ -780,13 +850,42 @@ Fehler: `test_case_not_found`, `test_case_retired`,
 
 Die Übergänge `review → active` bleiben `admin`-Sache
 (`apps/api/src/who2be_api/services/version_status.py#required_role_for_transition`).
-Neu: Der Transition-Aufruf nimmt `acknowledge_test_report: bool = false`.
-Hat der Agent aktive Prüffälle und ist für die Zielversion mindestens einer
-`fail`, `error` oder `missing`, antwortet der Server ohne Bestätigung mit 409
-`test_results_incomplete` und dem Bericht in `params`. Mit Bestätigung wird
-aktiviert und die Bestätigung in `status_history` vermerkt. Es gibt **keine**
-automatische Aktivierung bei grünen Ergebnissen (LW5) und keinen harten Block
-bei roten (Weiche P2).
+Neu nimmt der Transition-Aufruf zwei Felder
+(Erweiterung von `packages/models/src/who2be_models/status.py#VersionTransitionRequest`,
+`extra="forbid"` bleibt):
+
+| Feld | Typ | Regel |
+|---|---|---|
+| `acknowledge_test_report` | bool, Default `false` | Bestätigung, dass der Bericht gelesen wurde |
+| `override_reason` | str \| None, nach Trimmen 1–1 000 Zeichen (gesetzte Annahme, Anhang B) | Grund, warum trotz roter oder fehlender Ergebnisse aktiviert wird |
+
+Ablauf bei `to='active'`:
+
+1. Der Server bestimmt die Prüffall-Menge nach 3.2.1 und für jeden Prüffall
+   das letzte Ergebnis für die Zielversion.
+2. Ist die Menge leer oder alles `pass`, wird aktiviert; beide Felder werden
+   ignoriert.
+3. Ist mindestens ein Ergebnis `fail`, `error` oder `missing`, verlangt der
+   Server **beides**, `acknowledge_test_report=true` **und** einen nicht
+   leeren `override_reason`. Fehlt eines davon, antwortet er mit 409:
+   - `test_results_incomplete`, wenn die Bestätigung fehlt,
+   - `test_override_reason_required`, wenn bestätigt wurde, aber der Grund
+     fehlt oder nach Trimmen leer ist.
+
+   Den Bericht liefert er in beiden Fällen in `params`.
+4. Mit beidem wird aktiviert. Der Grund wird im `note` der
+   `status_history`-Zeile dieses Übergangs gespeichert
+   (`apps/api/src/who2be_api/services/status_history_service.py#StatusHistoryService.record`,
+   Spalte `note` aus
+   `apps/api/src/who2be_api/migrations/0012_status_history.sql@9e354495`),
+   mit festem Präfix und der Zahl roter und fehlender Ergebnisse. Er
+   erscheint damit ohne neue Tabelle in der Versionsherkunft („Warum
+   aktiv?“,
+   `apps/api/src/who2be_api/services/version_status.py#VersionStatusService._provenance`).
+   Ein vom Nutzer mitgeschickter `note` wird angehängt, nicht ersetzt.
+
+Es gibt **keine** automatische Aktivierung bei grünen Ergebnissen (LW5) und
+keinen harten Block bei roten (Weiche P2).
 
 ### 6.4 Phase C — Gedächtnis 2.0
 
@@ -857,8 +956,9 @@ REST:
 MCP:
 
 ```text
-report_case(situation: str, behavior: str, impact: str,
-            expected_behavior: str, severity: low | medium | high = medium,
+report_case(situation: str, behavior: str, expected_behavior: str,
+            impact: str | None = None,
+            severity: low | medium | high = medium,
             signal: FeedbackSignal | None = None, source_ref: str | None = None,
             subject_agent_id: str | None = None) -> CaseRead
     # ohne subject_agent_id: der eigene Agent
@@ -990,12 +1090,16 @@ verwalteter Inhalte legt Weiche E3 die Entscheidung vor.
 
 ## 8. Weichen
 
-Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
-**vorgeschlagen**. Die Kennung in Klammern verweist auf den Plan.
+Jede Weiche: Optionen, Trade-off, Empfehlung. Der Owner hat am 2026-09-28
+alle Weichen dieses Abschnitts entschieden — jeweils die Empfehlung (a), bei
+P2 abweichend (siehe dort). **Ausnahme: P4** ist erst im Review
+hinzugekommen und steht auf **vorgeschlagen**. Die Kennung in Klammern
+verweist auf den Plan.
 
 ### Gedächtnis
 
 **M1 — Wo liegen Arten und Nutzergedächtnis? (LW3, G-W1)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) In `agent_memory` mit `kind` und `scope`. Empfohlen.** Wächter,
   Dublettenprüfung, Vektor, Export, Triage bleiben eine Quelle. Nachteil:
   `agent_id` wird nullable, jede Abfrage braucht die Scope-Bedingung.
@@ -1004,6 +1108,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Eine Tabelle je Art. Maximal getrennt, maximal viel Doppelung.
 
 **M2 — Nutzergedächtnis je Workspace oder je Workspace und Nutzer? (G-W1)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Je Workspace und Nutzer. Empfohlen — Abweichung vom Plan**, Grund in
   3.1.1 (ASI06 #3). Für Hermes identisch, weil alle Profile demselben
   Besitzer gehören.
@@ -1013,6 +1118,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   Mandantentrennung auf Workspace-Ebene.
 
 **M3 — Was passiert mit bestehenden `auto`-Agenten? (G-W3/LW1)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Matrix-Default „alles aus“; `auto` wirkt bis zur Einstellung wie
   `suggest`. Empfohlen.** Sicher, aber eine sichtbare Verhaltensänderung.
 - (b) Beim Migrieren die Zelle `user_fact × user_stated` einschalten, wo ein
@@ -1023,6 +1129,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   Zwei Bedeutungen für dasselbe Wort.
 
 **M4 — `agent_note` automatisch? (G-W3/LW1)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Nie. Empfohlen.** ASI06 #6. Nachteil: Triage-Last für Arbeitsnotizen,
   die in Hermes lokal ohne Freigabe entstehen.
 - (b) Schaltbar wie `user_fact × user_stated`. Weniger Last, verletzt #6.
@@ -1031,6 +1138,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   `search_memory` auf sein Verhalten.
 
 **M5 — Historie bei Löschung (LW6)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Cascade; inhaltsfreier `audit_log`-Eintrag. Empfohlen.** DSGVO
   Art. 17 geht vor Nachvollziehbarkeit des Inhalts.
 - (b) Historie bleibt, Inhalt geschwärzt. Mehr Nachvollziehbarkeit, eine
@@ -1038,6 +1146,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Soft-Delete. Widerspricht ADR-0044 („Hard-Delete statt Soft-Delete“).
 
 **M6 — Gelten Bestandseinträge als bestätigt?**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) `active` gilt als bestätigt (`confirmed_at = updated_at`). Empfohlen.**
   Unter `suggest` war das eine menschliche Freigabe. Unter `auto` nicht —
   das lässt sich im Bestand nicht unterscheiden.
@@ -1048,6 +1157,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   vorsichtigsten; erzeugt einmalig die volle Triage-Last.
 
 **M7 — Laufzeit-Push in `get_persona` (G-W4)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Bleibt, nur bestätigte Einträge. Empfohlen.** ASI06 #9.
 - (b) Bleibt wie heute (alle aktiven). Automatisch übernommene Einträge
   kämen ungeprüft in jede Sitzung.
@@ -1055,6 +1165,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   die Nutzung, die ADR-0044 absichtlich so gebaut hat.
 
 **M8 — Herkunft (LW2)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Kanal serverseitig, Herkunft als Pflichtfeld des Agenten.
   Empfohlen**, wie im Plan. Die Herkunft bleibt Selbstauskunft.
 - (b) Nur serverseitig. Unterscheidet „Nutzer hat gesagt“ nicht von „aus
@@ -1062,6 +1173,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Klassifikation per LLM. Selbst angreifbar und nicht LLM-frei.
 
 **M9 — Mustererkennung (LW4)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Deterministisch, Zähler und Ähnlichkeit, Schwelle n = 3. Empfohlen**,
   wie im Plan. Grobe Muster werden übersehen.
 - (b) Periodischer LLM-Review im Client (Hermes-Muster). Findet mehr; das
@@ -1069,6 +1181,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Nur der Mensch. Skaliert nicht.
 
 **M10 — Verfall (LW6)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Nur unbestätigte Einträge, 30 Tage, Abrufe verlängern nicht.
   Empfohlen.**
 - (b) Alle Einträge mit Ablauf. Bestätigte Fakten müssten regelmäßig
@@ -1078,6 +1191,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 ### Prüffälle
 
 **P1 — Wo laufen Prüffälle? (F-W3)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Gespeichert in Who2Be, ausgeführt im Client, Ergebnis als
   Selbstauskunft gekennzeichnet. Empfohlen**, wie im Plan.
 - (b) Server-seitiger Replay über die Modell-API. Reproduzierbar, macht
@@ -1085,23 +1199,54 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Keine Prüffälle. Das Gate bleibt ein Mensch, der einen Diff liest.
 
 **P2 — Was macht die Aktivierung mit roten oder fehlenden Ergebnissen? (LW5)**
-- **(a) Server verlangt eine ausdrückliche Bestätigung
-  (`acknowledge_test_report`), sonst 409. Empfohlen.** Der Mensch entscheidet,
-  aber nicht aus Versehen.
+- *Status: entschieden (Owner, 2026-09-28) — (a) mit Zusatz nach
+  Design-Spec R2:* Aktivieren bleibt erlaubt, verlangt aber
+  `acknowledge_test_report=true` **und** einen nicht leeren
+  `override_reason`; der Grund wird mit der Aktivierung gespeichert und im
+  Verlauf angezeigt. Ohne beides 409. Vertrag in 6.3.
+- (a) Server verlangt eine ausdrückliche Bestätigung
+  (`acknowledge_test_report`), sonst 409. Ursprüngliche Empfehlung. Der
+  Mensch entscheidet, aber nicht aus Versehen; ohne Grund ist die
+  Entscheidung später nicht nachprüfbar.
 - (b) Nur Warnung in der Oberfläche. Über MCP oder API ließe sich ohne
   Hinweis aktivieren.
 - (c) Harter Block bei Rot. Ein kaputter oder überholter Prüffall blockiert
   jede Aktivierung.
 
 **P3 — Sind Prüffälle veränderlich?**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Nein; Korrektur = neuer Prüffall, alter wird `retired`. Empfohlen.**
 - (b) Versioniert wie Personas. Vollständig, aber schwer für einen
   Datensatz dieser Größe.
 - (c) Frei editierbar. Vorher/Nachher-Messungen werden wertlos.
 
+**P4 — Welche Prüffälle gelten für eine Elementversion? (LW5, B2, B5)**
+- *Status: **vorgeschlagen** — kam im Review hinzu und ist nicht von der
+  Owner-Entscheidung vom 2026-09-28 gedeckt. B2 und B5 warten darauf.*
+- **(a) Vereinigung: direkt ans Element gebundene Prüffälle plus alle
+  aktiven Prüffälle jedes Agenten, der das Element heute erreicht (Persona,
+  Template direkt; Playbook über Persona-Link und Composites; Resource über
+  Playbooks). Empfohlen**, Regel und Tabelle in 3.2.1. Trade-off: Ein von
+  vielen Agenten geteiltes Playbook zieht deren gesamte Regression mit; das
+  ist gewollt (LW5), macht den Bericht aber breit und erzeugt viele
+  `missing`. Gegenmittel: Bericht nach Agent gruppiert, Breite vorn, und
+  `missing` führt zu „Bestätigung plus Grund“, nicht zu einem Block.
+  External Tools haben keinen Verweisindex und bekommen nur direkt
+  gebundene Prüffälle; der Bericht sagt das.
+- (b) Nur direkt gebundene Prüffälle (`entity_type/entity_id` = Element).
+  Einfach und eindeutig, schmaler Bericht. Aber eine Persona-Änderung wird
+  nie gegen die Prüffälle ihres Agenten geprüft, solange niemand sie an die
+  Persona bindet. Die Regression aus LW5 („alle alten Prüffälle“) fällt weg.
+- (c) Bindung primär ans Element, `agent_id` optional (nur Ausführungs-
+  kontext). Sauberes Modell für geteilte Elemente, aber ein Prüffall ohne
+  Agent hat keinen Kontext, in dem der Client ihn ausführen kann, und Fälle
+  (3.3) hängen verpflichtend am Agenten. Das Datenmodell müsste an zwei
+  Stellen umgebaut werden.
+
 ### Fälle und Nutzung
 
 **F1 — Was passiert mit dem Alt-Feedback? (D1)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Bleibt unverändert; ein Mensch übernimmt einzelne Einträge in Fälle.
   Empfohlen — Abweichung vom Plan**, Grund in 5.2.
 - (b) Automatische Umwandlung mit Platzhaltern in den Pflichtfeldern. Ein
@@ -1109,6 +1254,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Alt-Feedback einfrieren und ausblenden. Verliert offene Punkte.
 
 **F2 — Wer meldet Fälle? (F-W4)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Menschen ab `viewer`, Agenten mit `feedback_write`; triagieren ab
   `editor`. Empfohlen**, wie im Plan. Freitext von `viewer`-Nutzern landet nie
   in einem Prompt; das Risiko ist Arbeit, nicht Wirkung.
@@ -1116,6 +1262,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Zusätzlich anonym. Kein Rückfragekanal.
 
 **F3 — Status `addressed` automatisch? (F-W6)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Das System setzt `addressed`, wenn die verknüpfte Version durch einen
   Menschen aktiv wird. Empfohlen.** Folge einer menschlichen Handlung, mit
   Beleg.
@@ -1125,6 +1272,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
   und Nachschau wäre unsichtbar.
 
 **N1 — Tabelle für die Nutzungsaufzeichnung (F-W5)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) `usage_event` mit `source`. Empfohlen — Abweichung vom Wortlaut des
   Plans**, Grund in 3.4.
 - (b) `agent_access_log` um Inhaltsarten erweitern. Tagesdedupe und
@@ -1132,6 +1280,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 - (c) Neue Tabelle. Eine dritte Stelle mit Nutzungszahlen.
 
 **N2 — Aufzeichnungsdichte**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Jede Auslieferung eine Zeile. Empfohlen.** Genau für Raten; das
   Volumen wird in F1 gemessen.
 - (b) Tagesbuckets mit Zähler. Weniger Zeilen, braucht `UPDATE` auf eine
@@ -1141,12 +1290,14 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 ### Gespräch
 
 **E1 — Wo findet das Gespräch statt? (F-W2)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Hybrid: Vorbereitung in Who2Be, Gespräch im Client, Protokoll per
   MCP. Empfohlen**, wie im Plan. Kein Modell-Chat in der Weboberfläche.
 - (b) Chat im Web. Macht Who2Be zum Runtime-Host.
 - (c) Nur Formular. Kein Gespräch.
 
 **E2 — Wo hängt der Verweis Entwurf ↔ Maßnahme?**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) An der Maßnahme (`measure_event.draft_linked`). Empfohlen.** Keine
   der fünf Versions-Tabellen ändert sich.
 - (b) Spalte `measure_id` in jeder `*_version`-Tabelle. Direkt, aber fünf
@@ -1155,6 +1306,7 @@ Jede Weiche: Optionen, Trade-off, Empfehlung. Status aller Weichen:
 
 **E3 — Gilt „nie direkt wirksam“ auch für Betreiber-Migrationen verwalteter
 Inhalte? (Feedback-Recherche W10)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Nein, aber jede solche Migration steht im CHANGELOG und zählt für
   die Nachschau als neue Version. Empfohlen.** Verwaltete Inhalte gehören dem
   Betreiber; die Messung sieht die Änderung trotzdem.
@@ -1164,6 +1316,7 @@ Inhalte? (Feedback-Recherche W10)**
 - (c) Nicht regeln. Dann bleibt der Widerspruch stehen.
 
 **E4 — Wie weit geht der Builder? (F-W7)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Moderiert, ordnet zu, legt Entwürfe und Prüffälle an, reicht das
   Protokoll ein — entscheidet nie, schließt keine Fälle. Empfohlen**, wie im
   Plan; serverseitig über `is_agent_bound` erzwungen.
@@ -1171,9 +1324,29 @@ Inhalte? (Feedback-Recherche W10)**
 - (c) Builder nur lesend. Der Mensch trägt die ganze Vorbereitung.
 
 **E5 — Automatische Prompt-Optimierung (F-W8)**
+- *Status: entschieden (Owner, 2026-09-28) — Option (a).*
 - **(a) Vorerst nicht; in F3 neu prüfen. Empfohlen**, wie im Plan.
 - (b) Als optionaler Entwurfsgenerator im Client.
 - (c) Nie. Schließt eine Option aus, bevor Daten vorliegen.
+
+### Verweise auf die Design-Spec
+
+Die Design-Spec der Lernschleife (Karte A2, außerhalb dieses Repos) hat
+eigene Weichen in ihrem §12. Die folgenden berühren diese ADR. Der Owner hat
+sie am 2026-09-28 jeweils mit Option A entschieden:
+
+| Spec-Weiche | Inhalt | Stelle in dieser ADR |
+|---|---|---|
+| G1 | `memory_mode` bleibt Hauptschalter; die Matrix legt fest, was „auto“ heißt | 4.1, M3 |
+| G2 | nur `user_fact × user_stated` schaltbar | 4.2, M4 |
+| G3 | Hard-Delete einschließlich Verlauf, inhaltsfreier Audit-Eintrag | 3.1.2, M5 |
+| F1 | Pflicht beim Melden: Agent, Situation, Verhalten, Erwartung; Folge optional | 3.3 (`impact` optional), 6.5 |
+| F2 | `viewer` sieht nur eigene Fälle | 3.3 Rechte, F2 |
+| R1 | Review im Versions-Tab | 6.3 (nur Oberfläche, kein Vertragseffekt) |
+| R2 | Aktivieren trotz Rot oder Fehlen mit Pflicht-Grund | 6.3, P2 |
+
+Spec-F1 macht die „Folge“ optional. Deshalb führt 3.3 `impact` als optional;
+die erste Fassung dieser ADR hatte das Feld als Pflicht.
 
 ## 9. Konsequenzen
 
@@ -1218,7 +1391,7 @@ S = `…/services/`, RT = `…/routers/`. „neu“ = neue Datei, sonst Änderun
 |---|---|---|
 | Migrationsnummer (M) | B1, C1, C2 (Matrix-Spalte), C3, D1, D3, E2 | eine Kette, in dieser Reihenfolge |
 | `PM/__init__.py` (Exporte) | B1, C1, C3, D1, E2 | mit der Schema-Kette |
-| `packages/models/src/who2be_models/errors.py#ProblemReason` + `apps/api/src/who2be_api/main.py` (`_PROBLEM_TITLES`) | B2, C2, C3, C4, D2, D4, E2 | mit der API-Kette; ein Test hält die Titel-Tabelle vollständig |
+| `packages/models/src/who2be_models/errors.py#ProblemReason` + `apps/api/src/who2be_api/main.py` (`_PROBLEM_TITLES`) | B2, B5, C2, C3, C4, D2, D4, E2 | mit der API-Kette; ein Test hält die Titel-Tabelle vollständig |
 | `PM/tool_policy.py` (Capabilities, `is_within`) | B1 (`test_report`), D1 (`case_triage`) | in B1 beide anlegen, D1 nutzt sie |
 | `apps/api/src/who2be_api/main.py` (`include_router`) | B2, C3, D2, E2 | API-Kette |
 | `docs/reference/openapi.json` | B2, B5, C3, C4, D2, D6, E1, E2 | API-Kette; regenerieren (`scripts/export_openapi.py`), nie von Hand lösen |
@@ -1234,9 +1407,9 @@ S = `…/services/`, RT = `…/routers/`. „neu“ = neue Datei, sonst Änderun
 | Paket | Dateien |
 |---|---|
 | B1 | M neu; PM `test_case.py` neu, `tool_policy.py`, `__init__.py`; R `test_case_repository.py` neu; Test RLS neu; Compliance-Naben |
-| B2 | S `test_case_service.py` neu; RT `test_cases.py` neu; `main.py`; `errors.py`; `openapi.json`; Test neu |
+| B2 | S `test_case_service.py` neu (inkl. Auflösung nach 3.2.1); R `usage_repository.py` bzw. neue Abfrage für betroffene Agenten; RT `test_cases.py` neu; `main.py`; `errors.py`; `openapi.json`; Test neu |
 | B3 | `tools/learning.py` neu; `clients/learning.py` neu; `server.py`; `tool_requirements.py`; `resolvers/tools.py`; `CLAUDE.md`; Test neu |
-| B5 (API-Teil) | S `version_status.py`; RT der Transitions (`personas.py`, `playbooks.py`, `resources.py`, `system_prompts.py`, `external_tools.py`) — **sechs Dateien plus Test: an der 8er-Grenze**, ggf. in B5a (Service) und B5b (Router) teilen |
+| B5 (API-Teil) | PM `status.py` (`VersionTransitionRequest` + `override_reason`); `errors.py`; S `version_status.py`; RT der Transitions (`personas.py`, `playbooks.py`, `resources.py`, `system_prompts.py`, `external_tools.py`) — **über der 8er-Grenze**, in B5a (Modell, Fehler, Service) und B5b (Router) teilen |
 | C1 | M neu; PM `memory.py`, `__init__.py`; R `memory_repository.py`; Test; Compliance-Naben |
 | C2 | M neu (Matrix-Spalte); S `memory_service.py`; neuer Verfallsjob neben `core/purge.py`; `errors.py`; `main.py`; Test |
 | C3 | M neu (Vorschläge); S `memory_service.py`; RT `memory.py`; R `memory_repository.py`; `openapi.json`; Test |
@@ -1291,6 +1464,7 @@ Weiche E3.
 | 200 | Obergrenze `agent_note` je Agent | **gesetzte Annahme** | 40 % von `MEMORY_MAX_PER_AGENT` (500), damit Nutzerfakten Vorrang behalten |
 | 300 / 200 / 500 | Längen `fact` / `context` / Notiz | übernommen | `packages/models/src/who2be_models/memory.py#MEMORY_FACT_MAX_LENGTH`, `#MEMORY_CONTEXT_MAX_LENGTH`, `#MEMORY_TRIAGE_NOTE_MAX_LENGTH` |
 | 2 000 | Freitextfelder Fall/Maßnahme | übernommen | gleiche Grenze wie `note` in `packages/models/src/who2be_models/feedback.py#FeedbackCreate` |
+| 1 000 | `override_reason` (6.3) | **gesetzte Annahme** | Halbe `note`-Grenze von `packages/models/src/who2be_models/status.py#VersionTransitionRequest` (2 000), weil beide zusammen in dieselbe `status_history.note` geschrieben werden und dort unter 2 000 plus Präfix bleiben sollen. Ein Grund ist ein bis drei Sätze |
 | 4 000 / 8 000 | `situation`, `behavior`, `output_excerpt` / `input` | **gesetzte Annahme** | Ein Fall zitiert Ein- und Ausgabe; 2 000 reichen dafür erfahrungsgemäß nicht. Obergrenze, damit ein Fall kein Transkript wird |
 | 132 162 / 160 000 / 1 592 | MCP-Payload | gemessen | `_tools_payload_bytes()` aus `apps/mcp/tests/test_tool_payload_budget.py` am Stand `ef0756a3`; 132 162 / 83 = 1 592 |
 | 11 | neue MCP-Werkzeuge | abgeleitet | Aufzählung 6.7 |
