@@ -53,6 +53,7 @@
         "notice": "Veröffentlichen erfordert Zwei-Faktor-Anmeldung.",
         "setup": "Zwei-Faktor einrichten"
       },
+      "viewChanges": "Änderungen ansehen",
       "fallback": "Aktion fehlgeschlagen.",
       "error": {
         "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}.",

@@ -1,5 +1,4 @@
 import { Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
-import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -22,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { notify } from '@/lib/feedback'
 
@@ -31,6 +31,8 @@ import { PersonaProfileFields } from '../components/PersonaProfileFields'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 
+const PERSONA_TABS = ['edit', 'modes', 'playbooks', 'versions'] as const
+
 export function PersonaDetailPage() {
   const { t } = useTranslation(['personas', 'common', 'playbooks', 'version'])
   const { id } = useParams<{ id: string }>()
@@ -39,9 +41,10 @@ export function PersonaDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
-  // Kontrollierte Tabs — der Modi-Info-Pill im „Bearbeiten"-Tab wechselt
-  // programmatisch in den „Modi"-Tab.
-  const [tab, setTab] = useState('edit')
+  // Kontrollierte Tabs aus der URL (`?tab=`, Audit E1 = A) — der Modi-Info-
+  // Pill im „Bearbeiten"-Tab wechselt programmatisch in den „Modi"-Tab, die
+  // Statusleiste verlinkt `?tab=versions&diff=<n>`.
+  const { tab, setTab, diffVersion } = useVersionDeepLink(PERSONA_TABS, 'edit')
   // Vom System verwaltet (Builder): Editor read-only, keine Status-/Lösch-
   // Aktionen. Das Backend sperrt Mutationen ohnehin (403 managed_aggregate).
   const locked = persona?.is_managed === true
@@ -178,6 +181,7 @@ export function PersonaDetailPage() {
                           <StatusActionBar
                             status={promotableVersion.status ?? 'draft'}
                             labels={branchLabels}
+                            diffVersion={promotableVersion.version}
                             onTransition={async (to) => {
                               await autoSave.flush()
                               return api.transitionPersonaVersion(
@@ -293,6 +297,7 @@ export function PersonaDetailPage() {
                           loadProvenance={(version) =>
                             api.provenancePersonaVersion(persona.id, version)
                           }
+                          initialDiffVersion={diffVersion}
                         />
 
                         {role !== 'viewer' && !locked ? (
