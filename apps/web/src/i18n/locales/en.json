@@ -211,7 +211,7 @@
       "dashboard": "Dashboard",
       "agents": "Agents",
       "systemPrompts": "System prompts",
-      "personas": "Personae",
+      "personas": "Personas",
       "playbooks": "Playbooks",
       "resources": "Resources",
       "tools": "External tools",
@@ -786,13 +786,13 @@
     },
     "kpis": {
       "ariaLabel": "Key metrics",
-      "activePersonas": "Active Personae",
+      "activePersonas": "Active Personas",
       "activePlaybooks": "Active Playbooks",
       "pendingReviewsDescription": "Versions awaiting review"
     },
     "statusDistribution": {
       "title": "Status Distribution",
-      "personas": "Personae",
+      "personas": "Personas",
       "playbooks": "Playbooks",
       "resources": "Resources"
     },
@@ -1140,16 +1140,16 @@
   },
   "personas": {
     "list": {
-      "title": "Personae",
+      "title": "Personas",
       "description": "Versioned persona definitions for your agents.",
       "newPersona": "New persona",
       "empty": {
-        "title": "No personae yet",
+        "title": "No personas yet",
         "description": "Create your first persona to configure agents."
       }
     },
     "detail": {
-      "back": "Personae",
+      "back": "Personas",
       "description": {
         "activeDraft": " · You are editing draft v{{version}}",
         "activeReview": " · In review: v{{version}}",
@@ -1426,7 +1426,7 @@
         "draftOpen": "Draft: v{{version}}",
         "inactiveCurrent": "Inactive: v{{version}}"
       },
-      "usedInDescription": "Personae using this playbook.",
+      "usedInDescription": "Personas using this playbook.",
       "subPlaybooksFlowDescription": "When rendered, this composite invokes in order:"
     },
     "form": {
@@ -1769,7 +1769,7 @@
       "dataPrivacy": {
         "title": "Data & Privacy",
         "description": "Export a copy of all your data (GDPR).",
-        "exportHint": "Downloads all organizations, workspaces, personae, playbooks, resources, agents and their versions as a JSON file.",
+        "exportHint": "Downloads all organizations, workspaces, personas, playbooks, resources, agents and their versions as a JSON file.",
         "exportButton": "Export data",
         "exportSuccess": "Data export downloaded.",
         "exportError": "Export failed."
@@ -1806,7 +1806,7 @@
         "title": "Workspaces",
         "openButton": "Open",
         "addTitle": "Add workspace",
-        "addDescription": "A new workspace groups its own personae, playbooks and tokens.",
+        "addDescription": "A new workspace groups its own personas, playbooks and tokens.",
         "nameLabel": "Name",
         "slugLabel": "Slug",
         "slugDescription": "Unique within the organization, used in the URL.",
@@ -1828,7 +1828,7 @@
       },
       "dangerZone": {
         "title": "Danger zone",
-        "description": "Deleting schedules the organization along with all workspaces, personae, playbooks, resources, agents and tokens for permanent removal (30-day grace period). Only the owner can do this.",
+        "description": "Deleting schedules the organization along with all workspaces, personas, playbooks, resources, agents and tokens for permanent removal (30-day grace period). Only the owner can do this.",
         "triggerButton": "Delete organization",
         "dialogTitle": "Delete organization",
         "dialogDescription": "Enter the name \"{{name}}\" to confirm. All content of all workspaces will be lost after the grace period.",
@@ -1900,7 +1900,7 @@
       },
       "dangerZone": {
         "title": "Danger zone",
-        "description": "Deleting removes the workspace along with all personae, playbooks, resources, templates, agents and tokens. This action is irreversible.",
+        "description": "Deleting removes the workspace along with all personas, playbooks, resources, templates, agents and tokens. This action is irreversible.",
         "lastWorkspace": "This is the last workspace of the organization and cannot be deleted.",
         "triggerButton": "Delete workspace",
         "dialogTitle": "Delete workspace",

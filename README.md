@@ -53,7 +53,7 @@ agents at runtime through an MCP server.
 
 ## Features
 
-- **Personae** — an agent's identity, tone, boundaries, and modes, versioned
+- **Personas** — an agent's identity, tone, boundaries, and modes, versioned
   with a status workflow and diff view
 - **Playbooks** — step-by-step workflows with trigger keywords, composable
   into composite bundles

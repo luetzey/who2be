@@ -13,7 +13,7 @@ die verbindliche Quelle (siehe `CLAUDE.md` §Frontend-Standards).
 **Profil:** Hybrid aus macOS-HIG (Admin-App) und Apple-Marketing-Touch
 (Auth/Brand-Momente).
 
-- **Admin-Pages** (Personae, Playbooks, Resources, Settings, Detail/New) folgen HIG:
+- **Admin-Pages** (Personas, Playbooks, Resources, Settings, Detail/New) folgen HIG:
   dichte Surfaces, klare Hierarchie, dezente Tinten, funktional vor
   emotional.
 - **Marketing-Pages** (heute nur `LoginPage`) duerfen einen Hero-Moment:
@@ -141,7 +141,7 @@ freigegeben. Auf Admin-Pages bleibt H1 = `text-2xl`.
 
 **Admin-Page-Header (PageHeader):**
 ```
-<h1 class="text-2xl font-semibold tracking-tight">Personae</h1>
+<h1 class="text-2xl font-semibold tracking-tight">Personas</h1>
 <p class="text-sm text-muted-foreground">Versionierte Persona-...</p>
 ```
 
@@ -385,7 +385,7 @@ Mit `icon`-Slot:
 ```
 <EmptyState
   icon={Users}
-  title="Noch keine Personae"
+  title="Noch keine Personas"
   description="Lege deine erste Persona an, um Agenten zu konfigurieren."
   action={<Button variant="brand">Neue Persona</Button>}
 />

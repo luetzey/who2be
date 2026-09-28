@@ -42,7 +42,7 @@ export function DataShowcase() {
         <div className="w-full max-w-md">
           <EmptyState
             icon={Users}
-            title="Noch keine Personae"
+            title="Noch keine Personas"
             description="Lege deine erste Persona an, um loszulegen."
             action={
               <Button variant="brand" size="sm">

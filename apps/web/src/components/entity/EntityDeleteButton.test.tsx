@@ -30,7 +30,7 @@ vi.mock('@/lib/feedback', () => ({
 const texts = {
   dialogTitle: 'Persona löschen?',
   success: 'Persona gelöscht.',
-  viewerReadOnly: 'Viewer können Personae nur ansehen',
+  viewerReadOnly: 'Viewer können Personas nur ansehen',
   blockedMessage: 'Diese Persona wird noch verwendet von:',
 }
 

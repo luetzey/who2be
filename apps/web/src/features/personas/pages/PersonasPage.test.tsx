@@ -21,7 +21,7 @@ afterEach(() => {
 })
 
 describe('PersonasPage', () => {
-  it('listet die von der API gelieferten Personae', async () => {
+  it('listet die von der API gelieferten Personas', async () => {
     const persona = {
       id: 'p1',
       workspace_id: 'ws-1',

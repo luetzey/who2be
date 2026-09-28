@@ -8,12 +8,12 @@ import { cn } from '@/lib/utils'
 import { EntityAvatar, EntityIcon, type EntityTone } from './EntityIcon'
 
 // Wiederverwendbare Listen-Karte (Design-Handoff „Karten-Redesign"). Ersetzt die
-// bisher pro Feature (System-Prompts / Agents / Resources / Personae) duplizierten
+// bisher pro Feature (System-Prompts / Agents / Resources / Personas) duplizierten
 // `renderItem`-Zeilen. Die ganze Karte ist per Stretched-Link klickbar (Titel-Link
 // mit `after`-Overlay); rechte Actions und der optionale Expander liegen via
 // `relative z-10` bzw. als Geschwister darueber.
 //
-// Default = schlichte klickbare Karte mit Chevron rechts (System-Prompts/Personae
+// Default = schlichte klickbare Karte mit Chevron rechts (System-Prompts/Personas
 // brauchen keine Zusatz-Props). Optional: Badges-, Status-, Meta- und Action-Slots
 // plus ein zugaenglicher Expander (Sub-Resources / Sub-Playbooks).
 
