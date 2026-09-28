@@ -34,9 +34,10 @@ export function useVersionDeepLink<T extends string>(
   const [params, setParams] = useSearchParams()
   const raw = params.get('tab')
   const tab = raw !== null && (tabs as readonly string[]).includes(raw) ? (raw as T) : defaultTab
-  // Kein eigener Guard auf `tab === versions` noetig: der Diff-Wunsch wirkt
-  // nur, wenn der Versions-Tab gemountet ist, und jeder Tab-Wechsel verwirft ihn.
-  const diffVersion = parseDiffParam(params.get('diff'))
+  // Der Diff-Wunsch gilt nur zusammen mit dem Versions-Tab: manche Detail-
+  // seiten (Playbook) halten alle Panels gemountet und wuerden den Diff sonst
+  // unsichtbar laden.
+  const diffVersion = tab === VERSIONS_TAB ? parseDiffParam(params.get('diff')) : undefined
 
   const setTab = useCallback(
     (next: string) => {

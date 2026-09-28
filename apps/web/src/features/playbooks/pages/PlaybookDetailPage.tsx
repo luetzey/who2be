@@ -11,6 +11,7 @@ import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { StatusActionBar, VersionHistory } from '@/components/version'
+import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,8 @@ import { SubPlaybookFlow } from '../components/SubPlaybookFlow'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 
+const PLAYBOOK_TABS: readonly PlaybookDetailTab[] = ['edit', 'relations', 'versions']
+
 // Avatar-Initialen fuer die „Verwendet in"-Liste: erste Buchstaben der
 // ersten beiden Woerter („Coach Carla" → „CC").
 function initials(name: string): string {
@@ -59,7 +62,10 @@ export function PlaybookDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
-  const [activeTab, setActiveTab] = useState<PlaybookDetailTab>('edit')
+  const { tab: activeTab, setTab: setActiveTab, diffVersion } = useVersionDeepLink(
+    PLAYBOOK_TABS,
+    'edit',
+  )
   const [dangerOpen, setDangerOpen] = useState(false)
   // Vom System verwaltet (Builder-Playbook): Editor read-only, keine Status-/
   // Lösch-Aktionen (Backend sperrt mit 403 managed_aggregate).
@@ -187,6 +193,7 @@ export function PlaybookDetailPage() {
                           <StatusActionBar
                             status={promotableVersion.status ?? 'draft'}
                             labels={branchLabels}
+                            diffVersion={promotableVersion.version}
                             onTransition={async (to) => {
                               await autoSave.flush()
                               return api.transitionPlaybookVersion(
@@ -386,6 +393,7 @@ export function PlaybookDetailPage() {
                   loadProvenance={(version) =>
                     api.provenancePlaybookVersion(playbook.id, version)
                   }
+                  initialDiffVersion={diffVersion}
                 />
               </div>
             </Stack>
