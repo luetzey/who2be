@@ -17,6 +17,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /*
+   * `text-destructive` liest zuerst `--text-color-destructive`, erst danach
+   * `--color-destructive` (Tailwind-v4-Namespace). Damit laufen ALLE
+   * Textverwendungen ueber das Text-Token, Flaechen (`bg-`, `border-`)
+   * bleiben bei `--destructive`. Audit A6, design-language.md §2.4.
+   */
+  --text-color-destructive: var(--destructive-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -153,6 +160,8 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Text-Variante (design-language.md §2.4): hell identisch zur Flaeche. */
+  --destructive-text: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -224,6 +233,10 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.396 0.141 25.723);
     --destructive-foreground: oklch(0.985 0 0);
+    /* Text-Variante: die dunkle Flaechenfarbe misst als Text nur 1,87:1 auf
+     * --card (Audit A6). Hellere Tinte fuer `text-destructive`; Waechter:
+     * brand-contrast.test.ts (>= 4,5:1 auf background/card/popover/muted). */
+    --destructive-text: oklch(0.7 0.19 25);
     --border: oklch(0.269 0 0);
     --input: oklch(0.269 0 0);
     --ring: oklch(0.439 0 0);
@@ -267,6 +280,8 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Text-Variante (design-language.md §2.4): hell identisch zur Flaeche. */
+  --destructive-text: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -318,6 +333,8 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Text-Variante, siehe Dark-Block unter prefers-color-scheme. */
+  --destructive-text: oklch(0.7 0.19 25);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
