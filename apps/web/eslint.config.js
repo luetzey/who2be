@@ -100,9 +100,12 @@ export default tseslint.config(
       tailwindcss: tailwind,
     },
     settings: {
+      // eslint-plugin-tailwindcss v4 liest `cssConfigPath`/`functions`; die
+      // v3-Schluessel `config`/`callees` ignoriert es still und faellt dann
+      // auf `src/style.css` zurueck, die es hier nicht gibt.
       tailwindcss: {
-        callees: ['cn', 'clsx', 'twMerge', 'cva'],
-        config: tailwindEntry,
+        functions: ['cn', 'clsx', 'twMerge', 'cva'],
+        cssConfigPath: tailwindEntry,
       },
     },
     rules: {
