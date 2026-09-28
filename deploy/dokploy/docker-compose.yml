@@ -24,7 +24,7 @@
 
 services:
   db:
-    image: supabase/postgres:15.14.1.175
+    image: supabase/postgres:15.14.1.176
     environment:
       POSTGRES_HOST: /var/run/postgresql
       POSTGRES_DB: postgres
