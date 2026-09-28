@@ -8,10 +8,12 @@ tracker is reserved for **bugs** and **feature requests**.
 - Read the [README](README.md) and the documentation index under
   [`docs/README.md`](docs/README.md) first — setup, architecture, and the
   MCP connection guide live there.
-- For questions that the documentation does not answer, open a
-  [blank issue](https://github.com/luetzey/who2be/issues/new) with the
-  prefix `question:` in the title. If GitHub Discussions are enabled for
-  this repository, prefer a discussion over an issue.
+- For questions that the documentation does not answer, ask in
+  [GitHub Discussions](https://github.com/luetzey/who2be/discussions). The
+  [Q&A category](https://github.com/luetzey/who2be/discussions/categories/q-a)
+  lets you mark the answer that solved your question; ideas that are not yet
+  a concrete feature request belong in
+  [Ideas](https://github.com/luetzey/who2be/discussions/categories/ideas).
 
 ## Bug reports & feature requests
 

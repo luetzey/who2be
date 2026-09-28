@@ -3088,8 +3088,11 @@ in #341):
    API `protected: false`" ist damit überholt). Offen bleibt die
    Merge-Strategie; **Description + Topics** setzen (Repo hat beides noch
    nicht; fertiger Text in #338 und PR #389). ~~Auto-delete head
-   branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; Secret-/Push-Protection und
-   Private vulnerability reporting noch bestätigen, ggf. Social-Preview.
+   branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; ~~Secret-/Push-Protection~~ ✅
+   und ~~Private vulnerability reporting~~ ✅ an (gemessen 2026-09-28:
+   `gh api repos/luetzey/who2be` → `security_and_analysis`,
+   `…/private-vulnerability-reporting` → `enabled: true`); ggf.
+   Social-Preview.
 4. CLA-Assistant aktivieren (vor den ersten externen PRs) — #338 O3;
    `CONTRIBUTING.md` §CLA hält die Stelle für den Link bereit.
 5. **Pflicht vor 1.0** (nicht mehr optional): Deploy-Verifikation
