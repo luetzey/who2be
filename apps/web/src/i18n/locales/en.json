@@ -49,6 +49,10 @@
       "reject": "Reject",
       "reactivate": "Reactivate as draft",
       "adminOnly": "Only admins can activate",
+      "mfa": {
+        "notice": "Publishing requires two-factor sign-in.",
+        "setup": "Set up two-factor"
+      },
       "fallback": "Action failed.",
       "error": {
         "promoteFill": "Fill in before activating: {{fields}}.",
@@ -167,6 +171,7 @@
       "invalid_cursor": "Invalid cursor.",
       "draft_conflict": "A draft already exists. Promote or discard the existing draft before editing again.",
       "review_conflict": "This version is in review — auto-save is disabled. Reject the review before continuing to edit.",
+      "mfa_required": "This admin action requires two-factor sign-in. Set up an authenticator under Settings → Account; if you already have one, sign in again.",
       "area_id_required_for_human": "Without area_id, only an agent-bound token can write or ingest (private area). Humans use the area-specific endpoint (POST /work-areas/{area_id}/...).",
       "template_version_inactive": "The linked system prompt template has no active version — please publish it first.",
       "agent_incomplete": "Agent is an incomplete shell (persona or template missing) — there is nothing to render.",

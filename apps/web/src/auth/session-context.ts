@@ -39,6 +39,42 @@ export interface SessionValue {
 
 export const SessionContext = createContext<SessionValue | null>(null)
 
+// Authenticator Assurance Level der Session, gelesen aus dem `aal`-Claim des
+// Access-Tokens — derselbe Claim, den das Backend-Gate
+// (`core/security.require_aal2`, ADR-0023) auswertet. Die UI nutzt ihn nur,
+// um die MFA-Pflicht VOR dem Klick anzukuendigen (Audit A1); die Grenze
+// bleibt serverseitig. `null`, wenn keine Session da ist oder das Token den
+// Claim nicht traegt (aeltere/handsignierte Tokens) — dann kuendigt die UI
+// nichts an und der Server entscheidet wie bisher.
+export function sessionAal(session: Session | null): string | null {
+  const token = session?.access_token
+  if (token === undefined || token === '') {
+    return null
+  }
+  const payload = token.split('.')[1]
+  if (payload === undefined || payload === '') {
+    return null
+  }
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const claims = JSON.parse(atob(base64)) as { aal?: unknown }
+    return typeof claims.aal === 'string' ? claims.aal : null
+  } catch {
+    return null
+  }
+}
+
+// Audit A1 (Owner-Entscheidung E5 = A): Veroeffentlichen verlangt eine
+// aal2-Session (ADR-0023, `require_aal2`). Traegt die Session explizit nur
+// aal1, kuendigen die Statusleisten das VOR dem Klick an, statt einen
+// Publish-Knopf anzubieten, der garantiert mit 403 `mfa_required` scheitert.
+// Ein fehlender Claim (`null`) kuendigt nichts an — dort entscheidet der
+// Server wie bisher (On-Prem-Bestandstokens ohne `aal`).
+export function useNeedsMfaForPublish(): boolean {
+  const { session } = useSession()
+  return sessionAal(session) === 'aal1'
+}
+
 export function useSession(): SessionValue {
   const value = useContext(SessionContext)
   if (value === null) {

@@ -205,6 +205,59 @@ describe('translateServerError — reason ohne Locale-Key (#509)', () => {
   })
 })
 
+// Audit A1: Der 403 `mfa_required` (require_aal2, ADR-0023) kam als deutscher
+// Servertext auch in der englischen Oberflaeche an. Jetzt traegt der Grund
+// einen Locale-Key — der Toast folgt der UI-Sprache.
+describe('mfa_required — Toast-Text folgt der UI-Sprache (Audit A1)', () => {
+  const serverDetail =
+    'Diese Admin-Aktion erfordert Zwei-Faktor-Authentifizierung (MFA). ' +
+    'Richte in den Kontoeinstellungen einen TOTP-Faktor ein und melde dich anschliessend erneut an.'
+
+  function stubMfaRequired() {
+    stubFetch(() =>
+      problemResponse(
+        {
+          type: 'https://who2be.dev/errors/mfa-required',
+          title: 'Zwei-Faktor-Authentifizierung erforderlich',
+          status: 403,
+          detail: serverDetail,
+          reason: 'mfa_required',
+          actionable_by: 'human',
+        },
+        403,
+      ),
+    )
+  }
+
+  afterEach(async () => {
+    await i18n.changeLanguage(DEFAULT_LOCALE)
+  })
+
+  it('liefert in der englischen UI den englischen Text', async () => {
+    await i18n.changeLanguage('en')
+    stubMfaRequired()
+    await expect(
+      createApi('tok', WS).transitionPersonaVersion('p1', 2, 'active'),
+    ).rejects.toMatchObject({
+      status: 403,
+      message:
+        'This admin action requires two-factor sign-in. Set up an authenticator under Settings → Account; if you already have one, sign in again.',
+    })
+  })
+
+  it('liefert in der deutschen UI den deutschen Text', async () => {
+    await i18n.changeLanguage('de')
+    stubMfaRequired()
+    await expect(
+      createApi('tok', WS).transitionPersonaVersion('p1', 2, 'active'),
+    ).rejects.toMatchObject({
+      status: 403,
+      message:
+        'Diese Admin-Aktion erfordert Zwei-Faktor-Anmeldung. Richte unter Einstellungen → Konto einen Authenticator ein; hast du schon einen, melde dich erneut an.',
+    })
+  })
+})
+
 describe('request — Netzwerkfehler', () => {
   it('mappt einen fetch-Reject auf ApiError(0) und loggt die GET-Ursache', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
