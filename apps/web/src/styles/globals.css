@@ -534,7 +534,7 @@
  * Layer 2 (siehe design-language.md §2.3 / §6).
  *
  * Die Selektoren stehen bewusst OHNE `.bn-container`-Prefix: BlockNote
- * portalt diese Floating-UI-Elemente per `portalElements.default = null`
+ * portalt diese Floating-UI-Elemente per `portalElements.default = document.body`
  * direkt unter `document.body`, damit kein `overflow:hidden`-Ancestor
  * (Card, FormSection) das Popover beschneidet (Phase 3-fixes Track 2).
  * Ein scopender Selektor wuerde die Styles deswegen verfehlen.
