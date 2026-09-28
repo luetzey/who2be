@@ -29,6 +29,8 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-hover: var(--brand-hover);
+  /* Wortmarke A (components/layout/Wordmark.tsx), Asset-Farben je Theme. */
+  --color-wordmark-accent: var(--wordmark-accent);
 
   /*
    * Pill-Kategorie-Tinten (Editor-Platzhalter). Eine bg/fg-Tinte je Pill-Kind;
@@ -164,6 +166,8 @@
   --brand: oklch(0.72 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
+  /* Die "2" der Wortmarke A (docs/assets/brand/logo-light.svg: #de6f00). */
+  --wordmark-accent: oklch(0.66 0.17 55);
 
   /*
    * Status-Tinten (Phase 2.1b). Eine Tinte je Version-Status fuer
@@ -231,6 +235,8 @@
     --brand: oklch(0.74 0.17 55);
     --brand-foreground: oklch(0.145 0 0);
     --brand-hover: oklch(0.8 0.16 55);
+    /* Die "2" der Wortmarke A (docs/assets/brand/logo-dark.svg: #fa8927). */
+    --wordmark-accent: oklch(0.74 0.17 55);
 
     --status-draft: oklch(0.65 0 0);
     --status-review: oklch(0.74 0.17 55);
@@ -274,6 +280,8 @@
   --brand: oklch(0.72 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
+  /* Die "2" der Wortmarke A (docs/assets/brand/logo-light.svg: #de6f00). */
+  --wordmark-accent: oklch(0.66 0.17 55);
 
   --status-draft: oklch(0.7 0 0);
   --status-review: oklch(0.72 0.17 55);
@@ -325,6 +333,8 @@
   --brand: oklch(0.74 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.8 0.16 55);
+  /* Die "2" der Wortmarke A (docs/assets/brand/logo-dark.svg: #fa8927). */
+  --wordmark-accent: oklch(0.74 0.17 55);
 
   --status-draft: oklch(0.65 0 0);
   --status-review: oklch(0.74 0.17 55);

@@ -651,6 +651,7 @@
   },
   "auth": {
     "brand": "Who2Be",
+    "tagline": "Agent-Konfiguration, die du prüfst — nicht Agent-Verhalten, auf das du hoffst.",
     "fields": {
       "email": "E-Mail",
       "password": "Passwort",

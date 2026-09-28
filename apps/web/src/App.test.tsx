@@ -9,6 +9,6 @@ describe('App', () => {
     // findBy*: Der Session-Bootstrap laeuft asynchron — bis er abgeschlossen
     // ist, zeigt RequireAuth eine Ladeanzeige statt sofort zu redirecten.
     expect(await screen.findByRole('heading', { name: 'Anmeldung' })).toBeInTheDocument()
-    expect(screen.getByText('Who2Be')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Who2Be' })).toBeInTheDocument()
   })
 })
