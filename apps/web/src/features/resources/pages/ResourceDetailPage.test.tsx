@@ -293,7 +293,10 @@ function detailHandlers(opts: DetailHandlerOptions = {}): FetchHandler {
   }
 }
 
-function renderDetailPage(handler: FetchHandler, options: { me?: Me } = {}) {
+function renderDetailPage(
+  handler: FetchHandler,
+  options: { me?: Me; entry?: string } = {},
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
     handler(new URL(String(input)).pathname, init?.method ?? 'GET', init),
   )
@@ -309,7 +312,7 @@ function renderDetailPage(handler: FetchHandler, options: { me?: Me } = {}) {
       }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/resources/r1']}>
+        <MemoryRouter initialEntries={[options.entry ?? '/w/ws-1/resources/r1']}>
           <Routes>
             <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
             <Route path="/w/:workspaceId/resources" element={<div>RESOURCES-LISTE</div>} />
@@ -917,5 +920,59 @@ describe('ResourceDetailPage — Umbruch bei 320px (#564)', () => {
     const badgeClasses = badge.className.split(/\s+/)
     expect(badgeClasses).toContain('break-all')
     expect(badgeClasses).toContain('max-w-full')
+  })
+})
+
+// Audit E1 = A: „Änderungen ansehen" und `?tab=versions&diff=<n>`.
+describe('ResourceDetailPage — Deep-Link in die Pruefansicht', () => {
+  function reviewHandlers(): FetchHandler {
+    const base = detailHandlers({
+      resource: resourceWith({ current_version: 3, current_status: 'review' }),
+      versions: [version(3, 'review'), version(2, 'active')],
+    })
+    return (path, method, init) => {
+      if (method === 'GET' && path === `${WS_PREFIX}/resources/r1/versions/3/diff`) {
+        return jsonResponse({
+          version: 3,
+          against: 'active',
+          against_version: 2,
+          identical: false,
+          changes: [{ path: 'description', op: 'changed', before: 'alt', after: 'neu' }],
+        })
+      }
+      return base(path, method, init)
+    }
+  }
+
+  function diffCalls(fetchMock: ReturnType<typeof vi.fn>): number {
+    return fetchMock.mock.calls.filter(([input]) =>
+      /\/resources\/r1\/versions\/[^/]+\/diff$/.test(new URL(String(input)).pathname),
+    ).length
+  }
+
+  it('Statusleiste im Review: ein Klick oeffnet den Versions-Tab mit Diff', async () => {
+    const fetchMock = renderDetailPage(reviewHandlers(), { me: meWithRole('admin') })
+
+    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(link).toHaveAttribute('href', '/w/ws-1/resources/r1?tab=versions&diff=3')
+    expect(diffCalls(fetchMock)).toBe(0)
+
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Versionen/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(diffCalls(fetchMock)).toBe(1)
+  })
+
+  it('Deep-Link ?tab=versions&diff=3 oeffnet den Diff ohne Klick', async () => {
+    const fetchMock = renderDetailPage(reviewHandlers(), {
+      entry: '/w/ws-1/resources/r1?tab=versions&diff=3',
+    })
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(diffCalls(fetchMock)).toBe(1)
   })
 })

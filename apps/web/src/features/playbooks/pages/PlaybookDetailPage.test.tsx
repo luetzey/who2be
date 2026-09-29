@@ -447,7 +447,10 @@ function playbookHandlers(opts: PlaybookHandlerOptions = {}): FetchHandler {
   }
 }
 
-function renderPlaybookDetail(handler: FetchHandler, options: { me?: Me } = {}) {
+function renderPlaybookDetail(
+  handler: FetchHandler,
+  options: { me?: Me; entry?: string } = {},
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
     handler(new URL(String(input)).pathname, init?.method ?? 'GET', init),
   )
@@ -463,7 +466,7 @@ function renderPlaybookDetail(handler: FetchHandler, options: { me?: Me } = {}) 
       }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+        <MemoryRouter initialEntries={[options.entry ?? '/w/ws-1/playbooks/pb1']}>
           <Routes>
             <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
             <Route path="/w/:workspaceId/playbooks" element={<div>PLAYBOOKS-LISTE</div>} />
@@ -982,5 +985,66 @@ describe('PlaybookDetailPage — Responsive (#573)', () => {
     const back = await screen.findByRole('link', { name: 'Playbooks' })
     expect(back).toHaveClass('min-h-10')
     expect(back).toHaveClass('md:min-h-0')
+  })
+})
+
+// Audit E1 = A: „Änderungen ansehen" und `?tab=versions&diff=<n>`. Die
+// Parameter-Validierung liegt im geteilten Hook und ist im Persona-Test
+// abgedeckt; hier zaehlt die Verdrahtung der Seite.
+describe('PlaybookDetailPage — Deep-Link in die Pruefansicht', () => {
+  function reviewHandlers(): FetchHandler {
+    const base = playbookHandlers({
+      playbook: playbookWith({ current_version: 2 }),
+      versions: [pbVersion(2, 'review'), pbVersion(1, 'active')],
+    })
+    return (path, method, init) => {
+      if (method === 'GET' && path === `${WS_PREFIX}/playbooks/pb1/versions/2/diff`) {
+        return jsonResponse({
+          version: 2,
+          against: 'active',
+          against_version: 1,
+          identical: false,
+          changes: [{ path: 'description', op: 'changed', before: 'alt', after: 'neu' }],
+        })
+      }
+      return base(path, method, init)
+    }
+  }
+
+  function diffCalls(fetchMock: ReturnType<typeof vi.fn>): number {
+    return fetchMock.mock.calls.filter(([input]) =>
+      /\/playbooks\/pb1\/versions\/[^/]+\/diff$/.test(new URL(String(input)).pathname),
+    ).length
+  }
+
+  it('Statusleiste im Review: ein Klick zeigt den Versions-Tab mit offenem Diff', async () => {
+    const fetchMock = renderPlaybookDetail(reviewHandlers(), { me: meWithRole('admin') })
+
+    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(link).toHaveAttribute('href', '/w/ws-1/playbooks/pb1?tab=versions&diff=2')
+    // Panels bleiben gemountet — ohne Link darf der Diff nicht vorab laden.
+    expect(diffCalls(fetchMock)).toBe(0)
+
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeVisible()
+    expect(screen.getByRole('tab', { name: /Versionen/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(diffCalls(fetchMock)).toBe(1)
+  })
+
+  it('?diff= ohne tab=versions laedt keinen versteckten Diff', async () => {
+    const fetchMock = renderPlaybookDetail(reviewHandlers(), {
+      entry: '/w/ws-1/playbooks/pb1?diff=2',
+    })
+
+    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(screen.getByRole('tab', { name: /Bearbeiten/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(diffCalls(fetchMock)).toBe(0)
   })
 })
