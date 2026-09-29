@@ -48,9 +48,25 @@ Verwandtschaft zum bereits gemergten Inhalt und kippen auf `CONFLICTING`, obwohl
 inhaltlich nichts widerspricht. Wer anfordert, bestimmt damit die Merge-Reihenfolge
 — und die kennt nur, wer alle offenen Pakete einer Welle sieht.
 
+## Strukturelle Grenze — vor dem Planen lesen
+
+Unser Review verlangt grüne Checks gegen den exakten Head-SHA. Ist das erfüllt,
+ist der PR `CLEAN` — und genau dann lehnt GitHub Auto-Merge ab (`clean status`).
+**Im normalen Ablauf Review-nach-CI greift Auto-Merge also nie.** Es hilft nur,
+wenn nach der Freigabe noch Checks laufen (z. B. nach `update-branch` oder
+Basiswechsel). Eine Nachtschicht „Reviewer fordert Auto-Merge an" staut deshalb
+trotzdem nach dem ersten Paket je Kette — so am 2026-09-28 gemessen (#698/#699).
+Wer Durchsatz über Nacht braucht, muss das dem Owner vorher so sagen und
+Alternativen nennen (Owner mergt vor dem Schlafen, gestapelte PRs,
+Owner-Freigabe für PM-Merge).
+
 ## Vor dem Aufruf — Checkliste
 
 - [ ] Das Review ist **freigegeben**, nicht nur angefordert.
+- [ ] Die Freigabe gilt für genau den aktuellen Head-SHA
+      (`gh pr view <PR> --json headRefOid`). Auto-Merge ersetzt das Review-Gate
+      nicht und verkürzt es nicht. `mergeStateStatus == CLEAN` ist **keine**
+      Vorbedingung — bei `CLEAN` lehnt GitHub ab, das ist Fall (a).
 - [ ] Der PR ist offen und hat keine ungelösten Konflikte.
 - [ ] `all-green` läuft noch (`gh pr checks <PR>`). Ist er auf dem Head schon
       grün, lehnt GitHub mit `clean status` ab — dann Fall (a) unter
