@@ -11,8 +11,9 @@ Status-Wechsel bumpt KEINE Version; Audit-Eintraege landen in
 
 from collections.abc import Mapping
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class VersionStatus(StrEnum):
@@ -59,10 +60,37 @@ def is_allowed_transition(from_status: VersionStatus, to_status: VersionStatus) 
     return to_status in ALLOWED_TRANSITIONS[from_status]
 
 
+# Obergrenze fuer `override_reason` (ADR-0053 Anhang B, gesetzte Annahme): die
+# halbe `note`-Grenze, weil Grund und `note` zusammen in dieselbe
+# `status_history.note` geschrieben werden.
+OVERRIDE_REASON_MAX_LENGTH = 1_000
+TRANSITION_NOTE_MAX_LENGTH = 2_000
+
+
 class VersionTransitionRequest(BaseModel):
-    """Eingabe fuer `POST .../versions/{v}/transition`."""
+    """Eingabe fuer `POST .../versions/{v}/transition`.
+
+    `acknowledge_test_report` und `override_reason` gehoeren zum
+    Aktivierungsvertrag (ADR-0053 6.3): Sind Pruefaelle der Zielversion rot
+    oder fehlen Ergebnisse, verlangt `to='active'` beides. Ist die
+    Pruefall-Menge leer oder alles `pass`, werden beide ignoriert.
+
+    `override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein
+    leerer Grund (auch nur Leerzeichen) ist hier zulaessig und wird erst vom
+    Service als 409 `test_override_reason_required` beantwortet — der
+    Vertrag unterscheidet „bestaetigt ohne Grund" ausdruecklich von einem
+    Formatfehler. Eine Mindestlaenge ueber ein Zeichen gibt es nicht.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     to: VersionStatus
-    note: str | None = Field(default=None, max_length=2_000)
+    note: str | None = Field(default=None, max_length=TRANSITION_NOTE_MAX_LENGTH)
+    acknowledge_test_report: bool = False
+    override_reason: (
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, max_length=OVERRIDE_REASON_MAX_LENGTH),
+        ]
+        | None
+    ) = None

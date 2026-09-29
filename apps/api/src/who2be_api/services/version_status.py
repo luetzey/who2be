@@ -26,6 +26,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import status
+from pydantic import JsonValue
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
@@ -36,6 +37,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.embeddings import build_embedding_port
 from who2be_api.repositories.content_chunk_repository import PgContentChunkRepository
+from who2be_api.repositories.test_case_repository import PgTestCaseRepository
 from who2be_api.services.content_chunks import ChunkDraft, chunk_version_content
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
@@ -43,6 +45,7 @@ from who2be_api.services.promote_validation import (
     validate_promote_resource,
 )
 from who2be_api.services.status_history_service import StatusHistoryService
+from who2be_api.services.test_case_service import TestCaseService, TestReport
 from who2be_models import (
     ALLOWED_TRANSITIONS,
     AgentCapability,
@@ -56,8 +59,17 @@ from who2be_models import (
     VersionStatus,
     WorkspaceRole,
 )
+from who2be_models.status import TRANSITION_NOTE_MAX_LENGTH
 
 logger = logging.getLogger(__name__)
+
+# Fester Praefix der `status_history.note`, wenn trotz roter oder fehlender
+# Pruefergebnisse aktiviert wird (ADR-0053 6.3, Schritt 4). Er macht die
+# Uebersteuerung in der Versionsherkunft (`_provenance`) auffindbar.
+TEST_OVERRIDE_NOTE_PREFIX = "Aktiviert trotz Pruefbericht"
+# Trenner vor einer vom Nutzer mitgeschickten `note` — angehaengt, nicht ersetzt.
+_USER_NOTE_SEPARATOR = "\n\nNotiz: "
+_TRUNCATION_MARK = "…"
 
 
 def _not_found(entity_type: EntityType) -> ApiError:
@@ -108,6 +120,90 @@ _PROMOTE_VALIDATORS: dict[str, _ValidatorFn] = {
     "playbook": validate_promote_playbook,
     "resource": validate_promote_resource,
 }
+
+
+def _override_note(report: TestReport, reason: str, user_note: str | None) -> str:
+    """`status_history.note` fuer eine Aktivierung trotz Pruefbericht (ADR 6.3).
+
+    Fester Praefix, die Zahl roter (`fail` + `error`) und fehlender
+    Ergebnisse, dann der Grund. Eine vom Nutzer mitgeschickte `note` wird
+    angehaengt, nicht ersetzt. Grund (<= 1 000) und `note` (<= 2 000) koennen
+    zusammen ueber der 2 000er-Grenze der Spalte liegen, die
+    `StatusHistoryEntry` beim Lesen der Herkunft erzwingt — deshalb wird nur
+    die angehaengte Nutzer-`note` gekuerzt, nie Praefix, Zahlen oder Grund.
+    """
+    red = report.counts.failed + report.counts.error
+    head = (
+        f"{TEST_OVERRIDE_NOTE_PREFIX} ({red} rot, {report.counts.missing} fehlend "
+        f"von {report.counts.total}): {reason}"
+    )
+    if not user_note:
+        return head
+    room = TRANSITION_NOTE_MAX_LENGTH - len(head) - len(_USER_NOTE_SEPARATOR)
+    if len(user_note) > room:
+        user_note = user_note[: max(room - len(_TRUNCATION_MARK), 0)] + _TRUNCATION_MARK
+    return f"{head}{_USER_NOTE_SEPARATOR}{user_note}"
+
+
+def _report_params(report: TestReport) -> dict[str, JsonValue]:
+    """Bericht fuer `params` der beiden 409 (ADR 6.3, Schritt 3).
+
+    Flache Zaehler fuer die Platzhalter der uebersetzten Meldung, der volle
+    Bericht (Form wie `GET .../test-report`) unter `report`.
+    """
+    counts = report.counts
+    return {
+        "total": counts.total,
+        "passed": counts.passed,
+        "failed": counts.failed,
+        "error": counts.error,
+        "missing": counts.missing,
+        "affected_agent_count": report.affected_agent_count,
+        "report": report.model_dump(mode="json"),
+    }
+
+
+def check_activation_contract(
+    report: TestReport,
+    *,
+    acknowledge_test_report: bool,
+    override_reason: str | None,
+    note: str | None,
+) -> str | None:
+    """Aktivierungsvertrag nach ADR-0053 6.3 — liefert die `note` des Uebergangs.
+
+    Menge leer oder alles `pass`: aktivieren, beide Felder ignorieren, `note`
+    unveraendert. Sonst verlangt der Vertrag beides: ohne Bestaetigung 409
+    `test_results_incomplete`, bestaetigt ohne (nach Trimmen) nicht leeren
+    Grund 409 `test_override_reason_required`, jeweils mit Bericht in
+    `params`. Mit beidem wird aktiviert und der Grund in die `note` gelegt.
+    """
+    if report.counts.passed == report.counts.total:
+        return note
+    red = report.counts.failed + report.counts.error
+    if not acknowledge_test_report:
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            reason="test_results_incomplete",
+            detail=(
+                f"Pruefbericht nicht bestaetigt: {red} rote und {report.counts.missing} "
+                f"fehlende von {report.counts.total} Pruefergebnissen. Aktivieren geht mit "
+                "acknowledge_test_report=true und einem override_reason."
+            ),
+            params=_report_params(report),
+        )
+    reason = (override_reason or "").strip()
+    if not reason:
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            reason="test_override_reason_required",
+            detail=(
+                "Aktivierung trotz roter oder fehlender Pruefergebnisse braucht einen "
+                "nicht leeren override_reason."
+            ),
+            params=_report_params(report),
+        )
+    return _override_note(report, reason, note)
 
 
 def validate_transition(from_status: VersionStatus, to_status: VersionStatus) -> None:
@@ -226,6 +322,11 @@ class VersionStatusService:
     def __init__(self, pool: asyncpg.Pool, history: StatusHistoryService) -> None:
         self._pool = pool
         self._history = history
+        # Pruefbericht fuer den Aktivierungsvertrag (ADR-0053 6.3): DIESELBE
+        # Aufloesung wie `GET .../test-report` (B2,
+        # `TestCaseService.build_test_report`) — wiederverwendet, nicht
+        # nachgebaut, damit Bericht und Aktivierung nie auseinanderlaufen.
+        self._test_cases = TestCaseService(PgTestCaseRepository(pool))
         # Passage-Ebene (ADR-0046). Der Rebuild laeuft in DERSELBEN Transaktion
         # wie der Statuswechsel — sonst koennten Status und Passagen
         # auseinanderlaufen (aktive Version ohne Chunks oder umgekehrt).
@@ -301,9 +402,20 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> PersonaVersionRead:
         row = await self._transition(
-            ctx, "persona", _PERSONA_TABLES, persona_id, version, to_status, note
+            ctx,
+            "persona",
+            _PERSONA_TABLES,
+            persona_id,
+            version,
+            to_status,
+            note,
+            acknowledge_test_report=acknowledge_test_report,
+            override_reason=override_reason,
         )
         return PersonaVersionRead.model_validate(dict(row))
 
@@ -314,9 +426,20 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> PlaybookVersionRead:
         row = await self._transition(
-            ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note
+            ctx,
+            "playbook",
+            _PLAYBOOK_TABLES,
+            playbook_id,
+            version,
+            to_status,
+            note,
+            acknowledge_test_report=acknowledge_test_report,
+            override_reason=override_reason,
         )
         return PlaybookVersionRead.model_validate(dict(row))
 
@@ -327,9 +450,20 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> ResourceVersionRead:
         row = await self._transition(
-            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note
+            ctx,
+            "resource",
+            _RESOURCE_TABLES,
+            resource_id,
+            version,
+            to_status,
+            note,
+            acknowledge_test_report=acknowledge_test_report,
+            override_reason=override_reason,
         )
         return ResourceVersionRead.model_validate(dict(row))
 
@@ -340,6 +474,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> SystemPromptTemplateVersionRead:
         row = await self._transition(
             ctx,
@@ -349,6 +486,8 @@ class VersionStatusService:
             version,
             to_status,
             note,
+            acknowledge_test_report=acknowledge_test_report,
+            override_reason=override_reason,
         )
         return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
@@ -359,9 +498,20 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> ExternalToolVersionRead:
         row = await self._transition(
-            ctx, "external_tool", _EXTERNAL_TOOL_TABLES, tool_id, version, to_status, note
+            ctx,
+            "external_tool",
+            _EXTERNAL_TOOL_TABLES,
+            tool_id,
+            version,
+            to_status,
+            note,
+            acknowledge_test_report=acknowledge_test_report,
+            override_reason=override_reason,
         )
         return ExternalToolVersionRead.model_validate(dict(row))
 
@@ -436,6 +586,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        *,
+        acknowledge_test_report: bool = False,
+        override_reason: str | None = None,
     ) -> asyncpg.Record:
         entity_tbl, version_tbl, fk_col = tables
         async with self._pool.acquire() as conn, conn.transaction():
@@ -448,7 +601,7 @@ class VersionStatusService:
             # `e.name` und `pv.content` werden fuer die Promote-Validation
             # mitgeladen (Welle 4).
             target = await conn.fetchrow(
-                f"SELECT pv.status, pv.content, pv.locale, e.name, e.is_managed "
+                f"SELECT pv.id, pv.status, pv.content, pv.locale, e.name, e.is_managed "
                 f"FROM {version_tbl} pv "
                 f"JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
                 f"WHERE pv.{fk_col} = $1 AND pv.version = $2 "
@@ -493,6 +646,23 @@ class VersionStatusService:
             # Eltern-Composite. Nur fuer playbook->active relevant.
             if entity_type == "playbook" and to_status == VersionStatus.active:
                 await self._assert_composite_children_active(conn, entity_id)
+
+            # Aktivierungsvertrag (ADR-0053 6.3): Pruefall-Menge nach 3.2.1 mit
+            # letztem Ergebnis fuer genau diese Version. Rot oder fehlend
+            # verlangt Bestaetigung plus Grund, sonst 409; der Grund landet mit
+            # Praefix in der `note` dieses Uebergangs. Sitzt NACH allen Rechte-
+            # und Pflichtfeld-Gates, damit ein Aufrufer ohne Recht den Bericht
+            # nie in `params` zu sehen bekommt.
+            if to_status == VersionStatus.active:
+                report = await self._test_cases.build_test_report(
+                    ctx.workspace_id, entity_type, entity_id, target["id"]
+                )
+                note = check_activation_contract(
+                    report,
+                    acknowledge_test_report=acknowledge_test_report,
+                    override_reason=override_reason,
+                    note=note,
+                )
 
             # Active-Promotion: die bisherige Active-Version derselben
             # Entity zuerst auf `inactive` setzen — sonst kollidiert der
@@ -699,7 +869,9 @@ class VersionStatusService:
 
 
 __all__ = [
+    "TEST_OVERRIDE_NOTE_PREFIX",
     "VersionStatusService",
+    "check_activation_contract",
     "required_role_for_transition",
     "validate_transition",
 ]

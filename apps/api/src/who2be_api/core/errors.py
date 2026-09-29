@@ -26,6 +26,7 @@ lesen `exc.value.status`/`exc.value.detail` weiterhin gleich.
 """
 
 from fastapi import HTTPException
+from pydantic import JsonValue
 
 from who2be_models import ActionableBy, ProblemReason
 
@@ -90,7 +91,7 @@ class ApiError(HTTPException):
         status_code: int,
         detail: str,
         reason: ProblemReason,
-        params: dict[str, str | int] | None = None,
+        params: dict[str, JsonValue] | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(status_code=status_code, detail=detail, headers=headers)

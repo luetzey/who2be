@@ -22,7 +22,7 @@ uebrige). Ein zweiter Enum daneben waere eine Dublette.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 # Stabiler, maschinenlesbarer Grund eines Gate-Fehlers (D1). Bewusst ein
 # geschlossenes Vokabular — ein Agent kann darauf deterministisch verzweigen,
@@ -175,6 +175,10 @@ ProblemReason = Literal[
     "test_subject_version_not_found",  # 404 — gepruefte Version nicht in diesem Workspace
     # 422 — `pass` ohne n/n, `runs_total < 1` oder `runs_passed` ausserhalb 0..runs_total
     "test_run_verdict_inconsistent",
+    # Lernschleife Phase B — Aktivierung mit Pruefbericht (ADR-0053 6.1/6.3, Paket B5a).
+    # Beide 409 tragen den Pruefbericht in `params` (Zaehler flach, Bericht unter `report`).
+    "test_results_incomplete",  # 409 — ohne Bestaetigung trotz roter/fehlender Ergebnisse
+    "test_override_reason_required",  # 409 — bestaetigt, aber `override_reason` fehlt/leer
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst
@@ -218,10 +222,17 @@ class ApiErrorBody(BaseModel):
     `params` traegt die Werte, die in den uebersetzten Text interpoliert
     werden (i18next-Platzhalter). Fehlt es, wird das Feld weggelassen — eine
     Antwort ohne Platzhalter sieht aus wie vorher plus `reason`.
+
+    Die Werte sind JSON-Werte, nicht nur `str | int`: die Aktivierung mit
+    Pruefbericht (ADR-0053 6.3) liefert den Bericht als Objekt unter
+    `params.report`, neben flachen Zaehlern fuer die Platzhalter. Der
+    Web-Client interpoliert ohnehin nur flache Primitive und laesst
+    verschachtelte Werte liegen; fuer alle bestehenden Gruende aendert sich
+    nichts, weil `str | int` eine Teilmenge ist.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     detail: str
     reason: ProblemReason
-    params: dict[str, str | int] | None = None
+    params: dict[str, JsonValue] | None = None
