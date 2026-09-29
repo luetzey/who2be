@@ -133,6 +133,7 @@ export function PersonaDetailPage() {
                     </>
                   }
                   description={persona.content.description}
+                  collapseActionsBelowMd
                   actions={
                     <>
                       {role === 'admin' || role === 'editor' ? (
