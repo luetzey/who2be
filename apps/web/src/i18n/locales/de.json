@@ -794,8 +794,7 @@
     "kpis": {
       "ariaLabel": "Kennzahlen",
       "activePersonas": "Aktive Personas",
-      "activePlaybooks": "Aktive Playbooks",
-      "pendingReviewsDescription": "Versionen warten auf Review"
+      "activePlaybooks": "Aktive Playbooks"
     },
     "statusDistribution": {
       "title": "Status-Verteilung",
@@ -836,7 +835,18 @@
       "ariaLabel": "Braucht jetzt deine Aufmerksamkeit",
       "eyebrow": "Braucht jetzt deine Aufmerksamkeit",
       "reviews": {
-        "description": "Prüfe die offenen Entwürfe in Personas und Playbooks."
+        "title_one": "1 Version liegt zur Review",
+        "title_other": "{{count}} Versionen liegen zur Review",
+        "description": "Prüfe die eingereichten Versionen und veröffentliche sie oder setze sie zurück auf Entwurf.",
+        "openVersion": "{{name}} v{{version}} prüfen",
+        "openList": {
+          "persona_one": "1 Persona prüfen",
+          "persona_other": "{{count}} Personas prüfen",
+          "playbook_one": "1 Playbook prüfen",
+          "playbook_other": "{{count}} Playbooks prüfen",
+          "resource_one": "1 Resource prüfen",
+          "resource_other": "{{count}} Resources prüfen"
+        }
       },
       "memories": {
         "title_one": "1 neuer Gedächtniseintrag wartet auf Freigabe",

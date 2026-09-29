@@ -65,10 +65,17 @@ export function AttentionBanner({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold">{title}</div>
         {description !== undefined ? (
-          <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+          // Kontrast (Audit A4, WCAG 1.4.3): `text-muted-foreground` auf der
+          // Brand-Flaeche mass 4,31:1 bei 12 px. `text-foreground/80` bleibt
+          // sichtbar sekundaer und liegt in beiden Themes ueber 4,5:1.
+          <div className="mt-0.5 text-xs text-foreground/80">{description}</div>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        // `min-w-0 max-w-full`: lange Link-Beschriftungen (Audit A4, Direktlinks
+        // mit Entitaetsnamen) kuerzen statt auf 390 px aus dem Banner zu laufen.
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   )
 }

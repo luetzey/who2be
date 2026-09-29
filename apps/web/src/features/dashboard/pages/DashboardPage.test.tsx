@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DashboardData } from '@/api/types'
@@ -64,7 +64,7 @@ describe('DashboardPage', () => {
     // Aktive-Resources-KPI (aus kpis.active_resources).
     expect(within(kpis).getByText('7')).toBeInTheDocument()
     // Pending-Reviews steckt jetzt im Aufmerksamkeits-Band statt in einer KPI.
-    expect(screen.getByText(/warten auf Review/)).toBeInTheDocument()
+    expect(screen.getByText('3 Versionen liegen zur Review')).toBeInTheDocument()
     // Neue Aufmerksamkeits-Signale: pending Memories + System-Prompt-Reviews,
     // jeweils mit Deep-Link in die Triage-Fläche.
     expect(
@@ -248,5 +248,148 @@ describe('DashboardPage', () => {
     for (const item of legendItems) {
       expect(item).toHaveClass('min-w-0')
     }
+  })
+})
+
+// Audit A4: Der Review-Banner fuehrt zur Pruefung — bis drei offene Versionen
+// direkt in die Pruefansicht (ein Klick), darueber auf die gefilterte Liste.
+describe('DashboardPage — Review-Banner (Audit A4)', () => {
+  const dist = (review: number) => ({ draft: 0, review, active: 1, inactive: 0 })
+
+  function reviewData(pending: number, persona: number, playbook: number, resource: number) {
+    return {
+      kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: pending },
+      activity: [],
+      status_distribution: {
+        persona: dist(persona),
+        playbook: dist(playbook),
+        resource: dist(resource),
+      },
+    } satisfies DashboardData
+  }
+
+  const item = (id: string, name: string, version: number, status: string) => ({
+    id,
+    name,
+    current_version: version,
+    current_status: status,
+  })
+
+  // Antwortet je Pfad: Dashboard-Aggregat bzw. die jeweilige Liste.
+  function routedFetch(dashboard: DashboardData, lists: Record<string, unknown[]>) {
+    return vi.fn().mockImplementation((url: string) => {
+      const path = new URL(String(url), 'http://x').pathname
+      if (path.endsWith('/dashboard')) {
+        return Promise.resolve(new Response(JSON.stringify(dashboard), { status: 200 }))
+      }
+      const type = path.split('/').pop() ?? ''
+      if (type in lists) {
+        return Promise.resolve(new Response(JSON.stringify(lists[type]), { status: 200 }))
+      }
+      return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+    })
+  }
+
+  function renderDashboard() {
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+    })
+  }
+
+  it('Singular: eine Version, Direktlink auf die Pruefansicht', async () => {
+    const fetchMock = routedFetch(reviewData(1, 1, 0, 0), {
+      personas: [item('p1', 'Builder (Kopie)', 2, 'review'), item('p2', 'Coach', 1, 'active')],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderDashboard()
+
+    const link = await screen.findByRole('link', { name: /Builder \(Kopie\) v2 prüfen/ })
+    expect(link).toHaveAttribute('href', '/w/ws-1/personas/p1?tab=versions&diff=2')
+    expect(screen.getByText('1 Version liegt zur Review')).toBeInTheDocument()
+    // Nur die Liste mit offenen Reviews wird geladen, Playbooks/Resources nicht.
+    const paths = fetchMock.mock.calls.map(([url]) => new URL(String(url), 'http://x').pathname)
+    expect(paths.some((p) => p.endsWith('/personas'))).toBe(true)
+    expect(paths.some((p) => p.endsWith('/playbooks') || p.endsWith('/resources'))).toBe(false)
+  })
+
+  it('bis drei Versionen: je ein Direktlink, ueber alle Typen', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(reviewData(3, 1, 1, 1), {
+        personas: [item('p1', 'Builder', 2, 'review')],
+        playbooks: [item('pb1', 'Onboarding call', 3, 'review')],
+        resources: [item('r1', 'Pricing sheet', 4, 'review')],
+      }),
+    )
+    renderDashboard()
+
+    expect(await screen.findByRole('link', { name: /Onboarding call v3 prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/playbooks/pb1?tab=versions&diff=3',
+    )
+    expect(screen.getByRole('link', { name: /Builder v2 prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/personas/p1?tab=versions&diff=2',
+    )
+    expect(screen.getByRole('link', { name: /Pricing sheet v4 prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/resources/r1?tab=versions&diff=4',
+    )
+    expect(screen.getByText('3 Versionen liegen zur Review')).toBeInTheDocument()
+  })
+
+  it('mehr als drei Versionen: Link auf die gefilterte Liste je Typ, keine Listen-Requests', async () => {
+    const fetchMock = routedFetch(reviewData(4, 3, 1, 0), {})
+    vi.stubGlobal('fetch', fetchMock)
+    renderDashboard()
+
+    expect(await screen.findByRole('link', { name: /3 Personas prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/personas?status=review',
+    )
+    expect(screen.getByRole('link', { name: /1 Playbook prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/playbooks?status=review',
+    )
+    expect(screen.queryByRole('link', { name: /Resources? prüfen/ })).not.toBeInTheDocument()
+    expect(screen.getByText('4 Versionen liegen zur Review')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Wartet, bis die Listen-Requests beantwortet und verarbeitet sind — sonst
+  // saehe ein fehlender Direktlink auch vor dem Laden gruen aus.
+  async function settleLists(fetchMock: ReturnType<typeof vi.fn>, count: number) {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1 + count))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+  }
+
+  it('faellt auf die Liste zurueck, wenn die Listen nicht alle Versionen liefern', async () => {
+    const fetchMock = routedFetch(reviewData(2, 2, 0, 0), {
+      personas: [item('p1', 'Builder', 2, 'review')],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderDashboard()
+
+    await settleLists(fetchMock, 1)
+    expect(screen.getByRole('link', { name: /2 Personas prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/personas?status=review',
+    )
+    expect(screen.queryByRole('link', { name: /Builder v2 prüfen/ })).not.toBeInTheDocument()
+  })
+
+  it('faellt auf die Liste zurueck, wenn eine Liste nicht laedt', async () => {
+    const fetchMock = routedFetch(reviewData(1, 0, 1, 0), {})
+    vi.stubGlobal('fetch', fetchMock)
+    renderDashboard()
+
+    await settleLists(fetchMock, 1)
+    expect(screen.getByRole('link', { name: /1 Playbook prüfen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/playbooks?status=review',
+    )
   })
 })
