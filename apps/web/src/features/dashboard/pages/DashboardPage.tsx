@@ -34,6 +34,7 @@ import { KpiCard } from '../components/KpiCard'
 import { PaginationControls } from '../components/PaginationControls'
 import { StatusBar } from '../components/StatusBar'
 import { useDashboard } from '../hooks/useDashboard'
+import { useReviewTargets } from '../hooks/useReviewTargets'
 
 const EYEBROW = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 const LEGEND_STATUSES = ['draft', 'review', 'active', 'inactive'] as const
@@ -50,6 +51,7 @@ export function DashboardPage() {
   const pendingMemories = data?.kpis.pending_memories ?? 0
   const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
   const allClear = pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0
+  const reviewTargets = useReviewTargets(pendingReviews, data?.status_distribution)
   const activeResources =
     data?.kpis.active_resources ?? data?.status_distribution.resource?.active ?? 0
 
@@ -84,8 +86,42 @@ export function DashboardPage() {
                     <AttentionBanner
                       variant="brand"
                       icon={ClipboardCheck}
-                      title={`${pendingReviews} ${t('kpis.pendingReviewsDescription')}`}
+                      title={t('attention.reviews.title', { count: pendingReviews })}
                       description={t('attention.reviews.description')}
+                      actions={
+                        reviewTargets.targets !== null
+                          ? reviewTargets.targets.map((target) => {
+                              const label = t('attention.reviews.openVersion', {
+                                name: target.name,
+                                version: target.version,
+                              })
+                              return (
+                                <Button
+                                  key={`${target.type}-${target.id}`}
+                                  asChild
+                                  variant="outline"
+                                  size="sm"
+                                  className="max-w-full"
+                                >
+                                  {/* `title`: auf 390 px wird der Name gekuerzt. */}
+                                  <Link to={wsPath(target.path)} title={label}>
+                                    <span className="min-w-0 truncate">{label}</span>
+                                    <ArrowRight />
+                                  </Link>
+                                </Button>
+                              )
+                            })
+                          : reviewTargets.lists.map((list) => (
+                              <Button key={list.type} asChild variant="outline" size="sm">
+                                <Link to={wsPath(list.path)}>
+                                  {t(`attention.reviews.openList.${list.type}`, {
+                                    count: list.count,
+                                  })}
+                                  <ArrowRight />
+                                </Link>
+                              </Button>
+                            ))
+                      }
                     />
                   ) : null}
                   {pendingMemories > 0 ? (

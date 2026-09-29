@@ -798,8 +798,7 @@
     "kpis": {
       "ariaLabel": "Key metrics",
       "activePersonas": "Active Personas",
-      "activePlaybooks": "Active Playbooks",
-      "pendingReviewsDescription": "Versions awaiting review"
+      "activePlaybooks": "Active Playbooks"
     },
     "statusDistribution": {
       "title": "Status Distribution",
@@ -840,7 +839,18 @@
       "ariaLabel": "Needs your attention now",
       "eyebrow": "Needs your attention now",
       "reviews": {
-        "description": "Review the open drafts in personas and playbooks."
+        "title_one": "1 version is awaiting review",
+        "title_other": "{{count}} versions are awaiting review",
+        "description": "Review the submitted versions and publish them or send them back to draft.",
+        "openVersion": "Review {{name}} v{{version}}",
+        "openList": {
+          "persona_one": "Review 1 persona",
+          "persona_other": "Review {{count}} personas",
+          "playbook_one": "Review 1 playbook",
+          "playbook_other": "Review {{count}} playbooks",
+          "resource_one": "Review 1 resource",
+          "resource_other": "Review {{count}} resources"
+        }
       },
       "memories": {
         "title_one": "1 new memory entry is awaiting approval",
