@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { FileText } from 'lucide-react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
@@ -67,5 +67,60 @@ describe('DetailHeader', () => {
       'href',
       '/system-prompts',
     )
+  })
+
+  // Audit A13 / #624: jsdom rendert kein CSS — die Zusicherung liegt deshalb
+  // auf den Klassen, die die Sichtbarkeit tragen (Phone: `hidden`, ab md:
+  // `md:flex`), plus dem ARIA-Vertrag des Knopfs. Die echte Sichtbarkeit je
+  // Viewport belegt `e2e/status-actions-viewport.spec.ts`.
+  it('klappt mit collapseActionsBelowMd die Aktionen hinter „Mehr" ein', () => {
+    renderHeader(
+      <DetailHeader
+        icon={FileText}
+        iconTone="tools"
+        title="Persona"
+        collapseActionsBelowMd
+        actions={<button type="button">Duplizieren</button>}
+      />,
+    )
+    const more = screen.getByRole('button', { name: 'Mehr' })
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).not.toBeNull()
+    expect(slot).toContainElement(screen.getByRole('button', { name: 'Duplizieren' }))
+    expect(slot).toHaveClass('hidden', 'md:flex')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(slot).toHaveClass('flex', 'md:flex')
+    expect(slot).not.toHaveClass('hidden')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    expect(slot).toHaveClass('hidden')
+  })
+
+  it('laesst die Aktionen ohne Opt-in offen und rendert keinen „Mehr"-Knopf', () => {
+    renderHeader(
+      <DetailHeader
+        icon={FileText}
+        iconTone="tools"
+        title="Agent"
+        actions={<button type="button">Copy</button>}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Mehr' })).not.toBeInTheDocument()
+    const copy = screen.getByRole('button', { name: 'Copy' })
+    expect(copy.parentElement).toHaveClass('flex')
+    expect(copy.parentElement).not.toHaveClass('hidden')
+  })
+
+  it('rendert ohne Aktionen auch mit Opt-in keinen „Mehr"-Knopf', () => {
+    renderHeader(
+      <DetailHeader icon={FileText} iconTone="tools" title="Leer" collapseActionsBelowMd />,
+    )
+    expect(screen.queryByRole('button', { name: 'Mehr' })).not.toBeInTheDocument()
   })
 })
