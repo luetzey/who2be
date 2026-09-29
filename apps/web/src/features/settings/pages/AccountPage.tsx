@@ -1,13 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { useApi } from '@/api/useApi'
 import { useAuthTokenContext } from '@/auth/auth-token-context'
-import { useSession } from '@/auth/session-context'
+import { sessionAal, useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -34,8 +34,33 @@ import type { Locale } from '@/i18n'
 import { useLocale } from '@/i18n/useLocale'
 import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
+import { safeInternalPath } from '@/lib/safePath'
 
 import { MfaSection } from '../components/MfaSection'
+
+
+// Ruecksprung nach der 2FA-Einrichtung (Audit A1/E5 = A): der MFA-Hinweis in
+// der Statusleiste verlinkt `settings/account?returnTo=<pfad>`. Sobald die
+// Session hier von aal1 auf aal2 wechselt (Challenge verifiziert), geht es
+// zur Ausgangsseite zurueck — nur fuer interne Pfade (`safeInternalPath`),
+// alles andere bleibt ohne Wirkung. Ist die Session beim Aufruf schon aal2,
+// passiert nichts: es gab keine Einrichtung, zu der zurueckgekehrt wuerde.
+function useReturnAfterMfa() {
+  const { session } = useSession()
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const returnTo = safeInternalPath(params.get('returnTo'))
+  const aal = sessionAal(session)
+  const previousAal = useRef(aal)
+
+  useEffect(() => {
+    const before = previousAal.current
+    previousAal.current = aal
+    if (returnTo !== null && before === 'aal1' && aal === 'aal2') {
+      navigate(returnTo, { replace: true })
+    }
+  }, [aal, returnTo, navigate])
+}
 
 
 // Konto-Self-Service (Track K). Mutationen laufen ueber GoTrue
@@ -50,6 +75,7 @@ export function AccountPage() {
   const hasPassword = me?.has_password ?? false
   const initialName =
     (session?.user?.user_metadata?.display_name as string | undefined) ?? ''
+  useReturnAfterMfa()
 
   return (
     <Container>

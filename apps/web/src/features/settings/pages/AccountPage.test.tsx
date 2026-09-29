@@ -44,6 +44,9 @@ vi.mock('../components/MfaSection', () => ({
 const sessionState = vi.hoisted(() => ({ hasPassword: true }))
 
 vi.mock('@/auth/session-context', () => ({
+  // Ruecksprung nach 2FA (useReturnAfterMfa): hier ohne aal-Wechsel, eigene
+  // Tests in useReturnAfterMfa.test.tsx.
+  sessionAal: () => null,
   useSession: () => ({
     session: {
       access_token: 't',
@@ -58,10 +61,10 @@ import i18n from '@/i18n'
 
 import { AccountPage } from './AccountPage'
 
-function renderPage() {
+function renderPage(entry = '/w/abc/settings/account') {
   return render(
     <AuthTokenProvider>
-      <MemoryRouter initialEntries={['/w/abc/settings/account']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/w/abc/settings/account" element={<AccountPage />} />
           <Route path="/login" element={<div>LOGIN</div>} />

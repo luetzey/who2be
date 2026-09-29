@@ -1,23 +1,8 @@
-// Open-Redirect-Schutz: ein gueltiger `next` ist ein In-App-Pfad — beginnt
-// mit genau einem `/`, enthaelt keinen Protocol-Marker. Browser interpretieren
-// `//evil.com` und `https://evil.com` als externe URL, das wollen wir nach dem
-// Login nicht aufrufen.
+import { safeInternalPath } from '@/lib/safePath'
+
+// Open-Redirect-Schutz fuer `next` nach dem Login. Die Regel selbst lebt in
+// `@/lib/safePath` (einzige Quelle, auch fuer `returnTo` nach der 2FA-
+// Einrichtung); ungueltige Ziele fallen hier auf `/` zurueck.
 export function sanitizeNext(raw: string | null): string {
-  if (raw === null || raw === '') {
-    return '/'
-  }
-  if (!raw.startsWith('/') || raw.startsWith('//')) {
-    return '/'
-  }
-  // Backslashes verbieten: manche Browser normalisieren `\` zu `/`, sodass
-  // `/\evil.com` als protocol-relative `//evil.com` interpretiert wird — der
-  // `startsWith('//')`-Check oben greift dann nicht. In-App-Pfade brauchen nie
-  // einen Backslash, daher folgenlos.
-  if (raw.includes('\\')) {
-    return '/'
-  }
-  if (raw.includes('://')) {
-    return '/'
-  }
-  return raw
+  return safeInternalPath(raw) ?? '/'
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileDiff, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import type { VersionStatus } from '@/api/types'
 import { useNeedsMfaForPublish } from '@/auth/session-context'
@@ -38,6 +38,10 @@ export function ViewChangesLink({ version }: { version: number }) {
 export function MfaPublishNotice() {
   const { t } = useTranslation('common')
   const wsPath = useWorkspacePath()
+  // Nach der Einrichtung zurueck hierher (Pfad + Query, z. B. der Diff-Deep-
+  // Link). `AccountPage` prueft das Ziel erneut mit `safeInternalPath`.
+  const { pathname, search } = useLocation()
+  const returnTo = encodeURIComponent(`${pathname}${search}`)
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="publish-mfa-notice">
       <span className="flex items-center gap-1.5 text-sm text-foreground">
@@ -45,7 +49,9 @@ export function MfaPublishNotice() {
         {t('statusBar.mfa.notice')}
       </span>
       <Button asChild variant="outline">
-        <Link to={wsPath('/settings/account')}>{t('statusBar.mfa.setup')}</Link>
+        <Link to={`${wsPath('/settings/account')}?returnTo=${returnTo}`}>
+          {t('statusBar.mfa.setup')}
+        </Link>
       </Button>
     </div>
   )
