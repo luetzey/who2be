@@ -34,6 +34,7 @@ from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
 from who2be_mcp.tools.kb import register as register_kb_tools
+from who2be_mcp.tools.learning import register as register_learning_tools
 from who2be_mcp.tools.tables import register as register_table_tools
 from who2be_mcp.tools.workarea import register as register_workarea_tools
 from who2be_models import (
@@ -1924,6 +1925,7 @@ async def search_content(
 register_workarea_tools(mcp)
 register_kb_tools(mcp)
 register_table_tools(mcp)
+register_learning_tools(mcp)
 
 
 def main() -> None:

@@ -582,6 +582,32 @@ _TOOLS: list[_ToolDoc] = [
             "Tabelle und Daten endgueltig (eingefrorene Auswertungen bleiben)."
         ),
     ),
+    # --- Lernschleife (ADR-0053 6.2, B3): Prueffaelle. Zwei Eintraege, weil
+    #     zwei Gates: Lesen per Oder-Logik (`test_report` ODER `case_triage`),
+    #     Melden nur mit `test_report` — die Beschreibung nennt darum jeweils
+    #     nur das eigene Tool.
+    _ToolDoc(
+        signature="list_test_cases(agent_id?, entity_type?, entity_id?)",
+        tool_names=("list_test_cases",),
+        description=(
+            "Prueffaelle lesen: Eingabe, erwartetes Verhalten und `check_kind`. "
+            "Ohne `agent_id` die deines eigenen Agenten; fremde Agenten nur mit "
+            "`case_triage`."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "submit_test_results(subject_entity_type, subject_version_id, results, "
+            "model_provider?, model_name?)"
+        ),
+        tool_names=("submit_test_results",),
+        description=(
+            "Prueffall-Ergebnisse fuer eine Elementversion melden — gespeichert "
+            "als Selbstauskunft des Clients. `pass` nur, wenn alle Laeufe "
+            "bestanden; `human_rule`-Faelle nur mit Ausgabe und `verdict='error'` "
+            "melden, bewerten tut ein Mensch. Aktiviert nie etwas."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks
