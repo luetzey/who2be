@@ -40,10 +40,14 @@ interface EntityTestCasesProps {
  * Tab selbst; nur gemountet, solange der Tab aktiv ist.
  */
 export function EntityTestCases({ type, id, name }: EntityTestCasesProps) {
-  const { t } = useTranslation('learning')
+  const { t, i18n } = useTranslation('learning')
   const { agents } = useAgents()
   const headingId = useId()
-  const subjectLabel = `${t(`testCases.entityType.${type}`)} „${name}“`
+  // Anfuehrungszeichen je Sprache (DE „…“, EN “…”) wie in den uebrigen
+  // Texten. Ein eigener i18n-Schluessel waere sauberer, sprengt aber den
+  // Acht-Dateien-Deckel dieses Pakets (de.json + en.json).
+  const [open, close] = i18n.resolvedLanguage === 'de' ? ['„', '“'] : ['“', '”']
+  const subjectLabel = `${t(`testCases.entityType.${type}`)} ${open}${name}${close}`
   // Die Liste bringt ihr eigenes h3 mit (Kopf mit Anlage-Aktion). Die
   // Detailseite hat darueber nur das h1 — das unsichtbare h2 haelt die
   // Ueberschriften-Hierarchie lueckenlos, wie die Sektion am Agenten.

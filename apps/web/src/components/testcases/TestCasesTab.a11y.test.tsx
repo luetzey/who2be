@@ -6,6 +6,7 @@ import { AgentDetailPage } from '@/features/agents/pages/AgentDetailPage'
 import { PersonaDetailPage } from '@/features/personas/pages/PersonaDetailPage'
 import { PlaybookDetailPage } from '@/features/playbooks/pages/PlaybookDetailPage'
 import { SystemPromptDetailPage } from '@/features/system-prompts/pages/SystemPromptDetailPage'
+import i18n from '@/i18n'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
@@ -309,6 +310,27 @@ describe('Tab „Prüffälle" an den Element-Detailseiten (B4b)', () => {
       expect(requests).toHaveLength(1)
     },
   )
+
+  it('setzt im Kopf die Anfuehrungszeichen der UI-Sprache (EN)', async () => {
+    stubApi()
+    await i18n.changeLanguage('en')
+    try {
+      renderPage(
+        <PlaybookDetailPage />,
+        '/w/:workspaceId/playbooks/:id',
+        '/w/ws-1/playbooks/pb1?tab=tests',
+      )
+      expect(
+        await screen.findByRole('heading', { name: 'Test cases · Playbook “Implement”' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'Test cases' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+    } finally {
+      await i18n.changeLanguage('de')
+    }
+  })
 })
 
 describe('Prüffälle am Agenten (B4b)', () => {
