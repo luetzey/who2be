@@ -11,6 +11,7 @@ import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
+import { AgentTestCasesSection } from '@/components/testcases/TestCasesTab'
 
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
@@ -122,6 +123,10 @@ export function AgentDetailPage() {
                 />
 
                 <AgentMemorySection agentId={agent.id} />
+
+                {/* Lernschleife B4b (Spec S10): Einstieg Prüffälle, Anker
+                    `#tests`. Der Tab-Umbau aus Spec §2.3 ist ein eigenes Paket. */}
+                <AgentTestCasesSection agentId={agent.id} agentName={agent.name} />
               </Stack>
             )
           })()

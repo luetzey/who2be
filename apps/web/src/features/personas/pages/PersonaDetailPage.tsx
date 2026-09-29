@@ -1,4 +1,4 @@
-import { Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
+import { ClipboardCheck, Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -14,6 +14,7 @@ import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
+import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
@@ -31,10 +32,10 @@ import { PersonaProfileFields } from '../components/PersonaProfileFields'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 
-const PERSONA_TABS = ['edit', 'modes', 'playbooks', 'versions'] as const
+const PERSONA_TABS = ['edit', 'modes', 'playbooks', 'versions', TESTS_TAB] as const
 
 export function PersonaDetailPage() {
-  const { t } = useTranslation(['personas', 'common', 'playbooks', 'version'])
+  const { t } = useTranslation(['personas', 'common', 'playbooks', 'version', 'learning'])
   const { id } = useParams<{ id: string }>()
   const { persona, versions, loading, error, reload } = usePersona(id)
   const { form, autoSave } = usePersonaForm(persona, reload)
@@ -238,6 +239,11 @@ export function PersonaDetailPage() {
                         <Share2 aria-hidden="true" />
                         {t('playbooks:list.title')}
                       </TabsTrigger>
+                      {/* Lernschleife B4b (Spec S10): ohne Zaehler (§2.3). */}
+                      <TabsTrigger value={TESTS_TAB}>
+                        <ClipboardCheck aria-hidden="true" />
+                        {t('learning:testCases.title')}
+                      </TabsTrigger>
                       <TabsTrigger value="versions">
                         <History aria-hidden="true" />
                         {t('version:history.title')}
@@ -333,6 +339,10 @@ export function PersonaDetailPage() {
                         }
                         initialDiffVersion={diffVersion}
                       />
+                    </TabsContent>
+
+                    <TabsContent value={TESTS_TAB}>
+                      <EntityTestCases type="persona" id={persona.id} name={persona.name} />
                     </TabsContent>
                   </Tabs>
                 </Form>

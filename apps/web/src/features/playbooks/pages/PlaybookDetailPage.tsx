@@ -10,6 +10,7 @@ import { DataView } from '@/components/data/DataView'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
+import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { StatusActionBar, VersionHistory } from '@/components/version'
 import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { Container } from '@/components/layout/Container'
@@ -38,7 +39,7 @@ import { SubPlaybookFlow } from '../components/SubPlaybookFlow'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 
-const PLAYBOOK_TABS: readonly PlaybookDetailTab[] = ['edit', 'relations', 'versions']
+const PLAYBOOK_TABS: readonly PlaybookDetailTab[] = ['edit', 'relations', 'versions', TESTS_TAB]
 
 // Avatar-Initialen fuer die „Verwendet in"-Liste: erste Buchstaben der
 // ersten beiden Woerter („Coach Carla" → „CC").
@@ -395,6 +396,15 @@ export function PlaybookDetailPage() {
                   }
                   initialDiffVersion={diffVersion}
                 />
+              </div>
+
+              {/* Anders als die uebrigen Panels erst beim Oeffnen gemountet:
+                  die Liste laedt Prueffaelle und Agenten, das soll nicht bei
+                  jedem Playbook-Aufruf passieren (kein Form-State zu halten). */}
+              <div {...tabPanelProps(TESTS_TAB)}>
+                {activeTab === TESTS_TAB ? (
+                  <EntityTestCases type="playbook" id={playbook.id} name={playbook.name} />
+                ) : null}
               </div>
             </Stack>
           ) : null}
