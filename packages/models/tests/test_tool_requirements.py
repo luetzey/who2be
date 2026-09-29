@@ -29,6 +29,8 @@ _FULL_POLICY = AgentToolPolicy(
     workarea_write=True,
     kb_write=True,
     kb_edge_write=True,
+    test_report=True,
+    case_triage=True,
     memory_mode=MemoryMode.auto,
 )
 
@@ -233,7 +235,13 @@ def test_every_capability_is_used_in_the_mapping() -> None:
     }
     # Seit WP9 (ADR-0047) sind auch `kb_write`/`kb_edge_write` im Mapping
     # (`tools/kb.py`) — jede Capability gated mindestens ein Tool.
-    assert used == set(AgentCapability)
+    # Bewusste Ausnahme (ADR-0053 Abschnitt 3.8, Lernschleife B1b):
+    # `test_report`/`case_triage` existieren schon im Modell, gaten aber erst
+    # mit den MCP-Tools der Pakete B3/D4 ein Tool. Wer diese Tools anlegt,
+    # leert die Menge — dann greift die strenge Gleichheit wieder fuer alle.
+    not_yet_gating = {AgentCapability.test_report, AgentCapability.case_triage}
+    assert not (used & not_yet_gating), "Capability gated jetzt ein Tool — Ausnahme entfernen."
+    assert used == set(AgentCapability) - not_yet_gating
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
