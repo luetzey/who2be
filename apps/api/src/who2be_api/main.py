@@ -312,6 +312,9 @@ _PROBLEM_TITLES: dict[str, str] = {
     "test_case_retired": "Pruefall zurueckgezogen",
     "test_subject_version_not_found": "Gepruefte Version nicht gefunden",
     "test_run_verdict_inconsistent": "Laufzahlen und Urteil passen nicht zusammen",
+    # Lernschleife Phase B — Aktivierung mit Pruefbericht (ADR-0053 6.3, B5a):
+    "test_results_incomplete": "Pruefbericht nicht bestaetigt",
+    "test_override_reason_required": "Grund fuer die Aktivierung fehlt",
 }
 
 
