@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Me } from '@/api/types'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import { SessionContext } from '@/auth/session-context'
+import i18n from '@/i18n'
 
 import { AppShell } from './AppShell'
 
@@ -112,6 +113,51 @@ const NAV_LABELS = [
   'Einstellungen',
 ]
 
+// Audit E2-B: Gruppen in fester Reihenfolge. `heading: null` = Gruppe ohne
+// Ueberschrift (Einstieg oben, Settings unten).
+const NAV_GROUPS_DE: { heading: string | null; links: string[] }[] = [
+  { heading: null, links: ['Dashboard', 'Agents'] },
+  {
+    heading: 'Bausteine',
+    links: ['System-Prompts', 'Personas', 'Playbooks', 'Resources', 'Externe Tools'],
+  },
+  { heading: 'Betrieb', links: ['Arbeitsbereich', 'Feedback'] },
+  { heading: null, links: ['Einstellungen'] },
+]
+
+/**
+ * Prueft die Screenreader-Struktur einer Nav-Flaeche: genau vier Listen in
+ * fester Reihenfolge, je Liste die erwarteten Links in Reihenfolge, betitelte
+ * Listen per h2 benannt (`aria-labelledby`), keine weiteren Ueberschriften.
+ */
+function expectGroupedNav(nav: HTMLElement, groups = NAV_GROUPS_DE) {
+  const lists = within(nav).getAllByRole('list')
+  expect(lists).toHaveLength(groups.length)
+  groups.forEach((group, index) => {
+    const list = lists[index]
+    const links = within(list).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual(group.links)
+    // Jeder Link steckt in einem eigenen Listeneintrag.
+    expect(within(list).getAllByRole('listitem')).toHaveLength(group.links.length)
+    if (group.heading) {
+      expect(list).toHaveAccessibleName(group.heading)
+    } else {
+      expect(list).not.toHaveAttribute('aria-labelledby')
+    }
+  })
+  const headings = within(nav).getAllByRole('heading', { level: 2 })
+  expect(headings.map((h) => h.textContent)).toEqual(
+    groups.flatMap((g) => (g.heading ? [g.heading] : [])),
+  )
+  // Tastaturreihenfolge = DOM-Reihenfolge: kein Link verschiebt sich per
+  // positivem tabIndex aus der Gruppenfolge.
+  const allLinks = within(nav).getAllByRole('link')
+  expect(allLinks.map((link) => link.textContent)).toEqual(groups.flatMap((g) => g.links))
+  for (const link of allLinks) {
+    expect(link.tabIndex).toBe(0)
+  }
+}
+
 interface MatchMediaControls {
   setMatches: (query: string, matches: boolean) => void
 }
@@ -201,6 +247,45 @@ describe('AppShell', () => {
       expect(aside).toHaveClass('hidden', 'md:flex')
       expect(aside).not.toHaveClass('sm:flex')
     })
+
+    it('gruppiert die Ziele: Einstieg, Bausteine, Betrieb, Einstellungen (Audit E2-B)', () => {
+      renderShell()
+      const aside = screen.getByRole('complementary')
+      expectGroupedNav(within(aside).getByRole('navigation', { name: 'Hauptnavigation' }))
+    })
+
+    it('setzt die Gruppenueberschriften als Eyebrow (design-language §3.3)', () => {
+      renderShell()
+      const aside = screen.getByRole('complementary')
+      for (const heading of within(aside).getAllByRole('heading', { level: 2 })) {
+        expect(heading).toHaveClass(
+          'text-xs',
+          'font-medium',
+          'uppercase',
+          'tracking-wide',
+          'text-muted-foreground',
+        )
+      }
+    })
+
+    it('zeigt die Gruppenueberschriften auf Englisch, wenn die UI Englisch ist', async () => {
+      await act(async () => {
+        await i18n.changeLanguage('en')
+      })
+      renderShell()
+      const nav = within(screen.getByRole('complementary')).getByRole('navigation', {
+        name: 'Main navigation',
+      })
+      expectGroupedNav(nav, [
+        { heading: null, links: ['Dashboard', 'Agents'] },
+        {
+          heading: 'Building blocks',
+          links: ['System prompts', 'Personas', 'Playbooks', 'Resources', 'External tools'],
+        },
+        { heading: 'Operations', links: ['Work area', 'Feedback'] },
+        { heading: null, links: ['Settings'] },
+      ])
+    })
   })
 
   describe('Sheet-Navigation (unterhalb md)', () => {
@@ -225,6 +310,20 @@ describe('AppShell', () => {
         expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument()
       }
       expect(within(nav).getAllByRole('link')).toHaveLength(NAV_LABELS.length)
+    })
+
+    it('zeigt im Sheet dieselbe Gruppierung wie die Sidebar, mit eigenen Ueberschrift-IDs', async () => {
+      renderShell()
+      const dialog = await openSheet()
+      const sheetNav = within(dialog).getByRole('navigation', { name: 'Hauptnavigation' })
+      expectGroupedNav(sheetNav)
+
+      // Beide Flaechen stehen gleichzeitig im DOM — die aria-labelledby-IDs
+      // duerfen deshalb nicht kollidieren, sonst benennt die Sidebar-
+      // Ueberschrift die Sheet-Liste.
+      const ids = Array.from(document.querySelectorAll('nav h2')).map((h) => h.id)
+      expect(ids).toHaveLength(4)
+      expect(new Set(ids).size).toBe(4)
     })
 
     it('schliesst das Sheet bei Klick auf ein Nav-Ziel und navigiert dorthin', async () => {
