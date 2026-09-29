@@ -1,29 +1,28 @@
+import type { TFunction } from 'i18next'
 import type { LucideIcon } from 'lucide-react'
 import { Check, CircleDot, Pencil, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { DashboardActivity, DashboardEntityType } from '@/api/types'
 import { cn } from '@/lib/utils'
 
-// Mapping fuer das `event`-Property im Activity-Feed. Backend liefert das
-// als Free-Form-String (z.B. `promoted_to_active`); Frontend uebersetzt
-// die bekannten Events ins UI-Vokabular und faellt sonst auf den
-// Roh-String zurueck.
-const EVENT_LABELS: Record<string, string> = {
-  promoted_to_active: 'aktivierte',
-  submitted_for_review: 'reichte zur Review ein',
-  rejected: 'lehnte ab',
-  returned_to_draft: 'setzte zurueck zu Entwurf',
-  deactivated: 'deaktivierte',
-  created: 'erstellte',
-  updated: 'aktualisierte',
-  deleted: 'loeschte',
-}
+// Das `event`-Property im Activity-Feed kommt als Free-Form-String (z.B.
+// `promoted_to_active`). Bekannte Events stehen unter
+// `dashboard:activity.events.*` (Audit A9: vorher fest verdrahtet deutsch,
+// auch in der englischen Oberflaeche); unbekannte fallen auf den Roh-String
+// zurueck.
+const KNOWN_EVENTS: ReadonlySet<string> = new Set([
+  'promoted_to_active',
+  'submitted_for_review',
+  'rejected',
+  'returned_to_draft',
+  'deactivated',
+  'created',
+  'updated',
+  'deleted',
+])
 
-const ENTITY_LABELS: Record<DashboardEntityType, string> = {
-  persona: 'Persona',
-  playbook: 'Playbook',
-  resource: 'Resource',
-}
+const KNOWN_ENTITIES: ReadonlySet<string> = new Set(['persona', 'playbook', 'resource'])
 
 // Avatar-Tinte nach Entity-Typ (Pill-Token-Klassen — statisch, damit Tailwind
 // sie behaelt; kein dynamischer Klassen-String).
@@ -46,9 +45,15 @@ const EVENT_DOT: Record<string, { color: string; icon: LucideIcon }> = {
   deleted: { color: 'var(--destructive)', icon: Trash2 },
 }
 
-function eventText(event: string | undefined): string {
-  if (!event) return 'aenderte'
-  return EVENT_LABELS[event] ?? event.replaceAll('_', ' ')
+function eventText(t: TFunction<'dashboard'>, event: string | undefined): string {
+  if (!event) return t('activity.events.changed')
+  if (KNOWN_EVENTS.has(event)) return t(`activity.events.${event}`)
+  return event.replaceAll('_', ' ')
+}
+
+function entityText(t: TFunction<'dashboard'>, entityType: DashboardEntityType): string {
+  if (KNOWN_ENTITIES.has(entityType)) return t(`activity.entityTypes.${entityType}`)
+  return entityType
 }
 
 // Initialen aus dem Anzeigenamen (max. zwei Buchstaben, gross).
@@ -64,12 +69,14 @@ interface ActivityRowProps {
 }
 
 export function ActivityRow({ activity }: ActivityRowProps) {
+  const { t } = useTranslation('dashboard')
   // Defensiv lesen — alte Response-Varianten (vor Phase-3 Track 1) liefern
   // `actor` gar nicht; `display_name` kann null sein, `user_id` faellt am
-  // Ende auf 'Unbekannt' zurueck, damit kein crash entsteht.
+  // Ende auf „Unbekannt"/„Unknown" zurueck, damit kein crash entsteht.
   const actor = activity.actor ?? null
-  const actorName = actor?.display_name?.trim() || actor?.user_id || 'Unbekannt'
-  const entityLabel = ENTITY_LABELS[activity.entity_type] ?? activity.entity_type
+  const actorName =
+    actor?.display_name?.trim() || actor?.user_id || t('activity.unknownActor')
+  const entityLabel = entityText(t, activity.entity_type)
   const entityName = activity.entity_name ?? activity.entity_id
   const versionHint =
     activity.to_version !== null && activity.to_version !== undefined
@@ -101,7 +108,7 @@ export function ActivityRow({ activity }: ActivityRowProps) {
         </span>
       </span>
       <span className="min-w-0 flex-1 truncate text-sm leading-snug">
-        <span className="font-medium">{actorName}</span> {eventText(activity.event)}{' '}
+        <span className="font-medium">{actorName}</span> {eventText(t, activity.event)}{' '}
         <span className="text-muted-foreground">{entityLabel}</span>{' '}
         <span className="font-medium">{entityName}</span>
         {versionHint ? <span className="text-muted-foreground">{versionHint}</span> : null}
