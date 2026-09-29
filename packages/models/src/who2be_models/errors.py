@@ -169,6 +169,12 @@ ProblemReason = Literal[
     "query_timeout",  # 408 — Tabellen-Query hat das Zeitbudget ueberschritten
     "timeline_request_invalid",  # 422 — Timeline-Request-Validierung (Fenster/Quellen)
     "memory_guard_rejected",  # 422 — Memory vom Injection-Guard abgelehnt
+    # Lernschleife Phase B — Pruefaelle und Prueflaeufe (ADR-0053 6.1, Paket B2):
+    "test_case_not_found",  # 404 — Pruefall unbekannt oder fuer den Aufrufer nicht lesbar
+    "test_case_retired",  # 409 — Ergebnis/Korrektur zu zurueckgezogenem Pruefall
+    "test_subject_version_not_found",  # 404 — gepruefte Version nicht in diesem Workspace
+    # 422 — `pass` ohne n/n, `runs_total < 1` oder `runs_passed` ausserhalb 0..runs_total
+    "test_run_verdict_inconsistent",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst
