@@ -52,7 +52,9 @@ inhaltlich nichts widerspricht. Wer anfordert, bestimmt damit die Merge-Reihenfo
 
 - [ ] Das Review ist **freigegeben**, nicht nur angefordert.
 - [ ] Der PR ist offen und hat keine ungelösten Konflikte.
-- [ ] `all-green` läuft oder ist grün (`gh pr checks <PR>`).
+- [ ] `all-green` läuft noch (`gh pr checks <PR>`). Ist er auf dem Head schon
+      grün, lehnt GitHub mit `clean status` ab — dann Fall (a) unter
+      [Fehlerbilder](#pull-request-is-in-clean-status), Merge geht an den Owner.
 - [ ] Das Ruleset auf dem Hauptzweig ist aktiv und führt `all-green`
       (`gh api repos/luetzey/who2be/rulesets`).
 - [ ] `allow_auto_merge` ist `true`
@@ -125,14 +127,37 @@ gh api graphql -f query='mutation($id:ID!){disablePullRequestAutoMerge(input:{pu
 
 ### `Pull request is in clean status`
 
-Der PR ist bereits sofort mergebar — es gibt nichts zu verzögern. Praktisch heißt
-das fast immer: der Required Check greift auf diesem PR nicht (Ruleset inaktiv,
-falscher Zielbranch, Check-Name nachträglich umbenannt).
+Der PR ist bereits sofort mergebar — es gibt nichts zu verzögern, und GitHub nimmt
+die Anforderung deshalb nicht an. Dafür gibt es zwei Ursachen, und sie verlangen
+Verschiedenes. Erst unterscheiden, dann handeln:
 
-**Nicht tun:** den PR stattdessen direkt mergen, auch nicht „nur dieses eine Mal".
-Die Meldung besagt, dass **Gate 3 fehlt** — also genau die Sicherung, die den
-Auto-Merge überhaupt verantwortbar macht. Stattdessen: das Ruleset prüfen und den
-Befund melden.
+```bash
+PR=<PR>; read -r BASE SHA < <(gh pr view "$PR" --json baseRefName,headRefOid --jq '"\(.baseRefName) \(.headRefOid)"'); echo "ruleset-checks: $(gh api "repos/luetzey/who2be/rules/branches/$BASE" --jq '[.[]|select(.type=="required_status_checks")|.parameters.required_status_checks[].context]|join(",")')"; echo "all-green@head: $(gh api "repos/luetzey/who2be/commits/$SHA/check-runs?check_name=all-green" --jq '[.check_runs[].conclusion]|join(",")')"
+```
+
+`rules/branches/<base>` liefert nur die Regeln, die auf dem Zielbranch **wirklich
+greifen** (aktive Rulesets, passendes Ziel). Ein inaktives Ruleset oder ein
+falscher Zielbranch fällt hier also auf, ohne dass man die Ruleset-Konfiguration
+selbst lesen muss.
+
+| Ausgabe | Fall | Bedeutung | Handlung |
+|---|---|---|---|
+| `ruleset-checks: all-green`, `all-green@head: success` | **(a) Checks schon grün** | Gate 3 ist da. Der PR ist mergebar, weil `all-green` auf genau diesem Head bereits `SUCCESS` ist. Auto-Merge ist hier nicht möglich — es gäbe nichts abzuwarten. | Nicht erneut anfordern. Den Merge an den **Owner** übergeben (PR-Nummer und geprüfter Head-SHA). Auf der Karte vermerken: Auto-Merge nicht angefordert, Grund `clean status` bei grünen Checks. |
+| `ruleset-checks:` leer oder ohne `all-green` | **(b) Gate 3 fehlt** | Der Required Check greift auf diesem PR nicht (Ruleset inaktiv, falscher Zielbranch, Check-Name umbenannt). | Nicht anfordern, nicht mergen. Befund melden (Ausgabe der Diagnose mitschicken). |
+| jede andere Kombination | unklar | Passt zu keinem der beiden Fälle. | Wie (b): melden, nicht raten. |
+
+Fall (a) ist im Alltag der häufige: Das Review gibt erst frei, wenn die Checks auf
+dem exakten Head-SHA grün sind — genau dann ist der PR `CLEAN`. Auto-Merge greift
+also nur, wenn nach der Freigabe noch Checks laufen (z. B. nach `update-branch`
+oder einem Basiswechsel). So gemessen am 2026-09-28 an #698 und #699: Ruleset
+aktiv mit `all-green`, `all-green` auf dem Head `SUCCESS`, Anforderung abgelehnt,
+Merge durch den Owner.
+
+**Nicht tun, in beiden Fällen:** den PR stattdessen direkt mergen, auch nicht „nur
+dieses eine Mal". In Fall (a) ist der PR zwar mergebar, der merge-ausführende Weg
+bleibt aber gesperrt (siehe [Was gesperrt bleibt](#was-gesperrt-bleibt)) — die
+Meldung ist keine Einladung, ihn zu umgehen. In Fall (b) fehlt genau die
+Sicherung, die den Auto-Merge überhaupt verantwortbar macht.
 
 ### `Resource not accessible by integration` / Rechte-Ablehnung
 
