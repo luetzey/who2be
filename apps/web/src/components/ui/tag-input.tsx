@@ -169,8 +169,12 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(function Tag
     <div ref={containerRef} className={cn('relative flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-input bg-background px-2 py-2">
         {value.map((tag) => (
-          <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-            <span>{tag}</span>
+          // `max-w-full` + `wrap-anywhere`: ein Chip mit langer URL wird
+          // mehrzeilig, statt Feld und Karte zu sprengen (Mobil-Spec M12). Das
+          // X bleibt oben rechts (`items-start`). `rounded-xl` statt der
+          // Badge-Pille: einzeilig optisch gleich, mehrzeilig kein Oval.
+          <Badge key={tag} variant="secondary" className="flex max-w-full items-start gap-1 rounded-xl">
+            <span className="min-w-0 text-left wrap-anywhere">{tag}</span>
             <button
               type="button"
               aria-label={`Tag ${tag} entfernen`}
