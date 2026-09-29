@@ -253,6 +253,7 @@
   },
   "data": {
     "empty": "Keine Einträge.",
+    "detailTabsLabel": "Detail-Ansicht",
     "error": {
       "title": "Fehler"
     },
@@ -819,15 +820,15 @@
         "resource": "Resource"
       },
       "events": {
-        "promoted_to_active": "aktiviert",
-        "submitted_for_review": "zur Review eingereicht",
-        "rejected": "abgelehnt",
-        "returned_to_draft": "zurück zu Entwurf gesetzt",
-        "deactivated": "deaktiviert",
-        "created": "erstellt",
-        "updated": "aktualisiert",
-        "deleted": "gelöscht",
-        "changed": "geändert"
+        "promoted_to_active": "aktivierte",
+        "submitted_for_review": "reichte zur Review ein",
+        "rejected": "lehnte ab",
+        "returned_to_draft": "setzte zurück auf Entwurf",
+        "deactivated": "deaktivierte",
+        "created": "erstellte",
+        "updated": "aktualisierte",
+        "deleted": "löschte",
+        "changed": "änderte"
       }
     },
     "pagination": {
@@ -2000,6 +2001,7 @@
       },
       "detail": {
         "slugVersion": "Slug: {{slug}} · Aktuelle Version: v{{version}}",
+        "bannerReviewTitle": "Version v{{version}} liegt zur Review",
         "toast": {
           "restored": "v{{version}} als Entwurf wiederhergestellt."
         }

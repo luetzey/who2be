@@ -208,7 +208,7 @@ export function ToolDetailPage() {
             </Stack>
 
             <Tabs defaultValue="edit">
-              <TabsList aria-label="Detail-Ansicht">
+              <TabsList aria-label={t('data:detailTabsLabel')}>
                 <TabsTrigger value="edit">
                   <Pencil aria-hidden="true" />
                   {t('tabs.edit')}

@@ -253,6 +253,7 @@
   },
   "data": {
     "empty": "No entries.",
+    "detailTabsLabel": "Detail view",
     "error": {
       "title": "Error"
     },
@@ -1456,7 +1457,7 @@
       "identityHelpTypesHeading": "Types",
       "nameLabel": "Name",
       "namePlaceholder": "e.g. Handle password-reset email",
-      "typeLabel": "Typ",
+      "typeLabel": "Type",
       "descriptionPlaceholder": "e.g. Responds to password-reset requests with a clear next step",
       "contentTitle": "Content",
       "contentDescription": "The actual playbook content and its triggers.",
@@ -2000,6 +2001,7 @@
       },
       "detail": {
         "slugVersion": "Slug: {{slug}} · Current version: v{{version}}",
+        "bannerReviewTitle": "Version v{{version}} is in review",
         "toast": {
           "restored": "v{{version}} restored as draft."
         }
