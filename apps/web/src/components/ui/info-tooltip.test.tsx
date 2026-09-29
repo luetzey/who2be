@@ -1,14 +1,27 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import i18n, { DEFAULT_LOCALE } from '@/i18n'
 
 import { InfoTooltip } from './info-tooltip'
 
 describe('InfoTooltip', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage(DEFAULT_LOCALE)
+  })
+
   it('rendert den Icon-Trigger mit deutschem aria-label', () => {
     render(<InfoTooltip>Hilfe-Inhalt</InfoTooltip>)
     expect(
       screen.getByRole('button', { name: 'Hilfe einblenden' }),
     ).toBeInTheDocument()
+  })
+
+  // Audit A9: der Default folgt der UI-Sprache, statt fest deutsch zu sein.
+  it('rendert in der englischen Oberflaeche ein englisches aria-label', async () => {
+    await i18n.changeLanguage('en')
+    render(<InfoTooltip>Help content</InfoTooltip>)
+    expect(screen.getByRole('button', { name: 'Show help' })).toBeInTheDocument()
   })
 
   it('uebernimmt ein eigenes Label', () => {

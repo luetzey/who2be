@@ -83,6 +83,9 @@
       "nameRequiredLong": "Name is required.",
       "bodyRequired": "Body is required."
     },
+    "help": {
+      "show": "Show help"
+    },
     "managed": {
       "title": "Managed by the system",
       "body": "This entry is maintained centrally by the system and updated automatically. Edits are locked.",
@@ -233,6 +236,12 @@
     "language": {
       "label": "Language",
       "switch": "Change language"
+    },
+    "theme": {
+      "switch": "Change theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
     },
     "footer": {
       "legal": "Legal",
