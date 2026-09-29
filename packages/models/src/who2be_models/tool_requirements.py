@@ -114,6 +114,14 @@ _WORKAREA_WRITE = ToolRequirement(capabilities=(AgentCapability.workarea_write,)
 _KB_READ = ToolRequirement(read_domain="kb")
 _KB_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_write,))
 _KB_EDGE_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_edge_write,))
+# Lernschleife (ADR-0053 6.2/6.7, Paket B3): Ergebnisse melden hinter
+# `test_report` (Default an). `list_test_cases` ist per Oder-Logik auch mit
+# `case_triage` sichtbar — ohne `case_triage` liefert die API nur den eigenen
+# Agenten, ein fremder `agent_id` endet in `missing_capability`.
+_TEST_REPORT = ToolRequirement(capabilities=(AgentCapability.test_report,))
+_TEST_CASE_READ = ToolRequirement(
+    capabilities=(AgentCapability.test_report, AgentCapability.case_triage)
+)
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -254,6 +262,9 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "set_convention": _WORKAREA_WRITE,
     "upsert_category_rule": _WORKAREA_WRITE,
     "list_category_rules": _WORKAREA_READ,
+    # --- Lernschleife (ADR-0053, B3) — `tools/learning.py` ---
+    "list_test_cases": _TEST_CASE_READ,
+    "submit_test_results": _TEST_REPORT,
 }
 
 
