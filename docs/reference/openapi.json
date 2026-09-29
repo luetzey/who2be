@@ -12136,7 +12136,9 @@
           "external_tool_write",
           "workarea_write",
           "kb_write",
-          "kb_edge_write"
+          "kb_edge_write",
+          "test_report",
+          "case_triage"
         ],
         "title": "AgentCapability",
         "description": "Schreib-Capabilities, die einem Agenten einzeln zugestanden werden.\n\nJede MCP-Mutation mappt auf genau eine dieser Capabilities (siehe\n``AgentToolPolicy.allows``). ``promote_retire`` deckt das Schalten von\nVersionen auf ``active``/``inactive`` ab — orthogonal zur reinen\nSchreib-Capability der jeweiligen Domain (Draft anlegen/aendern)."
@@ -12618,6 +12620,16 @@
           "kb_edge_write": {
             "type": "boolean",
             "title": "Kb Edge Write",
+            "default": false
+          },
+          "test_report": {
+            "type": "boolean",
+            "title": "Test Report",
+            "default": true
+          },
+          "case_triage": {
+            "type": "boolean",
+            "title": "Case Triage",
             "default": false
           },
           "transition_grants": {

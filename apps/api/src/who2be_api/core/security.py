@@ -288,6 +288,8 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
     AgentCapability.workarea_write: "WorkArea-Artifacts zu erstellen oder zu aendern",
     AgentCapability.kb_write: "Knowledge-Base-Nodes zu erstellen oder zu aendern",
     AgentCapability.kb_edge_write: "Knowledge-Base-Kanten anzulegen",
+    AgentCapability.test_report: "Prueffall-Ergebnisse zu melden",
+    AgentCapability.case_triage: "Faelle aller Agenten zu triagieren oder Prueffaelle anzulegen",
 }
 
 
