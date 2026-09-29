@@ -15,6 +15,7 @@ import { Container } from '@/components/layout/Container'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
+import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { EntityDuplicateButton } from '@/components/entity'
 import { notify } from '@/lib/feedback'
 
@@ -22,6 +23,9 @@ import { SystemPromptEditorForm } from '../components/SystemPromptEditorForm'
 import { SystemPromptStatusActionBar } from '../components/SystemPromptStatusActionBar'
 import { useSystemPrompt } from '../hooks/useSystemPrompt'
 import { useSystemPromptForm } from '../hooks/useSystemPromptForm'
+
+// Tabs der Detailseite — Whitelist fuer den Deep-Link `?tab=` (Audit E1 = A).
+const SYSTEM_PROMPT_TABS = ['edit', 'versions'] as const
 
 export function SystemPromptDetailPage() {
   const { t } = useTranslation('systemPrompts')
@@ -31,6 +35,7 @@ export function SystemPromptDetailPage() {
   const role = useCurrentWorkspaceRole()
   const { template, versions, loading, error, reload } = useSystemPrompt(id)
   const { form, onSubmit, saveError } = useSystemPromptForm(template, reload)
+  const { tab, setTab, diffVersion } = useVersionDeepLink(SYSTEM_PROMPT_TABS, 'edit')
   // Vom System verwaltet (Builder-Template): Editor read-only, keine Status-
   // Aktionen (Backend sperrt mit 403 managed_aggregate).
   const locked = template?.is_managed === true
@@ -97,6 +102,7 @@ export function SystemPromptDetailPage() {
                     version={template.current_version}
                     status={template.current_status}
                     onTransitioned={reload}
+                    diffVersion={template.current_version}
                   />
                 }
               />
@@ -109,7 +115,7 @@ export function SystemPromptDetailPage() {
               />
             ) : null}
 
-            <Tabs defaultValue="edit">
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList aria-label="Detail-Ansicht">
                 <TabsTrigger value="edit">
                   <SquarePen aria-hidden="true" />
@@ -143,6 +149,7 @@ export function SystemPromptDetailPage() {
                   loadProvenance={(version) =>
                     api.provenanceSystemPromptTemplateVersion(template.id, version)
                   }
+                  initialDiffVersion={diffVersion}
                 />
               </TabsContent>
             </Tabs>

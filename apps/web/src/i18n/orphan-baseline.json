@@ -12,7 +12,6 @@
   "common.actions.deactivate",
   "common.actions.delete",
   "common.actions.filter",
-  "common.actions.more",
   "common.actions.reset",
   "common.actions.retry",
   "common.actions.saving",

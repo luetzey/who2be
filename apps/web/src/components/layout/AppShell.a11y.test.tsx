@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -81,5 +81,24 @@ describe('AppShell (a11y)', () => {
     // (landmark-unique-Fehlalarm), obwohl im echten Browser durch
     // `display:none` nur eine davon je Breite in der A11y-Tree steht.
     expect(await axe(dialog)).toHaveNoViolations()
+  })
+
+  it('haelt die Gruppen-Semantik axe-sauber: Listen nur mit li-Kindern, benannte Listen, h2-Ueberschriften', async () => {
+    renderShell()
+    const nav = screen.getByTestId('app-nav-sidebar')
+    // Voraussetzung, damit der Scan etwas prueft: die Gruppenstruktur steht.
+    expect(within(nav).getAllByRole('list')).toHaveLength(4)
+    expect(within(nav).getAllByRole('heading', { level: 2 })).toHaveLength(2)
+
+    expect(
+      await axe(nav, {
+        rules: {
+          list: { enabled: true },
+          listitem: { enabled: true },
+          'aria-valid-attr-value': { enabled: true },
+          'empty-heading': { enabled: true },
+        },
+      }),
+    ).toHaveNoViolations()
   })
 })

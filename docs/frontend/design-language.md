@@ -252,6 +252,16 @@ Review-Checkliste unten.
 6. Wurde bei 768px (Tablet-Bruch `md`) und 1024px (`lg`) stichprobenartig
    gegengeprueft, nicht nur bei 320px und Desktop-Default?
 
+**Statusleiste der Detailseiten (Issue #624, Owner-Entscheidung C):** Die
+Statusleiste steht auf allen Breakpoints oberhalb der Tabs — im
+Seitenkopf, im Fluss, **keine** fixierte Bottom-Bar. Damit sie auf dem
+Phone ohne Scrollen erreichbar bleibt, legen Detailseiten ihre
+Sekundaeraktionen (Feedback, Duplizieren, Export) unterhalb `md` hinter
+den „Mehr"-Knopf von `DetailHeader` (`collapseActionsBelowMd`); die
+primaere Aktion einer Seite bleibt offen. Beleg:
+`apps/web/e2e/status-actions-viewport.spec.ts` (alle vier Profile, scharf
+auf `mobile-320`).
+
 ## 5. Radii
 
 `--radius: 0.5rem` (8px) Basis. Abgeleitet:
