@@ -1,4 +1,4 @@
-import { Clock, GitBranch, ScrollText, SquarePen } from 'lucide-react'
+import { ClipboardCheck, Clock, GitBranch, ScrollText, SquarePen } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -12,6 +12,7 @@ import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
+import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
@@ -25,7 +26,7 @@ import { useSystemPrompt } from '../hooks/useSystemPrompt'
 import { useSystemPromptForm } from '../hooks/useSystemPromptForm'
 
 // Tabs der Detailseite — Whitelist fuer den Deep-Link `?tab=` (Audit E1 = A).
-const SYSTEM_PROMPT_TABS = ['edit', 'versions'] as const
+const SYSTEM_PROMPT_TABS = ['edit', 'versions', TESTS_TAB] as const
 
 export function SystemPromptDetailPage() {
   const { t } = useTranslation('systemPrompts')
@@ -123,6 +124,11 @@ export function SystemPromptDetailPage() {
                   <SquarePen aria-hidden="true" />
                   {t('common:actions.edit')}
                 </TabsTrigger>
+                {/* Lernschleife B4b (Spec S10): ohne Zaehler (§2.3). */}
+                <TabsTrigger value={TESTS_TAB}>
+                  <ClipboardCheck aria-hidden="true" />
+                  {t('learning:testCases.title')}
+                </TabsTrigger>
                 <TabsTrigger value="versions">
                   <GitBranch aria-hidden="true" />
                   {t('version:history.title')}
@@ -152,6 +158,14 @@ export function SystemPromptDetailPage() {
                     api.provenanceSystemPromptTemplateVersion(template.id, version)
                   }
                   initialDiffVersion={diffVersion}
+                />
+              </TabsContent>
+
+              <TabsContent value={TESTS_TAB}>
+                <EntityTestCases
+                  type="system_prompt_template"
+                  id={template.id}
+                  name={template.name}
                 />
               </TabsContent>
             </Tabs>

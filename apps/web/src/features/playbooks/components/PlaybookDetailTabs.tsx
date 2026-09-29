@@ -1,20 +1,24 @@
-import { GitBranch, Layers, Pencil, type LucideIcon } from 'lucide-react'
+import { ClipboardCheck, GitBranch, Layers, Pencil, type LucideIcon } from 'lucide-react'
 import { useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { cn } from '@/lib/utils'
 
 // Design-Handoff „Playbooks-Redesign" §Detail: Tab-Leiste Bearbeiten /
-// Beziehungen / Versionen. Aktiver Tab traegt einen 2px-Brand-Unterstrich.
+// Beziehungen / Prüffälle / Versionen (Prüffälle: Lernschleife B4b, Spec
+// S10 — ohne Zaehler, §2.3; auf allen Element-Detailseiten direkt vor
+// „Versionen"). Aktiver Tab traegt einen 2px-Brand-Unterstrich.
 // ARIA-Tabs-Pattern inkl. Pfeiltasten-Navigation (roving tabindex).
 
-export type PlaybookDetailTab = 'edit' | 'relations' | 'versions'
+export type PlaybookDetailTab = 'edit' | 'relations' | 'versions' | typeof TESTS_TAB
 
-const TABS: { key: PlaybookDetailTab; icon: LucideIcon }[] = [
-  { key: 'edit', icon: Pencil },
-  { key: 'relations', icon: Layers },
-  { key: 'versions', icon: GitBranch },
+const TABS: { key: PlaybookDetailTab; icon: LucideIcon; label: string }[] = [
+  { key: 'edit', icon: Pencil, label: 'detail.tabs.edit' },
+  { key: 'relations', icon: Layers, label: 'detail.tabs.relations' },
+  { key: TESTS_TAB, icon: ClipboardCheck, label: 'learning:testCases.title' },
+  { key: 'versions', icon: GitBranch, label: 'detail.tabs.versions' },
 ]
 
 export function playbookTabPanelId(tab: PlaybookDetailTab): string {
@@ -58,7 +62,7 @@ export function PlaybookDetailTabs({ active, onChange }: PlaybookDetailTabsProps
       aria-label={t('detail.tabs.label')}
       className="flex flex-wrap gap-1 border-b"
     >
-      {TABS.map(({ key, icon: Icon }) => {
+      {TABS.map(({ key, icon: Icon, label }) => {
         const selected = key === active
         return (
           <Button
@@ -81,7 +85,7 @@ export function PlaybookDetailTabs({ active, onChange }: PlaybookDetailTabsProps
             )}
           >
             <Icon className="size-4" aria-hidden="true" />
-            {t(`detail.tabs.${key}`)}
+            {t(label)}
             {selected ? (
               <span
                 className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand"
