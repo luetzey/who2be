@@ -212,6 +212,18 @@ from who2be_models.tables import (
     WaTableCreate,
     WaTableRead,
 )
+from who2be_models.test_case import (
+    TestAttestation,
+    TestCaseCreate,
+    TestCaseCreatedByKind,
+    TestCaseRead,
+    TestCaseStatus,
+    TestCheckKind,
+    TestRunCreate,
+    TestRunRead,
+    TestVerdict,
+    verdict_consistent,
+)
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead, TokenRename
 from who2be_models.tool_policy import (
     AgentCapability,
@@ -465,6 +477,15 @@ __all__ = [
     "TableDescription",
     "TableQuery",
     "TableSchema",
+    "TestAttestation",
+    "TestCaseCreate",
+    "TestCaseCreatedByKind",
+    "TestCaseRead",
+    "TestCaseStatus",
+    "TestCheckKind",
+    "TestRunCreate",
+    "TestRunRead",
+    "TestVerdict",
     "TimelineGranularity",
     "TimelineItem",
     "TimelineResult",
@@ -508,4 +529,5 @@ __all__ = [
     "is_tool_visible_for",
     "issuer_base",
     "issuer_identifier",
+    "verdict_consistent",
 ]

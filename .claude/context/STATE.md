@@ -1,6 +1,26 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-28 (49. Lauf — Markenknopf im hellen Modus auf dunkle Schrift umgestellt: weiss auf Orange lag bei 2,5:1. Neuer Token-Test rechnet den Kontrast aus `globals.css` nach)_
+_Stand: 2026-09-28 (50. Lauf — Lernschleife B1: Schema `test_case`/`test_run` mit Modellen, Repository und RLS-Tests; Capabilities und Compliance-Naben als B1b/B1c abgespalten)_
+
+## Lernschleife B1: Prüffall und Prüflauf im Schema (2026-09-28, 50. Lauf, Karte t_dc2f9582)
+
+**Stand:** Migration `0089_test_case_test_run.sql` nach ADR-0053 3.2. Modelle in
+`who2be_models/test_case.py`, Repository `repositories/test_case_repository.py`,
+Integrationstests `apps/api/tests/test_test_case_schema.py` (isoliertes Schema,
+Laufzeitrolle `who2be_app`). Noch kein Service, kein Endpunkt, kein MCP (B2/B3).
+
+**Wie die Regeln gehalten werden:** Unveränderlichkeit über Grants statt Trigger
+(Muster 0044/0079) — `who2be_app` hat auf `test_case` nur `UPDATE (status)`,
+kein DELETE; `test_run` nur SELECT/INSERT. n/n, `runs_total >= 1`,
+`human_rating` ⇒ `reported_by_user_id` als CHECK. Workspace-Gleichheit per
+Composite-FK; dafür bekam `agent` den bisher fehlenden
+`UNIQUE (workspace_id, id)`. `ON DELETE SET NULL (supersedes_id)` nullt nur die
+Spalte (PG ≥ 15), nicht die `workspace_id`.
+
+**Budget-Split:** Die Capabilities `test_report`/`case_triage` ziehen gemessen
+mindestens sechs weitere Dateien nach sich (Labels, zwei Mengen-Guards in Tests,
+OpenAPI, Builder-Seed) — Karte B1b `t_4b459a06`, jetzt Parent von B2.
+Compliance-Naben (Export, VVT, Retention, Purge) → B1c `t_29c0ca88`.
 
 ## Brand-Knopf hell: weiss auf Orange fiel durch WCAG AA (2026-09-28, 49. Lauf, Karte t_176c07ed)
 
