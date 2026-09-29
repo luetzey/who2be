@@ -21,7 +21,19 @@
       "restore": "Wiederherstellen",
       "activate": "Aktivieren",
       "deactivate": "Deaktivieren",
-      "more": "Mehr"
+      "more": "Mehr",
+      "showMore": "Mehr anzeigen",
+      "showLess": "Weniger anzeigen",
+      "showMoreCount": "{{count}} weitere anzeigen"
+    },
+    "list": {
+      "shownOfTotal": "{{shown}} von {{total}} angezeigt"
+    },
+    "table": {
+      "scrollHint": "Seitlich wischen für weitere Spalten"
+    },
+    "tabs": {
+      "detailViewAria": "Detailansicht"
     },
     "fields": {
       "name": "Name",
