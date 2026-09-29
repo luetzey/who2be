@@ -88,13 +88,13 @@ function stubFetchRoutes(handlers: Record<string, () => Response>) {
   return fetchMock
 }
 
-function renderPage(activeMe: Me = me) {
+function renderPage(activeMe: Me = me, initialEntry = '/w/ws-1/system-prompts/sp1') {
   return render(
     <SessionContext.Provider
       value={{ session, me: activeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/system-prompts/sp1']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route
               path="/w/:workspaceId/system-prompts/:id"
@@ -242,6 +242,69 @@ describe('SystemPromptDetailPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Zur Review einreichen' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+// Audit E1 = A: `?tab=versions&diff=<n>` oeffnet den Versions-Tab mit
+// aufgeklapptem Diff; die Statusleiste verlinkt im Review genau dorthin.
+describe('SystemPromptDetailPage — Deep-Link in die Pruefansicht (E1 = A)', () => {
+  const reviewVersions: SystemPromptTemplateVersion[] = [
+    { ...version('review'), version: 2, created_at: '2026-07-02T00:00:00Z' },
+    { ...version('active'), version: 1 },
+  ]
+  const diffBody = {
+    version: 2,
+    against: 'active',
+    against_version: 1,
+    identical: false,
+    changes: [{ path: 'description', op: 'changed', before: 'alt', after: 'neu' }],
+  }
+
+  function stubReview() {
+    const diffCalls: string[] = []
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/system-prompts/sp1`]: () =>
+        jsonResponse(template({ current_status: 'review', current_version: 2 })),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions`]: () => jsonResponse(reviewVersions),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions/2/diff`]: () => {
+        diffCalls.push('v2')
+        return jsonResponse(diffBody)
+      },
+    })
+    return diffCalls
+  }
+
+  it('oeffnet per Deep-Link den Versions-Tab mit aufgeklapptem Diff', async () => {
+    const diffCalls = stubReview()
+
+    renderPage(meAdmin, '/w/ws-1/system-prompts/sp1?tab=versions&diff=2')
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Versionen' })).toHaveAttribute('aria-selected', 'true')
+    expect(diffCalls).toEqual(['v2'])
+  })
+
+  it('der Link in der Review-Leiste fuehrt mit einem Klick in den Diff', async () => {
+    stubReview()
+    renderPage(meAdmin)
+
+    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.click(link)
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Versionen' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('ignoriert einen unbekannten Tab und einen ungueltigen Diff-Wert', async () => {
+    const diffCalls = stubReview()
+
+    renderPage(meAdmin, '/w/ws-1/system-prompts/sp1?tab=evil&diff=2')
+
+    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute('aria-selected', 'true')
+    expect(diffCalls).toEqual([])
   })
 })
 
