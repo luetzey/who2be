@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 
 import type { ProvenanceEntry, VersionDiff, VersionStatus } from '@/api/types'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -39,6 +40,12 @@ interface VersionHistoryProps {
 }
 
 type PanelKind = 'diff' | 'provenance'
+
+// Audit A2: der gedrueckte Zustand der Panel-Knoepfe (Diff/Historie) muss
+// ohne Hover sichtbar sein — gefuellte Flaeche plus Innenkante statt allein
+// `aria-pressed`. Brand-Tinte bleibt dem CTA vorbehalten (§8).
+const PRESSED_CLASS =
+  'aria-pressed:bg-accent aria-pressed:text-accent-foreground aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-foreground/30'
 
 /**
  * Geteilte Versions-Insel (Track A): Liste mit Status-Badges plus Restore-,
@@ -90,11 +97,14 @@ export function VersionHistory({
     await showPanel(version, kind)
   }
 
-  // Deep-Link (Audit E1 = A): den Diff der angefragten Version einmal vorab
-  // aufklappen — je neuem Wert, damit ein erneuter Link-Klick aus der
-  // Statusleiste bei bereits offenem Tab ebenfalls greift. Unbekannte
+  // Deep-Link (Audit E1 = A): den Diff der angefragten Version vorab
+  // aufklappen — einmal je Navigation. Jeder Klick auf „Aenderungen ansehen"
+  // ist eine neue Navigation mit neuem `location.key` (React Router ersetzt
+  // auch bei identischer URL den History-Eintrag), daher oeffnet derselbe Link
+  // den Diff wieder, nachdem die Nutzerin ihn zugeklappt hat. Unbekannte
   // Versionen und Entities ohne Diff-Endpoint ignorieren den Wunsch still.
-  const autoOpened = useRef<number | undefined>(undefined)
+  const { key: navigationKey } = useLocation()
+  const autoOpened = useRef<string | undefined>(undefined)
   const targetRow = useRef<HTMLLIElement | null>(null)
   const canOpenInitial =
     initialDiffVersion !== undefined &&
@@ -105,8 +115,9 @@ export function VersionHistory({
       autoOpened.current = undefined
       return
     }
-    if (!canOpenInitial || autoOpened.current === initialDiffVersion) return
-    autoOpened.current = initialDiffVersion
+    const request = `${initialDiffVersion}@${navigationKey}`
+    if (!canOpenInitial || autoOpened.current === request) return
+    autoOpened.current = request
     void showPanel(initialDiffVersion, 'diff')
     // Auf dem Phone liegt die Versionsliste unter dem Falz (Audit A13) —
     // die angesprungene Zeile in den Blick holen. jsdom kennt die Methode nicht.
@@ -114,7 +125,7 @@ export function VersionHistory({
     // showPanel ist bewusst nicht in den Deps: es wechselt je Render die
     // Identitaet, der Effekt soll aber nur auf einen neuen Wunsch reagieren.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialDiffVersion, canOpenInitial])
+  }, [initialDiffVersion, canOpenInitial, navigationKey])
 
   const restore = async (version: number) => {
     setRestoringVersion(version)
@@ -154,8 +165,9 @@ export function VersionHistory({
                   <span className="flex flex-wrap items-center gap-1">
                     {loadDiff !== undefined ? (
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        className={PRESSED_CLASS}
                         aria-pressed={isOpen && openPanel?.kind === 'diff'}
                         onClick={() => void togglePanel(version.version, 'diff')}
                       >
@@ -165,6 +177,7 @@ export function VersionHistory({
                     <Button
                       variant="ghost"
                       size="sm"
+                      className={PRESSED_CLASS}
                       aria-pressed={isOpen && openPanel?.kind === 'provenance'}
                       onClick={() => void togglePanel(version.version, 'provenance')}
                     >
@@ -172,7 +185,7 @@ export function VersionHistory({
                     </Button>
                     {canEdit ? (
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         disabled={hasDraft || restoringVersion !== null}
                         title={

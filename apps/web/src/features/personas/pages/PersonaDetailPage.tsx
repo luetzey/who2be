@@ -261,44 +261,6 @@ export function PersonaDetailPage() {
                             />
                           </CardContent>
                         </Card>
-                      </Stack>
-                    </TabsContent>
-
-                    <TabsContent value="modes">
-                      <Stack gap="sm">
-                        <div className="flex justify-end">
-                          <SaveIndicator state={autoSave} />
-                        </div>
-                        <PersonaModesPanel form={form} locked={locked} />
-                      </Stack>
-                    </TabsContent>
-
-                    <TabsContent value="playbooks">
-                      {/* WP-E: Anzeige-Modus default; der Checkbox-Picker liegt im
-                          Bearbeiten-Modus der Karte. Viewer + managed nur Anzeige. */}
-                      <PersonaPlaybooksCard
-                        personaId={persona.id}
-                        canEdit={role !== 'viewer' && !locked}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="versions">
-                      <Stack gap="lg">
-                        <VersionHistory
-                          versions={versions}
-                          canEdit={role === 'admin' || role === 'editor'}
-                          onRestore={async (version) => {
-                            await autoSave.flush()
-                            await api.restorePersonaVersion(persona.id, version)
-                            notify.success(t('detail.toast.restored', { version }))
-                            reload()
-                          }}
-                          loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
-                          loadProvenance={(version) =>
-                            api.provenancePersonaVersion(persona.id, version)
-                          }
-                          initialDiffVersion={diffVersion}
-                        />
 
                         {role !== 'viewer' && !locked ? (
                           <Card className="border-destructive/40">
@@ -331,6 +293,45 @@ export function PersonaDetailPage() {
                           </Card>
                         ) : null}
                       </Stack>
+                    </TabsContent>
+
+                    <TabsContent value="modes">
+                      <Stack gap="sm">
+                        <div className="flex justify-end">
+                          <SaveIndicator state={autoSave} />
+                        </div>
+                        <PersonaModesPanel form={form} locked={locked} />
+                      </Stack>
+                    </TabsContent>
+
+                    <TabsContent value="playbooks">
+                      {/* WP-E: Anzeige-Modus default; der Checkbox-Picker liegt im
+                          Bearbeiten-Modus der Karte. Viewer + managed nur Anzeige. */}
+                      <PersonaPlaybooksCard
+                        personaId={persona.id}
+                        canEdit={role !== 'viewer' && !locked}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="versions">
+                      {/* Audit A2: der Pruef-Tab zeigt nur die Versionen — die
+                          Danger-Zone steht am Ende von „Bearbeiten", wie bei
+                          Playbook und Tool. */}
+                      <VersionHistory
+                        versions={versions}
+                        canEdit={role === 'admin' || role === 'editor'}
+                        onRestore={async (version) => {
+                          await autoSave.flush()
+                          await api.restorePersonaVersion(persona.id, version)
+                          notify.success(t('detail.toast.restored', { version }))
+                          reload()
+                        }}
+                        loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
+                        loadProvenance={(version) =>
+                          api.provenancePersonaVersion(persona.id, version)
+                        }
+                        initialDiffVersion={diffVersion}
+                      />
                     </TabsContent>
                   </Tabs>
                 </Form>

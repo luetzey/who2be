@@ -895,4 +895,23 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
     await screen.findByTestId('branch-action-submit')
     expect(screen.queryByRole('link', { name: 'Änderungen ansehen' })).not.toBeInTheDocument()
   })
+
+  // Audit A2 (Rest): der Pruef-Tab zeigt nur die Versionen; die Danger-Zone
+  // steht am Ende von „Bearbeiten" — wie bei Playbook und Tool.
+  it('zeigt die Danger-Zone im Bearbeiten-Tab, nicht unter der Versionsliste', async () => {
+    renderPersonaDetail(reviewHandlers(), {
+      me: meWithRole('admin'),
+      entry: '/w/ws-1/personas/p1?tab=versions&diff=2',
+    })
+
+    await screen.findByRole('list', { name: 'Änderungen' })
+    expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
+
+    const edit = screen.getByRole('tab', { name: /Bearbeiten/ })
+    fireEvent.mouseDown(edit)
+    fireEvent.click(edit)
+
+    expect(await screen.findByText('Persona löschen')).toBeInTheDocument()
+    expect(screen.getByTestId('delete-persona-trigger')).toBeInTheDocument()
+  })
 })

@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Link, MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProvenanceEntry, VersionDiff } from '@/api/types'
 
 import { VersionHistory, type VersionHistoryItem } from './VersionHistory'
+import { useVersionDeepLink, versionDiffSearch } from './versionDeepLink'
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -43,7 +45,11 @@ function renderHistory(overrides: Partial<Parameters<typeof VersionHistory>[0]> 
     loadProvenance: vi.fn().mockResolvedValue(provenance),
     ...overrides,
   }
-  render(<VersionHistory {...props} />)
+  render(
+    <MemoryRouter>
+      <VersionHistory {...props} />
+    </MemoryRouter>,
+  )
   return props
 }
 
@@ -85,7 +91,9 @@ describe('VersionHistory', () => {
         { version: 2, status: 'active', created_at: '2026-06-01T10:00:00Z' },
       ],
     })
-    for (const button of screen.getAllByRole('button', { name: 'Wiederherstellen' })) {
+    for (const button of screen.getAllByRole('button', {
+      name: 'Wiederherstellen',
+    })) {
       expect(button).toBeDisabled()
     }
   })
@@ -100,5 +108,87 @@ describe('VersionHistory', () => {
     expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument()
     // Provenance bleibt unberuehrt.
     expect(screen.getByRole('button', { name: 'Warum aktiv?' })).toBeInTheDocument()
+  })
+})
+
+// Audit A2 (Rest): Diff ist die Pruefaktion der Zeile (outline), Restore die
+// leise Nebenaktion (ghost); der gedrueckte Zustand ist ohne Hover sichtbar.
+describe('VersionHistory — Versionszeile (Audit A2)', () => {
+  it('rendert Diff als outline und Wiederherstellen als ghost', () => {
+    renderHistory()
+    const diffButton = screen.getAllByRole('button', { name: 'Diff' })[0]
+    const restore = screen.getAllByRole('button', {
+      name: 'Wiederherstellen',
+    })[0]
+
+    expect(diffButton.className).toMatch(/\bborder-input\b/)
+    expect(restore.className).not.toMatch(/\bborder-input\b/)
+    expect(restore.className).toMatch(/\bhover:bg-accent\b/)
+  })
+
+  it('markiert den offenen Diff als gedrueckt mit sichtbarer Flaeche', async () => {
+    renderHistory()
+    const diffButton = screen.getAllByRole('button', { name: 'Diff' })[0]
+    expect(diffButton).toHaveAttribute('aria-pressed', 'false')
+    // Die Pressed-Optik haengt am Attribut, nicht an Hover.
+    expect(diffButton.className).toMatch(/\baria-pressed:bg-accent\b/)
+    expect(diffButton.className).toMatch(/\baria-pressed:ring-1\b/)
+
+    fireEvent.click(diffButton)
+    await screen.findByText('description')
+    expect(diffButton).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(diffButton)
+    await waitFor(() => expect(screen.queryByText('description')).not.toBeInTheDocument())
+    expect(diffButton).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+// Nit aus dem Review von t_fa1ac28d: Diff zuklappen und denselben Link
+// „Aenderungen ansehen" erneut klicken oeffnet ihn wieder.
+function DeepLinkHarness(props: { loadDiff: (version: number) => Promise<VersionDiff> }) {
+  const { diffVersion } = useVersionDeepLink(['edit', 'versions'] as const, 'edit')
+  return (
+    <>
+      <Link to={{ search: versionDiffSearch(1) }}>Änderungen ansehen</Link>
+      <VersionHistory
+        versions={VERSIONS}
+        canEdit={false}
+        onRestore={vi.fn()}
+        loadDiff={props.loadDiff}
+        loadProvenance={vi.fn().mockResolvedValue([])}
+        initialDiffVersion={diffVersion}
+      />
+    </>
+  )
+}
+
+describe('VersionHistory — Deep-Link erneut klicken', () => {
+  it('oeffnet den zugeklappten Diff beim erneuten Klick auf denselben Link wieder', async () => {
+    const loadDiff = vi.fn().mockResolvedValue({
+      version: 1,
+      against: 'active',
+      against_version: 2,
+      identical: false,
+      changes: [{ path: 'description', op: 'changed', before: 'old', after: 'new' }],
+    } satisfies VersionDiff)
+    render(
+      <MemoryRouter initialEntries={['/x?tab=versions&diff=1']}>
+        <DeepLinkHarness loadDiff={loadDiff} />
+      </MemoryRouter>,
+    )
+
+    // Erster Aufruf: vorab offen.
+    expect(await screen.findByText('description')).toBeInTheDocument()
+
+    // Zuklappen per Knopf der Zeile v1.
+    const diffV1 = screen.getAllByRole('button', { name: 'Diff' })[1]
+    fireEvent.click(diffV1)
+    await waitFor(() => expect(screen.queryByText('description')).not.toBeInTheDocument())
+
+    // Derselbe Link (identische URL) oeffnet ihn wieder.
+    fireEvent.click(screen.getByRole('link', { name: 'Änderungen ansehen' }))
+    expect(await screen.findByText('description')).toBeInTheDocument()
+    expect(diffV1).toHaveAttribute('aria-pressed', 'true')
   })
 })
