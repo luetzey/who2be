@@ -41,9 +41,11 @@ vi.mock('../components/MfaSection', () => ({
 
 // `hasPassword` ist mutabel, damit die Passwort-Setzen-Zweige (Magic-Link-User
 // ohne Passwort) ohne zweite Mock-Factory testbar sind. Default: true.
-const sessionState = vi.hoisted(() => ({ hasPassword: true }))
+const sessionState = vi.hoisted(() => ({ hasPassword: true, aal: null as string | null }))
 
 vi.mock('@/auth/session-context', () => ({
+  // Ruecksprung nach 2FA (useReturnAfterMfa): `aal` ist je Test setzbar.
+  sessionAal: () => sessionState.aal,
   useSession: () => ({
     session: {
       access_token: 't',
@@ -58,10 +60,10 @@ import i18n from '@/i18n'
 
 import { AccountPage } from './AccountPage'
 
-function renderPage() {
+function renderPage(entry = '/w/abc/settings/account') {
   return render(
     <AuthTokenProvider>
-      <MemoryRouter initialEntries={['/w/abc/settings/account']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/w/abc/settings/account" element={<AccountPage />} />
           <Route path="/login" element={<div>LOGIN</div>} />
@@ -79,6 +81,57 @@ afterEach(() => {
   notifySuccess.mockReset()
   notifyError.mockReset()
   sessionState.hasPassword = true
+  sessionState.aal = null
+})
+
+// Ruecksprung nach der 2FA-Einrichtung (Karte t_dfd5ff9f, Punkt 3): erst der
+// Wechsel aal1 → aal2 fuehrt zurueck, und nur auf interne Pfade.
+describe('AccountPage — Ruecksprung nach 2FA', () => {
+  function tree(returnTo: string) {
+    return (
+      <AuthTokenProvider>
+        <MemoryRouter
+          initialEntries={[`/w/abc/settings/account?returnTo=${encodeURIComponent(returnTo)}`]}
+        >
+          <Routes>
+            <Route path="/w/abc/settings/account" element={<AccountPage />} />
+            <Route path="*" element={<div>ZIEL</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthTokenProvider>
+    )
+  }
+
+  it('springt nach aal1 → aal2 zum internen Ausgangspfad zurueck', () => {
+    sessionState.aal = 'aal1'
+    const { rerender } = render(tree('/w/abc/personas/p1?tab=versions&diff=2'))
+    expect(screen.queryByText('ZIEL')).not.toBeInTheDocument()
+
+    sessionState.aal = 'aal2'
+    rerender(tree('/w/abc/personas/p1?tab=versions&diff=2'))
+
+    expect(screen.getByText('ZIEL')).toBeInTheDocument()
+  })
+
+  it('bleibt stehen, wenn die Session schon beim Aufruf aal2 ist', () => {
+    sessionState.aal = 'aal2'
+    const { rerender } = render(tree('/w/abc/personas/p1'))
+    rerender(tree('/w/abc/personas/p1'))
+
+    expect(screen.queryByText('ZIEL')).not.toBeInTheDocument()
+  })
+
+  it.each(['https://evil.example', '//evil.example', '/\\evil.example', 'javascript:alert(1)'])(
+    'ignoriert das externe Ziel %s',
+    (evil) => {
+      sessionState.aal = 'aal1'
+      const { rerender } = render(tree(evil))
+      sessionState.aal = 'aal2'
+      rerender(tree(evil))
+
+      expect(screen.queryByText('ZIEL')).not.toBeInTheDocument()
+    },
+  )
 })
 
 describe('AccountPage', () => {

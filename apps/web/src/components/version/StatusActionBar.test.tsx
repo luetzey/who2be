@@ -59,7 +59,7 @@ function renderBar(
         refreshMe: vi.fn(),
       }}
     >
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/w/ws-1/personas/p1?tab=versions&diff=2']}>
         <StatusActionBar
           status={status}
           onTransition={onTransition}
@@ -215,7 +215,11 @@ describe('StatusActionBar', () => {
       const toolbar = screen.getByRole('toolbar', { name: 'Status-Aktionen' })
       expect(toolbar).toHaveTextContent('Veröffentlichen erfordert Zwei-Faktor-Anmeldung.')
       const setup = screen.getByRole('link', { name: 'Zwei-Faktor einrichten' })
-      expect(setup).toHaveAttribute('href', '/w/ws-1/settings/account')
+      // Ruecksprung nach der Einrichtung: Pfad + Query der Ausgangsseite.
+      expect(setup).toHaveAttribute(
+        'href',
+        `/w/ws-1/settings/account?returnTo=${encodeURIComponent('/w/ws-1/personas/p1?tab=versions&diff=2')}`,
+      )
       // „Zurueck zu Draft" bleibt nutzbar — nur Publish braucht aal2.
       expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled()
     })
