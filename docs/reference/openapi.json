@@ -6702,6 +6702,439 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/test-cases": {
+      "post": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "Create Test Case",
+        "operationId": "create_test_case_v1_workspaces__workspace_id__test_cases_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCaseCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "List Test Cases",
+        "operationId": "list_test_cases_v1_workspaces__workspace_id__test_cases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "playbook",
+                    "resource",
+                    "system_prompt_template",
+                    "external_tool"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TestCaseStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestCaseRead"
+                  },
+                  "title": "Response List Test Cases V1 Workspaces  Workspace Id  Test Cases Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/test-cases/{case_id}": {
+      "get": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "Get Test Case",
+        "operationId": "get_test_case_v1_workspaces__workspace_id__test_cases__case_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/test-cases/{case_id}/retire": {
+      "post": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "Retire Test Case",
+        "operationId": "retire_test_case_v1_workspaces__workspace_id__test_cases__case_id__retire_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/test-runs": {
+      "post": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "Submit Test Runs",
+        "operationId": "submit_test_runs_v1_workspaces__workspace_id__test_runs_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRunSubmit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestRunRead"
+                  },
+                  "title": "Response Submit Test Runs V1 Workspaces  Workspace Id  Test Runs Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/versions/{entity_type}/{version_id}/test-report": {
+      "get": {
+        "tags": [
+          "test-cases"
+        ],
+        "summary": "Get Test Report",
+        "operationId": "get_test_report_v1_workspaces__workspace_id__versions__entity_type___version_id__test_report_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "persona",
+                "playbook",
+                "resource",
+                "system_prompt_template",
+                "external_tool"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -12939,7 +13372,11 @@
               "query_invalid",
               "query_timeout",
               "timeline_request_invalid",
-              "memory_guard_rejected"
+              "memory_guard_rejected",
+              "test_case_not_found",
+              "test_case_retired",
+              "test_subject_version_not_found",
+              "test_run_verdict_inconsistent"
             ],
             "title": "Reason"
           },
@@ -18977,6 +19414,728 @@
         ],
         "title": "TableSchema",
         "description": "Das Schema einer Tabelle — der Postgres-Katalogteil (ADR-0049).\n\nInvarianten (Validator):\n\n- Spaltennamen sind eindeutig und nie reserviert (`RESERVED_COLUMN_NAMES`).\n- Eine ``occurred_at``-Spalte (type ``timestamp`` | ``date``) ist PFLICHT —\n  jede Zeile traegt ihren fachlichen Zeitpunkt (Timeline-Anforderung N).\n- `dedupe_columns` (idempotenter Import K), `match_column`\n  (Kategorisierungs-Eingang L) und `category_column` (Kategorie-Ziel L)\n  muessen existierende Spalten benennen."
+      },
+      "TestAttestation": {
+        "type": "string",
+        "enum": [
+          "client_self_report",
+          "human_rating"
+        ],
+        "title": "TestAttestation",
+        "description": "Herkunft eines Ergebnisses — serverseitig aus dem Aufrufweg gesetzt.\n\n`client_self_report`: Meldung ueber Agent-Token/MCP (Selbstauskunft des\nClients, Weiche P1). `human_rating`: Bewertung eines Menschen ueber die\nWeb-Session; verlangt `reported_by_user_id`."
+      },
+      "TestCaseCreateRequest": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Input"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Behavior"
+          },
+          "check_kind": {
+            "$ref": "#/components/schemas/TestCheckKind",
+            "default": "human_rule"
+          },
+          "check_pattern": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Pattern"
+          },
+          "origin_case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Case Id"
+          },
+          "origin_measure_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Measure Id"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id",
+          "title",
+          "input",
+          "expected_behavior"
+        ],
+        "title": "TestCaseCreateRequest",
+        "description": "`POST /test-cases`: ein neuer Pruefall, optional als Korrektur.\n\n`supersedes_id` macht aus dem Anlegen eine Korrektur (ADR 3.2): neuer\nPruefall mit Verweis auf den alten plus `retired` am alten, beides in\neiner Transaktion. Weil das den alten zurueckzieht, verlangt es dieselben\nRechte wie `retire` (Mensch mit `editor`)."
+      },
+      "TestCaseCreatedByKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent"
+        ],
+        "title": "TestCaseCreatedByKind",
+        "description": "Wer den Pruefall angelegt hat (der Builder darf anlegen)."
+      },
+      "TestCaseRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "title": "Expected Behavior"
+          },
+          "check_kind": {
+            "$ref": "#/components/schemas/TestCheckKind"
+          },
+          "check_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Pattern"
+          },
+          "origin_case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Case Id"
+          },
+          "origin_measure_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Measure Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TestCaseStatus"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "created_by_kind": {
+            "$ref": "#/components/schemas/TestCaseCreatedByKind"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "entity_type",
+          "entity_id",
+          "title",
+          "input",
+          "expected_behavior",
+          "check_kind",
+          "check_pattern",
+          "origin_case_id",
+          "origin_measure_id",
+          "status",
+          "supersedes_id",
+          "created_by_kind",
+          "created_by",
+          "created_at"
+        ],
+        "title": "TestCaseRead",
+        "description": "Ein Pruefall, wie er gespeichert ist."
+      },
+      "TestCaseStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "retired"
+        ],
+        "title": "TestCaseStatus",
+        "description": "Lebenszyklus eines Pruefalls: `active` -> `retired` (kein Rueckweg)."
+      },
+      "TestCheckKind": {
+        "type": "string",
+        "enum": [
+          "human_rule",
+          "must_contain",
+          "must_not_contain"
+        ],
+        "title": "TestCheckKind",
+        "description": "Wie ein Ergebnis bewertet wird.\n\n`human_rule`: ein Mensch bewertet (der Client meldet nur Ausgabe mit\n`verdict='error'`). `must_contain`/`must_not_contain`: deterministisch\ngegen `check_pattern`."
+      },
+      "TestReport": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "affected_agent_count": {
+            "type": "integer",
+            "title": "Affected Agent Count"
+          },
+          "scope_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "no_reference_index"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Note"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/TestReportCounts"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/TestReportAgentGroup"
+            },
+            "type": "array",
+            "title": "Agents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "version_id",
+          "affected_agent_count",
+          "scope_note",
+          "counts",
+          "agents"
+        ],
+        "title": "TestReport",
+        "description": "Pruefbericht einer Elementversion (ADR 6.2, Menge nach 3.2.1)."
+      },
+      "TestReportAgentGroup": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "via": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Via"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/TestReportEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "agent_name",
+          "via",
+          "entries"
+        ],
+        "title": "TestReportAgentGroup",
+        "description": "Alle Pruefaelle eines Agenten, mit den Wegen, ueber die er betroffen ist.\n\n`via` nennt die Verknuepfungswege aus 3.2.1 (`persona`,\n`system_prompt_template`, `persona_playbook`, `playbook_composite`,\n`resource_link`, `resource_composite`) und zusaetzlich `direct`, wenn in\nder Gruppe ein direkt gebundener Pruefall steht. Ein betroffener Agent\nohne Pruefall erscheint mit leerer `entries`-Liste — die Luecke soll\nsichtbar sein."
+      },
+      "TestReportCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "passed",
+          "failed",
+          "error",
+          "missing"
+        ],
+        "title": "TestReportCounts"
+      },
+      "TestReportEntry": {
+        "properties": {
+          "test_case": {
+            "$ref": "#/components/schemas/TestCaseRead"
+          },
+          "direct": {
+            "type": "boolean",
+            "title": "Direct"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "error",
+              "missing"
+            ],
+            "title": "State"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestRunRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "test_case",
+          "direct",
+          "state",
+          "result"
+        ],
+        "title": "TestReportEntry",
+        "description": "Ein Pruefall im Bericht mit seinem letzten Ergebnis fuer die Version."
+      },
+      "TestRunCreate": {
+        "properties": {
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "runs_total": {
+            "type": "integer",
+            "title": "Runs Total"
+          },
+          "runs_passed": {
+            "type": "integer",
+            "title": "Runs Passed"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TestVerdict"
+          },
+          "output_excerpt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Excerpt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "test_case_id",
+          "runs_total",
+          "runs_passed",
+          "verdict"
+        ],
+        "title": "TestRunCreate",
+        "description": "Ein gemeldetes Ergebnis fuer einen Pruefall.\n\nKein `attestation`-Feld (wird aus dem Aufrufweg gesetzt) und\n`extra=\"forbid\"`, damit ein mitgeschicktes Feld abgewiesen statt still\nverworfen wird. Die n/n-Regel prueft `verdict_consistent`, nicht dieses\nModell (s. Modul-Doc)."
+      },
+      "TestRunRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "subject_entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Subject Entity Type"
+          },
+          "subject_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Version Id"
+          },
+          "runs_total": {
+            "type": "integer",
+            "title": "Runs Total"
+          },
+          "runs_passed": {
+            "type": "integer",
+            "title": "Runs Passed"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TestVerdict"
+          },
+          "output_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Excerpt"
+          },
+          "attestation": {
+            "$ref": "#/components/schemas/TestAttestation"
+          },
+          "model_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Provider"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "reported_by_agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported By Agent Id"
+          },
+          "reported_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "test_case_id",
+          "subject_entity_type",
+          "subject_version_id",
+          "runs_total",
+          "runs_passed",
+          "verdict",
+          "output_excerpt",
+          "attestation",
+          "model_provider",
+          "model_name",
+          "reported_by_agent_id",
+          "reported_by_user_id",
+          "created_at"
+        ],
+        "title": "TestRunRead",
+        "description": "Ein gespeichertes Ergebnis (append-only)."
+      },
+      "TestRunSubmit": {
+        "properties": {
+          "subject_entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Subject Entity Type"
+          },
+          "subject_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Version Id"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TestRunCreate"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Results"
+          },
+          "model_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Provider"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "subject_entity_type",
+          "subject_version_id",
+          "results"
+        ],
+        "title": "TestRunSubmit",
+        "description": "`POST /test-runs`: eine Ergebnis-Charge fuer eine Elementversion.\n\nKein `attestation`-Feld und `extra=\"forbid\"`: ein mitgeschicktes\n`attestation` wird mit 422 abgewiesen statt still verworfen."
+      },
+      "TestVerdict": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "fail",
+          "error"
+        ],
+        "title": "TestVerdict",
+        "description": "Urteil eines Prueflaufs. `pass` nur bei n/n bestandenen Laeufen."
       },
       "TimelineGranularity": {
         "type": "string",

@@ -761,6 +761,31 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/test-cases",
+    "operationId": "list_test_cases_v1_workspaces__workspace_id__test_cases_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/test-cases",
+    "operationId": "create_test_case_v1_workspaces__workspace_id__test_cases_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/test-cases/{case_id}",
+    "operationId": "get_test_case_v1_workspaces__workspace_id__test_cases__case_id__get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/test-cases/{case_id}/retire",
+    "operationId": "retire_test_case_v1_workspaces__workspace_id__test_cases__case_id__retire_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/test-runs",
+    "operationId": "submit_test_runs_v1_workspaces__workspace_id__test_runs_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/timeline",
     "operationId": "timeline_v1_workspaces__workspace_id__timeline_get"
   },
@@ -793,6 +818,11 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/usage-events",
     "operationId": "record_usage_v1_workspaces__workspace_id__usage_events_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/versions/{entity_type}/{version_id}/test-report",
+    "operationId": "get_test_report_v1_workspaces__workspace_id__versions__entity_type___version_id__test_report_get"
   },
   {
     "method": "DELETE",

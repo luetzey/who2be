@@ -415,8 +415,16 @@ class TestCaseService:
     async def get_test_report(
         self, ctx: WorkspaceContext, entity_type: EntityType, version_id: UUID
     ) -> TestReport:
-        """`GET /versions/{entity_type}/{version_id}/test-report` (editor)."""
+        """`GET /versions/{entity_type}/{version_id}/test-report`.
+
+        Menschen brauchen `editor` (ADR 6.2). Ein agent-gebundener Token
+        braucht zusaetzlich `case_triage`: der Bericht zeigt Pruefaelle ALLER
+        betroffenen Agenten, und das Lesen fremder Pruefaelle ist nach ADR 3.2
+        an genau diese Capability gebunden.
+        """
         require_role(ctx, WorkspaceRole.editor)
+        if is_agent_bound(ctx):
+            require_capability(ctx, AgentCapability.case_triage)
         entity_id = await self._repo.version_entity_id(ctx.workspace_id, entity_type, version_id)
         if entity_id is None:
             raise _version_not_found()

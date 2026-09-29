@@ -249,6 +249,21 @@
       "reason": "Reiner Statuswechsel einer bestehenden Version, legt nichts an."
     },
     {
+      "path": "/test-cases",
+      "name": "create_test_case",
+      "reason": "Pruefaelle zaehlen in keinem Plan-Kontingent; Agenten brauchen case_triage und laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
+      "path": "/test-cases/{case_id}/retire",
+      "name": "retire_test_case",
+      "reason": "Statuswechsel eines bestehenden Pruefalls (nur Menschen mit editor), legt nichts Neues an."
+    },
+    {
+      "path": "/test-runs",
+      "name": "submit_test_runs",
+      "reason": "Append-only-Ergebnisse je Elementversion (hoechstens 200 je Charge); ein Quota-Gate deckelte die Pruefung selbst, gebremst durch write_limit und das Agent-Schreiblimit."
+    },
+    {
       "path": "/tokens/{token_id}/rotate",
       "name": "rotate_token",
       "reason": "Ersetzt ein bestehendes Token; die Zahl nutzbarer Tokens bleibt gleich — den Bestand deckelt das token_quota-Gate an create_token."
