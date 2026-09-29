@@ -55,6 +55,8 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `usage_event` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `test_case` (Migration 0089, ADR-0053) | `created_by` — **nur** bei `created_by_kind = 'human'` (bei `'agent'` steht dort eine Agent-ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `test_run` (Migration 0089, ADR-0053) | `reported_by_user_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `workspace_invitation` | `email` (Klartext) | Bereinigung bei `accepted_at IS NOT NULL OR expires_at < now()` (`cleanup_expired_invitations`) |
 | `oauth_authorization_code` (Migration 0049) | ganze Zeile (`user_id`-gebunden) | beim Account-Purge **geloescht** (Codes sind nach Konto-Loeschung wertlos); zusaetzlich laufender Cleanup abgelaufener/konsumierter Codes (`cleanup_expired_oauth`) |
 | `oauth_refresh_token` (Migration 0049) | ganze Zeile (via `api_token_id`) | beim Account-Purge ueber den `api_token`-FK-CASCADE **geloescht**; zusaetzlich laufender Cleanup abgelaufener Tokens (`cleanup_expired_oauth`; konsumierte, nicht abgelaufene Glieder bleiben fuer Grace-Retry/Rotationsketten-Revocation) |
@@ -226,6 +228,41 @@ Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
 ---
 
+## 4b · Pruefaelle und Prueflaeufe (`test_case`, `test_run`)
+
+Die Lernschleife (ADR-0053 §3.2, Migration 0089) haelt fest, **was** an einem
+Agenten geprueft wird (`test_case`: Eingabe + erwartetes Verhalten) und **mit
+welchem Ergebnis** eine Elementversion geprueft wurde (`test_run`: Urteil,
+Antwort-Auszug, meldender Mensch bzw. Agent). Personenbezug tragen
+`test_case.created_by` (bei `created_by_kind = 'human'`),
+`test_run.reported_by_user_id` sowie die Freitexte `input`,
+`expected_behavior` und `output_excerpt`, die Nutzerinhalte zitieren koennen.
+
+**Loeschpfade:**
+
+- **Org-/Workspace-Purge:** beide Tabellen haengen mit `ON DELETE CASCADE` an
+  `workspace` **und** `agent`; `test_run` zusaetzlich per CASCADE an
+  `test_case`. Anders als `agent_access_log` (FK `NO ACTION`) raeumt deshalb
+  die Organization-CASCADE in `purge_organization` sie ohne eigenen Schritt
+  ab — belegt in `apps/api/tests/test_test_case_compliance.py`.
+- **Agent-Delete:** Pruefaelle samt ihren Laeufen fallen mit dem Agenten;
+  `test_run.reported_by_agent_id` wird dagegen nur genullt
+  (`ON DELETE SET NULL`), der Lauf eines Pruefalls an einem anderen Agenten
+  bleibt stehen.
+- **Kein Einzel-Delete ueber die API:** `who2be_app` hat auf `test_case` nur
+  `UPDATE (status)` (Zurueckziehen statt Loeschen) und auf `test_run` nur
+  `SELECT, INSERT` (append-only).
+- **Account-Purge:** in fremden Workspaces ueberleben Pruefaelle und Laeufe
+  den Account. `purge_account_data` anonymisiert dort die Personen-Spalten
+  auf den Sentinel (s. §2) — als Owner, trotz der engen App-Grants. Die
+  Freitexte bleiben als Pruefinhalt des Workspace stehen; sie gehoeren dem
+  Workspace, nicht der meldenden Person.
+
+**Auskunft:** der GDPR-Export (`services/gdpr_export_service.py`) liefert
+beide Tabellen je Workspace als `test_cases` / `test_runs`.
+
+---
+
 ## 5 · Server-Logs / Zugriffsdaten
 
 Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
@@ -286,6 +323,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
 | Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
+| Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
