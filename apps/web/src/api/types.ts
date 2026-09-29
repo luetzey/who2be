@@ -75,6 +75,9 @@ export interface Persona {
 }
 
 export interface PersonaVersion {
+  // UUID der Versions-Zeile — Adresse fuer Pruefbericht und Prueflaeufe
+  // (`subject_version_id`, ADR-0053). Gilt fuer alle fuenf *Version-Typen.
+  id: string
   version: number
   status?: VersionStatus
   content: PersonaContent
@@ -148,6 +151,7 @@ export interface PlaybookRef {
 }
 
 export interface PlaybookVersion {
+  id: string
   version: number
   status?: VersionStatus
   content: PlaybookContent
@@ -441,6 +445,7 @@ export interface Resource {
 }
 
 export interface ResourceVersion {
+  id: string
   version: number
   status?: VersionStatus
   content: ResourceContent
@@ -492,6 +497,7 @@ export interface ExternalTool {
 }
 
 export interface ExternalToolVersion {
+  id: string
   version: number
   status?: VersionStatus
   content: ExternalToolContent
@@ -659,6 +665,7 @@ export interface SystemPromptTemplate {
 }
 
 export interface SystemPromptTemplateVersion {
+  id: string
   version: number
   status?: VersionStatus
   content: SystemPromptTemplateContent

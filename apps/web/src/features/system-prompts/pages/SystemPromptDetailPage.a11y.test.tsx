@@ -33,6 +33,7 @@ const templateFixture: SystemPromptTemplate = {
 }
 
 const versionFixture: SystemPromptTemplateVersion = {
+  id: 'v1',
   version: 1,
   status: 'draft',
   content: templateFixture.content,
