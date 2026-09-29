@@ -143,7 +143,13 @@ async def transition_template_version(
     status_service: StatusService,
 ) -> SystemPromptTemplateVersionRead:
     return await status_service.transition_system_prompt_template_version(
-        ctx, template_id, version, data.to, data.note
+        ctx,
+        template_id,
+        version,
+        data.to,
+        data.note,
+        acknowledge_test_report=data.acknowledge_test_report,
+        override_reason=data.override_reason,
     )
 
 
