@@ -203,6 +203,9 @@ class PgAccountPurgeRepository:
             `usage_event.actor_id` und `agent_feedback.actor_id` (0053) des
             Users auf den Sentinel anonymisieren (Audit-/Telemetrie-Integritaet
             bleibt, PII weg).
+          * `test_case.created_by` (nur `created_by_kind = 'human'`) und
+            `test_run.reported_by_user_id` (0089) ebenso — Pruefaelle und
+            -laeufe in fremden Workspaces bleiben als Nachweis stehen.
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -251,7 +254,34 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
-        return _count(sh_result) + _count(al_result) + _count(ue_result) + _count(fb_result)
+            # Pruefaelle + Prueflaeufe (ADR-0053 3.2, Migration 0089). Beide
+            # haengen per CASCADE an `workspace`/`agent` und fallen mit der
+            # Personal-Org oben; in FREMDEN Workspaces ueberleben sie den
+            # Account und tragen die Person weiter. `test_run` ist fuer
+            # `who2be_app` append-only, `test_case` nur in `status` aenderbar
+            # — der Owner darf trotzdem (s. o.). `created_by` nur bei
+            # `created_by_kind = 'human'`: bei 'agent' steht dort eine
+            # Agent-ID, keine Person; der Filter haelt Agent-Zeilen auch bei
+            # einer (theoretischen) UUID-Gleichheit heraus.
+            tc_result = await self._conn.execute(
+                "UPDATE test_case SET created_by = $2 "
+                "WHERE created_by = $1 AND created_by_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            tr_result = await self._conn.execute(
+                "UPDATE test_run SET reported_by_user_id = $2 WHERE reported_by_user_id = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+        return (
+            _count(sh_result)
+            + _count(al_result)
+            + _count(ue_result)
+            + _count(fb_result)
+            + _count(tc_result)
+            + _count(tr_result)
+        )
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:
         """Bereinigt die Klartext-`email` akzeptierter/abgelaufener Einladungen.
