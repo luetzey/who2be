@@ -1432,3 +1432,67 @@ export interface TableQueryResult {
 // naechste Backend-Welle — Client-Methoden existieren bereits).
 export type TableExportFormat = 'csv' | 'xlsx'
 export type ArtifactExportFormat = 'markdown' | 'html'
+
+// --- Lernschleife B2/B4: Prueffaelle (ADR-0053 3.2, 6.2) ---------------------
+// Spiegel von `who2be_models.test_case` + `TestCaseCreateRequest`. Der Inhalt
+// eines Prueffalls ist unveraenderlich; aendern laesst sich nur `status`
+// (`active` -> `retired`). Eine Korrektur ist ein neuer Prueffall mit
+// `supersedes_id` (retired den alten in derselben Transaktion).
+
+// Elementart eines Bezugs (`who2be_models.status_history.EntityType`).
+export type VersionedEntityType =
+  | 'persona'
+  | 'playbook'
+  | 'resource'
+  | 'system_prompt_template'
+  | 'external_tool'
+
+export type TestCaseStatus = 'active' | 'retired'
+// `human_rule`: ein Mensch bewertet. `must_contain`/`must_not_contain`:
+// deterministisch gegen `check_pattern` (dann Pflicht, sonst verboten).
+export type TestCheckKind = 'human_rule' | 'must_contain' | 'must_not_contain'
+export type TestCaseCreatedByKind = 'human' | 'agent'
+
+export interface TestCaseRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  entity_type: VersionedEntityType | null
+  entity_id: string | null
+  title: string
+  input: string
+  expected_behavior: string
+  check_kind: TestCheckKind
+  check_pattern: string | null
+  origin_case_id: string | null
+  origin_measure_id: string | null
+  status: TestCaseStatus
+  supersedes_id: string | null
+  created_by_kind: TestCaseCreatedByKind
+  created_by: string
+  created_at: string
+}
+
+// `POST /test-cases`. `entity_type`/`entity_id` nur gemeinsam; mit
+// `supersedes_id` eine Korrektur (nur Menschen mit editor).
+export interface TestCaseCreateInput {
+  agent_id: string
+  entity_type?: VersionedEntityType | null
+  entity_id?: string | null
+  title: string
+  input: string
+  expected_behavior: string
+  check_kind?: TestCheckKind
+  check_pattern?: string | null
+  origin_case_id?: string | null
+  origin_measure_id?: string | null
+  supersedes_id?: string | null
+}
+
+// Filter fuer `GET /test-cases` (Query `status`, ohne Filter alle Status).
+export interface TestCaseFilters {
+  agent_id?: string
+  entity_type?: VersionedEntityType
+  entity_id?: string
+  status?: TestCaseStatus
+}
