@@ -30,6 +30,7 @@ from who2be_api.repositories.memory_repository import (
     PgMemoryRepository,
     reset_vector_support,
 )
+from who2be_api.testing.isolated_schema import isolated_schema
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 from who2be_models import MemoryStatus
 
@@ -425,18 +426,19 @@ def test_broken_embedder_does_not_break_saving(monkeypatch: pytest.MonkeyPatch) 
     assert _with_repo(_case) is True
 
 
-def _set_vector_column(present: bool) -> None:
-    """Legt `agent_memory.content_vector` an oder entfernt sie."""
+def _drop_vector_column(schema: str) -> None:
+    """Entfernt `content_vector` im Wegwerf-Schema — nie in `public`.
+
+    Schema-qualifiziert statt ueber den `search_path`: ein Tippfehler im
+    Isolations-Helper duerfte sonst still die geteilte Tabelle treffen.
+    """
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
-            if present:
-                await conn.execute(
-                    "ALTER TABLE agent_memory ADD COLUMN IF NOT EXISTS content_vector vector(384)"
-                )
-            else:
-                await conn.execute("ALTER TABLE agent_memory DROP COLUMN IF EXISTS content_vector")
+            await conn.execute(
+                f'ALTER TABLE "{schema}".agent_memory DROP COLUMN IF EXISTS content_vector'
+            )
         finally:
             await conn.close()
 
@@ -453,11 +455,12 @@ def test_works_without_the_vector_column() -> None:
     weiterarbeiten — ein Fehler waere fuer ein additives Feature ein
     unangemessener Preis.
 
-    Der Test entfernt die Spalte wirklich und legt sie danach wieder an.
+    Der Test entfernt die Spalte wirklich — aber in einem eigenen, frisch
+    migrierten Schema (`isolated_schema`), nie im geteilten `public`. Ein
+    Abbruch mitten im Lauf kann die Dev-DB so nicht beschaedigen.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
-    _prepare_db()
 
     async def _case(
         repo: PgMemoryRepository, pool: asyncpg.Pool, ws: UUID, agent: UUID
@@ -478,11 +481,13 @@ def test_works_without_the_vector_column() -> None:
         filled = await backfill_memory_vectors(pool, embedder)
         return [h.fact for h in hits], duplicate is not None, filled
 
-    _set_vector_column(False)
-    try:
-        facts, duplicate, filled = _with_repo(_case)
-    finally:
-        _set_vector_column(True)
+    with isolated_schema("novec_mem") as schema:
+        try:
+            _drop_vector_column(schema)
+            facts, duplicate, filled = _with_repo(_case)
+        finally:
+            # Der Cache haelt sonst „keine Spalte“ fuer die Tests danach fest.
+            reset_vector_support()
 
     assert facts == ["Kunde bevorzugt Rechnung per Post"]
     # Trigram-Dedup greift weiterhin (identischer Wortlaut).

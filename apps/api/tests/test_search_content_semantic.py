@@ -35,6 +35,7 @@ from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.embeddings import reset_embedding_port, set_embedding_port
 from who2be_api.main import app
 from who2be_api.repositories.content_chunk_repository import reset_vector_support
+from who2be_api.testing.isolated_schema import isolated_schema
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
@@ -582,18 +583,19 @@ def test_stub_geometry_is_what_the_tests_assume() -> None:
     assert cos(vectors[0], vectors[4]) == pytest.approx(0.0)  # voellig fremd
 
 
-def _set_vector_column(present: bool) -> None:
-    """Legt `content_chunk.content_vector` an oder entfernt sie."""
+def _drop_vector_column(schema: str) -> None:
+    """Entfernt `content_vector` im Wegwerf-Schema — nie in `public`.
+
+    Schema-qualifiziert statt ueber den `search_path`: ein Tippfehler im
+    Isolations-Helper duerfte sonst still die geteilte Tabelle treffen.
+    """
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
-            if present:
-                await conn.execute(
-                    "ALTER TABLE content_chunk ADD COLUMN IF NOT EXISTS content_vector vector(384)"
-                )
-            else:
-                await conn.execute("ALTER TABLE content_chunk DROP COLUMN IF EXISTS content_vector")
+            await conn.execute(
+                f'ALTER TABLE "{schema}".content_chunk DROP COLUMN IF EXISTS content_vector'
+            )
         finally:
             await conn.close()
 
@@ -610,11 +612,24 @@ def test_works_without_the_vector_column(monkeypatch: pytest.MonkeyPatch) -> Non
     Suche laufen weiter, nur eben rein lexikalisch. Ein Fehler hier waere fuer
     ein additives Feature ein unangemessener Preis.
 
-    Der Test entfernt die Spalte wirklich und legt sie danach wieder an.
+    Der Test entfernt die Spalte wirklich — aber in einem eigenen, frisch
+    migrierten Schema (`isolated_schema`), nie im geteilten `public`. Ein
+    Abbruch mitten im Lauf kann die Dev-DB so nicht beschaedigen.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
-    _prepare_db()
+    with isolated_schema("novec_chunk") as schema:
+        try:
+            _drop_vector_column(schema)
+            _run_without_vector_column(monkeypatch)
+        finally:
+            # Der Cache haelt sonst „keine Spalte“ fuer die Tests danach fest.
+            reset_vector_support()
+
+
+def _run_without_vector_column(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `Settings()` statt Lambda-Konstante mit fester URL: die Isolation lenkt
+    # `DATABASE_URL` um, der Override muss das mitnehmen.
     monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
     # Port ist da und wuerde Vektoren liefern — die Spalte fehlt trotzdem.
     set_embedding_port(_StubEmbedder())
@@ -624,7 +639,6 @@ def test_works_without_the_vector_column(monkeypatch: pytest.MonkeyPatch) -> Non
     auth = _auth(owner)
     prefix = f"/v1/workspaces/{ws}"
 
-    _set_vector_column(False)
     try:
         with TestClient(app) as client:
             rid = _seed_resource(
@@ -661,4 +675,3 @@ def test_works_without_the_vector_column(monkeypatch: pytest.MonkeyPatch) -> Non
             assert asyncio.run(_run()) == 0
     finally:
         cleanup_workspaces([owner])
-        _set_vector_column(True)
