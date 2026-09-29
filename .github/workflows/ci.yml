@@ -906,9 +906,14 @@ jobs:
           }
           chmod +x /tmp/osv-scanner
           echo "osv-scanner $(/tmp/osv-scanner --version 2>&1 | head -1)"
+          # `|| scan_rc=$?` ist PFLICHT, nicht Stil: GitHub startet `run:` mit
+          # `bash -e`, und `set -uo pipefail` hebt das -e NICHT auf. rc=1 heisst
+          # hier "Funde" — ein nackter Aufruf beendete den Schritt genau dann,
+          # bevor Fundliste und Summary geschrieben sind (2026-09-28: rot ohne
+          # jede Zeile Diagnose).
+          scan_rc=0
           /tmp/osv-scanner scan source --lockfile package-lock.json --format json \
-            > /tmp/osv.json 2>/tmp/osv.err
-          scan_rc=$?
+            > /tmp/osv.json 2>/tmp/osv.err || scan_rc=$?
           echo "--- osv-scanner stderr ---"; cat /tmp/osv.err || true
 
           # Findet der Scanner nichts, ist rc=0 und das JSON leer/knapp; findet er
@@ -928,12 +933,14 @@ jobs:
                         | "  \(.package.name)@\(.package.version)  " +
                           ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json)
           echo "OSV: ${count} Eintraege (rc=${scan_rc})"
-          [ -n "$list" ] && printf '%s\n' "$list"
+          if [ -n "$list" ]; then printf '%s\n' "$list"; fi
           {
             echo "## OSV-Scan"
             echo
             echo "Gefundene Eintraege: **${count}**"
-            [ -n "$list" ] && { echo; echo '```'; printf '%s\n' "$list" | head -50; echo '```'; }
+            if [ -n "$list" ]; then
+              echo; echo '```'; printf '%s\n' "$list" | head -50; echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$count" -gt 0 ]; then
             echo "::error title=OSV: Verwundbarkeiten gefunden::${count} Eintraege — \

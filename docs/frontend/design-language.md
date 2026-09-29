@@ -45,6 +45,7 @@ Alle Farben sind OKLCH (ADR-0014) in
 | `--brand` | `oklch(0.72 0.17 55)` | `oklch(0.74 0.17 55)` | Primaere CTA-Fill |
 | `--brand-foreground` | `oklch(0.145 0 0)` (dunkel) | `oklch(0.145 0 0)` (dunkel) | Text auf `--brand` |
 | `--brand-hover` | `oklch(0.66 0.17 55)` (dunkler) | `oklch(0.80 0.16 55)` (heller) | Hover-State |
+| `--wordmark-accent` | `oklch(0.66 0.17 55)` (= Asset `#de6f00`) | `oklch(0.74 0.17 55)` (= Asset `#fa8927`) | Nur die "2" der Wortmarke (§10.2) |
 
 Tailwind-Klassen: `bg-brand`, `text-brand-foreground`, `hover:bg-brand-hover`.
 
@@ -80,8 +81,17 @@ sind drei Helligkeitsstufen wahrnehmbar (`0.145 < 0.18 < 0.21`).
 
 | Token | Light | Dark | Verwendung |
 |---|---|---|---|
-| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` | Error, Delete, Revoke |
+| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` | Error, Delete, Revoke (Flaeche: `bg-`, `border-`) |
 | `--destructive-foreground` | `oklch(0.985 0 0)` | `oklch(0.985 0 0)` | Text auf destructive |
+| `--destructive-text` | `oklch(0.577 0.245 27.325)` | `oklch(0.7 0.19 25)` | Destruktiver **Text** auf Surfaces (`text-destructive`) |
+
+`text-destructive` liest `--destructive-text` (Tailwind-Namespace
+`--text-color-destructive`), nicht die Flaeche. Grund: die dunkle
+Flaechenfarbe ist fuer weissen Text gebaut und misst als Textfarbe nur
+1,87:1 auf `--card`. Die Text-Variante misst dunkel 6,5:1 auf `--card`
+(5,2:1 auf `--muted`), hell ist sie identisch zur Flaeche (4,8:1 auf
+Weiss). Waechter: `styles/brand-contrast.test.ts`. Kein Textfarben-Bypass
+ueber `text-[var(--destructive)]`.
 
 Erweiterungen (Success/Warning/Info) werden hinzugefuegt, **wenn** ein
 echter Use-Case auftaucht — nicht prophylaktisch. Bis dahin: keine
@@ -145,14 +155,16 @@ freigegeben. Auf Admin-Pages bleibt H1 = `text-2xl`.
 <p class="text-sm text-muted-foreground">Versionierte Persona-...</p>
 ```
 
-**Marketing-Page-Header (LoginPage):**
+**Marketing-Page-Header (LoginPage, SignupPage):**
 ```
-<span class="text-xs uppercase tracking-wide text-muted-foreground">
-  Who2Be
-</span>
+<AuthBrand label="Who2Be" tagline="Agent-Konfiguration, die du pruefst — …" />
 <h1 class="text-3xl font-semibold tracking-tight">Anmeldung</h1>
 <p class="text-sm text-muted-foreground">Melde dich mit deinem ...</p>
 ```
+
+Die uebrigen Auth-Pages tragen noch die Versal-Eyebrow
+(`<span class="text-xs uppercase tracking-wide text-muted-foreground">Who2Be</span>`);
+Umstellung siehe §10.2.
 
 ## 4. Spacing & Layout
 
@@ -459,7 +471,7 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
              bg-muted/30 px-4 py-10 break-words">
   <Card class="w-full max-w-md shadow-modal border-transparent">
     <CardHeader>
-      <span class="text-xs uppercase tracking-wide text-muted-foreground">Who2Be</span>
+      <AuthBrand label={t('brand')} tagline={t('tagline')} />
       <CardTitle class="text-3xl tracking-tight">Anmeldung</CardTitle>
       <CardDescription>...</CardDescription>
     </CardHeader>
@@ -493,6 +505,17 @@ stellt den Gegenstand der Freigabe unvollstaendig dar.
 Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
 `ResetPasswordPage`, `SetPasswordPage`, `OAuthConsentPage`,
 `InvitationAcceptPage`, `AuthCallbackPage`, `ComingSoonPage`).
+
+**Kartenkopf = Wortmarke A + Einzeiler** (Audit A5, Entscheidung E6-A):
+`AuthBrand` aus `components/layout/Wordmark.tsx` ersetzt die fruehere
+12-px-Versal-Eyebrow. Die Wortmarke ist ein Inline-SVG mit den unveraenderten
+Pfaden aus `docs/assets/brand/logo-*.svg` (Test prueft Deckungsgleichheit);
+Glyphen in `fill-foreground`, die "2" in `fill-wordmark-accent`. So folgt sie
+`prefers-color-scheme` und `data-theme` ohne JS und ohne `ThemeProvider`.
+Der Einzeiler (`auth.tagline`) steht in `text-sm text-balance
+text-muted-foreground`. Heute auf `LoginPage` und `SignupPage`; die anderen
+Auth-Pages tragen noch die Eyebrow und ziehen bei Bedarf nach — keine dritte
+Variante daneben erfinden.
 
 ## 11. A11y-Minimum
 

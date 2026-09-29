@@ -8,6 +8,7 @@ import { z } from 'zod'
 
 import { useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { AuthBrand } from '@/components/layout/Wordmark'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -140,9 +141,7 @@ export function SignupPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {t('brand')}
-          </span>
+          <AuthBrand label={t('brand')} tagline={t('tagline')} />
           <CardTitle className="text-3xl tracking-tight">{t('signup.title')}</CardTitle>
           <CardDescription>
             {confirmationPending
