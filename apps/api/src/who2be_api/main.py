@@ -65,6 +65,7 @@ from who2be_api.routers import (
     resources,
     search,
     system_prompts,
+    test_cases,
     tokens,
     usages,
     wa_artifacts,
@@ -306,6 +307,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     "query_timeout": "Zeitbudget der Tabellen-Query ueberschritten",
     "timeline_request_invalid": "Timeline-Anfrage ungueltig",
     "memory_guard_rejected": "Memory vom Injection-Guard abgelehnt",
+    # Lernschleife Phase B — Pruefaelle und Prueflaeufe (ADR-0053 6.1, B2):
+    "test_case_not_found": "Pruefall nicht gefunden",
+    "test_case_retired": "Pruefall zurueckgezogen",
+    "test_subject_version_not_found": "Gepruefte Version nicht gefunden",
+    "test_run_verdict_inconsistent": "Laufzahlen und Urteil passen nicht zusammen",
 }
 
 
@@ -486,6 +492,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(feedback.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
+    # Pruefaelle/Prueflaeufe (ADR-0053 6.2, Lernschleife B2).
+    app.include_router(test_cases.router, prefix=_WORKSPACE_PREFIX)
     # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
     # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
     # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der
