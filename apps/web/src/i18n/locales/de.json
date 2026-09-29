@@ -83,6 +83,9 @@
       "nameRequiredLong": "Name ist erforderlich.",
       "bodyRequired": "Body erforderlich."
     },
+    "help": {
+      "show": "Hilfe einblenden"
+    },
     "managed": {
       "title": "Vom System verwaltet",
       "body": "Dieser Eintrag wird zentral vom System gepflegt und automatisch aktualisiert. Änderungen sind gesperrt.",
@@ -233,6 +236,12 @@
     "language": {
       "label": "Sprache",
       "switch": "Sprache umstellen"
+    },
+    "theme": {
+      "switch": "Theme umstellen",
+      "light": "Hell",
+      "dark": "Dunkel",
+      "system": "System"
     },
     "footer": {
       "legal": "Rechtliches",

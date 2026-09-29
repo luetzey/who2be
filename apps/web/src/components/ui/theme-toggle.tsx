@@ -1,5 +1,6 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -12,17 +13,19 @@ import { useTheme, type ThemePreference } from '@/app/theme-context'
 
 interface ThemeOption {
   value: ThemePreference
-  label: string
   icon: ComponentType<SVGProps<SVGSVGElement>>
 }
 
+// Beschriftung je Option unter `layout:theme.<value>` (Audit A9: vorher fest
+// deutsch, auch in der englischen Oberflaeche).
 const OPTIONS: readonly ThemeOption[] = [
-  { value: 'light', label: 'Hell', icon: Sun },
-  { value: 'dark', label: 'Dunkel', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor },
+  { value: 'light', icon: Sun },
+  { value: 'dark', icon: Moon },
+  { value: 'system', icon: Monitor },
 ]
 
 export function ThemeToggle() {
+  const { t } = useTranslation('layout')
   const { preference, resolved, setPreference } = useTheme()
   const ActiveIcon = resolved === 'dark' ? Moon : Sun
 
@@ -32,11 +35,11 @@ export function ThemeToggle() {
         <Button
           variant="ghost"
           size="sm"
-          aria-label="Theme umstellen"
+          aria-label={t('theme.switch')}
           aria-haspopup="menu"
         >
           <ActiveIcon className="h-4 w-4" aria-hidden="true" />
-          <span className="sr-only">Theme umstellen</span>
+          <span className="sr-only">{t('theme.switch')}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -48,7 +51,7 @@ export function ThemeToggle() {
             role="menuitemradio"
           >
             <option.icon className="h-4 w-4" aria-hidden="true" />
-            {option.label}
+            {t(`theme.${option.value}`)}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
