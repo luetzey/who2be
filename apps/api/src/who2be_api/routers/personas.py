@@ -237,7 +237,13 @@ async def transition_persona_version(
     status_service: StatusService,
 ) -> PersonaVersionRead:
     return await status_service.transition_persona_version(
-        ctx, persona_id, version, data.to, data.note
+        ctx,
+        persona_id,
+        version,
+        data.to,
+        data.note,
+        acknowledge_test_report=data.acknowledge_test_report,
+        override_reason=data.override_reason,
     )
 
 

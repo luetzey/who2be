@@ -262,7 +262,13 @@ async def transition_playbook_version(
     status_service: StatusService,
 ) -> PlaybookVersionRead:
     return await status_service.transition_playbook_version(
-        ctx, playbook_id, version, data.to, data.note
+        ctx,
+        playbook_id,
+        version,
+        data.to,
+        data.note,
+        acknowledge_test_report=data.acknowledge_test_report,
+        override_reason=data.override_reason,
     )
 
 

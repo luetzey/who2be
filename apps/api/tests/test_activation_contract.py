@@ -14,8 +14,9 @@ Drei Ebenen:
    Ergebnisse) und wird vom Service mit derselben Aufloesung wie der
    Pruefbericht (B2) bestimmt. Laeuft nur mit erreichbarer Datenbank.
 
-Die Router reichen die Felder erst in B5b durch; hier wird der Service direkt
-aufgerufen.
+4. **Endpunkte** (B5b) — die fuenf Transition-Router reichen beide Felder an
+   den Service durch: je Elementart 409 mit Bericht in `params` bzw.
+   Aktivierung mit Bestaetigung plus Grund, ueber HTTP.
 """
 
 import asyncio
@@ -533,3 +534,178 @@ def test_reason_and_note_both_land_in_history_below_limit(world: _World) -> None
 
     entries = asyncio.run(_provenance())
     assert [e.note for e in entries if e.to_status == VersionStatus.active] == [note]
+
+
+# --- 4. Endpunkte: die fuenf Transition-Router (B5b) ------------------------
+#
+# `POST .../versions/1/transition` mit `to=active` je Elementart. Die rote
+# Menge (1 fail, 1 missing) haengt DIREKT am Element (Teil (1) der Vereinigung
+# nach 3.2.1) — das geht fuer alle fuenf Arten gleich, auch fuer
+# `external_tool` ohne Verweisindex. Reicht ein Router die Felder nicht durch,
+# faellt der Bestaetigungs-Fall auf 409 `test_results_incomplete` zurueck.
+
+# entity_type -> (URL-Segment, Versionstabelle, FK-Spalte, Create-Body)
+_ENDPOINT_KINDS: dict[str, tuple[str, str, str, dict[str, Any]]] = {
+    "persona": (
+        "personas",
+        "persona_version",
+        "persona_id",
+        {"content": {"description": "d", "system_prompt": "s"}},
+    ),
+    "playbook": (
+        "playbooks",
+        "playbook_version",
+        "playbook_id",
+        {
+            "content": {
+                "description": "d",
+                "body": "1. Schritt.",
+                "type": "workflow",
+                "tags": [],
+                "triggers": "t",
+            }
+        },
+    ),
+    "resource": (
+        "resources",
+        "resource_version",
+        "resource_id",
+        {
+            "content": {
+                "description": "d",
+                "blocks": [{"id": "b1", "type": "heading", "props": {"level": 1}}],
+                "tags": [],
+            }
+        },
+    ),
+    "system_prompt_template": (
+        "system-prompts",
+        "system_prompt_template_version",
+        "template_id",
+        {"content": {"description": "d", "body": "Du bist ein Test-Agent."}},
+    ),
+    "external_tool": (
+        "external_tools",
+        "external_tool_version",
+        "external_tool_id",
+        {},
+    ),
+}
+_ALL_TYPES = list(_ENDPOINT_KINDS)
+
+
+class _Element:
+    """Element in `review` mit roter Pruefall-Menge (1 fail, 1 missing)."""
+
+    def __init__(self, w: _World, entity_type: str) -> None:
+        segment, table, fk, body = _ENDPOINT_KINDS[entity_type]
+        self.w = w
+        self.entity_type = entity_type
+        self.table = table
+        self.fk = fk
+        self.id = str(w.post(f"/{segment}", {"name": f"E-{uuid4().hex[:6]}", **body})["id"])
+        self.url = f"{w.base}/{segment}/{self.id}/versions/1/transition"
+        # Direkt per SQL nach `review`: geprueft wird `review -> active`.
+        rows = _fetch(
+            f"UPDATE {table} SET status = 'review' WHERE {fk} = $1 AND version = 1 RETURNING id",
+            UUID(self.id),
+        )
+        assert len(rows) == 1
+        self.version_id = str(rows[0]["id"])
+        agent = w.post("/agents", {"name": f"A-{uuid4().hex[:6]}"})["id"]
+        self.red = self._case(agent, "rot")
+        self.missing = self._case(agent, "fehlt")
+        w.post(
+            "/test-runs",
+            {
+                "subject_entity_type": entity_type,
+                "subject_version_id": self.version_id,
+                "results": [
+                    {"test_case_id": self.red, "runs_total": 1, "runs_passed": 0, "verdict": "fail"}
+                ],
+            },
+        )
+
+    def _case(self, agent: str, title: str) -> str:
+        return str(
+            self.w.post(
+                "/test-cases",
+                {
+                    "agent_id": agent,
+                    "entity_type": self.entity_type,
+                    "entity_id": self.id,
+                    "title": title,
+                    "input": "Eingabe",
+                    "expected_behavior": "Erwartet",
+                },
+            )["id"]
+        )
+
+    def transition(self, body: dict[str, Any]) -> Any:
+        return self.w.client.post(self.url, json={"to": "active", **body}, headers=self.w.auth)
+
+    def status(self) -> str:
+        rows = _fetch(
+            f"SELECT status FROM {self.table} WHERE {self.fk} = $1 AND version = 1",
+            UUID(self.id),
+        )
+        return str(rows[0]["status"])
+
+    def active_notes(self) -> list[str | None]:
+        rows = _fetch(
+            "SELECT note FROM status_history WHERE entity_type = $1 AND entity_id = $2 "
+            "AND version = 1 AND to_status = 'active' ORDER BY changed_at",
+            self.entity_type,
+            UUID(self.id),
+        )
+        return [r["note"] for r in rows]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("entity_type", _ALL_TYPES)
+def test_endpoint_red_without_ack_is_409_with_report_in_params(
+    world: _World, entity_type: str
+) -> None:
+    el = _Element(world, entity_type)
+    res = el.transition({"override_reason": "Grund ohne Bestaetigung"})
+    assert res.status_code == 409, res.text
+    body = res.json()
+    assert body["reason"] == "test_results_incomplete"
+    params = body["params"]
+    assert (params["total"], params["failed"], params["missing"]) == (2, 1, 1)
+    report = params["report"]
+    assert report["entity_type"] == entity_type
+    assert report["version_id"] == el.version_id
+    states = {e["test_case"]["id"]: e["state"] for g in report["agents"] for e in g["entries"]}
+    assert states == {el.red: "fail", el.missing: "missing"}
+    assert el.status() == "review"
+    assert el.active_notes() == []
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("entity_type", _ALL_TYPES)
+def test_endpoint_ack_with_blank_reason_is_409_reason_required(
+    world: _World, entity_type: str
+) -> None:
+    el = _Element(world, entity_type)
+    res = el.transition({"acknowledge_test_report": True, "override_reason": "   "})
+    assert res.status_code == 409, res.text
+    body = res.json()
+    assert body["reason"] == "test_override_reason_required"
+    assert body["params"]["report"]["version_id"] == el.version_id
+    assert el.status() == "review"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("entity_type", _ALL_TYPES)
+def test_endpoint_ack_with_reason_activates(world: _World, entity_type: str) -> None:
+    el = _Element(world, entity_type)
+    res = el.transition(
+        {"acknowledge_test_report": True, "override_reason": "  Pruefall veraltet  "}
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["status"] == "active"
+    assert el.status() == "active"
+    assert el.active_notes() == [
+        f"{TEST_OVERRIDE_NOTE_PREFIX} (1 rot, 1 fehlend von 2): Pruefall veraltet"
+    ]

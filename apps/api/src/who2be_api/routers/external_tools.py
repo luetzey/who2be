@@ -196,7 +196,13 @@ async def transition_external_tool_version(
     status_service: StatusService,
 ) -> ExternalToolVersionRead:
     return await status_service.transition_external_tool_version(
-        ctx, tool_id, version, data.to, data.note
+        ctx,
+        tool_id,
+        version,
+        data.to,
+        data.note,
+        acknowledge_test_report=data.acknowledge_test_report,
+        override_reason=data.override_reason,
     )
 
 

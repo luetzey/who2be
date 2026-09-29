@@ -238,7 +238,13 @@ async def transition_resource_version(
     status_service: StatusService,
 ) -> ResourceVersionRead:
     return await status_service.transition_resource_version(
-        ctx, resource_id, version, data.to, data.note
+        ctx,
+        resource_id,
+        version,
+        data.to,
+        data.note,
+        acknowledge_test_report=data.acknowledge_test_report,
+        override_reason=data.override_reason,
     )
 
 
