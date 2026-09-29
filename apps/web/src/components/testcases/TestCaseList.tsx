@@ -373,7 +373,7 @@ function TestCaseRow({ testCase, canWrite, createdAt, onSupersede, onRetire }: T
   const retired = testCase.status === 'retired'
   return (
     <li
-      className="flex min-w-0 flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between"
+      className="flex min-w-0 items-start justify-between gap-3 p-4"
       data-testid="test-case-row"
       data-status={testCase.status}
     >
@@ -414,7 +414,7 @@ function TestCaseRow({ testCase, canWrite, createdAt, onSupersede, onRetire }: T
               type="button"
               variant="outline"
               size="sm"
-              className="min-h-10 self-start md:min-h-0"
+              className="min-h-10 shrink-0 md:min-h-0"
               aria-label={t('testCases.row.actions', { title: testCase.title })}
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
