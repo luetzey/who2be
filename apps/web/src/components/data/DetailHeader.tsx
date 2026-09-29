@@ -71,8 +71,11 @@ export function DetailHeader({
       <header className="flex flex-wrap items-start justify-between gap-4">
         {/* `flex-1` (Basis 0) haelt den „Mehr"-Knopf auf dem Phone in der
             Titelzeile, statt ihn bei langem Titel in eine eigene Zeile zu
-            umbrechen. Ohne Einklappen bleibt das bisherige Verhalten. */}
-        <div className={cn('flex min-w-0 gap-4', collapsible && 'flex-1')}>
+            umbrechen. Ab `md` gilt wieder `flex-initial` (Basis auto): sonst
+            teilt sich der Titel die Zeile mit den offenen Aktionen und wird
+            auf Tablet-Breite auf einen Buchstaben je Zeile gequetscht (CI,
+            tablet-ipad-gen-7). Ohne Einklappen bleibt alles wie bisher. */}
+        <div className={cn('flex min-w-0 gap-4', collapsible && 'flex-1 md:flex-initial')}>
           <EntityIcon icon={icon} tone={iconTone} size="lg" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

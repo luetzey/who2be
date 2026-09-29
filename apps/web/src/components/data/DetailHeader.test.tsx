@@ -86,6 +86,10 @@ describe('DetailHeader', () => {
     const more = screen.getByRole('button', { name: 'Mehr' })
     expect(more).toHaveClass('md:hidden')
     expect(more).toHaveAttribute('aria-expanded', 'false')
+    // Ab md Basis auto zurueck — sonst quetschen die offenen Aktionen den
+    // Titel auf Tablet-Breite zusammen (CI-Befund tablet-ipad-gen-7).
+    const titleBlock = screen.getByRole('heading', { level: 1 }).closest('header > div')
+    expect(titleBlock).toHaveClass('flex-1', 'md:flex-initial')
 
     const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
     expect(slot).not.toBeNull()

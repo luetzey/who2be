@@ -77,6 +77,13 @@ test('#624: „Publish" steht im Status „In review" ohne Scrollen im Viewport'
   expect(tabsBox, 'Tabliste ohne Bounding-Box').not.toBeNull()
   expect(publishBox!.y + publishBox!.height).toBeLessThanOrEqual(tabsBox!.y)
 
+  // Der Titel darf nicht neben die Aktionen gequetscht werden (CI-Befund auf
+  // tablet-ipad-gen-7: ein Buchstabe je Zeile, „Publish" rutschte unter den
+  // Falz). Die H1 muss mindestens ihr erstes Wort nebeneinander tragen.
+  const h1Box = await page.getByRole('heading', { level: 1 }).boundingBox()
+  expect(h1Box, 'H1 ohne Bounding-Box').not.toBeNull()
+  expect(h1Box!.width).toBeGreaterThan(120)
+
   // Sekundaeraktionen: unterhalb `md` hinter „Mehr", darueber direkt sichtbar.
   const more = page.getByTestId('detail-header-more')
   const duplicate = page.getByTestId('duplicate-persona')
