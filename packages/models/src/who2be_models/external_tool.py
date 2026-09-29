@@ -160,6 +160,9 @@ class ExternalToolVersionRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    # UUID der Versions-Zeile — Adresse fuer Pruefbericht und Pruefläufe
+    # (`subject_version_id`, ADR-0053 3.2/6.2).
+    id: UUID
     version: int
     status: VersionStatus = VersionStatus.inactive
     locale: ContentLocale = DEFAULT_LOCALE

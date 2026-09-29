@@ -90,6 +90,7 @@ def test_content_rejects_too_many_or_too_long_tags() -> None:
 
 def test_version_read_carries_creator_and_version() -> None:
     version = PersonaVersionRead(
+        id=uuid4(),
         version=3,
         content=_content(),
         created_by=uuid4(),
@@ -115,6 +116,7 @@ def test_read_defaults_status_fields_for_back_compat() -> None:
 
 def test_version_read_defaults_status_to_inactive() -> None:
     version = PersonaVersionRead(
+        id=uuid4(),
         version=1,
         content=_content(),
         created_by=uuid4(),

@@ -83,7 +83,9 @@ class FakePersonaRepository:
         )
         self._personas[persona.id] = persona
         self._versions[persona.id] = [
-            PersonaVersionRead(version=1, content=content, created_by=owner_id, created_at=now)
+            PersonaVersionRead(
+                id=uuid4(), version=1, content=content, created_by=owner_id, created_at=now
+            )
         ]
         return persona
 
@@ -164,6 +166,7 @@ class FakePersonaRepository:
         self._personas[persona_id] = updated
         self._versions[persona_id].append(
             PersonaVersionRead(
+                id=uuid4(),
                 version=version,
                 status=new_status,
                 content=content,
@@ -198,6 +201,7 @@ class FakePersonaRepository:
         self._personas[persona_id] = updated
         self._versions[persona_id].append(
             PersonaVersionRead(
+                id=uuid4(),
                 version=version,
                 status=VersionStatus.draft,
                 content=content,
@@ -260,6 +264,7 @@ class FakePersonaRepository:
         self._personas[persona_id] = updated
         self._versions[persona_id].append(
             PersonaVersionRead(
+                id=uuid4(),
                 version=version,
                 status=VersionStatus.draft,
                 content=content,

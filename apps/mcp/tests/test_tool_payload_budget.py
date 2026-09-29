@@ -546,6 +546,7 @@ def test_list_versions_text_format_stays_under_response_limit(
     body = _fat_blocknote_body(60)
     payload = [
         {
+            "id": str(uuid4()),
             "version": version,
             "status": "active" if version == 8 else "inactive",
             "locale": "de",
@@ -585,6 +586,7 @@ def test_list_versions_text_format_empties_resource_blocks(
     blocks = _fat_blocks(60)
     payload = [
         {
+            "id": str(uuid4()),
             "version": version,
             "status": "inactive",
             "locale": "de",

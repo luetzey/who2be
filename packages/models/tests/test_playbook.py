@@ -140,6 +140,7 @@ def test_content_rejects_type_outside_curated_set() -> None:
 
 def test_version_read_carries_version() -> None:
     version = PlaybookVersionRead(
+        id=uuid4(),
         version=5,
         content=_content(),
         created_by=uuid4(),
@@ -168,6 +169,7 @@ def test_read_defaults_status_fields_for_back_compat() -> None:
 
 def test_version_read_defaults_status_to_inactive() -> None:
     version = PlaybookVersionRead(
+        id=uuid4(),
         version=1,
         content=_content(),
         created_by=uuid4(),

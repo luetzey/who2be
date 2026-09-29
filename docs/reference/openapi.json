@@ -14610,6 +14610,11 @@
       },
       "ExternalToolVersionRead": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -14641,6 +14646,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "version",
           "content",
           "created_by",
@@ -17321,6 +17327,11 @@
       },
       "PersonaVersionRead": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -17352,6 +17363,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "version",
           "content",
           "created_by",
@@ -17827,6 +17839,11 @@
       },
       "PlaybookVersionRead": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -17858,6 +17875,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "version",
           "content",
           "created_by",
@@ -18433,6 +18451,11 @@
       },
       "ResourceVersionRead": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -18464,6 +18487,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "version",
           "content",
           "created_by",
@@ -19222,6 +19246,11 @@
       },
       "SystemPromptTemplateVersionRead": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -19253,6 +19282,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "version",
           "content",
           "created_by",

@@ -118,6 +118,7 @@ def _agent_json(name: str = "A") -> dict[str, object]:
 
 def _version_json(version: int = 2) -> dict[str, object]:
     return {
+        "id": str(uuid4()),
         "version": version,
         "content": {"description": "d"},
         "created_by": str(uuid4()),

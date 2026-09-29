@@ -99,7 +99,9 @@ class FakePlaybookRepository:
         )
         self._playbooks[playbook.id] = playbook
         self._versions[playbook.id] = [
-            PlaybookVersionRead(version=1, content=content, created_by=owner_id, created_at=now)
+            PlaybookVersionRead(
+                id=uuid4(), version=1, content=content, created_by=owner_id, created_at=now
+            )
         ]
         return playbook
 
@@ -188,6 +190,7 @@ class FakePlaybookRepository:
         self._playbooks[playbook_id] = updated
         self._versions[playbook_id].append(
             PlaybookVersionRead(
+                id=uuid4(),
                 version=version,
                 status=new_status,
                 content=content,
@@ -225,6 +228,7 @@ class FakePlaybookRepository:
         self._playbooks[playbook_id] = updated
         self._versions[playbook_id].append(
             PlaybookVersionRead(
+                id=uuid4(),
                 version=version,
                 status=VersionStatus.draft,
                 content=content,
@@ -295,6 +299,7 @@ class FakePlaybookRepository:
         self._playbooks[playbook_id] = updated
         self._versions[playbook_id].append(
             PlaybookVersionRead(
+                id=uuid4(),
                 version=version,
                 status=VersionStatus.draft,
                 content=content,
