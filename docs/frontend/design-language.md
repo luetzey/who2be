@@ -80,8 +80,17 @@ sind drei Helligkeitsstufen wahrnehmbar (`0.145 < 0.18 < 0.21`).
 
 | Token | Light | Dark | Verwendung |
 |---|---|---|---|
-| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` | Error, Delete, Revoke |
+| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` | Error, Delete, Revoke (Flaeche: `bg-`, `border-`) |
 | `--destructive-foreground` | `oklch(0.985 0 0)` | `oklch(0.985 0 0)` | Text auf destructive |
+| `--destructive-text` | `oklch(0.577 0.245 27.325)` | `oklch(0.7 0.19 25)` | Destruktiver **Text** auf Surfaces (`text-destructive`) |
+
+`text-destructive` liest `--destructive-text` (Tailwind-Namespace
+`--text-color-destructive`), nicht die Flaeche. Grund: die dunkle
+Flaechenfarbe ist fuer weissen Text gebaut und misst als Textfarbe nur
+1,87:1 auf `--card`. Die Text-Variante misst dunkel 6,5:1 auf `--card`
+(5,2:1 auf `--muted`), hell ist sie identisch zur Flaeche (4,8:1 auf
+Weiss). Waechter: `styles/brand-contrast.test.ts`. Kein Textfarben-Bypass
+ueber `text-[var(--destructive)]`.
 
 Erweiterungen (Success/Warning/Info) werden hinzugefuegt, **wenn** ein
 echter Use-Case auftaucht — nicht prophylaktisch. Bis dahin: keine
