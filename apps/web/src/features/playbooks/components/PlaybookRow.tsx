@@ -97,7 +97,11 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
         </div>
 
         {playbook.content.description !== '' ? (
-          <p className="text-sm text-muted-foreground">{playbook.content.description}</p>
+          // `wrap-anywhere`: lange URL bricht um, statt die Liste zu
+          // verbreitern (Mobil-Spec M1).
+          <p className="text-sm wrap-anywhere text-muted-foreground">
+            {playbook.content.description}
+          </p>
         ) : null}
 
         {parent !== undefined ? (
@@ -120,10 +124,12 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
           >
             <Zap className="size-3.5 text-muted-foreground" aria-hidden="true" />
             {visibleTriggers.map((trigger) => (
+              // `min-w-0 wrap-anywhere`: ein Trigger mit langer URL bricht in
+              // der Pille um, statt die Liste zu verbreitern (Mobil-Spec M1/M12).
               <span
                 key={trigger}
                 role="listitem"
-                className="rounded-md bg-muted px-2 py-0.5 text-xs text-foreground"
+                className="min-w-0 rounded-md bg-muted px-2 py-0.5 text-xs wrap-anywhere text-foreground"
               >
                 {trigger}
               </span>

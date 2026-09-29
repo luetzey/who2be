@@ -154,7 +154,8 @@ export function PlaybookDetailPage() {
                     <LocaleBadge locale={playbook.locale} />
                   </div>
                   {playbook.content.description !== '' ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    // `wrap-anywhere`: lange URL bricht um (Mobil-Spec M1).
+                    <p className="mt-2 text-sm wrap-anywhere text-muted-foreground">
                       {playbook.content.description}
                     </p>
                   ) : null}
