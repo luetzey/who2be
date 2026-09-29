@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
@@ -41,6 +42,8 @@ import { SubResourcePicker } from '../components/SubResourcePicker'
 import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
 
+const RESOURCE_TABS = ['edit', 'sub', 'use', 'versions'] as const
+
 export function ResourceDetailPage() {
   const { t } = useTranslation('resources')
   const { id } = useParams<{ id: string }>()
@@ -51,6 +54,9 @@ export function ResourceDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
+  // Tabs aus der URL (`?tab=`, Audit E1 = A): „Änderungen ansehen" verlinkt
+  // `?tab=versions&diff=<n>`.
+  const { tab, setTab, diffVersion } = useVersionDeepLink(RESOURCE_TABS, 'edit')
   // Vom System verwaltet: Editor read-only, keine Status-/Lösch-/Sub-Resource-
   // Aktionen (Backend sperrt mit 403 managed_aggregate).
   const locked = resource?.is_managed === true
@@ -217,6 +223,7 @@ export function ResourceDetailPage() {
                         actions={
                           <StatusActionBar
                             status={status}
+                            diffVersion={promotableVersion.version}
                             onTransition={(to) =>
                               api.transitionResourceVersion(
                                 resource.id,
@@ -260,7 +267,7 @@ export function ResourceDetailPage() {
                 : null}
             </Stack>
 
-            <Tabs defaultValue="edit">
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList aria-label={t('detail.subResourcesTitle')}>
                 <TabsTrigger value="edit">
                   <Pencil aria-hidden="true" />
@@ -414,6 +421,7 @@ export function ResourceDetailPage() {
                   loadProvenance={(version) =>
                     api.provenanceResourceVersion(resource.id, version)
                   }
+                  initialDiffVersion={diffVersion}
                 />
               </TabsContent>
             </Tabs>

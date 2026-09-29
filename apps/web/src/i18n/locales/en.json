@@ -652,6 +652,7 @@
   },
   "auth": {
     "brand": "Who2Be",
+    "tagline": "Agent configuration you review — not agent behavior you hope for.",
     "fields": {
       "email": "Email",
       "password": "Password",

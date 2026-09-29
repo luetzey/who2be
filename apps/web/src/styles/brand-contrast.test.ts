@@ -88,3 +88,47 @@ describe('Brand-Tinte: Kontrast nach WCAG AA (design-language.md §11)', () => {
     })
   }
 })
+
+/**
+ * Audit A6: `text-destructive` laeuft ueber das eigene Text-Token
+ * `--destructive-text`, die Flaeche `--destructive` bleibt Flaechenfarbe.
+ * Dunkel mass die Flaechenfarbe als Text 1,87:1 auf `--card`.
+ */
+describe('Destructive-Text: Kontrast nach WCAG AA (Audit A6, design-language.md §2.4)', () => {
+  it('Tailwind-Namespace: text-destructive liest --destructive-text, nicht die Flaeche', () => {
+    expect(GLOBALS_CSS).toMatch(/--text-color-destructive:\s*var\(--destructive-text\);/)
+    expect(GLOBALS_CSS).toMatch(/--color-destructive:\s*var\(--destructive\);/)
+  })
+
+  for (const name of Object.keys(THEME_BLOCKS)) {
+    // Hell ist `--muted` (0,97) knapp unter 4,5:1 — dort steht heute kein
+    // destruktiver Text; der Hellwert bleibt bewusst unveraendert (Audit A6).
+    const surfaces = name.startsWith('dark')
+      ? ['--background', '--card', '--popover', '--muted']
+      : ['--background', '--card', '--popover']
+    it(`${name}: --destructive-text auf ${surfaces.join('/')} >= 4,5:1`, () => {
+      const css = block(name)
+      const fg = token(css, '--destructive-text')
+      for (const surface of surfaces) {
+        expect(
+          contrastRatio(fg, token(css, surface)),
+          `${surface} in ${name}`,
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT)
+      }
+    })
+
+    it(`${name}: Flaeche --destructive-foreground auf --destructive >= 4,5:1`, () => {
+      const css = block(name)
+      expect(
+        contrastRatio(token(css, '--destructive-foreground'), token(css, '--destructive')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT)
+    })
+  }
+
+  it('hell: Text-Token ist identisch zur heutigen Flaechenfarbe (keine Aenderung im Light Mode)', () => {
+    for (const name of ['light (:root)', "light ([data-theme='light'])"]) {
+      const css = block(name)
+      expect(token(css, '--destructive-text')).toEqual(token(css, '--destructive'))
+    }
+  })
+})
