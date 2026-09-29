@@ -94,7 +94,9 @@ export function SystemPromptDetailPage() {
               <AttentionBanner
                 variant="brand"
                 icon={Clock}
-                title={`Version ${template.current_version} liegt zur Review`}
+                title={t('page.detail.bannerReviewTitle', {
+                  version: template.current_version,
+                })}
                 description={t('reviewNotice')}
                 actions={
                   <SystemPromptStatusActionBar
@@ -116,14 +118,14 @@ export function SystemPromptDetailPage() {
             ) : null}
 
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList aria-label="Detail-Ansicht">
+              <TabsList aria-label={t('data:detailTabsLabel')}>
                 <TabsTrigger value="edit">
                   <SquarePen aria-hidden="true" />
                   {t('common:actions.edit')}
                 </TabsTrigger>
                 <TabsTrigger value="versions">
                   <GitBranch aria-hidden="true" />
-                  Versionen
+                  {t('version:history.title')}
                 </TabsTrigger>
               </TabsList>
 
@@ -142,7 +144,7 @@ export function SystemPromptDetailPage() {
                   canEdit={role === 'admin' || role === 'editor'}
                   onRestore={async (version) => {
                     await api.restoreSystemPromptTemplateVersion(template.id, version)
-                    notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                    notify.success(t('page.detail.toast.restored', { version }))
                     reload()
                   }}
                   loadDiff={(version) => api.diffSystemPromptTemplateVersion(template.id, version)}

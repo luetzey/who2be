@@ -59,10 +59,19 @@ _INSERT_SQL_WITH_VECTOR = (
 # auf dem Server fehlt (fail-soft, siehe dort) — dieser Zustand ist der
 # Normalfall einer On-Prem-Instanz auf Standard-Postgres und darf keinen Fehler
 # ausloesen, sondern nur die Semantik abschalten.
+#
+# `pg_attribute` + `to_regclass` statt `information_schema.columns` (Muster aus
+# Migration 0021): nur so wird GENAU die Tabelle geprueft, die die Queries per
+# `search_path` auch treffen. `information_schema` sieht jede gleichnamige
+# Tabelle in jedem Schema — liegt irgendwo ein zweites Schema mit der Spalte,
+# meldete die Probe „vorhanden“, und jeder Vektor-Zugriff scheiterte mit
+# `UndefinedColumnError`.
 _HAS_VECTOR_SQL = """
 SELECT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'content_chunk' AND column_name = 'content_vector'
+    SELECT 1 FROM pg_attribute
+    WHERE attrelid = to_regclass('content_chunk')
+      AND attname = 'content_vector'
+      AND NOT attisdropped
 )
 """
 

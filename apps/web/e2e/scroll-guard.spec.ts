@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { apiRequest, createUser, loginAs, seedWorkspace } from './helpers/auth'
+import { decideCookieConsent } from './helpers/consent'
 import { expectNoHorizontalScroll, measureHorizontalOverflow } from './helpers/viewport'
 
 /**
@@ -77,4 +79,135 @@ test('Kein Fehlalarm: bewusst scrollbarer Wrapper (Tabellen-Muster) bleibt gruen
     'Tabelle in einem overflow-auto-Wrapper darf nicht als Verursacher gelten',
   ).toEqual([])
   await expectNoHorizontalScroll(page, 'Selbsttest: Tabellen-Wrapper')
+})
+
+/**
+ * Mobil-Spec P1 (Befunde M1 + M12, WCAG 1.4.10 Reflow): frei eingegebene
+ * Texte brechen um, statt die Seite zu verbreitern.
+ *
+ * Gemessen war `scrollWidth` 517 px bei 320/390/430 px auf Persona-, Agent-,
+ * System-Prompt- und Playbook-Detail sowie 530 px auf der Playbook-Liste.
+ * Ursache: eine lange URL ohne Trennstelle in der Beschreibung setzt die
+ * min-content-Breite des Kopf-`<p>` auf ~437 px, und die Flex-Kette gibt das
+ * bis zum Dokument weiter. Der Seed traegt deshalb genau so eine URL (keine
+ * Bindestriche, die Chromium als Umbruchstelle nimmt) in jede Beschreibung und
+ * als Trigger-Chip ins Playbook (M12, Tag-Feld auf dem Bearbeiten-Tab).
+ *
+ * Laeuft auf allen vier Profilen; `mobile-320` und `mobile-iphone-13` (390 px)
+ * sind die scharfen Faelle. Rot-Probe: `wrap-anywhere` am Kopf-`<p>` in
+ * `DetailHeader.tsx` entfernt → Persona-/Agent-/System-Prompt-Detail rot.
+ */
+const LONG_URL =
+  'https://intranet.example.com/richtlinien/kommunikation/' +
+  'feedbackkulturundgespraechsfuehrungfuerteamleitungen/2026/leitfaden_fuer_schwierige_gespraeche.pdf'
+const LONG_DESCRIPTION = `Verweise auf interne Richtlinien stehen mit Titel und Abschnitt, etwa ${LONG_URL} fuer das Mitarbeitergespraech.`
+
+function blockDoc(text: string): { blocks: unknown[] } {
+  return {
+    blocks: [
+      {
+        id: 'e2e-reflow-p1',
+        type: 'paragraph',
+        props: {},
+        content: [{ type: 'text', text, styles: {} }],
+        children: [],
+      },
+    ],
+  }
+}
+
+test('M1/M12: lange URL ohne Trennstelle verbreitert keine Liste und keine Detailseite', async ({
+  page,
+  request,
+}) => {
+  // Zwoelf Seitenaufrufe plus Seed: das 30-s-Standardbudget reicht dafuer nicht.
+  test.setTimeout(120_000)
+
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const post = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  const persona = await post<{ id: string }>('/personas', {
+    name: 'E2E Reflow Persona',
+    content: {
+      description: LONG_DESCRIPTION,
+      tags: ['reflow'],
+      content: blockDoc('Profil'),
+    },
+  })
+  const playbook = await post<{ id: string }>('/playbooks', {
+    name: 'E2E Reflow Playbook',
+    content: { description: LONG_DESCRIPTION, triggers: `gespraech vorbereiten, ${LONG_URL}` },
+  })
+  const resource = await post<{ id: string }>('/resources', {
+    name: 'E2E Reflow Resource',
+    content: { description: LONG_DESCRIPTION, blocks: blockDoc('Inhalt').blocks },
+  })
+  const systemPrompt = await post<{ id: string }>('/system-prompts', {
+    name: 'E2E Reflow System-Prompt',
+    content: {
+      description: LONG_DESCRIPTION,
+      body: JSON.stringify(blockDoc('Grund-Prompt').blocks),
+    },
+  })
+  const tool = await post<{ id: string }>('/external_tools', {
+    name: 'E2E Reflow Tool',
+    content: { display_name: 'Reflow', fallback_note: LONG_DESCRIPTION },
+  })
+  const agent = await post<{ id: string }>('/agents', {
+    name: 'E2E Reflow Agent',
+    description: LONG_DESCRIPTION,
+  })
+
+  const ws = `/w/${workspaceId}`
+  // Dritter Wert: zeigt die Seite den Seed-Text als Text? Nur dann laesst sich
+  // pruefen, dass der Verursacher wirklich gerendert ist (sonst misst die
+  // Probe eine Seite ohne ihn und ist blind gruen). Resource-/Tool-Detail
+  // zeigen im Kopf die Version, die Beschreibung steht dort im Formularfeld;
+  // die Tool-Liste zeigt keine Beschreibung.
+  const routes: Array<[string, string, boolean]> = [
+    [`${ws}/personas`, 'personas (Liste)', true],
+    [`${ws}/personas/${persona.id}`, 'personas/:id', true],
+    [`${ws}/playbooks`, 'playbooks (Liste)', true],
+    [`${ws}/playbooks/${playbook.id}`, 'playbooks/:id (Bearbeiten, Trigger-Chip)', true],
+    [`${ws}/resources`, 'resources (Liste)', true],
+    [`${ws}/resources/${resource.id}`, 'resources/:id', false],
+    [`${ws}/system-prompts`, 'system-prompts (Liste)', true],
+    [`${ws}/system-prompts/${systemPrompt.id}`, 'system-prompts/:id', true],
+    [`${ws}/tools`, 'tools (Liste)', false],
+    [`${ws}/tools/${tool.id}`, 'tools/:id', false],
+    [`${ws}/agents`, 'agents (Liste)', true],
+    [`${ws}/agents/${agent.id}`, 'agents/:id', true],
+  ]
+
+  // Alle Routen messen, dann gesammelt pruefen: ein roter Lauf nennt jede
+  // betroffene Seite auf einmal, nicht nur die erste.
+  const failures: string[] = []
+  for (const [path, label, showsSeedText] of routes) {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    if (showsSeedText) {
+      await expect(page.getByText(LONG_URL, { exact: false }).first()).toBeVisible()
+    }
+    const probe = await measureHorizontalOverflow(page)
+    if (probe.scrollWidth > probe.clientWidth + 1) {
+      const culprit = probe.offenders[0]?.selector ?? 'kein einzelnes Element'
+      failures.push(`${label}: scrollWidth ${probe.scrollWidth} > ${probe.clientWidth} (${culprit})`)
+    }
+  }
+  expect(failures, 'Seiten mit horizontalem Body-Scroll').toEqual([])
+
+  // M12: Der Trigger-Chip mit der URL bleibt innerhalb des Tag-Felds.
+  await page.goto(`${ws}/playbooks/${playbook.id}`)
+  const chip = page.locator('span', { hasText: LONG_URL }).filter({ has: page.getByRole('button') })
+  await expect(chip.first()).toBeVisible()
+  const chipBox = await chip.first().boundingBox()
+  const viewportWidth = page.viewportSize()?.width ?? 0
+  expect(chipBox, 'Trigger-Chip ohne Bounding-Box').not.toBeNull()
+  expect(chipBox!.x + chipBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
 })

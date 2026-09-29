@@ -83,6 +83,9 @@
       "nameRequiredLong": "Name is required.",
       "bodyRequired": "Body is required."
     },
+    "help": {
+      "show": "Show help"
+    },
     "managed": {
       "title": "Managed by the system",
       "body": "This entry is maintained centrally by the system and updated automatically. Edits are locked.",
@@ -234,6 +237,12 @@
       "label": "Language",
       "switch": "Change language"
     },
+    "theme": {
+      "switch": "Change theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
     "footer": {
       "legal": "Legal",
       "impressum": "Imprint",
@@ -253,6 +262,7 @@
   },
   "data": {
     "empty": "No entries.",
+    "detailTabsLabel": "Detail view",
     "error": {
       "title": "Error"
     },
@@ -1456,7 +1466,7 @@
       "identityHelpTypesHeading": "Types",
       "nameLabel": "Name",
       "namePlaceholder": "e.g. Handle password-reset email",
-      "typeLabel": "Typ",
+      "typeLabel": "Type",
       "descriptionPlaceholder": "e.g. Responds to password-reset requests with a clear next step",
       "contentTitle": "Content",
       "contentDescription": "The actual playbook content and its triggers.",
@@ -2000,6 +2010,7 @@
       },
       "detail": {
         "slugVersion": "Slug: {{slug}} · Current version: v{{version}}",
+        "bannerReviewTitle": "Version v{{version}} is in review",
         "toast": {
           "restored": "v{{version}} restored as draft."
         }
@@ -2828,6 +2839,104 @@
         "iso": {
           "label": "Date (ISO 8601)",
           "description": "Rendered as \"2026-05-31\""
+        }
+      }
+    }
+  },
+  "learning": {
+    "testCases": {
+      "title": "Test cases",
+      "titleFor": "Test cases · {{subject}}",
+      "summaryAgent_one": "{{count}} test case · runs with every new version of this agent.",
+      "summaryAgent_other": "{{count}} test cases · run with every new version of this agent.",
+      "summaryEntity_one": "{{count}} test case · runs with every new version of this element.",
+      "summaryEntity_other": "{{count}} test cases · run with every new version of this element.",
+      "create": "Create test case",
+      "supersede": "Create new revision",
+      "empty": {
+        "title": "No test cases yet",
+        "body": "Test cases record what this agent has to be able to do. Every new version is checked against all of them – so you notice when a fix breaks something elsewhere."
+      },
+      "forbidden": {
+        "title": "No permission",
+        "body": "You lack the permissions for this (role {{role}} or higher).",
+        "role": "Editor"
+      },
+      "group": {
+        "agent": "For agent {{name}}",
+        "agentItself": "On the agent itself",
+        "entity": "{{type}} {{id}}"
+      },
+      "entityType": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "system_prompt_template": "System prompt",
+        "external_tool": "External tool"
+      },
+      "status": {
+        "active": "Active",
+        "retired": "Archived"
+      },
+      "checkKind": {
+        "human_rule": "Rated by a person",
+        "must_contain": "Contains",
+        "must_not_contain": "Does not contain"
+      },
+      "row": {
+        "expected": "Expected:",
+        "meta": "Check: {{checkKind}} · created {{date}}",
+        "byAgent": "created by the builder",
+        "revision": "new revision",
+        "fromCase": "from case {{id}}",
+        "actions": "Actions for test case “{{title}}”"
+      },
+      "retired": {
+        "show_one": "Show {{count}} archived test case",
+        "show_other": "Show {{count}} archived test cases",
+        "hide": "Hide archived"
+      },
+      "retire": {
+        "action": "Archive",
+        "title": "Archive test case?",
+        "question": "Archived test cases no longer run. Does this case really no longer apply?",
+        "confirm": "Archive",
+        "success": "Test case archived.",
+        "error": "Archiving failed."
+      },
+      "form": {
+        "titleCreate": "Create test case",
+        "titleSupersede": "Create new revision",
+        "description": "A test case is an input plus the expected behavior. It cannot be changed later, only replaced by a new revision.",
+        "descriptionSupersede": "The new revision replaces “{{title}}”. The previous revision is archived and no longer runs.",
+        "submitCreate": "Create test case",
+        "submitSupersede": "Create new revision",
+        "fields": {
+          "agent": "Applies to agent",
+          "agentPlaceholder": "Choose agent …",
+          "title": "Short name",
+          "input": "Input",
+          "expected": "Expected behavior",
+          "checkKind": "How is it checked?",
+          "pattern": "Text to look for"
+        },
+        "help": {
+          "agent": "Which agent does this test case run for?",
+          "title": "How do you recognize the test case in a list?",
+          "input": "What does the agent receive? As close to the real case as possible.",
+          "expected": "How can you tell it was right? A checkable statement.",
+          "checkKind": "“Rated by a person”: a person looks at the answer. “Contains” / “Does not contain”: the answer is checked for a text.",
+          "pattern": "This text must (or must not) appear in the answer."
+        },
+        "validation": {
+          "required": "Required.",
+          "tooLong": "At most {{max}} characters.",
+          "agentRequired": "Please choose an agent."
+        },
+        "toast": {
+          "created": "Test case created.",
+          "superseded": "New revision created, the previous one is archived.",
+          "error": "Saving failed."
         }
       }
     }

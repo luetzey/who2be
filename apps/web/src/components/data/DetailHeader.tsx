@@ -83,7 +83,11 @@ export function DetailHeader({
               {badges}
             </div>
             {description !== undefined && description !== '' ? (
-              <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
+              // `wrap-anywhere` statt `break-words`: nur `anywhere` senkt die
+              // min-content-Breite. Eine lange URL ohne Trennstelle setzte sie
+              // sonst auf ~437 px und verbreiterte die ganze Seite (Mobil-Spec
+              // M1, WCAG 1.4.10), wie am Titel in `EntityCard`.
+              <p className="mt-1.5 text-sm wrap-anywhere text-muted-foreground">{description}</p>
             ) : null}
           </div>
         </div>

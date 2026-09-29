@@ -77,6 +77,9 @@ import type {
   TableExportFormat,
   TableQueryInput,
   TableQueryResult,
+  TestCaseCreateInput,
+  TestCaseFilters,
+  TestCaseRead,
   Token,
   TokenCreated,
   TokenInput,
@@ -574,6 +577,13 @@ export interface Api {
   // serverseitig; ohne Filter kommen alle Status (Triage-UI braucht pending +
   // active + rejected gleichzeitig).
   listAgentMemories: (agentId: string, status?: MemoryStatus) => Promise<MemoryRead[]>
+  // ADR-0053 6.2 — Prueffaelle (Lernschleife B2/B4). Ohne `status` alle
+  // Status (die Liste blendet `retired` clientseitig ein/aus). Der Inhalt ist
+  // unveraenderlich: "Bearbeiten" = `createTestCase` mit `supersedes_id`.
+  listTestCases: (filters?: TestCaseFilters) => Promise<TestCaseRead[]>
+  getTestCase: (caseId: string) => Promise<TestCaseRead>
+  createTestCase: (input: TestCaseCreateInput) => Promise<TestCaseRead>
+  retireTestCase: (caseId: string) => Promise<TestCaseRead>
   // Triage eines pending-Vorschlags: approve (opt. Fakt-Edition) oder reject
   // (opt. Notiz). 409, wenn der Eintrag nicht mehr pending ist.
   triageAgentMemory: (
@@ -1057,6 +1067,23 @@ export function createApi(token: string, workspaceId: string): Api {
       const query = status !== undefined ? `?status=${status}` : ''
       return request<MemoryRead[]>(token, `${ws}/agents/${agentId}/memories${query}`)
     },
+    listTestCases: (filters) => {
+      const params = new URLSearchParams()
+      if (filters?.agent_id) params.set('agent_id', filters.agent_id)
+      if (filters?.entity_type) params.set('entity_type', filters.entity_type)
+      if (filters?.entity_id) params.set('entity_id', filters.entity_id)
+      if (filters?.status) params.set('status', filters.status)
+      const query = params.toString()
+      return request<TestCaseRead[]>(token, `${ws}/test-cases${query ? `?${query}` : ''}`)
+    },
+    getTestCase: (caseId) => request<TestCaseRead>(token, `${ws}/test-cases/${caseId}`),
+    createTestCase: (input) =>
+      request<TestCaseRead>(token, `${ws}/test-cases`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    retireTestCase: (caseId) =>
+      request<TestCaseRead>(token, `${ws}/test-cases/${caseId}/retire`, { method: 'POST' }),
     triageAgentMemory: (agentId, memoryId, input) =>
       request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}/triage`, {
         method: 'POST',

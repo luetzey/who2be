@@ -247,6 +247,20 @@ class GdprExportService:
                 workspace_id,
                 user_id,
             )
+            # Pruefaelle + Prueflaeufe (ADR-0053 3.2, Migration 0089): Freitext
+            # (`input`, `expected_behavior`, `output_excerpt`) kann Nutzerinhalte
+            # zitieren, `created_by`/`reported_by_user_id` tragen die Person.
+            # Workspace-weit wie `agent_memory` — beides sind Inhalte des
+            # Workspace, nicht Markierungen eines einzelnen Menschen. Keine
+            # generierten Spalten, `*` ist hier sicher.
+            test_cases = await self._pool.fetch(
+                "SELECT * FROM test_case WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
+            test_runs = await self._pool.fetch(
+                "SELECT * FROM test_run WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
         return {
             "id": str(workspace_id),
             "name": name,
@@ -264,6 +278,8 @@ class GdprExportService:
             "knowledge_base": knowledge_base,
             "agent_access_log": [_clean(row) for row in access_log],
             "agent_favorites": [_clean(row) for row in favorites],
+            "test_cases": [_clean(row) for row in test_cases],
+            "test_runs": [_clean(row) for row in test_runs],
         }
 
     async def _export_work_areas(self, workspace_id: UUID) -> list[dict[str, Any]]:

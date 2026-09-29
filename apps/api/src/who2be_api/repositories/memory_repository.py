@@ -58,10 +58,16 @@ _DEDUP_VECTOR_SIMILARITY = 0.92
 # Existiert die Vektor-Spalte? Migration 0072 legt sie NICHT an, wenn pgvector
 # auf dem Server fehlt (fail-soft) — der Normalfall einer On-Prem-Instanz auf
 # Standard-Postgres, der keinen Fehler ausloesen darf.
+#
+# `pg_attribute` + `to_regclass` statt `information_schema.columns`: nur so wird
+# die Tabelle geprueft, die die Queries per `search_path` auch treffen (Muster
+# Migration 0021, Begruendung in `content_chunk_repository._HAS_VECTOR_SQL`).
 _HAS_VECTOR_SQL = """
 SELECT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'agent_memory' AND column_name = 'content_vector'
+    SELECT 1 FROM pg_attribute
+    WHERE attrelid = to_regclass('agent_memory')
+      AND attname = 'content_vector'
+      AND NOT attisdropped
 )
 """
 

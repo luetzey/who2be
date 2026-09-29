@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/app/ThemeProvider'
+import i18n, { DEFAULT_LOCALE } from '@/i18n'
 
 import { ThemeToggle } from './theme-toggle'
 
@@ -70,5 +71,31 @@ describe('ThemeToggle', () => {
     const trigger = screen.getByRole('button', { name: /theme umstellen/i })
     const svg = trigger.querySelector('svg')
     expect(svg?.getAttribute('class') ?? '').toMatch(/sun/i)
+  })
+
+  // Audit A9: Trigger-Label und Menue-Eintraege folgen der UI-Sprache.
+  describe('in der englischen Oberflaeche', () => {
+    beforeEach(async () => {
+      await i18n.changeLanguage('en')
+    })
+    afterEach(async () => {
+      await i18n.changeLanguage(DEFAULT_LOCALE)
+    })
+
+    it('beschriftet Trigger und Optionen englisch', async () => {
+      installMatchMedia(false)
+      render(
+        <ThemeProvider>
+          <ThemeToggle />
+        </ThemeProvider>,
+      )
+
+      const trigger = screen.getByRole('button', { name: 'Change theme' })
+      expect(trigger).toHaveTextContent('Change theme')
+      fireEvent.keyDown(trigger, { key: 'Enter' })
+
+      const items = await screen.findAllByRole('menuitemradio')
+      expect(items.map((item) => item.textContent)).toEqual(['Light', 'Dark', 'System'])
+    })
   })
 })

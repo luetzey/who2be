@@ -308,6 +308,33 @@ Need a database locally? Either start the compose stack
 (see [`docs/local-smoke.md`](docs/local-smoke.md)) or run with
 `WHO2BE_TEST_TESTCONTAINERS=1` (requires Docker) to get an ephemeral Postgres.
 
+#### Tests that change the schema run in their own schema
+
+A test that alters the schema itself (for example, dropping
+`content_vector` to simulate an on-prem Postgres without pgvector) must
+never do so in the shared `public` schema. A run that is killed between the
+`DROP` and the restore leaves every later run with a broken database.
+Instead, wrap the test in `who2be_api.testing.isolated_schema.isolated_schema`.
+It creates and migrates a throwaway schema, points `DATABASE_URL` at it via
+`search_path`, and drops the schema afterwards.
+
+**Repairing a local database from before this fix.** Older versions of
+`test_works_without_the_vector_column` dropped the column in `public`. If an
+aborted run left your dev database without it, the two tests (and the vector
+search) fail with `UndefinedColumnError: column "content_vector" ... does not
+exist`. The columns are nullable and are refilled by the backfill, so
+re-adding them is safe:
+
+```sql
+ALTER TABLE content_chunk ADD COLUMN IF NOT EXISTS content_vector vector(384);
+ALTER TABLE agent_memory  ADD COLUMN IF NOT EXISTS content_vector vector(384);
+```
+
+Leftover test schemas (`rls_*`, `novec_*`, … from killed runs) are harmless
+since the column probe follows `search_path`. You can list them with
+`\dn` in `psql` and remove them with `DROP SCHEMA <name> CASCADE`.
+If in doubt, drop and recreate the dev database, then run `uv run who2be-migrate`.
+
 `scripts/ci/assert_skips_within_budget.py` is the second line of defence: it
 reads the JUnit XML and fails when tests were skipped for infrastructure
 reasons (budget: **0** — in CI the database is a service container, so a skip
