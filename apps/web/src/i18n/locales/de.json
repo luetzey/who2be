@@ -2831,5 +2831,103 @@
         }
       }
     }
+  },
+  "learning": {
+    "testCases": {
+      "title": "Prüffälle",
+      "titleFor": "Prüffälle · {{subject}}",
+      "summaryAgent_one": "{{count}} Prüffall · läuft bei jeder neuen Version dieses Agenten mit.",
+      "summaryAgent_other": "{{count}} Prüffälle · laufen bei jeder neuen Version dieses Agenten mit.",
+      "summaryEntity_one": "{{count}} Prüffall · läuft bei jeder neuen Version dieses Elements mit.",
+      "summaryEntity_other": "{{count}} Prüffälle · laufen bei jeder neuen Version dieses Elements mit.",
+      "create": "Prüffall anlegen",
+      "supersede": "Neue Fassung anlegen",
+      "empty": {
+        "title": "Noch keine Prüffälle",
+        "body": "Prüffälle halten fest, was dieser Agent können muss. Jede neue Version wird gegen alle geprüft – so fällt auf, wenn eine Korrektur anderswo etwas kaputt macht."
+      },
+      "forbidden": {
+        "title": "Keine Berechtigung",
+        "body": "Dafür fehlen dir die Rechte (ab Rolle {{role}}).",
+        "role": "Editor"
+      },
+      "group": {
+        "agent": "Für Agent {{name}}",
+        "agentItself": "Direkt am Agenten",
+        "entity": "{{type}} {{id}}"
+      },
+      "entityType": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "system_prompt_template": "System-Prompt",
+        "external_tool": "Externes Tool"
+      },
+      "status": {
+        "active": "Aktiv",
+        "retired": "Archiviert"
+      },
+      "checkKind": {
+        "human_rule": "Mensch bewertet",
+        "must_contain": "Enthält",
+        "must_not_contain": "Enthält nicht"
+      },
+      "row": {
+        "expected": "Erwartet:",
+        "meta": "Prüfart: {{checkKind}} · angelegt {{date}}",
+        "byAgent": "vom Builder angelegt",
+        "revision": "neue Fassung",
+        "fromCase": "aus Fall {{id}}",
+        "actions": "Aktionen für Prüffall „{{title}}“"
+      },
+      "retired": {
+        "show_one": "{{count}} archivierten Prüffall anzeigen",
+        "show_other": "{{count}} archivierte Prüffälle anzeigen",
+        "hide": "Archivierte ausblenden"
+      },
+      "retire": {
+        "action": "Archivieren",
+        "title": "Prüffall archivieren?",
+        "question": "Archivierte Prüffälle laufen nicht mehr mit. Gilt dieser Fall wirklich nicht mehr?",
+        "confirm": "Archivieren",
+        "success": "Prüffall archiviert.",
+        "error": "Archivieren fehlgeschlagen."
+      },
+      "form": {
+        "titleCreate": "Prüffall anlegen",
+        "titleSupersede": "Neue Fassung anlegen",
+        "description": "Ein Prüffall ist eine Eingabe plus das erwartete Verhalten. Er lässt sich später nicht mehr ändern, nur durch eine neue Fassung ersetzen.",
+        "descriptionSupersede": "Die neue Fassung ersetzt „{{title}}“. Die bisherige Fassung wird archiviert und läuft nicht mehr mit.",
+        "submitCreate": "Prüffall anlegen",
+        "submitSupersede": "Neue Fassung anlegen",
+        "fields": {
+          "agent": "Gilt für Agent",
+          "agentPlaceholder": "Agent wählen …",
+          "title": "Kurzname",
+          "input": "Eingabe",
+          "expected": "Erwartetes Verhalten",
+          "checkKind": "Wie wird geprüft?",
+          "pattern": "Gesuchter Text"
+        },
+        "help": {
+          "agent": "Für welchen Agenten läuft der Prüffall?",
+          "title": "Woran erkennst du den Prüffall in einer Liste?",
+          "input": "Was bekommt der Agent? Möglichst wörtlich aus dem echten Fall.",
+          "expected": "Woran erkennt man, dass es richtig war? Eine prüfbare Aussage.",
+          "checkKind": "„Mensch bewertet“: ein Mensch sieht sich die Antwort an. „Enthält“ / „Enthält nicht“: die Antwort wird auf einen Text geprüft.",
+          "pattern": "Dieser Text muss in der Antwort vorkommen bzw. darf nicht vorkommen."
+        },
+        "validation": {
+          "required": "Pflichtfeld.",
+          "tooLong": "Höchstens {{max}} Zeichen.",
+          "agentRequired": "Bitte einen Agenten wählen."
+        },
+        "toast": {
+          "created": "Prüffall angelegt.",
+          "superseded": "Neue Fassung angelegt, die bisherige ist archiviert.",
+          "error": "Speichern fehlgeschlagen."
+        }
+      }
+    }
   }
 }

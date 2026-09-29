@@ -13,7 +13,6 @@
   "common.actions.delete",
   "common.actions.filter",
   "common.actions.reset",
-  "common.actions.retry",
   "common.actions.saving",
   "common.actions.search",
   "common.actions.submit",
