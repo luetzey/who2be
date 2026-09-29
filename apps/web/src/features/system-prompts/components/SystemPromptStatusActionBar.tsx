@@ -6,7 +6,7 @@ import { useApi } from '@/api/useApi'
 import { useNeedsMfaForPublish } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Button } from '@/components/ui/button'
-import { MfaPublishNotice } from '@/components/version/StatusActionBar'
+import { MfaPublishNotice, ViewChangesLink } from '@/components/version/StatusActionBar'
 import { notify } from '@/lib/feedback'
 
 interface SystemPromptStatusActionBarProps {
@@ -14,6 +14,10 @@ interface SystemPromptStatusActionBarProps {
   version: number
   status: VersionStatus
   onTransitioned: () => void
+  // Audit E1 = A: im Status „In review" verlinkt die Leiste den Diff dieser
+  // Version (`?tab=versions&diff=<n>`, gleicher Pfad) — wie die zentrale
+  // `StatusActionBar`. Ohne Wert entfaellt der Link.
+  diffVersion?: number
 }
 
 /**
@@ -26,6 +30,7 @@ export function SystemPromptStatusActionBar({
   version,
   status,
   onTransitioned,
+  diffVersion,
 }: SystemPromptStatusActionBarProps) {
   const { t } = useTranslation('systemPrompts')
   const api = useApi()
@@ -91,6 +96,7 @@ export function SystemPromptStatusActionBar({
         >
           {t('statusBar.backToDraft')}
         </Button>
+        {diffVersion !== undefined ? <ViewChangesLink version={diffVersion} /> : null}
       </div>
     )
   }

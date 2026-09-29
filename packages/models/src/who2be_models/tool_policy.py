@@ -76,6 +76,13 @@ class AgentCapability(StrEnum):
     # Knowledge-Base-Kanten anlegen (getrennt von `kb_write`: Kanten sind im
     # MVP nicht loeschbar — eigene, bewusst vergebene Capability, ADR-0047).
     kb_edge_write = "kb_edge_write"
+    # Prueffall-Ergebnisse melden (Lernschleife, ADR-0053 Abschnitt 3.8).
+    # Default an — analog `feedback_write`: eine Meldung ist append-only und
+    # der Zweck der Pruefschleife.
+    test_report = "test_report"
+    # Faelle aller Agenten lesen/triagieren und Prueffaelle anlegen (ADR-0053
+    # Abschnitt 3.8). Default aus, im Builder-Seed an — Kurations-Macht.
+    case_triage = "case_triage"
 
 
 _TRANSITION_DOMAINS = ("persona", "playbook", "resource", "external_tool")
@@ -191,6 +198,17 @@ class AgentToolPolicy(BaseModel):
     # Knowledge-Base-Kanten anlegen (ADR-0047). Default aus (secure by default);
     # getrennt von `kb_write`, da Kanten im MVP nicht loeschbar sind.
     kb_edge_write: bool = False
+    # Prueffall-Ergebnisse melden (ADR-0053 Abschnitt 3.8). Default True,
+    # abweichend vom secure-by-default-Writes-Prinzip und aus demselben Grund
+    # wie `feedback_write`: ein Ergebnis zu melden ist append-only und risikoarm,
+    # und ohne Meldungen laeuft die Pruefschleife leer. JSONB-abwaertskompatibel:
+    # Bestands-Policies ohne das Feld erben True.
+    test_report: bool = True
+    # Faelle aller Agenten lesen, zuordnen, triagieren und Prueffaelle anlegen
+    # (ADR-0053 Abschnitt 3.8). Default aus (secure by default) — das ist
+    # Kurations-Arbeit ueber fremde Agenten hinweg; der Builder-Seed schaltet
+    # sie an. Unabhaengig von `feedback_resolve` (Alt-Triage bleibt bestehen).
+    case_triage: bool = False
     # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
     # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource/
     # external_tool (WP-3).
@@ -307,6 +325,8 @@ class AgentToolPolicy(BaseModel):
             "workarea_write",
             "kb_write",
             "kb_edge_write",
+            "test_report",
+            "case_triage",
         )
         if not all(not getattr(self, name) or getattr(other, name) for name in bool_fields):
             return False

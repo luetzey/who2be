@@ -1,5 +1,6 @@
-import { ArrowLeft, type LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ArrowLeft, Ellipsis, type LucideIcon } from 'lucide-react'
+import { useId, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,15 @@ interface DetailHeaderProps {
   description?: string
   /** Rechter Action-Slot (z. B. „Duplizieren"). */
   actions?: ReactNode
+  /**
+   * Audit A13 / Issue #624 (Owner-Entscheidung C): unterhalb `md` liegen die
+   * Aktionen hinter einem „Mehr"-Knopf neben dem Titel, damit Statusleiste
+   * und erster Inhalt im ersten Viewport stehen. Nur fuer reine
+   * Sekundaeraktionen (Feedback, Duplizieren, Export) setzen — traegt der
+   * Slot die primaere Aktion der Seite (Agent: „Copy"), bleibt er offen.
+   * Ab `md` wirkt der Prop nicht.
+   */
+  collapseActionsBelowMd?: boolean
   className?: string
 }
 
@@ -39,8 +49,14 @@ export function DetailHeader({
   badges,
   description,
   actions,
+  collapseActionsBelowMd = false,
   className,
 }: DetailHeaderProps) {
+  const { t } = useTranslation('common')
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const actionsId = useId()
+  const collapsible = collapseActionsBelowMd && Boolean(actions)
+
   return (
     <div className={cn('flex flex-col gap-4', className)}>
       {backHref !== undefined ? (
@@ -53,7 +69,13 @@ export function DetailHeader({
       ) : null}
 
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-4">
+        {/* `flex-1` (Basis 0) haelt den „Mehr"-Knopf auf dem Phone in der
+            Titelzeile, statt ihn bei langem Titel in eine eigene Zeile zu
+            umbrechen. Ab `md` gilt wieder `flex-initial` (Basis auto): sonst
+            teilt sich der Titel die Zeile mit den offenen Aktionen und wird
+            auf Tablet-Breite auf einen Buchstaben je Zeile gequetscht (CI,
+            tablet-ipad-gen-7). Ohne Einklappen bleibt alles wie bisher. */}
+        <div className={cn('flex min-w-0 gap-4', collapsible && 'flex-1 md:flex-initial')}>
           <EntityIcon icon={icon} tone={iconTone} size="lg" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -65,7 +87,35 @@ export function DetailHeader({
             ) : null}
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {collapsible ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="shrink-0 md:hidden"
+            aria-label={t('actions.more')}
+            aria-expanded={actionsOpen}
+            aria-controls={actionsId}
+            data-testid="detail-header-more"
+            onClick={() => setActionsOpen((open) => !open)}
+          >
+            <Ellipsis aria-hidden="true" />
+          </Button>
+        ) : null}
+        {actions ? (
+          <div
+            id={actionsId}
+            className={cn(
+              'flex-wrap items-center gap-2',
+              // Mobile-first (§4.4): Basis ist der Phone-Fall — eingeklappt
+              // `hidden`, aufgeklappt eigene volle Zeile; `md:flex` schaltet
+              // die Aktionen ab Tablet immer ein.
+              collapsible ? cn(actionsOpen ? 'flex w-full' : 'hidden', 'md:flex md:w-auto') : 'flex',
+            )}
+          >
+            {actions}
+          </div>
+        ) : null}
       </header>
     </div>
   )

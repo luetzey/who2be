@@ -223,7 +223,11 @@
       "tools": "Externe Tools",
       "feedback": "Feedback",
       "settings": "Einstellungen",
-      "workarea": "Arbeitsbereich"
+      "workarea": "Arbeitsbereich",
+      "groups": {
+        "buildingBlocks": "Bausteine",
+        "operations": "Betrieb"
+      }
     },
     "signOut": "Abmelden",
     "language": {

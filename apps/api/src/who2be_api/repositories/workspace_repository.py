@@ -468,7 +468,11 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # der rendert policy-gefiltert — mit den Capabilities erscheinen die
 # Schreib-Tools automatisch im System-Prompt. Der Bump ist trotzdem noetig:
 # ohne ihn zieht der Sync-Zweig (8) die neue Policy nie auf Bestands-Builder.
-BUILDER_CONTENT_VERSION = 15
+# v16: Lernschleife (ADR-0053 Abschnitt 3.8) — `case_triage` in der
+# Builder-Policy (Default aus, fuer den Meta-Agenten an); `test_report` kommt
+# ueber den Pydantic-Default True mit. Rein policy-seitig wie v15; der Bump
+# verteilt die Capability per Sync-Zweig (8) auf Bestands-Builder.
+BUILDER_CONTENT_VERSION = 16
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
@@ -563,6 +567,11 @@ def _builder_tool_policy() -> dict[str, object]:
     ueber die Web-UI verteilbar. Die Kanten sind bewusst mit dabei: eine
     Aussage ohne ihre Belegkante ist im MVP eine Sackgasse (Kanten sind nicht
     loeschbar — die Verantwortung dafuer traegt der Meta-Agent).
+
+    `case_triage` (Content-Stand 16, ADR-0053 Abschnitt 3.8): Faelle aller
+    Agenten triagieren und Prueffaelle anlegen ist Kurations-Arbeit des
+    Meta-Agenten; ueber `is_within` kann er sie zudem gezielt weitergeben.
+    `test_report` bleibt beim Default True und steht deshalb nicht explizit hier.
     """
     return AgentToolPolicy(
         playbook_read=ReadScope.all,
@@ -579,6 +588,7 @@ def _builder_tool_policy() -> dict[str, object]:
         workarea_write=True,
         kb_write=True,
         kb_edge_write=True,
+        case_triage=True,
         memory_mode=MemoryMode.suggest,
         memory_directive=MemoryDirective.recommended,
     ).model_dump(mode="json")

@@ -88,3 +88,51 @@ class TestWorkAreaKbAntiEscalation:
     def test_equal_policies_are_within(self) -> None:
         policy = AgentToolPolicy(workarea_write=True, kb_write=True, kb_edge_write=True)
         assert policy.is_within(policy) is True
+
+
+class TestLernschleifeCapabilities:
+    """`test_report`/`case_triage` (ADR-0053 Abschnitt 3.8, Lernschleife B1b)."""
+
+    def test_defaults(self) -> None:
+        # `test_report` an (Meldung ist append-only, Muster `feedback_write`),
+        # `case_triage` aus (Kurations-Macht ueber fremde Agenten).
+        policy = AgentToolPolicy()
+        assert policy.test_report is True
+        assert policy.case_triage is False
+        assert policy.allows(AgentCapability.test_report) is True
+        assert policy.allows(AgentCapability.case_triage) is False
+
+    def test_empty_json_is_backward_compatible(self) -> None:
+        # Bestands-JSONB ohne die Keys: keine Migration noetig.
+        policy = AgentToolPolicy.model_validate({})
+        assert policy.test_report is True
+        assert policy.case_triage is False
+        assert policy == AgentToolPolicy()
+
+    def test_granted_capabilities_follow_the_fields(self) -> None:
+        default_caps = AgentToolPolicy().granted_capabilities()
+        assert AgentCapability.test_report in default_caps
+        assert AgentCapability.case_triage not in default_caps
+        opted = AgentToolPolicy(test_report=False, case_triage=True).granted_capabilities()
+        assert AgentCapability.test_report not in opted
+        assert AgentCapability.case_triage in opted
+
+    def test_test_report_escalation_blocked(self) -> None:
+        # Ein Verwalter, dem der Owner `test_report` entzogen hat, darf es
+        # keinem anderen Agenten geben — auch nicht ueber den Default True.
+        manager = AgentToolPolicy(test_report=False)
+        assert AgentToolPolicy().is_within(manager) is False
+        assert AgentToolPolicy(test_report=False).is_within(manager) is True
+
+    def test_case_triage_escalation_blocked(self) -> None:
+        broad = AgentToolPolicy(case_triage=True)
+        narrow = AgentToolPolicy()
+        assert broad.is_within(narrow) is False
+        assert narrow.is_within(broad) is True
+
+    def test_case_triage_is_not_implied_by_feedback_resolve(self) -> None:
+        # Getrennte Rechte: die Alt-Triage bleibt eigenstaendig (ADR-0053 3.8).
+        triage = AgentToolPolicy(case_triage=True)
+        resolve = AgentToolPolicy(feedback_resolve=True)
+        assert triage.is_within(resolve) is False
+        assert resolve.is_within(triage) is False

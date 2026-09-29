@@ -1838,6 +1838,8 @@ class TestToolsOverviewSSoTParity:
             "workarea_write": True,
             "kb_write": True,
             "kb_edge_write": True,
+            "test_report": True,
+            "case_triage": True,
             "memory_mode": MemoryMode.auto,
         }
         # Jedes Sichtbarkeits-Feld ist gesetzt (die uebrigen steuern keine

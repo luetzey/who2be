@@ -223,7 +223,11 @@
       "tools": "External tools",
       "feedback": "Feedback",
       "settings": "Settings",
-      "workarea": "Work area"
+      "workarea": "Work area",
+      "groups": {
+        "buildingBlocks": "Building blocks",
+        "operations": "Operations"
+      }
     },
     "signOut": "Sign out",
     "language": {
