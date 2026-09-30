@@ -953,7 +953,7 @@ describe('ResourceDetailPage — Deep-Link in die Pruefansicht', () => {
   it('Statusleiste im Review: ein Klick oeffnet den Versions-Tab mit Diff', async () => {
     const fetchMock = renderDetailPage(reviewHandlers(), { me: meWithRole('admin') })
 
-    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    const link = await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(link).toHaveAttribute('href', '/w/ws-1/resources/r1?tab=versions&diff=3')
     expect(diffCalls(fetchMock)).toBe(0)
 
@@ -974,5 +974,48 @@ describe('ResourceDetailPage — Deep-Link in die Pruefansicht', () => {
 
     expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
     expect(diffCalls(fetchMock)).toBe(1)
+  })
+})
+
+// Lernschleife B5-Web C (Spec S11): der Versions-Tab klappt die Review-
+// Version auf und laedt deren Pruefbericht ueber Elementart + Versions-UUID.
+// Resources haben keinen Tab „Prüffälle“ — der Leerzustand bleibt ohne Link.
+describe('ResourceDetailPage — Pruefbericht im Versions-Tab (S11)', () => {
+  const REVIEW_ID = 'cccccccc-0000-4000-8000-000000000003'
+  const REPORT_PATH = `${WS_PREFIX}/versions/resource/${REVIEW_ID}/test-report`
+
+  it('der Diff der Review-Version laedt den Bericht mit resource und UUID', async () => {
+    const base = detailHandlers({
+      resource: resourceWith({ current_version: 3, current_status: 'review' }),
+      versions: [{ ...version(3, 'review'), id: REVIEW_ID }, { ...version(2, 'active'), id: 'v2' }],
+    })
+    const reportCalls: string[] = []
+    renderDetailPage(
+      (path, method, init) => {
+        if (method === 'GET' && path === `${WS_PREFIX}/resources/r1/versions/3/diff`) {
+          return jsonResponse({ version: 3, against: 'active', against_version: 2, identical: true, changes: [] })
+        }
+        if (method === 'GET' && path.endsWith('/test-report')) {
+          reportCalls.push(path)
+          return jsonResponse({
+            entity_type: 'resource',
+            entity_id: 'r1',
+            version_id: REVIEW_ID,
+            affected_agent_count: 0,
+            scope_note: null,
+            counts: { total: 0, passed: 0, failed: 0, error: 0, missing: 0 },
+            agents: [],
+          })
+        }
+        return base(path, method, init)
+      },
+      { me: meWithRole('editor'), entry: '/w/ws-1/resources/r1?tab=versions' },
+    )
+
+    expect(
+      await screen.findByText(/Für dieses Element gibt es keine Prüffälle/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Prüffall anlegen' })).not.toBeInTheDocument()
+    expect(reportCalls).toEqual([REPORT_PATH])
   })
 })

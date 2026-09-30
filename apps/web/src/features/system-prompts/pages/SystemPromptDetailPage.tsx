@@ -40,6 +40,11 @@ export function SystemPromptDetailPage() {
   // Vom System verwaltet (Builder-Template): Editor read-only, keine Status-
   // Aktionen (Backend sperrt mit 403 managed_aggregate).
   const locked = template?.is_managed === true
+  // UUID der Review-Version fuer den Pruefbericht (Spec S11) — die Leiste
+  // aktiviert immer `current_version`.
+  const reviewVersionId = versions.find(
+    (v) => v.version === template?.current_version && v.status === 'review',
+  )?.id
 
   if (id === undefined) {
     return <Navigate to={wsPath('/system-prompts')} replace />
@@ -106,6 +111,8 @@ export function SystemPromptDetailPage() {
                     status={template.current_status}
                     onTransitioned={reload}
                     diffVersion={template.current_version}
+                    testReportEntityType="system_prompt_template"
+                    versionId={reviewVersionId}
                   />
                 }
               />
@@ -157,7 +164,13 @@ export function SystemPromptDetailPage() {
                   loadProvenance={(version) =>
                     api.provenanceSystemPromptTemplateVersion(template.id, version)
                   }
-                  initialDiffVersion={diffVersion}
+                  // Spec S11: Review-Version beim Oeffnen des Tabs aufgeklappt.
+                  initialDiffVersion={
+                    diffVersion ??
+                    (template.current_status === 'review' ? template.current_version : undefined)
+                  }
+                  testReportEntityType="system_prompt_template"
+                  testCasesSearch={`?tab=${TESTS_TAB}`}
                 />
               </TabsContent>
 

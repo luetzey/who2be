@@ -196,12 +196,15 @@ export function PlaybookDetailPage() {
                             status={promotableVersion.status ?? 'draft'}
                             labels={branchLabels}
                             diffVersion={promotableVersion.version}
-                            onTransition={async (to) => {
+                            testReportEntityType="playbook"
+                            versionId={promotableVersion.id}
+                            onTransition={async (to, options) => {
                               await autoSave.flush()
                               return api.transitionPlaybookVersion(
                                 playbook.id,
                                 promotableVersion.version,
                                 to,
+                                options,
                               )
                             }}
                             onTransitioned={reload}
@@ -395,7 +398,15 @@ export function PlaybookDetailPage() {
                   loadProvenance={(version) =>
                     api.provenancePlaybookVersion(playbook.id, version)
                   }
-                  initialDiffVersion={diffVersion}
+                  // Spec S11: die Review-Version ist beim Oeffnen des Tabs
+                  // aufgeklappt. Alle Panels bleiben gemountet — daher nur im
+                  // aktiven Versions-Tab, sonst laedt der Diff unsichtbar.
+                  initialDiffVersion={
+                    diffVersion ??
+                    (activeTab === 'versions' ? reviewVersion?.version : undefined)
+                  }
+                  testReportEntityType="playbook"
+                  testCasesSearch={`?tab=${TESTS_TAB}`}
                 />
               </div>
 

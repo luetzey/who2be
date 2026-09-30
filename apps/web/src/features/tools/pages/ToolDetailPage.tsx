@@ -164,11 +164,14 @@ export function ToolDetailPage() {
                         actions={
                           <StatusActionBar
                             status={status}
-                            onTransition={(to) =>
+                            testReportEntityType="external_tool"
+                            versionId={promotableVersion.id}
+                            onTransition={(to, options) =>
                               api.transitionExternalToolVersion(
                                 tool.id,
                                 promotableVersion.version,
                                 to,
+                                options,
                               )
                             }
                             onTransitioned={reload}
@@ -290,6 +293,10 @@ export function ToolDetailPage() {
                   loadProvenance={(version) =>
                     api.provenanceExternalToolVersion(tool.id, version)
                   }
+                  // Tools haben keinen Diff-Endpoint (WP-4): das Pruefall-Panel
+                  // erscheint erst mit einem Diff. Der Pruefbericht wirkt hier
+                  // ueber den Aktivierungsdialog der Statusleiste.
+                  testReportEntityType="external_tool"
                 />
               </TabsContent>
             </Tabs>

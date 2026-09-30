@@ -184,12 +184,15 @@ export function PersonaDetailPage() {
                             status={promotableVersion.status ?? 'draft'}
                             labels={branchLabels}
                             diffVersion={promotableVersion.version}
-                            onTransition={async (to) => {
+                            testReportEntityType="persona"
+                            versionId={promotableVersion.id}
+                            onTransition={async (to, options) => {
                               await autoSave.flush()
                               return api.transitionPersonaVersion(
                                 persona.id,
                                 promotableVersion.version,
                                 to,
+                                options,
                               )
                             }}
                             onTransitioned={reload}
@@ -337,7 +340,11 @@ export function PersonaDetailPage() {
                         loadProvenance={(version) =>
                           api.provenancePersonaVersion(persona.id, version)
                         }
-                        initialDiffVersion={diffVersion}
+                        // Spec S11: die Review-Version ist beim Oeffnen des
+                        // Tabs aufgeklappt, ein expliziter `?diff=` gewinnt.
+                        initialDiffVersion={diffVersion ?? reviewVersion?.version}
+                        testReportEntityType="persona"
+                        testCasesSearch={`?tab=${TESTS_TAB}`}
                       />
                     </TabsContent>
 

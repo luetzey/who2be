@@ -75,6 +75,18 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 })
 }
 
+function emptyReport(versionId: string) {
+  return {
+    entity_type: 'system_prompt_template',
+    entity_id: 'sp1',
+    version_id: versionId,
+    affected_agent_count: 0,
+    scope_note: null,
+    counts: { total: 0, passed: 0, failed: 0, error: 0, missing: 0 },
+    agents: [],
+  }
+}
+
 function stubFetchRoutes(handlers: Record<string, () => Response>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
@@ -197,12 +209,18 @@ describe('SystemPromptDetailPage', () => {
         transitionCalls.push(true)
         return jsonResponse(version('active'))
       },
+      // Spec S11: ohne Pruefaelle bleibt Aktivieren ein Klick.
+      [`GET ${WS_PREFIX}/versions/system_prompt_template/v1/test-report`]: () =>
+        jsonResponse(emptyReport('v1')),
     })
 
     renderPage(meAdmin)
 
-    const activate = await screen.findByRole('button', { name: 'Aktivieren' })
-    expect(activate).toBeEnabled()
+    // Die Leiste laedt zuerst den Pruefbericht (Knopf im Ladezustand gesperrt).
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
+    })
+    const activate = screen.getByRole('button', { name: 'Aktivieren' })
     expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeInTheDocument()
 
     fireEvent.click(activate)
@@ -289,7 +307,7 @@ describe('SystemPromptDetailPage — Deep-Link in die Pruefansicht (E1 = A)', ()
     stubReview()
     renderPage(meAdmin)
 
-    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    const link = await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.click(link)
@@ -303,7 +321,7 @@ describe('SystemPromptDetailPage — Deep-Link in die Pruefansicht (E1 = A)', ()
 
     renderPage(meAdmin, '/w/ws-1/system-prompts/sp1?tab=evil&diff=2')
 
-    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute('aria-selected', 'true')
     expect(diffCalls).toEqual([])
   })
@@ -344,5 +362,55 @@ describe('SystemPromptDetailPage — Umbruch bei 320px (#566)', () => {
     const trigger = await screen.findByTestId('placeholder-help-trigger')
     const row = trigger.parentElement
     expect(row?.className.split(/\s+/)).toContain('flex-wrap')
+  })
+})
+
+// Lernschleife B5-Web C (Spec S11): der Versions-Tab klappt die Review-
+// Version auf und laedt deren Pruefbericht ueber Elementart + Versions-UUID;
+// die Review-Leiste nutzt dieselbe UUID fuer den Aktivierungsdialog.
+describe('SystemPromptDetailPage — Pruefbericht im Versions-Tab (S11)', () => {
+  const REVIEW_ID = 'eeeeeeee-0000-4000-8000-000000000002'
+  const REPORT_PATH = `${WS_PREFIX}/versions/system_prompt_template/${REVIEW_ID}/test-report`
+
+  function stubS11(reportCalls: string[]) {
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/system-prompts/sp1`]: () =>
+        jsonResponse(template({ current_status: 'review', current_version: 2 })),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions`]: () =>
+        jsonResponse([
+          { ...version('review'), id: REVIEW_ID, version: 2 },
+          { ...version('active'), id: 'v1', version: 1 },
+        ]),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions/2/diff`]: () =>
+        jsonResponse({ version: 2, against: 'active', against_version: 1, identical: true, changes: [] }),
+      [`GET ${REPORT_PATH}`]: () => {
+        reportCalls.push(REPORT_PATH)
+        return jsonResponse(emptyReport(REVIEW_ID))
+      },
+    })
+  }
+
+  it('der Diff der Review-Version laedt den Bericht mit system_prompt_template und UUID', async () => {
+    const reportCalls: string[] = []
+    stubS11(reportCalls)
+
+    // Nicht-Admin: die Leiste laedt keinen Bericht, der Request kommt vom Diff.
+    renderPage(me, '/w/ws-1/system-prompts/sp1?tab=versions')
+
+    const create = await screen.findByRole('link', { name: 'Prüffall anlegen' })
+    expect(create).toHaveAttribute('href', '/w/ws-1/system-prompts/sp1?tab=tests')
+    expect(reportCalls).toEqual([REPORT_PATH])
+  })
+
+  it('Admin: die Review-Leiste laedt den Bericht derselben Version', async () => {
+    const reportCalls: string[] = []
+    stubS11(reportCalls)
+
+    renderPage(meAdmin)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
+    })
+    expect(reportCalls).toEqual([REPORT_PATH])
   })
 })
