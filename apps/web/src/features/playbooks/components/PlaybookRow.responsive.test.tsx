@@ -10,7 +10,7 @@
 // unterhalb `md`, NICHT Streichen von `shrink-0` — die Klasse schuetzt die
 // Badges vor dem Zerquetschen und bleibt deshalb stehen.
 
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, isInaccessible, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
@@ -126,16 +126,18 @@ describe('PlaybookRow — Responsive', () => {
     expect(summary.className).toContain('min-w-24')
   })
 
-  it('haelt shrink-0 an der Meta-Spalte und legt sie unterhalb md quer', () => {
+  it('haelt shrink-0 an der Meta-Spalte und zeigt sie erst ab md', () => {
     renderRow()
 
     const tags = screen.getByLabelText('Tags')
     const metaColumn = tags.parentElement
+    const classes = metaColumn?.className.split(/\s+/) ?? []
     // shrink-0 bleibt bewusst stehen (#573 Weiche 3).
-    expect(metaColumn?.className).toContain('shrink-0')
-    expect(metaColumn?.className).toContain('w-full')
-    expect(metaColumn?.className).toContain('md:w-auto')
-    expect(metaColumn?.className).toContain('md:flex-col')
+    expect(classes).toContain('shrink-0')
+    // Owner-Entscheidung W6=b: unter md faellt die Spalte ganz weg.
+    expect(classes).toContain('hidden')
+    expect(classes).toContain('md:flex')
+    expect(classes).toContain('flex-col')
   })
 
   it('deckelt die Meta-Spalte ab md, damit viele Tags die Textspalte nicht verdraengen', () => {
@@ -182,5 +184,68 @@ describe('PlaybookRow — Responsive', () => {
     })
     expect(childLink.className).toContain('min-h-10')
     expect(childLink.className).toContain('md:min-h-0')
+  })
+})
+
+// Owner-Entscheidung W6=b (t_1c5a1a34): unter `md` zeigt die Zeile nur Name,
+// Status und Beschreibung. Geprueft wird der Accessibility-Tree, nicht nur die
+// Klasse — ein nur visuell verstecktes Element (`sr-only`, `opacity-0`) liesse
+// den Screenreader auf dem Telefon weiter zwoelf Tags vorlesen.
+//
+// jsdom rechnet keine Media-Queries. Das Stylesheet spielt deshalb die
+// Tailwind-Kaskade je Breakpoint nach: `hidden` gilt immer, `md:flex` nur ab md
+// (im gebauten CSS steht `md:flex` im @media-Block nach `hidden`).
+describe('PlaybookRow — Trigger und Tags unter md (W6=b)', () => {
+  const BELOW_MD = '.hidden { display: none; }'
+  const FROM_MD = `${BELOW_MD} .md\\:flex { display: flex; }`
+
+  function withCascade(css: string) {
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.append(style)
+    return () => style.remove()
+  }
+
+  const manyTags = () =>
+    playbook({
+      tags: Array.from({ length: 12 }, (_, i) => `tag-${i + 1}`),
+      triggers: 'Wenn ein Gespraech vorbereitet werden soll',
+    })
+
+  it('nimmt Trigger-Liste und Tag-Gruppe unter md aus dem Accessibility-Tree', () => {
+    const cleanup = withCascade(BELOW_MD)
+    try {
+      renderRow(manyTags())
+
+      expect(screen.queryByRole('list', { name: 'Trigger-Liste' })).not.toBeInTheDocument()
+      expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+      // Die Tag-Gruppe hat keine Rolle; `isInaccessible` ist dieselbe Pruefung,
+      // mit der Testing Library Elemente aus dem Accessibility-Tree ausschliesst.
+      expect(isInaccessible(screen.getByLabelText('Tags'))).toBe(true)
+      expect(isInaccessible(screen.getByText('tag-1'))).toBe(true)
+      // Name, Status und Beschreibung bleiben.
+      expect(screen.getByRole('link', { name: /Onboarding/ })).toBeVisible()
+      expect(screen.getByText(/Aktiv · v3/)).toBeVisible()
+      expect(screen.getByText('Schritt-fuer-Schritt-Ablauf fuer den ersten Arbeitstag.')).toBeVisible()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('zeigt Trigger-Liste und Tag-Gruppe ab md', () => {
+    const cleanup = withCascade(FROM_MD)
+    try {
+      renderRow(manyTags())
+
+      expect(screen.getByRole('list', { name: 'Trigger-Liste' })).toBeInTheDocument()
+      expect(screen.getByRole('listitem')).toHaveTextContent(
+        'Wenn ein Gespraech vorbereitet werden soll',
+      )
+      expect(isInaccessible(screen.getByLabelText('Tags'))).toBe(false)
+      expect(screen.getByText('tag-1')).toBeVisible()
+      expect(screen.getByText('tag-12')).toBeVisible()
+    } finally {
+      cleanup()
+    }
   })
 })
