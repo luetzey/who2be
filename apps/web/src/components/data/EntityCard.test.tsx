@@ -51,9 +51,11 @@ describe('EntityCard', () => {
         description="supercalifragilisticexpialidocious-mcp-server-produktion"
       />,
     )
+    // `wrap-anywhere` statt `break-words` (Mobil-Spec M1): senkt auch die
+    // min-content-Breite, gleiche Wahl wie am Titel-Link.
     expect(
       screen.getByText('supercalifragilisticexpialidocious-mcp-server-produktion'),
-    ).toHaveClass('break-words')
+    ).toHaveClass('wrap-anywhere')
   })
 
   it('rendert ohne Expander keinen Toggler', () => {

@@ -76,14 +76,19 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
     >
       {/* Icon-Kachel auf die geteilte `EntityIcon`-Geometrie (md: 44px,
           rounded-xl) angeglichen, damit Persona-/Playbook-/Resource-Karten
-          dieselbe Kachel teilen — der typ-spezifische Icon-Glyph bleibt. */}
-      <PlaybookTypeIcon type={playbook.type} className="size-11 rounded-xl" />
+          dieselbe Kachel teilen — der typ-spezifische Icon-Glyph bleibt.
+          Unter `md` sitzt eine kleine Kachel (32 px) in der Titelzeile, damit
+          die Textspalte die volle Kartenbreite nutzt (Mobil-Spec M3). */}
+      <PlaybookTypeIcon type={playbook.type} className="hidden size-11 rounded-xl md:flex" />
 
-      <div className="flex min-w-0 flex-1 basis-[calc(100%-3.75rem)] flex-col gap-1 md:basis-0">
+      <div className="flex min-w-0 flex-1 basis-full flex-col gap-1 md:basis-0">
         <div className="flex flex-wrap items-center gap-2">
+          <PlaybookTypeIcon type={playbook.type} className="size-8 rounded-md md:hidden" />
+          {/* Unter `md` nimmt der Name den Rest der Kachel-Zeile, Status und
+              Badges folgen darunter (sonst stuende die Kachel allein). */}
           <Link
             to={wsPath(`/playbooks/${playbook.id}`)}
-            className="rounded-sm text-sm font-semibold text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="min-w-0 basis-[calc(100%-2.5rem)] rounded-sm text-sm font-semibold wrap-anywhere text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:basis-auto"
           >
             {playbook.name}
           </Link>
@@ -98,8 +103,10 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
 
         {playbook.content.description !== '' ? (
           // `wrap-anywhere`: lange URL bricht um, statt die Liste zu
-          // verbreitern (Mobil-Spec M1).
-          <p className="text-sm wrap-anywhere text-muted-foreground">
+          // verbreitern (Mobil-Spec M1). Vorschau statt Volltext (M3, W3):
+          // 2 Zeilen unter `md`, 3 ab `md`, harte Kuerzung mit „…"; der
+          // Stretched-Link des Namens fuehrt zur Detailseite mit Volltext.
+          <p className="line-clamp-2 text-sm wrap-anywhere text-muted-foreground md:line-clamp-3">
             {playbook.content.description}
           </p>
         ) : null}
@@ -126,10 +133,13 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
             {visibleTriggers.map((trigger) => (
               // `min-w-0 wrap-anywhere`: ein Trigger mit langer URL bricht in
               // der Pille um, statt die Liste zu verbreitern (Mobil-Spec M1/M12).
+              // `max-w-[calc(100%-1.375rem)]`: die Pille passt neben den Blitz
+              // (14 px + 8 px Luecke), statt ihn allein in einer Zeile stehen
+              // zu lassen — gemessen 22 px pro Karte bei 320 px (Spec M3).
               <span
                 key={trigger}
                 role="listitem"
-                className="min-w-0 rounded-md bg-muted px-2 py-0.5 text-xs wrap-anywhere text-foreground"
+                className="max-w-[calc(100%-1.375rem)] min-w-0 rounded-md bg-muted px-2 py-0.5 text-xs wrap-anywhere text-foreground"
               >
                 {trigger}
               </span>
@@ -163,7 +173,9 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
               <span className="font-semibold">
                 {t('playbooks:list.subPlaybooksCount', { count: composeChildren.length })}
               </span>
-              <span className="min-w-0 truncate opacity-80">
+              {/* Namensliste erst ab `md` (Mobil-Spec M6): bei 320 px
+                  blieben ihr 17 px. Unter `md` nennt der Knopf die Anzahl. */}
+              <span className="hidden min-w-24 truncate opacity-80 md:inline">
                 {composeChildren.map((child) => child.name).join(' · ')}
               </span>
               <ChevronRight

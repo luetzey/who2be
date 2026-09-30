@@ -89,3 +89,68 @@ describe('EntityCard — Responsive (Primitive-Fund #570/A)', () => {
     expect(textColumn).toHaveClass('flex-1')
   })
 })
+
+// Mobil-Spec M3 / M6 (Paket P3). Gemessen bei 320 px: Textspalte 162 px,
+// eine Beschreibung 87 Zeilen = 3,06 Bildschirme fuer EINE Karte; die
+// Expander-Namensliste behielt 17–27 px. Klassen-/DOM-Vertrag; die
+// Layout-Zahlen stehen im PR (Chromium gegen das gebaute Stylesheet).
+describe('EntityCard — kompakte Listenkarte (Mobil-Spec M3/M6)', () => {
+  const LONG = 'Lange Beschreibung mit vielen Woertern. '.repeat(30).trim()
+
+  it('kuerzt die Beschreibung auf 2 Zeilen unter md und 3 ab md, ohne Mehr-Knopf', () => {
+    renderCard(
+      <EntityCard icon={Bot} iconTone="persona" title="Coach" href="/p/1" description={LONG} />,
+    )
+    const description = screen.getByText(LONG)
+    expect(description).toHaveClass('line-clamp-2', 'md:line-clamp-3')
+    // Volltext bleibt im DOM; der Tap-Weg dorthin ist der Stretched-Link.
+    expect(description.textContent).toBe(LONG)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Coach' })).toHaveClass('after:inset-0')
+  })
+
+  it('setzt die Kachel unter md klein in die Titelzeile, ab md gross links daneben', () => {
+    const { container } = renderCard(
+      <EntityCard icon={Bot} iconTone="persona" title="Coach" href="/p/1" description="kurz" />,
+    )
+    const article = container.querySelector('article')
+    const large = article?.firstElementChild
+    expect(large).toHaveClass('size-11', 'hidden', 'md:inline-flex')
+
+    const titleRow = screen.getByRole('link', { name: 'Coach' }).parentElement
+    const small = titleRow?.firstElementChild
+    expect(small).toHaveClass('size-8', 'md:hidden')
+    // Der Titel fuellt den Rest der Kachel-Zeile, statt unter die Kachel zu
+    // brechen (gemessen: sonst 40 px Leerzeile pro Karte bei 320 px).
+    expect(screen.getByRole('link', { name: 'Coach' })).toHaveClass(
+      'basis-[calc(100%-2.5rem)]',
+      'md:basis-auto',
+    )
+  })
+
+  it('zeigt auch den Avatar in beiden Groessen', () => {
+    renderCard(<EntityCard icon={Bot} iconTone="persona" avatar="CO" title="Coach" href="/p/1" />)
+    const tiles = screen.getAllByText('CO')
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]).toHaveClass('size-11', 'hidden', 'md:inline-flex')
+    expect(tiles[1]).toHaveClass('size-8', 'md:hidden')
+  })
+
+  it('blendet die Expander-Namensliste unter md aus; der Knopf nennt die Anzahl', () => {
+    renderCard(
+      <EntityCard
+        icon={Bot}
+        iconTone="resource"
+        title="Richtlinie"
+        href="/r/1"
+        expandLabel="14 Sub-Resources"
+        expandSummary="Erste · Zweite · Dritte"
+        expandable={<div>Liste</div>}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: /14 Sub-Resources/ })
+    const summary = screen.getByText('Erste · Zweite · Dritte')
+    expect(toggle).toContainElement(summary)
+    expect(summary).toHaveClass('hidden', 'md:inline', 'min-w-24')
+  })
+})
