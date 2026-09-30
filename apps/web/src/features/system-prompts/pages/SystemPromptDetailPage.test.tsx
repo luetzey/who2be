@@ -62,6 +62,7 @@ function template(overrides: Partial<SystemPromptTemplate> = {}): SystemPromptTe
 
 function version(status: VersionStatus): SystemPromptTemplateVersion {
   return {
+    id: 'v1',
     version: 1,
     status,
     content: { description: 'Beschreibung', body: '[]' },
