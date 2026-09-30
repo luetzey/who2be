@@ -201,7 +201,10 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="overflow-y-auto">
+            {/* `overscroll-contain`: Am Ende der Navigation laeuft der
+                Wisch nicht in die Seite dahinter weiter (Scroll-Chaining,
+                Mobil-Spec „Nav-Sheet“). */}
+            <SheetContent side="left" className="overflow-y-auto overscroll-contain">
               <SheetHeader>
                 <SheetTitle>{t('brand')}</SheetTitle>
                 <SheetDescription className="sr-only">

@@ -316,6 +316,118 @@ for (const mode of ['native', 'fallback'] as const) {
 }
 
 /**
+ * Mobil-Spec M11: Tabellen-Muster am Beispiel der Arbeitsbereich-Tabelle
+ * (8 Spalten, 988 px breit). Vorher bei 320 px: Scroll-Bereich 238 von
+ * 988 px, nicht fokussierbar, ohne Namen, erste Spalte scrollte mit weg,
+ * kein Hinweis.
+ *
+ * Geprueft auf jedem Profil, solange die Tabelle ueberlaeuft: der Bereich ist
+ * ein Tab-Stopp mit Namen (ACT 0ssw9k), `overscroll-behavior-x: contain`,
+ * die erste Spalte bleibt nach dem Scrollen am linken Rand, und der Hinweis
+ * erscheint genau unter `md`. Dazu das Navigations-Sheet: `overscroll-
+ * behavior: contain` (kein Scroll-Chaining in die Seite dahinter).
+ *
+ * Rot-Proben: `tabIndex` im Wrapper von `components/ui/table.tsx` entfernt →
+ * rot; `sticky` der ersten Spalte entfernt → rot (Spalte bei -120 px);
+ * `overscroll-contain` am Sheet in `AppShell.tsx` entfernt → rot unter `md`.
+ */
+test('M11: breite Tabelle ist fokussierbar, benannt, erste Spalte fixiert, Hinweis unter md', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const post = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  const area = await post<{ id: string }>('/work-areas', { name: 'E2E Tabellen-Area' })
+  const columns = ['kunde', 'region', 'produkt', 'status', 'kommentar'].map((name) => ({
+    name,
+    type: 'text',
+  }))
+  const table = await post<{ id: string }>(`/work-areas/${area.id}/tables`, {
+    name: 'auftraege',
+    schema: {
+      columns: [
+        { name: 'occurred_at', type: 'date', nullable: false },
+        ...columns,
+        { name: 'menge', type: 'integer' },
+        { name: 'umsatz', type: 'numeric' },
+      ],
+    },
+  })
+  await post(`/wa-tables/${table.id}/rows`, {
+    rows: Array.from({ length: 5 }, (_, i) => ({
+      occurred_at: `2026-09-0${i + 1}`,
+      kunde: `Kunde ${i + 1} GmbH`,
+      region: 'Nord',
+      produkt: 'Lizenzpaket Team',
+      status: 'offen',
+      kommentar: 'Rueckfrage zum Liefertermin',
+      menge: i + 1,
+      umsatz: (i + 1) * 99.9,
+    })),
+  })
+
+  const viewport = page.viewportSize()?.width ?? 0
+  const isPhone = viewport < 768
+  await page.goto(`/w/${workspaceId}/workarea/areas/${area.id}/tables/${table.id}`)
+  await expect(page.getByText('Kunde 1 GmbH')).toBeVisible()
+  await expectNoHorizontalScroll(page, 'workarea/tables/:id')
+
+  const preview = page.getByRole('table', { name: /^(Daten|Data)$/ })
+  const scroller = page.getByTestId('table-scroller').filter({ has: preview })
+  const overflowing = await scroller.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+  // Auf dem Desktop passt die Tabelle — dann gilt das Muster nicht, und es
+  // darf auch keinen zusaetzlichen Tab-Stopp geben.
+  if (!overflowing) {
+    await expect(scroller).not.toHaveAttribute('tabindex')
+    return
+  }
+
+  await expect(scroller).toHaveAttribute('tabindex', '0')
+  await expect(page.getByRole('region', { name: /^(Daten|Data)$/ })).toBeVisible()
+  expect(await scroller.evaluate((el) => getComputedStyle(el).overscrollBehaviorX)).toBe('contain')
+
+  const hint = page.getByText(/Seitlich wischen für weitere Spalten|Swipe sideways for more columns/)
+  if (isPhone) await expect(hint.first()).toBeVisible()
+  else await expect(hint.first()).toBeHidden()
+
+  // Mit dem Fokus auf dem Bereich scrollen die Pfeiltasten (ACT 0ssw9k).
+  await scroller.focus()
+  await expect(scroller).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(() => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+
+  // Nach dem Scrollen liegt die erste Spalte weiter am linken Rand.
+  await scroller.evaluate((el) => {
+    el.scrollLeft = 120
+  })
+  const offset = await scroller.evaluate((el) => {
+    const cell = el.querySelector('tbody tr > :first-child') as HTMLElement
+    return {
+      scrollLeft: el.scrollLeft,
+      left: Math.round(cell.getBoundingClientRect().left - el.getBoundingClientRect().left),
+    }
+  })
+  expect(offset.scrollLeft).toBeGreaterThan(0)
+  expect(offset.left, 'erste Spalte ist mitgescrollt statt fixiert').toBe(0)
+
+  // Navigations-Sheet (nur unter md sichtbar): kein Scroll-Chaining.
+  if (isPhone) {
+    await page.getByTestId('app-nav-open').click()
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+    expect(await sheet.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe('contain')
+  }
+})
+
+/**
  * Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ oeffnen
  * unterhalb `md` eine eigene Vollbildseite statt eines Dialogs; ab `md`
  * bleibt der Dialog. Geprueft auf jedem Profil, scharf auf `mobile-320`:

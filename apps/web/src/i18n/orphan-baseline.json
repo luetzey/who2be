@@ -26,7 +26,6 @@
   "common.fields.type",
   "common.fields.updatedAt",
   "common.list.shownOfTotal",
-  "common.table.scrollHint",
   "common.tabs.detailViewAria",
   "feedback.inbox.filter.status",
   "feedback.inbox.kpi.addressed",
