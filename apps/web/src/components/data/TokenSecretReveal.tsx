@@ -29,8 +29,11 @@ export function TokenSecretReveal({ token, onDismiss }: TokenSecretRevealProps) 
       <AlertDescription>
         <Stack gap="sm">
           <p>{t('reveal.body')}</p>
+          {/* Feste Hoehe (Mobil-Spec M5, Ausnahme): eine Geheimnis-Anzeige, kein
+              Eingabefeld — sie waechst nicht mit dem Inhalt. */}
           <Textarea
             readOnly
+            autoGrow={false}
             aria-label={t('reveal.ariaLabel')}
             value={token}
             rows={2}
