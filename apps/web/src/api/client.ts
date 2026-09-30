@@ -374,6 +374,24 @@ export function oauthConsentPreview(
   })
 }
 
+/**
+ * Optionale Zusatzfelder fuer `POST .../versions/{v}/transition`. Der Server
+ * (`VersionTransitionRequest`, `extra=forbid`) kennt genau `to`, `note`,
+ * `acknowledge_test_report` und `override_reason`. Die beiden letzten gehoeren
+ * zum Aktivierungsvertrag (ADR-0053 6.3): rote oder fehlende Pruefergebnisse
+ * verlangen beides, sonst 409 `test_results_incomplete` bzw.
+ * `test_override_reason_required`.
+ */
+export interface VersionTransitionOptions {
+  note?: string
+  acknowledge_test_report?: boolean
+  override_reason?: string
+}
+
+function transitionBody(to: VersionStatus, options?: VersionTransitionOptions): string {
+  return JSON.stringify({ to, ...options })
+}
+
 export interface Api {
   // `agent` filtert serverseitig auf die Persona des Agenten (WP-B).
   // `locale` filtert serverseitig auf die Element-Sprache (ADR-0045).
@@ -434,11 +452,13 @@ export interface Api {
     id: string,
     version: number,
     to: VersionStatus,
+    options?: VersionTransitionOptions,
   ) => Promise<PersonaVersion>
   transitionPlaybookVersion: (
     id: string,
     version: number,
     to: VersionStatus,
+    options?: VersionTransitionOptions,
   ) => Promise<PlaybookVersion>
   // `agent` filtert serverseitig auf die aus den zugewiesenen Playbooks
   // erreichbaren Resources inkl. Sub-Resource-Closure (WP-B).
@@ -451,6 +471,7 @@ export interface Api {
     id: string,
     version: number,
     to: VersionStatus,
+    options?: VersionTransitionOptions,
   ) => Promise<ResourceVersion>
   listPlaybookResourceLinks: (playbookId: string) => Promise<ResourceLink[]>
   setPlaybookResourceLinks: (
@@ -491,6 +512,7 @@ export interface Api {
     id: string,
     version: number,
     to: VersionStatus,
+    options?: VersionTransitionOptions,
   ) => Promise<ExternalToolVersion>
   restoreExternalToolVersion: (id: string, version: number) => Promise<ExternalTool>
   provenanceExternalToolVersion: (id: string, version: number) => Promise<ProvenanceEntry[]>
@@ -540,6 +562,7 @@ export interface Api {
     id: string,
     version: number,
     to: VersionStatus,
+    options?: VersionTransitionOptions,
   ) => Promise<SystemPromptTemplateVersion>
   // Track A — Versionierung-Core: Restore (non-destruktiv → neue Draft),
   // Diff (gegen 'active' oder eine Versions-Nummer) und Provenance
@@ -795,17 +818,17 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    transitionPersonaVersion: (id, version, to) =>
+    transitionPersonaVersion: (id, version, to, options) =>
       request<PersonaVersion>(
         token,
         `${ws}/personas/${id}/versions/${version}/transition`,
-        { method: 'POST', body: JSON.stringify({ to }) },
+        { method: 'POST', body: transitionBody(to, options) },
       ),
-    transitionPlaybookVersion: (id, version, to) =>
+    transitionPlaybookVersion: (id, version, to, options) =>
       request<PlaybookVersion>(
         token,
         `${ws}/playbooks/${id}/versions/${version}/transition`,
-        { method: 'POST', body: JSON.stringify({ to }) },
+        { method: 'POST', body: transitionBody(to, options) },
       ),
     listResources: (filters) => {
       const params = new URLSearchParams()
@@ -827,11 +850,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listResourceVersions: (id) =>
       request<ResourceVersion[]>(token, `${ws}/resources/${id}/versions`),
-    transitionResourceVersion: (id, version, to) =>
+    transitionResourceVersion: (id, version, to, options) =>
       request<ResourceVersion>(
         token,
         `${ws}/resources/${id}/versions/${version}/transition`,
-        { method: 'POST', body: JSON.stringify({ to }) },
+        { method: 'POST', body: transitionBody(to, options) },
       ),
     listPlaybookResourceLinks: (playbookId) =>
       request<ResourceLink[]>(token, `${ws}/playbooks/${playbookId}/resource_links`),
@@ -886,11 +909,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listExternalToolVersions: (id) =>
       request<ExternalToolVersion[]>(token, `${ws}/external_tools/${id}/versions`),
-    transitionExternalToolVersion: (id, version, to) =>
+    transitionExternalToolVersion: (id, version, to, options) =>
       request<ExternalToolVersion>(
         token,
         `${ws}/external_tools/${id}/versions/${version}/transition`,
-        { method: 'POST', body: JSON.stringify({ to }) },
+        { method: 'POST', body: transitionBody(to, options) },
       ),
     restoreExternalToolVersion: (id, version) =>
       request<ExternalTool>(token, `${ws}/external_tools/${id}/versions/${version}/restore`, {
@@ -983,11 +1006,11 @@ export function createApi(token: string, workspaceId: string): Api {
         token,
         `${ws}/system-prompts/${id}/versions`,
       ),
-    transitionSystemPromptTemplateVersion: (id, version, to) =>
+    transitionSystemPromptTemplateVersion: (id, version, to, options) =>
       request<SystemPromptTemplateVersion>(
         token,
         `${ws}/system-prompts/${id}/versions/${version}/transition`,
-        { method: 'POST', body: JSON.stringify({ to }) },
+        { method: 'POST', body: transitionBody(to, options) },
       ),
     restorePersonaVersion: (id, version) =>
       request<Persona>(token, `${ws}/personas/${id}/versions/${version}/restore`, {

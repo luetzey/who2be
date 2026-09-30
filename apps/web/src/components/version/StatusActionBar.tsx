@@ -3,7 +3,8 @@ import { FileDiff, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
 
-import type { VersionStatus } from '@/api/types'
+import type { VersionTransitionOptions } from '@/api/client'
+import type { VersionedEntityType, VersionStatus } from '@/api/types'
 import { useNeedsMfaForPublish } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 import { extractMissingFields, formatMissingFields } from '@/lib/promoteError'
 
+import { ActivateWithTestReport, AdminOnlyHint } from './ActivateWithWarningDialog'
 import { versionDiffSearch } from './versionDeepLink'
 import { canTransition } from './versionStatus'
 
@@ -75,8 +77,11 @@ const TESTID_SUFFIX: Record<StatusActionKey, string> = {
 interface StatusActionBarProps {
   status: VersionStatus
   // Promise<unknown>: die api.transition*Version-Methoden liefern teils die
-  // aktualisierte Version zurueck — die Bar ignoriert den Wert.
-  onTransition: (to: VersionStatus) => Promise<unknown>
+  // aktualisierte Version zurueck — die Bar ignoriert den Wert. `options`
+  // kommt nur beim Aktivieren trotz roter/fehlender Pruefaelle mit
+  // (`acknowledge_test_report` + `override_reason`, ADR-0053 6.3) und muss
+  // dann an die api.transition*Version-Methode durchgereicht werden.
+  onTransition: (to: VersionStatus, options?: VersionTransitionOptions) => Promise<unknown>
   onTransitioned: () => void
   // Optionaler Label-Override je Aktion — Default bleiben die geteilten
   // `common:statusBar.*`-Texte. Aufrufer mit eigenen (historisch gewachsenen)
@@ -87,6 +92,12 @@ interface StatusActionBarProps {
   // Version (Tab „Versions" mit aufgeklapptem Diff, gleicher Pfad). Ohne
   // Wert entfaellt der Link — z. B. fuer Entities ohne Diff-Endpoint.
   diffVersion?: number
+  // Aktivieren mit Warnung (Spec S11, ADR-0053 6.3): mit beiden Werten laedt
+  // die Leiste den Pruefbericht der Zielversion und fuehrt bei roten oder
+  // fehlenden Faellen ueber `ActivateWithWarningDialog`. Ohne sie bleibt das
+  // bisherige Verhalten (ein Klick).
+  testReportEntityType?: VersionedEntityType
+  versionId?: string
 }
 
 // Aktionen pro Status laut §2.1.F. Reihenfolge: Promote (primary) vor
@@ -99,6 +110,8 @@ export function StatusActionBar({
   onTransitioned,
   labels,
   diffVersion,
+  testReportEntityType,
+  versionId,
 }: StatusActionBarProps) {
   const { t } = useTranslation('common')
   const role = useCurrentWorkspaceRole()
@@ -106,11 +119,15 @@ export function StatusActionBar({
   const [busy, setBusy] = useState<VersionStatus | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
 
-  const transition = async (to: VersionStatus, success: string) => {
+  const transition = async (
+    to: VersionStatus,
+    success: string,
+    options?: VersionTransitionOptions,
+  ) => {
     setBusy(to)
     setPromoteError(null)
     try {
-      await onTransition(to)
+      await (options === undefined ? onTransition(to) : onTransition(to, options))
       notify.success(success)
       onTransitioned()
     } catch (cause: unknown) {
@@ -124,6 +141,21 @@ export function StatusActionBar({
         const message = cause instanceof Error ? cause.message : t('statusBar.fallback')
         notify.error(message)
       }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // Aktivieren trotz roter/fehlender Pruefaelle: Fehler (v. a. die 409 des
+  // Aktivierungsvertrags) zeigt der Dialog selbst an — deshalb hier kein
+  // catch, der Fehler geht an `ActivateWithWarningDialog` zurueck.
+  const activateWithOverride = async (options: VersionTransitionOptions) => {
+    setBusy('active')
+    setPromoteError(null)
+    try {
+      await onTransition('active', options)
+      notify.success(t('statusBar.toast.activated'))
+      onTransitioned()
     } finally {
       setBusy(null)
     }
@@ -143,6 +175,8 @@ export function StatusActionBar({
   // Nur wer ueberhaupt veroeffentlichen duerfte, bekommt den MFA-Hinweis —
   // ein Editor sieht weiter den gesperrten Knopf mit dem Admin-Tooltip.
   const promoteNeedsMfa = showPromote && canPromote && needsMfa
+  // Nur mit beiden Props wird der Pruefbericht geladen (Verdrahtung: Teil C).
+  const withTestReport = testReportEntityType !== undefined && versionId !== undefined
 
   return (
     <div className="flex flex-col gap-2">
@@ -152,7 +186,18 @@ export function StatusActionBar({
         aria-label={t('statusBar.ariaLabel')}
       >
         {promoteNeedsMfa ? <MfaPublishNotice /> : null}
-        {showPromote && !promoteNeedsMfa ? (
+        {showPromote && !promoteNeedsMfa && canPromote && withTestReport ? (
+          <ActivateWithTestReport
+            entityType={testReportEntityType}
+            versionId={versionId}
+            label={labels?.promote ?? t('statusBar.promote')}
+            disabled={busy !== null}
+            testId={`branch-action-${TESTID_SUFFIX.promote}`}
+            onActivate={() => void transition('active', t('statusBar.toast.activated'))}
+            onActivateWithOverride={activateWithOverride}
+          />
+        ) : null}
+        {showPromote && !promoteNeedsMfa && !(canPromote && withTestReport) ? (
           <Button
             type="button"
             variant="brand"
@@ -164,6 +209,7 @@ export function StatusActionBar({
             {labels?.promote ?? t('statusBar.promote')}
           </Button>
         ) : null}
+        {showPromote && !canPromote ? <AdminOnlyHint /> : null}
         {showSubmit ? (
           <Button
             type="button"
