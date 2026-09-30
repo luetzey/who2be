@@ -457,4 +457,39 @@ describe('AgentEditorForm', () => {
       screen.getByLabelText('Knowledge-Base-Kanten anlegen (nicht mehr löschbar)'),
     ).toBeDisabled()
   })
+
+  // Mobil-Spec M5: Nur lesend zeigt die Beschreibung Text (ExpandableText,
+  // 6 Zeilen) statt einer gesperrten Textarea mit innerem Scroll.
+  it('zeigt Viewern die Beschreibung als Text statt als gesperrte Textarea', () => {
+    roleRef.current = 'viewer'
+    const description = 'Beantwortet Fragen zum Onboarding.\nZweiter Absatz mit Details.'
+    render(<Harness agent={makeAgent({ description })} />)
+
+    const block = screen.getByTestId('agent-description-readonly')
+    expect(block).toHaveTextContent('Beschreibung')
+    expect(block).toHaveTextContent('Beantwortet Fragen zum Onboarding.')
+    const text = block.querySelector('[data-expanded]')
+    expect(text).not.toBeNull()
+    expect(text).toHaveClass('line-clamp-(--clamp)')
+    expect(text).toHaveStyle({ '--clamp': '6' })
+    expect(screen.queryByRole('textbox', { name: 'Beschreibung' })).not.toBeInTheDocument()
+  })
+
+  it('zeigt fuer verwaltete Agenten (locked) ebenfalls Text, leer als Gedankenstrich', () => {
+    render(<Harness agent={makeAgent({ description: '   ', is_managed: true })} locked />)
+
+    const block = screen.getByTestId('agent-description-readonly')
+    expect(block).toHaveTextContent('—')
+    expect(block.querySelector('[data-expanded]')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Beschreibung' })).not.toBeInTheDocument()
+  })
+
+  it('laesst Editoren die Beschreibung im mitwachsenden Textfeld bearbeiten', () => {
+    render(<Harness agent={makeAgent({ description: 'Kurz.' })} />)
+
+    const field = screen.getByRole('textbox', { name: 'Beschreibung' })
+    expect(field).toBeEnabled()
+    expect(field).toHaveValue('Kurz.')
+    expect(screen.queryByTestId('agent-description-readonly')).not.toBeInTheDocument()
+  })
 })
