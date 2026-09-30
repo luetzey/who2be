@@ -6,6 +6,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Nicht indexieren: zweite Linie hinter dem X-Robots-Tag-Header aus
+         deploy/hetzner/Caddyfile, fuer Deployments ohne diese Caddyfile
+         (Dokploy/Traefik, Self-Hosting). robots.txt sperrt bewusst nichts,
+         sonst sieht ein Crawler dieses Tag nie (public/robots.txt). -->
+    <meta name="robots" content="noindex, nofollow" />
     <title>Who2Be</title>
   </head>
   <body>

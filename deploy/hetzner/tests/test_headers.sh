@@ -4,6 +4,16 @@
 #      COOP, CSP inkl. object-src/form-action)
 #   2) /v1/internal/* → 403 (extern blockt Caddy direkt)
 #   3) /docs → 404 wenn WHO2BE_DOCS_PUBLIC=false (Default), sonst 200
+#   4) Crawler-Signal + Cache-Control auf allen vier Hosts (api./app./mcp./
+#      supabase.), ausdruecklich auch auf 401- und 404-Antworten:
+#      X-Robots-Tag noindex ueberall; `Cache-Control: no-store` auf api./mcp.,
+#      ohne einen von der App gesetzten Wert zu ueberschreiben; CSP auf den
+#      drei uebrigen Vhosts
+#   5) Web-Inhalt: /robots.txt ist eine echte Textdatei (kein SPA-HTML) und
+#      sperrt nichts; index.html traegt <meta name="robots" content="noindex">
+#
+# Die Hosts app./mcp./supabase. werden aus der api.-Adresse abgeleitet — die
+# Adresse MUSS deshalb mit `api.` beginnen.
 #
 # Aufruf:
 #   bash deploy/hetzner/tests/test_headers.sh https://api.<DOMAIN>
@@ -24,6 +34,11 @@
 # Steuerung ueber Env:
 #   HEADERS_RESOLVE=127.0.0.1   curl --resolve <host>:<port>:<addr>
 #   HEADERS_SKIP_DOCS=1         /docs-Fall ueberspringen (s. u.)
+#   HEADERS_SKIP_WEB_CONTENT=1  Abschnitt 5 ueberspringen (Upstream ist kein
+#                               echter Web-Container, sondern ein Platzhalter)
+#   HEADERS_APP_CACHE_PROBE=/p  Pfad, auf dem der Upstream selbst
+#                               `Cache-Control: private, max-age=60` setzt
+#                               (nur Platzhalter-Lauf, s. test_headers_ci.sh)
 #   WHO2BE_DOCS_PUBLIC=true     /docs-Fall erwartet 200 statt 404
 #
 # `-k` toleriert das selbstsignierte Zertifikat lokaler Setups; in Prod hat
@@ -62,7 +77,8 @@ else
   PORT=443
 fi
 
-CURL_OPTS=(-sS -k)
+CURL_BASE_OPTS=(-sS -k)
+CURL_OPTS=("${CURL_BASE_OPTS[@]}")
 if [[ -n "${HEADERS_RESOLVE:-}" ]]; then
   CURL_OPTS+=(--resolve "${HOST}:${PORT}:${HEADERS_RESOLVE}")
 fi
@@ -128,6 +144,123 @@ else
     [[ "${code}" == "404" ]] || fail "/docs → ${code}, erwartet 404 (DOCS_PUBLIC=false)"
     ok "/docs → 404"
   fi
+fi
+
+# --- 4) Crawler-Signal + Cache-Control auf allen Hosts ----------------------
+# Die Nachbar-Hosts entstehen aus der api.-Adresse durch Tausch des ersten
+# Labels. Ohne `api.` am Anfang gaebe es nichts zu tauschen — dann lieber laut
+# scheitern als still nur einen Host pruefen.
+[[ "${HOST}" == api.* ]] || fail "Adresse muss mit api. beginnen (ist: ${HOST}),
+sonst lassen sich app./mcp./supabase. nicht ableiten"
+DOMAIN_PART="${HOST#api.}"
+
+# host_url <label> <pfad> → volle URL auf dem Nachbar-Host (gleicher Port).
+host_url() { printf '%s://%s.%s:%s%s' "${_scheme}" "$1" "${DOMAIN_PART}" "${PORT}" "$2"; }
+
+# host_curl <label> <curl-args…> — mit passendem --resolve je Host.
+host_curl() {
+  local label="$1"; shift
+  local opts=("${CURL_BASE_OPTS[@]}")
+  if [[ -n "${HEADERS_RESOLVE:-}" ]]; then
+    opts+=(--resolve "${label}.${DOMAIN_PART}:${PORT}:${HEADERS_RESOLVE}")
+  fi
+  curl "${opts[@]}" "$@"
+}
+
+# Header per GET holen (nicht -I): HEAD beantworten manche Upstreams anders,
+# und geprueft werden soll die Antwort, die ein Crawler bekommt.
+host_headers() { host_curl "$1" -o /dev/null -D - "$(host_url "$1" "$2")"; }
+
+# expect_response <label> <pfad> <status> <cache: no-store|not-no-store|any>
+expect_response() {
+  local label="$1" path="$2" want_status="$3" cache="$4"
+  local what="${label}.${DOMAIN_PART}${path}"
+  local h
+  h="$(host_headers "${label}" "${path}")" || fail "${what} unerreichbar"
+  local status
+  status="$(printf '%s' "${h}" | head -n 1 | awk '{print $2}')"
+  [[ "${status}" == "${want_status}" ]] \
+    || fail "${what} → ${status}, erwartet ${want_status} (Testaufbau pruefen)"
+  printf '%s' "${h}" | grep -i '^x-robots-tag:' | grep -qi 'noindex' \
+    || fail "${what} (${status}): X-Robots-Tag mit noindex fehlt"
+  local cc
+  cc="$(printf '%s' "${h}" | grep -i '^cache-control:' | tr -d '\r' || true)"
+  case "${cache}" in
+    no-store)
+      printf '%s' "${cc}" | grep -qi 'no-store' \
+        || fail "${what} (${status}): Cache-Control no-store fehlt (ist: '${cc}')"
+      ;;
+    not-no-store)
+      if printf '%s' "${cc}" | grep -qi 'no-store'; then
+        fail "${what}: oeffentliche Metadaten tragen no-store (ist: '${cc}')"
+      fi
+      ;;
+  esac
+  ok "${what} → ${status}, X-Robots-Tag noindex${cc:+, ${cc}}"
+}
+
+log "CSP auf app./mcp./supabase. (api. oben)"
+for vhost in app mcp supabase; do
+  csp="$(host_headers "${vhost}" / | grep -i '^content-security-policy:' | tr -d '\r' || true)"
+  [[ -n "${csp}" ]] || fail "${vhost}-Vhost liefert keinen CSP-Header"
+  ok "${vhost}: ${csp#*: }"
+done
+
+log "Crawler-Signal + Cache-Control auf api./app./mcp./supabase."
+# api.: Inhalt, 401 ohne Anmeldung, 404, Caddy-eigenes 403.
+expect_response api      /v1/health          200 no-store
+expect_response api      /v1/me              401 no-store
+expect_response api      /robots.txt         404 no-store
+expect_response api      /v1/internal/foo    403 no-store
+# Oeffentliche Protokoll-Metadaten bleiben cachebar.
+expect_response api      /.well-known/oauth-authorization-server 200 not-no-store
+# Setzt die App selbst ein Cache-Control, bleibt es stehen. Den Pfad bedient
+# nur der Platzhalter aus test_headers_ci.sh — gegen einen echten Stack
+# (HEADERS_APP_CACHE_PROBE unset) entfaellt die Probe.
+if [[ -n "${HEADERS_APP_CACHE_PROBE:-}" ]]; then
+  expect_response api    "${HEADERS_APP_CACHE_PROBE}" 200 any
+  ah="$(host_headers api "${HEADERS_APP_CACHE_PROBE}")"
+  printf '%s' "${ah}" | grep -i '^cache-control:' | grep -qi 'private, max-age=60' \
+    || fail "App-eigenes Cache-Control wurde ueberschrieben: $(printf '%s' "${ah}" | grep -i '^cache-control:')"
+  ok "App-eigenes Cache-Control bleibt unangetastet"
+fi
+# mcp.: 401 ohne Token; die RFC-9728-Metadaten behalten den App-Wert.
+expect_response mcp      /mcp                401 no-store
+expect_response mcp      /.well-known/oauth-protected-resource/mcp 200 not-no-store
+# supabase.: 404 fuer unbekannte Pfade — auch Fehlerseiten tragen das Signal.
+expect_response supabase /robots.txt         404 any
+# app.: die App-Shell. Cache-Control setzt dort der Web-Container (no-cache
+# fuer index.html, Deploy-Frische), nicht Caddy — hier nicht geprueft.
+expect_response app      /                   200 any
+expect_response app      /robots.txt         200 any
+
+# --- 5) Web-Inhalt: robots.txt + meta robots ---------------------------------
+# Prueft den Web-Container, nicht Caddy — gegen einen Platzhalter-Upstream
+# waere das bedeutungslos, deshalb abschaltbar.
+if [[ "${HEADERS_SKIP_WEB_CONTENT:-0}" == "1" ]]; then
+  skip "robots.txt/meta robots — Upstream ist kein Web-Container"
+else
+  log "GET $(host_url app /robots.txt) (echte Textdatei, sperrt nichts)"
+  rh="$(host_headers app /robots.txt)"
+  printf '%s' "${rh}" | grep -i '^content-type:' | grep -qi 'text/plain' \
+    || fail "/robots.txt ist nicht text/plain: $(printf '%s' "${rh}" | grep -i '^content-type:')"
+  ok "/robots.txt Content-Type text/plain"
+  rbody="$(host_curl app "$(host_url app /robots.txt)")"
+  if printf '%s' "${rbody}" | grep -qi '<html'; then
+    fail "/robots.txt liefert HTML (SPA-Fallback statt Datei)"
+  fi
+  ok "/robots.txt ist kein SPA-HTML"
+  # `Disallow: /` wuerde Crawler aussperren — dann saehen sie das noindex nie.
+  if printf '%s' "${rbody}" | grep -Eqi '^[[:space:]]*disallow:[[:space:]]*/[[:space:]]*$'; then
+    fail "/robots.txt sperrt die Seite (Disallow: /) — das noindex waere unsichtbar"
+  fi
+  ok "/robots.txt sperrt nichts"
+
+  log "GET $(host_url app /) (meta robots)"
+  ibody="$(host_curl app "$(host_url app /)")"
+  printf '%s' "${ibody}" | grep -Eqi '<meta[^>]+name="robots"[^>]+content="[^"]*noindex' \
+    || fail "index.html ohne <meta name=\"robots\" content=\"noindex…\">"
+  ok "index.html: meta robots noindex"
 fi
 
 # --- Bilanz / Nulldurchlauf-Sicherung ------------------------------------

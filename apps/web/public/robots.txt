@@ -1,0 +1,13 @@
+# Who2Be is an application behind a login, not a website to be indexed.
+#
+# Crawling is deliberately NOT disallowed here. Every response carries a
+# "noindex" signal instead (X-Robots-Tag header, <meta name="robots">), and a
+# crawler can only honour that signal if it is allowed to fetch the page:
+# "For the noindex rule to be effective, the page or resource must not be
+# blocked by a robots.txt file" (Google Search Central, "Block Search indexing
+# with noindex").
+#
+# Served as a real text/plain file so this path no longer falls through to the
+# single-page-app HTML.
+User-agent: *
+Allow: /
