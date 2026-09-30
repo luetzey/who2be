@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { ExpandableText } from '@/components/data/ExpandableText'
 import { FormSection } from '@/components/layout/FormSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -173,15 +174,19 @@ export function PersonaProfileFields({
         >
           <p className="font-medium">{t('editor.legacy.title')}</p>
           <p className="mt-1 text-xs">{t('editor.legacy.body')}</p>
-          {/* `break-words`: ein Legacy-System-Prompt traegt fremdbestimmte
-              Bezeichner ohne Trennstelle; `whitespace-pre-wrap` allein bricht
-              nur an Leerzeichen (gemessen 462px Inhalt in 212px bei 320px,
-              #571). Der Block scrollt weiterhin in sich (`overflow-auto`) —
-              das ist nach §4.4 Punkt 1 zulaessig, der Text soll aber nicht
-              unnoetig seitlich weglaufen. */}
-          <pre className="mt-2 max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs break-words whitespace-pre-wrap dark:bg-amber-900/40">
-            {legacySystemPrompt}
-          </pre>
+          {/* Mobil-Spec M8: kein innerer Scrollbereich mehr (vorher
+              `max-h-40 overflow-auto`, bei 320 px 160 px sichtbar von
+              3.312 px). Der Text steht im Seitenfluss, gekuerzt auf 6 Zeilen,
+              „Mehr anzeigen" klappt ihn auf. `ExpandableText` bricht mit
+              `wrap-anywhere` auch Bezeichner ohne Trennstelle um;
+              `whitespace-pre-wrap` allein braeche nur an Leerzeichen (#571). */}
+          <ExpandableText
+            as="pre"
+            text={legacySystemPrompt ?? ''}
+            lines={6}
+            wrapperClassName="mt-2"
+            className="rounded bg-amber-100/60 p-2 font-mono text-xs break-words whitespace-pre-wrap dark:bg-amber-900/40"
+          />
         </div>
       ) : null}
 

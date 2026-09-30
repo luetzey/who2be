@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { EntityIcon, type EntityTone } from './EntityIcon'
+import { ExpandableText } from './ExpandableText'
 
 // Geteilter Detail-Page-Header (Design-Handoff „Detail-Redesign"). Identischer
 // Block in System-Prompt-/Agent-/Resource-Detail: optionaler Zurueck-Link,
@@ -83,11 +84,19 @@ export function DetailHeader({
               {badges}
             </div>
             {description !== undefined && description !== '' ? (
-              // `wrap-anywhere` statt `break-words`: nur `anywhere` senkt die
-              // min-content-Breite. Eine lange URL ohne Trennstelle setzte sie
-              // sonst auf ~437 px und verbreiterte die ganze Seite (Mobil-Spec
-              // M1, WCAG 1.4.10), wie am Titel in `EntityCard`.
-              <p className="mt-1.5 text-sm wrap-anywhere text-muted-foreground">{description}</p>
+              // Mobil-Spec M2: 3 Zeilen unter `md`, 6 ab `md`, „Mehr anzeigen"
+              // klappt im Seitenfluss auf. Vorher belegte die Beschreibung bei
+              // 320 px bis zu 1.600 px, die Tabs lagen erst nach 2,8
+              // Bildschirmen. `ExpandableText` setzt `wrap-anywhere` selbst
+              // (M1: nur `anywhere` senkt die min-content-Breite einer URL).
+              <ExpandableText
+                text={description}
+                lines={3}
+                mdLines={6}
+                wrapperClassName="mt-1.5"
+                className="text-sm text-muted-foreground"
+                data-testid="detail-header-description"
+              />
             ) : null}
           </div>
         </div>

@@ -21,7 +21,19 @@
       "restore": "Restore",
       "activate": "Activate",
       "deactivate": "Deactivate",
-      "more": "More"
+      "more": "More",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "showMoreCount": "Show {{count}} more"
+    },
+    "list": {
+      "shownOfTotal": "{{shown}} of {{total}} shown"
+    },
+    "table": {
+      "scrollHint": "Swipe sideways for more columns"
+    },
+    "tabs": {
+      "detailViewAria": "Detail view"
     },
     "fields": {
       "name": "Name",
