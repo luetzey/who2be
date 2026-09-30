@@ -61,6 +61,7 @@
       "reject": "Reject",
       "reactivate": "Reactivate as draft",
       "adminOnly": "Only admins can activate",
+      "adminOnlyHint": "Only admins can activate.",
       "mfa": {
         "notice": "Publishing requires two-factor sign-in.",
         "setup": "Set up two-factor"
@@ -3015,6 +3016,34 @@
         "savedPass": "Rated as passed.",
         "savedFail": "Rated as failed.",
         "error": "Saving the judgment failed."
+      }
+    },
+    "activateWarning": {
+      "trigger": "Activate…",
+      "title": "Activate despite open test cases?",
+      "description": "{{failed}} failed, {{missing}} without result out of {{total}} test cases. Activating requires a reason.",
+      "descriptionUnknown": "The test case results could not be loaded. Activating requires a reason.",
+      "reportUnavailable": "Results could not be loaded – all test cases count as “missing”.",
+      "failedHeading_one": "{{count}} failed",
+      "failedHeading_other": "{{count}} failed",
+      "missingHeading_one": "{{count}} without result",
+      "missingHeading_other": "{{count}} without result",
+      "reasonLabel": "Why anyway?",
+      "reasonHint": "Required. Stored with the version and shown in its history.",
+      "reasonTooLong": "At most {{max}} characters.",
+      "confirm": "Activate anyway",
+      "allPassed_one": "The test case passed. Activating is still your decision.",
+      "allPassed_other": "All {{count}} test cases passed. Activating is still your decision.",
+      "error": {
+        "generic": "Activation failed",
+        "test_results_incomplete": {
+          "title": "Test report not confirmed",
+          "body": "The server rejected the activation because failed or missing test cases were not confirmed. Reload the page and try again."
+        },
+        "test_override_reason_required": {
+          "title": "Reason missing",
+          "body": "The server needs a reason why you activate despite open test cases. Enter it above."
+        }
       }
     }
   }

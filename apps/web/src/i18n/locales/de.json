@@ -61,6 +61,7 @@
       "reject": "Ablehnen",
       "reactivate": "Reaktivieren als Draft",
       "adminOnly": "Nur Admins können aktivieren",
+      "adminOnlyHint": "Nur Admins können aktivieren.",
       "mfa": {
         "notice": "Veröffentlichen erfordert Zwei-Faktor-Anmeldung.",
         "setup": "Zwei-Faktor einrichten"
@@ -3015,6 +3016,34 @@
         "savedPass": "Als bestanden bewertet.",
         "savedFail": "Als nicht bestanden bewertet.",
         "error": "Bewertung konnte nicht gespeichert werden."
+      }
+    },
+    "activateWarning": {
+      "trigger": "Aktivieren…",
+      "title": "Trotz offener Prüffälle aktivieren?",
+      "description": "{{failed}} nicht bestanden, {{missing}} ohne Ergebnis von {{total}} Prüffällen. Aktivieren geht nur mit Begründung.",
+      "descriptionUnknown": "Die Prüffall-Ergebnisse konnten nicht geladen werden. Aktivieren geht nur mit Begründung.",
+      "reportUnavailable": "Ergebnisse konnten nicht geladen werden – alle Prüffälle gelten als „fehlt“.",
+      "failedHeading_one": "{{count}} nicht bestanden",
+      "failedHeading_other": "{{count}} nicht bestanden",
+      "missingHeading_one": "{{count}} ohne Ergebnis",
+      "missingHeading_other": "{{count}} ohne Ergebnis",
+      "reasonLabel": "Warum trotzdem?",
+      "reasonHint": "Pflichtfeld. Wird bei der Version gespeichert und im Verlauf angezeigt.",
+      "reasonTooLong": "Höchstens {{max}} Zeichen.",
+      "confirm": "Trotzdem aktivieren",
+      "allPassed_one": "Der Prüffall ist bestanden. Aktivieren entscheidest trotzdem du.",
+      "allPassed_other": "Alle {{count}} Prüffälle bestanden. Aktivieren entscheidest trotzdem du.",
+      "error": {
+        "generic": "Aktivieren fehlgeschlagen",
+        "test_results_incomplete": {
+          "title": "Prüfbericht nicht bestätigt",
+          "body": "Der Server hat die Aktivierung abgelehnt, weil rote oder fehlende Prüffälle nicht bestätigt wurden. Lade die Seite neu und versuche es noch einmal."
+        },
+        "test_override_reason_required": {
+          "title": "Begründung fehlt",
+          "body": "Der Server braucht eine Begründung, warum trotz offener Prüffälle aktiviert wird. Trag sie oben ein."
+        }
       }
     }
   }
