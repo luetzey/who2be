@@ -314,3 +314,93 @@ for (const mode of ['native', 'fallback'] as const) {
     expect(capped.scroll).toBeGreaterThan(capped.client)
   })
 }
+
+/**
+ * Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ oeffnen
+ * unterhalb `md` eine eigene Vollbildseite statt eines Dialogs; ab `md`
+ * bleibt der Dialog. Geprueft auf jedem Profil, scharf auf `mobile-320`:
+ * oeffnen, ausfuellen, absenden, zurueck — mit erhaltenem `?tab=` der
+ * Ausgangsseite, Browser-Zurueck und ohne horizontalen Seiten-Scroll.
+ *
+ * Rot-Probe: Mobil-Weiche in `GiveFeedbackDialog`/`ReportProblemDialog`
+ * abgeschaltet (`isMobile && false`) → Phone-Zweig rot (kein Link).
+ */
+test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialog', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const resource = await apiRequest<{ id: string }>(
+    request,
+    token,
+    `/v1/workspaces/${workspaceId}/resources`,
+    {
+      method: 'POST',
+      data: {
+        name: 'E2E Feedback Resource',
+        content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+      },
+    },
+  )
+  const ws = `/w/${workspaceId}`
+  const origin = `${ws}/resources/${resource.id}?tab=versions`
+  const isPhone = (page.viewportSize()?.width ?? 0) < 768
+  // Sprachneutral: Deutsch oder Englisch, je nach Browser-Locale des Profils.
+  const giveName = /Feedback geben|Give feedback/
+  const reportName = /Problem melden|Report a problem/
+
+  await page.goto(origin)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+
+  if (!isPhone) {
+    // Ab `md`: Dialog, die Route bleibt stehen.
+    await page.getByRole('button', { name: giveName }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe(`${ws}/resources/${resource.id}`)
+    return
+  }
+
+  // --- Feedback geben: oeffnen, ausfuellen, absenden, zurueck mit Bestaetigung.
+  await page.getByRole('link', { name: giveName }).click()
+  await expect(page).toHaveURL(new RegExp(`/feedback/give/resource/${resource.id}`))
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(giveName)
+  await expectNoHorizontalScroll(page, 'feedback/give (Vollbild)')
+  await page.locator('select').first().selectOption('outdated')
+  await page.locator('textarea').first().fill(`${MID_TEXT}\n`.repeat(3))
+  await expectNoHorizontalScroll(page, 'feedback/give (ausgefuellt)')
+  await page.getByRole('button', { name: /^(Absenden|Submit)$/ }).click()
+  await expect(page).toHaveURL((url) => `${url.pathname}${url.search}` === origin)
+  await expect(page.getByText(/Danke für dein Feedback|Thanks for your feedback/)).toBeVisible()
+
+  // Das Feedback liegt wirklich am Element (Element-ID ueber die Route erhalten).
+  const items = await apiRequest<{ items: Array<{ entity_id: string; signal: string }> }>(
+    request,
+    token,
+    `/v1/workspaces/${workspaceId}/feedback-items`,
+  )
+  expect(items.items.some((i) => i.entity_id === resource.id && i.signal === 'outdated')).toBe(
+    true,
+  )
+
+  // --- Browser-Zurueck: Seite oeffnen, Browser-Zurueck fuehrt zur Ausgangsseite.
+  await page.getByRole('link', { name: giveName }).click()
+  await expect(page).toHaveURL(/\/feedback\/give\//)
+  await page.goBack()
+  await expect(page).toHaveURL((url) => `${url.pathname}${url.search}` === origin)
+
+  // --- Problem melden (Feedback-Uebersicht): oeffnen, ausfuellen, absenden, zurueck.
+  await page.goto(`${ws}/feedback`)
+  await page.getByRole('link', { name: reportName }).click()
+  await expect(page).toHaveURL(new RegExp(`${ws}/feedback/report$`))
+  await expectNoHorizontalScroll(page, 'feedback/report (Vollbild)')
+  await page.locator('textarea').first().fill('Tool antwortet nicht.')
+  await page.getByRole('button', { name: /^(Melden|Report)$/ }).click()
+  await expect(page).toHaveURL(new RegExp(`${ws}/feedback$`))
+  await expect(page.getByText(/Problem gemeldet|Problem reported/)).toBeVisible()
+})
