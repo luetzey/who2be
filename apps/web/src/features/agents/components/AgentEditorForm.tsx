@@ -7,6 +7,7 @@ import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { ExpandableText } from '@/components/data/ExpandableText'
 import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -230,15 +231,37 @@ export function AgentEditorForm({
                 <FormField
                   control={form.control}
                   name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('common:fields.description')}</FormLabel>
-                      <FormControl>
-                        <Textarea rows={3} {...field} disabled={readOnly} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) =>
+                    readOnly ? (
+                      // Nur lesend (Viewer, verwaltet): Text statt gesperrter
+                      // Textarea (Mobil-Spec M5). Ein gesperrtes Feld mit
+                      // innerem Scroll zeigt nichts und laesst sich nicht
+                      // bedienen; `ExpandableText` kuerzt auf 6 Zeilen mit
+                      // „Mehr anzeigen" im Seitenfluss.
+                      <div className="space-y-2" data-testid="agent-description-readonly">
+                        <p className="text-sm leading-none font-medium">
+                          {t('common:fields.description')}
+                        </p>
+                        {field.value.trim() === '' ? (
+                          <p className="text-sm text-muted-foreground">—</p>
+                        ) : (
+                          <ExpandableText
+                            text={field.value}
+                            lines={6}
+                            className="text-sm whitespace-pre-wrap"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <FormItem>
+                        <FormLabel>{t('common:fields.description')}</FormLabel>
+                        <FormControl>
+                          <Textarea rows={3} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }
                 />
               </FormSection>
 
