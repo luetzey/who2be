@@ -65,21 +65,20 @@ interface TabsListProps {
   'aria-label'?: string
 }
 
-// Die Trigger tragen `whitespace-nowrap` und brechen nicht; die Leiste darf
-// aus Design-Gruenden auch nicht umbrechen (die `border-b` ist eine
-// durchgehende Kante, der aktive Unterstrich liegt auf ihr). Sie scrollt
-// stattdessen horizontal — §4.4 Punkt 1 nimmt bewusst gescrollte Container
-// vom 320px-Kriterium aus. `pb-px` haelt dabei den 1px-Ueberstand des
-// `-bottom-px`-Unterstrichs innerhalb der Box: `overflow-x: auto` zieht
-// `overflow-y` sonst auf `auto` nach und macht aus diesem Pixel echten
-// vertikalen Scroll-Inhalt.
+// Umbruch statt Scroll (Mobil-Spec M7, Owner-Weiche W1=a): Die Trigger
+// tragen `whitespace-nowrap` und bleiben ganz; reicht die Breite nicht, bricht
+// die Leiste in eine zweite Zeile um. Jeder Trigger ist ein 44-px-Ziel
+// (`h-11`), die Auswahl bleibt der Unterstrich.
+//
+// Vorher scrollte die Leiste horizontal: bei 320 px lagen „Werkzeuge &
+// Rechte“ und „Verbindung“ (Agent, 461 von 288 px) bzw. „Verwendung“ und
+// „Versionen“ (Resource, 540 von 288 px) ausserhalb der Leiste — ohne
+// sichtbaren Hinweis, dass es sie gibt. Ein Scroll-Container ist hier
+// deshalb die falsche Loesung; Persona- und Playbook-Detail brachen schon
+// vorher um und waren die Vorlage.
 export function TabsList({ children, className, ...props }: TabsListProps) {
   return (
-    <div
-      role="tablist"
-      className={cn('flex gap-1 overflow-x-auto border-b pb-px', className)}
-      {...props}
-    >
+    <div role="tablist" className={cn('flex flex-wrap gap-1 border-b', className)} {...props}>
       {children}
     </div>
   )

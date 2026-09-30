@@ -404,3 +404,97 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
   await expect(page).toHaveURL(new RegExp(`${ws}/feedback$`))
   await expect(page.getByText(/Problem gemeldet|Problem reported/)).toBeVisible()
 })
+
+/**
+ * Mobil-Spec M7 (Owner-Weiche W1=a): Tab-Leisten brechen um, statt
+ * horizontal zu scrollen. Vorher lagen bei 320 px im Agent-Detail
+ * „Werkzeuge & Rechte“ und „Verbindung“ (Leiste 461 von 288 px) und im
+ * Resource-Detail „Verwendung“ und „Versionen“ (540 von 288 px) ausserhalb
+ * der Leiste — auch bei 390 und 430 px blieb je mindestens ein Tab verdeckt.
+ *
+ * Geprueft auf jedem Profil: keine `tablist` mit eigener Scrollweite, jeder
+ * Tab liegt ganz im Viewport und ist mindestens 44 px hoch, die Leiste traegt
+ * ihren Namen, und der Deep-Link `?tab=versions` waehlt weiterhin den
+ * Versions-Tab und bleibt in der URL.
+ *
+ * Rot-Proben: `flex-wrap` in `components/ui/tabs.tsx` wieder durch
+ * `overflow-x-auto` ersetzt → rot auf `mobile-320` und `mobile-iphone-13`
+ * (Agent und Resource); `aria-label` der Resource-Leiste zurueck auf
+ * `detail.subResourcesTitle` → rot auf jedem Profil.
+ */
+test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const post = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  const agent = await post<{ id: string }>('/agents', { name: 'E2E Tabs Agent' })
+  const resource = await post<{ id: string }>('/resources', {
+    name: 'E2E Tabs Resource',
+    content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+  })
+  const persona = await post<{ id: string }>('/personas', {
+    name: 'E2E Tabs Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+
+  const ws = `/w/${workspaceId}`
+  // Dritter Wert: Tab-Anzahl; vierter: erwarteter Name der Leiste. Persona
+  // und Resource tragen den gemeinsamen Namen „Detailansicht“ (vorher:
+  // Persona ohne Namen, Resource faelschlich „Sub-Resources“).
+  const detailView = /^(Detailansicht|Detail view)$/
+  const routes: Array<[string, string, number, RegExp]> = [
+    [`${ws}/agents/${agent.id}`, 'agents/:id', 3, /.+/],
+    [`${ws}/resources/${resource.id}`, 'resources/:id', 4, detailView],
+    [`${ws}/personas/${persona.id}`, 'personas/:id', 5, detailView],
+  ]
+
+  const failures: string[] = []
+  for (const [path, label, tabCount, expectedName] of routes) {
+    await page.goto(path)
+    const tablist = page.getByRole('tablist').first()
+    await expect(tablist.getByRole('tab')).toHaveCount(tabCount)
+    const probe = await tablist.evaluate((list) => {
+      const viewport = document.documentElement.clientWidth
+      const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'))
+      return {
+        name: list.getAttribute('aria-label'),
+        scrollWidth: list.scrollWidth,
+        clientWidth: list.clientWidth,
+        outside: tabs
+          .filter((tab) => {
+            const rect = tab.getBoundingClientRect()
+            return rect.left < 0 || rect.right > viewport + 1
+          })
+          .map((tab) => tab.textContent?.trim() ?? '?'),
+        minHeight: Math.min(...tabs.map((tab) => tab.getBoundingClientRect().height)),
+      }
+    })
+    if (probe.scrollWidth > probe.clientWidth + 1) {
+      failures.push(`${label}: tablist scrollt (${probe.scrollWidth} > ${probe.clientWidth})`)
+    }
+    if (probe.outside.length > 0) {
+      failures.push(`${label}: Tabs ausserhalb des Viewports: ${probe.outside.join(', ')}`)
+    }
+    if (probe.minHeight < 44) {
+      failures.push(`${label}: Tab nur ${probe.minHeight}px hoch (< 44)`)
+    }
+    if (!expectedName.test(probe.name ?? '')) {
+      failures.push(`${label}: tablist-Name „${probe.name ?? ''}“ passt nicht zu ${expectedName}`)
+    }
+  }
+  expect(failures, 'Tab-Leisten mit verdeckten oder zu kleinen Tabs').toEqual([])
+
+  // Deep-Link unveraendert: `?tab=versions` waehlt den Versions-Tab.
+  await page.goto(`${ws}/resources/${resource.id}?tab=versions`)
+  await expect(page.getByRole('tab', { selected: true })).toHaveText(/Versionen|Versions/)
+  expect(new URL(page.url()).searchParams.get('tab')).toBe('versions')
+})

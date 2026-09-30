@@ -3,95 +3,58 @@ import { describe, expect, it } from 'vitest'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs'
 
-// Responsive-Vertrag (Primitive-Fund 1 aus dem Audit #570 Haelfte A).
+// Responsive-Vertrag der Tab-Leiste (Mobil-Spec M7, Owner-Weiche W1=a).
 //
-// `TabsList` rendert eine Zeile aus `whitespace-nowrap`-Triggern ohne
-// Umbruch und — vor dieser Aenderung — ohne Scroll-Moeglichkeit. Gemessen
-// gegen das gebaute Stylesheet summieren die drei Trigger des
-// `AgentEditorForm` 461 px; der Container klemmt bei 320 px Viewport auf
-// 288 px ab. Der dritte Tab lag damit 173 px ausserhalb der Innenkante und
-// war per Hit-Test NICHT erreichbar — ein Bedienelement ohne jeden Weg
-// dorthin, nicht nur ein knapper Ueberlauf.
+// jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag. Die
+// Layout-Aussage ist am gebauten Stylesheet in Chromium gemessen und steht
+// in `e2e/scroll-guard.spec.ts` („M7“) als dauerhafte Pruefung:
 //
-// jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag; die
-// Layout-Aussage selbst ist in
-// .claude/plan/2026-09-23-1700_primitives-tabslist-entitycard-hit-target.md
-// gerendert belegt (320 px: dritter Tab unerreichbar -> erreichbar,
-// horizontaler Scroll 173 px; 768/1024 px unveraendert kein Scroll).
+// - vorher: horizontaler Scroll-Container ohne Hinweis auf verdeckte Tabs.
+//   Agent-Detail 461 px Tabs in 288 px Leiste (320 px Viewport), „Werkzeuge
+//   & Rechte“ und „Verbindung“ ausserhalb; Resource-Detail 540 von 288 px,
+//   „Verwendung“ und „Versionen“ ausserhalb (auch bei 390 und 430 px).
+// - nachher: die Leiste bricht um, alle Tabs liegen im Viewport, die Leiste
+//   hat keine eigene Scrollweite mehr.
 //
-// `overflow-x-auto` und nicht `flex-wrap`: eine umbrechende Tab-Leiste
-// verliert die durchgehende `border-b`-Kante und setzt den aktiven
-// 2px-Unterstrich in die obere Zeile (gemessen 141 px Leistenhoehe statt 45).
-// Horizontales Scrollen ist das etablierte Tab-Muster, und
-// docs/frontend/design-language.md §4.4 Punkt 1 nimmt bewusst gescrollte
-// Container vom 320px-Kriterium ausdruecklich aus.
-describe('TabsList — Responsive (Primitive-Fund #570/A)', () => {
-  it('scrollt horizontal, statt Trigger unerreichbar abzuschneiden', () => {
-    render(
-      <Tabs defaultValue="config">
-        <TabsList aria-label="Detail-Tabs">
-          <TabsTrigger value="config">Konfiguration</TabsTrigger>
-          <TabsTrigger value="tools">Werkzeuge &amp; Rechte</TabsTrigger>
-          <TabsTrigger value="connection">Verbindung</TabsTrigger>
-        </TabsList>
-        <TabsContent value="config">Konfig-Panel</TabsContent>
-      </Tabs>,
-    )
-    expect(screen.getByRole('tablist')).toHaveClass('overflow-x-auto')
+// Der fruehere Einwand gegen den Umbruch (die `border-b` ist keine
+// durchgehende Unterkante unter der oberen Zeile) ist durch die Owner-
+// Entscheidung W1=a abgewogen: sichtbare Tabs vor durchgehender Linie.
+function renderAgentTabs(className?: string) {
+  render(
+    <Tabs defaultValue="config">
+      <TabsList aria-label="Detailansicht" className={className}>
+        <TabsTrigger value="config">Konfiguration</TabsTrigger>
+        <TabsTrigger value="tools">Werkzeuge &amp; Rechte</TabsTrigger>
+        <TabsTrigger value="connection">Verbindung</TabsTrigger>
+      </TabsList>
+      <TabsContent value="config">Konfig-Panel</TabsContent>
+    </Tabs>,
+  )
+}
+
+describe('TabsList — Responsive (Mobil-Spec M7, W1=a)', () => {
+  it('bricht um, statt Tabs in einem Scroll-Container zu verstecken', () => {
+    renderAgentTabs()
+    const list = screen.getByRole('tablist')
+    expect(list).toHaveClass('flex-wrap')
+    expect(list.className).not.toMatch(/overflow-(x-)?(auto|scroll)/)
   })
 
-  // Der aktive Unterstrich sitzt mit `-bottom-px` bewusst 1 px ausserhalb der
-  // Trigger-Box, damit er die `border-b` der Leiste ueberdeckt statt darueber
-  // zu schweben. `overflow-x: auto` zieht `overflow-y` rechnerisch auf `auto`
-  // nach — dieser eine Pixel wird dadurch zu echtem vertikalem Scroll-Inhalt:
-  // gemessen scrollHeight 45 > clientHeight 44, und der Container liess sich
-  // tatsaechlich um 1 px vertikal scrollen (Trackpad-/Touch-Falle auf einer
-  // Leiste, die gar nicht vertikal scrollen soll).
-  //
-  // `pb-px` gibt dem Unterstrich diesen Pixel als Polsterung INNERHALB der
-  // Box, statt ihn zu Overflow werden zu lassen: gemessen scrollHeight 44 =
-  // clientHeight 44, vertikal nicht mehr scrollbar, horizontaler Scroll und
-  // die Optik des Unterstrichs unveraendert.
-  it('erzeugt keinen vertikalen Overflow durch den aktiven Unterstrich', () => {
-    render(
-      <Tabs defaultValue="config">
-        <TabsList aria-label="Detail-Tabs">
-          <TabsTrigger value="config">Konfiguration</TabsTrigger>
-          <TabsTrigger value="tools">Werkzeuge &amp; Rechte</TabsTrigger>
-        </TabsList>
-        <TabsContent value="config">Konfig-Panel</TabsContent>
-      </Tabs>,
-    )
-    expect(screen.getByRole('tablist')).toHaveClass('pb-px')
+  it('jeder Trigger ist ein 44-px-Ziel und bricht selbst nicht um', () => {
+    renderAgentTabs()
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveClass('h-11')
+      expect(tab).toHaveClass('whitespace-nowrap')
+    }
   })
 
-  it('bricht die Leiste nicht um — die Unterstrich-Kante bleibt eine Zeile', () => {
-    render(
-      <Tabs defaultValue="config">
-        <TabsList aria-label="Detail-Tabs">
-          <TabsTrigger value="config">Konfiguration</TabsTrigger>
-          <TabsTrigger value="tools">Werkzeuge &amp; Rechte</TabsTrigger>
-        </TabsList>
-        <TabsContent value="config">Konfig-Panel</TabsContent>
-      </Tabs>,
-    )
-    expect(screen.getByRole('tablist')).not.toHaveClass('flex-wrap')
-  })
-
-  // Die Aufrufstellen sollen die Scroll-Eigenschaft nicht versehentlich
-  // zuruecknehmen koennen: `className` wird weiterhin durchgereicht und
-  // gewinnt per tailwind-merge, aber der Default traegt sie.
-  it('reicht className weiter, ohne den Default zu verlieren', () => {
-    render(
-      <Tabs defaultValue="config">
-        <TabsList aria-label="Detail-Tabs" className="mt-4">
-          <TabsTrigger value="config">Konfiguration</TabsTrigger>
-        </TabsList>
-        <TabsContent value="config">Konfig-Panel</TabsContent>
-      </Tabs>,
-    )
+  // Die Aufrufstellen brauchen kein eigenes `flex-wrap` mehr (die lokale
+  // Klasse im Persona-Detail ist entfallen); `className` ergaenzt den
+  // Default, statt ihn zu ersetzen.
+  it('reicht className weiter, ohne den Umbruch zu verlieren', () => {
+    renderAgentTabs('mt-4')
     const list = screen.getByRole('tablist')
     expect(list).toHaveClass('mt-4')
-    expect(list).toHaveClass('overflow-x-auto')
+    expect(list).toHaveClass('flex-wrap')
   })
 })
