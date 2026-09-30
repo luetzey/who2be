@@ -268,7 +268,7 @@ export function ResourceDetailPage() {
             </Stack>
 
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList aria-label={t('detail.subResourcesTitle')}>
+              <TabsList aria-label={t('common:tabs.detailViewAria')}>
                 <TabsTrigger value="edit">
                   <Pencil aria-hidden="true" />
                   {t('tabs.edit')}
