@@ -80,11 +80,15 @@ import type {
   TestCaseCreateInput,
   TestCaseFilters,
   TestCaseRead,
+  TestReport,
+  TestRunRead,
+  TestRunSubmitInput,
   Token,
   TokenCreated,
   TokenInput,
   TokenRenameInput,
   VersionDiff,
+  VersionedEntityType,
   VersionStatus,
   WaArtifact,
   WaTable,
@@ -584,6 +588,10 @@ export interface Api {
   getTestCase: (caseId: string) => Promise<TestCaseRead>
   createTestCase: (input: TestCaseCreateInput) => Promise<TestCaseRead>
   retireTestCase: (caseId: string) => Promise<TestCaseRead>
+  // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
+  // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
+  getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
+  submitTestRuns: (input: TestRunSubmitInput) => Promise<TestRunRead[]>
   // Triage eines pending-Vorschlags: approve (opt. Fakt-Edition) oder reject
   // (opt. Notiz). 409, wenn der Eintrag nicht mehr pending ist.
   triageAgentMemory: (
@@ -1084,6 +1092,13 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     retireTestCase: (caseId) =>
       request<TestCaseRead>(token, `${ws}/test-cases/${caseId}/retire`, { method: 'POST' }),
+    getTestReport: (entityType, versionId) =>
+      request<TestReport>(token, `${ws}/versions/${entityType}/${versionId}/test-report`),
+    submitTestRuns: (input) =>
+      request<TestRunRead[]>(token, `${ws}/test-runs`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     triageAgentMemory: (agentId, memoryId, input) =>
       request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}/triage`, {
         method: 'POST',

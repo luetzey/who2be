@@ -1503,3 +1503,87 @@ export interface TestCaseFilters {
   entity_id?: string
   status?: TestCaseStatus
 }
+
+// --- Lernschleife B5: Prueflaeufe und Pruefbericht (ADR-0053 3.2, 6.2) -------
+// Spiegel von `who2be_models.test_case` (TestRun*, TestReport*).
+
+// `pass` nur bei n/n bestandenen Laeufen (`runs_passed === runs_total`).
+export type TestVerdict = 'pass' | 'fail' | 'error'
+// Herkunft eines Ergebnisses, serverseitig aus dem Aufrufweg gesetzt:
+// Agent-Token/MCP -> `client_self_report`, Web-Session -> `human_rating`.
+export type TestAttestation = 'client_self_report' | 'human_rating'
+
+export interface TestRunRead {
+  id: string
+  workspace_id: string
+  test_case_id: string
+  subject_entity_type: VersionedEntityType
+  subject_version_id: string
+  runs_total: number
+  runs_passed: number
+  verdict: TestVerdict
+  output_excerpt: string | null
+  attestation: TestAttestation
+  model_provider: string | null
+  model_name: string | null
+  reported_by_agent_id: string | null
+  reported_by_user_id: string | null
+  created_at: string
+}
+
+// Ein Ergebnis in `POST /test-runs`. Kein `attestation`-Feld: der Server
+// weist es ab (extra=forbid) und setzt den Wert selbst.
+export interface TestRunCreateInput {
+  test_case_id: string
+  runs_total: number
+  runs_passed: number
+  verdict: TestVerdict
+  output_excerpt?: string | null
+}
+
+export interface TestRunSubmitInput {
+  subject_entity_type: VersionedEntityType
+  subject_version_id: string
+  results: TestRunCreateInput[]
+  model_provider?: string | null
+  model_name?: string | null
+}
+
+// `missing`: kein Lauf gegen genau diese Version.
+export type TestReportState = 'pass' | 'fail' | 'error' | 'missing'
+
+export interface TestReportEntry {
+  test_case: TestCaseRead
+  direct: boolean
+  state: TestReportState
+  result: TestRunRead | null
+}
+
+// Alle Pruefaelle eines betroffenen Agenten. `via` nennt die Wege, ueber die
+// er betroffen ist (`persona`, `playbook_composite`, …, `direct`); ein
+// betroffener Agent ohne Pruefall hat eine leere `entries`-Liste.
+export interface TestReportAgentGroup {
+  agent_id: string
+  agent_name: string
+  via: string[]
+  entries: TestReportEntry[]
+}
+
+export interface TestReportCounts {
+  total: number
+  passed: number
+  failed: number
+  error: number
+  missing: number
+}
+
+export interface TestReport {
+  entity_type: VersionedEntityType
+  entity_id: string
+  version_id: string
+  affected_agent_count: number
+  // External Tools haben keinen Rueckwaerts-Index: nur direkt gebundene Faelle.
+  scope_note: 'no_reference_index' | null
+  counts: TestReportCounts
+  agents: TestReportAgentGroup[]
+}

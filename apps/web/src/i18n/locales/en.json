@@ -2951,6 +2951,71 @@
           "error": "Saving failed."
         }
       }
+    },
+    "testResults": {
+      "title": "Test cases",
+      "affected_one": "Affects {{count}} agent.",
+      "affected_other": "Affects {{count}} agents.",
+      "affectedNone": "No agent uses this element today.",
+      "summary": {
+        "passed": "{{count}} passed",
+        "failed": "{{count}} failed",
+        "missing": "{{count}} without result",
+        "awaiting": "{{count}} awaiting judgment"
+      },
+      "jumpToDiff": "Go to changes",
+      "loadFailed": "Results could not be loaded",
+      "noCases": "There are no test cases for this element. Whether the change makes something worse elsewhere cannot be seen this way.",
+      "noRuns": {
+        "title": "No results yet. Start the test run in the client:",
+        "prompt": "Run the test cases for {{type}} {{entityId}}, version {{version}}, and report the results with submit_test_results (subject_entity_type {{entityType}}, subject_version_id {{versionId}}).",
+        "copy": "Copy prompt",
+        "copied": "Copied."
+      },
+      "clientReported": "Reported by the client – Who2Be did not run the test cases itself.",
+      "scopeNoReferenceIndex": "External tools have no stored links. Only test cases bound directly to this tool are listed.",
+      "viaLabel": "Affected via: {{via}}",
+      "via": {
+        "direct": "bound directly",
+        "persona": "persona",
+        "system_prompt_template": "system prompt",
+        "persona_playbook": "playbook of the persona",
+        "playbook_composite": "playbook composite",
+        "resource_link": "resource in a playbook",
+        "resource_composite": "resource composite"
+      },
+      "agentWithoutCases": "This agent has no test cases.",
+      "morePassed_one": "{{count}} more passed",
+      "morePassed_other": "{{count}} more passed",
+      "kind": {
+        "pass": "Passed",
+        "fail": "Failed",
+        "error": "Run failed",
+        "missing": "No result",
+        "awaiting": "Awaiting judgment"
+      },
+      "direct": "bound directly",
+      "attestation": {
+        "client": "Self-report by the client · {{model}} · {{time}}",
+        "human": "Rated by {{name}} · {{time}}",
+        "unknownModel": "model unknown"
+      },
+      "unknownUser": "unknown",
+      "detail": {
+        "input": "Input",
+        "expected": "Expected behaviour",
+        "output": "Output",
+        "noRun": "No run against this version."
+      },
+      "rate": {
+        "label": "Rate “{{title}}”",
+        "prompt": "Your judgment:",
+        "pass": "Passed",
+        "fail": "Failed",
+        "savedPass": "Rated as passed.",
+        "savedFail": "Rated as failed.",
+        "error": "Saving the judgment failed."
+      }
     }
   }
 }
