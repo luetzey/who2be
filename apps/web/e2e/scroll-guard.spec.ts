@@ -211,3 +211,106 @@ test('M1/M12: lange URL ohne Trennstelle verbreitert keine Liste und keine Detai
   expect(chipBox, 'Trigger-Chip ohne Bounding-Box').not.toBeNull()
   expect(chipBox!.x + chipBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
 })
+
+/**
+ * Mobil-Spec P5 (Befund M5): Textfelder wachsen mit dem Inhalt bis 60 svh,
+ * statt innen zu scrollen (Scroll-in-Scroll). Gemessen war bei 320 px:
+ * Agent-Beschreibung 16,4-fache, Tool-Fallback-Hinweis 4,8-fache innere Tiefe.
+ *
+ * Zwei Pfade, beide geprueft:
+ * - `native`: Chromium kennt `field-sizing: content`; kein JavaScript.
+ * - `fallback`: Browser ohne die Eigenschaft (Safari < 26.2, Firefox < 152)
+ *   werden nachgestellt — `CSS.supports` verneint, die Eigenschaft ist per
+ *   Stylesheet ausser Kraft. Dann muss `useAutoGrow` die Hoehe setzen.
+ *
+ * Rot-Probe: `field-sizing-content` aus `components/ui/textarea.tsx`
+ * entfernt → `native` rot; `useAutoGrow` auf No-op → `fallback` rot.
+ */
+// ~300 Zeichen: passt bei 320 x 568 (60 svh = 340 px) sicher unter die Grenze.
+const MID_TEXT =
+  'Ist der Kalender-Server nicht erreichbar, nennt der Agent die offenen Termine aus dem ' +
+  'letzten Protokoll und bittet darum, den Termin von Hand einzutragen. Er schlaegt keine ' +
+  'Uhrzeiten vor, die er nicht pruefen kann, und weist darauf hin, dass Einladungen erst ' +
+  'nach der Wiederherstellung verschickt werden.'
+
+for (const mode of ['native', 'fallback'] as const) {
+  test(`M5 (${mode}): Textfeld waechst mit, kein innerer Scroll unter 60 svh, Fokus bleibt`, async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000)
+    if (mode === 'fallback') {
+      await page.addInitScript(() => {
+        const original = CSS.supports.bind(CSS)
+        CSS.supports = ((...args: [string, string?]) =>
+          String(args[0]).includes('field-sizing')
+            ? false
+            : original(...(args as [string, string]))) as typeof CSS.supports
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style')
+          style.textContent = 'textarea{field-sizing:fixed!important}'
+          document.head.appendChild(style)
+        })
+      })
+    }
+
+    const user = await createUser(request)
+    await loginAs(page, user)
+    await decideCookieConsent(page)
+    const { workspaceId } = await seedWorkspace(request, user)
+    const token = user.session.access_token
+    const tool = await apiRequest<{ id: string }>(
+      request,
+      token,
+      `/v1/workspaces/${workspaceId}/external_tools`,
+      {
+        method: 'POST',
+        data: { name: 'E2E Autogrow Tool', content: { display_name: 'Autogrow', fallback_note: MID_TEXT } },
+      },
+    )
+
+    await page.goto(`/w/${workspaceId}/tools/${tool.id}`)
+    const field = page.getByLabel('Fallback-Hinweis', { exact: false }).or(
+      page.getByLabel('Fallback note', { exact: false }),
+    )
+    await expect(field.first()).toHaveValue(MID_TEXT)
+    const textarea = field.first()
+
+    const probe = () =>
+      textarea.evaluate((el: HTMLTextAreaElement) => ({
+        client: el.clientHeight,
+        scroll: el.scrollHeight,
+        cap: window.innerHeight * 0.6,
+        supports: CSS.supports('field-sizing', 'content'),
+        inlineHeight: el.style.height,
+        focused: document.activeElement === el,
+      }))
+
+    const loaded = await probe()
+    // Sicherstellen, dass der gewuenschte Pfad wirklich aktiv ist — sonst
+    // misst der Test zweimal dasselbe.
+    expect(loaded.supports).toBe(mode === 'native')
+    if (mode === 'native') expect(loaded.inlineHeight).toBe('')
+    else expect(loaded.inlineHeight).not.toBe('')
+    expect(loaded.scroll, 'Seed-Text muss unter 60 svh liegen').toBeLessThanOrEqual(loaded.cap)
+    expect(loaded.scroll, 'innerer Scroll trotz Inhalt < 60 svh').toBeLessThanOrEqual(
+      loaded.client + 1,
+    )
+
+    // Tippen: das Feld waechst Zeile um Zeile, der Fokus bleibt im Feld.
+    await textarea.click()
+    await textarea.press('Control+End')
+    const before = loaded.client
+    await textarea.pressSequentially(' Zweiter Absatz folgt.\nNoch eine Zeile.\nUnd eine dritte.')
+    const typed = await probe()
+    expect(typed.focused, 'Fokus hat das Feld beim Wachsen verlassen').toBe(true)
+    expect(typed.client).toBeGreaterThan(before)
+    expect(typed.scroll).toBeLessThanOrEqual(typed.client + 1)
+
+    // Obergrenze: weit ueber 60 svh scrollt das Feld innen, die Hoehe bleibt gedeckelt.
+    await textarea.fill(`${MID_TEXT}\n`.repeat(12))
+    const capped = await probe()
+    expect(capped.client).toBeLessThanOrEqual(Math.ceil(capped.cap) + 1)
+    expect(capped.scroll).toBeGreaterThan(capped.client)
+  })
+}

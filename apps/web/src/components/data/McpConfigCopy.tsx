@@ -48,8 +48,11 @@ export function McpConfigCopy({ token }: McpConfigCopyProps) {
           ))}
         </Select>
       </div>
+      {/* Feste Hoehe (Mobil-Spec M5, Ausnahme): ein Konfigurationsschnipsel
+          zum Kopieren, kein Eingabefeld. */}
       <Textarea
         readOnly
+        autoGrow={false}
         aria-label={t('mcp.ariaLabel')}
         value={content}
         rows={7}
