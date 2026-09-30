@@ -138,6 +138,28 @@ describe('PlaybookRow — Responsive', () => {
     expect(metaColumn?.className).toContain('md:flex-col')
   })
 
+  it('deckelt die Meta-Spalte ab md, damit viele Tags die Textspalte nicht verdraengen', () => {
+    // t_2a3882b4: ohne Deckel wurde die `shrink-0`-Spalte mit 12 Tags 1236px
+    // breit, die Textspalte fiel auf 0px (scrollWidth 1593 bei 768). Mit
+    // `md:max-w-40 lg:max-w-xs` gemessen: Text 210/306/546px bei 768/1024/1280.
+    renderRow(
+      playbook({
+        tags: Array.from({ length: 12 }, (_, i) => `tag-${i + 1}`),
+      }),
+    )
+
+    const tags = screen.getByLabelText('Tags')
+    const metaColumn = tags.parentElement
+    const classes = metaColumn?.className.split(/\s+/) ?? []
+    // `shrink-0` darf nur mit Deckel stehen.
+    expect(classes).toContain('shrink-0')
+    expect(classes).toContain('md:max-w-40')
+    expect(classes).toContain('lg:max-w-xs')
+    // Die Tags brechen im gedeckelten Block um, statt ihn zu verbreitern.
+    expect(tags.className.split(/\s+/)).toContain('flex-wrap')
+    expect(tags.children).toHaveLength(12)
+  })
+
   it('hebt Composite-Umschalter und Kind-Link unterhalb md auf die von Issue #573 AK 5 geforderten 40px', () => {
     renderRow(
       playbook({
