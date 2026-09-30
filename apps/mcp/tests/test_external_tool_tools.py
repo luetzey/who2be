@@ -89,6 +89,7 @@ def _workspace_json(content_locale: str = "de") -> dict[str, object]:
 
 def _version_payload(version: int = 1, status: str = "active") -> dict[str, object]:
     return {
+        "id": str(uuid4()),
         "version": version,
         "status": status,
         "locale": "de",

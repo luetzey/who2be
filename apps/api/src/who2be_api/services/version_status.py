@@ -696,7 +696,7 @@ class VersionStatusService:
                 updated = await conn.fetchrow(
                     f"UPDATE {version_tbl} SET status = $1 "
                     f"WHERE {fk_col} = $2 AND version = $3 AND locale = $4 "
-                    "RETURNING version, status, locale, content, created_by, created_at",
+                    "RETURNING id, version, status, locale, content, created_by, created_at",
                     to_status.value,
                     entity_id,
                     version,

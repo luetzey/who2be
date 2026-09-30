@@ -496,7 +496,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         if owned is None:
             return None
         rows = await self._pool.fetch(
-            "SELECT version, status, locale, content, created_by, created_at "
+            "SELECT id, version, status, locale, content, created_by, created_at "
             f"FROM {ev} WHERE {fk} = $1 "
             "ORDER BY version DESC, locale ASC",
             entity_id,
@@ -510,7 +510,8 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         EN-v1) gewinnt deterministisch die Row in der Entity-Sprache."""
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         row = await self._pool.fetchrow(
-            "SELECT ev.version, ev.status, ev.locale, ev.content, ev.created_by, ev.created_at "
+            "SELECT ev.id, ev.version, ev.status, ev.locale, ev.content, ev.created_by, "
+            "ev.created_at "
             f"FROM {ev} ev "
             f"JOIN {e} e ON e.id = ev.{fk} "
             "WHERE e.id = $1 AND e.workspace_id = $2 AND ev.version = $3 "

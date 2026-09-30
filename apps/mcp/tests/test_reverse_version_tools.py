@@ -39,6 +39,7 @@ def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[],
 
 def _playbook_version(version: int = 1, status: str = "active") -> dict[str, object]:
     return {
+        "id": str(uuid4()),
         "version": version,
         "status": status,
         "locale": "de",
@@ -56,6 +57,7 @@ def _playbook_version(version: int = 1, status: str = "active") -> dict[str, obj
 
 def _resource_version(version: int = 1, status: str = "draft") -> dict[str, object]:
     return {
+        "id": str(uuid4()),
         "version": version,
         "status": status,
         "locale": "de",
