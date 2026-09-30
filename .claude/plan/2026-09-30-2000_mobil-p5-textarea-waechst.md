@@ -40,7 +40,9 @@ Basis: origin/main 5fa0cf81 (P3 #727 gemergt).
    kurze `height:auto` die Seite verschoben hat.
 4. [x] Opt-out in `TokenSecretReveal` und `McpConfigCopy`.
 5. [x] Tests + Rot-Probe; E2E in `scroll-guard.spec.ts` (native + fallback).
-6. [ ] PR B: Viewer-Ansicht im Agent-Editor.
+6. [x] PR B (#730): Viewer-Ansicht im Agent-Editor — ExpandableText 6 Zeilen
+   statt gesperrter Textarea; nachher 120 px + Knopf, aufgeklappt ohne inneren
+   Scroll (320/390/430, hell/dunkel).
 7. [x] Nachher-Messung, Screenshots hell/dunkel, DoD, PR A.
 
 ## Messung (Stack `w2bd752`, gebautes Stylesheet, Seed aus P3)
