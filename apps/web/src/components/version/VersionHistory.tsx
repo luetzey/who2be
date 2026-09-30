@@ -2,17 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 
-import type { ProvenanceEntry, VersionDiff, VersionStatus } from '@/api/types'
+import type {
+  ProvenanceEntry,
+  VersionDiff,
+  VersionedEntityType,
+  VersionStatus,
+} from '@/api/types'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { notify } from '@/lib/feedback'
 
 import { ProvenanceList } from './ProvenanceList'
+import { TestResultsPanel } from './TestResultsPanel'
 import { VersionDiffView } from './VersionDiffView'
 
 export interface VersionHistoryItem {
   version: number
+  /** UUID der Version — noetig fuer den Pruefbericht (`*VersionRead.id`). */
+  id?: string
   status?: VersionStatus
   created_at: string
 }
@@ -37,6 +45,14 @@ interface VersionHistoryProps {
    * ohne Wirkung.
    */
   initialDiffVersion?: number
+  /**
+   * Lernschleife B5 (Spec S11): Elementart fuer den Pruefbericht. Gesetzt
+   * zeigt der aufgeklappte Diff die Pruefall-Ergebnisse der Version daneben.
+   * Ohne Wert bleibt die Insel wie bisher.
+   */
+  testReportEntityType?: VersionedEntityType
+  /** Query zum Tab „Prüffälle“ fuer den Leerzustand (z. B. `?tab=tests`). */
+  testCasesSearch?: string
 }
 
 type PanelKind = 'diff' | 'provenance'
@@ -59,8 +75,11 @@ export function VersionHistory({
   loadDiff,
   loadProvenance,
   initialDiffVersion,
+  testReportEntityType,
+  testCasesSearch,
 }: VersionHistoryProps) {
   const { t } = useTranslation('version')
+  const diffColumn = useRef<HTMLDivElement | null>(null)
   const [openPanel, setOpenPanel] = useState<{ version: number; kind: PanelKind } | null>(null)
   const [diff, setDiff] = useState<VersionDiff | null>(null)
   const [provenance, setProvenance] = useState<ProvenanceEntry[] | null>(null)
@@ -148,6 +167,19 @@ export function VersionHistory({
         <ul className="flex flex-col gap-2" aria-label={t('history.listLabel')}>
           {versions.map((version) => {
             const isOpen = openPanel?.version === version.version
+            // Pruefbericht nur, wenn die Seite ihn anfordert und die Version
+            // ihre UUID mitbringt (`*VersionRead.id`).
+            const reportVersionId =
+              testReportEntityType !== undefined ? (version.id ?? null) : null
+            const panelContent = panelLoading ? (
+              <p className="text-sm text-muted-foreground">{t('common:loading')}</p>
+            ) : panelError !== null ? (
+              <p className="text-sm text-destructive">{panelError}</p>
+            ) : openPanel?.kind === 'diff' && diff !== null ? (
+              <VersionDiffView diff={diff} />
+            ) : openPanel?.kind === 'provenance' && provenance !== null ? (
+              <ProvenanceList entries={provenance} />
+            ) : null
             return (
               <li
                 key={version.version}
@@ -200,15 +232,34 @@ export function VersionHistory({
                 </div>
                 {isOpen ? (
                   <div className="mt-3 border-t border-border pt-3">
-                    {panelLoading ? (
-                      <p className="text-sm text-muted-foreground">{t('common:loading')}</p>
-                    ) : panelError !== null ? (
-                      <p className="text-sm text-destructive">{panelError}</p>
-                    ) : openPanel?.kind === 'diff' && diff !== null ? (
-                      <VersionDiffView diff={diff} />
-                    ) : openPanel?.kind === 'provenance' && provenance !== null ? (
-                      <ProvenanceList entries={provenance} />
-                    ) : null}
+                    {openPanel?.kind === 'diff' &&
+                    testReportEntityType !== undefined &&
+                    reportVersionId !== null ? (
+                      // Spec S11: Pruefaelle neben dem Diff (ab lg zwei
+                      // Spalten); darunter gestapelt, Pruefaelle zuerst. Beide
+                      // laden getrennt — ein Fehler rechts blockiert den Diff
+                      // nicht.
+                      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                        <div
+                          ref={diffColumn}
+                          tabIndex={-1}
+                          className="order-last min-w-0 outline-none lg:order-first"
+                        >
+                          {panelContent}
+                        </div>
+                        <div className="order-first min-w-0 lg:order-last">
+                          <TestResultsPanel
+                            entityType={testReportEntityType}
+                            versionId={reportVersionId}
+                            version={version.version}
+                            testCasesSearch={testCasesSearch}
+                            onJumpToDiff={() => diffColumn.current?.focus()}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      panelContent
+                    )}
                   </div>
                 ) : null}
               </li>

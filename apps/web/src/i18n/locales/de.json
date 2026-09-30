@@ -2951,6 +2951,71 @@
           "error": "Speichern fehlgeschlagen."
         }
       }
+    },
+    "testResults": {
+      "title": "Prüffälle",
+      "affected_one": "Betrifft {{count}} Agenten.",
+      "affected_other": "Betrifft {{count}} Agenten.",
+      "affectedNone": "Heute nutzt kein Agent dieses Element.",
+      "summary": {
+        "passed": "{{count}} bestanden",
+        "failed": "{{count}} nicht bestanden",
+        "missing": "{{count}} ohne Ergebnis",
+        "awaiting": "{{count}} warten auf Bewertung"
+      },
+      "jumpToDiff": "Zu den Änderungen",
+      "loadFailed": "Ergebnisse konnten nicht geladen werden",
+      "noCases": "Für dieses Element gibt es keine Prüffälle. Ob die Änderung anderswo etwas verschlechtert, lässt sich so nicht erkennen.",
+      "noRuns": {
+        "title": "Noch keine Ergebnisse. Starte den Prüflauf im Client:",
+        "prompt": "Führe die Prüffälle für {{type}} {{entityId}}, Version {{version}}, aus und melde die Ergebnisse mit submit_test_results (subject_entity_type {{entityType}}, subject_version_id {{versionId}}).",
+        "copy": "Startsatz kopieren",
+        "copied": "Kopiert."
+      },
+      "clientReported": "Vom Client gemeldet – Who2Be hat die Prüffälle nicht selbst ausgeführt.",
+      "scopeNoReferenceIndex": "Externe Tools haben keine gespeicherten Verknüpfungen. Aufgeführt sind nur Prüffälle, die direkt an diesem Tool hängen.",
+      "viaLabel": "Betroffen über: {{via}}",
+      "via": {
+        "direct": "direkt gebunden",
+        "persona": "Persona",
+        "system_prompt_template": "System-Prompt",
+        "persona_playbook": "Playbook der Persona",
+        "playbook_composite": "Playbook-Composite",
+        "resource_link": "Resource in einem Playbook",
+        "resource_composite": "Resource-Composite"
+      },
+      "agentWithoutCases": "Für diesen Agenten gibt es keine Prüffälle.",
+      "morePassed_one": "{{count}} weiterer bestanden",
+      "morePassed_other": "{{count}} weitere bestanden",
+      "kind": {
+        "pass": "Bestanden",
+        "fail": "Nicht bestanden",
+        "error": "Lauf fehlgeschlagen",
+        "missing": "Kein Ergebnis",
+        "awaiting": "Wartet auf Bewertung"
+      },
+      "direct": "direkt gebunden",
+      "attestation": {
+        "client": "Selbstauskunft des Clients · {{model}} · {{time}}",
+        "human": "Bewertung durch {{name}} · {{time}}",
+        "unknownModel": "Modell unbekannt"
+      },
+      "unknownUser": "unbekannt",
+      "detail": {
+        "input": "Eingabe",
+        "expected": "Erwartetes Verhalten",
+        "output": "Ausgabe",
+        "noRun": "Kein Lauf gegen diese Version."
+      },
+      "rate": {
+        "label": "„{{title}}“ bewerten",
+        "prompt": "Deine Bewertung:",
+        "pass": "Bestanden",
+        "fail": "Nicht bestanden",
+        "savedPass": "Als bestanden bewertet.",
+        "savedFail": "Als nicht bestanden bewertet.",
+        "error": "Bewertung konnte nicht gespeichert werden."
+      }
     }
   }
 }
