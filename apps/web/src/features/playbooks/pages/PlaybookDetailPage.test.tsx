@@ -1020,7 +1020,7 @@ describe('PlaybookDetailPage — Deep-Link in die Pruefansicht', () => {
   it('Statusleiste im Review: ein Klick zeigt den Versions-Tab mit offenem Diff', async () => {
     const fetchMock = renderPlaybookDetail(reviewHandlers(), { me: meWithRole('admin') })
 
-    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    const link = await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(link).toHaveAttribute('href', '/w/ws-1/playbooks/pb1?tab=versions&diff=2')
     // Panels bleiben gemountet — ohne Link darf der Diff nicht vorab laden.
     expect(diffCalls(fetchMock)).toBe(0)
@@ -1040,11 +1040,67 @@ describe('PlaybookDetailPage — Deep-Link in die Pruefansicht', () => {
       entry: '/w/ws-1/playbooks/pb1?diff=2',
     })
 
-    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(screen.getByRole('tab', { name: /Bearbeiten/ })).toHaveAttribute(
       'aria-selected',
       'true',
     )
     expect(diffCalls(fetchMock)).toBe(0)
+  })
+})
+
+// Lernschleife B5-Web C (Spec S11): der Versions-Tab klappt die Review-
+// Version auf und laedt deren Pruefbericht ueber Elementart + Versions-UUID.
+describe('PlaybookDetailPage — Pruefbericht im Versions-Tab (S11)', () => {
+  const REVIEW_ID = 'bbbbbbbb-0000-4000-8000-000000000002'
+  const REPORT_PATH = `${WS_PREFIX}/versions/playbook/${REVIEW_ID}/test-report`
+
+  function handlers(reportCalls: string[]): FetchHandler {
+    const base = playbookHandlers({
+      playbook: playbookWith({ current_version: 2 }),
+      versions: [{ ...pbVersion(2, 'review'), id: REVIEW_ID }, { ...pbVersion(1, 'active'), id: 'v1' }],
+    })
+    return (path, method, init) => {
+      if (method === 'GET' && path === `${WS_PREFIX}/playbooks/pb1/versions/2/diff`) {
+        return jsonResponse({ version: 2, against: 'active', against_version: 1, identical: true, changes: [] })
+      }
+      if (method === 'GET' && path.endsWith('/test-report')) {
+        reportCalls.push(path)
+        return jsonResponse({
+          entity_type: 'playbook',
+          entity_id: 'pb1',
+          version_id: REVIEW_ID,
+          affected_agent_count: 0,
+          scope_note: null,
+          counts: { total: 0, passed: 0, failed: 0, error: 0, missing: 0 },
+          agents: [],
+        })
+      }
+      return base(path, method, init)
+    }
+  }
+
+  it('der Diff der Review-Version laedt den Bericht mit playbook und UUID', async () => {
+    const reportCalls: string[] = []
+    renderPlaybookDetail(handlers(reportCalls), {
+      me: meWithRole('editor'),
+      entry: '/w/ws-1/playbooks/pb1?tab=versions',
+    })
+
+    const create = await screen.findByRole('link', { name: 'Prüffall anlegen' })
+    expect(create).toHaveAttribute('href', '/w/ws-1/playbooks/pb1?tab=tests')
+    expect(reportCalls).toEqual([REPORT_PATH])
+  })
+
+  it('im Tab „Bearbeiten" wird weder Diff noch Bericht geladen (Panels bleiben gemountet)', async () => {
+    const reportCalls: string[] = []
+    const fetchMock = renderPlaybookDetail(handlers(reportCalls), { me: meWithRole('editor') })
+
+    await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
+    const diffs = fetchMock.mock.calls.filter(([input]) =>
+      new URL(String(input)).pathname.endsWith('/diff'),
+    )
+    expect(diffs).toHaveLength(0)
+    expect(reportCalls).toEqual([])
   })
 })

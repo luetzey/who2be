@@ -224,11 +224,14 @@ export function ResourceDetailPage() {
                           <StatusActionBar
                             status={status}
                             diffVersion={promotableVersion.version}
-                            onTransition={(to) =>
+                            testReportEntityType="resource"
+                            versionId={promotableVersion.id}
+                            onTransition={(to, options) =>
                               api.transitionResourceVersion(
                                 resource.id,
                                 promotableVersion.version,
                                 to,
+                                options,
                               )
                             }
                             onTransitioned={reload}
@@ -421,7 +424,10 @@ export function ResourceDetailPage() {
                   loadProvenance={(version) =>
                     api.provenanceResourceVersion(resource.id, version)
                   }
-                  initialDiffVersion={diffVersion}
+                  // Spec S11: Review-Version beim Oeffnen aufgeklappt. Ohne
+                  // Tab „Prüffälle“ kein `testCasesSearch`.
+                  initialDiffVersion={diffVersion ?? reviewVersion?.version}
+                  testReportEntityType="resource"
                 />
               </TabsContent>
             </Tabs>

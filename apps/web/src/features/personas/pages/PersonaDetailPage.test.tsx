@@ -822,7 +822,7 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
   it('Statusleiste im Review: ein Klick oeffnet den Versions-Tab mit aufgeklapptem Diff', async () => {
     const fetchMock = renderPersonaDetail(reviewHandlers(), { me: meWithRole('admin') })
 
-    const link = await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    const link = await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(link).toHaveAttribute('href', '/w/ws-1/personas/p1?tab=versions&diff=2')
     expect(screen.getByRole('tab', { name: /Bearbeiten/ })).toHaveAttribute(
       'aria-selected',
@@ -873,7 +873,6 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
     ['unbekannter Tab und kaputte Version', '?tab=bogus&diff=abc', /Bearbeiten/],
     ['diff ohne tab=versions', '?diff=2', /Bearbeiten/],
     ['Version, die es nicht gibt', '?tab=versions&diff=99', /Versionen/],
-    ['keine kanonische Ganzzahl', '?tab=versions&diff=2.0', /Versionen/],
   ])('ignoriert ungueltige Parameter (%s)', async (_label, search, selectedTab) => {
     const fetchMock = renderPersonaDetail(reviewHandlers(), {
       entry: `/w/ws-1/personas/p1${search}`,
@@ -884,16 +883,25 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
       'true',
     )
     // Seite ist fertig geladen (Status-Callout steht), trotzdem kein Diff.
-    await screen.findByRole('link', { name: 'Änderungen ansehen' })
+    await screen.findByRole('link', { name: 'Änderungen und Prüffälle ansehen' })
     expect(screen.queryByRole('list', { name: 'Änderungen' })).not.toBeInTheDocument()
     expect(diffCalls(fetchMock)).toBe(0)
+  })
+
+  it('ungueltiger Diff-Wert: der Versions-Tab klappt die Review-Version auf (Spec S11)', async () => {
+    const fetchMock = renderPersonaDetail(reviewHandlers(), {
+      entry: '/w/ws-1/personas/p1?tab=versions&diff=2.0',
+    })
+
+    expect(await screen.findByRole('list', { name: 'Änderungen' })).toBeInTheDocument()
+    expect(diffCalls(fetchMock)).toBe(1)
   })
 
   it('Draft: kein Link „Änderungen ansehen"', async () => {
     renderPersonaDetail(personaHandlers())
 
     await screen.findByTestId('branch-action-submit')
-    expect(screen.queryByRole('link', { name: 'Änderungen ansehen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).not.toBeInTheDocument()
   })
 
   // Audit A2 (Rest): der Pruef-Tab zeigt nur die Versionen; die Danger-Zone
@@ -913,5 +921,48 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
 
     expect(await screen.findByText('Persona löschen')).toBeInTheDocument()
     expect(screen.getByTestId('delete-persona-trigger')).toBeInTheDocument()
+  })
+})
+
+// Lernschleife B5-Web C (Spec S11): der Versions-Tab klappt die Review-
+// Version auf und laedt deren Pruefbericht ueber Elementart + Versions-UUID.
+describe('PersonaDetailPage — Pruefbericht im Versions-Tab (S11)', () => {
+  const REVIEW_ID = 'aaaaaaaa-0000-4000-8000-000000000002'
+  const REPORT_PATH = `${WS_PREFIX}/versions/persona/${REVIEW_ID}/test-report`
+
+  it('der Diff der Review-Version laedt den Bericht mit persona und UUID', async () => {
+    const base = personaHandlers({
+      persona: personaWith({ current_version: 2 }),
+      versions: [{ ...pVersion(2, 'review'), id: REVIEW_ID }, { ...pVersion(1, 'active'), id: 'v1' }],
+    })
+    const reportCalls: string[] = []
+    renderPersonaDetail(
+      (path, method, init) => {
+        if (method === 'GET' && path === `${WS_PREFIX}/personas/p1/versions/2/diff`) {
+          return jsonResponse({ version: 2, against: 'active', against_version: 1, identical: true, changes: [] })
+        }
+        if (method === 'GET' && path.endsWith('/test-report')) {
+          reportCalls.push(path)
+          return jsonResponse({
+            entity_type: 'persona',
+            entity_id: 'p1',
+            version_id: REVIEW_ID,
+            affected_agent_count: 0,
+            scope_note: null,
+            counts: { total: 0, passed: 0, failed: 0, error: 0, missing: 0 },
+            agents: [],
+          })
+        }
+        return base(path, method, init)
+      },
+      // Editor: die Leiste laedt keinen Bericht, der Request kommt nur vom Diff.
+      { me: meWithRole('editor'), entry: '/w/ws-1/personas/p1?tab=versions' },
+    )
+
+    // Leerzustand verlinkt den Tab „Prüffälle“ derselben Seite.
+    const create = await screen.findByRole('link', { name: 'Prüffall anlegen' })
+    expect(create).toHaveAttribute('href', '/w/ws-1/personas/p1?tab=tests')
+    expect(screen.getByRole('button', { name: 'Diff', pressed: true })).toBeInTheDocument()
+    expect(reportCalls).toEqual([REPORT_PATH])
   })
 })

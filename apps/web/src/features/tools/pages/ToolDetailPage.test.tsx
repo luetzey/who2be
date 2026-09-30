@@ -567,3 +567,37 @@ describe('ToolDetailPage — Umbruch bei 320px (#562)', () => {
     expect(classes).toContain('max-w-full')
   })
 })
+
+// Lernschleife B5-Web C (Spec S11): Tools haben keinen Diff-Endpoint (WP-4),
+// der Pruefbericht wirkt ueber die Statusleiste. Sie laedt ihn mit
+// Elementart `external_tool` und der UUID der Review-Version.
+describe('ToolDetailPage — Pruefbericht beim Aktivieren (S11)', () => {
+  const REVIEW_ID = 'dddddddd-0000-4000-8000-000000000001'
+  const REPORT_PATH = `${WS_PREFIX}/versions/external_tool/${REVIEW_ID}/test-report`
+
+  it('die Review-Leiste laedt den Bericht mit external_tool und UUID; rot fuehrt in den Dialog', async () => {
+    const base = detailHandlers({
+      tool: tool({ current_status: 'review' }),
+      versions: [{ ...version(1, 'review'), id: REVIEW_ID }],
+    })
+    const reportCalls: string[] = []
+    renderDetailPage((path, method, init) => {
+      if (method === 'GET' && path.endsWith('/test-report')) {
+        reportCalls.push(path)
+        return jsonResponse({
+          entity_type: 'external_tool',
+          entity_id: 't1',
+          version_id: REVIEW_ID,
+          affected_agent_count: 0,
+          scope_note: 'no_reference_index',
+          counts: { total: 1, passed: 0, failed: 0, error: 0, missing: 1 },
+          agents: [],
+        })
+      }
+      return base(path, method, init)
+    })
+
+    expect(await screen.findByRole('button', { name: 'Aktivieren…' })).toBeEnabled()
+    expect(reportCalls).toEqual([REPORT_PATH])
+  })
+})

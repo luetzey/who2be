@@ -66,7 +66,7 @@
         "notice": "Publishing requires two-factor sign-in.",
         "setup": "Set up two-factor"
       },
-      "viewChanges": "View changes",
+      "viewChanges": "View changes and test cases",
       "fallback": "Action failed.",
       "error": {
         "promoteFill": "Fill in before activating: {{fields}}.",

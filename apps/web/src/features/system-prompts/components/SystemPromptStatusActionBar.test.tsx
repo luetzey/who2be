@@ -144,7 +144,7 @@ describe('SystemPromptStatusActionBar — Review-Leiste', () => {
   it('verlinkt im Review den Diff der uebergebenen Version auf demselben Pfad', () => {
     renderBar('review', { aal: 'aal2', diffVersion: 3 })
 
-    expect(screen.getByRole('link', { name: 'Änderungen ansehen' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).toHaveAttribute(
       'href',
       '/w/ws-1/system-prompts/sp1?tab=versions&diff=3',
     )
@@ -153,19 +153,19 @@ describe('SystemPromptStatusActionBar — Review-Leiste', () => {
   it('zeigt den Link auch neben dem MFA-Hinweis (Pruefen geht ohne aal2)', () => {
     renderBar('review', { aal: 'aal1', diffVersion: 3 })
 
-    expect(screen.getByRole('link', { name: 'Änderungen ansehen' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).toBeInTheDocument()
   })
 
   it('zeigt ohne diffVersion keinen Link', () => {
     renderBar('review', { aal: 'aal2' })
 
-    expect(screen.queryByRole('link', { name: 'Änderungen ansehen' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).toBeNull()
   })
 
   it('zeigt im Draft keinen Link, auch wenn eine Version uebergeben wird', () => {
     renderBar('draft', { diffVersion: 3 })
 
     expect(screen.getByRole('button', { name: 'Zur Review einreichen' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Änderungen ansehen' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).toBeNull()
   })
 })
