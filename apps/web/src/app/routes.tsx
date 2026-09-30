@@ -133,6 +133,17 @@ const FeedbackItemDetailPage = lazy(() =>
     default: mod.FeedbackItemDetailPage,
   })),
 )
+// Mobil-Spec W4=b: Vollbild-Varianten von „Feedback geben“/„Problem melden“.
+const GiveFeedbackPage = lazy(() =>
+  import('@/features/feedback/pages/FeedbackComposePages').then((mod) => ({
+    default: mod.GiveFeedbackPage,
+  })),
+)
+const ReportProblemPage = lazy(() =>
+  import('@/features/feedback/pages/FeedbackComposePages').then((mod) => ({
+    default: mod.ReportProblemPage,
+  })),
+)
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
@@ -338,6 +349,15 @@ export function RouterRoot() {
                   path="/w/:workspaceId/feedback/item/:feedbackId"
                   element={<FeedbackItemDetailPage />}
                 />
+                {/* Mobil-Spec W4=b: Vollbildseiten unter `md` (Ausloeser in
+                    GiveFeedbackDialog/ReportProblemDialog). `give` hat drei
+                    Segmente, `report` eines — keine Ueberschneidung mit
+                    `:entityType/:entityId`. */}
+                <Route
+                  path="/w/:workspaceId/feedback/give/:entityType/:entityId"
+                  element={<GiveFeedbackPage />}
+                />
+                <Route path="/w/:workspaceId/feedback/report" element={<ReportProblemPage />} />
                 <Route
                   path="/w/:workspaceId/feedback/:entityType/:entityId"
                   element={<FeedbackDetailPage />}
