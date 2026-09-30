@@ -79,6 +79,17 @@ function CardBody({
   | 'meta'
   | 'actions'
 > & { interactiveSurface: boolean }) {
+  // Kachel in zwei Groessen (Mobil-Spec M3): unter `md` klein (32 px) in der
+  // Titelzeile, damit die Textspalte die volle Kartenbreite bekommt — bei
+  // 320 px war sie neben der 44-px-Kachel nur 162 px breit. Ab `md` steht die
+  // grosse Kachel wie bisher links. Beide sind dekorativ (aria-hidden-Glyph).
+  const tile = (size: 'sm' | 'md', className: string) =>
+    avatar !== undefined ? (
+      <EntityAvatar initials={avatar} tone={iconTone} size={size} className={className} />
+    ) : (
+      <EntityIcon icon={icon} tone={iconTone} size={size} className={className} />
+    )
+
   return (
     <article
       className={cn(
@@ -86,25 +97,28 @@ function CardBody({
         // Textspalte bei 320px sonst auf 0px — der Titel bricht dann nach
         // jedem Zeichen um. Mit Umbruch rutschen die Actions in die naechste
         // Zeile, statt die Spalte zu erdruecken.
-        'relative flex flex-wrap items-center gap-4 p-4',
+        // `items-start` unter `md`: Actions und Chevron bleiben oben rechts
+        // neben dem Titel statt mittig neben der Beschreibung (Spec M3).
+        'relative flex flex-wrap items-start gap-4 p-4 md:items-center',
         interactiveSurface &&
           'rounded-xl border bg-card shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover',
       )}
     >
-      {avatar !== undefined ? (
-        <EntityAvatar initials={avatar} tone={iconTone} size="md" />
-      ) : (
-        <EntityIcon icon={icon} tone={iconTone} size="md" />
-      )}
+      {tile('md', 'hidden md:inline-flex')}
 
       {/* `min-w-32`: Untergrenze gegen den Kollaps der Spalte, wenn die Karte
           Zeilen-Actions traegt. `flex-1` gewinnt darueber, sobald Platz da ist
           — ab `md` bleibt die Spalte unveraendert breit. */}
       <div className="flex min-w-32 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
+          {tile('sm', 'md:hidden')}
+          {/* Unter `md` nimmt der Titel den Rest der Kachel-Zeile
+              (`100% - 32px Kachel - 8px Luecke`), sonst bricht er unter die
+              Kachel und die Kachel steht allein in einer Zeile. Badges und
+              Status folgen darunter. */}
           <Link
             to={href}
-            className="rounded-sm text-sm font-semibold wrap-anywhere text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="min-w-0 basis-[calc(100%-2.5rem)] rounded-sm text-sm font-semibold wrap-anywhere text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:basis-auto"
           >
             {title}
           </Link>
@@ -113,7 +127,15 @@ function CardBody({
         </div>
 
         {description !== undefined && description !== '' ? (
-          <p className="text-sm break-words text-muted-foreground">{description}</p>
+          // Vorschau, kein Volltext (Mobil-Spec M3, Weiche W3): 2 Zeilen unter
+          // `md`, 3 ab `md`, harte Kuerzung mit „…". `line-clamp-*` erzeugt das
+          // praefixierte `-webkit-line-clamp`-Muster (R-F5). Kein „Mehr
+          // anzeigen" pro Karte — der Stretched-Link des Titels ist der Weg
+          // zur Detailseite mit Volltext. Der Text bleibt ganz im DOM, der
+          // Screenreader liest ihn vollstaendig.
+          <p className="line-clamp-2 text-sm wrap-anywhere text-muted-foreground md:line-clamp-3">
+            {description}
+          </p>
         ) : null}
 
         {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
@@ -208,7 +230,13 @@ export function EntityCard({
             <span className="font-semibold">{expandLabel}</span>
           ) : null}
           {expandSummary !== undefined ? (
-            <span className="min-w-0 flex-1 truncate text-left opacity-80">{expandSummary}</span>
+            // Namensliste erst ab `md` (Mobil-Spec M6): bei 320 px blieben ihr
+            // 17–27 px — eine Ellipse ohne Information. Unter `md` nennt der
+            // Knopf nur die Anzahl (steht schon im `expandLabel`). `min-w-24`
+            // haelt ab `md` mindestens 96 px frei.
+            <span className="hidden min-w-24 flex-1 truncate text-left opacity-80 md:inline">
+              {expandSummary}
+            </span>
           ) : null}
           <ChevronRight
             className={cn(
