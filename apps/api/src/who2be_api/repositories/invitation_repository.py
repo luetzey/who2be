@@ -24,11 +24,12 @@ class AcceptResult:
 
     `status` unterscheidet die HTTP-Mappings im Service: `not_found` → 404,
     `gone` (akzeptiert/widerrufen/abgelaufen) → 410,
+    `email_required` (Aufrufer bringt keine Email mit) → 403,
     `email_mismatch` (JWT-Email passt nicht zur Invitation-Email) → 403,
     `accepted` → 200 mit `workspace_id`.
     """
 
-    status: Literal["not_found", "gone", "email_mismatch", "accepted"]
+    status: Literal["not_found", "gone", "email_required", "email_mismatch", "accepted"]
     workspace_id: UUID | None = None
 
 
@@ -110,11 +111,14 @@ class PgInvitationRepository:
                 or row["expires_at"] <= datetime.now(row["expires_at"].tzinfo)
             ):
                 return AcceptResult(status="gone")
-            # Phase 3-D: bringt der Aufrufer eine bestaetigte Email mit (JWT-
-            # Claim), muss sie zur Invitation-Email passen — sonst koennte ein
-            # falsches Konto die Mitgliedschaft uebernehmen. Vergleich
-            # case-insensitive; Invitation bleibt offen.
-            if expected_email is not None and expected_email.lower() != row["email"].lower():
+            # Die Einladung gilt einer Email-Adresse; angenommen wird sie nur
+            # von einem Konto, das genau diese Adresse belegt (JWT-Claim).
+            # Fail-closed: ohne Email kein Abgleich, also keine Annahme — sonst
+            # entschiede allein der Besitz des Tokens. Vergleich
+            # case-insensitive; die Invitation bleibt in beiden Faellen offen.
+            if expected_email is None:
+                return AcceptResult(status="email_required")
+            if expected_email.lower() != row["email"].lower():
                 return AcceptResult(status="email_mismatch")
             # Mitgliedschaft setzen; ein bereits bestehender Member behaelt
             # seine Rolle (DO NOTHING) — der Accept bleibt dennoch single-use.
