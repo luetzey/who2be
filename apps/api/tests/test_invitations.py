@@ -5,6 +5,8 @@ Expired→410, Revoked→410, Cross-Workspace-Isolation, admin-only Gate sowie
 die Last-admin-Self-demote-Invariante (409). Dazu die Annahme per Token im
 Body (`POST /v1/invitations/accept`), den befristeten Legacy-Pfad mit Token im
 Pfad und den fail-closed Email-Abgleich: ohne Email-Claim keine Annahme.
+Ausserdem die offenen Einladungen des eigenen Kontos
+(`GET /v1/invitations/pending`), nur mit bestaetigter Email-Adresse.
 Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 """
 
@@ -22,9 +24,11 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.integrations import gotrue_mailer
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token, db_execute
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
+    seed_auth_user,
     setup_workspace,
 )
 
@@ -619,3 +623,210 @@ def test_invitation_legacy_path_still_accepts_with_sunset_notice() -> None:
             assert "deprecated" not in spec["paths"]["/v1/invitations/accept"]["post"]
     finally:
         cleanup_workspaces([admin_id, invitee_id])
+
+
+# --------------------------------------------------------------------------
+# GET /v1/invitations/pending — offene Einladungen des eigenen Kontos
+# --------------------------------------------------------------------------
+
+_PENDING = "/v1/invitations/pending"
+
+
+def _account(user_id: UUID, email: str, *, confirmed: bool) -> None:
+    """Konto im `auth.users`-Stub, bestaetigt oder nicht (wie GoTrue)."""
+    seed_auth_user(user_id, email, None)
+    db_execute(
+        "UPDATE auth.users SET email_confirmed_at = CASE WHEN $2 THEN now() END WHERE id = $1",
+        user_id,
+        confirmed,
+    )
+
+
+def _invite(
+    client: TestClient, admin_id: UUID, ws: UUID, email: str, role: str = "editor"
+) -> dict[str, str]:
+    created = client.post(
+        f"/v1/workspaces/{ws}/invitations",
+        json={"email": email, "role": role},
+        headers=_auth(admin_id),
+    )
+    assert created.status_code == 201, created.text
+    body: dict[str, str] = created.json()
+    return body
+
+
+def _rename(client: TestClient, admin_id: UUID, ws: UUID, name: str) -> None:
+    res = client.patch(f"/v1/workspaces/{ws}", json={"name": name}, headers=_auth(admin_id))
+    assert res.status_code == 200, res.text
+
+
+@pytest.mark.integration
+def test_pending_lists_only_open_invitations_for_the_confirmed_account() -> None:
+    """Bestaetigt: eigene offene Einladungen aus allen Workspaces, mit Name und
+    Rolle, ohne Token. Abgelaufen, widerrufen, angenommen und fremde Adressen
+    erscheinen nicht; Gross-/Kleinschreibung zaehlt nicht."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_a = fresh_user_id()
+    admin_b = fresh_user_id()
+    admin_c = fresh_user_id()
+    invitee = fresh_user_id()
+    stranger = fresh_user_id()
+    ws_a = setup_workspace(admin_a)
+    ws_b = setup_workspace(admin_b)
+    ws_c = setup_workspace(admin_c)
+    # Adresse im Konto anders geschrieben als in den Einladungen und im Claim.
+    _account(invitee, "Pending.Invitee@Example.com", confirmed=True)
+    _account(stranger, "pending.stranger@example.com", confirmed=True)
+
+    try:
+        with TestClient(app) as client:
+            _rename(client, admin_a, ws_a, "Pending Probe A")
+            _rename(client, admin_b, ws_b, "Pending Probe B")
+            # Je Workspace und Adresse gibt es hoechstens eine offene Einladung
+            # (workspace_invitation_open_uniq): erst die erledigten anlegen.
+            revoked = _invite(client, admin_a, ws_a, "pending.invitee@example.com")
+            gone = client.delete(
+                f"/v1/workspaces/{ws_a}/invitations/{revoked['id']}", headers=_auth(admin_a)
+            )
+            assert gone.status_code == 204, gone.text
+            accepted = _invite(client, admin_b, ws_b, "pending.invitee@example.com")
+            took = client.post(
+                "/v1/invitations/accept",
+                json={"token": accepted["token"]},
+                headers=_auth(invitee, email="pending.invitee@example.com"),
+            )
+            assert took.status_code == 200, took.text
+            expired = _invite(client, admin_c, ws_c, "pending.invitee@example.com")
+            _expire_invitation(expired["id"])
+            open_a = _invite(client, admin_a, ws_a, "pending.invitee@example.com", "editor")
+            open_b = _invite(client, admin_b, ws_b, "PENDING.INVITEE@example.com", "viewer")
+            foreign = _invite(client, admin_a, ws_a, "pending.stranger@example.com", "admin")
+
+            res = client.get(_PENDING, headers=_auth(invitee, email="pending.INVITEE@example.com"))
+            assert res.status_code == 200, res.text
+            rows = res.json()
+            by_id = {r["id"]: r for r in rows}
+            assert set(by_id) == {open_a["id"], open_b["id"]}
+            assert by_id[open_a["id"]] == {
+                "id": open_a["id"],
+                "workspace_id": str(ws_a),
+                "workspace_name": "Pending Probe A",
+                "role": "editor",
+                "expires_at": by_id[open_a["id"]]["expires_at"],
+                "created_at": by_id[open_a["id"]]["created_at"],
+            }
+            assert by_id[open_b["id"]]["workspace_id"] == str(ws_b)
+            assert by_id[open_b["id"]]["workspace_name"] == "Pending Probe B"
+            assert by_id[open_b["id"]]["role"] == "viewer"
+            # Kein Token, kein Hash — weder als Feld noch irgendwo im Text.
+            assert all(set(r) == set(by_id[open_a["id"]]) for r in rows)
+            assert "token" not in res.text
+            for invitation in (open_a, open_b, expired, revoked, accepted, foreign):
+                assert invitation["token"] not in res.text
+
+            # Der Fremde sieht nur seine eigene Einladung, nichts vom Eingeladenen.
+            other = client.get(
+                _PENDING, headers=_auth(stranger, email="pending.stranger@example.com")
+            )
+            assert other.status_code == 200, other.text
+            assert [r["id"] for r in other.json()] == [foreign["id"]]
+            assert open_a["id"] not in other.text
+            assert open_b["id"] not in other.text
+    finally:
+        cleanup_workspaces([admin_a, admin_b, admin_c, invitee, stranger])
+
+
+@pytest.mark.integration
+def test_pending_without_matching_invitations_is_empty() -> None:
+    """Fremde Adresse: die eigene Liste ist leer, fremde Einladungen tauchen nicht auf."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    nobody = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(nobody, "pending.nobody@example.com", confirmed=True)
+
+    try:
+        with TestClient(app) as client:
+            theirs = _invite(client, admin, ws, "pending.someone-else@example.com")
+            res = client.get(_PENDING, headers=_auth(nobody, email="pending.nobody@example.com"))
+            assert res.status_code == 200, res.text
+            assert res.json() == []
+            assert theirs["id"] not in res.text
+    finally:
+        cleanup_workspaces([admin, nobody])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("account", ["unconfirmed", "missing", "other_address"])
+def test_pending_requires_a_confirmed_account_address(account: str) -> None:
+    """Ohne bestaetigte Kontoadresse 403 `invitation_email_unconfirmed` — auch
+    wenn der Claim zur Einladung passt. Fail-closed, wenn GoTrue das Konto
+    nicht kennt oder der Claim eine andere als die Kontoadresse nennt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    invitee = fresh_user_id()
+    ws = setup_workspace(admin)
+    if account == "unconfirmed":
+        _account(invitee, "pending.unconfirmed@example.com", confirmed=False)
+    elif account == "other_address":
+        _account(invitee, "pending.real-owner@example.com", confirmed=True)
+
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, admin, ws, "pending.unconfirmed@example.com")
+            res = client.get(
+                _PENDING, headers=_auth(invitee, email="pending.unconfirmed@example.com")
+            )
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "invitation_email_unconfirmed"
+            assert invitation["id"] not in res.text
+    finally:
+        cleanup_workspaces([admin, invitee])
+
+
+@pytest.mark.integration
+def test_pending_without_email_claim_is_rejected() -> None:
+    """Ohne `email`-Claim im Login: 403 `invitation_email_required`."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    user = fresh_user_id()
+    _account(user, "pending.noclaim@example.com", confirmed=True)
+    try:
+        with TestClient(app) as client:
+            res = client.get(_PENDING, headers=_auth(user))
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "invitation_email_required"
+    finally:
+        cleanup_workspaces([user])
+
+
+@pytest.mark.integration
+def test_pending_rejects_agent_tokens() -> None:
+    """Nur Menschen: ein agent-gebundener `w2b_`-Token bekommt 403."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    try:
+        with TestClient(app) as client:
+            _agent_id, token_auth = agent_token(
+                client, f"/v1/workspaces/{ws}", "[Pending] Agent", {}, _auth(owner)
+            )
+            res = client.get(_PENDING, headers=token_auth)
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "account_route_requires_human"
+    finally:
+        cleanup_workspaces([owner])

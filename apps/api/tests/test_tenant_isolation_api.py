@@ -56,6 +56,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import db_execute
 from who2be_api.testing.tenant_pair import (
     ANCHOR_DENIED,
     DENIED,
@@ -68,7 +69,7 @@ from who2be_api.testing.tenant_pair import (
     leaks,
     seed_tenant,
 )
-from who2be_api.testing.workspace_setup import cleanup_workspaces
+from who2be_api.testing.workspace_setup import cleanup_workspaces, seed_auth_user
 
 _WS = "/v1/workspaces/{workspace_id}"
 # Pfad-Parameter, die keine Objekt-ID sind: der Workspace selbst (V1) und
@@ -427,6 +428,11 @@ PROBES: dict[str, Probe] = {
         body={"name": "iso", "slug": "iso-probe"}
     ),
     "DELETE /v1/organizations/{organization_id}": Probe(),
+    # Offene Einladungen des eigenen Kontos, ueber alle Workspaces hinweg —
+    # genau deshalb hier: B hat eine offene Einladung auf B's Adresse, A darf
+    # sie nicht sehen (V3, Leck-Check). Beide Konten sind bestaetigt
+    # (`_confirm_accounts` in `run_isolation`), sonst antwortete die Route 403.
+    "GET /v1/invitations/pending": Probe(),
     # Der Einladungs-Token ist das Objekt: A haelt den Token einer Einladung
     # in B. Ohne passende E-Mail im Login muss die Annahme scheitern (L1).
     # Beide Annahmewege teilen den Service; der Body-Weg ist der Nachfolger.
@@ -646,6 +652,19 @@ def isolation_env(tmp_path: Path) -> Iterator[None]:
         yield
 
 
+def _confirm_accounts(*tenants: Tenant) -> None:
+    """Bestaetigte Konten im `auth.users`-Stub, mit der Adresse aus dem JWT.
+
+    `seed_tenant` setzt den `email`-Claim auf `<marker>@example.com` (klein)
+    und laedt auf genau diese Adresse eine eigene Einladung ein. Ohne
+    bestaetigtes Konto antwortete `GET /v1/invitations/pending` mit 403, und
+    die V3-Probe saehe nie eine Liste.
+    """
+    for t in tenants:
+        seed_auth_user(t.user_id, f"{t.marker.lower()}@example.com", None)
+        db_execute("UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1", t.user_id)
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -731,6 +750,8 @@ def _probe_as_a(
 def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Report:
     """Alle Proben als A, dann der Fingerabdruck, dann die Gegenprobe als B."""
     report = Report()
+    # Hier statt beim Aufrufer: auch test_org_transfer.py faehrt diesen Lauf.
+    _confirm_accounts(a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():

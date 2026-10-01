@@ -6,7 +6,9 @@ Zwei Router:
   verschickt den Mail-Link (best-effort) bzw. teilt ihn manuell.
 - `accept_router` (top-level, **anonym authentifiziert**): ein anderer User
   akzeptiert die Einladung per Klartext-Token und wird Mitglied.
-  Single-use; akzeptiert/widerrufen/abgelaufen → 410 Gone.
+  Single-use; akzeptiert/widerrufen/abgelaufen → 410 Gone. Dazu
+  `GET /v1/invitations/pending`: die offenen Einladungen fuer die bestaetigte
+  E-Mail-Adresse des eigenen Kontos.
 
 Der Token reist im Request-Body (`POST /v1/invitations/accept`), nicht im
 Pfad: ein Pfad landet in jedem Access-Log zwischen Browser und API, ein Body
@@ -14,6 +16,7 @@ nicht. Der alte Pfad `POST /v1/invitations/{token}/accept` bleibt fuer bereits
 verschickte Links uebergangsweise erreichbar (siehe `_LEGACY_SUNSET`).
 """
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -34,7 +37,7 @@ from who2be_api.core.security import (
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.invitation_repository import PgInvitationRepository
 from who2be_api.services.audit_service import AuditService
-from who2be_api.services.invitation_service import InvitationService
+from who2be_api.services.invitation_service import InvitationService, PendingInvitationService
 from who2be_models import (
     InvitationAccept,
     InvitationCreate,
@@ -70,10 +73,59 @@ Principal = Annotated[CurrentPrincipal, Depends(get_current_human_principal)]
 Service = Annotated[InvitationService, Depends(get_invitation_service)]
 
 
+def get_pending_invitation_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> PendingInvitationService:
+    return PendingInvitationService(PgInvitationRepository(pool))
+
+
+PendingService = Annotated[PendingInvitationService, Depends(get_pending_invitation_service)]
+
+
 class InvitationAcceptResult(BaseModel):
     """Antwort auf einen erfolgreichen Accept — der beigetretene Workspace."""
 
     workspace_id: UUID
+
+
+class PendingInvitationRead(BaseModel):
+    """Offene Einladung fuer die E-Mail-Adresse des eigenen Kontos.
+
+    Bewusst ohne Token und ohne Token-Hash: angenommen wird per Klick ueber die
+    ID, nicht ueber ein Geheimnis in der Antwort.
+    """
+
+    id: UUID
+    workspace_id: UUID
+    workspace_name: str
+    role: WorkspaceRole
+    expires_at: datetime
+    created_at: datetime
+
+
+@accept_router.get("/pending")
+async def list_pending_invitations(
+    principal: Principal, service: PendingService
+) -> list[PendingInvitationRead]:
+    """Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.
+
+    Ueber alle Workspaces, nur nicht angenommene, nicht widerrufene und nicht
+    abgelaufene. Nur mit bestaetigter Adresse: ohne `email` im Login 403
+    `invitation_email_required`, ohne Bestaetigung 403
+    `invitation_email_unconfirmed`.
+    """
+    pending = await service.list_for_account(principal.user_id, principal.email)
+    return [
+        PendingInvitationRead(
+            id=p.id,
+            workspace_id=p.workspace_id,
+            workspace_name=p.workspace_name,
+            role=p.role,
+            expires_at=p.expires_at,
+            created_at=p.created_at,
+        )
+        for p in pending
+    ]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
