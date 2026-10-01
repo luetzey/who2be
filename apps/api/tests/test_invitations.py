@@ -2,8 +2,9 @@
 
 Deckt §2.3.C/D ab: Create→Accept-E2E, Single-Use (Double-Accept→410),
 Expired→410, Revoked→410, Cross-Workspace-Isolation, admin-only Gate sowie
-die Last-admin-Self-demote-Invariante (409). Laeuft nur mit erreichbarer
-Datenbank; ohne DB werden die Tests uebersprungen.
+die Last-admin-Self-demote-Invariante (409) und den fail-closed Email-Abgleich:
+ohne Email-Claim im Login keine Annahme.
+Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 """
 
 import asyncio
@@ -122,7 +123,10 @@ def test_invitation_create_accept_member_lifecycle() -> None:
             assert all("token" not in i for i in pending.json())
 
             # Zweiter User akzeptiert anonym mit dem Mail-Token.
-            accepted = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            accepted = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="invitee@example.com"),
+            )
             assert accepted.status_code == 200
             assert accepted.json()["workspace_id"] == str(ws)
 
@@ -136,7 +140,10 @@ def test_invitation_create_accept_member_lifecycle() -> None:
             assert client.get(f"{base}/invitations", headers=_auth(admin_id)).json() == []
 
             # Single-use: zweiter Accept → 410 Gone.
-            again = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            again = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="invitee@example.com"),
+            )
             assert again.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -163,7 +170,10 @@ def test_invitation_expired_is_gone() -> None:
             body = created.json()
             _expire_invitation(body["id"])
 
-            resp = client.post(f"/v1/invitations/{body['token']}/accept", headers=_auth(invitee_id))
+            resp = client.post(
+                f"/v1/invitations/{body['token']}/accept",
+                headers=_auth(invitee_id, email="expired@example.com"),
+            )
             assert resp.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -195,7 +205,10 @@ def test_invitation_revoked_is_gone() -> None:
             )
             assert revoke.status_code == 204
 
-            resp = client.post(f"/v1/invitations/{body['token']}/accept", headers=_auth(invitee_id))
+            resp = client.post(
+                f"/v1/invitations/{body['token']}/accept",
+                headers=_auth(invitee_id, email="revoked@example.com"),
+            )
             assert resp.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -269,7 +282,11 @@ def test_invitation_admin_only_gate() -> None:
                 headers=_auth(admin_id),
             )
             token = created.json()["token"]
-            client.post(f"/v1/invitations/{token}/accept", headers=_auth(editor_id))
+            joined = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(editor_id, email="editor@example.com"),
+            )
+            assert joined.status_code == 200, joined.text
 
             # Editor darf nicht einladen / nicht listen / nicht Rollen aendern.
             assert (
@@ -325,7 +342,11 @@ def test_member_role_update_and_last_admin_guard() -> None:
                 headers=_auth(admin_id),
             )
             token = created.json()["token"]
-            client.post(f"/v1/invitations/{token}/accept", headers=_auth(second_id))
+            joined = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(second_id, email="admin2@example.com"),
+            )
+            assert joined.status_code == 200, joined.text
 
             # Jetzt zwei Admins → Herabstufung des zweiten ist erlaubt.
             patched = client.patch(
@@ -416,3 +437,64 @@ def test_invitation_email_mismatch_is_forbidden() -> None:
             assert ok.json()["workspace_id"] == str(ws)
     finally:
         cleanup_workspaces([admin_id, intended_id, attacker_id])
+
+
+def _create_invitation(client: TestClient, admin_id: UUID, ws: UUID, email: str) -> str:
+    created = client.post(
+        f"/v1/workspaces/{ws}/invitations",
+        json={"email": email, "role": "editor"},
+        headers=_auth(admin_id),
+    )
+    assert created.status_code == 201, created.text
+    token: str = created.json()["token"]
+    return token
+
+
+def _member_ids(client: TestClient, admin_id: UUID, ws: UUID) -> set[str]:
+    members = client.get(f"/v1/workspaces/{ws}/members", headers=_auth(admin_id))
+    assert members.status_code == 200, members.text
+    return {m["user_id"] for m in members.json()}
+
+
+@pytest.mark.integration
+def test_invitation_accept_without_email_claim_is_rejected() -> None:
+    """Fail-closed: ohne Email-Claim im Login wird keine Einladung angenommen.
+
+    Belegt wird die ausgebliebene Wirkung (kein Mitglied, Einladung weiter
+    offen), nicht nur der Statuscode — und dass dasselbe Konto mit passendem
+    Claim danach regulaer hineinkommt.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    invitee_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+
+    try:
+        with TestClient(app) as client:
+            token = _create_invitation(client, admin_id, ws, "noclaim@example.com")
+
+            resp = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            assert resp.status_code == 403, resp.text
+            assert resp.json() == {
+                "detail": (
+                    "Diese Einladung laesst sich nur mit einem Konto annehmen, "
+                    "das eine bestaetigte Email-Adresse traegt."
+                ),
+                "reason": "invitation_email_required",
+            }
+
+            assert str(invitee_id) not in _member_ids(client, admin_id, ws)
+            pending = client.get(f"/v1/workspaces/{ws}/invitations", headers=_auth(admin_id))
+            assert [i["email"] for i in pending.json()] == ["noclaim@example.com"]
+
+            ok = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="noclaim@example.com"),
+            )
+            assert ok.status_code == 200, ok.text
+            assert str(invitee_id) in _member_ids(client, admin_id, ws)
+    finally:
+        cleanup_workspaces([admin_id, invitee_id])
