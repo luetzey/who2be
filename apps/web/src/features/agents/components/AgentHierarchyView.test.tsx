@@ -1,8 +1,8 @@
 import type { Session } from '@supabase/supabase-js'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_TOOL_POLICY,
@@ -15,6 +15,17 @@ import {
 import { SessionContext } from '@/auth/session-context'
 
 import { AgentHierarchyView } from './AgentHierarchyView'
+
+// Breakpoint steuerbar: jsdom kennt kein `matchMedia`; der Default `false`
+// ist der Desktop-Pfad (alle Playbooks), `true` der Pfad unter `md`.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => viewport.mobile,
+}))
+
+afterEach(() => {
+  viewport.mobile = false
+})
 
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [] }
@@ -213,5 +224,99 @@ describe('AgentHierarchyView — Responsive (#570)', () => {
       expect(row).toHaveClass('min-h-10')
       expect(row).toHaveClass('md:min-h-0')
     }
+  })
+})
+
+function manyPlaybooks(count: number): Playbook[] {
+  const [template] = mockPlaybooks()
+  return Array.from({ length: count }, (_, index) => ({
+    ...template,
+    id: `pb-${index + 1}`,
+    name: `Playbook ${index + 1}`,
+  }))
+}
+
+function renderMany(count: number) {
+  return renderView(
+    <AgentHierarchyView
+      agent={mockAgent()}
+      persona={mockPersona()}
+      template={mockTemplate()}
+      playbooks={manyPlaybooks(count)}
+    />,
+  )
+}
+
+// Mobil-Spec P7, M6 (Namen): Vorher kuerzte `truncate` auch kurze Namen
+// unnoetig. Die Namen sind Links zum Volltext, deshalb ist eine Begrenzung
+// auf zwei Zeilen erlaubt (Spec M6.1) — mehr nicht. Klassen-Vertrag.
+describe('AgentHierarchyView — Namen brechen um (Mobil-Spec M6)', () => {
+  it('kuerzt Playbook-, Persona- und System-Prompt-Namen erst nach zwei Zeilen', () => {
+    renderView(
+      <AgentHierarchyView
+        agent={mockAgent()}
+        persona={mockPersona()}
+        template={mockTemplate()}
+        playbooks={mockPlaybooks()}
+      />,
+    )
+    const names = [
+      screen.getByText('Reset-Mail'),
+      screen.getByRole('link', { name: 'Coach Carla' }),
+      screen.getByRole('link', { name: 'Customer-Support-Agent' }),
+    ]
+    for (const name of names) {
+      expect(name).toHaveClass('wrap-anywhere', 'line-clamp-2')
+      expect(name).not.toHaveClass('truncate')
+    }
+  })
+})
+
+// PM-Zusatz zu P7 (Muster M9): Vor den Tabs stand die Karte mit allen
+// 14 Playbooks (942 px bei 320). Unter `md` zuerst 4 im Seitenfluss plus
+// „{{count}} weitere anzeigen“ (je 8); ab `md` unveraendert alle.
+describe('AgentHierarchyView — Playbook-Liste unter md (Muster M9)', () => {
+  it('zeigt unter md vier Playbooks und einen Knopf fuer die naechsten acht', () => {
+    viewport.mobile = true
+    renderMany(14)
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
+    expect(screen.getByRole('button', { name: '8 weitere anzeigen' })).toBeInTheDocument()
+    // Die Liste nennt weiter die Gesamtzahl.
+    expect(screen.getByRole('list', { name: '14 verknüpfte Playbooks' })).toBeInTheDocument()
+  })
+
+  it('laedt je acht nach, setzt den Fokus auf den ersten neuen Eintrag und meldet den Stand', () => {
+    viewport.mobile = true
+    renderMany(15)
+    const live = document.querySelector('[aria-live="polite"]')
+    expect(live).toHaveTextContent('')
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
+    })
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(12)
+    expect(document.activeElement).toHaveTextContent('Playbook 5')
+    expect(live).toHaveTextContent('12 von 15 angezeigt')
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '3 weitere anzeigen' }))
+    })
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(15)
+    expect(document.activeElement).toHaveTextContent('Playbook 13')
+    expect(live).toHaveTextContent('15 von 15 angezeigt')
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('zeigt bei hoechstens vier Playbooks keinen Knopf', () => {
+    viewport.mobile = true
+    renderMany(4)
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('zeigt ab md alle Playbooks ohne Knopf', () => {
+    renderMany(14)
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(14)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
   })
 })

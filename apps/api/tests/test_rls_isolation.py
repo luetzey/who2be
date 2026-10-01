@@ -34,11 +34,10 @@ from who2be_models import DEFAULT_LOCALE
 _APP_PASSWORD = "rls_test_secret"  # noqa: S105 — Test-Fixture, kein echtes Secret
 
 # Tabellen, die eine workspace_id/org_id-Spalte tragen, aber BEWUSST keine
-# tenant_isolation-Policy haben. Nur `workspace`: es traegt `org_id`, ist aber
-# die control-plane-Wurzel (Parent des Mandanten, kein Mandant im RLS-Sinn) —
-# dokumentiert in 0037 und core/security.py (org-Lookup laeuft vor tenant_scope).
-# Jeder weitere Eintrag hier muss eine bewusste, begruendete Ausnahme sein.
-_RLS_EXEMPT_SCOPED_TABLES = frozenset({"workspace"})
+# tenant_isolation-Policy haben. Seit Migration 0092 traegt auch `workspace`
+# eine Policy — die Menge ist leer. Jeder Eintrag hier muss eine bewusste,
+# begruendete Ausnahme sein.
+_RLS_EXEMPT_SCOPED_TABLES: frozenset[str] = frozenset()
 
 
 def _db_reachable() -> bool:
@@ -198,8 +197,8 @@ def test_rls_blocks_cross_workspace_reads_for_app_role() -> None:
 @pytest.mark.integration
 def test_every_scoped_table_has_rls_policy() -> None:
     """Generischer Coverage-Guard: JEDE Tabelle mit workspace_id/org_id-Spalte
-    (ausser der dokumentierten Ausnahme `workspace`) MUSS RLS aktiviert haben und
-    mindestens eine Policy tragen.
+    (ausser den dokumentierten Ausnahmen, seit 0092 keine) MUSS RLS aktiviert
+    haben und mindestens eine Policy tragen.
 
     Faengt kuenftige Luecken automatisch, ohne dass eine Tabellenliste manuell
     gepflegt werden muss — genau die Regression, die historisch passierte

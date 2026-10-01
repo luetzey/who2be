@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Resource, SubResource, SubResourceLinkInput } from '@/api/types'
 
@@ -14,6 +14,14 @@ const stableApi = { listResources: listResourcesMock }
 vi.mock('@/api/useApi', () => ({
   useApi: () => stableApi,
 }))
+// Breakpoint steuerbar; Default `false` = Desktop-Pfad der uebrigen Tests.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => viewport.mobile,
+}))
+beforeEach(() => {
+  viewport.mobile = false
+})
 
 const makeResource = (id: string, name: string): Resource => ({
   id,
@@ -311,5 +319,67 @@ describe('SubResourcePicker — 320px (#564)', () => {
     // Weiche 3 bleibt gewahrt: die Segment-Gruppe selbst bricht nicht.
     const group = screen.getByRole('group', { name: 'Einbettungs-Modus für Glossar A' })
     expect(group.className.split(/\s+/)).toContain('shrink-0')
+  })
+})
+
+// Mobil-Spec M9 + M6: Verfuegbar-Liste ohne Scroll-in-Scroll, Namen umbrechen.
+describe('SubResourcePicker — Auswahlliste (M9/M6)', () => {
+  const many = Array.from({ length: 11 }, (_, i) => makeResource(`r-${i + 1}`, `Resource ${i + 1}`))
+
+  function renderPicker(existing: SubResource[] = []) {
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={existing}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+  }
+
+  it('zeigt unter md 8 Treffer ohne inneren Scroller und laedt den Rest nach', async () => {
+    viewport.mobile = true
+    listResourcesMock.mockResolvedValue(many)
+    renderPicker()
+
+    const list = await screen.findByRole('list', { name: 'Verfuegbare Resources' })
+    await waitFor(() => expect(list.children).toHaveLength(8))
+    const frame = screen.getByTestId('sub-resource-available')
+    expect(frame.className).not.toMatch(/max-h-|overflow-/)
+    expect(screen.queryByRole('region', { name: 'Verfuegbare Resources' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '3 weitere anzeigen' }))
+    expect(list.children).toHaveLength(11)
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Resource 9 als Sub-Resource hinzufügen' }),
+    )
+    expect(screen.getByText('11 von 11 angezeigt')).toHaveAttribute('aria-live', 'polite')
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('behaelt ab md die gedeckelte, per Tab erreichbare Liste', async () => {
+    listResourcesMock.mockResolvedValue(many)
+    renderPicker()
+
+    const region = await screen.findByRole('region', { name: 'Verfuegbare Resources' })
+    expect(region).toHaveClass('max-h-72', 'overflow-auto')
+    expect(region).toHaveAttribute('tabindex', '0')
+    await waitFor(() =>
+      expect(screen.getByRole('list', { name: 'Verfuegbare Resources' }).children).toHaveLength(11),
+    )
+  })
+
+  it('bricht lange Namen in Verfuegbar- und Verknuepft-Liste um statt zu kuerzen', async () => {
+    const LONG = 'Kundenonboarding-Wissensbasis-Vertriebsteam-Langbezeichner-Q4'
+    listResourcesMock.mockResolvedValue([makeResource('r-long', LONG), makeResource('r-a', 'Glossar A')])
+    renderPicker([makeSub('r-a', 'Glossar A')])
+
+    const available = await screen.findByText(LONG)
+    expect(available).toHaveClass('wrap-anywhere', 'whitespace-normal')
+    expect(available).not.toHaveClass('truncate')
+    for (const node of screen.getAllByText('Glossar A')) {
+      expect(node).toHaveClass('wrap-anywhere')
+      expect(node).not.toHaveClass('truncate')
+    }
   })
 })

@@ -73,11 +73,21 @@ _KB_TABLES: tuple[tuple[str, str], ...] = (
 
 # `kb_node` traegt eine generierte `search`-tsvector-Spalte (Migration 0077) —
 # Index-Material, kein Nutzdatum. Deshalb explizite Spaltenliste statt `*`
-# (Muster: `agent_memory` oben).
+# (Muster: `_MEMORY_COLUMNS` unten).
 _KB_NODE_COLUMNS = (
     "id, workspace_id, tier, content, content_ref, source_ref, source_ref_kind, "
     "ttl_expires_at, status, derivation_depth, sensitivity, occurred_at, "
     "occurred_precision, created_by, created_at, updated_at"
+)
+
+# `agent_memory` ohne die generierte tsvector-Spalte `search` und ohne den
+# Vektor `content_vector` (beides Index-Material, kein Nutzdatum). Mit den
+# Gedaechtnis-2.0-Spalten aus Migration 0091.
+_MEMORY_COLUMNS = (
+    "id, workspace_id, agent_id, status, fact, context, category, importance, source, "
+    "triage_note, retrieval_count, last_retrieved_at, created_at, updated_at, "
+    "kind, scope, subject_user_id, origin, created_by_agent_id, confirmed_at, "
+    "confirmed_by, expires_at, occurrence_count, converted_case_id"
 )
 
 # Workspaces + Org-Metadaten des Users (control-plane, ohne RLS). Eingemottete
@@ -98,6 +108,26 @@ _WORKSPACES_QUERY = (
 def _clean(row: asyncpg.Record) -> dict[str, Any]:
     """Record → dict, ohne interne Mandanten-Spalten."""
     return {key: value for key, value in dict(row).items() if key not in _INTERNAL_COLUMNS}
+
+
+def _with_events(
+    memories: list[asyncpg.Record], events: list[asyncpg.Record]
+) -> list[dict[str, Any]]:
+    """Gedaechtniseintraege mit ihrer Historie unter `events` (aelteste zuerst).
+
+    Dieselbe Verschachtelung wie Versionen unter ihrer Identitaets-Zeile. Es
+    landen nur Events an Eintraegen, die selbst im Block stehen — fremdes
+    Nutzergedaechtnis faellt so samt seiner Historie heraus.
+    """
+    by_memory: dict[Any, list[dict[str, Any]]] = {}
+    for row in events:
+        by_memory.setdefault(row["memory_id"], []).append(_clean(row))
+    result: list[dict[str, Any]] = []
+    for row in memories:
+        item = _clean(row)
+        item["events"] = by_memory.get(row["id"], [])
+        result.append(item)
+    return result
 
 
 def _safe_kb_table(table: str) -> str:
@@ -215,13 +245,30 @@ class GdprExportService:
             )
             # Agent-Memory (ADR-0044): kuratierte Fakten koennen personenbezogene
             # Angaben enthalten — Teil des Art.-20-Buendels ab Tag 1.
-            # Explizite Spalten statt `*`: die generierte tsvector-Spalte
-            # `search` ist internes Index-Material, kein Nutzdatum.
+            # Seit Gedaechtnis 2.0 (ADR-0053 3.1, Migration 0091) liegen in
+            # derselben Tabelle zwei Bestaende mit verschiedenen Besitzern:
+            # das Agentengedaechtnis (`scope='agent'`, Inhalt des Workspace)
+            # und das Nutzergedaechtnis (`scope='user'`, gehoert genau EINEM
+            # Menschen, 3.1.1). Letzteres geht nur an diesen Menschen — ein
+            # ungefiltertes SELECT lieferte ihm die Nutzerfakten der uebrigen
+            # Mitglieder mit aus. Beide Bloecke tragen ihre Historie
+            # (`agent_memory_event`, 3.1.2) je Eintrag unter `events`.
             memories = await self._pool.fetch(
-                "SELECT id, workspace_id, agent_id, status, fact, context, category, "
-                "importance, source, triage_note, retrieval_count, last_retrieved_at, "
-                "created_at, updated_at "
-                "FROM agent_memory WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
+                f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
+                "WHERE workspace_id = $1 AND scope = 'agent' "
+                "ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
+            user_memories = await self._pool.fetch(
+                f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
+                "WHERE workspace_id = $1 AND scope = 'user' AND subject_user_id = $2 "
+                "ORDER BY created_at ASC, id ASC",
+                workspace_id,
+                user_id,
+            )
+            memory_events = await self._pool.fetch(
+                "SELECT * FROM agent_memory_event WHERE workspace_id = $1 "
+                "ORDER BY memory_id ASC, created_at ASC, id ASC",
                 workspace_id,
             )
             # WorkArea + KB + Zugriffslog (WP20). Der Tabellen-Dump liest die
@@ -274,7 +321,8 @@ class GdprExportService:
             "resources": resources,
             "external_tools": external_tools,
             "agents": [_clean(row) for row in agents],
-            "agent_memories": [_clean(row) for row in memories],
+            "agent_memories": _with_events(memories, memory_events),
+            "user_memories": _with_events(user_memories, memory_events),
             "work_areas": work_areas,
             "wa_blobs": {"note": _BLOB_EXPORT_NOTE, "items": blobs},
             "wa_tables": tables,

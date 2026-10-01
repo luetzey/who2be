@@ -8,7 +8,7 @@
 // erhalten. Muster: PlaybookComposesPicker + useResourceSubResources.
 
 import { ChevronDown, ChevronUp, FileText, Info, Lock, Pencil, Plus, Search, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { EmbeddingMode, Resource, SubResource, SubResourceLinkInput } from '@/api/types'
@@ -16,6 +16,9 @@ import { useApi } from '@/api/useApi'
 import { EntityIcon } from '@/components/data/EntityIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { useShowMore } from '@/hooks/useShowMore'
+import { cn } from '@/lib/utils'
 
 interface SubResourcePickerProps {
   /** ID der aktuellen Resource — wird aus der Auswahl ausgeschlossen. */
@@ -139,6 +142,13 @@ export function SubResourcePicker({
   const available = allResources
     .filter((r) => !linkedIds.has(r.id))
     .filter((r) => needle === '' || r.name.toLowerCase().includes(needle))
+  const isMobile = useIsMobile()
+  const availableListRef = useRef<HTMLUListElement>(null)
+  const more = useShowMore(available, {
+    enabled: isMobile,
+    listRef: availableListRef,
+    resetKey: needle,
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -177,7 +187,10 @@ export function SubResourcePicker({
                 <EntityIcon icon={FileText} tone="resource" size="sm" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium">{sub.name}</span>
+                    {/* M6: Namen brechen um statt gekuerzt zu werden — die
+                        Zeile ist kein Link, eine Ellipse haette keinen
+                        Tap-Weg zum Volltext. */}
+                    <span className="min-w-0 text-sm font-medium wrap-anywhere">{sub.name}</span>
                     <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-pill-resource px-2 py-0.5 text-xs font-semibold break-all text-pill-resource-fg">
                       {/* size-3 bewusst (funktionaler Sonderfall §8): Icon in
                           der kompakten text-xs-Pill.
@@ -218,7 +231,7 @@ export function SubResourcePicker({
                     {index + 1}.
                   </span>
                   <EntityIcon icon={FileText} tone="resource" size="sm" />
-                  <span className="min-w-0 flex-1 basis-[8rem] truncate text-sm font-medium">
+                  <span className="min-w-0 flex-1 basis-[8rem] text-sm font-medium wrap-anywhere">
                     {nameOf(id)}
                   </span>
                   {/* Aktionsblock: unterhalb `md` bekommt er mit `basis-full`
@@ -320,37 +333,70 @@ export function SubResourcePicker({
             className="pl-9"
           />
         </div>
-        <ul
-          className="flex max-h-72 flex-col gap-1 overflow-auto"
-          aria-label={t('picker.availableAriaLabel')}
+        {/* Mobil-Spec M9: unter md kein innerer Scroller, sondern 8 Treffer im
+            Seitenfluss + „N weitere anzeigen“. Ab md bleibt die gedeckelte
+            Liste; als Scroller ist sie per Tab erreichbar und benannt (ACT
+            0ssw9k, Safari). Die Region liegt um das `<ul>`, damit dessen
+            Listensemantik erhalten bleibt. */}
+        <div
+          role={isMobile ? undefined : 'region'}
+          aria-label={isMobile ? undefined : t('picker.availableAriaLabel')}
+          tabIndex={isMobile ? undefined : 0}
+          data-testid="sub-resource-available"
+          className={cn(
+            !isMobile &&
+              'max-h-72 overflow-auto rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          )}
         >
-          {available.map((resource) => (
-            <li key={resource.id}>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-auto w-full justify-start gap-3 px-3 py-2"
-                onClick={() => addResource(resource.id)}
-                disabled={saving}
-                aria-label={t('picker.addAriaLabel', { name: resource.name })}
-              >
-                <EntityIcon icon={FileText} tone="resource" size="sm" />
-                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
-                  {resource.name}
-                </span>
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Plus className="size-4" aria-hidden="true" />
-                  {t('subInline.addAction')}
-                </span>
-              </Button>
-            </li>
-          ))}
-          {available.length === 0 ? (
-            <li className="px-3 py-3 text-center text-sm text-muted-foreground">
-              {t('subInline.noResults')}
-            </li>
-          ) : null}
-        </ul>
+          <ul
+            ref={availableListRef}
+            className="flex flex-col gap-1"
+            aria-label={t('picker.availableAriaLabel')}
+          >
+            {more.visible.map((resource) => (
+              <li key={resource.id}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto w-full justify-start gap-3 px-3 py-2"
+                  onClick={() => addResource(resource.id)}
+                  disabled={saving}
+                  aria-label={t('picker.addAriaLabel', { name: resource.name })}
+                >
+                  <EntityIcon icon={FileText} tone="resource" size="sm" />
+                  {/* M6: umbrechen statt kuerzen — `whitespace-normal` hebt das
+                      `nowrap` der Button-Basis auf, sonst bliebe der Name
+                      einzeilig und liefe ueber. */}
+                  <span className="min-w-0 flex-1 text-left text-sm font-medium wrap-anywhere whitespace-normal">
+                    {resource.name}
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <Plus className="size-4" aria-hidden="true" />
+                    {t('subInline.addAction')}
+                  </span>
+                </Button>
+              </li>
+            ))}
+            {available.length === 0 ? (
+              <li className="px-3 py-3 text-center text-sm text-muted-foreground">
+                {t('subInline.noResults')}
+              </li>
+            ) : null}
+          </ul>
+        </div>
+        {more.nextCount > 0 ? (
+          <Button
+            type="button"
+            variant="link"
+            className="min-h-11 self-start px-0"
+            onClick={more.showMore}
+          >
+            {more.buttonLabel}
+          </Button>
+        ) : null}
+        <p className="sr-only" aria-live="polite">
+          {more.liveMessage}
+        </p>
       </div>
     </div>
   )

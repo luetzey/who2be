@@ -401,11 +401,11 @@ class MemoryService:
         require_role(ctx, WorkspaceRole.editor)
         self._require_human(ctx)
         await self._require_agent(ctx, agent_id)
-        if not await self._repo.delete(ctx.workspace_id, agent_id, memory_id):
+        if not await self._repo.delete(ctx.workspace_id, agent_id, memory_id, ctx.user_id):
             raise _memory_not_found()
 
     async def delete_all(self, ctx: WorkspaceContext, agent_id: UUID) -> None:
         require_role(ctx, WorkspaceRole.editor)
         self._require_human(ctx)
         await self._require_agent(ctx, agent_id)
-        await self._repo.delete_all(ctx.workspace_id, agent_id)
+        await self._repo.delete_all(ctx.workspace_id, agent_id, ctx.user_id)

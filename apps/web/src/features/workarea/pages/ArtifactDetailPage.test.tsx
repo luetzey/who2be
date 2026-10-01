@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { notify } from '@/lib/feedback'
@@ -298,5 +298,26 @@ describe('ArtifactDetailPage — Responsive (#572)', () => {
       expect(button).toHaveClass('min-h-10')
       expect(button).toHaveClass('md:min-h-0')
     }
+  })
+
+  it('gibt dem Text unter md die volle Breite, der Anker-Knopf hat keine eigene Spalte (Mobil-Spec M10)', async () => {
+    // Vorher: `li.flex` mit Text und 40-px-Knopf nebeneinander, Textspalte
+    // 170 px bei 320 (Spec M10). Jetzt unter `md` kein Flex: Der Knopf liegt
+    // absolut oben rechts, der Text fliesst um einen gleich grossen
+    // Platzhalter (`before:float-right`). Ab `md` wieder nebeneinander.
+    // Gemessen (Plan P7): Textspalte 170 → 238 px, Seite 7,2 → 5,8 Bildschirme.
+    stubArtifact()
+    renderAt(<ArtifactDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Der Preis stieg um 8 %/)).toBeInTheDocument()
+    })
+    const block = screen.getByText(/Der Preis stieg um 8 %/)
+    const item = block.closest('li')
+    expect(item).not.toHaveClass('flex')
+    expect(item).toHaveClass('relative', 'md:flex')
+    expect(block).toHaveClass('before:float-right', 'md:before:content-none')
+    const button = within(item as HTMLElement).getByRole('button', { name: 'Anker kopieren' })
+    expect(button).toHaveClass('absolute', 'top-2', 'right-2', 'md:static')
   })
 })

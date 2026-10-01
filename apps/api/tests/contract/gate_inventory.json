@@ -274,6 +274,11 @@
       "reason": "Append-only-Telemetrie (welches Element wurde genutzt). Ein Quota-Gate deckelte die Messung selbst; gebremst durch write_limit."
     },
     {
+      "path": "/v1/invitations/accept",
+      "name": "accept_invitation_by_body",
+      "reason": "Nachfolger von /v1/invitations/{token}/accept (Token im Body statt im Pfad), gleiche Begruendung: Beitritt zu einer bestehenden Einladung, der Deckel gehoert an das Ausstellen."
+    },
+    {
       "path": "/v1/invitations/{token}/accept",
       "name": "accept_invitation",
       "reason": "Beitritt zu einer bestehenden Einladung. Der Deckel gehoert, wenn ueberhaupt, an das Ausstellen — nicht an das Annehmen, wo er einen eingeladenen Nutzer aussperren wuerde."
