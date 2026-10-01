@@ -146,7 +146,7 @@ class PgMeRepository:
         """Ob der User ein Passwort gesetzt hat — frisch eingeladene
         Magic-Link-User und reine OAuth-User haben keins, bis sie auf
         `/onboarding/set-password` eines setzen. Gelesen ueber
-        `w2b_self_account()` (Migration 0091): nur die eigene Zeile, nur der
+        `w2b_self_account()` (Migration 0093): nur die eigene Zeile, nur der
         Wahrheitswert, nie der Hash. Ist die Funktion nicht aufrufbar (reine
         API-Test-DB ohne GoTrue), gilt `False`."""
         try:

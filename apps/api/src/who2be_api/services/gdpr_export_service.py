@@ -191,7 +191,7 @@ class GdprExportService:
 
         Die Daten liegen im GoTrue-Schema `auth.users`, auf das die
         Laufzeitrolle keinen Zugriff hat. Gelesen wird ueber
-        `w2b_self_account()` (Migration 0091), die nur die Zeile von
+        `w2b_self_account()` (Migration 0093), die nur die Zeile von
         `app.current_user_id` liefert — `scope_to_self` setzt die GUC
         transaktionslokal. Ist die Funktion nicht aufrufbar (reine Test-DB ohne
         GoTrue), bleibt der Block leer, statt den ganzen Export scheitern zu

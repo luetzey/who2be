@@ -21,8 +21,8 @@ raw_user_meta_data"). Basis: origin/main 32a4dde2.
 
 ## Schritte
 
-1. [x] Migration `0091_self_account_function.sql` (hoechste auf origin/main: 0090;
-   offene PRs ohne Migration). Muster und Haertung wie 0090.
+1. [x] Migration `0093_self_account_function.sql` (urspruenglich 0091; nach
+   Merge von #748/0091 und #747/0092 auf main umnummeriert, kein neuer Inhalt). Muster und Haertung wie 0090.
 2. [x] `gdpr_export_service._export_account`: Transaktion + `scope_to_self` +
    `w2b_self_account()`; Fehler → leerer Block (Verhalten wie bisher).
 3. [x] `me_repository._has_password`: dito.

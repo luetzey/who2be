@@ -4,7 +4,7 @@ Ohne DB: ein Fake-Pool gibt definierte Antworten. Belegt, dass der Block
 sauber zu `null` degradiert, wenn `w2b_self_account()` nicht aufrufbar ist
 (PostgresError, z. B. Test-DB ohne GoTrue) — analog
 `me_repository._lookup_profile` — und dass der Lookup an den Aufrufer selbst
-gebunden ist (`app.current_user_id` transaktionslokal, Migration 0091).
+gebunden ist (`app.current_user_id` transaktionslokal, Migration 0093).
 """
 
 from __future__ import annotations

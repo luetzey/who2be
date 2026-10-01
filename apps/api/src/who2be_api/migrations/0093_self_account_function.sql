@@ -1,4 +1,4 @@
--- Migration 0091 — eigene Kontodaten nur ueber `w2b_self_account()`
+-- Migration 0093 — eigene Kontodaten nur ueber `w2b_self_account()`
 -- Plan: .claude/plan/2026-10-01-0420_n1b-self-account-function.md
 --
 -- Ergaenzt 0090 fuer die zwei Lesestellen, die mehr als das Profil brauchen:

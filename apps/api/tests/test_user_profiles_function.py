@@ -278,7 +278,7 @@ def test_gdpr_export_and_me_read_own_account_as_app_role(
     make_auth_headers: Callable[[UUID], dict[str, str]],
 ) -> None:
     """DSGVO-Export und `/v1/me` lesen die eigenen Kontodaten als `who2be_app`
-    ueber `w2b_self_account()` (Migration 0091): `account`-Block vollstaendig,
+    ueber `w2b_self_account()` (Migration 0093): `account`-Block vollstaendig,
     `has_password` true fuer den Passwortnutzer, false fuer den OAuth-Nutzer."""
     password_user = fresh_user_id()
     oauth_user = fresh_user_id()
