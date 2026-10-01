@@ -57,6 +57,9 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `test_case` (Migration 0089, ADR-0053) | `created_by` — **nur** bei `created_by_kind = 'human'` (bei `'agent'` steht dort eine Agent-ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `test_run` (Migration 0089, ADR-0053) | `reported_by_user_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `agent_memory` (Migration 0091, ADR-0053) | `confirmed_by` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `agent_memory_event` (Migration 0091, ADR-0053) | `actor_id` — **nur** bei `actor_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `agent_memory` mit `scope='user'` (Migration 0091) | ganze Zeile (`subject_user_id`-gebunden) | beim Account-Purge in allen Workspaces **geloescht** + je Zeile `audit_log` `memory.deleted` ohne Inhalt, s. §4c |
 | `workspace_invitation` | `email` (Klartext) | Bereinigung bei `accepted_at IS NOT NULL OR expires_at < now()` (`cleanup_expired_invitations`) |
 | `oauth_authorization_code` (Migration 0049) | ganze Zeile (`user_id`-gebunden) | beim Account-Purge **geloescht** (Codes sind nach Konto-Loeschung wertlos); zusaetzlich laufender Cleanup abgelaufener/konsumierter Codes (`cleanup_expired_oauth`) |
 | `oauth_refresh_token` (Migration 0049) | ganze Zeile (via `api_token_id`) | beim Account-Purge ueber den `api_token`-FK-CASCADE **geloescht**; zusaetzlich laufender Cleanup abgelaufener Tokens (`cleanup_expired_oauth`; konsumierte, nicht abgelaufene Glieder bleiben fuer Grace-Retry/Rotationsketten-Revocation) |
@@ -263,6 +266,58 @@ beide Tabellen je Workspace als `test_cases` / `test_runs`.
 
 ---
 
+## 4c · Gedaechtnis 2.0: Nutzergedaechtnis und Historie (`agent_memory`, `agent_memory_event`)
+
+Migration 0091 (ADR-0053 §3.1) erweitert das Agent-Memory um zwei
+Datenkategorien:
+
+- **Nutzergedaechtnis** (`agent_memory.scope = 'user'`): Fakten **ueber**
+  einen Menschen (`subject_user_id`), je Workspace und Nutzer (§3.1.1). Er
+  haengt an keinem Agenten (`agent_id IS NULL` per DB-CHECK) und ueberlebt
+  das Loeschen des einreichenden Agenten (`created_by_agent_id` ON DELETE
+  SET NULL).
+- **Historie** (`agent_memory_event`, §3.1.2): append-only, je Eintrag jede
+  Aenderung mit Akteur (`actor_kind`, bei Menschen `actor_id`) und
+  Schnappschuss (`before`/`after`, enthaelt den Fakt).
+
+Agentennotizen (`kind = 'agent_note'`) duerfen keine Angaben ueber Dritte
+enthalten (§3.1.5); fuer sie gibt es deshalb keinen Betroffenen-Pfad ausser
+dem des Workspace.
+
+**Fristen:**
+
+| Was | Frist | Wirkung |
+|---|---|---|
+| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung setzt `expires_at = NULL`. Den Verfallsjob liefert Paket C2b |
+| bestaetigte Eintraege | bis zur Loeschung durch einen Menschen oder Purge | — |
+| Historie | so lange wie ihr Eintrag | faellt per FK-Cascade mit |
+
+**Loeschpfade:**
+
+- **Einzel-/Komplett-Loeschung** durch einen Menschen: Hard-Delete (ADR-0044,
+  Art. 17); die Historie geht per Cascade mit. Zurueck bleibt je Eintrag
+  eine `audit_log`-Zeile `memory.deleted` mit Workspace, Akteur und
+  Eintrags-ID — **ohne** Fakt, Kontext oder Historie (Weiche M5).
+- **Org-/Workspace-Purge:** `agent_memory` haengt seit 0091 per FK-Cascade
+  am Workspace, `agent_memory_event` ebenso; die Organization-CASCADE in
+  `purge_organization` raeumt beides ab. Hier entsteht **keine**
+  `memory.deleted`-Zeile je Eintrag — die Loeschung des Elternobjekts
+  dokumentiert den Vorgang.
+- **Account-Purge** (`purge_account_data`): das Nutzergedaechtnis des
+  Menschen wird in **allen** Workspaces geloescht, nicht anonymisiert — ein
+  Fakt ueber eine Person bliebe auch ohne ihre ID ein Fakt ueber sie. Je
+  Eintrag eine inhaltsfreie `memory.deleted`-Zeile (Akteur leer = System).
+  In ueberlebenden Zeilen fremder Workspaces werden `agent_memory.confirmed_by`
+  und `agent_memory_event.actor_id` (nur `actor_kind = 'human'`) auf den
+  Sentinel gesetzt (§2). Belegt in `apps/api/tests/test_memory_compliance.py`.
+
+**Auskunft:** der GDPR-Export liefert je Workspace das Agentengedaechtnis als
+`agent_memories` und das Nutzergedaechtnis **nur des exportierenden
+Menschen** als `user_memories`, beide mit der Historie je Eintrag unter
+`events`. Nutzergedaechtnis anderer Mitglieder steht nicht im Buendel.
+
+---
+
 ## 5 · Server-Logs / Zugriffsdaten
 
 Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
@@ -324,6 +379,8 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
+| Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
+| Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
@@ -359,5 +416,8 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 - `apps/api/src/who2be_api/tablestore/engine.py` — `delete_area_store()`,
   `snapshot_to()` (`VACUUM INTO`).
 - `apps/api/src/who2be_api/services/gdpr_export_service.py` — Art.-20-Buendel
-  inkl. WorkArea/KB/Tabellen/Zugriffslog.
+  inkl. WorkArea/KB/Tabellen/Zugriffslog und (§4c) Agenten-/Nutzergedaechtnis
+  mit Historie.
+- `apps/api/src/who2be_api/migrations/0091_agent_memory_v2.sql` —
+  Nutzergedaechtnis, Verfall, Historie `agent_memory_event` (§4c).
 - ADR-0047/0048/0049 — WorkArea+KB, Blob-Storage, Tabellen-Store.
