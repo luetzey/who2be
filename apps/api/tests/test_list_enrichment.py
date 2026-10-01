@@ -194,7 +194,12 @@ def test_list_endpoints_expose_enrichment_counts(make_auth_headers: AuthFactory)
             ):
                 saved = client.post(
                     f"{base}/agent-memories",
-                    json={"fact": fact, "category": "preference", "importance": 7},
+                    json={
+                        "fact": fact,
+                        "category": "preference",
+                        "importance": 7,
+                        "origin": "user_stated",
+                    },
                     headers=mem_auth,
                 )
                 assert saved.status_code == 201, saved.text

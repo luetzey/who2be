@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import status
@@ -36,21 +37,105 @@ from who2be_api.embeddings import build_embedding_port
 from who2be_api.repositories.memory_repository import MemoryRepository
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
+    MEMORY_MAX_PER_USER,
     MEMORY_MIN_IMPORTANCE,
+    MemoryCategory,
     MemoryCreate,
     MemoryGuardConfig,
     MemoryGuardMode,
     MemoryHit,
+    MemoryKind,
     MemoryMode,
+    MemoryOrigin,
     MemoryRead,
+    MemoryScope,
+    MemorySource,
     MemoryStatus,
     MemoryTriage,
     MemoryTriageAction,
     MemoryUpdate,
     WorkspaceRole,
 )
+from who2be_models.memory import (
+    MEMORY_AUTO_SWITCHABLE_CELLS,
+    MEMORY_MAX_NOTES_PER_AGENT,
+    MemoryAutoCell,
+    MemoryAutoPolicy,
+    MemoryAutoPolicyRead,
+    MemoryAutoRow,
+    MemorySaveResult,
+)
 
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------ Freigabematrix
+
+
+@dataclass(frozen=True)
+class MemoryDecision:
+    """Ergebnis der Freigabematrix fuer einen neuen Eintrag (ADR-0053 4)."""
+
+    status: MemoryStatus
+    # Aktiv per Matrix: unbestaetigt, mit Verfallszeitpunkt (3.1.3).
+    auto_activated: bool = False
+    # Aktiv und bestaetigt: der Mensch ist die Quelle (Kanal human/import).
+    confirmed: bool = False
+
+
+def matrix_row(kind: MemoryKind, category: MemoryCategory) -> MemoryAutoRow:
+    """Zeile der Matrix 4.2 fuer einen neuen Eintrag.
+
+    `instruction` traegt per Definition Verhaltenswirkung und bildet deshalb
+    eine eigene Zeile; nur die uebrigen Kategorien sind `user_fact`.
+    """
+    if kind == MemoryKind.lesson:
+        return MemoryAutoRow.lesson
+    if kind == MemoryKind.agent_note:
+        return MemoryAutoRow.agent_note
+    if category == MemoryCategory.instruction:
+        return MemoryAutoRow.user_fact_instruction
+    return MemoryAutoRow.user_fact
+
+
+def decide_memory_status(
+    *,
+    mode: MemoryMode | None,
+    source: MemorySource,
+    row: MemoryAutoRow,
+    origin: MemoryOrigin,
+    policy: MemoryAutoPolicy,
+) -> MemoryDecision:
+    """Die Freigabematrix Art x Herkunft (ADR-0053 4.1/4.2) als reine Funktion.
+
+    - Kanal `human`/`import`: aktiv und bestaetigt — ausser `lesson` (auch ein
+      Mensch macht daraus einen Fall, keinen aktiven Eintrag) und Vorschlaegen.
+    - Kanal `agent`: nur unter `memory_mode=auto` UND nur fuer eine Zelle, die
+      der Admin eingeschaltet hat UND die schaltbar ist. Eine eingeschaltete
+      Nie-Zelle ignoriert der Server (`MemoryAutoPolicy.effective`).
+    - Alles andere: `pending` (Kurations-Schleuse).
+    """
+    if source in (MemorySource.human, MemorySource.import_):
+        if row in (MemoryAutoRow.lesson, MemoryAutoRow.proposal):
+            return MemoryDecision(MemoryStatus.pending)
+        return MemoryDecision(MemoryStatus.active, confirmed=True)
+    if mode != MemoryMode.auto:
+        return MemoryDecision(MemoryStatus.pending)
+    if MemoryAutoCell(row=row, origin=origin) in policy.effective():
+        return MemoryDecision(MemoryStatus.active, auto_activated=True)
+    return MemoryDecision(MemoryStatus.pending)
+
+
+def _sorted_cells(cells: frozenset[MemoryAutoCell]) -> list[MemoryAutoCell]:
+    return sorted(cells, key=lambda cell: (cell.row.value, cell.origin.value))
+
+
+def _auto_policy_read(policy: MemoryAutoPolicy) -> MemoryAutoPolicyRead:
+    return MemoryAutoPolicyRead(
+        enabled_cells=_sorted_cells(policy.effective()),
+        switchable_cells=_sorted_cells(MEMORY_AUTO_SWITCHABLE_CELLS),
+    )
+
 
 # Deckel fuer Retrieval-Antworten (Token-Budget des Client-Prompts).
 _SEARCH_K_MAX = 20
@@ -181,10 +266,45 @@ class MemoryService:
 
     # ------------------------------------------------------------------ Agent
 
-    async def save(self, ctx: WorkspaceContext, data: MemoryCreate) -> MemoryRead:
+    async def save(self, ctx: WorkspaceContext, data: MemoryCreate) -> MemorySaveResult:
+        """Speicherpfad des Agenten (ADR-0044, ADR-0053 3.1.1/3.1.5/3.1.6/4).
+
+        Reihenfolge: Gates → Pflicht-Herkunft und Art x Scope → Importance →
+        Injection-Waechter → Dublette (bei `lesson`: Merge statt 409) →
+        Obergrenze → Freigabematrix → Insert. Den Kanal (`source`) setzt der
+        Server: dieser Pfad ist nur fuer agent-gebundene Tokens offen, also
+        immer `agent` (Weiche M8).
+        """
         require_memory_mode(ctx, MemoryMode.suggest)
         require_write_rate(ctx)
         assert ctx.agent_id is not None and ctx.tool_policy is not None  # via Gate garantiert
+
+        # `legacy_unknown` markiert nur den Bestand vor C2a; als Deklaration
+        # waere er ein Weg, die Pflicht-Herkunft zu umgehen.
+        if data.origin is None or data.origin == MemoryOrigin.legacy_unknown:
+            raise ApiError(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "Nicht gespeichert — die Herkunft fehlt. `origin` ist Pflicht: "
+                    "user_stated (vom Nutzer gesagt), inferred (selbst geschlossen) "
+                    "oder external_content (aus Werkzeug, Web oder Dokument)."
+                ),
+                reason="memory_origin_required",
+            )
+        origin = data.origin
+        # DB-CHECK 0091: `scope='user'` nur mit `kind='user_fact'` (3.1). Hier
+        # vorab als stabiler Grund statt als 500 aus der CheckViolation.
+        if data.scope == MemoryScope.user and data.kind != MemoryKind.user_fact:
+            raise ApiError(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"Nicht gespeichert — `kind={data.kind.value}` ist im "
+                    "Nutzergedaechtnis (`scope=user`) nicht erlaubt; dort gibt es nur "
+                    "Fakten ueber den Nutzer (`user_fact`)."
+                ),
+                reason="memory_kind_scope_invalid",
+                params={"kind": data.kind.value, "scope": data.scope.value},
+            )
 
         if data.importance < MEMORY_MIN_IMPORTANCE:
             raise ApiError(
@@ -214,9 +334,30 @@ class MemoryService:
                     reason="memory_guard_rejected",
                 )
         fact_vector = await self._embed(data.fact)
-        duplicate = await self._repo.find_similar(
-            ctx.workspace_id, ctx.agent_id, data.fact, fact_vector
-        )
+        is_user_scope = data.scope == MemoryScope.user
+        if data.kind == MemoryKind.lesson:
+            # Wiederholung eines Lernvorschlags ist Signal, kein Fehler (3.1.6):
+            # gegen ALLE lesson-Eintraege desselben Agenten inkl. rejected und
+            # converted. Der Treffer behaelt seinen Status; keine neue Zeile.
+            lesson_hit = await self._repo.find_similar(
+                ctx.workspace_id, ctx.agent_id, data.fact, fact_vector, lessons=True
+            )
+            if lesson_hit is not None:
+                merged = await self._repo.merge_lesson(
+                    ctx.workspace_id, ctx.agent_id, lesson_hit[0]
+                )
+                if merged is not None:
+                    return MemorySaveResult(**merged.model_dump(), merged_into=merged.id)
+        if is_user_scope:
+            duplicate = await self._repo.find_similar_user(
+                ctx.workspace_id, ctx.user_id, data.fact, fact_vector
+            )
+        elif data.kind == MemoryKind.lesson:
+            duplicate = None  # oben geprueft
+        else:
+            duplicate = await self._repo.find_similar(
+                ctx.workspace_id, ctx.agent_id, data.fact, fact_vector
+            )
         if duplicate is not None:
             dup_id, dup_fact = duplicate
             duplicate_id = str(dup_id)[:8]
@@ -230,12 +371,84 @@ class MemoryService:
                 reason="memory_duplicate",
                 params={"duplicate_id": duplicate_id, "duplicate_fact": dup_fact},
             )
-        # Cap zaehlt bewusst ALLE Status inkl. rejected (Security-Review N-3):
-        # harte Obergrenze pro Agent statt unbegrenzt wachsender rejected-Menge.
-        # Ein Agent kann so sein eigenes Gedaechtnis fuellen (Selbst-DoS) — das
-        # ist in der Triage-UI sichtbar und vom Menschen aufraeumbar.
-        count = await self._repo.count_for_agent(ctx.workspace_id, ctx.agent_id)
-        if count >= MEMORY_MAX_PER_AGENT:
+        await self._enforce_caps(ctx, ctx.agent_id, data.kind, is_user_scope)
+
+        decision = decide_memory_status(
+            mode=ctx.tool_policy.memory_mode,
+            source=MemorySource.agent,
+            row=matrix_row(data.kind, data.category),
+            origin=origin,
+            policy=await self._repo.get_auto_policy(ctx.workspace_id),
+        )
+        created = await self._repo.insert(
+            ctx.workspace_id,
+            None if is_user_scope else ctx.agent_id,
+            decision.status,
+            data.fact,
+            data.context,
+            data.category.value,
+            data.importance,
+            kind=data.kind,
+            scope=data.scope,
+            origin=origin,
+            source=MemorySource.agent,
+            subject_user_id=ctx.user_id if is_user_scope else None,
+            created_by_agent_id=ctx.agent_id,
+            auto_activated=decision.auto_activated,
+        )
+        # Vektor nachziehen. Bewusst NACH dem Insert und ohne Fehlerpfad: das
+        # Memory ist bereits gespeichert, der Vektor nur eine Beschleunigung
+        # des spaeteren Suchens.
+        if fact_vector is not None:
+            await self._repo.set_vector(created.id, fact_vector)
+        return MemorySaveResult(**created.model_dump(), auto_activated=decision.auto_activated)
+
+    async def _enforce_caps(
+        self, ctx: WorkspaceContext, agent_id: UUID, kind: MemoryKind, is_user_scope: bool
+    ) -> None:
+        """Obergrenzen je Geltungsbereich und Art, gezaehlt ueber ALLE Status.
+
+        Alle Status inkl. rejected (Security-Review N-3): harte Obergrenze statt
+        unbegrenzt wachsender rejected-Menge. Ein Agent kann so sein eigenes
+        Gedaechtnis fuellen (Selbst-DoS) — das ist in der Triage-UI sichtbar
+        und vom Menschen aufraeumbar.
+
+        - Nutzergedaechtnis: `MEMORY_MAX_PER_USER` je (workspace_id,
+          subject_user_id), `memory_cap_reached` mit `scope='user'` (3.1.1).
+        - Arbeitsnotizen: `MEMORY_MAX_NOTES_PER_AGENT` je Agent, getrennt von
+          der Agentengrenze, `memory_note_cap_reached` (3.1.5).
+        - Sonst: `MEMORY_MAX_PER_AGENT` (ohne Arbeitsnotizen).
+        """
+        if is_user_scope:
+            if await self._repo.count_for_user(ctx.workspace_id, ctx.user_id) >= (
+                MEMORY_MAX_PER_USER
+            ):
+                raise ApiError(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Nicht gespeichert — dein Nutzergedaechtnis in diesem Workspace "
+                        f"ist voll ({MEMORY_MAX_PER_USER} Eintraege). Zuerst aufraeumen."
+                    ),
+                    reason="memory_cap_reached",
+                    params={"maximum": MEMORY_MAX_PER_USER, "scope": MemoryScope.user.value},
+                )
+            return
+        if kind == MemoryKind.agent_note:
+            if await self._repo.count_notes_for_agent(ctx.workspace_id, agent_id) >= (
+                MEMORY_MAX_NOTES_PER_AGENT
+            ):
+                raise ApiError(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Nicht gespeichert — die Arbeitsnotizen dieses Agenten sind voll "
+                        f"({MEMORY_MAX_NOTES_PER_AGENT} Eintraege). Der Workspace-Besitzer "
+                        "muss zuerst aufraeumen (Agent-Detailseite → Gedaechtnis)."
+                    ),
+                    reason="memory_note_cap_reached",
+                    params={"maximum": MEMORY_MAX_NOTES_PER_AGENT},
+                )
+            return
+        if await self._repo.count_for_agent(ctx.workspace_id, agent_id) >= MEMORY_MAX_PER_AGENT:
             raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
@@ -246,26 +459,6 @@ class MemoryService:
                 reason="memory_cap_reached",
                 params={"maximum": MEMORY_MAX_PER_AGENT},
             )
-        new_status = (
-            MemoryStatus.active
-            if ctx.tool_policy.memory_mode == MemoryMode.auto
-            else MemoryStatus.pending
-        )
-        created = await self._repo.insert(
-            ctx.workspace_id,
-            ctx.agent_id,
-            new_status,
-            data.fact,
-            data.context,
-            data.category.value,
-            data.importance,
-        )
-        # Vektor nachziehen. Bewusst NACH dem Insert und ohne Fehlerpfad: das
-        # Memory ist bereits gespeichert, der Vektor nur eine Beschleunigung
-        # des spaeteren Suchens.
-        if fact_vector is not None:
-            await self._repo.set_vector(created.id, fact_vector)
-        return created
 
     async def search(self, ctx: WorkspaceContext, query: str, k: int) -> list[MemoryHit]:
         require_memory_mode(ctx, MemoryMode.read_only)
@@ -336,6 +529,27 @@ class MemoryService:
     ) -> MemoryGuardConfig:
         self._require_guard_admin(ctx)
         return await self._repo.set_guard_config(ctx.workspace_id, config)
+
+    # ---------------------------------------------------------- Freigabematrix
+
+    async def get_auto_policy(self, ctx: WorkspaceContext) -> MemoryAutoPolicyRead:
+        # Gleiches Gate wie der Injection-Waechter (ADR-0053 4.1): admin UND
+        # eingeloggter Mensch. Die Matrix steuert, was ein Agent ohne
+        # menschliche Freigabe aktiv setzen darf — ein Token darf sie weder
+        # lesen noch schreiben.
+        self._require_guard_admin(ctx)
+        return _auto_policy_read(await self._repo.get_auto_policy(ctx.workspace_id))
+
+    async def set_auto_policy(
+        self, ctx: WorkspaceContext, policy: MemoryAutoPolicy
+    ) -> MemoryAutoPolicyRead:
+        self._require_guard_admin(ctx)
+        # Nie-Zellen werden ignoriert, nicht abgelehnt (ADR-0053 4.2): gespeichert
+        # wird nur, was wirkt. So kann auch ein Altbestand mit Nie-Zellen nie
+        # still mitwirken, falls die Schaltbarkeit spaeter enger wird.
+        effective = MemoryAutoPolicy(enabled_cells=_sorted_cells(policy.effective()))
+        stored = await self._repo.set_auto_policy(ctx.workspace_id, effective, ctx.user_id)
+        return _auto_policy_read(stored)
 
     async def list_memories(
         self, ctx: WorkspaceContext, agent_id: UUID, status_filter: MemoryStatus | None

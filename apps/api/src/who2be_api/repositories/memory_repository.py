@@ -49,6 +49,17 @@ from who2be_models import (
     MemoryRead,
     MemoryStatus,
 )
+from who2be_models.memory import (
+    MEMORY_UNCONFIRMED_TTL_DAYS,
+    MemoryActorKind,
+    MemoryAutoCell,
+    MemoryAutoPolicy,
+    MemoryEventKind,
+    MemoryKind,
+    MemoryOrigin,
+    MemoryScope,
+    MemorySource,
+)
 
 # Trigram-Schwelle fuer den Dedup-Waechter (similarity(fact, kandidat)).
 MEMORY_DEDUP_SIMILARITY = 0.6
@@ -104,6 +115,10 @@ _EVENT_COLUMNS = (
 # WELCHE ID geloescht hat — nie Fakt, Kontext oder Historie. Die Historie geht
 # per Cascade mit dem Eintrag.
 MEMORY_DELETED_AUDIT_ACTION = "memory.deleted"
+# Ein- und Ausschalten einer Zelle der Freigabematrix (ADR-0053 4.3: wer,
+# wann, welche Zelle). Je geaenderter Zelle eine Zeile, `detail={row, origin}`.
+MEMORY_AUTO_POLICY_ENABLED_AUDIT_ACTION = "memory.auto_policy.enabled"
+MEMORY_AUTO_POLICY_DISABLED_AUDIT_ACTION = "memory.auto_policy.disabled"
 
 
 def _jsonb_out(value: object) -> dict[str, Any] | None:
@@ -113,6 +128,23 @@ def _jsonb_out(value: object) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         raise TypeError(f"jsonb-Schnappschuss ist kein Objekt: {type(raw).__name__}")
     return raw
+
+
+def _snapshot(memory: MemoryRead) -> dict[str, Any]:
+    """Historien-Schnappschuss (3.1.2): nie `context` oder `triage_note`."""
+    return {
+        "fact": memory.fact,
+        "category": memory.category.value,
+        "importance": memory.importance,
+        "status": memory.status.value,
+        "kind": memory.kind.value,
+        "origin": memory.origin.value,
+    }
+
+
+def _cell_key(cell: MemoryAutoCell) -> str:
+    """Stabiler `audit_log.target` einer Matrix-Zelle, z. B. `user_fact:user_stated`."""
+    return f"{cell.row.value}:{cell.origin.value}"
 
 
 def _event(row: asyncpg.Record) -> MemoryEventRead:
@@ -141,10 +173,28 @@ class MemoryRepository(Protocol):
 
     async def count_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int: ...
 
+    async def count_notes_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int: ...
+
+    async def get_auto_policy(self, workspace_id: UUID) -> MemoryAutoPolicy: ...
+
+    async def set_auto_policy(
+        self, workspace_id: UUID, policy: MemoryAutoPolicy, actor_id: UUID
+    ) -> MemoryAutoPolicy: ...
+
     async def find_similar(
         self,
         workspace_id: UUID,
         agent_id: UUID,
+        fact: str,
+        fact_vector: Sequence[float] | None = None,
+        *,
+        lessons: bool = False,
+    ) -> tuple[UUID, str] | None: ...
+
+    async def find_similar_user(
+        self,
+        workspace_id: UUID,
+        subject_user_id: UUID,
         fact: str,
         fact_vector: Sequence[float] | None = None,
     ) -> tuple[UUID, str] | None: ...
@@ -152,13 +202,25 @@ class MemoryRepository(Protocol):
     async def insert(
         self,
         workspace_id: UUID,
-        agent_id: UUID,
+        agent_id: UUID | None,
         status: MemoryStatus,
         fact: str,
         context: str | None,
         category: str,
         importance: int,
+        *,
+        kind: MemoryKind = MemoryKind.user_fact,
+        scope: MemoryScope = MemoryScope.agent,
+        origin: MemoryOrigin = MemoryOrigin.legacy_unknown,
+        source: MemorySource = MemorySource.agent,
+        subject_user_id: UUID | None = None,
+        created_by_agent_id: UUID | None = None,
+        auto_activated: bool = False,
     ) -> MemoryRead: ...
+
+    async def merge_lesson(
+        self, workspace_id: UUID, agent_id: UUID, memory_id: UUID
+    ) -> MemoryRead | None: ...
 
     async def search_active(
         self,
@@ -264,12 +326,79 @@ class PgMemoryRepository:
         return config
 
     async def count_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int:
+        # Arbeitsnotizen zaehlen NICHT gegen MEMORY_MAX_PER_AGENT: sie haben
+        # eine eigene, getrennte Obergrenze (ADR-0053 3.1.5), damit Notizen
+        # die Nutzerfakten nicht verdraengen. `scope='user'` traegt
+        # `agent_id IS NULL` und faellt ohnehin heraus (3.1.1).
         count = await self._pool.fetchval(
-            "SELECT COUNT(*)::int FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2",
+            "SELECT COUNT(*)::int FROM agent_memory "
+            "WHERE workspace_id = $1 AND agent_id = $2 AND kind <> 'agent_note'",
             workspace_id,
             agent_id,
         )
         return int(count or 0)
+
+    async def count_notes_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int:
+        """Arbeitsnotizen eines Agenten ueber ALLE Status (3.1.5)."""
+        count = await self._pool.fetchval(
+            "SELECT COUNT(*)::int FROM agent_memory "
+            "WHERE workspace_id = $1 AND agent_id = $2 AND kind = 'agent_note'",
+            workspace_id,
+            agent_id,
+        )
+        return int(count or 0)
+
+    async def get_auto_policy(self, workspace_id: UUID) -> MemoryAutoPolicy:
+        # `{}` (Spalten-Default, 0095) = keine Zelle eingeschaltet (M3).
+        raw = await self._pool.fetchval(
+            "SELECT memory_auto_policy FROM workspace WHERE id = $1", workspace_id
+        )
+        if raw is None:
+            return MemoryAutoPolicy()
+        return MemoryAutoPolicy.model_validate(json.loads(raw) if isinstance(raw, str) else raw)
+
+    async def set_auto_policy(
+        self, workspace_id: UUID, policy: MemoryAutoPolicy, actor_id: UUID
+    ) -> MemoryAutoPolicy:
+        """Schreibt die WIRKSAME Matrix und protokolliert jede geaenderte Zelle.
+
+        Nie-Zellen sind beim Aufrufer bereits herausgefiltert. Je ein- oder
+        ausgeschalteter Zelle eine `audit_log`-Zeile (wer, wann, welche Zelle,
+        ADR-0053 4.3) — in derselben Transaktion wie die Aenderung, damit es
+        keine Einstellung ohne Spur gibt. Eine unveraenderte Einstellung
+        schreibt keine Audit-Zeile.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            raw = await conn.fetchval(
+                "SELECT memory_auto_policy FROM workspace WHERE id = $1 FOR UPDATE",
+                workspace_id,
+            )
+            previous = (
+                MemoryAutoPolicy.model_validate(json.loads(raw) if isinstance(raw, str) else raw)
+                if raw is not None
+                else MemoryAutoPolicy()
+            ).effective()
+            current = frozenset(policy.enabled_cells)
+            # dict an `::jsonb` (jsonb-Codec des App-Pools) — Muster set_guard_config.
+            await conn.execute(
+                "UPDATE workspace SET memory_auto_policy = $2::jsonb WHERE id = $1",
+                workspace_id,
+                policy.model_dump(mode="json"),
+            )
+            changes = [
+                (MEMORY_AUTO_POLICY_ENABLED_AUDIT_ACTION, cell) for cell in current - previous
+            ] + [(MEMORY_AUTO_POLICY_DISABLED_AUDIT_ACTION, cell) for cell in previous - current]
+            for action, cell in sorted(changes, key=lambda c: (c[0], c[1].row, c[1].origin)):
+                await conn.execute(
+                    "INSERT INTO audit_log (workspace_id, actor_id, action, target, detail) "
+                    "VALUES ($1, $2, $3, $4, $5::text::jsonb)",
+                    workspace_id,
+                    actor_id,
+                    action,
+                    _cell_key(cell),
+                    json.dumps({"row": cell.row.value, "origin": cell.origin.value}),
+                )
+        return policy
 
     async def find_similar(
         self,
@@ -277,11 +406,19 @@ class PgMemoryRepository:
         agent_id: UUID,
         fact: str,
         fact_vector: Sequence[float] | None = None,
+        *,
+        lessons: bool = False,
     ) -> tuple[UUID, str] | None:
         """Findet ein hinreichend aehnliches Memory (Dedup-Waechter).
 
         Prueft gegen ALLE Status, auch `rejected` — sonst schlaegt der Agent
         Abgelehntes in der naechsten Session erneut vor.
+
+        `lessons=True` sucht nur unter den Lernvorschlaegen des Agenten (Basis
+        des lesson-Merge, ADR-0053 3.1.6, inkl. `rejected`/`converted`);
+        sonst nur unter den uebrigen Arten. Die Kanaele sind getrennt: ein
+        Lernvorschlag (nie abrufbar) darf keinen Fakt blockieren und
+        umgekehrt.
 
         Der Trigram-Zweig (≥ `MEMORY_DEDUP_SIMILARITY`) bleibt massgeblich und
         unveraendert. Der Vektor-Zweig kommt additiv dazu und faengt
@@ -291,28 +428,62 @@ class PgMemoryRepository:
         verwirft einen gueltigen Fakt dauerhaft, ein falsch negativer kostet
         nur einen von 500 Listenplaetzen.
         """
+        kind_filter = "kind = 'lesson'" if lessons else "kind <> 'lesson'"
+        return await self._find_similar_where(
+            f"workspace_id = $1 AND agent_id = $2 AND {kind_filter}",
+            workspace_id,
+            agent_id,
+            fact,
+            fact_vector,
+        )
+
+    async def find_similar_user(
+        self,
+        workspace_id: UUID,
+        subject_user_id: UUID,
+        fact: str,
+        fact_vector: Sequence[float] | None = None,
+    ) -> tuple[UUID, str] | None:
+        """Dedup-Waechter des Nutzergedaechtnisses je (workspace_id, subject_user_id)."""
+        return await self._find_similar_where(
+            "workspace_id = $1 AND scope = 'user' AND subject_user_id = $2",
+            workspace_id,
+            subject_user_id,
+            fact,
+            fact_vector,
+        )
+
+    async def _find_similar_where(
+        self,
+        where: str,
+        workspace_id: UUID,
+        owner_id: UUID,
+        fact: str,
+        fact_vector: Sequence[float] | None,
+    ) -> tuple[UUID, str] | None:
+        # `where` ist eine feste Zeichenkette dieser Klasse, nie Eingabe.
         use_vector = fact_vector is not None and await self.vector_supported()
         if not use_vector:
             row = await self._pool.fetchrow(
                 "SELECT id, fact FROM agent_memory "
-                "WHERE workspace_id = $1 AND agent_id = $2 AND similarity(fact, $3) >= $4 "
+                f"WHERE {where} AND similarity(fact, $3) >= $4 "
                 "ORDER BY similarity(fact, $3) DESC LIMIT 1",
                 workspace_id,
-                agent_id,
+                owner_id,
                 fact,
                 MEMORY_DEDUP_SIMILARITY,
             )
         else:
             row = await self._pool.fetchrow(
                 "SELECT id, fact FROM agent_memory "
-                "WHERE workspace_id = $1 AND agent_id = $2 "
+                f"WHERE {where} "
                 "  AND (similarity(fact, $3) >= $4 "
                 "       OR (content_vector IS NOT NULL "
                 f"           AND 1 - (content_vector <=> $5::vector) >= "
                 f"{_DEDUP_VECTOR_SIMILARITY})) "
                 "ORDER BY similarity(fact, $3) DESC LIMIT 1",
                 workspace_id,
-                agent_id,
+                owner_id,
                 fact,
                 MEMORY_DEDUP_SIMILARITY,
                 list(fact_vector or []),
@@ -324,29 +495,111 @@ class PgMemoryRepository:
     async def insert(
         self,
         workspace_id: UUID,
-        agent_id: UUID,
+        agent_id: UUID | None,
         status: MemoryStatus,
         fact: str,
         context: str | None,
         category: str,
         importance: int,
+        *,
+        kind: MemoryKind = MemoryKind.user_fact,
+        scope: MemoryScope = MemoryScope.agent,
+        origin: MemoryOrigin = MemoryOrigin.legacy_unknown,
+        source: MemorySource = MemorySource.agent,
+        subject_user_id: UUID | None = None,
+        created_by_agent_id: UUID | None = None,
+        auto_activated: bool = False,
     ) -> MemoryRead:
-        row = await self._pool.fetchrow(
-            "INSERT INTO agent_memory "
-            "(workspace_id, agent_id, created_by_agent_id, status, fact, context, "
-            " category, importance) "
-            "VALUES ($1, $2, $2, $3, $4, $5, $6, $7) "
-            f"RETURNING {_READ_COLUMNS}",
-            workspace_id,
-            agent_id,
-            status.value,
-            fact,
-            context,
-            category,
-            importance,
-        )
-        assert row is not None
-        return MemoryRead.model_validate(dict(row))
+        """Legt einen Eintrag an und schreibt seine ersten Historien-Ereignisse.
+
+        `created_by_agent_id` faellt auf `agent_id` zurueck (Agentengedaechtnis);
+        beim Nutzergedaechtnis ist `agent_id` NULL und der Einreicher steht
+        nur dort (3.1). `auto_activated`: die Freigabematrix hat den Eintrag
+        aktiv gesetzt — unbestaetigt, `expires_at = created_at + 30 Tage`
+        (3.1.3; `now()` ist in der Transaktion stabil, also gleich
+        `created_at`). Ereignisse: `created` (Agent) und ggf.
+        `auto_activated` (System, „Matrix") — in derselben Transaktion.
+        """
+        submitter = created_by_agent_id if created_by_agent_id is not None else agent_id
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "INSERT INTO agent_memory "
+                "(workspace_id, agent_id, created_by_agent_id, status, fact, context, "
+                " category, importance, kind, scope, origin, source, subject_user_id, "
+                " expires_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
+                "        CASE WHEN $14::bool THEN now() + make_interval(days => $15) END) "
+                f"RETURNING {_READ_COLUMNS}",
+                workspace_id,
+                agent_id,
+                submitter,
+                status.value,
+                fact,
+                context,
+                category,
+                importance,
+                kind.value,
+                scope.value,
+                origin.value,
+                source.value,
+                subject_user_id,
+                auto_activated,
+                MEMORY_UNCONFIRMED_TTL_DAYS,
+            )
+            assert row is not None
+            created = MemoryRead.model_validate(dict(row))
+            events = [(MemoryEventKind.created, MemoryActorKind.agent)]
+            if auto_activated:
+                events.append((MemoryEventKind.auto_activated, MemoryActorKind.system))
+            for event, actor_kind in events:
+                await conn.execute(
+                    "INSERT INTO agent_memory_event "
+                    "(workspace_id, memory_id, event, actor_kind, agent_id, after) "
+                    "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+                    workspace_id,
+                    created.id,
+                    event.value,
+                    actor_kind.value,
+                    submitter,
+                    _snapshot(created),
+                )
+        return created
+
+    async def merge_lesson(
+        self, workspace_id: UUID, agent_id: UUID, memory_id: UUID
+    ) -> MemoryRead | None:
+        """Wiederholung eines Lernvorschlags (ADR-0053 3.1.6, 3.1.2 `merged`).
+
+        Erhoeht `occurrence_count` am Treffer, laesst Status und Inhalt
+        unveraendert und schreibt das Ereignis `merged` (Agent; `before` und
+        `after` gleich, weil sich der Treffer inhaltlich nicht aendert) — in
+        einer Transaktion. Keine neue Zeile, also auch keine Obergrenze.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "UPDATE agent_memory SET occurrence_count = occurrence_count + 1 "
+                "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3 AND kind = 'lesson' "
+                f"RETURNING {_READ_COLUMNS}",
+                workspace_id,
+                agent_id,
+                memory_id,
+            )
+            if row is None:
+                return None
+            merged = MemoryRead.model_validate(dict(row))
+            snapshot = _snapshot(merged)
+            await conn.execute(
+                "INSERT INTO agent_memory_event "
+                "(workspace_id, memory_id, event, actor_kind, agent_id, before, after) "
+                "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $6::jsonb)",
+                workspace_id,
+                memory_id,
+                MemoryEventKind.merged.value,
+                MemoryActorKind.agent.value,
+                agent_id,
+                snapshot,
+            )
+        return merged
 
     async def vector_supported(self) -> bool:
         """True, wenn `agent_memory.content_vector` existiert (gecacht)."""

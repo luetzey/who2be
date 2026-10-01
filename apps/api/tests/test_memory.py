@@ -58,9 +58,26 @@ def _add_member(workspace_id: UUID, user_id: UUID) -> None:
 def _save(
     client: TestClient, prefix: str, headers: dict[str, str], fact: str, **overrides: Any
 ) -> Any:
-    body: dict[str, Any] = {"fact": fact, "category": "preference", "importance": 7}
+    body: dict[str, Any] = {
+        "fact": fact,
+        "category": "preference",
+        "importance": 7,
+        "origin": "user_stated",
+    }
     body.update(overrides)
     return client.post(f"{prefix}/agent-memories", json=body, headers=headers)
+
+
+_SWITCHABLE_CELL = {"row": "user_fact", "origin": "user_stated"}
+
+
+def _enable_matrix(client: TestClient, prefix: str, auth: dict[str, str]) -> None:
+    """Schaltet die einzige schaltbare Zelle der Freigabematrix ein (Admin)."""
+    res = client.put(
+        f"{prefix}/memory-auto-policy", json={"enabled_cells": [_SWITCHABLE_CELL]}, headers=auth
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["enabled_cells"] == [_SWITCHABLE_CELL]
 
 
 @pytest.mark.integration
@@ -98,10 +115,20 @@ def test_memory_mode_gates(make_auth_headers: AuthFactory) -> None:
             assert suggested.status_code == 201, suggested.text
             assert suggested.json()["status"] == "pending"
 
-            # auto: save → 201 mit status=active.
-            saved = _save(client, prefix, auto, "Nutzer bevorzugt knappe Antworten")
+            # auto bei Matrix-Default „alles aus" (ADR-0053 M3): wirkt wie suggest.
+            held = _save(client, prefix, auto, "Nutzer bevorzugt knappe Antworten")
+            assert held.status_code == 201, held.text
+            assert held.json()["status"] == "pending"
+            assert held.json()["auto_activated"] is False
+
+            # Admin schaltet die einzige schaltbare Zelle ein → active, unbestaetigt.
+            _enable_matrix(client, prefix, auth)
+            saved = _save(client, prefix, auto, "Nutzer arbeitet am liebsten morgens")
             assert saved.status_code == 201, saved.text
             assert saved.json()["status"] == "active"
+            assert saved.json()["auto_activated"] is True
+            assert saved.json()["confirmed_at"] is None
+            assert saved.json()["expires_at"] is not None
 
             # Mensch/JWT auf Agent-Endpunkten: 403 (kein Memory-Namespace).
             assert _save(client, prefix, auth, "Mensch speichert direkt").status_code == 403
@@ -385,13 +412,20 @@ def test_persona_render_embeds_runtime_memory_section(make_auth_headers: AuthFac
                 )
                 assert res.status_code == 200, res.text
 
-            _, auto = agent_token(client, prefix, "m-rt", {"memory_mode": "auto"}, auth)
+            auto_id, auto = agent_token(client, prefix, "m-rt", {"memory_mode": "auto"}, auth)
             _, sug = agent_token(client, prefix, "m-rt-sug", {"memory_mode": "suggest"}, auth)
             _, off = agent_token(client, prefix, "m-rt-off", {}, auth)
-            assert (
-                _save(client, prefix, auto, "Nutzer plant Deployments auf Hetzner").status_code
-                == 201
+            # Matrix-Default „alles aus" (ADR-0053 M3): auch der auto-Agent
+            # landet in der Schleuse; der Mensch gibt frei.
+            saved = _save(client, prefix, auto, "Nutzer plant Deployments auf Hetzner")
+            assert saved.status_code == 201
+            assert saved.json()["status"] == "pending"
+            approved = client.post(
+                f"{prefix}/agents/{auto_id}/memories/{saved.json()['id']}/triage",
+                json={"action": "approve"},
+                headers=auth,
             )
+            assert approved.status_code == 200, approved.text
             assert (
                 _save(client, prefix, sug, "Pending-Fakt darf nie im Prompt landen").status_code
                 == 201

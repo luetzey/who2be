@@ -271,12 +271,16 @@ PROBES: dict[str, Probe] = {
     f"DELETE {_WS}/agents/{{agent_id}}/memories": Probe(),
     # --- Agenten-Gedaechtnis (nur Agent-Token) -----------------------------
     f"GET {_WS}/agent-memories": Probe(agent=True),
-    f"POST {_WS}/agent-memories": Probe(body={"fact": "Nutzer mag Gruen"}, agent=True),
+    f"POST {_WS}/agent-memories": Probe(
+        body={"fact": "Nutzer mag Gruen", "origin": "user_stated"}, agent=True
+    ),
     f"GET {_WS}/agent-memories/search": Probe(
         query={"query": "<<marker>>"}, agent=True, filters=True
     ),
     f"GET {_WS}/memory-guard": Probe(),
     f"PUT {_WS}/memory-guard": Probe(body={"mode": "standard"}),
+    f"GET {_WS}/memory-auto-policy": Probe(),
+    f"PUT {_WS}/memory-auto-policy": Probe(body={"enabled_cells": []}),
     # --- Feedback / Nutzung ------------------------------------------------
     f"POST {_WS}/usage-events": Probe(body=_FEEDBACK_REF, agent=True),
     f"POST {_WS}/feedback": Probe(body={**_FEEDBACK_REF, "signal": "helpful"}, agent=True),

@@ -16,7 +16,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
@@ -33,6 +33,7 @@ from who2be_models import (
     MemoryTriage,
     MemoryUpdate,
 )
+from who2be_models.memory import MemoryAutoPolicy, MemoryAutoPolicyRead, MemorySaveResult
 
 router = APIRouter(tags=["memory"])
 
@@ -53,11 +54,16 @@ Service = Annotated[MemoryService, Depends(get_memory_service)]
 @router.post("/agent-memories", status_code=201)
 @limiter.limit(write_limit)
 async def save_memory(
-    request: Request, data: MemoryCreate, ctx: Ctx, service: Service
-) -> MemoryRead:
+    request: Request, response: Response, data: MemoryCreate, ctx: Ctx, service: Service
+) -> MemorySaveResult:
     # `status` in der Antwort sagt dem Agenten, ob der Fakt live ist (`active`,
-    # auto-Modus) oder auf menschliche Freigabe wartet (`pending`, suggest).
-    return await service.save(ctx, data)
+    # per Freigabematrix, dann `auto_activated=true`) oder auf menschliche
+    # Freigabe wartet (`pending`). Eine lesson-Wiederholung ist kein neuer
+    # Eintrag: 200 mit `merged_into` (ADR-0053 3.1.6).
+    result = await service.save(ctx, data)
+    if result.merged_into is not None:
+        response.status_code = 200
+    return result
 
 
 @router.get("/agent-memories/search", dependencies=[Depends(enforce_mcp_read_limit)])
@@ -94,6 +100,25 @@ async def update_memory_guard(
     request: Request, data: MemoryGuardConfig, ctx: Ctx, service: Service
 ) -> MemoryGuardConfig:
     return await service.set_guard(ctx, data)
+
+
+# ------------------------------------------------------------ Freigabematrix
+
+
+@router.get("/memory-auto-policy")
+async def get_memory_auto_policy(ctx: Ctx, service: Service) -> MemoryAutoPolicyRead:
+    # Freigabematrix Art x Herkunft (ADR-0053 4, admin + human-only).
+    return await service.get_auto_policy(ctx)
+
+
+@router.put("/memory-auto-policy")
+@limiter.limit(write_limit)
+async def update_memory_auto_policy(
+    request: Request, data: MemoryAutoPolicy, ctx: Ctx, service: Service
+) -> MemoryAutoPolicyRead:
+    # Nie-Zellen werden ignoriert (nicht 422); die Antwort zeigt die wirksame
+    # Einstellung. Jede geaenderte Zelle landet im audit_log (4.3).
+    return await service.set_auto_policy(ctx, data)
 
 
 # ------------------------------------------------------------- Management-Pfad

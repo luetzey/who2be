@@ -38,6 +38,13 @@ MEMORY_MAX_PER_AGENT = 500
 # Nutzergedaechtnis ueber alle Profile desselben Besitzers geteilt wird.
 # Die Pruefung selbst baut Paket C2a.
 MEMORY_MAX_PER_USER = 500
+# Eigene Obergrenze fuer Arbeitsnotizen (`kind='agent_note'`) je Agent,
+# getrennt von MEMORY_MAX_PER_AGENT, damit Notizen die Nutzerfakten nicht
+# verdraengen (ADR-0053 3.1.5; gesetzte Annahme, Anhang B: 40 % von 500).
+MEMORY_MAX_NOTES_PER_AGENT = 200
+# Verfall unbestaetigter, automatisch aktivierter Eintraege:
+# `expires_at = created_at + 30 Tage` (ADR-0053 3.1.3, Anhang B).
+MEMORY_UNCONFIRMED_TTL_DAYS = 30
 # Vorschlaege unterhalb dieser Importance lehnt der Server ab (Kap. 10.2 des
 # Memory-Konzepts: konservativ speichern, Ballast gar nicht erst aufnehmen).
 MEMORY_MIN_IMPORTANCE = 5
@@ -211,6 +218,13 @@ class MemoryCreate(BaseModel):
 
     `context` (optional): 1 Satz, WORAUS der Agent den Fakt geschlossen hat —
     nur fuer die Triage-Ansicht, nie im Retrieval.
+
+    `origin` ist fachlich Pflicht (Weiche M8): der Agent deklariert die
+    Herkunft. Das Feld ist im Schema optional, damit der Server das Fehlen
+    mit dem stabilen Grund `memory_origin_required` beantworten kann statt
+    mit einem generischen Validierungsfehler. `legacy_unknown` ist kein
+    deklarierbarer Wert (nur Bestand). Den Kanal (`source`) setzt der Server
+    aus dem Aufrufweg; ein Feld dafuer gibt es bewusst nicht.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -219,6 +233,9 @@ class MemoryCreate(BaseModel):
     category: MemoryCategory = MemoryCategory.general
     importance: int = Field(default=MEMORY_MIN_IMPORTANCE, ge=1, le=10)
     context: str | None = Field(default=None, max_length=MEMORY_CONTEXT_MAX_LENGTH)
+    origin: MemoryOrigin | None = None
+    kind: MemoryKind = MemoryKind.user_fact
+    scope: MemoryScope = MemoryScope.agent
 
 
 class MemoryUpdate(BaseModel):
@@ -282,6 +299,81 @@ class MemoryRead(BaseModel):
     expires_at: datetime | None = None
     occurrence_count: int = 1
     converted_case_id: UUID | None = None
+
+
+class MemorySaveResult(MemoryRead):
+    """Antwort von `save_memory` (ADR-0053 6.4).
+
+    `auto_activated`: die Freigabematrix hat den Eintrag automatisch aktiv
+    gesetzt — aktiv, aber unbestaetigt, mit Verfallszeitpunkt.
+    `merged_into`: ein `lesson`-Vorschlag traf einen bestehenden
+    Lernvorschlag desselben Agenten (3.1.6); die Antwort ist dann dieser
+    Treffer mit erhoehtem `occurrence_count` und unveraendertem Status.
+    """
+
+    auto_activated: bool = False
+    merged_into: UUID | None = None
+
+
+class MemoryAutoRow(StrEnum):
+    """Zeile der Freigabematrix Art x Herkunft (ADR-0053 4.2).
+
+    `user_fact` meint Kategorien ohne Verhaltenswirkung (alles ausser
+    `instruction`); `proposal` steht fuer Aenderungs-/Loeschvorschlaege.
+    """
+
+    user_fact = "user_fact"
+    user_fact_instruction = "user_fact_instruction"
+    agent_note = "agent_note"
+    lesson = "lesson"
+    proposal = "proposal"
+
+
+class MemoryAutoCell(BaseModel):
+    """Eine Zelle der Freigabematrix: Zeile x deklarierte Herkunft."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    row: MemoryAutoRow
+    origin: MemoryOrigin
+
+
+# Die EINZIGE schaltbare Zelle (Owner 2026-09-28): `user_fact` (Kategorie
+# ohne Verhaltenswirkung) x `user_stated`. Alles andere ist „nie"; der
+# Server ignoriert eine entsprechende Einstellung beim Schreiben UND beim
+# Auswerten (ADR-0053 4.2).
+MEMORY_AUTO_SWITCHABLE_CELLS: frozenset[MemoryAutoCell] = frozenset(
+    {MemoryAutoCell(row=MemoryAutoRow.user_fact, origin=MemoryOrigin.user_stated)}
+)
+
+
+class MemoryAutoPolicy(BaseModel):
+    """Workspace-Einstellung der Freigabematrix (JSONB `workspace.memory_auto_policy`).
+
+    `{}` (Spalten-Default) = keine Zelle eingeschaltet (Weiche M3): ein Agent
+    mit `memory_mode=auto` wirkt dann wie `suggest`. Eingeschaltete
+    Nie-Zellen werden nicht abgelehnt, sondern ignoriert (4.2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled_cells: list[MemoryAutoCell] = Field(default_factory=list, max_length=50)
+
+    def effective(self) -> frozenset[MemoryAutoCell]:
+        """Eingeschaltete Zellen, die tatsaechlich schaltbar sind."""
+        return frozenset(self.enabled_cells) & MEMORY_AUTO_SWITCHABLE_CELLS
+
+
+class MemoryAutoPolicyRead(BaseModel):
+    """Antwort von `GET/PUT /memory-auto-policy`.
+
+    `enabled_cells` ist die wirksame Einstellung (Nie-Zellen sind bereits
+    herausgefiltert); `switchable_cells` nennt, was ueberhaupt schaltbar ist
+    — eine Quelle fuer die Oberflaeche (C6) statt einer zweiten Kopie.
+    """
+
+    enabled_cells: list[MemoryAutoCell]
+    switchable_cells: list[MemoryAutoCell]
 
 
 class MemoryEventCreate(BaseModel):
