@@ -12122,6 +12122,37 @@
         ]
       }
     },
+    "/v1/invitations/pending": {
+      "get": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "List Pending Invitations",
+        "description": "Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.\n\nUeber alle Workspaces, nur nicht angenommene, nicht widerrufene und nicht\nabgelaufene. Nur mit bestaetigter Adresse: ohne `email` im Login 403\n`invitation_email_required`, ohne Bestaetigung 403\n`invitation_email_unconfirmed`.",
+        "operationId": "list_pending_invitations_v1_invitations_pending_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PendingInvitationRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Pending Invitations V1 Invitations Pending Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/invitations/accept": {
       "post": {
         "tags": [
@@ -17154,6 +17185,48 @@
         ],
         "title": "OrganizationRead",
         "description": "Organization-Metadaten."
+      },
+      "PendingInvitationRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/WorkspaceRole"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "workspace_name",
+          "role",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "PendingInvitationRead",
+        "description": "Offene Einladung fuer die E-Mail-Adresse des eigenen Kontos.\n\nBewusst ohne Token und ohne Token-Hash: angenommen wird per Klick ueber die\nID, nicht ueber ein Geheimnis in der Antwort."
       },
       "PersonaContent": {
         "properties": {

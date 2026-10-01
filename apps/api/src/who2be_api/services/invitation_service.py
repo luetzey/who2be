@@ -16,7 +16,10 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, hash_token
 from who2be_api.integrations.gotrue_mailer import send_invitation_email
-from who2be_api.repositories.invitation_repository import InvitationRepository
+from who2be_api.repositories.invitation_repository import (
+    InvitationRepository,
+    PendingInvitation,
+)
 from who2be_api.services.audit_service import AuditService
 from who2be_models import InvitationCreate, InvitationCreated, InvitationRead
 
@@ -69,6 +72,42 @@ class InvitationService:
 
     async def list_pending(self, ctx: WorkspaceContext) -> list[InvitationRead]:
         return await self._repo.list_pending_by_workspace(ctx.workspace_id)
+
+    async def list_pending_for_account(
+        self, user_id: UUID, jwt_email: str | None
+    ) -> list[PendingInvitation]:
+        """Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.
+
+        Ohne Token gibt es nur noch das Konto als Beleg fuer den Besitz der
+        Adresse — deshalb erst nach bestaetigter Adresse: 403
+        `invitation_email_required` ohne `email`-Claim, 403
+        `invitation_email_unconfirmed`, wenn GoTrue die Adresse des Kontos nicht
+        bestaetigt hat oder der Claim nicht die Kontoadresse ist (fail-closed).
+        """
+        if jwt_email is None:
+            raise ApiError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Offene Einladungen gibt es nur fuer ein Konto, "
+                    "das eine bestaetigte Email-Adresse traegt."
+                ),
+                reason="invitation_email_required",
+            )
+        account = await self._repo.self_account_email(user_id)
+        if (
+            not account.confirmed
+            or account.email is None
+            or account.email.lower() != jwt_email.lower()
+        ):
+            raise ApiError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Offene Einladungen sind erst sichtbar, wenn die Email-Adresse "
+                    "des Kontos bestaetigt ist."
+                ),
+                reason="invitation_email_unconfirmed",
+            )
+        return await self._repo.list_pending_for_email(account.email)
 
     async def revoke(self, ctx: WorkspaceContext, invitation_id: UUID) -> None:
         revoked = await self._repo.revoke(ctx.workspace_id, invitation_id)
