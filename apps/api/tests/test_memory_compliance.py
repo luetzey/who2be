@@ -108,7 +108,8 @@ def _target_workspace(bundle: dict[str, Any], ws: UUID) -> dict[str, Any]:
         w for org in bundle["organizations"] for w in org["workspaces"] if w["id"] == str(ws)
     ]
     assert len(workspaces) == 1, workspaces
-    return workspaces[0]
+    target: dict[str, Any] = workspaces[0]
+    return target
 
 
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
