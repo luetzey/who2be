@@ -3,7 +3,9 @@
 - Status: **Accepted** (Owner, 2026-09-28) — alle Weichen in Abschnitt 8 sind
   entschieden, P4 per Nachtrag vom 2026-09-28. Nachtrag Phase C vom
   2026-10-01 (PM-Entscheidungen vom 2026-09-30): 3.1.1, 3.1.2, 3.1.6, 6.4,
-  Anhang A.2 und B.
+  Anhang A.2 und B. Nachtrag C0b vom 2026-10-01 (Owner-Entscheidungen
+  Phase C 2 = a, 3 = b; W4 = a, W5 = a): workspace-weite Sicht, Stapel,
+  Not-Aus — 3.1.1, 3.1.2, 6.1, 6.4.1, Anhang A.2.
 - Datum: 2026-09-28
 - Gemessen gegen: `origin/main` @ `ef0756a3`. Alle Code-Aussagen tragen einen
   Symbolanker oder einen SHA-Permalink (Konvention `docs/code-references.md`).
@@ -258,6 +260,8 @@ Rechte am Nutzergedächtnis:
 
 Die zweite und vierte Zeile weichen vom heutigen Memory-Recht (`editor+`) ab.
 Das ist Absicht: Ein Fakt über eine Person gehört dieser Person.
+Exportieren darf ihr Nutzergedächtnis ebenfalls nur die Person selbst. Den
+Admin-Pfad „Anzahl sehen, alles löschen“ legt 6.4.1 fest (Owner W5 = a).
 
 Obergrenze: Je `(workspace_id, subject_user_id)` höchstens **500** Einträge
 mit `scope='user'`, gezählt über alle Status — wie heute die Agentengrenze
@@ -275,7 +279,7 @@ Neue Tabelle `agent_memory_event`, append-only (`SELECT, INSERT`):
 | Spalte | Bedeutung |
 |---|---|
 | `id`, `workspace_id`, `memory_id` (FK `agent_memory` ON DELETE CASCADE) | |
-| `event` | `created · auto_activated · approved · rejected · edited · confirmed · expired · reactivated · change_proposed · delete_proposed · proposal_accepted · proposal_rejected · rolled_back · converted · merged` |
+| `event` | `created · auto_activated · approved · rejected · edited · confirmed · expired · reactivated · change_proposed · delete_proposed · proposal_accepted · proposal_rejected · rolled_back · converted · merged · auto_revoked` (`auto_revoked` per Nachtrag C0b, 6.4.1; Migration in C3) |
 | `actor_kind` | `human · agent · system` |
 | `actor_id`, `agent_id` | wer; `system` für Verfallsjob und Matrix |
 | `before`, `after` | jsonb-Schnappschuss von `fact, category, importance, status, kind, origin` |
@@ -835,6 +839,8 @@ außer dort, wo ausdrücklich ein *anderer* Agent gemeint ist
 | `memory_kind_scope_invalid` | 422 | Kombination Art × Scope nicht erlaubt |
 | `memory_proposal_not_pending` | 409 | Entscheidung über einen bereits entschiedenen Vorschlag |
 | `memory_note_cap_reached` | 409 | Obergrenze `agent_note` |
+| `memory_batch_count_mismatch` | 409 | Stapel per Filter oder Not-Aus: die Serverzahl weicht von `expected_count` ab (6.4.1); `params={count}` |
+| `memory_held` | 409 | Stapel-Freigabe eines zurückgehaltenen Eintrags (6.4.1); nur als Ergebnis je Eintrag |
 | `test_case_not_found` | 404 | |
 | `test_case_retired` | 409 | Ergebnis zu zurückgezogenem Prüffall |
 | `test_subject_version_not_found` | 404 | geprüfte Version gehört nicht zum Workspace |
@@ -990,6 +996,116 @@ Fehler: `memory_origin_required`, `memory_kind_scope_invalid`,
 `params={maximum}`, bei der Grenze des Nutzergedächtnisses
 `params={maximum, scope:'user'}` (3.1.1). Eine `lesson`-Wiederholung ist
 kein Fehler, sondern 200 mit `merged_into` (3.1.6).
+
+#### 6.4.1 Nachtrag C0b — workspace-weite Sicht, Stapel, Not-Aus
+
+Owner-Entscheidung vom 2026-10-01 zu den offenen Fragen der Design-Spec
+Phase C, Wortlaut: „1.a, 2.a, 3.b, 4. b“. Hier relevant: **Frage 2 = a**
+(workspace-weite Warteschlange) und **Frage 3 = b** (Notfall-Rücknahme in
+Phase C). Dazu Owner-Entscheidung vom selben Tag zur zentralen
+Gedächtnisverwaltung, Wortlaut: „1. a, 2. a, 3.a, 4. a,5. ja“ — hier relevant
+**W4 = a** (API-Form, PM-Entscheidung innerhalb von 2 = a) und **W5 = a**
+(Admin sieht vom Nutzergedächtnis nur die Anzahl). Die Tabelle in 6.4 gilt
+weiter; dieser Abschnitt ergänzt sie.
+
+REST:
+
+| Methode, Pfad | Rolle | Zweck |
+|---|---|---|
+| `GET /memories?status&kind&scope&agent_id&origin&source&health&held&q&sort&cursor&limit` | ab `viewer`, Sichtbarkeit siehe unten | allgemeine Liste über alle Agenten, alle Status; `limit ≤ 50`, Cursor-Paginierung. `GET /memories?status=pending` ist die workspace-weite Warteschlange (Frage 2 = a) |
+| `GET /memories/counts?group_by&<Filter wie oben>&created_after` | wie `GET /memories` | Zähler je Gruppe (`agent`, `kind`, `status`, `origin`, `source`, `health`); je Gruppe ohne den eigenen Filter (Facetten). `group_by=subject_user_id` mit `scope=user` nur `admin` und nur Zahlen (W5 = a) |
+| `POST /memories/batch` | je Eintrag wie die Einzelaktion | Body `{action: approve·reject·confirm·delete, ids[≤100] \| filter, expected_count?, note?}`, Antwort `{results:[{id, ok, reason?, params?}]}` |
+| `GET /memory-proposals?status&agent_id` | `editor`; Vorschläge zum eigenen Nutzergedächtnis ab `viewer` | Vorschläge workspace-weit, Gegenstück zu `GET /agents/{agent_id}/memory-proposals` |
+| `POST /memories/revoke-auto` | `editor`; fremdes Nutzergedächtnis nur `admin` | Notfall-Rücknahme, siehe unten |
+| `DELETE /members/{user_id}/memories` | `admin` | löscht das gesamte Nutzergedächtnis dieser Person im Workspace (W5 = a) |
+| `GET /me/memories` | Nutzer selbst | wie 6.4, zusätzlich mit `q`, `cursor`, `limit` |
+
+**Sichtbarkeit von `GET /memories` und `counts`.** `editor` sieht
+`scope='agent'` aller Agenten des Workspace. Jede Rolle ab `viewer` sieht
+das eigene Nutzergedächtnis (`scope='user'`, `subject_user_id` = eigene
+Nutzer-ID). Das Nutzergedächtnis **anderer** Personen erscheint nie in der
+Antwort, auch nicht für `admin` (3.1.1); der Admin bekommt davon nur die
+Anzahl über `group_by=subject_user_id`. Dieselbe Regel gilt für die Vorschau
+des Not-Aus und für `batch`: Ein fremder Eintrag ist für den Aufrufer
+`memory_not_found`, kein `forbidden` (kein Enumerieren).
+
+**Zähler.** Der Zähler der Dashboard-Kachel und der Tab-Zähler „Zur Freigabe“
+kommen aus `GET /memories/counts` mit `status=pending`. Lernvorschläge
+(`lesson`) zählen dort nicht mit, weil sie nie freigegeben werden und nicht in
+der Warteschlange stehen (3.1, Matrix 4.2). Damit zählen Dashboard und
+Warteschlange dieselbe Menge.
+
+**Filter `held` und `health`** rechnet der Server, damit Liste und Zähler
+dieselbe Regel nutzen:
+
+- `held` (zurückgehalten) ist abgeleitet, kein Feld: `status='pending'` und
+  (`origin IN ('external_content','inferred')` oder `category='instruction'`).
+  Es gibt kein `hold_reasons[]` (PM-Entscheidung F1 = a).
+- `health` kennt `unconfirmed` (`active`, `confirmed_at IS NULL`),
+  `expiring_soon` (`expires_at` in den nächsten 7 Tagen, `pending` oder
+  `active`), `never_delivered` (`active`, `retrieval_count = 0`, älter als
+  30 Tage), `stale_delivery` (`active`, `last_retrieved_at` älter als 90 Tage)
+  und `external_or_inferred` (`origin`). Die Grenzen 7/30/90 Tage stammen aus
+  der Design-Entscheidung W3 = a und sind gesetzte Annahmen.
+
+**Stapel (`batch`).** Jeder Eintrag läuft durch dieselbe Prüfung wie die
+Einzelaktion (Rechte, Status, Obergrenzen); ein Teilfehler bricht den Stapel
+nicht ab, sondern steht im Ergebnis dieses Eintrags. Im Filter-Modus ist
+`expected_count` Pflicht. Weicht die Zahl der Treffer ab, antwortet der
+Server mit 409 `memory_batch_count_mismatch` und `params={count}` und ändert
+nichts. So wird nie mehr freigegeben, als ein Mensch bestätigt hat — das
+trägt „Alle von <Profil> freigeben“ (W2 = a). `approve` auf einen
+zurückgehaltenen Eintrag ergibt je Eintrag `memory_held`; zurückgehaltene
+Einträge werden nur einzeln freigegeben. Änderungs- und Löschvorschläge
+laufen nicht über `batch`, sondern einzeln über `decide` (3.1.4).
+
+**Notfall-Rücknahme (`revoke-auto`, LW6, Frage 3 = b).** Body
+`{since, until?, agent_id?, origin[]?, include_other_users: bool, dry_run: bool, expected_count?}`.
+
+- Betroffen sind Einträge mit `status='active'`, `confirmed_at IS NULL` und
+  einem Event `auto_activated` im Zeitraum `since`…`until` — also genau das,
+  was ohne menschliche Prüfung wirksam wurde. Bestätigte Einträge bleiben
+  unberührt.
+- Wirkung je Eintrag: `status` → `pending`, dazu das neue Event
+  `auto_revoked` (3.1.2) mit `actor_kind='human'`, `before` (der
+  automatisch aktive Stand) und `after`. Gelöscht wird nichts. Der Eintrag
+  steht danach wieder in der Warteschlange.
+- Rollback-fähig: Ein Rollback auf das `auto_revoked`-Event stellt dessen
+  `before` wieder her, also den aktiven, unbestätigten Stand (3.1.2).
+- Einen eigenen Status „archiviert“ gibt es nicht; Ziel der Rücknahme ist
+  `pending`. Wer einen zurückgenommenen Eintrag nicht mehr will, lehnt ihn in
+  der Warteschlange ab (`rejected`, bleibt Dublettenbasis wie in ADR-0044 §3).
+- `dry_run=true` liefert `{count, sample, hidden_count}`: `sample` sind
+  höchstens fünf Einträge, die der Aufrufer sehen darf, `hidden_count` die
+  Anzahl aus fremdem Nutzergedächtnis (nur beim Admin größer als null).
+- Ohne `dry_run` ist `expected_count` Pflicht, Abweichung wie bei `batch`
+  (409 `memory_batch_count_mismatch`). Antwort wie `batch`, ein Ergebnis je
+  Eintrag.
+- Rechte: `editor` nimmt Agentengedächtnis und das eigene Nutzergedächtnis
+  zurück. `include_other_users=true` ist `admin` vorbehalten. Das ist mit
+  3.1.1 vereinbar, weil die Rücknahme weniger eingreift als das Löschen, das
+  dem Admin dort schon zusteht, und den Inhalt nicht offenlegt.
+
+**Admin-Löschen des Nutzergedächtnisses (W5 = a).** `DELETE
+/members/{user_id}/memories` löscht alle Einträge mit `scope='user'` und
+`subject_user_id=user_id` im Workspace (Hard-Delete wie 3.1.2) und schreibt
+eine inhaltsfreie Zeile `audit_log` mit `action='memory.user_purged'`,
+`target=<user_id>` und der Anzahl. Den Inhalt sieht der Admin dabei nicht.
+
+Neue `ProblemReason`-Werte siehe 6.1 (`memory_batch_count_mismatch`,
+`memory_held`). Das Event `auto_revoked` erweitert den CHECK von
+`agent_memory_event.event` aus
+`apps/api/src/who2be_api/migrations/0091_agent_memory_v2.sql@d185ba78` per
+neuer Migration in C3.
+
+Nicht Teil dieses Nachtrags: ein Pfad, über den ein Mensch selbst einen
+Eintrag ins eigene Nutzergedächtnis schreibt (`POST /me/memories`), und
+Cursor/Suche für die Altpfade `GET /agents/{agent_id}/memories`.
+
+Zuschnitt: Alle Endpunkte dieses Abschnitts setzt C3 um (Anhang A.2). Die
+Oberfläche des Not-Aus kommt mit C5b. Die Warnliste S4a darf den Satz „Du
+kannst alles automatisch Freigegebene auf einmal zurücknehmen“ behalten; er
+wird erst ausgeliefert, wenn der Web-Teil des Not-Aus gemergt ist.
 
 ### 6.5 Phase D — Fälle, Nutzung, Muster
 
@@ -1468,7 +1584,7 @@ S = `…/services/`, RT = `…/routers/`. „neu“ = neue Datei, sonst Änderun
 | C1b | Compliance-Naben (`S/gdpr_export_service.py`, `docs/compliance/vvt.md`, `docs/compliance/data-retention-and-erasure.md`, `R/account_repository.py`); Test |
 | C2a | M neu (Matrix-Spalte); S `memory_service.py` (Freigabematrix, Pflichtfeld `origin` im Speicherpfad, `lesson`-Merge 3.1.6, Obergrenzen 3.1.1 und 3.1.5); RT `memory.py` (`GET/PUT /memory-auto-policy`); `errors.py`; `main.py`; `openapi.json`; Test |
 | C2b | S `memory_service.py` (Secret-Scan, Ratenbegrenzung); neuer Verfallsjob neben `core/purge.py`; Test |
-| C3 | M neu (Vorschläge); S `memory_service.py`; RT `memory.py` (Vorschläge, Historie/Rollback, `/me/memories`); R `memory_repository.py`; `openapi.json`; Test |
+| C3 | M neu (Vorschläge, Event `auto_revoked`); S `memory_service.py`; RT `memory.py` (Vorschläge, Historie/Rollback, `/me/memories`, `GET /memories`, `counts`, `batch`, `revoke-auto`); RT `members.py` (`DELETE /members/{user_id}/memories`); R `memory_repository.py`; `errors.py`; `main.py`; `openapi.json`; Test — **über der 8er-Grenze**, in C3a (Migration, Repository, Service) und C3b (Router, OpenAPI) teilen |
 | C4 | `server.py` (`save_memory`); `tools/learning.py`; `clients/learning.py`; `tool_requirements.py`; `resolvers/tools.py`; S `persona_service.py` (Push nur bestätigt); `CLAUDE.md` |
 | D1 | M neu; PM `case.py` neu, `__init__.py`; R `case_repository.py` neu; Test; Compliance-Naben |
 | D2 | S `case_service.py` neu; RT `cases.py` neu; RT `feedback.py` (promote); `main.py`; `errors.py`; `openapi.json`; Test |
@@ -1500,9 +1616,9 @@ bzw. C2a/C2b gemeint.
 | C1b | Compliance-Naben (Export, VVT, Löschkonzept, Purge) |
 | C2a | Freigabematrix (Abschnitt 4) inkl. `GET/PUT /memory-auto-policy` (Router) und Pflichtfeld `origin` im Speicherpfad |
 | C2b | Secret-Scan, Ratenbegrenzung, Verfallsjob (3.1.3) |
-| C3 | Vorschläge (3.1.4), Historie/Rollback (3.1.2), `/me/memories` |
+| C3 | Vorschläge (3.1.4), Historie/Rollback (3.1.2), `/me/memories`; dazu laut Nachtrag C0b (6.4.1) workspace-weite Liste, Zähler, Stapel, Not-Aus-Endpunkt und Admin-Löschen des Nutzergedächtnisses |
 | C4 | MCP (6.4) |
-| Web | C6 → C5a → C5b, eine Kette wegen `apps/web/src/i18n/locales/{de,en}.json` (A.1, A.3) |
+| Web | C6 → C5a → C5b, eine Kette wegen `apps/web/src/i18n/locales/{de,en}.json` (A.1, A.3). C5a: Warteschlange aus `GET /memories?status=pending`, Zähler aus `counts`. C5b: zusätzlich die Oberfläche des Not-Aus (6.4.1) |
 
 `GET/PUT /memory-auto-policy` gehört damit zu C2a, nicht zu C3.
 
