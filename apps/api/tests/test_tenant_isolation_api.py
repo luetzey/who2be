@@ -429,6 +429,14 @@ PROBES: dict[str, Probe] = {
     "DELETE /v1/organizations/{organization_id}": Probe(known="Fix in Arbeit (Board t_977db967)"),
     # Der Einladungs-Token ist das Objekt: A haelt den Token einer Einladung
     # in B. Ohne passende E-Mail im Login muss die Annahme scheitern (L1).
+    # Beide Annahmewege teilen den Service; der Body-Weg ist der Nachfolger.
+    "POST /v1/invitations/accept": Probe(
+        body={"token": "<<invite_token>>"},
+        oracle_exempt=(
+            "Der Token ist ein 256-Bit-Geheimnis aus der Einladungs-Mail. Wer ihn "
+            "hat, darf wissen, dass er gilt (403 bei falscher E-Mail statt 404)."
+        ),
+    ),
     "POST /v1/invitations/{token}/accept": Probe(
         path={"token": "invite_token"},
         oracle_exempt=(
