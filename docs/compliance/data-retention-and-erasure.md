@@ -40,12 +40,6 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
      Auth-Delete wird `account_deletion.purged_at = now()` gesetzt
      (idempotenter Retry, falls der Auth-Call scheitert).
 
-**Rueckgabe vor der Loeschung (Art. 28 Abs. 3 lit. g):** Verlangt der Kunde
-seine Daten zurueck, exportiert der Betreiber die Organisation waehrend der
-Grace mit `who2be-org-transfer export` als gpg-verschluesseltes Archiv
-(`docs/org-export-import.md`). Das Archiv ist nach der Uebergabe beim Betreiber
-zu loeschen; es liegt ausserhalb von Purge und Backup-Retention.
-
 ---
 
 ## 2 · Anonymisierung ueberlebender Audit-Referenzen (WP-D)

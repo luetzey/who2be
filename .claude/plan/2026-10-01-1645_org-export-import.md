@@ -74,8 +74,9 @@ Umzug. ADR-0055 §4.6 und R6.
 7. `docs/adr/0055-mandantentrennung-trennungskonzept.md` — §4.6, R6, §7, §10
 8. `changelog.d/org-transfer.added.md`
 
-Nachgezogen (Doku als DoD): `docs/README.md` (Index-Eintrag),
-`docs/compliance/data-retention-and-erasure.md` §1 (Rueckgabe vor dem Purge).
+Nicht in diesem PR (8-Dateien-Grenze), als Folgekarte: `docs/README.md`
+(Index-Eintrag), `docs/compliance/data-retention-and-erasure.md` §1 (Rueckgabe
+vor dem Purge), `.claude/context/STATE.md` und `DECISIONS.md`.
 
 ## Verifikation
 
@@ -99,4 +100,11 @@ Meldung, Blob/SQLite nicht unberuehrt).
 - [x] Tests: 12 gruen (`test_org_transfer.py`), Isolation per `run_isolation`
 - [x] Rot-Proben: `_check_tenancy` und `_check_references` je ausgeschaltet ->
       `foreign_row` und `foreign_reference` rot; wieder eingesetzt -> gruen
-- [x] Doku: Betreiber-Anleitung, ADR-0055 §4.6/R6/§7/§10, Retention-Doku, Changelog
+- [x] Doku: Betreiber-Anleitung, ADR-0055 §4.6/R6/§7/§10, Changelog
+- [x] Gesamt-Suite: 2585 passed, Coverage 93 %, 0 skipped. Die 7 Fehlschlaege
+      in `test_org_transfer.py` kamen daher, dass der Hintergrundlauf die
+      DATABASE_URL aus `.env` nahm, also eine geteilte DB mit fremden
+      Migrationen (0091_self_account_function, 0095_memory_auto_policy aus
+      anderen Worktrees). Die 5 Setup-Fehler kamen von `-p no:logging`
+      (kein `caplog`). Auf der eigenen DB ohne diesen Schalter sind dieselben
+      Tests gruen (26 passed).
