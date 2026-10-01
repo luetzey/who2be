@@ -129,6 +129,8 @@ export function ToolDetailPage() {
                   </>
                 }
                 description={description}
+                // Audit A13: Export ist Sekundaeraktion — unter md hinter „Mehr".
+                collapseActionsBelowMd
                 actions={
                   <EntityExportButton
                     entityKind="external-tool"

@@ -127,6 +127,24 @@ afterEach(() => {
 })
 
 describe('SystemPromptDetailPage', () => {
+  // Audit A13: Duplizieren liegt unter md hinter „Mehr" (Vertrag; Sichtbarkeit
+  // je Viewport belegt e2e/status-actions-viewport.spec.ts).
+  it('Audit A13: Duplizieren liegt unter md hinter „Mehr"', async () => {
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/system-prompts/sp1`]: () => jsonResponse(template()),
+      [`GET ${WS_PREFIX}/system-prompts/sp1/versions`]: () =>
+        jsonResponse([version('draft')]),
+    })
+    renderPage()
+
+    const more = await screen.findByTestId('detail-header-more')
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).toHaveClass('hidden', 'md:flex')
+    expect(slot).toContainElement(screen.getByTestId('duplicate-system-prompt'))
+  })
+
   it('laedt das Template und zeigt Draft-Status-Aktion, Formular und Versionshistorie', async () => {
     stubFetchRoutes({
       [`GET ${WS_PREFIX}/system-prompts/sp1`]: () => jsonResponse(template()),
