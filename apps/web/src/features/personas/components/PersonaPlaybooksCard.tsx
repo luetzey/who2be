@@ -1,5 +1,5 @@
 import { Layers, Plus, Share2, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -15,8 +15,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
+import { useShowMore } from '@/hooks/useShowMore'
 import { splitTriggers } from '@/lib/triggers'
+import { cn } from '@/lib/utils'
 
 import { PlaybookLinkItem, PlaybookReferencedBadge } from './PlaybookLinkItem'
 
@@ -176,6 +179,13 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
         (needle === '' || playbook.name.toLowerCase().includes(needle)),
     )
   }, [links.playbooks, links.linkedIds, query])
+  const isMobile = useIsMobile()
+  const availableListRef = useRef<HTMLUListElement>(null)
+  const more = useShowMore(available, {
+    enabled: isMobile,
+    listRef: availableListRef,
+    resetKey: query,
+  })
 
   // Voll-Objekt eines Sub-Playbooks aus der Workspace-Liste — liefert
   // Status/Version fuer die aufgeklappten Kind-Zeilen (keine neue Query).
@@ -354,18 +364,53 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
                       {t('personas:detail.playbooks.searchEmpty')}
                     </p>
                   ) : (
-                    <ul className="max-h-72 divide-y divide-border overflow-auto rounded-lg border border-border">
-                      {available.map((playbook) => (
-                        <PlaybookLinkItem
-                          key={playbook.id}
-                          name={playbook.name}
-                          actionLabel={t('personas:detail.playbooks.link')}
-                          actionIcon={Plus}
-                          onAction={() => links.toggle(playbook.id)}
-                          disabled={links.saving}
-                        />
-                      ))}
-                    </ul>
+                    // Mobil-Spec M9: unter md kein innerer Scroller, sondern
+                    // 8 Treffer im Seitenfluss + „N weitere anzeigen“. Ab md
+                    // bleibt die gedeckelte Liste; als Scroller ist sie dann
+                    // per Tab erreichbar und benannt (ACT 0ssw9k, Safari).
+                    <>
+                      <div
+                        role={isMobile ? undefined : 'region'}
+                        aria-label={isMobile ? undefined : t('personas:detail.playbooks.addTitle')}
+                        tabIndex={isMobile ? undefined : 0}
+                        data-testid="persona-playbooks-available"
+                        className={cn(
+                          'rounded-lg border border-border',
+                          !isMobile &&
+                            'max-h-72 overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        )}
+                      >
+                        <ul
+                          ref={availableListRef}
+                          aria-label={t('personas:detail.playbooks.addTitle')}
+                          className="divide-y divide-border"
+                        >
+                          {more.visible.map((playbook) => (
+                            <PlaybookLinkItem
+                              key={playbook.id}
+                              name={playbook.name}
+                              actionLabel={t('personas:detail.playbooks.link')}
+                              actionIcon={Plus}
+                              onAction={() => links.toggle(playbook.id)}
+                              disabled={links.saving}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                      {more.nextCount > 0 ? (
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="mt-1 min-h-11 px-0"
+                          onClick={more.showMore}
+                        >
+                          {more.buttonLabel}
+                        </Button>
+                      ) : null}
+                      <p className="sr-only" aria-live="polite">
+                        {more.liveMessage}
+                      </p>
+                    </>
                   )}
                 </div>
               </Stack>

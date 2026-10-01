@@ -1,5 +1,5 @@
 import { ChevronRight, FileText, GitBranch, Users, type LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -8,7 +8,17 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { EntityIcon, type EntityTone } from '@/components/data/EntityIcon'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+
+/**
+ * Playbook-Liste unter `md`: zuerst 4 im Seitenfluss (PM-Entscheidung zu P7:
+ * die Tabs sollen bei 320 px nahe an einen Bildschirm rutschen, 8 Zeilen à
+ * ≥ 40 px passten nicht), danach je 8 weitere (Mobil-Spec M9).
+ */
+const PLAYBOOK_INITIAL = 4
+const PLAYBOOK_STEP = 8
 
 interface AgentHierarchyViewProps {
   agent: Agent
@@ -61,7 +71,7 @@ function PrimaryRow({
         <div className="mt-0.5 flex flex-wrap items-center gap-2">
           <Link
             to={href}
-            className="min-w-0 truncate rounded-sm font-semibold text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="line-clamp-2 min-w-0 rounded-sm font-semibold wrap-anywhere text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {name}
           </Link>
@@ -96,6 +106,8 @@ function PlaybookRow({
   href: string
   version?: number
 }) {
+  // Mobil-Spec M6: Der Name bricht um statt bei kurzen Namen unnoetig mit „…“
+  // zu enden; als Link darf er nach zwei Zeilen kuerzen (Spec M6.1).
   return (
     <Link
       to={href}
@@ -103,7 +115,9 @@ function PlaybookRow({
       className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-0"
     >
       <GitBranch className="size-4 flex-none text-pill-playbook-fg" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{name}</span>
+      <span className="line-clamp-2 min-w-0 flex-1 font-medium wrap-anywhere text-foreground">
+        {name}
+      </span>
       {version !== undefined ? (
         <span className="flex-none text-xs text-muted-foreground tabular-nums">v{version}</span>
       ) : null}
@@ -123,7 +137,39 @@ export function AgentHierarchyView({
   playbooks,
 }: AgentHierarchyViewProps) {
   const { t } = useTranslation('agents')
+  const { t: tc } = useTranslation('common')
   const wsPath = useWorkspacePath()
+
+  // PM-Zusatz zu Mobil-Spec P7 (Muster M9): Unter `md` stehen zuerst
+  // `PLAYBOOK_INITIAL` Playbooks im Seitenfluss, jeder Klick auf
+  // „N weitere anzeigen“ haengt die naechsten `PLAYBOOK_STEP` an. Vorher schob die Karte mit
+  // 14 Playbooks (942 px bei 320) die Tabs des Agenten auf 2,6 Bildschirme.
+  // Ab `md` alle, wie bisher. Die Anzahl ist Logik, deshalb `useIsMobile`
+  // statt CSS.
+  const isMobile = useIsMobile()
+  const listRef = useRef<HTMLUListElement>(null)
+  const pendingFocus = useRef<number | null>(null)
+  const [shown, setShown] = useState(PLAYBOOK_INITIAL)
+  const [announced, setAnnounced] = useState(false)
+  const visiblePlaybooks = isMobile ? playbooks.slice(0, shown) : playbooks
+  const nextCount = isMobile
+    ? Math.min(PLAYBOOK_STEP, playbooks.length - visiblePlaybooks.length)
+    : 0
+
+  const showMore = () => {
+    pendingFocus.current = visiblePlaybooks.length
+    setShown((count) => count + PLAYBOOK_STEP)
+    setAnnounced(true)
+  }
+
+  // Der Knopf verschwindet mit dem letzten Schritt; ohne Fokus-Sprung landete
+  // der Tastatur-Fokus auf `body`. Deshalb: erster neuer Eintrag.
+  useLayoutEffect(() => {
+    const index = pendingFocus.current
+    if (index === null) return
+    pendingFocus.current = null
+    listRef.current?.children.item(index)?.querySelector<HTMLElement>('a[href]')?.focus()
+  }, [shown])
 
   return (
     <Card data-testid="agent-hierarchy">
@@ -172,14 +218,42 @@ export function AgentHierarchyView({
               ? t('hierarchy.noPlaybooks')
               : t('hierarchy.playbooksLinked', { count: playbooks.length })}
           </SectionLabel>
-          {playbooks.map((playbook) => (
-            <PlaybookRow
-              key={playbook.id}
-              name={playbook.name}
-              href={wsPath(`/playbooks/${playbook.id}`)}
-              version={playbook.current_version}
-            />
-          ))}
+          {playbooks.length > 0 ? (
+            <ul
+              ref={listRef}
+              aria-label={t('hierarchy.playbooksLinked', { count: playbooks.length })}
+              className="flex flex-col gap-1.5"
+            >
+              {visiblePlaybooks.map((playbook) => (
+                <li key={playbook.id}>
+                  <PlaybookRow
+                    name={playbook.name}
+                    href={wsPath(`/playbooks/${playbook.id}`)}
+                    version={playbook.current_version}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {nextCount > 0 ? (
+            <Button
+              type="button"
+              variant="link"
+              className="min-h-11 self-start px-2"
+              data-testid="agent-hierarchy-show-more"
+              onClick={showMore}
+            >
+              {tc('actions.showMoreCount', { count: nextCount })}
+            </Button>
+          ) : null}
+          <p className="sr-only" aria-live="polite">
+            {announced
+              ? tc('list.shownOfTotal', {
+                  shown: visiblePlaybooks.length,
+                  total: playbooks.length,
+                })
+              : ''}
+          </p>
         </div>
       </CardContent>
     </Card>

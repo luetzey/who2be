@@ -90,7 +90,12 @@ export function ActivityRow({ activity }: ActivityRowProps) {
   const DotIcon = dot.icon
 
   return (
-    <div className="flex items-center gap-3">
+    // Mobil-Spec M6: Der Satz bricht um statt mit „…“ zu enden. Die Zeile ist
+    // kein Link und hat keinen anderen Weg zum Volltext; bei 320 px blieben
+    // vorher 75 px sichtbar. `items-start` haelt Avatar und Zeit an der
+    // ersten Textzeile, wenn der Satz mehrzeilig wird. Unter `md` steht die
+    // Zeit unter dem Satz, sonst nimmt sie ihm gut ein Drittel der Breite.
+    <div className="flex items-start gap-3">
       <span className="relative flex-none" aria-hidden="true">
         <span
           className={cn(
@@ -107,15 +112,23 @@ export function ActivityRow({ activity }: ActivityRowProps) {
           <DotIcon />
         </span>
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm leading-snug">
-        <span className="font-medium">{actorName}</span> {eventText(t, activity.event)}{' '}
-        <span className="text-muted-foreground">{entityLabel}</span>{' '}
-        <span className="font-medium">{entityName}</span>
-        {versionHint ? <span className="text-muted-foreground">{versionHint}</span> : null}
-      </span>
-      <time className="flex-none text-xs text-muted-foreground" dateTime={activity.ts}>
-        {dateLabel}
-      </time>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:gap-3">
+        <span
+          data-testid="activity-text"
+          className="min-w-0 text-sm leading-snug wrap-anywhere md:flex-1"
+        >
+          <span className="font-medium">{actorName}</span> {eventText(t, activity.event)}{' '}
+          <span className="text-muted-foreground">{entityLabel}</span>{' '}
+          <span className="font-medium">{entityName}</span>
+          {versionHint ? <span className="text-muted-foreground">{versionHint}</span> : null}
+        </span>
+        <time
+          className="text-xs text-muted-foreground md:flex-none md:pt-0.5"
+          dateTime={activity.ts}
+        >
+          {dateLabel}
+        </time>
+      </div>
     </div>
   )
 }
