@@ -44,7 +44,7 @@ _PURGE_USER_MEMORY_SQL = (
 class AccountLifecycleRepository(Protocol):
     """Service-seitige Abstraktion fuer Lifecycle-Schreibzugriffe."""
 
-    async def is_org_owner(self, org_id: UUID, user_id: UUID) -> bool: ...
+    async def org_role(self, org_id: UUID, user_id: UUID) -> str | None: ...
 
     async def org_kind(self, org_id: UUID) -> str | None: ...
 
@@ -61,13 +61,14 @@ class PgAccountLifecycleRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def is_org_owner(self, org_id: UUID, user_id: UUID) -> bool:
+    async def org_role(self, org_id: UUID, user_id: UUID) -> str | None:
+        """Org-Rolle von `user_id` in `org_id`; `None`, wenn kein Mitglied."""
         role: str | None = await self._pool.fetchval(
             "SELECT role FROM org_member WHERE org_id = $1 AND user_id = $2",
             org_id,
             user_id,
         )
-        return role == "owner"
+        return role
 
     async def org_kind(self, org_id: UUID) -> str | None:
         kind: str | None = await self._pool.fetchval(

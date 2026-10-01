@@ -81,6 +81,7 @@ async def delete_organization(
     """Merkt eine Company-Org zur Loeschung vor (Soft-Delete, 30-Tage-Grace).
 
     Nur der Org-Owner darf das; Personal-Orgs laufen ueber die Konto-Loeschung.
+    Nicht-Mitglieder erhalten dieselbe 404 wie bei einer unbekannten Org.
     """
     return await service.delete_organization(user_id, organization_id)
 

@@ -426,7 +426,7 @@ PROBES: dict[str, Probe] = {
     "POST /v1/organizations/{organization_id}/workspaces": Probe(
         body={"name": "iso", "slug": "iso-probe"}
     ),
-    "DELETE /v1/organizations/{organization_id}": Probe(known="Fix in Arbeit (Board t_977db967)"),
+    "DELETE /v1/organizations/{organization_id}": Probe(),
     # Der Einladungs-Token ist das Objekt: A haelt den Token einer Einladung
     # in B. Ohne passende E-Mail im Login muss die Annahme scheitern (L1).
     # Beide Annahmewege teilen den Service; der Body-Weg ist der Nachfolger.

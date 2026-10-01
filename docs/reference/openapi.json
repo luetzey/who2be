@@ -11779,7 +11779,7 @@
           "organizations"
         ],
         "summary": "Delete Organization",
-        "description": "Merkt eine Company-Org zur Loeschung vor (Soft-Delete, 30-Tage-Grace).\n\nNur der Org-Owner darf das; Personal-Orgs laufen ueber die Konto-Loeschung.",
+        "description": "Merkt eine Company-Org zur Loeschung vor (Soft-Delete, 30-Tage-Grace).\n\nNur der Org-Owner darf das; Personal-Orgs laufen ueber die Konto-Loeschung.\nNicht-Mitglieder erhalten dieselbe 404 wie bei einer unbekannten Org.",
         "operationId": "delete_organization_v1_organizations__organization_id__delete",
         "security": [
           {
