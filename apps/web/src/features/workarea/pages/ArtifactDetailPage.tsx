@@ -218,30 +218,18 @@ export function ArtifactDetailPage() {
               </MetaPill>
             ) : null}
             <Card>
-              {/* Mobil-Spec M10: unter `md` 16 statt 24 px Kartenrand — die
-                  Textspalte gewinnt bei 320 px weitere 16 px. */}
-              <CardContent className="flex flex-col gap-4 p-4 md:p-6 md:pt-6">
+              <CardContent className="flex flex-col gap-4 pt-6">
                 <p className="text-xs text-muted-foreground">{t('artifact.rawNotice')}</p>
                 {blocks.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t('artifact.emptyBody')}</p>
                 ) : (
-                  // Mobil-Spec M10: unter `md` 4 statt 12 px Abstand; die
-                  // Bloecke trennt dort schon ihre eigene Polsterung (2 × 8 px).
-                  <ol className="flex flex-col gap-1 md:gap-3">
+                  <ol className="flex flex-col gap-3">
                     {blocks.map((block, index) => (
                       <li
                         key={block.blockId ?? `unanchored-${index}`}
                         id={block.blockId !== null ? `block-${block.blockId}` : undefined}
                         className={cn(
-                          // Mobil-Spec M10: Unter `md` hat der Text die volle
-                          // Breite (vorher 170 px Spalte bei 320 neben dem
-                          // 40-px-Knopf). Der Knopf liegt oben rechts ueber dem
-                          // Block, der Text fliesst um einen Platzhalter
-                          // gleicher Groesse (Spec-Variante „Symbol ohne eigene
-                          // Spalte“) — ein Knopf UNTER dem Block kostete je
-                          // Block eine Zeile und machte die Seite laenger.
-                          // Ab `md` wie bisher Text und Knopf nebeneinander.
-                          'relative rounded-md p-2 md:flex md:items-start md:gap-3',
+                          'flex items-start gap-3 rounded-md p-2',
                           // Der aus einem Suchtreffer angesprungene Block wird
                           // hervorgehoben — Rahmen UND Flaeche, damit die
                           // Markierung nicht allein an der Farbe haengt.
@@ -254,13 +242,7 @@ export function ArtifactDetailPage() {
                             ueber `whitespace-pre-wrap` um; ein trennstellenfreies
                             Token lief gemessen trotzdem ueber. `break-words`
                             ergaenzt genau diesen Fall. */}
-                        <pre
-                          className={cn(
-                            'min-w-0 font-sans text-sm break-words whitespace-pre-wrap md:flex-1',
-                            block.blockId !== null &&
-                              'before:float-right before:ml-2 before:h-10 before:w-10 before:content-[""] md:before:content-none print:before:content-none',
-                          )}
-                        >
+                        <pre className="min-w-0 flex-1 font-sans text-sm break-words whitespace-pre-wrap">
                           {block.text}
                         </pre>
                         {block.blockId !== null ? (
@@ -272,7 +254,7 @@ export function ArtifactDetailPage() {
                             // gemessen 36 px (`size="sm"`). Die Zahl kommt aus
                             // AK 3 des Issues, nicht aus der Norm: §11 setzt den
                             // Floor auf >= 32 px, womit 36 px zulaessig waren.
-                            className="absolute top-2 right-2 min-h-10 min-w-10 md:static md:min-h-0 md:min-w-0 print:hidden"
+                            className="min-h-10 print:hidden md:min-h-0"
                             aria-label={t('artifact.anchorCopy')}
                             title={t('artifact.anchorCopy')}
                             onClick={() => void copyAnchor(block.blockId as string)}

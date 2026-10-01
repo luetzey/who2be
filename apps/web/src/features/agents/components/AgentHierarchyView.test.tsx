@@ -273,44 +273,44 @@ describe('AgentHierarchyView — Namen brechen um (Mobil-Spec M6)', () => {
 })
 
 // PM-Zusatz zu P7 (Muster M9): Vor den Tabs stand die Karte mit allen
-// 14 Playbooks (942 px bei 320). Unter `md` hoechstens 8 im Seitenfluss plus
-// „{{count}} weitere anzeigen“; ab `md` unveraendert alle.
+// 14 Playbooks (942 px bei 320). Unter `md` zuerst 4 im Seitenfluss plus
+// „{{count}} weitere anzeigen“ (je 8); ab `md` unveraendert alle.
 describe('AgentHierarchyView — Playbook-Liste unter md (Muster M9)', () => {
-  it('zeigt unter md acht Playbooks und einen Knopf fuer die naechsten', () => {
+  it('zeigt unter md vier Playbooks und einen Knopf fuer die naechsten acht', () => {
     viewport.mobile = true
     renderMany(14)
-    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(8)
-    expect(screen.getByRole('button', { name: '6 weitere anzeigen' })).toBeInTheDocument()
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
+    expect(screen.getByRole('button', { name: '8 weitere anzeigen' })).toBeInTheDocument()
     // Die Liste nennt weiter die Gesamtzahl.
     expect(screen.getByRole('list', { name: '14 verknüpfte Playbooks' })).toBeInTheDocument()
   })
 
   it('laedt je acht nach, setzt den Fokus auf den ersten neuen Eintrag und meldet den Stand', () => {
     viewport.mobile = true
-    renderMany(20)
+    renderMany(15)
     const live = document.querySelector('[aria-live="polite"]')
     expect(live).toHaveTextContent('')
 
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
     })
-    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(16)
-    expect(document.activeElement).toHaveTextContent('Playbook 9')
-    expect(live).toHaveTextContent('16 von 20 angezeigt')
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(12)
+    expect(document.activeElement).toHaveTextContent('Playbook 5')
+    expect(live).toHaveTextContent('12 von 15 angezeigt')
 
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '4 weitere anzeigen' }))
+      fireEvent.click(screen.getByRole('button', { name: '3 weitere anzeigen' }))
     })
-    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(20)
-    expect(document.activeElement).toHaveTextContent('Playbook 17')
-    expect(live).toHaveTextContent('20 von 20 angezeigt')
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(15)
+    expect(document.activeElement).toHaveTextContent('Playbook 13')
+    expect(live).toHaveTextContent('15 von 15 angezeigt')
     expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
   })
 
-  it('zeigt bei hoechstens acht Playbooks keinen Knopf', () => {
+  it('zeigt bei hoechstens vier Playbooks keinen Knopf', () => {
     viewport.mobile = true
-    renderMany(8)
-    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(8)
+    renderMany(4)
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
   })
 

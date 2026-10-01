@@ -12,7 +12,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 
-/** Schrittweite der Playbook-Liste unter `md` (Mobil-Spec M9: „8 Treffer“). */
+/**
+ * Playbook-Liste unter `md`: zuerst 4 im Seitenfluss (PM-Entscheidung zu P7:
+ * die Tabs sollen bei 320 px nahe an einen Bildschirm rutschen, 8 Zeilen à
+ * ≥ 40 px passten nicht), danach je 8 weitere (Mobil-Spec M9).
+ */
+const PLAYBOOK_INITIAL = 4
 const PLAYBOOK_STEP = 8
 
 interface AgentHierarchyViewProps {
@@ -135,16 +140,16 @@ export function AgentHierarchyView({
   const { t: tc } = useTranslation('common')
   const wsPath = useWorkspacePath()
 
-  // PM-Zusatz zu Mobil-Spec P7 (Muster M9): Unter `md` stehen hoechstens
-  // `PLAYBOOK_STEP` Playbooks im Seitenfluss, jeder Klick auf
-  // „N weitere anzeigen“ haengt die naechsten an. Vorher schob die Karte mit
+  // PM-Zusatz zu Mobil-Spec P7 (Muster M9): Unter `md` stehen zuerst
+  // `PLAYBOOK_INITIAL` Playbooks im Seitenfluss, jeder Klick auf
+  // „N weitere anzeigen“ haengt die naechsten `PLAYBOOK_STEP` an. Vorher schob die Karte mit
   // 14 Playbooks (942 px bei 320) die Tabs des Agenten auf 2,6 Bildschirme.
   // Ab `md` alle, wie bisher. Die Anzahl ist Logik, deshalb `useIsMobile`
   // statt CSS.
   const isMobile = useIsMobile()
   const listRef = useRef<HTMLUListElement>(null)
   const pendingFocus = useRef<number | null>(null)
-  const [shown, setShown] = useState(PLAYBOOK_STEP)
+  const [shown, setShown] = useState(PLAYBOOK_INITIAL)
   const [announced, setAnnounced] = useState(false)
   const visiblePlaybooks = isMobile ? playbooks.slice(0, shown) : playbooks
   const nextCount = isMobile
