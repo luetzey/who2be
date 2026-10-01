@@ -1871,3 +1871,17 @@ Abstraktion einziehen (Variabilitaets-Schwelle nicht erreicht, es gibt genau
 einen Zeitbegriff); die Platzhalter-Aufloesung auf Ortszeit umstellen (waere eine
 fachliche Weiche ohne Beleg — das Repo kennt keine nutzerbezogene Zeitzone, und
 die Karte schliesst deren Einfuehrung aus).
+
+## 2026-10-01 — Workspace-Delete bei Zugriffsprotokoll: 409, kein Mitloeschen
+
+- **Entscheidung (Owner):** Hat ein Agent des Workspaces Zeilen in
+  `agent_access_log`, antwortet `DELETE /v1/workspaces/{id}` mit 409
+  (`concurrent_conflict`, Hinweis auf den Retention-/Purge-Pfad) — dieselbe
+  Antwort wie der Agent-Delete (ADR-0047 H5). Die Transaktion rollt zurueck.
+- **Begruendung:** Das Protokoll ist append-only; der Org-Purge
+  (`core/purge.py`) bleibt der eine legitime Loeschpfad. Vorher endete der
+  Fall mit 500.
+- **Verworfen:** Soft-Delete fuer Workspaces mit Purge-Sweep (Feature mit
+  Migration, eigene Karte falls gewuenscht); Log-Zeilen beim Workspace-Delete
+  mitloeschen (machte das Log wieder ueber einen normalen API-Aufruf loeschbar,
+  widerspricht H5).
