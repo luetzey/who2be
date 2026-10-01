@@ -106,13 +106,6 @@ _EVENT_COLUMNS = (
 MEMORY_DELETED_AUDIT_ACTION = "memory.deleted"
 
 
-def _jsonb_in(value: dict[str, Any] | None) -> str | None:
-    # `$n::text::jsonb` statt `$n::jsonb`: funktioniert auf dem App-Pool (mit
-    # jsonb-Codec) UND auf einer Owner-/Test-Connection ohne Codec (Muster
-    # `audit_log_repository.PgAuditLogRepository.insert`).
-    return json.dumps(value) if value is not None else None
-
-
 def _jsonb_out(value: object) -> dict[str, Any] | None:
     if value is None:
         return None
@@ -630,12 +623,16 @@ class PgMemoryRepository:
         return int(count or 0)
 
     async def insert_event(self, workspace_id: UUID, data: MemoryEventCreate) -> MemoryEventRead:
-        """Haengt ein Historien-Ereignis an (append-only, 3.1.2)."""
+        """Haengt ein Historien-Ereignis an (append-only, 3.1.2).
+
+        `before`/`after` als dict an `$n::jsonb` (App-Pool mit jsonb-Codec,
+        `core/db.init_connection`) — Muster `set_guard_config`.
+        """
         row = await self._pool.fetchrow(
             "INSERT INTO agent_memory_event "
             "(workspace_id, memory_id, event, actor_kind, actor_id, agent_id, "
             " before, after, reason) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7::text::jsonb, $8::text::jsonb, $9) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9) "
             f"RETURNING {_EVENT_COLUMNS}",
             workspace_id,
             data.memory_id,
@@ -643,8 +640,8 @@ class PgMemoryRepository:
             data.actor_kind.value,
             data.actor_id,
             data.agent_id,
-            _jsonb_in(data.before),
-            _jsonb_in(data.after),
+            data.before,
+            data.after,
             data.reason,
         )
         assert row is not None

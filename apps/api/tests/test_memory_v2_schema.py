@@ -669,6 +669,13 @@ def test_repository_events_roundtrip() -> None:
         )
         assert first.after == snapshot and first.before is None
         assert second.before == snapshot and second.after == {**snapshot, "status": "active"}
+        # In der Spalte steht ein Objekt, kein doppelt encodierter JSON-String.
+        assert (
+            await env.owner.fetchval(
+                "SELECT jsonb_typeof(after) FROM agent_memory_event WHERE id = $1", first.id
+            )
+            == "object"
+        )
 
         events = await repo.list_events(s.ws_a, memory.id)
         assert [e.id for e in events] == [first.id, second.id]
