@@ -1,5 +1,5 @@
 import { ChevronDown, Download, Table2 } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useParams } from 'react-router-dom'
 
@@ -53,6 +53,10 @@ export function TableDetailPage() {
   const api = useApi()
   const { areaId, tableId } = useParams<{ areaId: string; tableId: string }>()
   const [busy, setBusy] = useState(false)
+  // Die sichtbaren Kartentitel benennen Tabelle und Scroll-Bereich
+  // (Tabellen-Muster, Mobil-Spec M11) — ein Name, keine zweite Kopie.
+  const schemaTitleId = useId()
+  const previewTitleId = useId()
 
   // Der Katalog der Area ist die einzige Quelle des Tabellen-NAMENS (describe
   // liefert ihn nicht) — und er ist ohnehin sichtbarkeits-gefiltert, eine
@@ -134,7 +138,7 @@ export function TableDetailPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>{t('tables.schemaTitle')}</CardTitle>
+                <CardTitle id={schemaTitleId}>{t('tables.schemaTitle')}</CardTitle>
                 <CardDescription>{t('tables.schemaDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -155,7 +159,7 @@ export function TableDetailPage() {
                     </MetaPill>
                   ) : null}
                 </div>
-                <Table aria-label={t('tables.schemaTitle')}>
+                <Table labelledBy={schemaTitleId}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('tables.schemaColumn')}</TableHead>
@@ -205,7 +209,7 @@ export function TableDetailPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>{t('tables.previewTitle')}</CardTitle>
+                <CardTitle id={previewTitleId}>{t('tables.previewTitle')}</CardTitle>
                 <CardDescription>
                   {t('tables.previewNote', {
                     limit: PREVIEW_LIMIT,
@@ -220,10 +224,11 @@ export function TableDetailPage() {
                   empty={rows.length === 0}
                   emptyTitle={t('tables.previewEmpty')}
                 >
-                  {/* Der horizontale Scroll steckt im `Table`-Primitive
-                      (`overflow-auto`-Wrapper) — breite Tabellen scrollen in
-                      sich, die Seite selbst nie. */}
-                  <Table aria-label={t('tables.previewTitle')}>
+                  {/* Der horizontale Scroll steckt im `Table`-Primitive —
+                      breite Tabellen scrollen in sich, die Seite selbst nie.
+                      Bei Ueberlauf: fokussierbarer, benannter Bereich, erste
+                      Spalte fixiert, Hinweis unter md (Mobil-Spec M11). */}
+                  <Table labelledBy={previewTitleId}>
                     <TableHeader>
                       <TableRow>
                         {(preview?.columns ?? []).map((column) => (
