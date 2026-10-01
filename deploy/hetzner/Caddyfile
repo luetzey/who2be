@@ -12,6 +12,19 @@
 # explizit fuer Klarheit; `-Server` versteckt das Caddy-Banner.
 # Cross-Origin-Opener-Policy isoliert den Browsing-Context (kein window-Handle
 # fuer cross-origin Opener) — schliesst die letzte Header-Luecke aus F-12.
+#
+# X-Robots-Tag: keine Who2Be-Antwort gehoert in einen Suchindex — weder die
+# App-Shell noch JSON der API/MCP noch Fehlerseiten (401/403/404). Als Header
+# statt nur als <meta>, weil er fuer JEDEN Content-Type gilt. Google Search
+# Central, „Block Search indexing with noindex" (woertlich): „you can return an
+# X-Robots-Tag HTTP header with a value of either noindex or none in your
+# response." Das <meta name="robots"> in apps/web/index.html ist die zweite
+# Linie fuer Deployments ohne diese Caddyfile.
+# Voraussetzung, damit das wirkt: robots.txt darf die Seiten NICHT sperren
+# (apps/web/public/robots.txt). Dieselbe Quelle: „For the noindex rule to be
+# effective, the page or resource must not be blocked by a robots.txt file".
+# `noarchive` wertet Google laut eigener Doku nicht mehr aus („no longer used
+# by Google Search"); es bleibt als Signal an andere Crawler stehen.
 (security_headers) {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -20,8 +33,22 @@
         Referrer-Policy "no-referrer"
         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=()"
         Cross-Origin-Opener-Policy "same-origin"
+        X-Robots-Tag "noindex, nofollow, noarchive"
         -Server
     }
+}
+
+# Cache-Control fuer Antworten mit Nutzerinhalt (api., mcp.): `no-store`, damit
+# weder Browser- noch Zwischencaches (Firmen-Proxy, geteilter Rechner) Inhalte
+# oder Exporte ablegen. Das `?` setzt den Header NUR, wenn die App keinen
+# eigenen liefert (Caddy wertet es verzoegert beim Schreiben der Antwort aus):
+# so bleiben bewusst gesetzte Werte unangetastet — die OAuth-Endpunkte senden
+# selbst `no-store`, die RFC-9728-Metadaten des MCP-Servers `public,
+# max-age=3600`. `/.well-known/*` ist ausgenommen: oeffentliche, statische
+# Protokoll-Metadaten ohne Nutzerbezug duerfen gecacht werden.
+(no_store) {
+    @no_store not path /.well-known/*
+    header @no_store ?Cache-Control "no-store"
 }
 
 # Access-Logs. Ohne sie faellt nur ein AUSFALL auf, nie ein Zugriff — eine
@@ -98,6 +125,7 @@
 api.{$DOMAIN} {
     import security_headers
     import access_log
+    import no_store
     # API liefert JSON — Inline-Scripts, Frames, Plugins, Form-Posts und externe
     # Connects sind alle aus. `object-src`/`form-action` explizit, weil Letzteres
     # NICHT auf `default-src` zurueckfaellt (sonst Form-Hijack-Luecke).
@@ -155,6 +183,7 @@ supabase.{$DOMAIN} {
 mcp.{$DOMAIN} {
     import security_headers
     import access_log
+    import no_store
     # Streamable-HTTP liefert SSE-Frames (`text/event-stream`); HTML-Inline-Code
     # gibt es nicht, deshalb harte CSP — Browser sollten den Endpoint sowieso
     # nicht direkt anfassen (MCP-Clients sind native bzw. Server-to-Server).
