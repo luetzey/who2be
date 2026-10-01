@@ -292,6 +292,12 @@ def test_account_purge_deletes_user_memory_with_contentless_audit() -> None:
         ev_other_human = await _insert_event(
             owner, ws, mem_other, "confirmed", actor_kind="human", actor_id=other_user
         )
+        # Agent-Event, dessen `actor_id` zufaellig die User-UUID traegt: das
+        # ist keine Person — der Purge darf es nicht anfassen (Muster
+        # `test_case.created_by_kind` in B1c).
+        ev_agent_same_id = await _insert_event(
+            owner, ws, mem_confirmed, "edited", actor_kind="agent", actor_id=user, agent_id=agent
+        )
 
         anonymized = await PgAccountPurgeRepository(owner).purge_account_data(user)
         # `confirmed_by` + ein menschliches Event des Users.
@@ -340,6 +346,7 @@ def test_account_purge_deletes_user_memory_with_contentless_audit() -> None:
             ev_other: None,
             ev_human: ANONYMIZED_USER_ID,
             ev_other_human: other_user,
+            ev_agent_same_id: user,
         }
         assert (
             await owner.fetchval(

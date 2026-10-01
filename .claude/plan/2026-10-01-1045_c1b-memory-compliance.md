@@ -1,6 +1,6 @@
 # C1b — Compliance-Naben fuer Gedaechtnis 2.0 (Kanban t_450c0bae)
 
-Status: aktiv · Basis: origin/main 30b2f83d · ADR-0053 Anhang A.1 (Compliance), A.2 (C1b)
+Status: umgesetzt, Review ausstehend · Basis: origin/main 30b2f83d · ADR-0053 Anhang A.1 (Compliance), A.2 (C1b)
 
 ## Outcome
 
