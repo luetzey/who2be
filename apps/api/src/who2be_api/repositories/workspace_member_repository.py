@@ -56,13 +56,17 @@ class WorkspaceMemberRepository(Protocol):
 
 _COLUMNS = "workspace_id, user_id, role, joined_at"
 
-# Mit Email-Join (auth.users). Wird bevorzugt; faellt auf `_COLUMNS` zurueck,
-# wenn das `auth`-Schema fehlt (reine API-Test-DB ohne GoTrue) — analog
-# `PgMeRepository._lookup_email`.
+# Mit Email ueber `w2b_user_profiles` (Migration 0090, SECURITY DEFINER) — die
+# Laufzeitrolle liest `auth.users` nie direkt, die Funktion liefert nur Nutzer
+# des aktuellen Mandanten (gesetzt von `get_current_workspace`). Faellt auf
+# `_LIST_NO_EMAIL` zurueck, wenn der Aufruf scheitert (reine API-Test-DB ohne
+# GoTrue) — analog `PgMeRepository._lookup_profile`.
 _LIST_WITH_EMAIL = (
     "SELECT m.workspace_id, m.user_id, m.role, m.joined_at, u.email "
     "FROM workspace_member m "
-    "LEFT JOIN auth.users u ON u.id = m.user_id "
+    "LEFT JOIN w2b_user_profiles(ARRAY("
+    "  SELECT user_id FROM workspace_member WHERE workspace_id = $1"
+    ")) u ON u.id = m.user_id "
     "WHERE m.workspace_id = $1 "
     "ORDER BY m.joined_at ASC, m.user_id ASC"
 )
@@ -87,7 +91,7 @@ class PgWorkspaceMemberRepository:
         try:
             rows = await self._pool.fetch(_LIST_WITH_EMAIL, workspace_id)
         except asyncpg.PostgresError:
-            # `auth.users` existiert nicht (Test-DB) → ohne Email-Join lesen.
+            # Profil-Funktion nicht aufrufbar (Test-DB ohne GoTrue) → ohne Email.
             rows = await self._pool.fetch(_LIST_NO_EMAIL, workspace_id)
         return [WorkspaceMemberRead.model_validate(dict(row)) for row in rows]
 
