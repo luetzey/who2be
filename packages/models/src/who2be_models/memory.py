@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -28,7 +29,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 MEMORY_FACT_MAX_LENGTH = 300
 MEMORY_CONTEXT_MAX_LENGTH = 200
 MEMORY_TRIAGE_NOTE_MAX_LENGTH = 500
+# Freitext eines Historien-Ereignisses (DB-CHECK in 0091, ADR-0053 3.1.2).
+MEMORY_EVENT_REASON_MAX_LENGTH = 500
 MEMORY_MAX_PER_AGENT = 500
+# Obergrenze des Nutzergedaechtnisses je (workspace_id, subject_user_id),
+# gezaehlt ueber alle Status wie MEMORY_MAX_PER_AGENT (ADR-0053 3.1.1).
+# Gesetzte Annahme (ADR-0053 Anhang B): gleich der Agentengrenze, weil ein
+# Nutzergedaechtnis ueber alle Profile desselben Besitzers geteilt wird.
+# Die Pruefung selbst baut Paket C2a.
+MEMORY_MAX_PER_USER = 500
 # Vorschlaege unterhalb dieser Importance lehnt der Server ab (Kap. 10.2 des
 # Memory-Konzepts: konservativ speichern, Ballast gar nicht erst aufnehmen).
 MEMORY_MIN_IMPORTANCE = 5
@@ -94,16 +103,89 @@ class MemoryGuardConfig(BaseModel):
 
 
 class MemoryStatus(StrEnum):
-    """Lebenszyklus eines Memorys (Kurations-Schleuse).
+    """Lebenszyklus eines Memorys (Kurations-Schleuse, ADR-0044/ADR-0053 3.1).
 
     `pending` (Vorschlag, retrieval-unsichtbar) → `active` (freigegeben,
     einziger abrufbarer Zustand) bzw. `rejected` (abgelehnt; bleibt als
     Dedup-Basis erhalten, bis der Mensch es endgueltig loescht).
+    `expired`: unbestaetigt verfallen (3.1.3), bleibt Dedup-Basis.
+    `converted`: ein Lernvorschlag wurde zu einem Fall (nur mit
+    `converted_case_id`, DB-CHECK).
     """
 
     pending = "pending"
     active = "active"
     rejected = "rejected"
+    expired = "expired"
+    converted = "converted"
+
+
+class MemoryKind(StrEnum):
+    """Art eines Gedaechtniseintrags (ADR-0053 3.1, DB-CHECK).
+
+    `lesson` kann in der Datenbank nie `active` werden (DB-CHECK) und
+    fliesst damit nie in einen Abruf.
+    """
+
+    user_fact = "user_fact"
+    agent_note = "agent_note"
+    lesson = "lesson"
+
+
+class MemoryScope(StrEnum):
+    """Geltungsbereich: Gedaechtnis eines Agenten oder Nutzergedaechtnis.
+
+    `user` gilt je `(workspace_id, subject_user_id)` (ADR-0053 3.1.1) und
+    traegt `agent_id IS NULL` (DB-CHECK).
+    """
+
+    agent = "agent"
+    user = "user"
+
+
+class MemoryOrigin(StrEnum):
+    """Vom Agenten deklarierte Herkunft (Weiche M8); Bestand `legacy_unknown`."""
+
+    user_stated = "user_stated"
+    inferred = "inferred"
+    external_content = "external_content"
+    legacy_unknown = "legacy_unknown"
+
+
+class MemorySource(StrEnum):
+    """Vom Server aus dem Aufrufweg gesetzter Kanal (Weiche M8)."""
+
+    agent = "agent"
+    human = "human"
+    import_ = "import"
+
+
+class MemoryEventKind(StrEnum):
+    """Ereignisse der Historie `agent_memory_event` (ADR-0053 3.1.2)."""
+
+    created = "created"
+    auto_activated = "auto_activated"
+    approved = "approved"
+    rejected = "rejected"
+    edited = "edited"
+    confirmed = "confirmed"
+    expired = "expired"
+    reactivated = "reactivated"
+    change_proposed = "change_proposed"
+    delete_proposed = "delete_proposed"
+    proposal_accepted = "proposal_accepted"
+    proposal_rejected = "proposal_rejected"
+    rolled_back = "rolled_back"
+    converted = "converted"
+    merged = "merged"
+
+
+class MemoryActorKind(StrEnum):
+    """Wer ein Historien-Ereignis ausgeloest hat (`system`: Verfallsjob, Matrix)."""
+
+    human = "human"
+    agent = "agent"
+    system = "system"
 
 
 class MemoryCategory(StrEnum):
@@ -175,18 +257,67 @@ class MemoryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    agent_id: UUID
+    # NULL nur bei `scope='user'` (DB-CHECK); Agentengedaechtnis traegt ihn immer.
+    agent_id: UUID | None
     status: MemoryStatus
     fact: str
     context: str | None = None
     category: MemoryCategory
     importance: int
-    source: str
+    source: MemorySource
     triage_note: str | None = None
     retrieval_count: int
     last_retrieved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    # Gedaechtnis 2.0 (ADR-0053 3.1). Defaults bilden den Bestand ab (5.1).
+    kind: MemoryKind = MemoryKind.user_fact
+    scope: MemoryScope = MemoryScope.agent
+    subject_user_id: UUID | None = None
+    origin: MemoryOrigin = MemoryOrigin.legacy_unknown
+    created_by_agent_id: UUID | None = None
+    # Menschliche Bestaetigung; automatisch aktiv heisst aktiv, aber unbestaetigt.
+    confirmed_at: datetime | None = None
+    confirmed_by: UUID | None = None
+    expires_at: datetime | None = None
+    occurrence_count: int = 1
+    converted_case_id: UUID | None = None
+
+
+class MemoryEventCreate(BaseModel):
+    """Ein neues Historien-Ereignis (append-only, ADR-0053 3.1.2).
+
+    `before`/`after` sind Schnappschuesse von `fact, category, importance,
+    status, kind, origin` — nie `context` oder `triage_note`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: UUID
+    event: MemoryEventKind
+    actor_kind: MemoryActorKind
+    actor_id: UUID | None = None
+    agent_id: UUID | None = None
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    reason: str | None = Field(default=None, max_length=MEMORY_EVENT_REASON_MAX_LENGTH)
+
+
+class MemoryEventRead(BaseModel):
+    """Ein persistiertes Historien-Ereignis (read-only)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    memory_id: UUID
+    event: MemoryEventKind
+    actor_kind: MemoryActorKind
+    actor_id: UUID | None = None
+    agent_id: UUID | None = None
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    reason: str | None = None
+    created_at: datetime
 
 
 class MemoryHit(BaseModel):

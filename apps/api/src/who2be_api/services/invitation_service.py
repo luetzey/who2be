@@ -87,13 +87,15 @@ class InvitationService:
                 target=invitation_id,
             )
 
-    async def accept(self, token: str, user_id: UUID, jwt_email: str | None = None) -> UUID:
+    async def accept(self, token: str, user_id: UUID, jwt_email: str | None) -> UUID:
         """Akzeptiert eine Einladung single-use; gibt die `workspace_id` zurueck.
 
         404, wenn der Token unbekannt ist; 410 Gone, wenn die Einladung bereits
-        akzeptiert, widerrufen oder abgelaufen ist; 403, wenn `jwt_email`
-        gesetzt ist und nicht zur Invitation-Email passt (Phase 3-D Magic-Link-
-        Schutz — der Klick muss vom eingeladenen Account kommen).
+        akzeptiert, widerrufen oder abgelaufen ist; 403, wenn `jwt_email` fehlt
+        (`invitation_email_required`) oder nicht zur Invitation-Email passt
+        (`invitation_email_mismatch`). Der Klick muss vom eingeladenen Account
+        kommen, und das laesst sich nur mit Email-Claim belegen — deshalb
+        fail-closed und ohne Default fuer `jwt_email`.
         """
         result = await self._repo.accept(hash_token(token), user_id, jwt_email)
         if result.status == "not_found":
@@ -111,6 +113,15 @@ class InvitationService:
                 status_code=status.HTTP_410_GONE,
                 detail="Einladung ist nicht mehr gueltig.",
                 reason="invitation_no_longer_valid",
+            )
+        if result.status == "email_required":
+            raise ApiError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Diese Einladung laesst sich nur mit einem Konto annehmen, "
+                    "das eine bestaetigte Email-Adresse traegt."
+                ),
+                reason="invitation_email_required",
             )
         if result.status == "email_mismatch":
             raise ApiError(

@@ -13319,6 +13319,7 @@
               "invitation_not_found",
               "invitation_no_longer_valid",
               "invitation_email_mismatch",
+              "invitation_email_required",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
@@ -16392,6 +16393,16 @@
         "title": "MemoryHit",
         "description": "Ein Retrieval-Treffer fuer Agenten (bewusst schmal).\n\nNur id (Kurzform fuer Referenzen), Fakt und Kategorie — kein `context`,\nkeine Triage-Metadaten (Injection-/Leak-Minimierung)."
       },
+      "MemoryKind": {
+        "type": "string",
+        "enum": [
+          "user_fact",
+          "agent_note",
+          "lesson"
+        ],
+        "title": "MemoryKind",
+        "description": "Art eines Gedaechtniseintrags (ADR-0053 3.1, DB-CHECK).\n\n`lesson` kann in der Datenbank nie `active` werden (DB-CHECK) und\nfliesst damit nie in einen Abruf."
+      },
       "MemoryMode": {
         "type": "string",
         "enum": [
@@ -16403,6 +16414,17 @@
         "title": "MemoryMode",
         "description": "Gedaechtnis-Modus eines Agenten (ADR-0044) — geordnete Stufen.\n\nSteuert BEIDE Seiten des Agent-Memorys: ob die Memory-MCP-Tools fuer den\nAgenten ueberhaupt existieren (tools/list-Filter, ADR-0042) und wie\n`save_memory` persistiert wird.\n\n- ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.\n- ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).\n- ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —\n  retrieval-sichtbar erst nach menschlicher Freigabe (Kurations-Schleuse,\n  Muster ADR-0038).\n- ``auto``: `save_memory` speichert direkt `active`; die serverseitigen\n  Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer."
       },
+      "MemoryOrigin": {
+        "type": "string",
+        "enum": [
+          "user_stated",
+          "inferred",
+          "external_content",
+          "legacy_unknown"
+        ],
+        "title": "MemoryOrigin",
+        "description": "Vom Agenten deklarierte Herkunft (Weiche M8); Bestand `legacy_unknown`."
+      },
       "MemoryRead": {
         "properties": {
           "id": {
@@ -16411,8 +16433,15 @@
             "title": "Id"
           },
           "agent_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Agent Id"
           },
           "status": {
@@ -16441,8 +16470,7 @@
             "title": "Importance"
           },
           "source": {
-            "type": "string",
-            "title": "Source"
+            "$ref": "#/components/schemas/MemorySource"
           },
           "triage_note": {
             "anyOf": [
@@ -16480,6 +16508,95 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemoryKind",
+            "default": "user_fact"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/MemoryScope",
+            "default": "agent"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/MemoryOrigin",
+            "default": "legacy_unknown"
+          },
+          "created_by_agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Agent Id"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "occurrence_count": {
+            "type": "integer",
+            "title": "Occurrence Count",
+            "default": 1
+          },
+          "converted_case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Case Id"
           }
         },
         "type": "object",
@@ -16498,15 +16615,36 @@
         "title": "MemoryRead",
         "description": "Ein persistiertes Memory (read-only, Verwaltungs-Sicht).\n\n`retrieval_count`/`last_retrieved_at` sind das Nutzungs-Log: sie zeigen,\nob und wann das Gedaechtnis real abgerufen wurde (Transparenz-Anforderung\nADR-0044). Retrieval-Antworten an Agenten nutzen NICHT dieses Modell —\nsie liefern nur id/fact/category (ohne context/triage_note)."
       },
+      "MemoryScope": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "user"
+        ],
+        "title": "MemoryScope",
+        "description": "Geltungsbereich: Gedaechtnis eines Agenten oder Nutzergedaechtnis.\n\n`user` gilt je `(workspace_id, subject_user_id)` (ADR-0053 3.1.1) und\ntraegt `agent_id IS NULL` (DB-CHECK)."
+      },
+      "MemorySource": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "human",
+          "import"
+        ],
+        "title": "MemorySource",
+        "description": "Vom Server aus dem Aufrufweg gesetzter Kanal (Weiche M8)."
+      },
       "MemoryStatus": {
         "type": "string",
         "enum": [
           "pending",
           "active",
-          "rejected"
+          "rejected",
+          "expired",
+          "converted"
         ],
         "title": "MemoryStatus",
-        "description": "Lebenszyklus eines Memorys (Kurations-Schleuse).\n\n`pending` (Vorschlag, retrieval-unsichtbar) → `active` (freigegeben,\neinziger abrufbarer Zustand) bzw. `rejected` (abgelehnt; bleibt als\nDedup-Basis erhalten, bis der Mensch es endgueltig loescht)."
+        "description": "Lebenszyklus eines Memorys (Kurations-Schleuse, ADR-0044/ADR-0053 3.1).\n\n`pending` (Vorschlag, retrieval-unsichtbar) → `active` (freigegeben,\neinziger abrufbarer Zustand) bzw. `rejected` (abgelehnt; bleibt als\nDedup-Basis erhalten, bis der Mensch es endgueltig loescht).\n`expired`: unbestaetigt verfallen (3.1.3), bleibt Dedup-Basis.\n`converted`: ein Lernvorschlag wurde zu einem Fall (nur mit\n`converted_case_id`, DB-CHECK)."
       },
       "MemoryTriage": {
         "properties": {
