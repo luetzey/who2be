@@ -75,15 +75,23 @@ class InvitationRepository(Protocol):
 
     async def list_pending_by_workspace(self, workspace_id: UUID) -> list[InvitationRead]: ...
 
-    async def self_account_email(self, user_id: UUID) -> SelfAccountEmail: ...
-
-    async def list_pending_for_email(self, email: str) -> list[PendingInvitation]: ...
-
     async def accept(
         self, token_hash: str, user_id: UUID, expected_email: str | None = None
     ) -> AcceptResult: ...
 
     async def revoke(self, workspace_id: UUID, invitation_id: UUID) -> bool: ...
+
+
+class PendingInvitationRepository(Protocol):
+    """Kontoweite Sicht: offene Einladungen fuer die Adresse eines Kontos.
+
+    Getrennt von `InvitationRepository`, weil sie ohne Workspace laeuft und
+    zusaetzlich das eigene Konto liest; `PgInvitationRepository` erfuellt beide.
+    """
+
+    async def self_account_email(self, user_id: UUID) -> SelfAccountEmail: ...
+
+    async def list_pending_for_email(self, email: str) -> list[PendingInvitation]: ...
 
 
 class PgInvitationRepository:

@@ -37,7 +37,7 @@ from who2be_api.core.security import (
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.invitation_repository import PgInvitationRepository
 from who2be_api.services.audit_service import AuditService
-from who2be_api.services.invitation_service import InvitationService
+from who2be_api.services.invitation_service import InvitationService, PendingInvitationService
 from who2be_models import (
     InvitationAccept,
     InvitationCreate,
@@ -73,6 +73,15 @@ Principal = Annotated[CurrentPrincipal, Depends(get_current_human_principal)]
 Service = Annotated[InvitationService, Depends(get_invitation_service)]
 
 
+def get_pending_invitation_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> PendingInvitationService:
+    return PendingInvitationService(PgInvitationRepository(pool))
+
+
+PendingService = Annotated[PendingInvitationService, Depends(get_pending_invitation_service)]
+
+
 class InvitationAcceptResult(BaseModel):
     """Antwort auf einen erfolgreichen Accept — der beigetretene Workspace."""
 
@@ -96,7 +105,7 @@ class PendingInvitationRead(BaseModel):
 
 @accept_router.get("/pending")
 async def list_pending_invitations(
-    principal: Principal, service: Service
+    principal: Principal, service: PendingService
 ) -> list[PendingInvitationRead]:
     """Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.
 
@@ -105,7 +114,7 @@ async def list_pending_invitations(
     `invitation_email_required`, ohne Bestaetigung 403
     `invitation_email_unconfirmed`.
     """
-    pending = await service.list_pending_for_account(principal.user_id, principal.email)
+    pending = await service.list_for_account(principal.user_id, principal.email)
     return [
         PendingInvitationRead(
             id=p.id,
