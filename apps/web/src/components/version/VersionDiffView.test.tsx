@@ -150,10 +150,13 @@ describe('VersionDiffView – Umbruch statt Seitwaerts-Scroll (Mobil-Spec M4)', 
       expect(text).toHaveAttribute('data-testid', 'diff-line-text')
       expect(text).toHaveClass('min-w-0', 'whitespace-pre-wrap', 'wrap-anywhere')
     }
-    // Die URL ohne Trennstelle steht in der umbrechenden Text-Spalte.
-    expect(screen.getByText(new RegExp(URL_NO_BREAK.replaceAll('.', '\\.')))).toHaveClass(
-      'wrap-anywhere',
-    )
+    // Die URL ohne Trennstelle steht in der umbrechenden Text-Spalte
+    // (Teilstring-Vergleich, keine RegExp aus der URL).
+    const addedText = screen
+      .getByLabelText('Inhalts-Diff')
+      .querySelector('li[data-kind="added"] [data-testid="diff-line-text"]')
+    expect(addedText).toHaveTextContent(URL_NO_BREAK)
+    expect(addedText).toHaveClass('wrap-anywhere')
     // Auch die Hunk-Kopfzeile darf brechen.
     expect(screen.getByText('@@ -1,3 +1,3 @@')).toHaveClass('wrap-anywhere')
   })
