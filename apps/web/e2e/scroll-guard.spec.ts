@@ -428,6 +428,52 @@ test('M11: breite Tabelle ist fokussierbar, benannt, erste Spalte fixiert, Hinwe
 })
 
 /**
+ * Mobil-Spec P7, M10: Im Artefakt-Detail lag die Textspalte bei 320 px neben
+ * dem Anker-Knopf und war 170 px breit. Unter md nutzt der Text die volle
+ * Blockbreite; der Knopf sitzt oben rechts im Block, der Text fliesst um ihn.
+ *
+ * Rot-Probe: gegen das Image von origin/main rot (Textspalte schmaler als der
+ * Block).
+ */
+test('M10: Artefakt-Text unter md in voller Blockbreite', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  const area = await call<{ id: string }>('/work-areas', { name: 'E2E Artefakt-Area' })
+  const artifact = await call<{ id: string }>(`/work-areas/${area.id}/artifacts`, {
+    title: 'E2E Protokoll',
+    content_md: Array.from(
+      { length: 4 },
+      (_, i) => `Absatz ${i + 1}: Im Quartalsgespräch wurde die neue Preisliste vereinbart.`,
+    ).join('\n\n'),
+    occurred_at: '2026-09-29T10:00:00Z',
+  })
+
+  const isPhone = (page.viewportSize()?.width ?? 0) < 768
+  await page.goto(`/w/${workspaceId}/workarea/areas/${area.id}/artifacts/${artifact.id}`)
+  const text = page.locator('main ol pre').first()
+  await expect(text).toBeVisible()
+  await expectNoHorizontalScroll(page, 'workarea/artifacts/:id')
+  const widths = await text.evaluate((el) => ({
+    text: el.getBoundingClientRect().width,
+    block: (el.parentElement as HTMLElement).clientWidth,
+  }))
+  if (isPhone) {
+    // `li` hat 2 × 8 px Polsterung; der Text fuellt den Rest ganz.
+    expect(widths.text, 'Artefakt-Text unter md nicht in voller Breite').toBeGreaterThanOrEqual(
+      widths.block - 16 - 1,
+    )
+  }
+})
+
+/**
  * Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ oeffnen
  * unterhalb `md` eine eigene Vollbildseite statt eines Dialogs; ab `md`
  * bleibt der Dialog. Geprueft auf jedem Profil, scharf auf `mobile-320`:
