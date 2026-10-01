@@ -18,11 +18,27 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.memory_repository import MEMORY_DELETED_AUDIT_ACTION
+
 # Sentinel-UUID fuer anonymisierte Akteurs-/Subjekt-Verweise in Audit-Journalen
 # (WP-D, ADR-0031). Nach DSGVO-Erasure wird `status_history.changed_by` und
 # `audit_log.actor_id` des geloeschten Users hierauf gesetzt — Audit-Integritaet
 # bleibt, PII-Bezug ist weg.
 ANONYMIZED_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
+
+# Nutzergedaechtnis eines Menschen workspace-uebergreifend loeschen und je
+# Zeile eine inhaltsfreie `audit_log`-Spur schreiben (ADR-0053 3.1.2, Weiche
+# M5) — dieselbe Form wie `memory_repository._DELETE_WITH_AUDIT_SQL`, nur ohne
+# Workspace-/Agent-Einschraenkung (Owner-Connection des Purge-Jobs) und mit
+# Akteur NULL. Data-modifying CTE: Loeschen und Spur in einer Anweisung.
+_PURGE_USER_MEMORY_SQL = (
+    "WITH deleted AS ("
+    "  DELETE FROM agent_memory WHERE scope = 'user' AND subject_user_id = $1 "
+    "  RETURNING id, workspace_id"
+    ") "
+    "INSERT INTO audit_log (workspace_id, actor_id, action, target) "
+    f"SELECT workspace_id, NULL::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
+)
 
 
 class AccountLifecycleRepository(Protocol):
@@ -206,6 +222,12 @@ class PgAccountPurgeRepository:
           * `test_case.created_by` (nur `created_by_kind = 'human'`) und
             `test_run.reported_by_user_id` (0089) ebenso — Pruefaelle und
             -laeufe in fremden Workspaces bleiben als Nachweis stehen.
+          * Nutzergedaechtnis (`agent_memory.scope = 'user'` mit
+            `subject_user_id` = User, 0091) workspace-uebergreifend
+            **loeschen**, je Zeile eine inhaltsfreie `audit_log`-Spur
+            `memory.deleted`; die Historie faellt per Cascade.
+            `agent_memory.confirmed_by` und `agent_memory_event.actor_id`
+            (nur `actor_kind = 'human'`) auf den Sentinel.
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -274,6 +296,34 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
+            # Nutzergedaechtnis (ADR-0053 3.1.1, Migration 0091): Fakten UEBER
+            # diesen Menschen. Sie haengen an keinem Agenten (`agent_id IS
+            # NULL` per CHECK) und fallen nur mit ihrem Workspace — in
+            # FREMDEN Workspaces ueberlebten sie den Account. Geloescht, nicht
+            # anonymisiert: ein Fakt ueber eine Person ohne die Person ist
+            # wertlos, und anonymisiert bliebe der Inhalt stehen. Die Historie
+            # (`agent_memory_event`) geht per FK-Cascade mit. Je Zeile bleibt
+            # nur die inhaltsfreie Spur `memory.deleted` (Weiche M5; Akteur
+            # NULL = System, wie in 0044 fuer Ereignisse ohne Akteur
+            # vorgesehen). Laeuft NACH dem Personal-Org-Delete: was dort per
+            # Cascade faellt, dokumentiert die Org-Loeschung (0091).
+            await self._conn.execute(_PURGE_USER_MEMORY_SQL, user_id)
+            # Personenverweise in ueberlebenden Gedaechtnis-Zeilen (Muster
+            # `test_case.created_by` oben): wer einen Eintrag bestaetigt hat
+            # und wer in der Historie als Mensch gehandelt hat. Bei
+            # `actor_kind` 'agent'/'system' ist `actor_id` NULL (0091); der
+            # Filter haelt die Zeilen trotzdem ausdruecklich heraus.
+            mc_result = await self._conn.execute(
+                "UPDATE agent_memory SET confirmed_by = $2 WHERE confirmed_by = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            me_result = await self._conn.execute(
+                "UPDATE agent_memory_event SET actor_id = $2 "
+                "WHERE actor_id = $1 AND actor_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
         return (
             _count(sh_result)
             + _count(al_result)
@@ -281,6 +331,8 @@ class PgAccountPurgeRepository:
             + _count(fb_result)
             + _count(tc_result)
             + _count(tr_result)
+            + _count(mc_result)
+            + _count(me_result)
         )
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:
