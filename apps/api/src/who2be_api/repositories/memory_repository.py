@@ -1,9 +1,18 @@
 """Datenzugriff fuer das Agent-Memory (ADR-0044).
 
-Jede Query filtert auf `workspace_id` UND `agent_id` — per Signatur erzwungen
-(Defense-in-Depth zusaetzlich zur RLS): es gibt keinen Weg, ueber dieses
-Repository fremde Memories zu lesen oder zu schreiben (Leak-Test-Kritikalitaet,
-Kap. 11.7 des Memory-Konzepts).
+Jede Query filtert auf `workspace_id` — per Signatur erzwungen
+(Defense-in-Depth zusaetzlich zur RLS) — und zusaetzlich auf den Besitzer:
+`agent_id` fuer das Agentengedaechtnis, `subject_user_id` fuer das
+Nutzergedaechtnis (`count_for_user`), `memory_id` fuer die Historie. Es gibt
+keinen Weg, ueber dieses Repository fremde Memories zu lesen oder zu
+schreiben (Leak-Test-Kritikalitaet, Kap. 11.7 des Memory-Konzepts).
+
+Gedaechtnis 2.0 (ADR-0053 3.1, Migration 0091): die heutigen Abrufpfade
+(`search_active`, `list_active`) filtern auf `status='active'` UND
+`scope='agent'`. Lernvorschlaege (`kind='lesson'`) koennen per DB-CHECK nie
+`active` sein; das Nutzergedaechtnis (`scope='user'`) erreicht diese Pfade
+erst, wenn C2a/C4 es ausdruecklich anbinden. Loeschen schreibt je Zeile eine
+inhaltsfreie `audit_log`-Zeile `memory.deleted` (Weiche M5).
 
 Retrieval (nur `status='active'`): drei Zweige — FTS ('simple'-tsvector,
 ADR-0037-Muster), ILIKE und pg_trgm-Similarity — plus optional ein
@@ -27,12 +36,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 import asyncpg
 
-from who2be_models import MemoryGuardConfig, MemoryHit, MemoryRead, MemoryStatus
+from who2be_models import (
+    MemoryEventCreate,
+    MemoryEventRead,
+    MemoryGuardConfig,
+    MemoryHit,
+    MemoryRead,
+    MemoryStatus,
+)
 
 # Trigram-Schwelle fuer den Dedup-Waechter (similarity(fact, kandidat)).
 MEMORY_DEDUP_SIMILARITY = 0.6
@@ -75,8 +91,42 @@ _vector_supported: bool | None = None
 
 _READ_COLUMNS = (
     "id, agent_id, status, fact, context, category, importance, source, "
-    "triage_note, retrieval_count, last_retrieved_at, created_at, updated_at"
+    "triage_note, retrieval_count, last_retrieved_at, created_at, updated_at, "
+    "kind, scope, subject_user_id, origin, created_by_agent_id, confirmed_at, "
+    "confirmed_by, expires_at, occurrence_count, converted_case_id"
 )
+
+_EVENT_COLUMNS = (
+    "id, memory_id, event, actor_kind, actor_id, agent_id, before, after, reason, created_at"
+)
+
+# Inhaltsfreie Spur einer Loeschung (ADR-0053 3.1.2, Weiche M5): nur WER WANN
+# WELCHE ID geloescht hat — nie Fakt, Kontext oder Historie. Die Historie geht
+# per Cascade mit dem Eintrag.
+MEMORY_DELETED_AUDIT_ACTION = "memory.deleted"
+
+
+def _jsonb_in(value: dict[str, Any] | None) -> str | None:
+    # `$n::text::jsonb` statt `$n::jsonb`: funktioniert auf dem App-Pool (mit
+    # jsonb-Codec) UND auf einer Owner-/Test-Connection ohne Codec (Muster
+    # `audit_log_repository.PgAuditLogRepository.insert`).
+    return json.dumps(value) if value is not None else None
+
+
+def _jsonb_out(value: object) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    raw = json.loads(value) if isinstance(value, str) else value
+    if not isinstance(raw, dict):
+        raise TypeError(f"jsonb-Schnappschuss ist kein Objekt: {type(raw).__name__}")
+    return raw
+
+
+def _event(row: asyncpg.Record) -> MemoryEventRead:
+    data = dict(row)
+    data["before"] = _jsonb_out(data["before"])
+    data["after"] = _jsonb_out(data["after"])
+    return MemoryEventRead.model_validate(data)
 
 
 def reset_vector_support() -> None:
@@ -160,9 +210,25 @@ class MemoryRepository(Protocol):
         importance: int | None,
     ) -> MemoryRead | None: ...
 
-    async def delete(self, workspace_id: UUID, agent_id: UUID, memory_id: UUID) -> bool: ...
+    async def delete(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        memory_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> bool: ...
 
-    async def delete_all(self, workspace_id: UUID, agent_id: UUID) -> int: ...
+    async def delete_all(
+        self, workspace_id: UUID, agent_id: UUID, actor_id: UUID | None = None
+    ) -> int: ...
+
+    async def count_for_user(self, workspace_id: UUID, subject_user_id: UUID) -> int: ...
+
+    async def insert_event(
+        self, workspace_id: UUID, data: MemoryEventCreate
+    ) -> MemoryEventRead: ...
+
+    async def list_events(self, workspace_id: UUID, memory_id: UUID) -> list[MemoryEventRead]: ...
 
 
 class PgMemoryRepository:
@@ -274,8 +340,9 @@ class PgMemoryRepository:
     ) -> MemoryRead:
         row = await self._pool.fetchrow(
             "INSERT INTO agent_memory "
-            "(workspace_id, agent_id, status, fact, context, category, importance) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+            "(workspace_id, agent_id, created_by_agent_id, status, fact, context, "
+            " category, importance) "
+            "VALUES ($1, $2, $2, $3, $4, $5, $6, $7) "
             f"RETURNING {_READ_COLUMNS}",
             workspace_id,
             agent_id,
@@ -355,6 +422,7 @@ class PgMemoryRepository:
             f"{', content_vector' if use_vector else ''}"
             "  FROM agent_memory"
             "  WHERE workspace_id = $1 AND agent_id = $2 AND status = 'active'"
+            "    AND scope = 'agent'"
             "), "
             "fts AS ("
             "  SELECT id, row_number() OVER ("
@@ -410,6 +478,7 @@ class PgMemoryRepository:
         rows = await self._pool.fetch(
             "SELECT id, fact, category FROM agent_memory "
             "WHERE workspace_id = $1 AND agent_id = $2 AND status = 'active' "
+            "AND scope = 'agent' "
             "ORDER BY importance DESC, created_at DESC LIMIT $3",
             workspace_id,
             agent_id,
@@ -519,22 +588,96 @@ class PgMemoryRepository:
         )
         return MemoryRead.model_validate(dict(row)) if row is not None else None
 
-    async def delete(self, workspace_id: UUID, agent_id: UUID, memory_id: UUID) -> bool:
+    async def delete(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        memory_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> bool:
+        # Loeschen + inhaltsfreie Audit-Zeile in EINER Anweisung (atomar, M5).
         result = await self._pool.execute(
-            "DELETE FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2 AND id = $3",
+            _DELETE_WITH_AUDIT_SQL.format(extra="AND id = $4"),
             workspace_id,
             agent_id,
+            actor_id,
             memory_id,
         )
-        return bool(str(result).endswith("1"))
+        return _affected(result) == 1
 
-    async def delete_all(self, workspace_id: UUID, agent_id: UUID) -> int:
+    async def delete_all(
+        self, workspace_id: UUID, agent_id: UUID, actor_id: UUID | None = None
+    ) -> int:
         result = await self._pool.execute(
-            "DELETE FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2",
+            _DELETE_WITH_AUDIT_SQL.format(extra=""),
             workspace_id,
             agent_id,
+            actor_id,
         )
-        try:
-            return int(result.rsplit(" ", 1)[-1])
-        except ValueError:
-            return 0
+        return _affected(result)
+
+    async def count_for_user(self, workspace_id: UUID, subject_user_id: UUID) -> int:
+        """Eintraege des Nutzergedaechtnisses ueber ALLE Status (3.1.1).
+
+        Grundlage der Obergrenze `MEMORY_MAX_PER_USER`; die Pruefung baut C2a.
+        """
+        count = await self._pool.fetchval(
+            "SELECT COUNT(*)::int FROM agent_memory "
+            "WHERE workspace_id = $1 AND scope = 'user' AND subject_user_id = $2",
+            workspace_id,
+            subject_user_id,
+        )
+        return int(count or 0)
+
+    async def insert_event(self, workspace_id: UUID, data: MemoryEventCreate) -> MemoryEventRead:
+        """Haengt ein Historien-Ereignis an (append-only, 3.1.2)."""
+        row = await self._pool.fetchrow(
+            "INSERT INTO agent_memory_event "
+            "(workspace_id, memory_id, event, actor_kind, actor_id, agent_id, "
+            " before, after, reason) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7::text::jsonb, $8::text::jsonb, $9) "
+            f"RETURNING {_EVENT_COLUMNS}",
+            workspace_id,
+            data.memory_id,
+            data.event.value,
+            data.actor_kind.value,
+            data.actor_id,
+            data.agent_id,
+            _jsonb_in(data.before),
+            _jsonb_in(data.after),
+            data.reason,
+        )
+        assert row is not None
+        return _event(row)
+
+    async def list_events(self, workspace_id: UUID, memory_id: UUID) -> list[MemoryEventRead]:
+        """Historie eines Eintrags, aelteste zuerst."""
+        rows = await self._pool.fetch(
+            f"SELECT {_EVENT_COLUMNS} FROM agent_memory_event "
+            "WHERE workspace_id = $1 AND memory_id = $2 ORDER BY created_at, id",
+            workspace_id,
+            memory_id,
+        )
+        return [_event(row) for row in rows]
+
+
+# Loescht Eintraege des Agentengedaechtnisses und schreibt je geloeschter Zeile
+# `audit_log (action='memory.deleted', target=<memory_id>)` — ohne Inhalt.
+# Data-modifying CTE: beides in einer Anweisung, also atomar ohne explizite
+# Transaktion. `$3` ist der Akteur; `{extra}` engt optional auf eine ID ($4) ein.
+_DELETE_WITH_AUDIT_SQL = (
+    "WITH deleted AS ("
+    "  DELETE FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2 {extra} "
+    "  RETURNING id, workspace_id"
+    ") "
+    "INSERT INTO audit_log (workspace_id, actor_id, action, target) "
+    f"SELECT workspace_id, $3::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
+)
+
+
+def _affected(status: object) -> int:
+    """Zeilenzahl aus einem asyncpg-Status wie ``INSERT 0 3``."""
+    try:
+        return int(str(status).rsplit(" ", 1)[-1])
+    except ValueError:
+        return 0
