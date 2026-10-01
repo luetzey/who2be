@@ -709,8 +709,12 @@ def test_repository_events_roundtrip() -> None:
         )
 
         events = await repo.list_events(s.ws_a, memory.id)
-        assert [e.id for e in events] == [first.id, second.id]
-        assert events[1] == second
+        # `insert` schreibt selbst das erste Ereignis `created` (Agent, C2a).
+        assert [(e.event, e.actor_kind) for e in events[:1]] == [
+            (MemoryEventKind.created, MemoryActorKind.agent)
+        ]
+        assert [e.id for e in events[1:]] == [first.id, second.id]
+        assert events[2] == second
         # Fremder Workspace sieht die Historie nicht (Signatur + RLS).
         assert await repo.list_events(s.ws_b, memory.id) == []
 

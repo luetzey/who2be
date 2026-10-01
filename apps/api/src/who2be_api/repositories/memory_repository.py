@@ -391,12 +391,12 @@ class PgMemoryRepository:
             for action, cell in sorted(changes, key=lambda c: (c[0], c[1].row, c[1].origin)):
                 await conn.execute(
                     "INSERT INTO audit_log (workspace_id, actor_id, action, target, detail) "
-                    "VALUES ($1, $2, $3, $4, $5::text::jsonb)",
+                    "VALUES ($1, $2, $3, $4, $5::jsonb)",
                     workspace_id,
                     actor_id,
                     action,
                     _cell_key(cell),
-                    json.dumps({"row": cell.row.value, "origin": cell.origin.value}),
+                    {"row": cell.row.value, "origin": cell.origin.value},
                 )
         return policy
 
