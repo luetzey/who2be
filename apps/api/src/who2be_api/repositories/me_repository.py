@@ -17,6 +17,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.core.tenancy import scope_to_self
 from who2be_api.repositories.workspace_repository import ensure_personal_workspace
 from who2be_models import DEFAULT_LOCALE, MeOrganization, MeRead, MeWorkspace
 from who2be_models.locale import SUPPORTED_LOCALES, normalize_locale
@@ -114,21 +115,27 @@ class PgMeRepository:
         )
 
     async def _lookup_profile(self, user_id: UUID) -> tuple[str | None, str]:
-        """Liest `email` + `preferred_locale` aus `auth.users` — EINE Query,
+        """Liest `email` + `preferred_locale` des Users — EINE Query,
         optional, Fehler → Defaults (None, `DEFAULT_LOCALE`).
 
         Wird beim Lazy-Seed genutzt, um die Personal-Org nach dem Local-Part
         der E-Mail zu benennen UND die Workspace-Content-Sprache aus der
         UI-Sprache (`raw_user_meta_data ->> 'preferred_locale'`) abzuleiten
-        (ADR-0045). Existiert `auth.users` nicht oder fehlt eine Spalte
-        (reine Test-DB), faellt der Seed auf ``"Personal"`` + `'de'` zurueck.
+        (ADR-0045). Gelesen wird ueber `w2b_user_profiles` (Migration 0090):
+        die Laufzeitrolle hat keinen Zugriff auf `auth.users`, und ohne
+        Workspace-Mandanten liefert die Funktion nur das eigene Profil — dafuer
+        setzt `scope_to_self` `app.current_user_id` transaktionslokal. Ist die
+        Funktion nicht aufrufbar (reine Test-DB ohne GoTrue), faellt der Seed
+        auf ``"Personal"`` + `'de'` zurueck.
         """
         try:
-            row = await self._pool.fetchrow(
-                "SELECT email, raw_user_meta_data ->> 'preferred_locale' AS preferred_locale "
-                "FROM auth.users WHERE id = $1",
-                user_id,
-            )
+            async with self._pool.acquire() as conn, conn.transaction():
+                await scope_to_self(conn, user_id)
+                row = await conn.fetchrow(
+                    "SELECT email, raw_user_meta_data ->> 'preferred_locale' AS preferred_locale "
+                    "FROM w2b_user_profiles(ARRAY[$1::uuid])",
+                    user_id,
+                )
         except asyncpg.PostgresError:
             return None, DEFAULT_LOCALE
         if row is None:

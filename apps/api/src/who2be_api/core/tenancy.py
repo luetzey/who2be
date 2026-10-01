@@ -38,6 +38,10 @@ import asyncpg
 # `current_setting('app.current_tenant', true)` (missing_ok ⇒ NULL, kein Fehler).
 TENANT_SETTING = "app.current_tenant"
 ORG_SETTING = "app.current_org"
+# Aufrufer selbst — liest nur `w2b_user_profiles` (Migration 0090), keine
+# RLS-Policy. Wird ausschliesslich transaktionslokal gesetzt
+# (`scope_to_self`), nie im Pool-`setup`.
+USER_SETTING = "app.current_user_id"
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,19 @@ async def apply_tenant_settings(conn: asyncpg.Connection) -> None:
             TENANT_SETTING,
             str(ctx.workspace_id),
         )
+
+
+async def scope_to_self(conn: asyncpg.Connection, user_id: UUID) -> None:
+    """Setzt `app.current_user_id` fuer die laufende Transaktion.
+
+    Damit liefert `w2b_user_profiles` (Migration 0090) auch ohne Workspace-
+    Mandanten das eigene Profil — gebraucht von `/v1/me`, das vor dem ersten
+    Workspace laeuft. `is_local => true`: die Setzung faellt bei COMMIT/ROLLBACK
+    weg, die gepoolte Connection traegt sie in kein fremdes Checkout. **Setzt
+    eine umgebende Transaktion voraus** (Muster `_scope_to_new_workspace` in
+    repositories/workspace_repository.py).
+    """
+    await conn.execute("SELECT set_config($1, $2, true)", USER_SETTING, str(user_id))
 
 
 @asynccontextmanager

@@ -3,9 +3,9 @@
 Drei Distribution-Queries (eine pro Entity-Typ, `GROUP BY status` ueber
 `*_version`, joined ans Entitaets-Aggregat fuer den `workspace_id`-Filter)
 und **eine** Activity-Query — eine UNION-ALL ueber persona/playbook/resource,
-die sowohl den Entity-Namen mitliefert als auch (LEFT JOIN auf `auth.users`)
-Email und `raw_user_meta_data` fuer den Anzeigenamen heranholt. Kein
-Per-Row-Lookup, kein N+1.
+die den Entity-Namen mitliefert. Email und `raw_user_meta_data` fuer den
+Anzeigenamen kommen in EINER zweiten Query fuer alle Akteure der Seite ueber
+`w2b_user_profiles` (Migration 0090). Kein Per-Row-Lookup, kein N+1.
 
 `status_history` traegt selbst keinen `workspace_id`; die Isolation laeuft
 weiterhin per `entity_id IN (SELECT id FROM <entity> WHERE workspace_id = $1)`
@@ -15,8 +15,9 @@ schemaseitig ohne workspace_id-Snapshot nicht kreuz-isolier-fest und der
 Aufruf in `dashboard_service` faellt fuer fehlende Namen auf den
 `entity_id`-Tail zurueck (Tombstone-Schutz fuer Race-Faelle).
 
-`auth.users` lebt im GoTrue-Schema; LEFT JOIN, damit Test-User ohne
-GoTrue-Row trotzdem mit reinem User-ID-Fallback durchkommen.
+Die Laufzeitrolle der Cloud (`who2be_app`) liest `auth.users` nie direkt; die
+Funktion liefert nur Nutzer des aktuellen Mandanten. Fehlt ein Profil, faellt
+der Anzeigename auf die User-ID zurueck.
 """
 
 from dataclasses import dataclass
@@ -107,14 +108,18 @@ _ACTIVITY = """
     )
     SELECT a.entity_type, a.entity_id, a.changed_at, a.changed_by,
            a.from_status, a.to_status, a.entity_name,
-           u.email AS user_email,
-           u.raw_user_meta_data AS user_meta,
            COUNT(*) OVER () AS total_count
     FROM activity a
-    LEFT JOIN auth.users u ON u.id = a.changed_by
     ORDER BY a.changed_at DESC
     LIMIT $2 OFFSET $3
 """
+
+# Anzeige-Profile (E-Mail, `raw_user_meta_data`) der Akteure EINER Seite — ein
+# Roundtrip fuer alle IDs, kein N+1. Nur ueber die SECURITY-DEFINER-Funktion
+# (Migration 0090): die Laufzeitrolle hat keinen Zugriff auf `auth.users`, und
+# die Funktion liefert nur Nutzer des aktuellen Mandanten. Ehemalige Mitglieder
+# fallen damit auf die User-ID zurueck (Fallback in `dashboard_service`).
+_PROFILES = "SELECT id, email, raw_user_meta_data FROM w2b_user_profiles($1::uuid[])"
 
 
 # Aufmerksamkeits-Zaehler in einem Roundtrip: pending Memories (Freigabe-
@@ -198,11 +203,27 @@ class PgDashboardRepository:
         # `COUNT(*) OVER ()` ist auf jeder Zeile identisch; bei leerer Seite
         # (Offset hinter dem Ende oder gar keine Activity) ist die Gesamtzahl 0.
         total = int(rows[0]["total_count"]) if rows else 0
-        return [_row_to_activity(row) for row in rows], total
+        profiles = await self._profiles({row["changed_by"] for row in rows})
+        return [_row_to_activity(row, profiles.get(row["changed_by"])) for row in rows], total
+
+    async def _profiles(self, user_ids: set[UUID]) -> dict[UUID, asyncpg.Record]:
+        """Profile der Akteure; Fehler → ohne Profil statt 500.
+
+        Ohne GoTrue-Schema (reine Test-DB) oder ohne Leserecht des
+        Funktions-Owners scheitert der Aufruf. Die Activity bleibt dann mit
+        User-ID-Fallback lesbar — wie `/members` und `/v1/me` auch.
+        """
+        if not user_ids:
+            return {}
+        try:
+            rows = await self._pool.fetch(_PROFILES, list(user_ids))
+        except asyncpg.PostgresError:
+            return {}
+        return {row["id"]: row for row in rows}
 
 
-def _row_to_activity(row: asyncpg.Record) -> DashboardActivityRow:
-    raw_meta = row["user_meta"]
+def _row_to_activity(row: asyncpg.Record, profile: asyncpg.Record | None) -> DashboardActivityRow:
+    raw_meta = profile["raw_user_meta_data"] if profile is not None else None
     # GoTrue speichert `raw_user_meta_data` als jsonb; asyncpg liefert es
     # je nach Codec als dict oder als JSON-String — beides absichern.
     meta: dict[str, Any] | None
@@ -228,6 +249,6 @@ def _row_to_activity(row: asyncpg.Record) -> DashboardActivityRow:
         from_status=VersionStatus(from_status_raw) if from_status_raw is not None else None,
         to_status=VersionStatus(row["to_status"]),
         entity_name=row["entity_name"],
-        user_email=row["user_email"],
+        user_email=profile["email"] if profile is not None else None,
         user_meta=meta,
     )
