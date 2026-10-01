@@ -621,10 +621,11 @@ def test_repository_count_for_user_counts_all_status() -> None:
                 status=status,
                 fact=f"Nutzerfakt {index}",
             )
-        # Zaehlen nicht mit: anderer Nutzer, anderer Workspace, Agentengedaechtnis.
+        # Zaehlen nicht mit: anderer Nutzer, anderer Workspace, Agentengedaechtnis
+        # (auch eines, das den Nutzer als Betroffenen nennt — nur scope='user' zaehlt).
         await _insert_memory(env.owner, s.ws_a, None, scope="user", subject_user_id=other_user)
         await _insert_memory(env.owner, s.ws_b, None, scope="user", subject_user_id=s.user)
-        await _insert_memory(env.owner, s.ws_a, s.agent_a)
+        await _insert_memory(env.owner, s.ws_a, s.agent_a, subject_user_id=s.user)
 
         assert await repo.count_for_user(s.ws_a, s.user) == 4
         assert await repo.count_for_user(s.ws_a, other_user) == 1
