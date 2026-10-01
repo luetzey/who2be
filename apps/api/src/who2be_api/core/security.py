@@ -789,8 +789,8 @@ async def get_current_workspace(
     `yield` weiter. Solange der Endpunkt laeuft, traegt jede vom App-Pool
     gezogene Connection `app.current_tenant`/`app.current_org` — RLS isoliert
     den Mandanten als zweite Verteidigungslinie hinter den App-`WHERE`-Filtern.
-    Der `org_id`-Lookup laeuft VOR dem Scope (workspace ist control-plane, ohne
-    RLS lesbar).
+    Der `org_id`-Lookup laeuft VOR dem Scope (ohne Mandanten ist `workspace`
+    fuer die Aufloesung lesbar, Migration 0092).
     """
     try:
         pool = get_pool()
@@ -867,8 +867,9 @@ async def get_current_workspace(
         )
 
     # Org des Workspace fuer `app.current_org` (org-scoped RLS auf
-    # org_entitlement/mcp_usage). `workspace`/`organization` tragen keine RLS,
-    # sind also auch ausserhalb des Scopes lesbar; None ⇒ org-GUC bleibt ungesetzt.
+    # org_entitlement/mcp_usage). Laeuft VOR dem Scope: ohne gesetzten
+    # Mandanten sind `workspace`/`organization` fuer die Aufloesung lesbar
+    # (Migration 0092); None ⇒ org-GUC bleibt ungesetzt.
     # Zugleich der Soft-Delete-Gate (Track O): eine zur Loeschung vorgemerkte
     # Org (deleted_at gesetzt) sperrt den Zugriff auf alle ihre Workspaces.
     org_row = await pool.fetchrow(

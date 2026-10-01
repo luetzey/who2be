@@ -68,8 +68,16 @@ def test_append_only_for_app_role_and_owner_full_access() -> None:
                 "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', 'w') RETURNING id",
                 org_id,
             )
-            entity_id = uuid4()
+            # Seit 0092 leitet ein Trigger `status_history.workspace_id` aus
+            # der Entity ab, und die Policy ist strikt — die Entity muss also
+            # im Mandanten existieren, sonst weist RLS den Insert ab.
             actor = uuid4()
+            entity_id = await owner.fetchval(
+                "INSERT INTO persona (workspace_id, owner_id, name) "
+                "VALUES ($1, $2, 'p') RETURNING id",
+                ws_id,
+                actor,
+            )
             sh_id = await owner.fetchval(
                 "INSERT INTO status_history "
                 "(entity_type, entity_id, from_status, to_status, changed_by) "
