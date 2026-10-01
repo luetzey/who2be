@@ -431,7 +431,7 @@ PROBES: dict[str, Probe] = {
     # Offene Einladungen des eigenen Kontos, ueber alle Workspaces hinweg —
     # genau deshalb hier: B hat eine offene Einladung auf B's Adresse, A darf
     # sie nicht sehen (V3, Leck-Check). Beide Konten sind bestaetigt
-    # (`_confirm_accounts`), sonst antwortete die Route 403.
+    # (`_confirm_accounts` in `run_isolation`), sonst antwortete die Route 403.
     "GET /v1/invitations/pending": Probe(),
     # Der Einladungs-Token ist das Objekt: A haelt den Token einer Einladung
     # in B. Ohne passende E-Mail im Login muss die Annahme scheitern (L1).
@@ -675,7 +675,6 @@ def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
             tenants.append(a)
             b = seed_tenant(client, "B", patched_jwt_secret)
             tenants.append(b)
-            _confirm_accounts(a, b)
             ghost = ghost_of(b)
             report = run_isolation(client, a, b, ghost)
 
@@ -751,6 +750,8 @@ def _probe_as_a(
 def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Report:
     """Alle Proben als A, dann der Fingerabdruck, dann die Gegenprobe als B."""
     report = Report()
+    # Hier statt beim Aufrufer: auch test_org_transfer.py faehrt diesen Lauf.
+    _confirm_accounts(a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():
