@@ -122,7 +122,7 @@ PROBES: dict[str, Probe] = {
     # --- Workspace selbst --------------------------------------------------
     f"GET {_WS}": Probe(),
     f"PATCH {_WS}": Probe(body={"name": "iso"}),
-    f"DELETE {_WS}": Probe(known="Fix in Arbeit (Board t_19169bdd)"),
+    f"DELETE {_WS}": Probe(),
     f"GET {_WS}/whoami": Probe(),
     f"GET {_WS}/dashboard": Probe(),
     f"GET {_WS}/billing/entitlement": Probe(),

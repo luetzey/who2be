@@ -612,6 +612,72 @@ def test_h5_access_log_survives_agent_delete(make_auth_headers: AuthFactory) -> 
         cleanup_workspaces([owner])
 
 
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "fast_table_store")
+def test_h5_access_log_blocks_workspace_delete_with_409(make_auth_headers: AuthFactory) -> None:
+    """Der Workspace-Delete endet bei Protokollzeilen mit 409, nicht mit 500.
+
+    Der Workspace-Delete entfernt zuerst die Agenten — und scheitert damit am
+    selben FK ohne Cascade wie der Agent-Delete. Owner-Entscheidung
+    2026-10-01: dieselbe Antwort (409, Retention-/Purge-Pfad), kein
+    Mitloeschen. Die Transaktion rollt zurueck: Workspace, Agent und Log
+    bleiben vollstaendig. Ein zweiter Workspace ohne Protokoll bleibt
+    loeschbar.
+    """
+    owner = fresh_user_id()
+    home = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    try:
+        with TestClient(app) as client:
+            org_id = client.get(f"/v1/workspaces/{home}", headers=auth).json()["org_id"]
+
+            def new_workspace(slug: str) -> str:
+                created = client.post(
+                    f"/v1/organizations/{org_id}/workspaces",
+                    json={"name": slug, "slug": f"{slug}-{fresh_user_id().hex[:8]}"},
+                    headers=auth,
+                )
+                assert created.status_code == 201, created.text
+                return str(created.json()["id"])
+
+            logged = new_workspace("protokolliert")
+            prefix = f"/v1/workspaces/{logged}"
+            agent_id, agent_headers = agent_token(
+                client, prefix, "spurenleger", _ALL_WRITE_POLICY, auth
+            )
+            created = client.post(
+                f"{prefix}/artifacts",
+                json={
+                    "title": "Beleg",
+                    "content_md": "Inhalt",
+                    "occurred_at": "2026-08-01T12:00:00Z",
+                },
+                headers=agent_headers,
+            )
+            assert created.status_code == 201, created.text
+            before = _db_fetch(
+                "SELECT id FROM agent_access_log WHERE agent_id = $1", UUID(agent_id)
+            )
+            assert before, "Voraussetzung: es gibt Protokollzeilen"
+
+            blocked = client.delete(prefix, headers=auth)
+            assert blocked.status_code == 409, blocked.text
+            assert blocked.json()["reason"] == "concurrent_conflict"
+            assert "Retention-/Purge-Pfad" in blocked.json()["detail"]
+
+            # Rollback: nichts ist verloren, der Workspace ist noch da.
+            after = _db_fetch("SELECT id FROM agent_access_log WHERE agent_id = $1", UUID(agent_id))
+            assert len(after) == len(before)
+            assert client.get(prefix, headers=auth).status_code == 200
+            assert client.get(f"{prefix}/agents/{agent_id}", headers=auth).status_code == 200
+
+            # Ohne Protokollzeilen bleibt der Workspace-Delete moeglich.
+            clean = new_workspace("sauber")
+            assert client.delete(f"/v1/workspaces/{clean}", headers=auth).status_code == 204
+    finally:
+        cleanup_workspaces([owner])
+
+
 # --------------------------------------------------------------------- M1
 
 
