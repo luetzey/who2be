@@ -53,8 +53,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# `gnupg`: `who2be-org-transfer export` verschluesselt das Org-Archiv selbst
+# und hat bewusst keinen Klartext-Ausgang (docs/org-export-import.md).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl gnupg \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --no-create-home --uid 1000 who2be
 

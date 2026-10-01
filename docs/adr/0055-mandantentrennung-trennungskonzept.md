@@ -288,11 +288,19 @@ abgeräumt werden, steht in Abschnitt 4.6.
   Einzelnen laufen, steht in `docs/compliance/data-retention-and-erasure.md`
   §4a. Die Löschung wirkt sich nicht auf andere Mandanten aus (SDM
   Prüfschritt 5). Zwei Lücken bleiben, sie sind als R4 ausgewiesen.
-- **Rückgabe:** Heute gibt es nur einen DSGVO-Export je Nutzer. Ein Export und
-  Import je Organisation ist Teil der Owner-Entscheidung und als eigenes Paket
-  geplant (Abschnitt 10). Er deckt die Rückgabe nach Art. 28 Abs. 3 lit. g ab,
-  das Zurückspielen einer einzelnen Org und später den Umzug in eine eigene
-  Instanz.
+- **Rückgabe:** Der Betreiber exportiert eine Organisation mit
+  `who2be-org-transfer` vollständig: Postgres-Zeilen, SQLite-Dateien und Blobs
+  in einem gpg-verschlüsselten Archiv
+  (`apps/api/src/who2be_api/core/org_transfer.py#export_org`). Der Import
+  (`apps/api/src/who2be_api/core/org_transfer.py#import_org`) setzt die Org in
+  eine leere oder fremde Instanz ein. Er bricht fail-closed ab, wenn eine Zeile
+  einem fremden Mandanten gehört, ein Fremdschlüssel aus dem Archiv herauszeigt
+  oder eine ID im Ziel schon existiert. Zugangsdaten liegen nie im Archiv. Das
+  deckt die Rückgabe nach Art. 28 Abs. 3 lit. g ab, das Zurückspielen einer
+  einzelnen Org und später den Umzug in eine eigene Instanz. Die
+  Betreiber-Anleitung steht in `docs/org-export-import.md`. Eine
+  Self-Service-Rückgabe für den Org-Admin gibt es noch nicht, ebenso wenig ein
+  Identitäts-Mapping für fremde Auth-Instanzen.
 
 ## 5. Restrisiken (gesondert ausgewiesen)
 
@@ -316,7 +324,7 @@ schwächer ist als die erste.
 | R3 | **Steuer-Tabellen ohne zweite Linie.** Die Stammdaten von Organisation und Workspace, der Statusverlauf und einzelne Steuer-Tabellen haben bis zur Härtung keine eigene Policy. Der Coverage-Test nimmt `workspace` ausdrücklich aus, der Statusverlauf hat keine Mandantenspalte. | Für diese Tabellen gibt es bis zur Härtung nur die Anwendungsschicht. | Wird gehärtet (Owner-Entscheidung 3, „Control-Plane-Tabellen absichern“): Policies für Organisation und Workspace, eine Mandantenspalte und eine strikte Policy für den Statusverlauf. Die globale OAuth-Client-Registry bleibt bewusst ohne Mandant. |
 | R4 | **Reste nach dem Org-Purge.** (a) Der Statusverlauf hängt über `entity_id` an den Entities, hat aber keinen FK und keine Kaskade. Nach dem Löschen einer Organisation bleiben die Zeilen stehen. Akteurs-IDs werden beim Konto-Purge anonymisiert. (b) Die SQLite-Dateien des Tabellen-Stores bleiben liegen, bis der Betreiber sie entfernt (Abschnitt 4.6). | Rest-Metadaten (Entity-ID, Statuswechsel, Zeitpunkt, Notiz) und Tabelleninhalte bleiben nach der Löschung bestehen. Das betrifft Löschung und Rückgabe (Art. 28 Abs. 3 lit. g, SDM Prüfschritt 5). | (a) wird mit R3 behoben: Mit der Mandantenspalte räumt der Org-Purge den Statusverlauf ab, ein Test belegt das. (b) ist bewusst so (ein falsch konfigurierter Purge soll keine fremden Dateien löschen) und als Betreiber-Schritt dokumentiert. |
 | R5 | **Fehler der RLS-Engine.** Ein Fehler in PostgreSQL selbst (Beispiel CVE-2024-10976) kann eine falsche Policy anwenden. | Eine DB-Grenze hätte das verhindert (Abschnitt 3.2). | Akzeptiert. Für Who2Be ist das Risiko gering: eine App-Rolle, keine rollenspezifischen Policies, aktuelles Image (Bericht §4). Patch-Stand über die Image-Pflege. |
-| R6 | **Keine kundenindividuellen Backup- und Wiederherstellungs-Parameter.** Ein Dump gilt für alle Mandanten, und eine Punkt-in-Zeit-Wiederherstellung geht nur für den ganzen Cluster. | Der Rest-Einwand der OH Cloud 2014 bleibt bestehen (Abschnitt 3.3). Eine einzelne Org lässt sich nur mit Werkzeug zurückspielen. | Teilweise behandelt durch Export/Import je Org. Vollständig erst mit eigener Instanz (Abschnitt 9). |
+| R6 | **Keine kundenindividuellen Backup- und Wiederherstellungs-Parameter.** Ein Dump gilt für alle Mandanten, und eine Punkt-in-Zeit-Wiederherstellung geht nur für den ganzen Cluster. | Der Rest-Einwand der OH Cloud 2014 bleibt bestehen (Abschnitt 3.3). Eine einzelne Org lässt sich nur mit Werkzeug zurückspielen. | Teilweise behandelt durch Export/Import je Org (`who2be-org-transfer`, Abschnitt 4.6): Eine einzelne Org lässt sich exportieren und, nach dem Org-Purge, aus dem Archiv zurückspielen. Der Zeitpunkt ist der des Exports, nicht frei wählbar. Vollständig erst mit eigener Instanz (Abschnitt 9). |
 
 Nicht als Restrisiko geführt, weil die Anwendung sie absichtlich überschreitet:
 geteilte Einladungen und die Liste der eigenen Organisationen eines Nutzers
@@ -353,6 +361,8 @@ Integrationstests mit echter Datenbank):
 | Der Laufzeit-Pool darf RLS nicht umgehen | `apps/api/tests/test_db_rls_guard.py#test_rls_guard_rejects_bypass_role_in_cloud` | Boot-Guard aus Abschnitt 4.4. |
 | Der Statusverlauf und das Audit-Log sind für die App-Rolle append-only | `apps/api/tests/test_audit_append_only.py#test_append_only_for_app_role_and_owner_full_access` | Protokolldaten kann die App-Rolle nicht nachträglich ändern. |
 | Der Konto-Purge anonymisiert die Audit-Referenzen | `apps/api/tests/test_purge_erasure.py#test_purge_anonymises_audit_and_keeps_entitlement_history` | Löschpfad je Nutzer. |
+| Eine importierte Org bleibt von einer fremden Org getrennt | `apps/api/tests/test_org_transfer.py#test_import_next_to_foreign_org_keeps_tenants_apart` | Der Fingerabdruck der fremden Org ändert sich nicht. Der REST-Isolationslauf findet zwischen beiden Orgs keinen Befund. |
+| Ein manipuliertes Archiv schreibt nicht in einen fremden Mandanten | `apps/api/tests/test_org_transfer.py#test_tampered_archive_is_rejected` | Fremde Zeile, fremde Referenz, Migrationsstand, Prüfsumme und Zugangsdaten führen zum Abbruch ohne Rückstände. |
 
 Geplant und Teil der Owner-Entscheidung:
 
@@ -403,7 +413,9 @@ Rückweg).
   1. E-Mail-Zugriff über die Funktion (Entscheidung 1), in zwei Paketen.
   2. Härtung der Steuer-Tabellen und Purge des Statusverlaufs (R3, R4).
   3. API- und MCP-Isolationstests je Endpunkt (Abschnitt 7).
-  4. Export und Import je Organisation (Abschnitt 4.6, R6).
+  4. Export und Import je Organisation (Abschnitt 4.6, R6). Paket 1 umgesetzt
+     (`who2be-org-transfer`). Offen sind Identitäts-Mapping, Self-Service-Rückgabe
+     und die Migration älterer Archive.
 - Die Weiche aus Abschnitt 6 liegt beim Owner. Bis sie entschieden ist, bleibt
   R1 ausgewiesen.
 - Ist ein Restrisiko behoben, wird es in Abschnitt 5 als geschlossen markiert

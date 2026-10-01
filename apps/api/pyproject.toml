@@ -45,6 +45,7 @@ dependencies = [
 who2be-migrate = "who2be_api.core.migrations:cli"
 who2be-retrieval-backfill = "who2be_api.core.chunk_backfill:cli"
 who2be-purge = "who2be_api.core.purge:cli"
+who2be-org-transfer = "who2be_api.core.org_transfer:cli"
 who2be-license = "who2be_api.core.license_cli:cli"
 
 [tool.uv.sources]
