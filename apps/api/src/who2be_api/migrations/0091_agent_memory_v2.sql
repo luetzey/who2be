@@ -125,6 +125,35 @@ ALTER TABLE agent_memory DROP CONSTRAINT IF EXISTS agent_memory_converted_check;
 ALTER TABLE agent_memory ADD CONSTRAINT agent_memory_converted_check
     CHECK ((status = 'converted') = (converted_case_id IS NOT NULL));
 
+-- --- Loeschkette Workspace ---------------------------------------------------
+
+-- `workspace_id` hatte seit 0066 keinen FK: geloescht wurde bisher nur ueber
+-- `agent_id` (CASCADE), und `agent` haengt am Workspace. Nutzerfakten
+-- (`scope='user'`) haben kein `agent_id` mehr — ohne diesen FK ueberlebten sie
+-- das Loeschen von Workspace und Organisation (Purge, ADR-0044, DSGVO Art. 17,
+-- Weiche M5). Der Bestand ist waisenfrei: jede Zeile hing bisher ueber
+-- `agent_id` an einem Agenten desselben Workspace (das belegt auch der
+-- Composite-FK `agent_memory_created_by_agent_fkey` unten, der denselben
+-- Bestand prueft). Index: `agent_memory_scope_idx` fuehrt mit `workspace_id`.
+--
+-- Bewusst ohne `memory.deleted`-Audit: Faellt ein Eintrag per Cascade (Agent,
+-- Workspace, Organisation), dokumentiert die Loeschung des Elternobjekts den
+-- Vorgang; die inhaltsfreie Audit-Zeile je Eintrag schreibt nur das gezielte
+-- Loeschen im Repository.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = (current_schema() || '.agent_memory')::regclass
+          AND conname = 'agent_memory_workspace_fkey'
+    ) THEN
+        ALTER TABLE agent_memory
+            ADD CONSTRAINT agent_memory_workspace_fkey
+            FOREIGN KEY (workspace_id) REFERENCES workspace (id) ON DELETE CASCADE;
+    END IF;
+END
+$$;
+
 -- --- FK-Ziele und Einreicher -------------------------------------------------
 
 -- Composite-Ziel fuer die Historie (Workspace-Gleichheit, Muster 0089).

@@ -9,7 +9,8 @@ Schema (Muster `test_test_case_schema.py`):
   `converted_case_id` gesetzt ist; geschlossene Wertemengen.
 - **Einreicher:** ein Nutzerfakt ueberlebt das Loeschen des Agenten, der ihn
   eingereicht hat (`created_by_agent_id` ON DELETE SET NULL); das
-  Agentengedaechtnis faellt weiter per Cascade.
+  Agentengedaechtnis faellt weiter per Cascade. Mit Workspace und
+  Organisation faellt alles (Workspace-FK, M5).
 - **Historie:** `agent_memory_event` ist append-only (kein UPDATE/DELETE),
   workspace-getrennt per RLS, an den Eintrag desselben Workspace gebunden und
   faellt mit ihm.
@@ -356,6 +357,36 @@ def test_created_by_agent_must_share_workspace() -> None:
         await env.as_tenant(s.ws_a)
         with pytest.raises(asyncpg.ForeignKeyViolationError):
             await _insert_memory(env.app, s.ws_a, s.agent_a, created_by_agent_id=s.agent_b)
+
+    _with_env(body)
+
+
+@pytest.mark.integration
+def test_user_fact_falls_with_workspace_and_organization() -> None:
+    """Nutzerfakten haben kein `agent_id` — sie fallen ueber den Workspace-FK (M5)."""
+
+    async def body(env: _Env) -> None:
+        s = env.seed
+        user_a = await _insert_memory(env.owner, s.ws_a, None, scope="user", subject_user_id=s.user)
+        agent_a = await _insert_memory(env.owner, s.ws_a, s.agent_a)
+        user_b = await _insert_memory(env.owner, s.ws_b, None, scope="user", subject_user_id=s.user)
+        agent_b = await _insert_memory(env.owner, s.ws_b, s.agent_b)
+
+        async def remaining() -> set[UUID]:
+            rows = await env.owner.fetch("SELECT id FROM agent_memory")
+            return {r["id"] for r in rows}
+
+        # Workspace-Delete: alles aus A weg, der fremde Workspace unberuehrt.
+        await env.owner.execute("DELETE FROM workspace WHERE id = $1", s.ws_a)
+        assert await remaining() == {user_b, agent_b}
+        assert not {user_a, agent_a} & await remaining()
+
+        # Organisations-Delete (Purge-Weg) kaskadiert ueber den Workspace.
+        await env.owner.execute(
+            "DELETE FROM organization WHERE id = (SELECT org_id FROM workspace WHERE id = $1)",
+            s.ws_b,
+        )
+        assert await remaining() == set()
 
     _with_env(body)
 

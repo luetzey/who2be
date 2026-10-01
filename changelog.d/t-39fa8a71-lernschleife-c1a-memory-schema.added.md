@@ -7,7 +7,9 @@
 
   Die Datenbank sichert die Regeln selbst ab: Ein Lernvorschlag kann nie
   `active` werden. Ein Nutzerfakt gehört genau einem Nutzer und keinem
-  Agenten; er bleibt erhalten, wenn der einreichende Agent gelöscht wird.
+  Agenten; er bleibt erhalten, wenn der einreichende Agent gelöscht wird,
+  fällt aber mit seinem Workspace und seiner Organisation (neuer
+  Workspace-Fremdschlüssel mit Cascade).
   `converted` ist nur mit Fall-Verweis möglich. Bestehende Einträge gelten
   als Agentengedächtnis mit unbekannter Herkunft; aktive Einträge gelten als
   bestätigt. Wer einen Eintrag löscht, hinterlässt eine Zeile
