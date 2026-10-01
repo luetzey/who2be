@@ -554,6 +554,9 @@ def _check_tenancy(
             ws_ok = ws in workspace_ids
             org_ok = org == org_id
             if table.has_workspace and table.has_org:
+                # Eine der beiden Spalten darf leer sein (org-weite Zeile ohne
+                # Workspace); die gesetzte muss zur Archiv-Org gehoeren, und
+                # mindestens eine muss gesetzt sein.
                 ok = (ws_ok or ws is None) and (org_ok or org is None) and (ws_ok or org_ok)
             elif table.has_workspace:
                 ok = ws_ok
@@ -575,11 +578,18 @@ def _check_references(schema: Schema, rows: Mapping[str, list[dict[str, Any]]]) 
     """
     keys: dict[tuple[str, tuple[str, ...]], set[tuple[Any, ...]]] = {}
     for fk in schema.foreign_keys:
-        if fk.table not in rows or fk.ref_table not in rows:
+        if fk.table not in rows:
+            continue
+        ref = schema.tables.get(fk.ref_table)
+        if ref is None or ref.mode != "import":
+            # Verweise auf globale Tabellen (z. B. oauth_client) bzw. nicht
+            # importierte Tabellen prueft der Fremdschluessel der DB.
             continue
         index = (fk.ref_table, fk.ref_columns)
         if index not in keys:
-            keys[index] = {tuple(r[c] for c in fk.ref_columns) for r in rows[fk.ref_table]}
+            # Fail-closed: fehlt die Elterntabelle im Archiv, gilt sie als leer —
+            # sonst haengte eine Zeile an einem Objekt, das schon im Ziel liegt.
+            keys[index] = {tuple(r[c] for c in fk.ref_columns) for r in rows.get(fk.ref_table, [])}
         for row in rows[fk.table]:
             value = tuple(row[c] for c in fk.columns)
             if any(v is None for v in value):
@@ -649,11 +659,17 @@ async def import_org(
     leaked = sorted(set(manifest["tables"]) & CREDENTIAL_TABLES)
     if leaked:
         raise OrgTransferError(f"Archiv enthaelt Zugangsdaten-Tabellen: {leaked}")
+    # Der Export schreibt jede importierbare Tabelle, auch leer, und der
+    # Migrationsstand ist identisch. Fehlt eine, ist das Archiv manipuliert —
+    # eine fehlende Elterntabelle wuerde sonst die Referenzpruefung aushebeln.
+    missing = sorted(set(order) - set(manifest["tables"]))
+    if missing:
+        raise OrgTransferError(
+            f"Archiv unvollstaendig, es fehlen Org-Tabellen: {missing} — Import abgebrochen."
+        )
 
     rows: dict[str, list[dict[str, Any]]] = {}
     for name in order:
-        if name not in manifest["tables"]:
-            continue
         table_rows = _parse_rows(archive, name)
         _check_tenancy(schema.tables[name], table_rows, org_id, workspace_ids)
         rows[name] = table_rows

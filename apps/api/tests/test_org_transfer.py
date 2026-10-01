@@ -9,8 +9,9 @@ Belegt die Akzeptanzkriterien der Karte t_18cb3e8b:
   Zeilen bleiben unveraendert (Fingerabdruck), und der REST-Isolationslauf aus
   `test_tenant_isolation_api.py` findet zwischen importierter und fremder Org
   in beide Richtungen keinen Befund.
-* **Fail-closed:** Kollision, Migrationsstand, Pruefsumme, fremde Zeile und
-  fremde Referenz brechen ab, ohne im Ziel etwas zu hinterlassen.
+* **Fail-closed:** Kollision, Migrationsstand, Pruefsumme, fremde Zeile,
+  fremde Referenz und fehlende Org-Tabelle brechen ab, ohne im Ziel etwas zu
+  hinterlassen.
 * **CLI:** Export nur verschluesselt (gpg), Import von Datei oder stdin.
 """
 
@@ -374,6 +375,59 @@ def test_tampered_archive_is_rejected(
         cleanup_workspaces([b.user_id])
 
 
+@pytest.mark.usefixtures("migrated_db")
+def test_archive_without_parent_table_cannot_attach_to_foreign_object(
+    source: tuple[Tenant, bytes, dict[str, Any]], stores: Path, patched_jwt_secret: str
+) -> None:
+    """Archiv nur mit organization, workspace und wa_table; die Tabelle haengt an B.
+
+    Ohne `work_area` im Archiv galt der Verweis frueher als "nicht pruefbar",
+    und der Fremdschluessel der DB war erfuellt — B lebt ja im Ziel. Der Import
+    muss abbrechen, und an der WorkArea von B darf nichts haengen.
+    """
+    a, data, _ = source
+    _switch_stores(stores / "t-missing-parent")
+    with isolated_schema("orgxfer_gap"):
+        users: list[UUID] = []
+        try:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                b = seed_tenant(client, "B", patched_jwt_secret)
+            users.append(b.user_id)
+            before = fingerprint(b)
+            keep = {"organization", "workspace", "wa_table"}
+
+            def edit(manifest: dict[str, Any], members: dict[str, bytes]) -> None:
+                for name in set(manifest["tables"]) - keep:
+                    del manifest["tables"][name]
+                    del members[f"postgres/{name}.jsonl"]
+                manifest["tablestores"] = {}
+                manifest["blobs"] = {}
+                for member in [m for m in members if not m.startswith("postgres/")]:
+                    del members[member]
+                lines = members["postgres/wa_table.jsonl"].decode().splitlines()[:1]
+                members["postgres/wa_table.jsonl"] = (lines[0] + "\n").encode()
+                manifest["tables"]["wa_table"]["rows"] = 1
+                _edit_rows(members, "wa_table", lambda r: r.update(area_id=b.ids["area_id"]))
+
+            tampered = _rebuild(data, edit)
+            try:
+                with pytest.raises(OrgTransferError, match="Archiv unvollstaendig"):
+                    _import(tampered)
+            finally:
+                users.append(a.user_id)
+            assert fingerprint(b) == before
+            attached = _db(
+                lambda c: c.fetchval(
+                    "SELECT count(*) FROM wa_table WHERE area_id = $1 AND workspace_id <> $2",
+                    UUID(b.ids["area_id"]),
+                    b.workspace_id,
+                )
+            )
+            assert attached == 0
+        finally:
+            cleanup_workspaces(users)
+
+
 def _ensure_persona_playbook(a: Tenant) -> None:
     """Verknuepft Persona und Playbook von A, damit `persona_playbook` eine Zeile hat."""
     with TestClient(app, raise_server_exceptions=False) as client:
@@ -488,3 +542,27 @@ def test_new_table_without_tenant_column_is_rejected() -> None:
 def test_unreadable_archive_is_rejected() -> None:
     with pytest.raises(OrgTransferError, match="Kein lesbares Archiv"):
         read_archive(b"-----BEGIN PGP MESSAGE-----")
+
+
+def test_reference_to_missing_parent_table_is_rejected() -> None:
+    """Fehlt die Elterntabelle, gilt sie als leer — der Verweis zeigt nach aussen."""
+
+    def table(name: str, mode: str = "import") -> org_transfer.TableInfo:
+        return org_transfer.TableInfo(name, ("id", "workspace_id"), (), False, mode)
+
+    schema = org_transfer.Schema(
+        tables={
+            "work_area": table("work_area"),
+            "wa_table": table("wa_table"),
+            "oauth_client": table("oauth_client", "skip"),
+        },
+        foreign_keys=(
+            org_transfer.ForeignKey("wa_table", "work_area", ("area_id",), ("id",)),
+            org_transfer.ForeignKey("wa_table", "oauth_client", ("client_id",), ("id",)),
+        ),
+    )
+    child = {"id": "t1", "area_id": "fremd", "client_id": "c1"}
+    with pytest.raises(OrgTransferError, match="ausserhalb des Archivs"):
+        org_transfer._check_references(schema, {"wa_table": [child]})
+    # Verweise auf nicht importierte Tabellen prueft der Fremdschluessel der DB.
+    org_transfer._check_references(schema, {"wa_table": [child], "work_area": [{"id": "fremd"}]})

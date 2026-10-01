@@ -53,6 +53,7 @@ mit Code 1 und einer Meldung ab, wenn eine dieser Prüfungen fehlschlägt:
 | Prüfsummen | eine Tabelle, SQLite-Datei oder ein Blob nicht zu seiner sha256 im Manifest passt |
 | Migrationsstand | Quelle und Ziel nicht genau dieselben Migrationen angewandt haben |
 | Zugangsdaten | das Archiv eine Zugangsdaten-Tabelle enthält |
+| Vollständigkeit | eine Org-Tabelle des Ziel-Schemas im Archiv fehlt (der Export schreibt jede, auch leere) |
 | Mandant | eine Zeile einer anderen Org oder einem Workspace außerhalb des Archivs gehört |
 | Referenzen | ein Fremdschlüssel auf eine Zeile außerhalb des Archivs zeigt |
 | Kollision | die Org, ein Workspace oder eine andere ID im Ziel schon existiert |

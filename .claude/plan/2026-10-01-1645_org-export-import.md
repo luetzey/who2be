@@ -108,3 +108,25 @@ Meldung, Blob/SQLite nicht unberuehrt).
       anderen Worktrees). Die 5 Setup-Fehler kamen von `-p no:logging`
       (kein `caplog`). Auf der eigenen DB ohne diesen Schalter sind dieselben
       Tests gruen (26 passed).
+
+## Review Runde 1 (Reviewer, Blocker) — nachgezogen
+
+- Befund: `_check_references` uebersprang einen FK, wenn die Elterntabelle im
+  Archiv fehlte. Ein Archiv nur mit organization/workspace/wa_table haengte
+  eine Zeile an eine WorkArea von B.
+- Fix, zwei Schichten:
+  1. `import_org` verlangt jede Tabelle der Klasse "import" des Ziel-Schemas
+     im Archiv ("Archiv unvollstaendig"). Der Export schreibt sie alle, auch
+     leere, und der Migrationsstand ist identisch.
+  2. `_check_references` behandelt eine fehlende Import-Elterntabelle als
+     leer (fail-closed). Verweise auf skip/export_only-Tabellen prueft der
+     Fremdschluessel der DB.
+- Tests: `test_archive_without_parent_table_cannot_attach_to_foreign_object`
+  (Reproduktion des Reviewers, B-Fingerabdruck unveraendert, keine Zeile an
+  B's WorkArea) und `test_reference_to_missing_parent_table_is_rejected`
+  (Unit, ohne DB).
+- Rot-Proben: Gegen den Stand 43b9506f sind beide rot ("DID NOT RAISE").
+  Mit nur Schicht 2 (Vollstaendigkeit aus) lehnt die Referenzpruefung ab
+  ("wa_table.area_id verweist auf work_area ausserhalb des Archivs"). Schicht 1
+  bricht vor der Referenzpruefung ab; beide greifen also unabhaengig.
+- Nit: Kommentar zu `ws is None` in `_check_tenancy` ergaenzt.
