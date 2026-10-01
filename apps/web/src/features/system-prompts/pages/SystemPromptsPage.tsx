@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { SystemPromptTemplate } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
+import { CountPill } from '@/components/data/CountPill'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
@@ -60,12 +61,7 @@ export function SystemPromptsPage() {
           title={t('systemPrompts:page.list.title')}
           titleAddon={
             templates.length > 0 ? (
-              <span
-                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
-                aria-label={`${templates.length} Templates`}
-              >
-                {templates.length}
-              </span>
+              <CountPill count={templates.length} label={`${templates.length} Templates`} />
             ) : undefined
           }
           description={t('systemPrompts:page.list.description')}
