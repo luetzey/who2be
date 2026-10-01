@@ -13369,6 +13369,7 @@
               "invitation_no_longer_valid",
               "invitation_email_mismatch",
               "invitation_email_required",
+              "invitation_email_unconfirmed",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
