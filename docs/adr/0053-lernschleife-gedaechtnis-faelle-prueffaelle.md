@@ -1,7 +1,9 @@
 # ADR-0053 — Lernschleife: Gedächtnis 2.0, Fälle, Prüffälle, Feedback-Gespräch
 
 - Status: **Accepted** (Owner, 2026-09-28) — alle Weichen in Abschnitt 8 sind
-  entschieden, P4 per Nachtrag vom 2026-09-28.
+  entschieden, P4 per Nachtrag vom 2026-09-28. Nachtrag Phase C vom
+  2026-10-01 (PM-Entscheidungen vom 2026-09-30): 3.1.1, 3.1.2, 3.1.6, 6.4,
+  Anhang A.2 und B.
 - Datum: 2026-09-28
 - Gemessen gegen: `origin/main` @ `ef0756a3`. Alle Code-Aussagen tragen einen
   Symbolanker oder einen SHA-Permalink (Konvention `docs/code-references.md`).
@@ -257,6 +259,15 @@ Rechte am Nutzergedächtnis:
 Die zweite und vierte Zeile weichen vom heutigen Memory-Recht (`editor+`) ab.
 Das ist Absicht: Ein Fakt über eine Person gehört dieser Person.
 
+Obergrenze: Je `(workspace_id, subject_user_id)` höchstens **500** Einträge
+mit `scope='user'`, gezählt über alle Status — wie heute die Agentengrenze
+(`packages/models/src/who2be_models/memory.py#MEMORY_MAX_PER_AGENT`), die
+ebenfalls `rejected` mitzählt. Neue Konstante `MEMORY_MAX_PER_USER` daneben.
+Die Zahl ist eine gesetzte Annahme (Anhang B). Wird sie erreicht, antwortet
+der Server 409 `memory_cap_reached` mit `params={maximum, scope:'user'}`;
+es gibt keinen neuen `ProblemReason`. Einträge mit `scope='user'` tragen
+`agent_id IS NULL` und zählen deshalb nicht gegen die Agentengrenze.
+
 #### 3.1.2 Historie und Rollback
 
 Neue Tabelle `agent_memory_event`, append-only (`SELECT, INSERT`):
@@ -264,7 +275,7 @@ Neue Tabelle `agent_memory_event`, append-only (`SELECT, INSERT`):
 | Spalte | Bedeutung |
 |---|---|
 | `id`, `workspace_id`, `memory_id` (FK `agent_memory` ON DELETE CASCADE) | |
-| `event` | `created · auto_activated · approved · rejected · edited · confirmed · expired · reactivated · change_proposed · delete_proposed · proposal_accepted · proposal_rejected · rolled_back · converted` |
+| `event` | `created · auto_activated · approved · rejected · edited · confirmed · expired · reactivated · change_proposed · delete_proposed · proposal_accepted · proposal_rejected · rolled_back · converted · merged` |
 | `actor_kind` | `human · agent · system` |
 | `actor_id`, `agent_id` | wer; `system` für Verfallsjob und Matrix |
 | `before`, `after` | jsonb-Schnappschuss von `fact, category, importance, status, kind, origin` |
@@ -275,6 +286,15 @@ Neue Tabelle `agent_memory_event`, append-only (`SELECT, INSERT`):
 Zustand aus `before` eines gewählten Events wiederherstellt — nur durch einen
 Menschen. Die bestehende Spalte `triage_note` bleibt für die Oberfläche und
 wird mit jedem Triage-Event gespiegelt.
+
+**`merged`** schreibt der Server, wenn ein `lesson`-Vorschlag auf einen
+bestehenden `lesson`-Eintrag trifft (3.1.6). Das Event hängt am Treffer,
+`actor_kind='agent'`, `agent_id` ist der einreichende Agent; `before` und
+`after` sind gleich, weil sich der Treffer inhaltlich und im Status nicht
+ändert. Ein eigenes Event statt `created` mit Verweis, weil `created` dann
+zwei Bedeutungen hätte („Eintrag entstanden“ und „Wiederholung eines
+anderen“) und jede Auswertung der Historie unterscheiden müsste. Mit
+`merged` liefert die Historie jede Wiederholung mit Zeitpunkt.
 
 **Löschen** bleibt Hard-Delete (ADR-0044, DSGVO Art. 17). Die Historie geht
 per Cascade mit. Zurück bleibt eine inhaltsfreie Zeile in `audit_log`
@@ -338,10 +358,24 @@ Die heutige Dublettenprüfung weist einen ähnlichen Eintrag mit 409 ab
 (`apps/api/src/who2be_api/services/memory_service.py#MemoryService.save`,
 `reason='memory_duplicate'`). Für `lesson` wäre das falsch: Die Wiederholung
 **ist** das Signal, aus dem die Mustererkennung ein Muster macht. Deshalb:
-Trifft ein `lesson`-Vorschlag auf einen bestehenden `lesson`-Eintrag
-desselben Agenten, erhöht der Server `occurrence_count` und schreibt ein
-Event, statt abzulehnen. Die Antwort ist 200 mit `merged_into=<id>`. Für
-`user_fact` und `agent_note` bleibt 409.
+Ein neuer `lesson`-Vorschlag wird gegen **alle** `lesson`-Einträge desselben
+Agenten geprüft, unabhängig vom Status (`pending`, `rejected`, `converted`).
+Trifft er einen, erhöht der Server dort `occurrence_count` und schreibt das
+Event `merged` (3.1.2), statt abzulehnen. Die Antwort ist 200 mit
+`merged_into=<id>`. Es entsteht keine neue Zeile; der Merge zählt deshalb
+nicht gegen eine Obergrenze. Für `user_fact` und `agent_note` bleibt 409.
+
+**Der Status des Treffers ändert sich nie:** Ein `rejected` bleibt
+`rejected`, ein `converted` bleibt `converted`, ein `pending` bleibt
+`pending`. Begründung:
+
+- Die Wiederholung ist Signal für die Mustererkennung (D5), auch wenn der
+  Mensch die Lektion schon abgelehnt hat.
+- Bei `converted` ist sie zusätzlich Signal für die Nachschau: Die Maßnahme
+  aus dem Fall wirkt offenbar nicht.
+- Ein Agent darf eine abgelehnte Lektion nicht durch erneutes Einreichen
+  wiederbeleben. Das ist dieselbe Logik wie `rejected` als Dublettenbasis in
+  ADR-0044 §3.
 
 ### 3.2 Prüffall und Prüflauf
 
@@ -952,6 +986,11 @@ Fehler: `memory_origin_required`, `memory_kind_scope_invalid`,
 `memory_duplicate`, `memory_guard_rejected`, `memory_cap_reached`,
 `memory_note_cap_reached`, `memory_not_found`, `memory_proposal_not_pending`.
 
+`memory_cap_reached` trägt bei der Agentengrenze wie heute
+`params={maximum}`, bei der Grenze des Nutzergedächtnisses
+`params={maximum, scope:'user'}` (3.1.1). Eine `lesson`-Wiederholung ist
+kein Fehler, sondern 200 mit `merged_into` (3.1.6).
+
 ### 6.5 Phase D — Fälle, Nutzung, Muster
 
 REST:
@@ -1425,9 +1464,11 @@ S = `…/services/`, RT = `…/routers/`. „neu“ = neue Datei, sonst Änderun
 | B2 | S `test_case_service.py` neu (inkl. Auflösung nach 3.2.1); R `usage_repository.py` bzw. neue Abfrage für betroffene Agenten; RT `test_cases.py` neu; `main.py`; `errors.py`; `openapi.json`; Test neu |
 | B3 | `tools/learning.py` neu; `clients/learning.py` neu; `server.py`; `tool_requirements.py`; `resolvers/tools.py`; `CLAUDE.md`; Test neu |
 | B5 (API-Teil) | PM `status.py` (`VersionTransitionRequest` + `override_reason`); `errors.py`; S `version_status.py`; RT der Transitions (`personas.py`, `playbooks.py`, `resources.py`, `system_prompts.py`, `external_tools.py`) — **über der 8er-Grenze**, in B5a (Modell, Fehler, Service) und B5b (Router) teilen |
-| C1 | M neu; PM `memory.py`, `__init__.py`; R `memory_repository.py`; Test; Compliance-Naben |
-| C2 | M neu (Matrix-Spalte); S `memory_service.py`; neuer Verfallsjob neben `core/purge.py`; `errors.py`; `main.py`; Test |
-| C3 | M neu (Vorschläge); S `memory_service.py`; RT `memory.py`; R `memory_repository.py`; `openapi.json`; Test |
+| C1a | M neu; PM `memory.py` (inkl. `MEMORY_MAX_PER_USER`), `__init__.py`; R `memory_repository.py` (inkl. Zählabfrage je `(workspace_id, subject_user_id)`); Test |
+| C1b | Compliance-Naben (`S/gdpr_export_service.py`, `docs/compliance/vvt.md`, `docs/compliance/data-retention-and-erasure.md`, `R/account_repository.py`); Test |
+| C2a | M neu (Matrix-Spalte); S `memory_service.py` (Freigabematrix, Pflichtfeld `origin` im Speicherpfad, `lesson`-Merge 3.1.6, Obergrenzen 3.1.1 und 3.1.5); RT `memory.py` (`GET/PUT /memory-auto-policy`); `errors.py`; `main.py`; `openapi.json`; Test |
+| C2b | S `memory_service.py` (Secret-Scan, Ratenbegrenzung); neuer Verfallsjob neben `core/purge.py`; Test |
+| C3 | M neu (Vorschläge); S `memory_service.py`; RT `memory.py` (Vorschläge, Historie/Rollback, `/me/memories`); R `memory_repository.py`; `openapi.json`; Test |
 | C4 | `server.py` (`save_memory`); `tools/learning.py`; `clients/learning.py`; `tool_requirements.py`; `resolvers/tools.py`; S `persona_service.py` (Push nur bestätigt); `CLAUDE.md` |
 | D1 | M neu; PM `case.py` neu, `__init__.py`; R `case_repository.py` neu; Test; Compliance-Naben |
 | D2 | S `case_service.py` neu; RT `cases.py` neu; RT `feedback.py` (promote); `main.py`; `errors.py`; `openapi.json`; Test |
@@ -1440,12 +1481,30 @@ S = `…/services/`, RT = `…/routers/`. „neu“ = neue Datei, sonst Änderun
 
 Kollisionen innerhalb der Backend-Spur, die über die Naben hinausgehen:
 
-- `S/memory_service.py`: C2, C3 — nacheinander.
+- `S/memory_service.py`: C2a, C2b, C3 — nacheinander.
+- `RT/memory.py`: C2a, C3 — nacheinander.
 - `S/persona_service.py`: C4 (Push), D3 (Nutzung) — nacheinander.
 - `S/version_status.py`: B5, E3 — nacheinander.
-- `R/memory_repository.py`: C1, C3, D5 — nacheinander.
+- `R/memory_repository.py`: C1a, C3, D5 — nacheinander.
 - `R/feedback_repository.py`: D3 allein; D6 liest nur.
 - `RT/cases.py`: D2, D5 — nacheinander.
+
+**Zuschnitt Phase C (Ist-Zuschnitt der Karten, PM 2026-09-30).** Die
+Zeilen C1a bis C3 oben ersetzen die frühere Grobteilung C1/C2/C3. Wo
+Abschnitt A.1, A.3 und der Fließtext noch „C1“ oder „C2“ sagen, sind C1a/C1b
+bzw. C2a/C2b gemeint.
+
+| Karte | Inhalt |
+|---|---|
+| C1a | Schema, Modelle, Repository (3.1–3.1.2, 5.1) |
+| C1b | Compliance-Naben (Export, VVT, Löschkonzept, Purge) |
+| C2a | Freigabematrix (Abschnitt 4) inkl. `GET/PUT /memory-auto-policy` (Router) und Pflichtfeld `origin` im Speicherpfad |
+| C2b | Secret-Scan, Ratenbegrenzung, Verfallsjob (3.1.3) |
+| C3 | Vorschläge (3.1.4), Historie/Rollback (3.1.2), `/me/memories` |
+| C4 | MCP (6.4) |
+| Web | C6 → C5a → C5b, eine Kette wegen `apps/web/src/i18n/locales/{de,en}.json` (A.1, A.3) |
+
+`GET/PUT /memory-auto-policy` gehört damit zu C2a, nicht zu C3.
 
 ### A.3 Web-Spur
 
@@ -1477,6 +1536,7 @@ Weiche E3.
 | n = 3 | Musterschwelle | **gesetzte Annahme** | Belegt ist „mindestens 2 Belege“ (Honcho) und ein Startwert 2 (ExpeL). 3 statt 2, damit eine einzelne Sitzung mit einer Wiederholung noch kein Muster erzeugt |
 | 30 Tage | Zeitfenster für Fall-Muster | **gesetzte Annahme** | gleich dem Verfall, damit beide Sichten denselben Zeitraum zeigen |
 | 200 | Obergrenze `agent_note` je Agent | **gesetzte Annahme** | 40 % von `MEMORY_MAX_PER_AGENT` (500), damit Nutzerfakten Vorrang behalten |
+| 500 | Obergrenze Nutzergedächtnis je `(workspace_id, subject_user_id)`, `MEMORY_MAX_PER_USER` (3.1.1) | **gesetzte Annahme** | gleich der Agentengrenze `packages/models/src/who2be_models/memory.py#MEMORY_MAX_PER_AGENT`, weil ein Nutzergedächtnis über alle Profile desselben Besitzers geteilt wird; gezählt über alle Status wie dort. In F1 anhand der Füllstände überprüfen |
 | 300 / 200 / 500 | Längen `fact` / `context` / Notiz | übernommen | `packages/models/src/who2be_models/memory.py#MEMORY_FACT_MAX_LENGTH`, `#MEMORY_CONTEXT_MAX_LENGTH`, `#MEMORY_TRIAGE_NOTE_MAX_LENGTH` |
 | 2 000 | Freitextfelder Fall/Maßnahme | übernommen | gleiche Grenze wie `note` in `packages/models/src/who2be_models/feedback.py#FeedbackCreate` |
 | 1 000 | `override_reason` (6.3) | **gesetzte Annahme** | Halbe `note`-Grenze von `packages/models/src/who2be_models/status.py#VersionTransitionRequest` (2 000), weil beide zusammen in dieselbe `status_history.note` geschrieben werden und dort unter 2 000 plus Präfix bleiben sollen. Ein Grund ist ein bis drei Sätze |
