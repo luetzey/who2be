@@ -126,7 +126,7 @@ export function SystemPromptDetailPage() {
             ) : null}
 
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList aria-label={t('data:detailTabsLabel')}>
+              <TabsList aria-label={t('common:tabs.detailViewAria')}>
                 <TabsTrigger value="edit">
                   <SquarePen aria-hidden="true" />
                   {t('common:actions.edit')}

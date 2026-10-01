@@ -225,11 +225,10 @@ export function PersonaDetailPage() {
                     inaktiven Tab-Inhalt unmountet. */}
                 <Form {...form}>
                   <Tabs value={tab} onValueChange={setTab}>
-                    {/* `flex-wrap`: vier Trigger messen zusammen 461px und
-                        laufen bei 320/375px aus der Leiste (gemessen am
-                        gebauten CSS, #571). Umbruch statt Scroll — §4.4
-                        Checklistenpunkt 5 nennt Umbruch als Mittel der Wahl. */}
-                    <TabsList className="flex-wrap">
+                    {/* Umbruch statt Scroll liegt seit Mobil-Spec M7 im
+                        Primitive (`TabsList`), die lokale Klasse ist
+                        entfallen. */}
+                    <TabsList aria-label={t('common:tabs.detailViewAria')}>
                       <TabsTrigger value="edit">
                         <SquarePen aria-hidden="true" />
                         {t('common:actions.edit')}

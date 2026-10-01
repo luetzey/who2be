@@ -70,7 +70,9 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
       // `min-w-0`-Textspalte bei 320px auf 0px gerechnet wurde und Name,
       // Beschreibung und Kind-Links 102px aus ihrer Box liefen (gemessen am
       // gebauten CSS). `shrink-0` bleibt — es schuetzt die Badges; geloest
-      // wird die einzeilige Anordnung, ab `md` unveraendert.
+      // wird die einzeilige Anordnung. Ab `md` traegt die Meta-Spalte einen
+      // Deckel (`md:max-w-40 lg:max-w-xs`), sonst drueckten 12 Tags sie auf
+      // 1236px und die Textspalte wieder auf 0px (t_2a3882b4).
       className="relative flex flex-wrap gap-4 rounded-xl border bg-card p-4 shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover md:flex-nowrap"
       data-testid="playbook-row"
     >
@@ -124,8 +126,12 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
         ) : null}
 
         {visibleTriggers.length > 0 ? (
+          // Unter `md` ausgeblendet (Owner-Entscheidung W6=b): auf dem Telefon
+          // zeigt die Zeile nur Name, Status und Beschreibung; die Trigger
+          // stehen vollstaendig auf der Detailseite. `hidden` ist
+          // `display:none` und nimmt die Liste auch aus dem Accessibility-Tree.
           <div
-            className="mt-1 flex flex-wrap items-center gap-2"
+            className="mt-1 hidden flex-wrap items-center gap-2 md:flex"
             role="list"
             aria-label={t('playbooks:detail.triggerList')}
           >
@@ -225,7 +231,17 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
         ) : null}
       </div>
 
-      <div className="flex w-full shrink-0 flex-row items-center justify-between gap-2 md:w-auto md:flex-col md:items-end md:justify-between">
+      {/* Ab `md` gedeckelt, damit die Tags darin umbrechen statt die
+          Textspalte zu verdraengen (`shrink-0` greift nur mit Deckel).
+          Gemessen am gebauten CSS, 12 Tags: ohne Deckel 1236px breit, Text
+          0px, scrollWidth 1593 bei 768. Mit 10rem bleiben der Textspalte bei
+          768 (Karte 480px neben der Sidebar) 210px; 20rem ab `lg` gibt den
+          Tags mehr Zeilenbreite (Text 306/546px bei 1024/1280). 20rem schon
+          ab `md` liesse bei 768 nur 50px, 40% nur 192px.
+          Unter `md` faellt die ganze Spalte weg (Owner-Entscheidung W6=b):
+          Tags stehen auf der Detailseite, der Chevron ist dekorativ, und
+          allein stehend kostete er eine leere Zeile samt `gap-4`. */}
+      <div className="hidden shrink-0 flex-col items-end justify-between gap-2 md:flex md:max-w-40 lg:max-w-xs">
         {playbook.tags.length > 0 ? (
           <div className="flex flex-wrap justify-end gap-1" aria-label={t('common:fields.tags')}>
             {playbook.tags.map((tag) => (
