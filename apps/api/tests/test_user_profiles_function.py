@@ -122,6 +122,7 @@ def _set_account_fields(
     password_hash: str | None,
     created_at: datetime | None = None,
     last_sign_in_at: datetime | None = None,
+    email_confirmed_at: datetime | None = None,
 ) -> None:
     """Setzt die Konto-Spalten im `auth.users`-Stub (als Owner)."""
 
@@ -130,11 +131,12 @@ def _set_account_fields(
         try:
             await conn.execute(
                 "UPDATE auth.users SET encrypted_password = $2, created_at = $3, "
-                "last_sign_in_at = $4 WHERE id = $1",
+                "last_sign_in_at = $4, email_confirmed_at = $5 WHERE id = $1",
                 user_id,
                 password_hash,
                 created_at,
                 last_sign_in_at,
+                email_confirmed_at,
             )
         finally:
             await conn.close()
@@ -354,6 +356,7 @@ def test_self_account_function_returns_only_current_user() -> None:
                 "created_at",
                 "last_sign_in_at",
                 "has_password",
+                "email_confirmed",
             }
 
             # Anderer Aufrufer: nur dessen Zeile, nie die von user_a.
@@ -374,6 +377,50 @@ def test_self_account_function_returns_only_current_user() -> None:
         asyncio.run(_run())
     finally:
         cleanup_workspaces([user_a, user_b])
+
+
+@pytest.mark.integration
+def test_self_account_function_reports_email_confirmation() -> None:
+    """`w2b_self_account()` liefert `email_confirmed` (Migration 0094): true,
+    wenn GoTrue die Adresse bestaetigt hat (`email_confirmed_at` gesetzt),
+    sonst false. Nur der Wahrheitswert verlaesst die Funktion, und weiterhin
+    nur fuer den Aufrufer selbst."""
+    _prepare_public_schema()
+    confirmed = fresh_user_id()
+    unconfirmed = fresh_user_id()
+    setup_workspace(confirmed)
+    setup_workspace(unconfirmed)
+    seed_auth_user(confirmed, email="s2b-confirmed@example.com", name=None)
+    seed_auth_user(unconfirmed, email="s2b-unconfirmed@example.com", name=None)
+    _set_account_fields(
+        confirmed,
+        password_hash=None,
+        email_confirmed_at=datetime(2026, 10, 1, 9, 0, tzinfo=UTC),
+    )
+    _set_account_fields(unconfirmed, password_hash=None, email_confirmed_at=None)
+    lookup = "SELECT id, email_confirmed FROM w2b_self_account()"
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(_app_role_url())
+        try:
+            await conn.execute("SELECT set_config($1, $2, false)", USER_SETTING, str(confirmed))
+            rows = await conn.fetch(lookup)
+            assert [(r["id"], r["email_confirmed"]) for r in rows] == [(confirmed, True)]
+
+            await conn.execute("SELECT set_config($1, $2, false)", USER_SETTING, str(unconfirmed))
+            rows = await conn.fetch(lookup)
+            assert [(r["id"], r["email_confirmed"]) for r in rows] == [(unconfirmed, False)]
+
+            # Ohne GUC weiterhin keine Zeile.
+            await conn.execute("RESET ALL")
+            assert await conn.fetch(lookup) == []
+        finally:
+            await conn.close()
+
+    try:
+        asyncio.run(_run())
+    finally:
+        cleanup_workspaces([confirmed, unconfirmed])
 
 
 @pytest.mark.integration
