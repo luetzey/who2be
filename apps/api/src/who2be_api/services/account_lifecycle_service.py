@@ -72,12 +72,18 @@ class AccountLifecycleService:
     async def delete_organization(self, user_id: UUID, org_id: UUID) -> OrganizationDeletionRead:
         """Merkt eine Company-Org zur Loeschung vor — nur der Org-Owner darf das.
 
-        404, wenn die Org nicht existiert (oder schon vorgemerkt ist); 400 fuer
-        Personal-Orgs (die laufen ueber die Konto-Loeschung); 403, wenn der
-        Aufrufer nicht Owner ist.
+        Pruefreihenfolge (ADR-0036 "Kein Existenz-Orakel"):
+
+        1. 404, wenn die Org nicht existiert, schon vorgemerkt ist ODER der
+           Aufrufer kein Mitglied ist — ein Rueckgabepfad, identischer Body.
+           Ein Nicht-Mitglied erfaehrt weder, dass die ID existiert, noch
+           welche Art Org dahinter steht.
+        2. 400 fuer Personal-Orgs (die laufen ueber die Konto-Loeschung).
+        3. 403, wenn der Aufrufer Mitglied, aber nicht Owner ist.
         """
         kind = await self._repo.org_kind(org_id)
-        if kind is None:
+        role = await self._repo.org_role(org_id, user_id) if kind is not None else None
+        if kind is None or role is None:
             raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organisation nicht gefunden.",
@@ -89,7 +95,7 @@ class AccountLifecycleService:
                 detail="Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
                 reason="personal_organization_undeletable",
             )
-        if not await self._repo.is_org_owner(org_id, user_id):
+        if role != "owner":
             # Eigenstaendiger Grund statt `insufficient_role`: geprueft wird
             # die Org-Owner-Rolle, nicht die Workspace-Rolle der RBAC-Gates
             # (ADR-0023) — und die Stelle ist bewusst kein `ApiGateError`.

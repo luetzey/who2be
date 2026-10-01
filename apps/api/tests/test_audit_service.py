@@ -257,8 +257,8 @@ def test_invitation_service_records_issued_and_revoked(
 class _FakeLifecycleRepo:
     """Minimaler Stub fuer `AccountLifecycleService` — kein Konflikt-Pfad."""
 
-    async def is_org_owner(self, org_id: UUID, user_id: UUID) -> bool:
-        return True
+    async def org_role(self, org_id: UUID, user_id: UUID) -> str | None:
+        return "owner"
 
     async def org_kind(self, org_id: UUID) -> str | None:
         return "company"
