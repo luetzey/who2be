@@ -65,23 +65,46 @@ function UnifiedTextDiff({ beforeText, afterText }: { beforeText: string; afterT
     added: t('diff.lineAdded'),
     removed: t('diff.lineRemoved'),
   }
+  // Mobil-Spec M4, Owner-Weiche W2=a: Zeilen brechen auf jeder Breite um,
+  // es gibt keinen horizontalen Scroller. Verglichen wird Prosa, kein Code.
+  // Vorher war jede Zeile `whitespace-pre` in `min-w-max`, und der Wrapper
+  // scrollte 12.919 px bei 210 px Breite. Jede Zeile ist ein Grid: links die
+  // feste Rinne mit `+`/`-`, rechts der Text. Umbrochene Folgezeilen stehen
+  // dadurch unter dem Text und nicht unter dem Zeichen. `pre-wrap` haelt
+  // Einrueckungen, `wrap-anywhere` bricht auch URLs ohne Trennstelle.
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <ul className="min-w-max font-mono text-xs leading-5" aria-label={t('diff.textDiffLabel')}>
+    <div className="rounded-md border border-border">
+      <ul className="font-mono text-xs leading-5" aria-label={t('diff.textDiffLabel')}>
         {hunks.map((hunk) => (
           <Fragment key={formatHunkHeader(hunk)}>
-            <li className="bg-muted/50 px-2 py-1 text-muted-foreground select-none">
+            <li className="bg-muted/50 px-2 py-1 wrap-anywhere text-muted-foreground select-none">
               {formatHunkHeader(hunk)}
             </li>
             {hunk.lines.map((line) => (
               <li
                 key={`${line.kind}-${line.beforeLine ?? 'x'}-${line.afterLine ?? 'x'}`}
                 data-kind={line.kind}
-                className={cn('whitespace-pre px-2', LINE_CLASS[line.kind])}
+                className={cn('grid grid-cols-[1.25rem_1fr] px-2', LINE_CLASS[line.kind])}
               >
-                {srLabel[line.kind] ? <span className="sr-only">{srLabel[line.kind]} </span> : null}
-                <span aria-hidden="true">{LINE_PREFIX[line.kind]} </span>
-                {line.text}
+                {/* Das Zeichen bleibt sichtbar: Farbe ist nicht das einzige Merkmal.
+                    `whitespace-pre` haelt das Leerzeichen der Kontextzeile, damit
+                    eine leere Zeile nicht auf 0 px zusammenfaellt. */}
+                <span
+                  aria-hidden="true"
+                  data-testid="diff-gutter"
+                  className="whitespace-pre select-none"
+                >
+                  {LINE_PREFIX[line.kind]}
+                </span>
+                <span
+                  data-testid="diff-line-text"
+                  className="min-w-0 wrap-anywhere whitespace-pre-wrap"
+                >
+                  {srLabel[line.kind] ? (
+                    <span className="sr-only">{srLabel[line.kind]} </span>
+                  ) : null}
+                  {line.text}
+                </span>
               </li>
             ))}
           </Fragment>

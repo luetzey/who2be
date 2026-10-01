@@ -657,6 +657,82 @@ test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', as
   expect(new URL(page.url()).searchParams.get('tab')).toBe('versions')
 })
 
+/**
+ * Mobil-Spec M4 (Owner-Weiche W2=a): Der Text-Diff im Versionen-Tab bricht
+ * auf jeder Breite um, statt seitlich zu scrollen. Vorher war der Wrapper
+ * `overflow-x-auto` mit `scrollWidth` 12.919 px bei 210 px (320) bzw.
+ * 280 px (390). Eine 1.100-Zeichen-Beschreibung lag als eine einzige Zeile da.
+ *
+ * Geprueft auf jedem Profil, Desktop eingeschlossen (W2=a, keine
+ * Doppeldarstellung): Im Diff hat kein Element `scrollWidth > clientWidth`.
+ * Ausgenommen sind die `sr-only`-Praefixe (1 px, nicht sichtbar). Jede Zeile
+ * hat die feste Rinne links, die Folgezeilen beginnen rechts davon. Die Seite
+ * scrollt nicht horizontal.
+ *
+ * Rot-Probe: `overflow-x-auto` + `min-w-max` + `whitespace-pre` in
+ * `VersionDiffView.tsx` zurueck → rot auf jedem Profil.
+ */
+test('M4: Versions-Diff bricht um, kein Seitwaerts-Scroller (W2=a)', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, method: 'POST' | 'PUT', data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  // v1 aktiv, v2 als Entwurf mit langer Beschreibung samt URL ohne
+  // Trennstelle. Das Persona-Profil beginnt mit der Beschreibung, also steht
+  // sie im Text-Diff.
+  const sentence = 'Moderiert Feedbackgespräche zwischen Teammitgliedern und hält Vereinbarungen fest. '
+  const longDescription = `${sentence.repeat(12)}Leitfaden: ${LONG_URL}`
+  const persona = await call<{ id: string }>('/personas', 'POST', {
+    name: 'E2E Diff Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+  for (const to of ['review', 'active']) {
+    await call(`/personas/${persona.id}/versions/1/transition`, 'POST', { to })
+  }
+  await call(`/personas/${persona.id}`, 'PUT', {
+    name: 'E2E Diff Persona',
+    content: { description: longDescription, tags: [], content: blockDoc('Profil') },
+  })
+
+  await page.goto(`/w/${workspaceId}/personas/${persona.id}?tab=versions&diff=2`)
+  const diff = page.getByRole('list', { name: /^(Inhalts-Diff|Content diff)$/ })
+  await expect(diff).toBeVisible()
+  // Der Verursacher muss gerendert sein, sonst misst die Probe blind gruen.
+  await expect(diff.getByText(LONG_URL, { exact: false })).toBeVisible()
+  await expectNoHorizontalScroll(page, 'personas/:id?tab=versions (Diff offen)')
+
+  const probe = await diff.evaluate((list) => {
+    const wrapper = list.parentElement as HTMLElement
+    const scrollers = [wrapper, ...Array.from(list.querySelectorAll<HTMLElement>('*'))]
+      .filter((el) => !el.classList.contains('sr-only'))
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .map((el) => `${el.tagName.toLowerCase()}.${el.className} ${el.scrollWidth}/${el.clientWidth}`)
+    const line = list.querySelector<HTMLElement>('li[data-kind="added"]')!
+    const [gutter, text] = Array.from(line.children) as HTMLElement[]
+    const gutterBox = gutter.getBoundingClientRect()
+    const textBox = text.getBoundingClientRect()
+    return {
+      scrollers,
+      gutterWidth: Math.round(gutterBox.width),
+      textOffset: Math.round(textBox.left - gutterBox.left),
+      textLines: Math.round(textBox.height / parseFloat(getComputedStyle(text).lineHeight)),
+    }
+  })
+  expect(probe.scrollers, 'Elemente im Diff mit eigener Scrollweite').toEqual([])
+  // Rinne 1,25 rem = 20 px; der Text (und damit jede Folgezeile) beginnt
+  // rechts davon, nicht unter dem Zeichen.
+  expect(probe.gutterWidth).toBe(20)
+  expect(probe.textOffset).toBeGreaterThanOrEqual(20)
+  // Die lange Zeile ist wirklich umbrochen (vorher: genau eine Zeile).
+  expect(probe.textLines).toBeGreaterThan(1)
+})
+
 test('M9/M11: Mitglieder als Liste, Auswahllisten ohne Scroll-in-Scroll unter md', async ({
   page,
   request,

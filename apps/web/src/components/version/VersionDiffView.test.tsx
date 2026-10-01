@@ -98,3 +98,92 @@ describe('VersionDiffView', () => {
     expect(screen.getByText('tags')).toBeInTheDocument()
   })
 })
+
+// Mobil-Spec M4, Owner-Weiche W2=a. Vorher scrollte der Wrapper
+// (`overflow-x-auto` um `ul.min-w-max`, Zeilen `whitespace-pre`) bei 320 px
+// 9.189 px Inhalt in 208 px. jsdom hat kein Layout, deshalb ist das hier ein
+// Klassen- und DOM-Vertrag. Die Layout-Zahlen (Chromium gegen das gebaute
+// Stylesheet, 320/390/430/1280) stehen in
+// .claude/plan/2026-10-01-1740_mobil-p4-diff-umbruch.md und im PR.
+describe('VersionDiffView – Umbruch statt Seitwaerts-Scroll (Mobil-Spec M4)', () => {
+  const URL_NO_BREAK =
+    'https://intranet.example.com/richtlinien/feedbackkulturundgespraechsfuehrung/leitfaden.pdf'
+
+  function renderTextDiff() {
+    return render(
+      <VersionDiffView
+        diff={makeDiff({
+          before_text: 'Titel\n\nAlte Beschreibung',
+          after_text: `Titel\n\nNeue Beschreibung ${URL_NO_BREAK}`,
+        })}
+      />,
+    )
+  }
+
+  it('hat keinen horizontalen Scroller und keine Mindestbreite mehr', () => {
+    const { container } = renderTextDiff()
+    const list = screen.getByLabelText('Inhalts-Diff')
+    expect(list).not.toHaveClass('min-w-max')
+    expect(list.parentElement).not.toHaveClass('overflow-x-auto')
+    // Auch kein anderes Element im Diff haelt Zeilen ungebrochen oder scrollt.
+    // Klassen einzeln pruefen: `not.toHaveClass(a, b)` schluege nur an, wenn
+    // ALLE zugleich gesetzt waeren.
+    for (const el of container.querySelectorAll('*')) {
+      for (const cls of ['overflow-x-auto', 'overflow-auto', 'overflow-x-scroll', 'min-w-max']) {
+        expect(el).not.toHaveClass(cls)
+      }
+      if (el.getAttribute('data-testid') !== 'diff-gutter') {
+        expect(el).not.toHaveClass('whitespace-pre')
+      }
+    }
+  })
+
+  it('setzt jede Zeile als Grid mit fester Rinne links und umbrechendem Text', () => {
+    renderTextDiff()
+    const lines = screen.getByLabelText('Inhalts-Diff').querySelectorAll('li[data-kind]')
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) {
+      expect(line).toHaveClass('grid', 'grid-cols-[1.25rem_1fr]')
+      const [gutter, text] = Array.from(line.children)
+      expect(gutter).toHaveAttribute('data-testid', 'diff-gutter')
+      // Folgezeilen stehen in der zweiten Spalte, also unter dem Text.
+      expect(text).toHaveAttribute('data-testid', 'diff-line-text')
+      expect(text).toHaveClass('min-w-0', 'whitespace-pre-wrap', 'wrap-anywhere')
+    }
+    // Die URL ohne Trennstelle steht in der umbrechenden Text-Spalte
+    // (Teilstring-Vergleich, keine RegExp aus der URL).
+    const addedText = screen
+      .getByLabelText('Inhalts-Diff')
+      .querySelector('li[data-kind="added"] [data-testid="diff-line-text"]')
+    expect(addedText).toHaveTextContent(URL_NO_BREAK)
+    expect(addedText).toHaveClass('wrap-anywhere')
+    // Auch die Hunk-Kopfzeile darf brechen.
+    expect(screen.getByText('@@ -1,3 +1,3 @@')).toHaveClass('wrap-anywhere')
+  })
+
+  it('zeigt +/- sichtbar in der Rinne und behaelt die Screenreader-Praefixe', () => {
+    renderTextDiff()
+    const removed = screen.getByLabelText('Inhalts-Diff').querySelector('li[data-kind="removed"]')
+    const added = screen.getByLabelText('Inhalts-Diff').querySelector('li[data-kind="added"]')
+    const context = screen.getByLabelText('Inhalts-Diff').querySelector('li[data-kind="context"]')
+
+    // Farbe ist nicht das einzige Merkmal: das Zeichen steht sichtbar da,
+    // nur fuer Screenreader ausgeblendet (die lesen das Wort-Praefix).
+    const removedGutter = removed?.querySelector('[data-testid="diff-gutter"]')
+    expect(removedGutter).toHaveTextContent('-')
+    expect(removedGutter).toHaveAttribute('aria-hidden', 'true')
+    expect(removedGutter).not.toHaveClass('sr-only')
+    expect(added?.querySelector('[data-testid="diff-gutter"]')).toHaveTextContent('+')
+
+    // Das Praefix steht im Text-Element vor dem Inhalt; der zugaengliche
+    // Text der Zeile lautet also „Entfernte Zeile Alte Beschreibung".
+    const removedText = removed?.querySelector('[data-testid="diff-line-text"]')
+    expect(removedText?.firstElementChild).toHaveClass('sr-only')
+    expect(removedText).toHaveTextContent('Entfernte Zeile Alte Beschreibung')
+    expect(added?.querySelector('[data-testid="diff-line-text"]')).toHaveTextContent(
+      /^Hinzugefügte Zeile Neue Beschreibung/,
+    )
+    // Kontextzeilen bekommen kein Praefix.
+    expect(context?.querySelector('.sr-only')).toBeNull()
+  })
+})
