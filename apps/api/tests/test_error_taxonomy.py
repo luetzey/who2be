@@ -128,6 +128,38 @@ def test_every_problem_reason_has_a_title() -> None:
     assert reasons - set(_PROBLEM_TITLES) == set()
 
 
+def test_invitation_email_unconfirmed_renders_as_problem_with_title() -> None:
+    """403 fuer offene Einladungen ohne bestaetigte Konto-Email (S2b, A1b-0).
+
+    Der Grund wird hier vorab eingefuehrt; der Pending-Endpunkt, der ihn wirft,
+    folgt separat. Belegt wird: der Grund ist Teil des einen Vokabulars und der
+    Handler rendert ihn als problem+json mit dem festgelegten Titel.
+    """
+    assert "invitation_email_unconfirmed" in get_args(ProblemReason)
+
+    app = FastAPI()
+    app.add_exception_handler(ApiGateError, _on_api_gate_error)
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise ApiGateError(
+            status=403,
+            reason="invitation_email_unconfirmed",
+            actionable_by="human",
+            detail="Offene Einladungen erst nach Bestaetigung der Email-Adresse.",
+        )
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get("/boom")
+
+    assert resp.status_code == 403
+    assert resp.headers["content-type"].startswith("application/problem+json")
+    body = resp.json()
+    assert body["reason"] == "invitation_email_unconfirmed"
+    assert body["title"] == "Einladung erst nach bestaetigter Email-Adresse annehmbar"
+    assert body["type"] == "https://who2be.dev/errors/invitation-email-unconfirmed"
+
+
 def test_invariant_violation_concurrent_conflict_agent() -> None:
     err = _invariant_violation()
     assert err.status == 409
