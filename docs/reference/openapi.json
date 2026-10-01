@@ -12071,7 +12071,7 @@
             "description": "Successful Response"
           },
           "409": {
-            "description": "reason: last_workspace_undeletable",
+            "description": "reason: last_workspace_undeletable | concurrent_conflict (Agenten mit protokollierten Zugriffen, ADR-0047 H5)",
             "content": {
               "application/json": {
                 "schema": {

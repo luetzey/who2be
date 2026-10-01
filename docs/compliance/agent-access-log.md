@@ -105,6 +105,11 @@ Grant-Entzug. Konsequenzen im Betrieb:
 - Ein Agent mit protokollierten Zugriffen lässt sich **nicht löschen** (409,
   „nur über den Retention-/Purge-Pfad"). Wer ihn stilllegen will, setzt ihn
   auf `disabled`.
+- Dasselbe gilt für den **Workspace**, in dem ein solcher Agent liegt: der
+  Workspace-Delete entfernt zuerst die Agenten und antwortet deshalb ebenfalls
+  mit 409 (`reason: concurrent_conflict`). Die Transaktion rollt zurück —
+  Workspace, Agenten und Protokoll bleiben unverändert. Kein Soft-Delete, kein
+  Mitlöschen (Owner-Entscheidung 2026-10-01).
 - Der Purge-Job (`core/purge.py`, Owner-Connection) löscht die Log-Zeilen der
   betroffenen Workspaces **explizit**, bevor die Organization-CASCADE greift
   — der eine legitime Löschpfad.
