@@ -15,6 +15,8 @@
 --       workspace:    id = Mandant ODER org_id = Org des Mandanten
 --                     (der Last-Workspace-Schutz zaehlt die Workspaces der Org)
 --       organization: id = Org des Mandanten
+--     Beim Schreiben auf workspace muss die neue Zeile in der gesetzten Org
+--     liegen; nur ohne Org-GUC reicht id = Mandant.
 --     "Kein Mandant" heisst: BEIDE GUCs leer. Ein Pfad, der nur
 --     app.current_tenant setzt (tenant_scope(ws, None)), bleibt damit strikt.
 --
@@ -52,11 +54,16 @@ CREATE POLICY tenant_isolation ON workspace
         OR id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
         OR org_id = NULLIF(current_setting('app.current_org', true), '')::uuid
     )
+    -- Schreiben strenger als Lesen: ist die Org gesetzt, muss die neue Zeile in
+    -- dieser Org liegen. Der Zweig id = Mandant gilt nur ohne Org-GUC
+    -- (tenant_scope(ws, None)), sonst liesse sich ein Workspace per UPDATE
+    -- in eine fremde Org umhaengen.
     WITH CHECK (
         (NULLIF(current_setting('app.current_tenant', true), '') IS NULL
          AND NULLIF(current_setting('app.current_org', true), '') IS NULL)
-        OR id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
         OR org_id = NULLIF(current_setting('app.current_org', true), '')::uuid
+        OR (NULLIF(current_setting('app.current_org', true), '') IS NULL
+            AND id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
     );
 
 -- (1b) organization --------------------------------------------------------------

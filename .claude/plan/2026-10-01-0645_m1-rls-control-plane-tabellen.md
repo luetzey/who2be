@@ -57,13 +57,18 @@ laufen weiter.
 - [x] 2 `test_rls_control_plane.py` (3 Tests)
 - [x] 3 `test_rls_control_plane_api.py` (2 Tests, Pool als `who2be_app`)
 - [x] 4 `test_rls_isolation.py` (Ausnahmeliste leer), `test_audit_append_only.py`
-- [x] 5 Stale Doku: `core/security.py`, ADR-0055 §5 (R3/R4a geschlossen) + §7
+- [x] 5 Stale Doku: `core/security.py`. ADR-0055 §5 (R3/R4a geschlossen) + §7
+  nach Review Runde 1 aus dem PR genommen (Budget 8 Dateien) → Doku-Folgekarte
+  nach dem Merge, Patch liegt der Karte bei.
 - [x] 6 Changelog-Fragment `rls-control-plane-tables.security.md`
 - [x] 7 Rot/Gruen-Probe:
   - ohne 0092: 3/3 rot (fremde Zeilen sichtbar; Purge laesst Zeile stehen)
   - mit 0092: 3/3 gruen
   - Gegenprobe API-Test: `organization` ohne Permissiv-Zweig → Login-Test rot (500)
-- [x] 8 DoD gruen (2425 passed, Cov 92 %, 0 Skips), PR #747; Review offen
+- [x] 8 DoD gruen (2425 passed, Cov 92 %, 0 Skips), PR #747
+- [x] 9 Review Runde 1: WITH CHECK auf `workspace` verlangt bei gesetzter Org
+  `org_id = Org` (kein Umhaengen in fremde Org); Zweig `id = Mandant` nur ohne
+  Org-GUC. Rot-Probe: alte Policy → `DID NOT RAISE InsufficientPrivilegeError`.
 
 ## Beobachtung ausserhalb des Scopes
 

@@ -148,6 +148,18 @@ def test_control_plane_tables_hide_foreign_tenant_without_where() -> None:
         )
         assert await owner.fetchval("SELECT name FROM workspace WHERE id = $1", b["ws"]) == "ws-b"
 
+        # Den eigenen Workspace in die fremde Org umhaengen: WITH CHECK weist ab,
+        # obwohl die Zeile ueber id = Mandant sichtbar ist.
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await app.execute("UPDATE workspace SET org_id = $1 WHERE id = $2", b["org"], a["ws"])
+        assert (
+            await owner.fetchval("SELECT org_id FROM workspace WHERE id = $1", a["ws"]) == a["org"]
+        )
+        # Gewoehnliches Schreiben auf den eigenen Workspace bleibt erlaubt.
+        assert await app.execute("UPDATE workspace SET name = 'ws-a' WHERE id = $1", a["ws"]) == (
+            "UPDATE 1"
+        )
+
         # Statusverlauf fuer eine fremde Entity: die Persona ist unsichtbar,
         # der Trigger findet keinen Workspace, WITH CHECK weist ab.
         with pytest.raises(asyncpg.InsufficientPrivilegeError):
@@ -183,6 +195,10 @@ def test_control_plane_tables_hide_foreign_tenant_without_where() -> None:
         await _scope(app, a["ws"], None)
         assert {r["id"] for r in await app.fetch("SELECT id FROM workspace")} == {a["ws"]}
         assert await app.fetch("SELECT id FROM organization") == []
+        # Schreiben auf den eigenen Workspace bleibt ohne Org-GUC moeglich.
+        assert await app.execute("UPDATE workspace SET name = 'ws-a' WHERE id = $1", a["ws"]) == (
+            "UPDATE 1"
+        )
 
         # --- Kein Mandant: Aufloesungspfade sehen Stammdaten (permissiv) ... ---
         await _scope(app, None, None)
