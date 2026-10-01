@@ -428,6 +428,101 @@ test('M11: breite Tabelle ist fokussierbar, benannt, erste Spalte fixiert, Hinwe
 })
 
 /**
+ * Mobil-Spec P7, PM-Zusatz (Muster M9) und M10.
+ *
+ * - Agent-Detail: Die Karte „Zusammensetzung“ stand vor den Tabs mit allen
+ *   Playbooks (14 → 942 px bei 320). Unter md hoechstens 8 im Seitenfluss,
+ *   „{{count}} weitere anzeigen“ haengt je 8 an, Fokus auf den ersten neuen
+ *   Eintrag, `aria-live` nennt den Stand. Ab md alle, kein Knopf.
+ * - Artefakt-Detail: Die Textspalte lag bei 320 px neben dem Anker-Knopf und
+ *   war 170 px breit. Unter md nutzt der Text die volle Blockbreite.
+ *
+ * Rot-Probe: gegen das Image von origin/main rot (12 statt 8 Playbooks unter
+ * md; Textspalte schmaler als der Block).
+ */
+test('P7: Agent-Playbooks unter md in 8er-Schritten, Artefakt-Text in voller Breite', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(method: 'POST' | 'PUT', path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  const playbookIds: string[] = []
+  for (let i = 0; i < 12; i++) {
+    const playbook = await call<{ id: string }>('POST', '/playbooks', {
+      name: `E2E Playbook ${i + 1}`,
+      content: { description: 'Kurz.' },
+    })
+    playbookIds.push(playbook.id)
+  }
+  const persona = await call<{ id: string }>('POST', '/personas', {
+    name: 'E2E Hierarchie Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+  await call('PUT', `/personas/${persona.id}/playbooks`, { playbook_ids: playbookIds })
+  const agent = await call<{ id: string }>('POST', '/agents', {
+    name: 'E2E Hierarchie Agent',
+    persona_id: persona.id,
+  })
+  const area = await call<{ id: string }>('POST', '/work-areas', { name: 'E2E Artefakt-Area' })
+  const artifact = await call<{ id: string }>('POST', `/work-areas/${area.id}/artifacts`, {
+    title: 'E2E Protokoll',
+    content_md: Array.from(
+      { length: 4 },
+      (_, i) => `Absatz ${i + 1}: Im Quartalsgespräch wurde die neue Preisliste vereinbart.`,
+    ).join('\n\n'),
+    occurred_at: '2026-09-29T10:00:00Z',
+  })
+
+  const isPhone = (page.viewportSize()?.width ?? 0) < 768
+  const ws = `/w/${workspaceId}`
+
+  await page.goto(`${ws}/agents/${agent.id}`)
+  const card = page.getByTestId('agent-hierarchy')
+  const rows = card.getByTestId('agent-hierarchy-playbook')
+  const more = card.getByRole('button', { name: /weitere anzeigen|more/ })
+  await expect(rows.first()).toBeVisible()
+  await expectNoHorizontalScroll(page, 'agents/:id')
+  if (isPhone) {
+    await expect(rows).toHaveCount(8)
+    await expect(more).toHaveText(/4 weitere anzeigen|Show 4 more/)
+    await more.click()
+    await expect(rows).toHaveCount(12)
+    await expect(more).toHaveCount(0)
+    // Fokus auf dem ersten neuen Eintrag, nicht auf `body`.
+    await expect(rows.nth(8)).toBeFocused()
+    await expect(card.locator('[aria-live="polite"]')).toHaveText(
+      /12 von 12 angezeigt|12 of 12 shown/,
+    )
+  } else {
+    await expect(rows).toHaveCount(12)
+    await expect(more).toHaveCount(0)
+  }
+
+  await page.goto(`${ws}/workarea/areas/${area.id}/artifacts/${artifact.id}`)
+  const text = page.locator('main ol pre').first()
+  await expect(text).toBeVisible()
+  await expectNoHorizontalScroll(page, 'workarea/artifacts/:id')
+  const widths = await text.evaluate((el) => ({
+    text: el.getBoundingClientRect().width,
+    block: (el.parentElement as HTMLElement).clientWidth,
+  }))
+  if (isPhone) {
+    // `li` hat 2 × 8 px Polsterung; der Text fuellt den Rest ganz.
+    expect(widths.text, 'Artefakt-Text unter md nicht in voller Breite').toBeGreaterThanOrEqual(
+      widths.block - 16 - 1,
+    )
+  }
+})
+
+/**
  * Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ oeffnen
  * unterhalb `md` eine eigene Vollbildseite statt eines Dialogs; ab `md`
  * bleibt der Dialog. Geprueft auf jedem Profil, scharf auf `mobile-320`:
@@ -515,6 +610,72 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
   await page.getByRole('button', { name: /^(Melden|Report)$/ }).click()
   await expect(page).toHaveURL(new RegExp(`${ws}/feedback$`))
   await expect(page.getByText(/Problem gemeldet|Problem reported/)).toBeVisible()
+})
+
+/**
+ * Mobil-Spec P7 (M6 Namen): Keine Ellipse ohne Tap-Weg in der
+ * Dashboard-Aktivitaet und in „Verwendet in“.
+ *
+ * Gemessen vorher bei 320 px: Aktivitaetssatz mit `truncate` und ohne Link
+ * (75 px sichtbar), „Verwendet in“ 91 px pro Name.
+ *
+ * Rot-Probe: gegen das Image von origin/main ist der Fall auf allen vier
+ * Profilen rot („Dashboard: Kuerzung ohne Link“).
+ */
+const ELLIPSIS_WITHOUT_LINK = () =>
+  [...document.querySelectorAll('main *')]
+    .filter((el) => {
+      const cs = getComputedStyle(el)
+      const clipped =
+        (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1) ||
+        (cs.webkitLineClamp !== 'none' && el.scrollHeight > el.clientHeight + 1)
+      return clipped && el.closest('a') === null
+    })
+    .map((el) => (el.textContent ?? '').slice(0, 60))
+
+test('M6/P7: Aktivitaet und „Verwendet in“ kuerzen nicht ohne Tap-Weg', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(method: 'POST' | 'PUT', path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  const LONG = 'Gesprächsleitfaden für schwierige Mitarbeitergespräche in der Probezeit'
+  const playbook = await call<{ id: string }>('POST', '/playbooks', {
+    name: LONG,
+    content: {
+      description: 'Kurz.',
+      type: 'prompt',
+      body: JSON.stringify(blockDoc('Schritt').blocks),
+    },
+  })
+  // Dashboard-Aktivitaet: das Playbook mit langem Namen zur Review einreichen.
+  await call('POST', `/playbooks/${playbook.id}/versions/1/transition`, { to: 'review' })
+  const resource = await call<{ id: string }>('POST', '/resources', {
+    name: 'E2E Verwendet-in Resource',
+    content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+  })
+  await call('PUT', `/playbooks/${playbook.id}/resource_links`, {
+    links: [{ resource_id: resource.id, position: 0, link_scope: 'resource' }],
+  })
+  const ws = `/w/${workspaceId}`
+
+  await page.goto(ws)
+  await expect(page.locator('main time').first()).toBeVisible()
+  expect(await page.evaluate(ELLIPSIS_WITHOUT_LINK), 'Dashboard: Kuerzung ohne Link').toEqual([])
+  await expectNoHorizontalScroll(page, 'dashboard')
+
+  await page.goto(`${ws}/resources/${resource.id}?tab=use`)
+  await expect(page.getByRole('link', { name: LONG })).toBeVisible()
+  expect(await page.evaluate(ELLIPSIS_WITHOUT_LINK), 'Verwendet in: Kuerzung ohne Link').toEqual([])
+  await expectNoHorizontalScroll(page, 'resources/:id?tab=use')
 })
 
 /**
