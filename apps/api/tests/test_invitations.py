@@ -2,8 +2,10 @@
 
 Deckt §2.3.C/D ab: Create→Accept-E2E, Single-Use (Double-Accept→410),
 Expired→410, Revoked→410, Cross-Workspace-Isolation, admin-only Gate sowie
-die Last-admin-Self-demote-Invariante (409). Laeuft nur mit erreichbarer
-Datenbank; ohne DB werden die Tests uebersprungen.
+die Last-admin-Self-demote-Invariante (409). Dazu die Annahme per Token im
+Body (`POST /v1/invitations/accept`), den befristeten Legacy-Pfad mit Token im
+Pfad und den fail-closed Email-Abgleich: ohne Email-Claim keine Annahme.
+Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 """
 
 import asyncio
@@ -122,7 +124,10 @@ def test_invitation_create_accept_member_lifecycle() -> None:
             assert all("token" not in i for i in pending.json())
 
             # Zweiter User akzeptiert anonym mit dem Mail-Token.
-            accepted = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            accepted = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="invitee@example.com"),
+            )
             assert accepted.status_code == 200
             assert accepted.json()["workspace_id"] == str(ws)
 
@@ -136,7 +141,10 @@ def test_invitation_create_accept_member_lifecycle() -> None:
             assert client.get(f"{base}/invitations", headers=_auth(admin_id)).json() == []
 
             # Single-use: zweiter Accept → 410 Gone.
-            again = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            again = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="invitee@example.com"),
+            )
             assert again.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -163,7 +171,10 @@ def test_invitation_expired_is_gone() -> None:
             body = created.json()
             _expire_invitation(body["id"])
 
-            resp = client.post(f"/v1/invitations/{body['token']}/accept", headers=_auth(invitee_id))
+            resp = client.post(
+                f"/v1/invitations/{body['token']}/accept",
+                headers=_auth(invitee_id, email="expired@example.com"),
+            )
             assert resp.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -195,7 +206,10 @@ def test_invitation_revoked_is_gone() -> None:
             )
             assert revoke.status_code == 204
 
-            resp = client.post(f"/v1/invitations/{body['token']}/accept", headers=_auth(invitee_id))
+            resp = client.post(
+                f"/v1/invitations/{body['token']}/accept",
+                headers=_auth(invitee_id, email="revoked@example.com"),
+            )
             assert resp.status_code == 410
     finally:
         cleanup_workspaces([admin_id, invitee_id])
@@ -269,7 +283,11 @@ def test_invitation_admin_only_gate() -> None:
                 headers=_auth(admin_id),
             )
             token = created.json()["token"]
-            client.post(f"/v1/invitations/{token}/accept", headers=_auth(editor_id))
+            joined = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(editor_id, email="editor@example.com"),
+            )
+            assert joined.status_code == 200, joined.text
 
             # Editor darf nicht einladen / nicht listen / nicht Rollen aendern.
             assert (
@@ -325,7 +343,11 @@ def test_member_role_update_and_last_admin_guard() -> None:
                 headers=_auth(admin_id),
             )
             token = created.json()["token"]
-            client.post(f"/v1/invitations/{token}/accept", headers=_auth(second_id))
+            joined = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(second_id, email="admin2@example.com"),
+            )
+            assert joined.status_code == 200, joined.text
 
             # Jetzt zwei Admins → Herabstufung des zweiten ist erlaubt.
             patched = client.patch(
@@ -416,3 +438,177 @@ def test_invitation_email_mismatch_is_forbidden() -> None:
             assert ok.json()["workspace_id"] == str(ws)
     finally:
         cleanup_workspaces([admin_id, intended_id, attacker_id])
+
+
+def _create_invitation(client: TestClient, admin_id: UUID, ws: UUID, email: str) -> str:
+    created = client.post(
+        f"/v1/workspaces/{ws}/invitations",
+        json={"email": email, "role": "editor"},
+        headers=_auth(admin_id),
+    )
+    assert created.status_code == 201, created.text
+    token: str = created.json()["token"]
+    return token
+
+
+def _member_ids(client: TestClient, admin_id: UUID, ws: UUID) -> set[str]:
+    members = client.get(f"/v1/workspaces/{ws}/members", headers=_auth(admin_id))
+    assert members.status_code == 200, members.text
+    return {m["user_id"] for m in members.json()}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("via", ["body", "legacy_path"])
+def test_invitation_accept_without_email_claim_is_rejected(via: str) -> None:
+    """Fail-closed: ohne Email-Claim im Login wird keine Einladung angenommen.
+
+    Beide Annahmewege, weil sie denselben Service teilen und der Legacy-Pfad
+    sonst unbemerkt der weichere bleiben koennte. Belegt wird die ausgebliebene
+    Wirkung (kein Mitglied, Einladung weiter offen), nicht nur der Statuscode.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    invitee_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+
+    try:
+        with TestClient(app) as client:
+            token = _create_invitation(client, admin_id, ws, "noclaim@example.com")
+
+            if via == "body":
+                resp = client.post(
+                    "/v1/invitations/accept", json={"token": token}, headers=_auth(invitee_id)
+                )
+            else:
+                resp = client.post(f"/v1/invitations/{token}/accept", headers=_auth(invitee_id))
+            assert resp.status_code == 403, resp.text
+            assert resp.json()["reason"] == "invitation_email_required"
+
+            assert str(invitee_id) not in _member_ids(client, admin_id, ws)
+            pending = client.get(f"/v1/workspaces/{ws}/invitations", headers=_auth(admin_id))
+            assert [i["email"] for i in pending.json()] == ["noclaim@example.com"]
+
+            # Dasselbe Konto mit passendem Claim kommt danach regulaer hinein.
+            ok = client.post(
+                "/v1/invitations/accept",
+                json={"token": token},
+                headers=_auth(invitee_id, email="noclaim@example.com"),
+            )
+            assert ok.status_code == 200, ok.text
+    finally:
+        cleanup_workspaces([admin_id, invitee_id])
+
+
+@pytest.mark.integration
+def test_invitation_accept_by_body_lifecycle() -> None:
+    """Body-Endpunkt: gueltiger Token → 200, falsche Email → 403, zweiter Accept → 410."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    invitee_id = fresh_user_id()
+    stranger_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+
+    try:
+        with TestClient(app) as client:
+            token = _create_invitation(client, admin_id, ws, "body@example.com")
+
+            wrong = client.post(
+                "/v1/invitations/accept",
+                json={"token": token},
+                headers=_auth(stranger_id, email="stranger@example.com"),
+            )
+            assert wrong.status_code == 403, wrong.text
+            assert wrong.json()["reason"] == "invitation_email_mismatch"
+            assert str(stranger_id) not in _member_ids(client, admin_id, ws)
+
+            accepted = client.post(
+                "/v1/invitations/accept",
+                json={"token": token},
+                headers=_auth(invitee_id, email="body@example.com"),
+            )
+            assert accepted.status_code == 200, accepted.text
+            assert accepted.json() == {"workspace_id": str(ws)}
+            assert "Sunset" not in accepted.headers
+            assert str(invitee_id) in _member_ids(client, admin_id, ws)
+
+            again = client.post(
+                "/v1/invitations/accept",
+                json={"token": token},
+                headers=_auth(invitee_id, email="body@example.com"),
+            )
+            assert again.status_code == 410, again.text
+            assert again.json()["reason"] == "invitation_no_longer_valid"
+
+            unknown = client.post(
+                "/v1/invitations/accept",
+                json={"token": "gibt-es-nicht"},
+                headers=_auth(invitee_id, email="body@example.com"),
+            )
+            assert unknown.status_code == 404, unknown.text
+    finally:
+        cleanup_workspaces([admin_id, invitee_id, stranger_id])
+
+
+@pytest.mark.integration
+def test_invitation_accept_by_body_rejects_malformed_body() -> None:
+    """Der Body traegt genau `token` — fehlend oder mit Zusatzfeld → 422."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    user_id = fresh_user_id()
+    try:
+        with TestClient(app) as client:
+            headers = _auth(user_id, email="x@example.com")
+            assert client.post("/v1/invitations/accept", json={}, headers=headers).status_code == (
+                422
+            )
+            extra = client.post(
+                "/v1/invitations/accept",
+                json={"token": "t", "workspace_id": "x"},
+                headers=headers,
+            )
+            assert extra.status_code == 422
+    finally:
+        cleanup_workspaces([user_id])
+
+
+@pytest.mark.integration
+def test_invitation_legacy_path_still_accepts_with_sunset_notice() -> None:
+    """Uebergang: alte Links mit Token im Pfad funktionieren weiter.
+
+    Die Antwort kuendigt das Ende an (`Sunset`, RFC 8594) und nennt den
+    Nachfolger; die OpenAPI-Spec fuehrt die Route als `deprecated`.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    invitee_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+
+    try:
+        with TestClient(app) as client:
+            token = _create_invitation(client, admin_id, ws, "legacy@example.com")
+            resp = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(invitee_id, email="legacy@example.com"),
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json() == {"workspace_id": str(ws)}
+            assert resp.headers["Sunset"] == "Thu, 31 Dec 2026 23:59:59 GMT"
+            assert resp.headers["Link"] == '</v1/invitations/accept>; rel="successor-version"'
+            assert str(invitee_id) in _member_ids(client, admin_id, ws)
+
+            spec = app.openapi()
+            assert spec["paths"]["/v1/invitations/{token}/accept"]["post"]["deprecated"] is True
+            assert "deprecated" not in spec["paths"]["/v1/invitations/accept"]["post"]
+    finally:
+        cleanup_workspaces([admin_id, invitee_id])

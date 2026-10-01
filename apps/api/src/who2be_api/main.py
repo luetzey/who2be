@@ -250,6 +250,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "invitation_not_found": "Einladung nicht gefunden",
     "invitation_no_longer_valid": "Einladung nicht mehr gueltig",
     "invitation_email_mismatch": "Einladung fuer eine andere Email-Adresse",
+    "invitation_email_required": "Einladung nur mit Email-Adresse im Login annehmbar",
     "personal_organization_undeletable": "Persoenliche Organisation nicht loeschbar",
     "organization_owner_required": "Aktion nur fuer den Org-Owner",
     "workspace_org_missing": "Workspace ohne Organisation",
