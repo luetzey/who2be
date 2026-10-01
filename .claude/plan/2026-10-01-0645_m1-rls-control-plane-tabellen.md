@@ -63,7 +63,7 @@ laufen weiter.
   - ohne 0092: 3/3 rot (fremde Zeilen sichtbar; Purge laesst Zeile stehen)
   - mit 0092: 3/3 gruen
   - Gegenprobe API-Test: `organization` ohne Permissiv-Zweig → Login-Test rot (500)
-- [ ] 8 DoD, PR, Review
+- [x] 8 DoD gruen (2425 passed, Cov 92 %, 0 Skips), PR #747; Review offen
 
 ## Beobachtung ausserhalb des Scopes
 
