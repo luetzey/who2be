@@ -38,7 +38,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.entity_sql import safe_entity
-from who2be_api.core.tenancy import tenant_scope
+from who2be_api.core.tenancy import scope_to_self, tenant_scope
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.tablestore import AreaStoreMissingError, TableStore, quote_identifier
 
@@ -189,11 +189,13 @@ class GdprExportService:
     async def _export_account(self, user_id: UUID) -> dict[str, Any]:
         """GoTrue-Profildaten des Users (Art.-15-Vollstaendigkeit, WP-E).
 
-        Liest aus `auth.users` (Schema gehoert GoTrue). Robust gegen fehlende
-        `auth.users` in Test-DBs oder eingeschraenkten Berechtigungen — Muster
-        analog `repositories/me_repository._lookup_email`: bei PostgresError
-        wird ein leerer Account-Block zurueckgegeben, statt den ganzen Export
-        scheitern zu lassen.
+        Die Daten liegen im GoTrue-Schema `auth.users`, auf das die
+        Laufzeitrolle keinen Zugriff hat. Gelesen wird ueber
+        `w2b_self_account()` (Migration 0093), die nur die Zeile von
+        `app.current_user_id` liefert — `scope_to_self` setzt die GUC
+        transaktionslokal. Ist die Funktion nicht aufrufbar (reine Test-DB ohne
+        GoTrue), bleibt der Block leer, statt den ganzen Export scheitern zu
+        lassen — Muster `repositories/me_repository._lookup_profile`.
         """
         block: dict[str, Any] = {
             "id": str(user_id),
@@ -202,10 +204,11 @@ class GdprExportService:
             "last_sign_in_at": None,
         }
         try:
-            row = await self._pool.fetchrow(
-                "SELECT email, created_at, last_sign_in_at FROM auth.users WHERE id = $1",
-                user_id,
-            )
+            async with self._pool.acquire() as conn, conn.transaction():
+                await scope_to_self(conn, user_id)
+                row = await conn.fetchrow(
+                    "SELECT email, created_at, last_sign_in_at FROM w2b_self_account()"
+                )
         except asyncpg.PostgresError:
             return block
         if row is None:

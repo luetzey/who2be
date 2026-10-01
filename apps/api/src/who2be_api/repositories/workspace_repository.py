@@ -143,7 +143,8 @@ async def ensure_personal_workspace(
 
     ``content_locale`` (ADR-0045) bestimmt die Content-Sprache des Workspaces
     und damit die Sprache der geseedeten Standard-Inhalte; abgeleitet wird sie
-    vom Aufrufer (me-Flow: ``preferred_locale`` aus ``auth.users``). Bei einem
+    vom Aufrufer (me-Flow: ``preferred_locale`` aus dem eigenen Profil, gelesen
+    ueber ``w2b_user_profiles``, Migration 0090). Bei einem
     Re-Lauf bleibt die bestehende Workspace-Sprache erhalten (kein Update im
     ON-CONFLICT-Zweig) — die Seeds prallen dann ohnehin an ihren Guards ab.
 
