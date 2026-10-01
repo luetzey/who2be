@@ -19,12 +19,12 @@ und wird hier mit geschlossen.
 
 ## Schritte
 
-1. Export (`services/gdpr_export_service.py`)
+1. Export (`apps/api/src/who2be_api/services/gdpr_export_service.py`)
    - `agent_memories`: nur `scope='agent'`, Spaltenliste um die 0091-Spalten
      erweitert, je Eintrag `events` (Historie) verschachtelt.
    - neu `user_memories`: nur `scope='user' AND subject_user_id = <user>`,
      ebenfalls mit `events`.
-2. Purge (`repositories/account_repository.py#purge_account_data`)
+2. Purge (`apps/api/src/who2be_api/repositories/account_repository.py#PgAccountPurgeRepository.purge_account_data`)
    - Nutzergedaechtnis des Users loeschen (`scope='user' AND subject_user_id`),
      je Zeile `audit_log` `memory.deleted` ohne Inhalt (Konstante aus
      `memory_repository`, Akteur NULL = System). Historie faellt per Cascade.
@@ -33,7 +33,7 @@ und wird hier mit geschlossen.
    - Personenverweise in ueberlebenden Zeilen auf den Sentinel:
      `agent_memory.confirmed_by`, `agent_memory_event.actor_id` (nur
      `actor_kind='human'`) — Muster B1c (`test_case.created_by` nur bei human).
-3. Tests (`tests/test_memory_compliance.py`, neu) gegen echte DB, je
+3. Tests (`apps/api/tests/test_memory_compliance.py`, neu) gegen echte DB, je
    Zusicherung eine Rot-Probe (Mutation zurueckdrehen → Test rot).
 4. Doku: VVT (V17, Datenkategorien, Loeschfristen), Loeschkonzept (§2, neuer
    §4c, §6). Verfall 30 Tage fuer unbestaetigte Eintraege (ADR 3.1.3, gesetzte
