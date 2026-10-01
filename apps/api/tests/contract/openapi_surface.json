@@ -41,6 +41,11 @@
   },
   {
     "method": "POST",
+    "path": "/v1/invitations/accept",
+    "operationId": "accept_invitation_by_body_v1_invitations_accept_post"
+  },
+  {
+    "method": "POST",
     "path": "/v1/invitations/{token}/accept",
     "operationId": "accept_invitation_v1_invitations__token__accept_post"
   },

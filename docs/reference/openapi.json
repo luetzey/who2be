@@ -12122,13 +12122,62 @@
         ]
       }
     },
+    "/v1/invitations/accept": {
+      "post": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Accept Invitation By Body",
+        "description": "Nimmt eine Einladung an; der Klartext-Token steht im Body.\n\nDer Aufrufer muss eine Email-Adresse im Login tragen, die zur Einladung\npasst — sonst 403 (`invitation_email_required` bzw.\n`invitation_email_mismatch`).",
+        "operationId": "accept_invitation_by_body_v1_invitations_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationAccept"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAcceptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/invitations/{token}/accept": {
       "post": {
         "tags": [
           "invitations"
         ],
         "summary": "Accept Invitation",
+        "description": "Veraltet: Token im Pfad. Nachfolger ist `POST /v1/invitations/accept`.\n\nBleibt bis zum Datum im `Sunset`-Header erreichbar, damit bereits\nverschickte Einladungslinks weiter funktionieren; es gelten dieselben\nPruefungen wie beim Body-Endpunkt.",
         "operationId": "accept_invitation_v1_invitations__token__accept_post",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -15506,6 +15555,21 @@
         ],
         "title": "IngestResult",
         "description": "Ergebnis eines Ingests: Blob- + abgeleitetes Doc-Artifact (ADR-0048).\n\n`deduplicated=True`: dieselbe (area, sha256)-Kombination existierte\nbereits — der Ingest ist idempotent, die bestehenden IDs kommen zurueck."
+      },
+      "InvitationAccept": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "InvitationAccept",
+        "description": "Eingabe fuer `POST /v1/invitations/{token}/accept`.\n\nTraegt den Klartext-Token aus der Einladungs-Mail; der Server vergleicht\ndessen Hash gegen `workspace_invitation.token_hash`."
       },
       "InvitationAcceptResult": {
         "properties": {
