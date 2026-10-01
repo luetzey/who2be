@@ -76,7 +76,7 @@ def test_account_block_degrades_when_self_account_missing() -> None:
     pool = _FakePool(error=True)
     user_id = uuid4()
 
-    bundle = asyncio.run(GdprExportService(pool).export(user_id))  # type: ignore[arg-type]
+    bundle = asyncio.run(GdprExportService(pool).export(user_id))
 
     assert bundle["user_id"] == str(user_id)
     assert bundle["organizations"] == []
@@ -87,7 +87,7 @@ def test_account_block_when_user_not_found() -> None:
     pool = _FakePool(row=None)
     user_id = uuid4()
 
-    bundle = asyncio.run(GdprExportService(pool).export(user_id))  # type: ignore[arg-type]
+    bundle = asyncio.run(GdprExportService(pool).export(user_id))
 
     assert bundle["account"] == {"id": str(user_id), **_EMPTY}
 
@@ -99,7 +99,7 @@ def test_account_block_populated_and_scoped_to_self() -> None:
     )
     user_id = uuid4()
 
-    bundle = asyncio.run(GdprExportService(pool).export(user_id))  # type: ignore[arg-type]
+    bundle = asyncio.run(GdprExportService(pool).export(user_id))
 
     assert bundle["account"]["email"] == "hello@example.com"
     assert bundle["account"]["created_at"] == created

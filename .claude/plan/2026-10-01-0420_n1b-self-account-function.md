@@ -21,18 +21,28 @@ raw_user_meta_data"). Basis: origin/main 32a4dde2.
 
 ## Schritte
 
-1. [ ] Migration `0091_self_account_function.sql` (hoechste auf origin/main: 0090;
+1. [x] Migration `0091_self_account_function.sql` (hoechste auf origin/main: 0090;
    offene PRs ohne Migration). Muster und Haertung wie 0090.
-2. [ ] `gdpr_export_service._export_account`: Transaktion + `scope_to_self` +
+2. [x] `gdpr_export_service._export_account`: Transaktion + `scope_to_self` +
    `w2b_self_account()`; Fehler → leerer Block (Verhalten wie bisher).
-3. [ ] `me_repository._has_password`: dito.
-4. [ ] Docstring `workspace_repository.ensure_personal_workspace`: Zugriffsweg
+3. [x] `me_repository._has_password`: dito.
+4. [x] Docstring `workspace_repository.ensure_personal_workspace`: Zugriffsweg
    `w2b_user_profiles` statt `auth.users`.
-5. [ ] Tests: `test_user_profiles_function.py` um Export, has_password und
+5. [x] Tests: `test_user_profiles_function.py` um Export, has_password und
    Negativtest erweitern (Fixture `app_role_client` liegt dort), EXECUTE-Test
    auf beide Funktionen; Fake-Pools in `test_gdpr_export_account.py` auf den
    Transaktionsweg umstellen.
-6. [ ] Changelog-Fragment, DoD, PR.
+6. [x] Changelog-Fragment, DoD, PR.
+
+## DoD (lokal, gemessen, pgvector:pg16)
+
+- ruff check / format --check gruen, mypy: no issues in 515 source files.
+- `WHO2BE_REQUIRE_DB=1 pytest --cov --cov-fail-under=85`: 2423 passed, 0 skipped,
+  Coverage 92,01 %; Skip-Budget-Gate OK; Lizenz-Gate OK; Wirkungs-Pruefung OK.
+- Grep-Kriterium leer (exit 1).
+- Rot-Probe (Service/Repo auf origin/main): Export `assert None == '…'`,
+  `has_password` `assert False is True`, 3 Unit-Tests rot.
+- Mutation (Funktion ohne Self-Filter) vom Negativtest gefangen.
 
 ## Entscheidungen
 
