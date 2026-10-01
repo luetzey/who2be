@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -24,6 +24,12 @@ vi.mock('@/auth/useWorkspacePath', () => ({
 }))
 vi.mock('@/hooks/usePersonaPlaybooks', () => ({
   usePersonaPlaybooks: vi.fn(),
+}))
+// Breakpoint steuerbar: jsdom kennt kein `matchMedia`; der Default `false`
+// entspricht dem Desktop-Pfad, den die uebrigen Tests voraussetzen.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => viewport.mobile,
 }))
 
 /** Minimal-Persona mit gegebenem Inhalt — nur `content` liest die Card. */
@@ -95,6 +101,7 @@ function renderCard(state: HookState, canEdit = true) {
 }
 
 beforeEach(() => {
+  viewport.mobile = false
   vi.mocked(usePersonaPlaybooks).mockReset()
   // Default: kein Inhalt referenziert ein Playbook → keine Referenz-Badges.
   mockGetPersona.mockReset()
@@ -378,5 +385,78 @@ describe('PersonaPlaybooksCard — Responsive (#571)', () => {
     expect(name).not.toBeNull()
     expect(name).toHaveTextContent('Kind-Playbook')
     expect(name).toHaveClass('min-w-40')
+  })
+})
+
+// Mobil-Spec M9: Hinzufuegen-Liste ohne Scroll-in-Scroll unter md.
+describe('PersonaPlaybooksCard — Auswahlliste (M9)', () => {
+  const many = Array.from({ length: 20 }, (_, i) =>
+    playbook({ id: `pb${i + 1}`, name: `Playbook ${i + 1}` }),
+  )
+
+  function openEditor() {
+    renderCard(hookState({ playbooks: many, linked: [], linkedIds: [] }))
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+  }
+
+  it('zeigt unter md 8 Treffer im Seitenfluss, ohne max-h und ohne Scroller', () => {
+    viewport.mobile = true
+    openEditor()
+
+    const list = screen.getByRole('list', { name: 'Playbook hinzufügen' })
+    expect(list.children).toHaveLength(8)
+    const frame = screen.getByTestId('persona-playbooks-available')
+    expect(frame.className).not.toMatch(/max-h-|overflow-/)
+    expect(frame).not.toHaveAttribute('tabindex')
+    expect(screen.queryByRole('region', { name: 'Playbook hinzufügen' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '8 weitere anzeigen' })).toBeInTheDocument()
+  })
+
+  it('laedt je 8 weitere, fokussiert den ersten neuen Eintrag und meldet den Stand', () => {
+    viewport.mobile = true
+    openEditor()
+
+    fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
+    const list = screen.getByRole('list', { name: 'Playbook hinzufügen' })
+    expect(list.children).toHaveLength(16)
+    // Fokus auf der Aktion des 9. Eintrags (erster neuer).
+    expect(document.activeElement).toBe(within(list.children[8] as HTMLElement).getByRole('button'))
+    expect(screen.getByText('16 von 20 angezeigt')).toHaveAttribute('aria-live', 'polite')
+
+    // Rest kleiner als die Schrittweite: der Knopf nennt die echte Zahl.
+    fireEvent.click(screen.getByRole('button', { name: '4 weitere anzeigen' }))
+    expect(list.children).toHaveLength(20)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+    expect(screen.getByText('20 von 20 angezeigt')).toBeInTheDocument()
+  })
+
+  it('beginnt nach einer neuen Suche wieder bei 8 und zeigt bei <= 8 Treffern keinen Knopf', () => {
+    viewport.mobile = true
+    openEditor()
+    fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
+
+    // „Playbook 1“ trifft 1 und 10–19 = 11 Treffer → wieder 8 sichtbar.
+    fireEvent.change(screen.getByLabelText('Playbooks durchsuchen'), {
+      target: { value: 'Playbook 1' },
+    })
+    const list = screen.getByRole('list', { name: 'Playbook hinzufügen' })
+    expect(list.children).toHaveLength(8)
+    expect(screen.getByRole('button', { name: '3 weitere anzeigen' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Playbooks durchsuchen'), {
+      target: { value: 'Playbook 2' },
+    })
+    expect(list.children).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('behaelt ab md die gedeckelte Liste, jetzt fokussierbar und benannt', () => {
+    openEditor()
+
+    const region = screen.getByRole('region', { name: 'Playbook hinzufügen' })
+    expect(region).toHaveClass('max-h-72', 'overflow-auto')
+    expect(region).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('list', { name: 'Playbook hinzufügen' }).children).toHaveLength(20)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
   })
 })

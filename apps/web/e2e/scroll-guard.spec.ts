@@ -498,3 +498,97 @@ test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', as
   await expect(page.getByRole('tab', { selected: true })).toHaveText(/Versionen|Versions/)
   expect(new URL(page.url()).searchParams.get('tab')).toBe('versions')
 })
+
+test('M9/M11: Mitglieder als Liste, Auswahllisten ohne Scroll-in-Scroll unter md', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const post = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  // Zwoelf Kandidaten je Liste: mehr als die 8er-Schrittweite, damit unter md
+  // der „weitere anzeigen“-Knopf entsteht.
+  const persona = await post<{ id: string }>('/personas', {
+    name: 'E2E Auswahl Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+  const resource = await post<{ id: string }>('/resources', {
+    name: 'E2E Auswahl Resource',
+    content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+  })
+  for (let i = 1; i <= 12; i++) {
+    await post('/playbooks', { name: `E2E Auswahl Playbook ${i}`, content: { description: 'Kurz.' } })
+    await post('/resources', {
+      name: `E2E Auswahl Kandidat ${i} ${LONG_URL}`,
+      content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+    })
+  }
+
+  const ws = `/w/${workspaceId}`
+  const mobile = page.viewportSize()!.width < 768
+
+  // Mitglieder: unter md Liste ohne Tabelle, ab md die Tabelle.
+  await page.goto(`${ws}/settings/members`)
+  if (mobile) {
+    await expect(page.getByTestId('members-list').getByRole('listitem')).toHaveCount(1)
+    await expect(page.getByRole('table')).toHaveCount(0)
+    await page.getByRole('button', { name: /Mehr anzeigen|Show more/ }).click()
+    await expect(page.getByRole('button', { name: /Entfernen|Remove/ })).toBeVisible()
+  } else {
+    await expect(page.getByRole('table')).toHaveCount(1)
+  }
+  await expectNoHorizontalScroll(page)
+
+  // Beide Auswahllisten: dasselbe Muster, je nach Breite.
+  const pickers: Array<[string, string, () => Promise<void>]> = [
+    [
+      `${ws}/personas/${persona.id}?tab=playbooks`,
+      'persona-playbooks-available',
+      () => page.getByRole('button', { name: /Verknüpfungen bearbeiten|Edit links/ }).click(),
+    ],
+    [`${ws}/resources/${resource.id}?tab=sub`, 'sub-resource-available', async () => {}],
+  ]
+  for (const [path, testId, open] of pickers) {
+    await page.goto(path)
+    await open()
+    const frame = page.getByTestId(testId)
+    const list = frame.getByRole('list')
+    await expect(list).toBeVisible()
+    const style = await frame.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      return { maxHeight: cs.maxHeight, overflowY: cs.overflowY, tab: el.getAttribute('tabindex') }
+    })
+    if (mobile) {
+      expect(style, `${testId}: kein innerer Scroller unter md`).toEqual({
+        maxHeight: 'none',
+        overflowY: 'visible',
+        tab: null,
+      })
+      // Der Seed-Workspace bringt eigene Eintraege mit; die Gesamtzahl steht
+      // deshalb nicht fest — der Knopf nennt, wie viele er nachlaedt.
+      await expect(list.getByRole('listitem')).toHaveCount(8)
+      const more = page.getByRole('button', { name: /weitere anzeigen|more/ })
+      const step = Number((await more.textContent())?.match(/\d+/)?.[0])
+      expect(step).toBeGreaterThan(0)
+      await more.click()
+      await expect(list.getByRole('listitem')).toHaveCount(8 + step)
+      // Fokus liegt im ersten neuen Eintrag, nicht auf body.
+      expect(
+        await list.getByRole('listitem').nth(8).evaluate((li) => li.contains(document.activeElement)),
+      ).toBe(true)
+    } else {
+      expect(style.overflowY).toBe('auto')
+      expect(style.tab).toBe('0')
+      await expect.poll(() => list.getByRole('listitem').count()).toBeGreaterThanOrEqual(12)
+      await expect(page.getByRole('button', { name: /weitere anzeigen|Show \d+ more/ })).toHaveCount(0)
+    }
+    await expectNoHorizontalScroll(page)
+  }
+})
