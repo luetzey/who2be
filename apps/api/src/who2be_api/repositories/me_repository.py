@@ -143,15 +143,16 @@ class PgMeRepository:
         return row["email"], _content_locale_from_preferred(row["preferred_locale"])
 
     async def _has_password(self, user_id: UUID) -> bool:
-        """`auth.users.encrypted_password IS NOT NULL` — frisch eingeladene
-        Magic-Link-User haben `NULL`, bis sie auf `/onboarding/set-password`
-        ein Passwort setzen. Wenn das `auth`-Schema (noch) nicht existiert
-        — z. B. in einer reinen API-Test-DB ohne GoTrue — gilt `False`."""
+        """Ob der User ein Passwort gesetzt hat — frisch eingeladene
+        Magic-Link-User und reine OAuth-User haben keins, bis sie auf
+        `/onboarding/set-password` eines setzen. Gelesen ueber
+        `w2b_self_account()` (Migration 0091): nur die eigene Zeile, nur der
+        Wahrheitswert, nie der Hash. Ist die Funktion nicht aufrufbar (reine
+        API-Test-DB ohne GoTrue), gilt `False`."""
         try:
-            value = await self._pool.fetchval(
-                "SELECT encrypted_password IS NOT NULL FROM auth.users WHERE id = $1",
-                user_id,
-            )
+            async with self._pool.acquire() as conn, conn.transaction():
+                await scope_to_self(conn, user_id)
+                value = await conn.fetchval("SELECT has_password FROM w2b_self_account()")
         except asyncpg.PostgresError:
             return False
         return bool(value)

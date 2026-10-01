@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
@@ -26,7 +27,7 @@ from fastapi.testclient import TestClient
 from who2be_api.core import db
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
-from who2be_api.core.tenancy import TENANT_SETTING
+from who2be_api.core.tenancy import TENANT_SETTING, USER_SETTING
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
     _ensure_auth_users_stub,
@@ -113,6 +114,32 @@ def _seed_persona(workspace_id: UUID) -> UUID:
             await conn.close()
 
     return asyncio.run(_run())
+
+
+def _set_account_fields(
+    user_id: UUID,
+    *,
+    password_hash: str | None,
+    created_at: datetime | None = None,
+    last_sign_in_at: datetime | None = None,
+) -> None:
+    """Setzt die Konto-Spalten im `auth.users`-Stub (als Owner)."""
+
+    async def _run() -> None:
+        conn = await _owner()
+        try:
+            await conn.execute(
+                "UPDATE auth.users SET encrypted_password = $2, created_at = $3, "
+                "last_sign_in_at = $4 WHERE id = $1",
+                user_id,
+                password_hash,
+                created_at,
+                last_sign_in_at,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
 
 
 @pytest.fixture
@@ -209,8 +236,6 @@ def test_user_profiles_function_is_scoped_to_current_tenant() -> None:
     """Negativtest: die Funktion liefert nur Nutzer des gesetzten Mandanten und
     den Aufrufer selbst — nie einen Nutzer eines fremden Mandanten, und ohne
     Mandanten gar nichts."""
-    from who2be_api.core.tenancy import USER_SETTING
-
     _prepare_public_schema()
     user_a = fresh_user_id()
     user_b = fresh_user_id()
@@ -248,7 +273,112 @@ def test_user_profiles_function_is_scoped_to_current_tenant() -> None:
 
 
 @pytest.mark.integration
-def test_user_profiles_execute_only_for_owner_and_app_role() -> None:
+def test_gdpr_export_and_me_read_own_account_as_app_role(
+    app_role_client: TestClient,
+    make_auth_headers: Callable[[UUID], dict[str, str]],
+) -> None:
+    """DSGVO-Export und `/v1/me` lesen die eigenen Kontodaten als `who2be_app`
+    ueber `w2b_self_account()` (Migration 0091): `account`-Block vollstaendig,
+    `has_password` true fuer den Passwortnutzer, false fuer den OAuth-Nutzer."""
+    password_user = fresh_user_id()
+    oauth_user = fresh_user_id()
+    setup_workspace(password_user)
+    setup_workspace(oauth_user)
+    seed_auth_user(password_user, email="n1b-password@example.com", name=None)
+    seed_auth_user(oauth_user, email="n1b-oauth@example.com", name=None)
+    created = datetime(2026, 9, 1, 8, 30, tzinfo=UTC)
+    last_sign_in = created + timedelta(days=29, hours=2)
+    _set_account_fields(
+        password_user,
+        password_hash="$2a$10$n1btestnotarealhash",  # noqa: S106 — Test-Stub, kein Secret
+        created_at=created,
+        last_sign_in_at=last_sign_in,
+    )
+    _set_account_fields(oauth_user, password_hash=None, created_at=created)
+
+    try:
+        export = app_role_client.get("/v1/gdpr/export", headers=make_auth_headers(password_user))
+        assert export.status_code == 200, export.text
+        account = export.json()["account"]
+        assert account["id"] == str(password_user)
+        assert account["email"] == "n1b-password@example.com"
+        assert datetime.fromisoformat(account["created_at"]) == created
+        assert datetime.fromisoformat(account["last_sign_in_at"]) == last_sign_in
+
+        me_password = app_role_client.get("/v1/me", headers=make_auth_headers(password_user))
+        assert me_password.status_code == 200, me_password.text
+        assert me_password.json()["has_password"] is True
+
+        me_oauth = app_role_client.get("/v1/me", headers=make_auth_headers(oauth_user))
+        assert me_oauth.status_code == 200, me_oauth.text
+        assert me_oauth.json()["has_password"] is False
+    finally:
+        cleanup_workspaces([password_user, oauth_user])
+
+
+@pytest.mark.integration
+def test_self_account_function_returns_only_current_user() -> None:
+    """Negativtest: `w2b_self_account()` liefert ausschliesslich die Zeile von
+    `app.current_user_id` — nie die eines anderen Nutzers, und ohne die GUC
+    nichts, auch nicht mit gesetztem Workspace-Mandanten."""
+    _prepare_public_schema()
+    user_a = fresh_user_id()
+    user_b = fresh_user_id()
+    ws_a = setup_workspace(user_a)
+    setup_workspace(user_b)
+    seed_auth_user(user_a, email="n1b-a@example.com", name=None)
+    seed_auth_user(user_b, email="n1b-b@example.com", name=None)
+    _set_account_fields(user_a, password_hash="$2a$10$n1bhash")  # noqa: S106 — Test-Stub
+    lookup = "SELECT * FROM w2b_self_account()"
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(_app_role_url())
+        try:
+            # Ohne GUC: nichts.
+            assert await conn.fetch(lookup) == []
+            # Workspace-Mandant allein oeffnet nichts — die Funktion ist kein
+            # Mitglieder-Lookup.
+            await conn.execute("SELECT set_config($1, $2, false)", TENANT_SETTING, str(ws_a))
+            assert await conn.fetch(lookup) == []
+
+            await conn.execute("RESET ALL")
+            await conn.execute("SELECT set_config($1, $2, false)", USER_SETTING, str(user_a))
+            rows = await conn.fetch(lookup)
+            assert [(r["id"], r["email"], r["has_password"]) for r in rows] == [
+                (user_a, "n1b-a@example.com", True)
+            ]
+            # Nur der Wahrheitswert verlaesst die Funktion, nie der Hash.
+            assert set(rows[0].keys()) == {
+                "id",
+                "email",
+                "created_at",
+                "last_sign_in_at",
+                "has_password",
+            }
+
+            # Anderer Aufrufer: nur dessen Zeile, nie die von user_a.
+            await conn.execute("SELECT set_config($1, $2, false)", USER_SETTING, str(user_b))
+            rows = await conn.fetch(lookup)
+            assert [(r["id"], r["has_password"]) for r in rows] == [(user_b, False)]
+
+            # Transaktionslokal gesetzt (wie `scope_to_self`): nach COMMIT leer.
+            await conn.execute("RESET ALL")
+            async with conn.transaction():
+                await conn.execute("SELECT set_config($1, $2, true)", USER_SETTING, str(user_a))
+                assert len(await conn.fetch(lookup)) == 1
+            assert await conn.fetch(lookup) == []
+        finally:
+            await conn.close()
+
+    try:
+        asyncio.run(_run())
+    finally:
+        cleanup_workspaces([user_a, user_b])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("signature", ["w2b_user_profiles(uuid[])", "w2b_self_account()"])
+def test_profile_functions_execute_only_for_owner_and_app_role(signature: str) -> None:
     """EXECUTE haben nur Owner und `who2be_app` — auch wenn Default-Privileges
     (wie in Images mit vordefinierten API-Rollen) EXECUTE an weitere Rollen
     vergeben wuerden. Laeuft im isolierten Schema, damit die Default-Privileges
@@ -268,26 +398,26 @@ def test_user_profiles_execute_only_for_owner_and_app_role() -> None:
             await owner.execute(f'SET search_path TO "{schema}"')
             await apply_migrations(owner, MIGRATIONS_DIR)
 
-            signature = f'"{schema}".w2b_user_profiles(uuid[])'
+            qualified = f'"{schema}".{signature}'
             grantees = await owner.fetch(
                 "SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' "
                 "            ELSE pg_get_userbyid(a.grantee) END AS grantee "
                 "FROM pg_proc p, aclexplode(p.proacl) a "
                 "WHERE p.oid = $1::regprocedure AND a.privilege_type = 'EXECUTE'",
-                signature,
+                qualified,
             )
             fn_owner = await owner.fetchval(
                 "SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid = $1::regprocedure",
-                signature,
+                qualified,
             )
             assert {row["grantee"] for row in grantees} == {fn_owner, "who2be_app"}
 
             config = await owner.fetchval(
-                "SELECT proconfig FROM pg_proc WHERE oid = $1::regprocedure", signature
+                "SELECT proconfig FROM pg_proc WHERE oid = $1::regprocedure", qualified
             )
             assert config == ["search_path=pg_catalog, pg_temp"]
             definer = await owner.fetchval(
-                "SELECT prosecdef FROM pg_proc WHERE oid = $1::regprocedure", signature
+                "SELECT prosecdef FROM pg_proc WHERE oid = $1::regprocedure", qualified
             )
             assert definer is True
         finally:
