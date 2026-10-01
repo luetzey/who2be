@@ -18,6 +18,19 @@ describe('BranchStatus', () => {
     expect(screen.getByText('(du bearbeitest)')).toBeInTheDocument()
   })
 
+  it('Audit A12: der aktuelle Knoten hat dunkle Schrift auf der Brand-Flaeche, kein text-brand', () => {
+    render(<BranchStatus activeVersion={3} draftVersion={4} currentVersion={4} actions={[]} />)
+    const current = screen.getByTestId('branch-node-draft')
+    expect(current.className).toContain('bg-brand/10')
+    expect(current.className).toContain('text-foreground')
+    expect(current.className).not.toMatch(/(^|\s)text-brand(\s|$)/)
+    // Der Punkt erbt die Schriftfarbe; die Form unterscheidet den aktuellen Stand.
+    const dot = current.querySelector('[aria-hidden="true"]')
+    expect(dot?.textContent).toBe('●')
+    expect(dot?.getAttribute('class') ?? '').not.toContain('text-brand')
+    expect(screen.getByTestId('branch-node-active').querySelector('[aria-hidden="true"]')?.textContent).toBe('○')
+  })
+
   it('rendert nur die uebergebenen Actions als Buttons', () => {
     const onClick = vi.fn()
     render(
