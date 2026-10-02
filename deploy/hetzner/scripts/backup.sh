@@ -74,8 +74,12 @@
 #            Spitze). Der Vorlauf liegt bewusst dort und nicht in ${TMPDIR}, s. u.
 #   restic:  keep-daily 7 / keep-weekly 4 / keep-monthly 6 + prune
 #
-# Trigger (Host-Cron auf Hetzner, dokumentiert im RUNBOOK):
-#   15 3 * * * cd /opt/who2be && docker compose --profile backup run --rm backup
+# Trigger (Host-Cron auf Hetzner, dokumentiert im RUNBOOK §Backup & Restore,
+# „Trigger (Routine)"). Immer gegen den Produktions-Stack wie deploy.sh — ein
+# nacktes `docker compose` in /opt/who2be liest die Root-Compose (Dev-Stack)
+# und kennt keinen Dienst `backup`. On-Prem; Cloud zusaetzlich
+# `-f deploy/hetzner/who2be/docker-compose.cloud.yml` nach dem Basis-File:
+#   15 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env --profile backup run --rm backup
 
 set -euo pipefail
 
