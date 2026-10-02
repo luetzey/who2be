@@ -272,7 +272,8 @@ def test_save_path_matrix_end_to_end(make_auth_headers: AuthFactory) -> None:
             assert (off.json()["status"], off.json()["auto_activated"]) == ("pending", False)
             assert off.json()["source"] == "agent"
             assert off.json()["origin"] == "user_stated"
-            assert off.json()["expires_at"] is None
+            # Unbestaetigt heisst auch fuer `pending`: Verfall nach 30 Tagen (3.1.3, C2b).
+            assert off.json()["expires_at"] is not None
 
             put = client.put(
                 f"{prefix}/memory-auto-policy",

@@ -253,6 +253,7 @@ class MemoryRepository(Protocol):
         new_status: MemoryStatus,
         fact: str | None,
         note: str | None,
+        actor_id: UUID | None = None,
     ) -> MemoryRead | None: ...
 
     async def update(
@@ -515,12 +516,17 @@ class PgMemoryRepository:
         `created_by_agent_id` faellt auf `agent_id` zurueck (Agentengedaechtnis);
         beim Nutzergedaechtnis ist `agent_id` NULL und der Einreicher steht
         nur dort (3.1). `auto_activated`: die Freigabematrix hat den Eintrag
-        aktiv gesetzt — unbestaetigt, `expires_at = created_at + 30 Tage`
-        (3.1.3; `now()` ist in der Transaktion stabil, also gleich
-        `created_at`). Ereignisse: `created` (Agent) und ggf.
+        aktiv gesetzt. Verfall (3.1.3): jeder unbestaetigte Eintrag — `pending`
+        oder automatisch aktiviert — bekommt `expires_at = created_at + 30
+        Tage` (`now()` ist in der Transaktion stabil, also gleich
+        `created_at`). Ausgenommen ist `lesson`: der DB-CHECK 0091 laesst fuer
+        Lernvorschlaege kein `expired` zu, sie bleiben Signal fuer die
+        Mustererkennung (3.1.6). Ereignisse: `created` (Agent) und ggf.
         `auto_activated` (System, „Matrix") — in derselben Transaktion.
         """
         submitter = created_by_agent_id if created_by_agent_id is not None else agent_id
+        unconfirmed = auto_activated or status == MemoryStatus.pending
+        expires = kind != MemoryKind.lesson and unconfirmed
         async with self._pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(
                 "INSERT INTO agent_memory "
@@ -543,7 +549,7 @@ class PgMemoryRepository:
                 origin.value,
                 source.value,
                 subject_user_id,
-                auto_activated,
+                expires,
                 MEMORY_UNCONFIRMED_TTL_DAYS,
             )
             assert row is not None
@@ -793,12 +799,20 @@ class PgMemoryRepository:
         new_status: MemoryStatus,
         fact: str | None,
         note: str | None,
+        actor_id: UUID | None = None,
     ) -> MemoryRead | None:
         # Triage wirkt NUR auf pending (Schleusen-Invariante): active/rejected
         # Zeilen bleiben unberuehrt — dann kommt None zurueck (Service → 409).
+        # Freigabe ist menschliche Bestaetigung (3.1.3): `confirmed_at/_by`
+        # gesetzt und `expires_at = NULL` — nur so endet der Verfall. Eine
+        # Ablehnung laesst beides stehen; der Verfallsjob greift nur auf
+        # `pending`/`active`.
         row = await self._pool.fetchrow(
             "UPDATE agent_memory "
-            "SET status = $4, fact = COALESCE($5, fact), triage_note = $6, updated_at = now() "
+            "SET status = $4, fact = COALESCE($5, fact), triage_note = $6, updated_at = now(), "
+            "    confirmed_at = CASE WHEN $4 = 'active' THEN now() ELSE confirmed_at END, "
+            "    confirmed_by = CASE WHEN $4 = 'active' THEN $7::uuid ELSE confirmed_by END, "
+            "    expires_at = CASE WHEN $4 = 'active' THEN NULL ELSE expires_at END "
             "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3 AND status = 'pending' "
             f"RETURNING {_READ_COLUMNS}",
             workspace_id,
@@ -807,6 +821,7 @@ class PgMemoryRepository:
             new_status.value,
             fact,
             note,
+            actor_id,
         )
         return MemoryRead.model_validate(dict(row)) if row is not None else None
 

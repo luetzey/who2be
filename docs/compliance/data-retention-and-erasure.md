@@ -294,7 +294,7 @@ dem des Workspace.
 
 | Was | Frist | Wirkung |
 |---|---|---|
-| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung setzt `expires_at = NULL`. Den Verfallsjob liefert Paket C2b |
+| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung (Freigabe in der Triage) setzt `confirmed_at` und `expires_at = NULL`. Lernvorschlaege (`kind = 'lesson'`) verfallen nicht. Verfallsjob: `who2be-memory-expire`, taeglich per Cron (`deploy/hetzner/RUNBOOK.md`), je Eintrag ein Historien-Ereignis `expired` |
 | bestaetigte Eintraege | bis zur Loeschung durch einen Menschen oder Purge | — |
 | Historie | so lange wie ihr Eintrag | faellt per FK-Cascade mit |
 
