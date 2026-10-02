@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -57,6 +58,10 @@ from who2be_models.memory import (
     MemoryEventKind,
     MemoryKind,
     MemoryOrigin,
+    MemoryProposalAction,
+    MemoryProposalCreate,
+    MemoryProposalRead,
+    MemoryProposalStatus,
     MemoryScope,
     MemorySource,
 )
@@ -110,6 +115,11 @@ _READ_COLUMNS = (
 _EVENT_COLUMNS = (
     "id, memory_id, event, actor_kind, actor_id, agent_id, before, after, reason, created_at"
 )
+
+_PROPOSAL_COLUMNS = (
+    "id, memory_id, agent_id, action, new_fact, reason, status, decided_by, decided_at, created_at"
+)
+_PROPOSAL_COLUMNS_P = ", ".join(f"p.{c.strip()}" for c in _PROPOSAL_COLUMNS.split(","))
 
 # Inhaltsfreie Spur einer Loeschung (ADR-0053 3.1.2, Weiche M5): nur WER WANN
 # WELCHE ID geloescht hat — nie Fakt, Kontext oder Historie. Die Historie geht
@@ -264,6 +274,7 @@ class MemoryRepository(Protocol):
         fact: str | None,
         category: str | None,
         importance: int | None,
+        actor_id: UUID | None = None,
     ) -> MemoryRead | None: ...
 
     async def delete(
@@ -285,6 +296,128 @@ class MemoryRepository(Protocol):
     ) -> MemoryEventRead: ...
 
     async def list_events(self, workspace_id: UUID, memory_id: UUID) -> list[MemoryEventRead]: ...
+
+    # --- Paket C3a: Besitzer-gebundene Pfade (Agenten- UND Nutzergedaechtnis)
+
+    async def get_owned(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID
+    ) -> MemoryRead | None: ...
+
+    async def list_for_user(
+        self, workspace_id: UUID, subject_user_id: UUID, status: MemoryStatus | None
+    ) -> list[MemoryRead]: ...
+
+    async def triage_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        new_status: MemoryStatus,
+        fact: str | None,
+        note: str | None,
+        actor_id: UUID | None = None,
+    ) -> MemoryRead | None: ...
+
+    async def update_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        fact: str | None,
+        category: str | None,
+        importance: int | None,
+        actor_id: UUID | None = None,
+    ) -> MemoryRead | None: ...
+
+    async def delete_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> bool: ...
+
+    async def confirm(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID, actor_id: UUID
+    ) -> MemoryRead | None: ...
+
+    async def reactivate(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID, actor_id: UUID
+    ) -> MemoryRead | None: ...
+
+    async def restore(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        snapshot: MemorySnapshot,
+        actor_id: UUID,
+        reason: str,
+    ) -> MemoryRead | None: ...
+
+    async def insert_proposal(
+        self, workspace_id: UUID, agent_id: UUID, memory: MemoryRead, data: MemoryProposalCreate
+    ) -> MemoryProposalRead: ...
+
+    async def get_proposal(
+        self, workspace_id: UUID, proposal_id: UUID
+    ) -> tuple[MemoryProposalRead, MemoryOwner] | None: ...
+
+    async def list_proposals(
+        self,
+        workspace_id: UUID,
+        *,
+        viewer_user_id: UUID,
+        include_agent_scope: bool,
+        agent_id: UUID | None = None,
+        status: MemoryProposalStatus | None = None,
+    ) -> list[MemoryProposalRead]: ...
+
+    async def decide_proposal(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        proposal_id: UUID,
+        *,
+        accept: bool,
+        actor_id: UUID,
+        note: str | None,
+    ) -> MemoryProposalRead | None: ...
+
+
+@dataclass(frozen=True)
+class MemoryOwner:
+    """Besitzer eines Eintrags — genau eines der beiden Felder ist gesetzt.
+
+    Jede besitzer-gebundene Abfrage filtert ueber `clause` auf Geltungsbereich
+    UND Besitzer: Agentengedaechtnis ueber `agent_id`, Nutzergedaechtnis ueber
+    `subject_user_id` (ADR-0053 3.1.1). So bleibt die Repository-Regel „kein
+    Weg zu fremden Memories“ auch fuer das Nutzergedaechtnis erhalten.
+    """
+
+    agent_id: UUID | None = None
+    subject_user_id: UUID | None = None
+
+    def __post_init__(self) -> None:
+        if (self.agent_id is None) == (self.subject_user_id is None):
+            raise ValueError("MemoryOwner braucht genau einen Besitzer.")
+
+    @property
+    def owner_id(self) -> UUID:
+        owner = self.agent_id if self.agent_id is not None else self.subject_user_id
+        assert owner is not None  # __post_init__
+        return owner
+
+    def clause(self, param: int, alias: str = "") -> str:
+        """SQL-Bedingung mit dem Besitzer als `$param` (feste Zeichenkette)."""
+        p = f"{alias}." if alias else ""
+        if self.agent_id is not None:
+            return f"{p}scope = 'agent' AND {p}agent_id = ${param}"
+        return f"{p}scope = 'user' AND {p}subject_user_id = ${param}"
+
+
+# Schnappschuss-Form der Historie (3.1.2), Schluessel siehe `_snapshot`.
+MemorySnapshot = dict[str, Any]
 
 
 class PgMemoryRepository:
@@ -782,14 +915,80 @@ class PgMemoryRepository:
         return [MemoryRead.model_validate(dict(row)) for row in rows]
 
     async def get(self, workspace_id: UUID, agent_id: UUID, memory_id: UUID) -> MemoryRead | None:
+        return await self.get_owned(workspace_id, MemoryOwner(agent_id=agent_id), memory_id)
+
+    async def get_owned(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID
+    ) -> MemoryRead | None:
+        """Ein Eintrag, nur wenn er `owner` gehoert (Geltungsbereich UND Besitzer)."""
         row = await self._pool.fetchrow(
             f"SELECT {_READ_COLUMNS} FROM agent_memory "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3",
+            f"WHERE workspace_id = $1 AND {owner.clause(2)} AND id = $3",
             workspace_id,
-            agent_id,
+            owner.owner_id,
             memory_id,
         )
         return MemoryRead.model_validate(dict(row)) if row is not None else None
+
+    async def list_for_user(
+        self, workspace_id: UUID, subject_user_id: UUID, status: MemoryStatus | None
+    ) -> list[MemoryRead]:
+        """Nutzergedaechtnis EINER Person (3.1.1), neueste zuerst."""
+        rows = await self._pool.fetch(
+            f"SELECT {_READ_COLUMNS} FROM agent_memory "
+            "WHERE workspace_id = $1 AND scope = 'user' AND subject_user_id = $2 "
+            "  AND ($3::text IS NULL OR status = $3::text) "
+            "ORDER BY created_at DESC",
+            workspace_id,
+            subject_user_id,
+            status.value if status is not None else None,
+        )
+        return [MemoryRead.model_validate(dict(row)) for row in rows]
+
+    async def _mutate(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        *,
+        set_sql: str,
+        set_args: Sequence[object],
+        condition: str,
+        event: MemoryEventKind,
+        actor_id: UUID | None,
+        reason: str | None,
+    ) -> MemoryRead | None:
+        """Aendert einen Eintrag und schreibt sein Historien-Ereignis — in `conn`s Transaktion.
+
+        Liest den Vorzustand `FOR UPDATE` (besitzer-gebunden, plus `condition`
+        als feste Zusatzbedingung), aendert per `set_sql` (Parameter ab `$3`;
+        `$1` Workspace, `$2` ID) und haengt `event` mit `before`/`after` an
+        (Akteur: Mensch, 3.1.2). `None`, wenn kein passender Eintrag existiert.
+        `set_sql` und `condition` sind feste Zeichenketten dieses Moduls.
+        """
+        before_row = await conn.fetchrow(
+            f"SELECT {_READ_COLUMNS} FROM agent_memory "
+            f"WHERE workspace_id = $1 AND {owner.clause(2)} AND id = $3 {condition} "
+            "FOR UPDATE",
+            workspace_id,
+            owner.owner_id,
+            memory_id,
+        )
+        if before_row is None:
+            return None
+        before = MemoryRead.model_validate(dict(before_row))
+        row = await conn.fetchrow(
+            f"UPDATE agent_memory SET {set_sql}, updated_at = now() "
+            f"WHERE workspace_id = $1 AND id = $2 RETURNING {_READ_COLUMNS}",
+            workspace_id,
+            memory_id,
+            *set_args,
+        )
+        assert row is not None  # Zeile ist gesperrt
+        after = MemoryRead.model_validate(dict(row))
+        await _insert_human_event(conn, workspace_id, before, event, actor_id, reason, after)
+        return after
 
     async def triage(
         self,
@@ -801,29 +1000,59 @@ class PgMemoryRepository:
         note: str | None,
         actor_id: UUID | None = None,
     ) -> MemoryRead | None:
+        return await self.triage_owned(
+            workspace_id,
+            MemoryOwner(agent_id=agent_id),
+            memory_id,
+            new_status,
+            fact,
+            note,
+            actor_id,
+        )
+
+    async def triage_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        new_status: MemoryStatus,
+        fact: str | None,
+        note: str | None,
+        actor_id: UUID | None = None,
+    ) -> MemoryRead | None:
         # Triage wirkt NUR auf pending (Schleusen-Invariante): active/rejected
         # Zeilen bleiben unberuehrt — dann kommt None zurueck (Service → 409).
         # Freigabe ist menschliche Bestaetigung (3.1.3): `confirmed_at/_by`
         # gesetzt und `expires_at = NULL` — nur so endet der Verfall. Eine
         # Ablehnung laesst beides stehen; der Verfallsjob greift nur auf
-        # `pending`/`active`.
-        row = await self._pool.fetchrow(
-            "UPDATE agent_memory "
-            "SET status = $4, fact = COALESCE($5, fact), triage_note = $6, updated_at = now(), "
-            "    confirmed_at = CASE WHEN $4 = 'active' THEN now() ELSE confirmed_at END, "
-            "    confirmed_by = CASE WHEN $4 = 'active' THEN $7::uuid ELSE confirmed_by END, "
-            "    expires_at = CASE WHEN $4 = 'active' THEN NULL ELSE expires_at END "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3 AND status = 'pending' "
-            f"RETURNING {_READ_COLUMNS}",
-            workspace_id,
-            agent_id,
-            memory_id,
-            new_status.value,
-            fact,
-            note,
-            actor_id,
+        # `pending`/`active`. Ereignis `approved` bzw. `rejected` mit der
+        # Notiz als Grund (3.1.2: `triage_note` wird gespiegelt) — ohne diese
+        # Spur haette ein Rollback keinen Vorzustand der Freigabe.
+        event = (
+            MemoryEventKind.approved
+            if new_status == MemoryStatus.active
+            else MemoryEventKind.rejected
         )
-        return MemoryRead.model_validate(dict(row)) if row is not None else None
+        async with self._pool.acquire() as conn, conn.transaction():
+            return await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory_id,
+                set_sql=(
+                    "status = $3::text, fact = COALESCE($4, fact), triage_note = $5, "
+                    "confirmed_at = CASE WHEN $3::text = 'active' THEN now() "
+                    "  ELSE confirmed_at END, "
+                    "confirmed_by = CASE WHEN $3::text = 'active' THEN $6::uuid "
+                    "  ELSE confirmed_by END, "
+                    "expires_at = CASE WHEN $3::text = 'active' THEN NULL ELSE expires_at END"
+                ),
+                set_args=(new_status.value, fact, note, actor_id),
+                condition="AND status = 'pending'",
+                event=event,
+                actor_id=actor_id,
+                reason=note,
+            )
 
     async def update(
         self,
@@ -833,21 +1062,134 @@ class PgMemoryRepository:
         fact: str | None,
         category: str | None,
         importance: int | None,
+        actor_id: UUID | None = None,
     ) -> MemoryRead | None:
-        row = await self._pool.fetchrow(
-            "UPDATE agent_memory "
-            "SET fact = COALESCE($4, fact), category = COALESCE($5, category), "
-            "    importance = COALESCE($6, importance), updated_at = now() "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3 "
-            f"RETURNING {_READ_COLUMNS}",
+        return await self.update_owned(
             workspace_id,
-            agent_id,
+            MemoryOwner(agent_id=agent_id),
             memory_id,
             fact,
             category,
             importance,
+            actor_id,
         )
-        return MemoryRead.model_validate(dict(row)) if row is not None else None
+
+    async def update_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        fact: str | None,
+        category: str | None,
+        importance: int | None,
+        actor_id: UUID | None = None,
+    ) -> MemoryRead | None:
+        """Bearbeiten durch einen Menschen; schreibt `edited` (3.1.2)."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            return await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory_id,
+                set_sql=(
+                    "fact = COALESCE($3, fact), category = COALESCE($4, category), "
+                    "importance = COALESCE($5, importance)"
+                ),
+                set_args=(fact, category, importance),
+                condition="",
+                event=MemoryEventKind.edited,
+                actor_id=actor_id,
+                reason=None,
+            )
+
+    async def confirm(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID, actor_id: UUID
+    ) -> MemoryRead | None:
+        """Bestaetigt einen aktiven, unbestaetigten Eintrag und hebt den Verfall auf (3.1.3)."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            return await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory_id,
+                set_sql="confirmed_at = now(), confirmed_by = $3, expires_at = NULL",
+                set_args=(actor_id,),
+                condition="AND status = 'active' AND confirmed_at IS NULL",
+                event=MemoryEventKind.confirmed,
+                actor_id=actor_id,
+                reason=None,
+            )
+
+    async def reactivate(
+        self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID, actor_id: UUID
+    ) -> MemoryRead | None:
+        """`expired` → `active`, bestaetigt durch diesen Menschen (6.4)."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            return await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory_id,
+                set_sql=(
+                    "status = 'active', confirmed_at = now(), confirmed_by = $3, expires_at = NULL"
+                ),
+                set_args=(actor_id,),
+                condition="AND status = 'expired'",
+                event=MemoryEventKind.reactivated,
+                actor_id=actor_id,
+                reason=None,
+            )
+
+    async def restore(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        snapshot: MemorySnapshot,
+        actor_id: UUID,
+        reason: str,
+    ) -> MemoryRead | None:
+        """Rollback (3.1.2): stellt `fact, category, importance, status` aus `snapshot` her.
+
+        `kind` und `origin` bleiben: kein Ereignis aendert sie, und ein anderer
+        Wert koennte die Art-x-Scope-Invarianten (0091) verletzen. Die
+        Bestaetigung bleibt nur bei einem aktiven Ziel stehen; wer auf einen
+        Stand vor der Freigabe zurueckgeht, nimmt auch die Bestaetigung
+        zurueck. Ein dadurch unbestaetigter `pending`/`active`-Eintrag
+        verfaellt wieder (ausser `lesson`, 3.1.3) — sonst entstuende ueber den
+        Rollback ein unbestaetigter Eintrag ohne Verfall. Ereignis
+        `rolled_back` mit `reason` (Verweis auf das Ziel-Ereignis).
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            return await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory_id,
+                set_sql=(
+                    "fact = $3, category = $4, importance = $5, status = $6::text, "
+                    "confirmed_at = CASE WHEN $6::text = 'active' THEN confirmed_at END, "
+                    "confirmed_by = CASE WHEN $6::text = 'active' THEN confirmed_by END, "
+                    "expires_at = CASE "
+                    "  WHEN kind = 'lesson' THEN expires_at "
+                    "  WHEN $6::text = 'pending' "
+                    "    OR ($6::text = 'active' AND confirmed_at IS NULL) "
+                    "  THEN COALESCE(expires_at, now() + make_interval(days => $7)) "
+                    "  WHEN $6::text = 'active' THEN NULL "
+                    "  ELSE expires_at END"
+                ),
+                set_args=(
+                    snapshot["fact"],
+                    snapshot["category"],
+                    snapshot["importance"],
+                    snapshot["status"],
+                    MEMORY_UNCONFIRMED_TTL_DAYS,
+                ),
+                condition="",
+                event=MemoryEventKind.rolled_back,
+                actor_id=actor_id,
+                reason=reason,
+            )
 
     async def delete(
         self,
@@ -856,11 +1198,22 @@ class PgMemoryRepository:
         memory_id: UUID,
         actor_id: UUID | None = None,
     ) -> bool:
+        return await self.delete_owned(
+            workspace_id, MemoryOwner(agent_id=agent_id), memory_id, actor_id
+        )
+
+    async def delete_owned(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        memory_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> bool:
         # Loeschen + inhaltsfreie Audit-Zeile in EINER Anweisung (atomar, M5).
         result = await self._pool.execute(
-            _DELETE_WITH_AUDIT_SQL.format(extra="AND id = $4"),
+            _delete_with_audit_sql(owner, "AND id = $4"),
             workspace_id,
-            agent_id,
+            owner.owner_id,
             actor_id,
             memory_id,
         )
@@ -870,12 +1223,198 @@ class PgMemoryRepository:
         self, workspace_id: UUID, agent_id: UUID, actor_id: UUID | None = None
     ) -> int:
         result = await self._pool.execute(
-            _DELETE_WITH_AUDIT_SQL.format(extra=""),
+            _delete_with_audit_sql(MemoryOwner(agent_id=agent_id), ""),
             workspace_id,
             agent_id,
             actor_id,
         )
         return _affected(result)
+
+    # ---------------------------------------------- Vorschlaege (3.1.4, C3a)
+
+    async def insert_proposal(
+        self, workspace_id: UUID, agent_id: UUID, memory: MemoryRead, data: MemoryProposalCreate
+    ) -> MemoryProposalRead:
+        """Legt einen Vorschlag an (immer `pending`), Ereignis `change_proposed`/`delete_proposed`.
+
+        Es gibt keinen Parameter fuer den Status: ein Vorschlag entsteht
+        ausnahmslos offen (Matrix 4.2, Zeile „Aenderung/Loeschung“: nie
+        automatisch). Das Ereignis traegt den unveraenderten Stand als
+        `before` und `after` und die Begruendung des Agenten als `reason`.
+        """
+        event = (
+            MemoryEventKind.change_proposed
+            if data.action == MemoryProposalAction.change
+            else MemoryEventKind.delete_proposed
+        )
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "INSERT INTO agent_memory_proposal "
+                "(workspace_id, memory_id, agent_id, action, new_fact, reason) "
+                "VALUES ($1, $2, $3, $4, $5, $6) "
+                f"RETURNING {_PROPOSAL_COLUMNS}",
+                workspace_id,
+                memory.id,
+                agent_id,
+                data.action.value,
+                data.new_fact,
+                data.reason,
+            )
+            assert row is not None
+            snapshot = _snapshot(memory)
+            await conn.execute(
+                "INSERT INTO agent_memory_event "
+                "(workspace_id, memory_id, event, actor_kind, agent_id, before, after, reason) "
+                "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $6::jsonb, $7)",
+                workspace_id,
+                memory.id,
+                event.value,
+                MemoryActorKind.agent.value,
+                agent_id,
+                snapshot,
+                data.reason,
+            )
+        return MemoryProposalRead.model_validate(dict(row))
+
+    async def get_proposal(
+        self, workspace_id: UUID, proposal_id: UUID
+    ) -> tuple[MemoryProposalRead, MemoryOwner] | None:
+        """Ein Vorschlag mit dem Besitzer des Eintrags, auf den er zielt.
+
+        Die Rechtepruefung macht der Service anhand des Besitzers (3.1.1:
+        Nutzergedaechtnis nur die Person selbst).
+        """
+        row = await self._pool.fetchrow(
+            f"SELECT {_PROPOSAL_COLUMNS_P}, m.agent_id AS m_agent_id, "
+            "       m.subject_user_id AS m_subject_user_id "
+            "FROM agent_memory_proposal p "
+            "JOIN agent_memory m ON m.workspace_id = p.workspace_id AND m.id = p.memory_id "
+            "WHERE p.workspace_id = $1 AND p.id = $2",
+            workspace_id,
+            proposal_id,
+        )
+        if row is None:
+            return None
+        data = dict(row)
+        owner = MemoryOwner(
+            agent_id=data.pop("m_agent_id"), subject_user_id=data.pop("m_subject_user_id")
+        )
+        return MemoryProposalRead.model_validate(data), owner
+
+    async def list_proposals(
+        self,
+        workspace_id: UUID,
+        *,
+        viewer_user_id: UUID,
+        include_agent_scope: bool,
+        agent_id: UUID | None = None,
+        status: MemoryProposalStatus | None = None,
+    ) -> list[MemoryProposalRead]:
+        """Vorschlaege, die `viewer_user_id` sehen darf (3.1.1, 6.4.1).
+
+        Sichtbar sind Vorschlaege zum Agentengedaechtnis (nur mit
+        `include_agent_scope`, also ab `editor`) und Vorschlaege zum EIGENEN
+        Nutzergedaechtnis. Vorschlaege zum Nutzergedaechtnis anderer Personen
+        erscheinen nie — auch nicht fuer `admin`, auch nicht ueber den Filter
+        `agent_id` (ein vorschlagender Agent kann beide Gedaechtnisse treffen).
+        """
+        rows = await self._pool.fetch(
+            f"SELECT {_PROPOSAL_COLUMNS_P} "
+            "FROM agent_memory_proposal p "
+            "JOIN agent_memory m ON m.workspace_id = p.workspace_id AND m.id = p.memory_id "
+            "WHERE p.workspace_id = $1 "
+            "  AND ((m.scope = 'agent' AND $3::bool) "
+            "       OR (m.scope = 'user' AND m.subject_user_id = $2)) "
+            "  AND ($4::uuid IS NULL OR p.agent_id = $4::uuid) "
+            "  AND ($5::text IS NULL OR p.status = $5::text) "
+            "ORDER BY p.created_at DESC, p.id",
+            workspace_id,
+            viewer_user_id,
+            include_agent_scope,
+            agent_id,
+            status.value if status is not None else None,
+        )
+        return [MemoryProposalRead.model_validate(dict(row)) for row in rows]
+
+    async def decide_proposal(
+        self,
+        workspace_id: UUID,
+        owner: MemoryOwner,
+        proposal_id: UUID,
+        *,
+        accept: bool,
+        actor_id: UUID,
+        note: str | None,
+    ) -> MemoryProposalRead | None:
+        """Entscheidung eines Menschen (3.1.4), alles in einer Transaktion.
+
+        - Ablehnung: Vorschlag `rejected`, Ereignis `proposal_rejected`.
+        - Annahme `change`: Vorschlag `accepted`, Ereignisse
+          `proposal_accepted` und `edited` (neuer Fakt).
+        - Annahme `delete`: Vorschlag `accepted`, Eintrag hart geloescht mit
+          inhaltsfreier `memory.deleted`-Spur; Historie und Vorschlag fallen
+          per Cascade (M5). Die Antwort traegt den Stand vor dem Cascade.
+
+        `None`, wenn der Vorschlag nicht (mehr) offen ist oder sein Eintrag
+        nicht `owner` gehoert — die Status-Bedingung im UPDATE macht parallele
+        Entscheidungen sicher.
+        """
+        new_status = MemoryProposalStatus.accepted if accept else MemoryProposalStatus.rejected
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "UPDATE agent_memory_proposal "
+                "SET status = $3, decided_by = $4, decided_at = now() "
+                "WHERE workspace_id = $1 AND id = $2 AND status = 'pending' "
+                "  AND memory_id IN (SELECT id FROM agent_memory "
+                f"                   WHERE workspace_id = $1 AND {owner.clause(5)}) "
+                f"RETURNING {_PROPOSAL_COLUMNS}",
+                workspace_id,
+                proposal_id,
+                new_status.value,
+                actor_id,
+                owner.owner_id,
+            )
+            if row is None:
+                return None
+            proposal = MemoryProposalRead.model_validate(dict(row))
+            memory_row = await conn.fetchrow(
+                f"SELECT {_READ_COLUMNS} FROM agent_memory "
+                "WHERE workspace_id = $1 AND id = $2 FOR UPDATE",
+                workspace_id,
+                proposal.memory_id,
+            )
+            assert memory_row is not None  # Vorschlag haengt per FK am Eintrag
+            memory = MemoryRead.model_validate(dict(memory_row))
+            if not accept:
+                await _insert_human_event(
+                    conn, workspace_id, memory, MemoryEventKind.proposal_rejected, actor_id, note
+                )
+                return proposal
+            if proposal.action == MemoryProposalAction.delete:
+                await conn.execute(
+                    _delete_with_audit_sql(owner, "AND id = $4"),
+                    workspace_id,
+                    owner.owner_id,
+                    actor_id,
+                    memory.id,
+                )
+                return proposal
+            await _insert_human_event(
+                conn, workspace_id, memory, MemoryEventKind.proposal_accepted, actor_id, note
+            )
+            await self._mutate(
+                conn,
+                workspace_id,
+                owner,
+                memory.id,
+                set_sql="fact = $3",
+                set_args=(proposal.new_fact,),
+                condition="",
+                event=MemoryEventKind.edited,
+                actor_id=actor_id,
+                reason=proposal.reason,
+            )
+            return proposal
 
     async def count_for_user(self, workspace_id: UUID, subject_user_id: UUID) -> int:
         """Eintraege des Nutzergedaechtnisses ueber ALLE Status (3.1.1).
@@ -926,18 +1465,47 @@ class PgMemoryRepository:
         return [_event(row) for row in rows]
 
 
-# Loescht Eintraege des Agentengedaechtnisses und schreibt je geloeschter Zeile
+# Loescht Eintraege eines Besitzers und schreibt je geloeschter Zeile
 # `audit_log (action='memory.deleted', target=<memory_id>)` — ohne Inhalt.
 # Data-modifying CTE: beides in einer Anweisung, also atomar ohne explizite
-# Transaktion. `$3` ist der Akteur; `{extra}` engt optional auf eine ID ($4) ein.
-_DELETE_WITH_AUDIT_SQL = (
-    "WITH deleted AS ("
-    "  DELETE FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2 {extra} "
-    "  RETURNING id, workspace_id"
-    ") "
-    "INSERT INTO audit_log (workspace_id, actor_id, action, target) "
-    f"SELECT workspace_id, $3::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
-)
+# Transaktion. `$2` ist der Besitzer, `$3` der Akteur; `extra` engt optional
+# auf eine ID ($4) ein. `extra` und die Besitzer-Bedingung sind feste
+# Zeichenketten dieses Moduls, nie Eingabe.
+def _delete_with_audit_sql(owner: MemoryOwner, extra: str) -> str:
+    return (
+        "WITH deleted AS ("
+        f"  DELETE FROM agent_memory WHERE workspace_id = $1 AND {owner.clause(2)} {extra} "
+        "  RETURNING id, workspace_id"
+        ") "
+        "INSERT INTO audit_log (workspace_id, actor_id, action, target) "
+        f"SELECT workspace_id, $3::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
+    )
+
+
+async def _insert_human_event(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    before: MemoryRead,
+    event: MemoryEventKind,
+    actor_id: UUID | None,
+    reason: str | None,
+    after: MemoryRead | None = None,
+) -> None:
+    """Historien-Ereignis eines Menschen (3.1.2); ohne `after` gilt der unveraenderte Stand."""
+    snapshot_before = _snapshot(before)
+    await conn.execute(
+        "INSERT INTO agent_memory_event "
+        "(workspace_id, memory_id, event, actor_kind, actor_id, before, after, reason) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)",
+        workspace_id,
+        before.id,
+        event.value,
+        MemoryActorKind.human.value,
+        actor_id,
+        snapshot_before,
+        _snapshot(after) if after is not None else snapshot_before,
+        reason,
+    )
 
 
 def _affected(status: object) -> int:

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import status
+from pydantic import JsonValue
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
@@ -32,9 +33,10 @@ from who2be_api.core.security import (
     require_memory_mode,
     require_role,
     require_write_rate,
+    role_satisfies,
 )
 from who2be_api.embeddings import build_embedding_port
-from who2be_api.repositories.memory_repository import MemoryRepository
+from who2be_api.repositories.memory_repository import MemoryOwner, MemoryRepository
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
     MEMORY_MAX_PER_USER,
@@ -63,6 +65,13 @@ from who2be_models.memory import (
     MemoryAutoPolicy,
     MemoryAutoPolicyRead,
     MemoryAutoRow,
+    MemoryEventKind,
+    MemoryEventRead,
+    MemoryProposalCreate,
+    MemoryProposalDecision,
+    MemoryProposalRead,
+    MemoryProposalStatus,
+    MemoryRollback,
     MemorySaveResult,
 )
 
@@ -297,6 +306,45 @@ def _agent_not_found() -> ApiError:
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Agent nicht gefunden.",
         reason="agent_not_found",
+    )
+
+
+def _proposal_not_found() -> ApiError:
+    # Kein eigener Grund (ADR-0053 6.1 kennt nur `memory_not_found`): auch ein
+    # Vorschlag, den der Aufrufer nicht sehen darf, ist „nicht gefunden“.
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Vorschlag nicht gefunden.",
+        reason="memory_not_found",
+    )
+
+
+def _proposal_not_pending() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Der Vorschlag ist bereits entschieden.",
+        reason="memory_proposal_not_pending",
+    )
+
+
+def _transition_invalid(memory: MemoryRead, *, event: MemoryEventKind | None = None) -> ApiError:
+    params: dict[str, JsonValue] = {"status": memory.status.value}
+    if event is not None:
+        params["event"] = event.value
+        detail = (
+            f"Das Ereignis `{event.value}` hat keinen Vorzustand, "
+            "auf den zurueckgesetzt werden kann."
+        )
+    else:
+        detail = (
+            "Dieser Statuswechsel ist fuer ein Memory im Status "
+            f"`{memory.status.value}` nicht moeglich."
+        )
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail,
+        reason="memory_transition_invalid",
+        params=params,
     )
 
 
@@ -682,6 +730,7 @@ class MemoryService:
             data.fact,
             data.category.value if data.category is not None else None,
             data.importance,
+            ctx.user_id,
         )
         if updated is None:
             raise _memory_not_found()
@@ -699,3 +748,271 @@ class MemoryService:
         self._require_human(ctx)
         await self._require_agent(ctx, agent_id)
         await self._repo.delete_all(ctx.workspace_id, agent_id, ctx.user_id)
+
+    # ------------------------------------------- Vorschlaege von Agenten (3.1.4)
+
+    async def propose(
+        self, ctx: WorkspaceContext, data: MemoryProposalCreate
+    ) -> MemoryProposalRead:
+        """Aenderungs- oder Loeschvorschlag eines Agenten (MCP `propose_memory_change`, C4).
+
+        Gates wie `save_memory` (Modus `suggest`, Schreib-Rate). Ein Agent darf
+        nur vorschlagen, was er abrufen darf (3.1.4): sein eigenes
+        Agentengedaechtnis oder das Nutzergedaechtnis des Token-Besitzers,
+        jeweils nur `active` und nie `lesson` (der Abruf liefert nichts
+        anderes, 6.2). Alles andere ist fuer ihn `memory_not_found` — auch ein
+        existierender fremder Eintrag, damit die Antwort nichts verraet.
+
+        `new_fact` und `reason` durchlaufen Secret-Scan und Injection-Waechter
+        wie `save_memory`. Der Vorschlag entsteht IMMER `pending`; einen Pfad
+        zur automatischen Annahme gibt es nicht — auch nicht unter
+        `memory_mode=auto` mit eingeschalteter Matrix-Zelle (4.2).
+        """
+        require_memory_mode(ctx, MemoryMode.suggest)
+        require_write_rate(ctx)
+        assert ctx.agent_id is not None  # via Gate garantiert
+        memory = await self._repo.get_owned(
+            ctx.workspace_id, MemoryOwner(agent_id=ctx.agent_id), data.memory_id
+        )
+        if memory is None:
+            memory = await self._repo.get_owned(
+                ctx.workspace_id, MemoryOwner(subject_user_id=ctx.user_id), data.memory_id
+            )
+        if (
+            memory is None
+            or memory.status != MemoryStatus.active
+            or memory.kind == MemoryKind.lesson
+        ):
+            raise _memory_not_found()
+        guard = await self._repo.get_guard_config(ctx.workspace_id)
+        for text in (data.new_fact or "", data.reason):
+            if not text:
+                continue
+            rejection = _secret_rejection(text) or _guard_rejection(guard, text)
+            if rejection is not None:
+                raise ApiError(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=rejection,
+                    reason="memory_guard_rejected",
+                )
+        return await self._repo.insert_proposal(ctx.workspace_id, ctx.agent_id, memory, data)
+
+    async def list_proposals(
+        self,
+        ctx: WorkspaceContext,
+        *,
+        agent_id: UUID | None = None,
+        status_filter: MemoryProposalStatus | None = None,
+    ) -> list[MemoryProposalRead]:
+        """Vorschlaege fuer einen Menschen (6.4.1 `GET /memory-proposals`).
+
+        Ab `viewer` sichtbar: Vorschlaege zum eigenen Nutzergedaechtnis. Ab
+        `editor` dazu alle zum Agentengedaechtnis. Vorschlaege zum
+        Nutzergedaechtnis anderer Personen sieht niemand (3.1.1, auch admin
+        nicht). `agent_id` ist ein optionaler Filter auf den Absender.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        self._require_human(ctx)
+        if agent_id is not None:
+            await self._require_agent(ctx, agent_id)
+        return await self._repo.list_proposals(
+            ctx.workspace_id,
+            viewer_user_id=ctx.user_id,
+            include_agent_scope=role_satisfies(ctx.role, WorkspaceRole.editor),
+            agent_id=agent_id,
+            status=status_filter,
+        )
+
+    async def decide_proposal(
+        self, ctx: WorkspaceContext, proposal_id: UUID, data: MemoryProposalDecision
+    ) -> MemoryProposalRead:
+        """Annahme oder Ablehnung durch einen Menschen (3.1.4).
+
+        Rechte folgen dem Ziel-Eintrag: Agentengedaechtnis ab `editor`,
+        Nutzergedaechtnis nur die Person selbst (jede Rolle ab `viewer`).
+        Wer den Vorschlag nicht entscheiden darf, bekommt `memory_not_found` —
+        nicht 403, damit ein fremdes Nutzergedaechtnis nicht ueber
+        Vorschlags-IDs abtastbar ist.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        self._require_human(ctx)
+        found = await self._repo.get_proposal(ctx.workspace_id, proposal_id)
+        if found is None:
+            raise _proposal_not_found()
+        proposal, owner = found
+        if owner.subject_user_id is not None:
+            if owner.subject_user_id != ctx.user_id:
+                raise _proposal_not_found()
+        elif not role_satisfies(ctx.role, WorkspaceRole.editor):
+            raise _proposal_not_found()
+        if proposal.status != MemoryProposalStatus.pending:
+            raise _proposal_not_pending()
+        decided = await self._repo.decide_proposal(
+            ctx.workspace_id,
+            owner,
+            proposal_id,
+            accept=data.accept,
+            actor_id=ctx.user_id,
+            note=data.note,
+        )
+        if decided is None:  # Race: parallel entschieden
+            raise _proposal_not_pending()
+        return decided
+
+    # ------------------- Historie, Rollback, Bestaetigen, Reaktivieren (3.1.2, 6.4)
+    #
+    # `agent_id=None` heisst: das EIGENE Nutzergedaechtnis (`/me/memories`, C3b);
+    # sonst das Agentengedaechtnis dieses Agenten (`/agents/{id}/memories`).
+
+    async def _owner(self, ctx: WorkspaceContext, agent_id: UUID | None) -> MemoryOwner:
+        """Besitzer samt Rechtepruefung (3.1.1).
+
+        Agentengedaechtnis: `editor`, Mensch, Agent im Workspace.
+        Nutzergedaechtnis: jede Rolle ab `viewer`, Mensch, und nur das eigene —
+        der Besitzer ist IMMER `ctx.user_id`, es gibt keinen Parameter, ueber
+        den jemand (auch admin) ein fremdes Nutzergedaechtnis adressiert.
+        """
+        if agent_id is None:
+            require_role(ctx, WorkspaceRole.viewer)
+            self._require_human(ctx)
+            return MemoryOwner(subject_user_id=ctx.user_id)
+        require_role(ctx, WorkspaceRole.editor)
+        self._require_human(ctx)
+        await self._require_agent(ctx, agent_id)
+        return MemoryOwner(agent_id=agent_id)
+
+    async def _owned(
+        self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID
+    ) -> tuple[MemoryOwner, MemoryRead]:
+        owner = await self._owner(ctx, agent_id)
+        memory = await self._repo.get_owned(ctx.workspace_id, owner, memory_id)
+        if memory is None:
+            raise _memory_not_found()
+        return owner, memory
+
+    async def list_my_memories(
+        self, ctx: WorkspaceContext, status_filter: MemoryStatus | None
+    ) -> list[MemoryRead]:
+        """Eigenes Nutzergedaechtnis (`GET /me/memories`)."""
+        await self._owner(ctx, None)
+        return await self._repo.list_for_user(ctx.workspace_id, ctx.user_id, status_filter)
+
+    async def history(
+        self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID
+    ) -> list[MemoryEventRead]:
+        """Historie eines Eintrags, aelteste zuerst (3.1.2)."""
+        _, memory = await self._owned(ctx, agent_id, memory_id)
+        return await self._repo.list_events(ctx.workspace_id, memory.id)
+
+    async def confirm(
+        self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID
+    ) -> MemoryRead:
+        """Bestaetigt einen aktiven, unbestaetigten Eintrag; der Verfall endet (3.1.3)."""
+        owner, memory = await self._owned(ctx, agent_id, memory_id)
+        if memory.status != MemoryStatus.active or memory.confirmed_at is not None:
+            raise _transition_invalid(memory)
+        updated = await self._repo.confirm(ctx.workspace_id, owner, memory_id, ctx.user_id)
+        if updated is None:  # Race
+            raise _transition_invalid(memory)
+        return updated
+
+    async def reactivate(
+        self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID
+    ) -> MemoryRead:
+        """`expired` → `active`, zugleich bestaetigt (6.4)."""
+        owner, memory = await self._owned(ctx, agent_id, memory_id)
+        if memory.status != MemoryStatus.expired:
+            raise _transition_invalid(memory)
+        updated = await self._repo.reactivate(ctx.workspace_id, owner, memory_id, ctx.user_id)
+        if updated is None:  # Race
+            raise _transition_invalid(memory)
+        return updated
+
+    async def rollback(
+        self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID, data: MemoryRollback
+    ) -> MemoryRead:
+        """Stellt den Zustand aus `before` des gewaehlten Ereignisses her (3.1.2).
+
+        Nur ein Mensch (Gate in `_owner`). Das Ereignis muss zu GENAU diesem
+        Eintrag gehoeren — sonst `memory_not_found`. Ohne `before`
+        (z. B. `created`) gibt es keinen Vorzustand: `memory_transition_invalid`.
+        Geschrieben wird ein neues Ereignis `rolled_back`; die Historie bleibt
+        append-only.
+        """
+        owner, memory = await self._owned(ctx, agent_id, memory_id)
+        events = await self._repo.list_events(ctx.workspace_id, memory.id)
+        target = next((e for e in events if e.id == data.event_id), None)
+        if target is None:
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ereignis gehoert nicht zu diesem Memory.",
+                reason="memory_not_found",
+            )
+        if target.before is None:
+            raise _transition_invalid(memory, event=target.event)
+        restored = await self._repo.restore(
+            ctx.workspace_id,
+            owner,
+            memory_id,
+            target.before,
+            ctx.user_id,
+            reason=f"rollback_to:{target.id}",
+        )
+        if restored is None:  # Race: parallel geloescht
+            raise _memory_not_found()
+        return restored
+
+    # ------------------------------ Eigenes Nutzergedaechtnis kuratieren (3.1.1)
+
+    async def triage_my(
+        self, ctx: WorkspaceContext, memory_id: UUID, data: MemoryTriage
+    ) -> MemoryRead:
+        """Triage im eigenen Nutzergedaechtnis — nur die Person selbst."""
+        owner, memory = await self._owned(ctx, None, memory_id)
+        if memory.status != MemoryStatus.pending:
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
+                reason="memory_not_pending",
+            )
+        approve = data.action == MemoryTriageAction.approve
+        updated = await self._repo.triage_owned(
+            ctx.workspace_id,
+            owner,
+            memory_id,
+            MemoryStatus.active if approve else MemoryStatus.rejected,
+            data.fact if approve else None,
+            data.note,
+            ctx.user_id,
+        )
+        if updated is None:  # Race
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
+                reason="memory_not_pending",
+            )
+        return updated
+
+    async def update_my(
+        self, ctx: WorkspaceContext, memory_id: UUID, data: MemoryUpdate
+    ) -> MemoryRead:
+        """Bearbeiten im eigenen Nutzergedaechtnis."""
+        owner = await self._owner(ctx, None)
+        updated = await self._repo.update_owned(
+            ctx.workspace_id,
+            owner,
+            memory_id,
+            data.fact,
+            data.category.value if data.category is not None else None,
+            data.importance,
+            ctx.user_id,
+        )
+        if updated is None:
+            raise _memory_not_found()
+        return updated
+
+    async def delete_my(self, ctx: WorkspaceContext, memory_id: UUID) -> None:
+        """Hard-Delete im eigenen Nutzergedaechtnis, inhaltsfreie Audit-Spur (M5)."""
+        owner = await self._owner(ctx, None)
+        if not await self._repo.delete_owned(ctx.workspace_id, owner, memory_id, ctx.user_id):
+            raise _memory_not_found()
