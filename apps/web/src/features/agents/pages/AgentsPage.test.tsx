@@ -70,6 +70,28 @@ afterEach(() => {
 })
 
 describe('AgentsPage', () => {
+  it('Audit A10: genau eine Brand-Flaeche — Kopieren in der Zeile ist outline', async () => {
+    const list = [agent(), agent({ id: 'a2', name: 'Zweiter Bot' }), agent({ id: 'a3', name: 'Dritter Bot' })]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(list), { status: 200 })),
+    )
+    renderPage()
+    expect(await screen.findByText('Dritter Bot')).toBeInTheDocument()
+
+    const copyParts = [
+      ...screen.getAllByTestId('copy-prompt-primary'),
+      ...screen.getAllByTestId('copy-prompt-dropdown-trigger'),
+    ]
+    expect(copyParts).toHaveLength(6)
+    for (const part of copyParts) {
+      expect(part.className).not.toMatch(/(^|\s)bg-brand(\s|$)/)
+      expect(part.className).toContain('border-input')
+    }
+    const brand = document.querySelectorAll('button[class~="bg-brand"], a[class~="bg-brand"]')
+    expect([...brand].map((el) => el.getAttribute('data-testid'))).toEqual(['new-agent'])
+  })
+
   it('listet Agents mit Status- und Unvollstaendig-Badges', async () => {
     const complete = agent()
     const incomplete = agent({

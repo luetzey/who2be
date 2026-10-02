@@ -42,8 +42,13 @@ function nodeFor(label: string, displayLabel: string, version: number, accent: b
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
+        // Audit A12: Punkt und Text standen in `text-brand` auf `bg-brand/10`
+        // und massen hell 2,38:1 (Text braucht 4,5:1, der Punkt als Grafik
+        // 3:1). Wie bei allen Brand-Flaechen (design-language.md §2.2) ist die
+        // Schrift dunkel; Flaeche und Rand tragen die Marke weiter. Der
+        // aktuelle Stand ist zusaetzlich an der Form erkennbar (● statt ○).
         accent
-          ? 'border-brand/40 bg-brand/10 text-brand'
+          ? 'border-brand/40 bg-brand/10 text-foreground'
           : 'border-border bg-muted text-muted-foreground',
       )}
       data-testid={`branch-node-${label}`}

@@ -464,6 +464,7 @@ export function AgentsPage() {
                                   <CopyPromptButton
                                     agentId={agent.id}
                                     disabled={agent.status !== 'enabled'}
+                                    variant="outline"
                                   />
                                 ) : (
                                   <Button asChild variant="outline" size="sm" className="min-h-10 md:min-h-0">

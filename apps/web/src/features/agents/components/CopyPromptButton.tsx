@@ -13,11 +13,19 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
+import { cn } from '@/lib/utils'
 
 interface CopyPromptButtonProps {
   agentId: string
   /** Wird true, wenn der Agent deaktiviert ist — Render-Endpoint wirft 409. */
   disabled?: boolean
+  /**
+   * Audit A10 / design-language.md §2.2: hoechstens eine Brand-Aktion je
+   * Seite. In der Detailseite ist „Kopieren\" die primaere Aktion (`brand`,
+   * Standard); in jeder Zeile der Agent-Liste ist sie tertiaer (`outline`),
+   * sonst stuende bei n Agents n+1 Mal Brand auf der Seite.
+   */
+  variant?: 'brand' | 'outline'
 }
 
 /**
@@ -29,7 +37,11 @@ interface CopyPromptButtonProps {
  * mit `undefined`. Unresolved Placeholders triggern einen sekundaeren
  * Hinweis-Toast.
  */
-export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButtonProps) {
+export function CopyPromptButton({
+  agentId,
+  disabled = false,
+  variant = 'brand',
+}: CopyPromptButtonProps) {
   const { t } = useTranslation('agents')
   const api = useApi()
   const [busy, setBusy] = useState<AgentRenderFormat | null>(null)
@@ -60,7 +72,7 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
     <div className="inline-flex" data-testid="copy-prompt-button">
       <Button
         type="button"
-        variant="brand"
+        variant={variant}
         disabled={disabled || busy !== null}
         onClick={() => void copy('plain')}
         className="rounded-r-none"
@@ -73,7 +85,7 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            variant="brand"
+            variant={variant}
             disabled={disabled || busy !== null}
             aria-label={t('copy.formatSelect')}
             // `w-10 md:w-auto`: der Dropdown-Teil traegt nur ein Chevron;
@@ -83,7 +95,12 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
             // einzige Quelle), bleibt in der Breite aber unter den 40 px, die
             // AK 4 von #570 unterhalb `md` verlangt. `w-10` macht daraus
             // 40x40 px; ab `md` gibt `md:w-auto` die Desktop-Dichte frei.
-            className="w-10 rounded-l-none border-l border-l-primary-foreground/30 px-2 md:w-auto"
+            // Trennlinie: auf Brand ein heller Strich, bei `outline` liegen
+            // die beiden Raender ohnehin aneinander (`-ml-px` statt Doppelstrich).
+            className={cn(
+              'w-10 rounded-l-none px-2 md:w-auto',
+              variant === 'brand' ? 'border-l border-l-primary-foreground/30' : '-ml-px',
+            )}
             data-testid="copy-prompt-dropdown-trigger"
           >
             <ChevronDown className="h-4 w-4" />
