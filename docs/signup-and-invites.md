@@ -180,6 +180,30 @@ Admin manuell teilt.
 > Lokal nimmt **Mailpit** (UI `http://localhost:8025`) jede Mail an — die
 > `GOTRUE_SMTP_*`-Defaults in `.env.example` reichen für den Smoke.
 
+### Self-Hosting ohne Mailversand
+
+Die Cloud-Version braucht Mailversand. Die On-Prem-Edition soll bewusst auch
+**ohne** Mailversand laufen. Deshalb steht im Dokploy-Compose
+(`deploy/dokploy/docker-compose.yml`, Dienst `auth`) der Default
+`GOTRUE_MAILER_AUTOCONFIRM=true`; der Hetzner-Compose setzt `false`.
+
+> **Hinweis: Autoconfirm ist nur für lokalen Betrieb oder ein
+> vertrauenswürdiges Netz gedacht.** Mit `GOTRUE_MAILER_AUTOCONFIRM=true` gilt
+> jede bei der Registrierung angegebene Adresse sofort als bestätigt — ohne
+> dass jemand das Postfach geöffnet hat. Die Bestätigung ist dann **kein
+> Besitznachweis**. Die offenen Einladungen (Weg A, `/v1/invitations/pending`)
+> hängen aber genau an dieser bestätigten Adresse.
+>
+> Ist die Instanz öffentlich erreichbar, gehört
+> `GOTRUE_MAILER_AUTOCONFIRM=false` gesetzt und echter SMTP verdrahtet
+> (`GOTRUE_SMTP_*`, siehe „Voraussetzungen für den Mailversand"). Stand heute
+> reicht der Dokploy-Compose `GOTRUE_SMTP_*` **nicht** an den `auth`-Dienst
+> durch — Variablen nur in der Dokploy-Environment zu setzen, genügt dort
+> also nicht. Ohne SMTP bleibt Weg B (geteilter Link) der Einladungsweg.
+>
+> Hintergrund und dieselbe Warnung für den Hetzner-Betrieb:
+> [Supabase-README → Mailer](../deploy/hetzner/supabase/README.md#mailer-verify---invitation-mails).
+
 ## 3. Captcha vor der Registrierung (Cloudflare Turnstile)
 
 Gegen Massen-Signups steht optional ein Captcha vor der Selbstregistrierung.
