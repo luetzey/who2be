@@ -23,7 +23,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Serverseitige Deckel (Waechter laufen in jedem Modus, ADR-0044).
 MEMORY_FACT_MAX_LENGTH = 300
@@ -31,6 +31,8 @@ MEMORY_CONTEXT_MAX_LENGTH = 200
 MEMORY_TRIAGE_NOTE_MAX_LENGTH = 500
 # Freitext eines Historien-Ereignisses (DB-CHECK in 0091, ADR-0053 3.1.2).
 MEMORY_EVENT_REASON_MAX_LENGTH = 500
+# Begruendung eines Aenderungs-/Loeschvorschlags (DB-CHECK 0096, ADR-0053 3.1.4).
+MEMORY_PROPOSAL_REASON_MAX_LENGTH = 200
 MEMORY_MAX_PER_AGENT = 500
 # Obergrenze des Nutzergedaechtnisses je (workspace_id, subject_user_id),
 # gezaehlt ueber alle Status wie MEMORY_MAX_PER_AGENT (ADR-0053 3.1.1).
@@ -185,6 +187,8 @@ class MemoryEventKind(StrEnum):
     rolled_back = "rolled_back"
     converted = "converted"
     merged = "merged"
+    # Not-Aus (ADR-0053 6.4.1): automatisch Aktiviertes zurueck nach `pending`.
+    auto_revoked = "auto_revoked"
 
 
 class MemoryActorKind(StrEnum):
@@ -410,6 +414,78 @@ class MemoryEventRead(BaseModel):
     after: dict[str, Any] | None = None
     reason: str | None = None
     created_at: datetime
+
+
+class MemoryProposalAction(StrEnum):
+    """Art eines Agenten-Vorschlags zu einem bestehenden Eintrag (ADR-0053 3.1.4)."""
+
+    change = "change"
+    delete = "delete"
+
+
+class MemoryProposalStatus(StrEnum):
+    """Status eines Vorschlags. Es gibt keinen Weg zu `accepted` ohne Menschen."""
+
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
+class MemoryProposalCreate(BaseModel):
+    """Aenderungs- oder Loeschvorschlag eines Agenten (MCP `propose_memory_change`).
+
+    `new_fact` genau bei `action=change` (DB-CHECK 0096). Der Text durchlaeuft
+    serverseitig dieselben Waechter wie `save_memory` (Secret-Scan,
+    Injection-Waechter); `reason` ebenfalls, weil er einem Menschen gezeigt
+    wird.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: UUID
+    action: MemoryProposalAction
+    reason: str = Field(min_length=1, max_length=MEMORY_PROPOSAL_REASON_MAX_LENGTH)
+    new_fact: str | None = Field(default=None, min_length=1, max_length=MEMORY_FACT_MAX_LENGTH)
+
+    @model_validator(mode="after")
+    def _new_fact_matches_action(self) -> MemoryProposalCreate:
+        if (self.action == MemoryProposalAction.change) != (self.new_fact is not None):
+            raise ValueError("`new_fact` ist bei action=change Pflicht und sonst nicht erlaubt.")
+        return self
+
+
+class MemoryProposalRead(BaseModel):
+    """Ein persistierter Vorschlag (read-only)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    memory_id: UUID
+    agent_id: UUID
+    action: MemoryProposalAction
+    new_fact: str | None = None
+    reason: str
+    status: MemoryProposalStatus
+    decided_by: UUID | None = None
+    decided_at: datetime | None = None
+    created_at: datetime
+
+
+class MemoryProposalDecision(BaseModel):
+    """Entscheidung eines Menschen ueber einen Vorschlag (`POST .../decide`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accept: bool
+    note: str | None = Field(default=None, max_length=MEMORY_EVENT_REASON_MAX_LENGTH)
+
+
+class MemoryRollback(BaseModel):
+    """Body von `POST .../rollback`: das Ereignis, dessen `before` gilt (3.1.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: UUID
 
 
 class MemoryHit(BaseModel):

@@ -228,7 +228,8 @@ class PgAccountPurgeRepository:
             **loeschen**, je Zeile eine inhaltsfreie `audit_log`-Spur
             `memory.deleted`; die Historie faellt per Cascade.
             `agent_memory.confirmed_by` und `agent_memory_event.actor_id`
-            (nur `actor_kind = 'human'`) auf den Sentinel.
+            (nur `actor_kind = 'human'`) auf den Sentinel, ebenso
+            `agent_memory_proposal.decided_by` (0096).
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -325,6 +326,13 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
+            # Wer einen Agenten-Vorschlag entschieden hat (0096) — der
+            # Vorschlag bleibt als Nachweis am ueberlebenden Eintrag stehen.
+            mp_result = await self._conn.execute(
+                "UPDATE agent_memory_proposal SET decided_by = $2 WHERE decided_by = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
         return (
             _count(sh_result)
             + _count(al_result)
@@ -334,6 +342,7 @@ class PgAccountPurgeRepository:
             + _count(tr_result)
             + _count(mc_result)
             + _count(me_result)
+            + _count(mp_result)
         )
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:

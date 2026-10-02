@@ -302,6 +302,8 @@ _PROBLEM_TITLES: dict[str, str] = {
     "memory_origin_required": "Herkunft des Memorys fehlt",
     "memory_kind_scope_invalid": "Art und Geltungsbereich passen nicht zusammen",
     "memory_note_cap_reached": "Kontingent fuer Arbeitsnotizen erreicht",
+    "memory_proposal_not_pending": "Vorschlag bereits entschieden",
+    "memory_transition_invalid": "Statuswechsel des Memorys nicht moeglich",
     "persona_mode_unknown": "Unbekannter Persona-Modus",
     "placeholder_kind_unknown": "Unbekannter Placeholder-Typ",
     "entity_version_not_found": "Version nicht gefunden",

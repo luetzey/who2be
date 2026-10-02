@@ -13602,6 +13602,8 @@
               "memory_origin_required",
               "memory_kind_scope_invalid",
               "memory_note_cap_reached",
+              "memory_proposal_not_pending",
+              "memory_transition_invalid",
               "persona_mode_unknown",
               "placeholder_kind_unknown",
               "entity_version_not_found",
