@@ -169,6 +169,9 @@ ProblemReason = Literal[
     # 409 — Statuswechsel am Eintrag nicht moeglich (confirm nur aktiv-unbestaetigt,
     # reactivate nur expired, Rollback-Ziel ohne Vorzustand; params: status[, event])
     "memory_transition_invalid",
+    # Paket C3b-2 (ADR-0053 6.1/6.4.1): Not-Aus bzw. Stapel per Filter — die
+    # Serverzahl weicht von `expected_count` ab, nichts geaendert (params: count)
+    "memory_batch_count_mismatch",  # 409
     "persona_mode_unknown",  # 422 — Persona-Modus existiert nicht (params: mode, available)
     "placeholder_kind_unknown",  # 422 — unbekannter Placeholder-Typ (params: kind)
     "entity_version_not_found",  # 404 — Version einer Entitaet unbekannt (params: label)

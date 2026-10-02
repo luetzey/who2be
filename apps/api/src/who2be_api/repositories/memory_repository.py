@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -383,6 +384,58 @@ class MemoryRepository(Protocol):
         actor_id: UUID,
         note: str | None,
     ) -> MemoryProposalRead | None: ...
+
+    # --- Paket C3b-2: Not-Aus (6.4.1)
+
+    async def preview_auto_revocable(
+        self, workspace_id: UUID, selection: MemoryRevokeSelection, sample_size: int
+    ) -> MemoryRevokeOutcome: ...
+
+    async def revoke_auto(
+        self,
+        workspace_id: UUID,
+        selection: MemoryRevokeSelection,
+        *,
+        expected_count: int,
+        actor_id: UUID,
+    ) -> MemoryRevokeOutcome: ...
+
+
+@dataclass(frozen=True)
+class MemoryRevokeSelection:
+    """Auswahl des Not-Aus (ADR-0053 6.4.1), vom Service aus Body und Rechten gebaut.
+
+    Betroffen: `status='active'`, `confirmed_at IS NULL` und ein Ereignis
+    `auto_activated` mit `since <= created_at < until`. Sichtbar fuer den
+    Aufrufer sind das Agentengedaechtnis und sein eigenes Nutzergedaechtnis
+    (`viewer_user_id`). Das Nutzergedaechtnis anderer Personen gehoert nur mit
+    `include_other_users` zur Auswahl — und bleibt auch dann verborgen: es
+    zaehlt in `hidden_count`, erscheint aber nie mit Inhalt oder ID (3.1.1).
+    """
+
+    viewer_user_id: UUID
+    since: datetime
+    until: datetime | None = None
+    agent_id: UUID | None = None
+    origins: tuple[MemoryOrigin, ...] | None = None
+    include_other_users: bool = False
+
+
+@dataclass(frozen=True)
+class MemoryRevokeOutcome:
+    """Ergebnis von Vorschau bzw. Ruecknahme.
+
+    `count` zaehlt alle Treffer, `hidden_count` deren Anteil aus fremdem
+    Nutzergedaechtnis. `visible` sind nur Eintraege, die der Aufrufer sehen
+    darf (Vorschau: hoechstens `sample_size`, vor der Aenderung; Ruecknahme:
+    alle sichtbaren, nach der Aenderung). `applied=False` heisst: nichts
+    geaendert (Vorschau oder abweichende Zahl).
+    """
+
+    count: int
+    hidden_count: int
+    visible: list[MemoryRead]
+    applied: bool
 
 
 @dataclass(frozen=True)
@@ -1463,6 +1516,141 @@ class PgMemoryRepository:
             memory_id,
         )
         return [_event(row) for row in rows]
+
+    # ---------------------------------------------------- Not-Aus (6.4.1, C3b-2)
+
+    async def preview_auto_revocable(
+        self, workspace_id: UUID, selection: MemoryRevokeSelection, sample_size: int
+    ) -> MemoryRevokeOutcome:
+        """Vorschau: zaehlt die Treffer und liefert hoechstens `sample_size` sichtbare.
+
+        Aendert nichts. Fremdes Nutzergedaechtnis zaehlt nur in `hidden_count`;
+        die Stichprobe filtert es in SQL heraus, sein Inhalt verlaesst die
+        Datenbank also gar nicht erst.
+        """
+        args = _revoke_args(workspace_id, selection)
+        totals = await self._pool.fetchrow(
+            "SELECT COUNT(*)::int AS count, "
+            f"       COUNT(*) FILTER (WHERE {_REVOKE_HIDDEN})::int AS hidden "
+            f"FROM agent_memory m WHERE {_REVOKE_WHERE}",
+            *args,
+        )
+        assert totals is not None
+        rows = await self._pool.fetch(
+            f"SELECT {_READ_COLUMNS_M} FROM agent_memory m "
+            f"WHERE {_REVOKE_WHERE} AND NOT ({_REVOKE_HIDDEN}) "
+            f"ORDER BY m.created_at DESC, m.id LIMIT {int(sample_size)}",
+            *args,
+        )
+        return MemoryRevokeOutcome(
+            count=int(totals["count"]),
+            hidden_count=int(totals["hidden"]),
+            visible=[MemoryRead.model_validate(dict(row)) for row in rows],
+            applied=False,
+        )
+
+    async def revoke_auto(
+        self,
+        workspace_id: UUID,
+        selection: MemoryRevokeSelection,
+        *,
+        expected_count: int,
+        actor_id: UUID,
+    ) -> MemoryRevokeOutcome:
+        """Not-Aus: alle Treffer `active` → `pending`, je Eintrag Ereignis `auto_revoked`.
+
+        Alles in EINER Transaktion: Auswahl `FOR UPDATE` (nach ID sortiert,
+        damit zwei parallele Laeufe nicht gegenseitig verklemmen), Vergleich
+        mit `expected_count`, Aenderung und Historie. Weicht die Zahl ab, wird
+        nichts geaendert (`applied=False`). Faellt ein Schritt danach aus, rollt
+        die Transaktion alles zurueck — alle oder keiner.
+
+        Die Bestaetigung bleibt leer (der Eintrag war nie bestaetigt); der
+        Verfall laeuft weiter bzw. wird gesetzt, falls er fehlt (3.1.3: kein
+        unbestaetigter Eintrag ohne Verfall). Geloescht wird nichts.
+        """
+        args = _revoke_args(workspace_id, selection)
+        async with self._pool.acquire() as conn, conn.transaction():
+            rows = await conn.fetch(
+                f"SELECT {_READ_COLUMNS_M}, ({_REVOKE_HIDDEN}) AS hidden "
+                f"FROM agent_memory m WHERE {_REVOKE_WHERE} "
+                "ORDER BY m.id FOR UPDATE OF m",
+                *args,
+            )
+            hidden_ids = {row["id"] for row in rows if row["hidden"]}
+            count, hidden_count = len(rows), len(hidden_ids)
+            if count != expected_count:
+                return MemoryRevokeOutcome(
+                    count=count, hidden_count=hidden_count, visible=[], applied=False
+                )
+            before = {
+                row["id"]: MemoryRead.model_validate(
+                    {k: v for k, v in row.items() if k != "hidden"}
+                )
+                for row in rows
+            }
+            updated = await conn.fetch(
+                "UPDATE agent_memory SET status = 'pending', updated_at = now(), "
+                "  expires_at = COALESCE(expires_at, now() + make_interval(days => $3)) "
+                "WHERE workspace_id = $1 AND id = ANY($2::uuid[]) "
+                f"RETURNING {_READ_COLUMNS}",
+                workspace_id,
+                list(before),
+                MEMORY_UNCONFIRMED_TTL_DAYS,
+            )
+            if len(updated) != count:  # gesperrte Zeilen — darf nicht passieren
+                raise RuntimeError("Not-Aus: Zeilenzahl nach dem Update weicht ab.")
+            after = sorted(
+                (MemoryRead.model_validate(dict(row)) for row in updated), key=lambda m: m.id
+            )
+            for memory in after:
+                await _insert_human_event(
+                    conn,
+                    workspace_id,
+                    before[memory.id],
+                    MemoryEventKind.auto_revoked,
+                    actor_id,
+                    None,
+                    memory,
+                )
+        return MemoryRevokeOutcome(
+            count=count,
+            hidden_count=hidden_count,
+            visible=[m for m in after if m.id not in hidden_ids],
+            applied=True,
+        )
+
+
+# Not-Aus-Auswahl (6.4.1). Parameter: $1 Workspace, $2 Aufrufer (fuer die
+# Sichtbarkeit), $3 since, $4 until, $5 Agent, $6 Herkuenfte, $7
+# include_other_users. Fremdes Nutzergedaechtnis gehoert nur mit $7 zur
+# Auswahl. Der Agentenfilter greift auf Besitzer ODER Einreicher, weil das
+# Nutzergedaechtnis `agent_id IS NULL` traegt und der Einreicher dort nur in
+# `created_by_agent_id` steht (3.1.1). Feste Zeichenketten, nie Eingabe.
+_READ_COLUMNS_M = ", ".join(f"m.{c.strip()}" for c in _READ_COLUMNS.split(","))
+_REVOKE_HIDDEN = "m.scope = 'user' AND m.subject_user_id <> $2"
+_REVOKE_WHERE = (
+    "m.workspace_id = $1 AND m.status = 'active' AND m.confirmed_at IS NULL "
+    "AND EXISTS (SELECT 1 FROM agent_memory_event e "
+    "            WHERE e.workspace_id = $1 AND e.memory_id = m.id "
+    "              AND e.event = 'auto_activated' AND e.created_at >= $3 "
+    "              AND ($4::timestamptz IS NULL OR e.created_at < $4::timestamptz)) "
+    "AND ($5::uuid IS NULL OR m.agent_id = $5::uuid OR m.created_by_agent_id = $5::uuid) "
+    "AND ($6::text[] IS NULL OR m.origin = ANY($6::text[])) "
+    "AND (m.scope = 'agent' OR m.subject_user_id = $2 OR $7::bool)"
+)
+
+
+def _revoke_args(workspace_id: UUID, selection: MemoryRevokeSelection) -> tuple[object, ...]:
+    return (
+        workspace_id,
+        selection.viewer_user_id,
+        selection.since,
+        selection.until,
+        selection.agent_id,
+        [o.value for o in selection.origins] if selection.origins is not None else None,
+        selection.include_other_users,
+    )
 
 
 # Loescht Eintraege eines Besitzers und schreibt je geloeschter Zeile

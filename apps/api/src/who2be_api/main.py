@@ -304,6 +304,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "memory_note_cap_reached": "Kontingent fuer Arbeitsnotizen erreicht",
     "memory_proposal_not_pending": "Vorschlag bereits entschieden",
     "memory_transition_invalid": "Statuswechsel des Memorys nicht moeglich",
+    "memory_batch_count_mismatch": "Trefferzahl weicht von der bestaetigten Anzahl ab",
     "persona_mode_unknown": "Unbekannter Persona-Modus",
     "placeholder_kind_unknown": "Unbekannter Placeholder-Typ",
     "entity_version_not_found": "Version nicht gefunden",
