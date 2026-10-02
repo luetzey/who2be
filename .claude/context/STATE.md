@@ -1,6 +1,33 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-10-01 (Export und Import je Organisation: Betreiber-Werkzeug `who2be-org-transfer`, PR #756 gemergt; Folgepakete P2–P4 offen)_
+_Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
+
+## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
+
+**Stand:** PR offen, Review ausstehend. `save_memory` weist Zugangsdaten und
+Geheimnisse ab (`_secret_rejection` in `services/memory_service.py`, Grund
+`memory_guard_rejected`), unabhaengig vom Injection-Waechter, auch bei `off`.
+Unbestaetigte Eintraege — jetzt auch `pending` — bekommen `expires_at`
+(30 Tage); `lesson` nie. Die Freigabe in der Triage setzt `confirmed_at`,
+`confirmed_by` und `expires_at = NULL`. Der Job `who2be-memory-expire`
+(`core/memory_expiry.py`) setzt Faelliges auf `expired` und schreibt je Eintrag
+das Ereignis `expired` (`actor_kind='system'`); Cron-Zeile im RUNBOOK.
+Ratenbegrenzung: `save_memory` verbrauchte das Agenten-Schreiblimit schon
+(`require_write_rate`); C2b haelt es per Test fest.
+
+**Beleg:** `apps/api/tests/test_memory_expiry.py` (14 Tests). Neun Rot-Proben,
+jede an der erwarteten Assertion rot: Bestaetigtes verfaellt, Abruf verlaengert,
+kein/falsches Ereignis, Dublettenpruefung ohne `expired`, `lesson` verfaellt
+(DB-CHECK), `pending` ohne Verfall, Freigabe ohne Verfallsende, Secret-Scan aus,
+Agenten-Ratenlimit aus.
+
+**Offen:** Der Secret-Scan ist ein Mustervorfilter fuer Versehen, keine
+Garantie; Fehlalarme und Luecken in F1 messen.
+
+**Stolperstein lokal:** Eine geteilte Test-DB mit dem Migrationsstand eines
+anderen Zweigs (`0091_self_account_function.sql` vor der Umnummerierung) laesst
+die acht `test_org_transfer`-Tests am Migrationsabgleich scheitern. Abhilfe:
+eigene, frische DB je Karte.
 
 ## Export und Import je Organisation (2026-10-01, Karte t_18cb3e8b)
 
