@@ -312,11 +312,11 @@ def test_accept_change_writes_proposal_accepted_and_edited() -> None:
             await env.pool.fetchval("SELECT fact FROM agent_memory WHERE id = $1", mem)
             == "Nutzer trinkt morgens Kaffee"
         )
-        assert await env.events(mem) == [
-            ("change_proposed", "agent"),
-            ("proposal_accepted", "human"),
-            ("edited", "human"),
-        ]
+        # `proposal_accepted` und `edited` entstehen in EINER Transaktion mit
+        # gleichem `created_at`; ihre Reihenfolge ist nicht definiert.
+        events = await env.events(mem)
+        assert events[0] == ("change_proposed", "agent")
+        assert sorted(events[1:]) == [("edited", "human"), ("proposal_accepted", "human")]
         edited = await env.pool.fetchrow(
             "SELECT actor_id, before->>'fact' AS b, after->>'fact' AS a "
             "FROM agent_memory_event WHERE memory_id = $1 AND event = 'edited'",
