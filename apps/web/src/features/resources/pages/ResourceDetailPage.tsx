@@ -22,6 +22,7 @@ import { DetailHeader } from '@/components/data/DetailHeader'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { UsedByList } from '@/components/data/UsedByList'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { Container } from '@/components/layout/Container'
@@ -145,11 +146,15 @@ export function ResourceDetailPage() {
                         {resource.slug}
                       </Badge>
                     ) : null}
-                    {tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="max-w-full text-xs break-words">
-                        {tag}
-                      </Badge>
-                    ))}
+                    <TagList
+                      tags={tags}
+                      label={t('common:fields.tags')}
+                      renderTag={(tag) => (
+                        <Badge variant="secondary" className="max-w-full text-xs break-words">
+                          {tag}
+                        </Badge>
+                      )}
+                    />
                   </>
                 }
                 description={description}
