@@ -893,6 +893,10 @@ jobs:
         # richtig; meldet es spaeter einmal einen dev-only Low-Fund, ist das
         # eine Information und der Umfang eine Einzeiler-Entscheidung mit
         # echten Daten statt auf Vorrat.
+        #
+        # Ausnahmen: apps/web/osv-scanner.toml (vom Scanner automatisch neben
+        # dem Lockfile geladen). Je Eintrag genau EINE Advisory-ID mit
+        # `ignoreUntil` — nach Ablauf wird der Schritt wieder rot.
         env:
           OSV_VERSION: "2.2.4"
           OSV_SHA256: "7702cd1e5d9f5059dd9570f4ad967f27d3c5f5391b371ec937b384c238177f55"

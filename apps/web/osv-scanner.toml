@@ -1,0 +1,15 @@
+# osv-scanner config for the web lockfile. osv-scanner loads it automatically
+# because it sits next to package-lock.json (verified with the version pinned
+# in .github/workflows/ci.yml: "Loaded filter from: .../osv-scanner.toml").
+#
+# Every entry is a time-boxed exception for exactly one advisory ID. No entry
+# without an expiry date; when it expires the scan turns red again and the
+# finding has to be re-evaluated with current data.
+
+[[IgnoredVulns]]
+id = "GHSA-ch52-4w7c-c8xp"
+ignoreUntil = 2026-11-02T00:00:00Z
+reason = """http-cache-semantics@4.2.0 has no fixed release yet. Dev-only, CI tooling, \
+not in the shipped bundle: the only path is license-checker-rseidelsohn (license gate in CI) \
+-> @npmcli/arborist -> pacote -> sigstore -> @sigstore/sign -> make-fetch-happen \
+-> http-cache-semantics. Re-check by the expiry date."""
