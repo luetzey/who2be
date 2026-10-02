@@ -767,6 +767,19 @@
         "generic": "Could not accept invitation."
       }
     },
+    "pendingInvitations": {
+      "title": "Your invitations",
+      "description": "Open invitations to your account's email address. Accept one to join the workspace.",
+      "listLabel": "Open invitations",
+      "role": "Role: {{role}}",
+      "expires": "valid until {{date}}",
+      "acceptFor": "Accept invitation to {{workspace}}",
+      "accepting": "Accepting…",
+      "emptyTitle": "No open invitations",
+      "emptyDescription": "There is currently no invitation for your account's email address. Invitations you accepted are in your workspaces.",
+      "continue": "Continue to Who2Be",
+      "emailTitle": "Confirm your email address"
+    },
     "callback": {
       "loadingTitle": "Completing sign-in…",
       "loadingDescription": "Just a moment while we set up your session.",
