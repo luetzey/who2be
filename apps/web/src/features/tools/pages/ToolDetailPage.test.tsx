@@ -217,6 +217,18 @@ describe('ToolDetailPage — Lade-/Fehler-Zustaende', () => {
 })
 
 describe('ToolDetailPage — Formular + Alias', () => {
+  // Audit A13: Export liegt unter md hinter „Mehr" (Vertrag; Sichtbarkeit je
+  // Viewport belegt e2e/status-actions-viewport.spec.ts).
+  it('Audit A13: Export liegt unter md hinter „Mehr"', async () => {
+    renderDetailPage(detailHandlers())
+
+    const more = await screen.findByTestId('detail-header-more')
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).toHaveClass('hidden', 'md:flex')
+    expect(slot).toContainElement(screen.getByTestId('export-tool-trigger'))
+  })
   it('rendert Name, Alias (read-only), Anzeigename, MCP-Server-Name und Tool-Namen', async () => {
     renderDetailPage(detailHandlers())
 
