@@ -31,9 +31,8 @@ class SelfAccountEmail:
 class PendingInvitation:
     """Offene Einladung fuer die E-Mail-Adresse eines Kontos.
 
-    Traegt `token_hash` nur intern: die Annahme per Klick (S2b A2) nimmt die
-    Einladung ueber denselben Weg an wie der geteilte Link. Nach aussen geht
-    der Datensatz nur ueber ein Antwortmodell ohne dieses Feld.
+    Ohne `token_hash`: die Annahme per Klick (S2b A2) holt ihn sich ueber
+    `find_for_account`, damit sie auch erledigte Einladungen als 410 meldet.
     """
 
     id: UUID
@@ -42,6 +41,19 @@ class PendingInvitation:
     role: WorkspaceRole
     expires_at: datetime
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class AccountInvitation:
+    """Einladung an die Adresse eines Kontos, in jedem Zustand.
+
+    Nur intern: liefert der Annahme per Klick den `token_hash`, damit sie ueber
+    denselben Weg annimmt wie der geteilte Link — auch fuer eine bereits
+    erledigte Einladung, die `accept` dann als `gone` (410) meldet.
+    """
+
+    id: UUID
+    workspace_id: UUID
     token_hash: str
 
 
@@ -92,6 +104,14 @@ class PendingInvitationRepository(Protocol):
     async def self_account_email(self, user_id: UUID) -> SelfAccountEmail: ...
 
     async def list_pending_for_email(self, email: str) -> list[PendingInvitation]: ...
+
+    async def find_for_account(
+        self, invitation_id: UUID, email: str
+    ) -> AccountInvitation | None: ...
+
+    async def accept(
+        self, token_hash: str, user_id: UUID, expected_email: str | None = None
+    ) -> AcceptResult: ...
 
 
 class PgInvitationRepository:
@@ -156,7 +176,7 @@ class PgInvitationRepository:
         """
         rows = await self._pool.fetch(
             "SELECT i.id, i.workspace_id, w.name AS workspace_name, i.role, "
-            "i.expires_at, i.created_at, i.token_hash "
+            "i.expires_at, i.created_at "
             "FROM workspace_invitation i JOIN workspace w ON w.id = i.workspace_id "
             "WHERE lower(i.email) = lower($1) AND i.accepted_at IS NULL "
             "AND i.revoked_at IS NULL AND i.expires_at > now() "
@@ -171,10 +191,29 @@ class PgInvitationRepository:
                 role=WorkspaceRole(row["role"]),
                 expires_at=row["expires_at"],
                 created_at=row["created_at"],
-                token_hash=row["token_hash"],
             )
             for row in rows
         ]
+
+    async def find_for_account(self, invitation_id: UUID, email: str) -> AccountInvitation | None:
+        """Einladung `invitation_id`, sofern sie auf `email` lautet.
+
+        Bewusst ohne Zustandsfilter: angenommen, widerrufen oder abgelaufen
+        entscheidet `accept` (410). Lautet sie auf eine andere Adresse oder gibt
+        es sie nicht, kommt `None` — beides gleich, kein Existenz-Orakel
+        (ADR-0036). Gross-/Kleinschreibung zaehlt nicht, wie in `accept`.
+        """
+        row = await self._pool.fetchrow(
+            "SELECT id, workspace_id, token_hash FROM workspace_invitation "
+            "WHERE id = $1 AND lower(email) = lower($2)",
+            invitation_id,
+            email,
+        )
+        if row is None:
+            return None
+        return AccountInvitation(
+            id=row["id"], workspace_id=row["workspace_id"], token_hash=row["token_hash"]
+        )
 
     async def accept(
         self, token_hash: str, user_id: UUID, expected_email: str | None = None

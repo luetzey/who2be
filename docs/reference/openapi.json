@@ -12153,6 +12153,55 @@
         ]
       }
     },
+    "/v1/invitations/pending/{invitation_id}/accept": {
+      "post": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Accept Pending Invitation",
+        "description": "Nimmt eine Einladung an die eigene Adresse per Klick an — ohne Token.\n\nDie ID stammt aus `GET /v1/invitations/pending`. Gleiche Bestaetigungs-\npruefung wie dort (403 `invitation_email_required` bzw.\n`invitation_email_unconfirmed`). Fremde oder unbekannte ID: 404. Bereits\nangenommen, widerrufen oder abgelaufen: 410 wie beim geteilten Link.",
+        "operationId": "accept_pending_invitation_v1_invitations_pending__invitation_id__accept_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invitation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAcceptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/invitations/accept": {
       "post": {
         "tags": [

@@ -6,13 +6,14 @@ die Last-admin-Self-demote-Invariante (409). Dazu die Annahme per Token im
 Body (`POST /v1/invitations/accept`), den befristeten Legacy-Pfad mit Token im
 Pfad und den fail-closed Email-Abgleich: ohne Email-Claim keine Annahme.
 Ausserdem die offenen Einladungen des eigenen Kontos
-(`GET /v1/invitations/pending`), nur mit bestaetigter Email-Adresse.
+(`GET /v1/invitations/pending`) und ihre Annahme per Klick
+(`POST /v1/invitations/pending/{id}/accept`), nur mit bestaetigter Email-Adresse.
 Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 """
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import jwt
@@ -24,7 +25,7 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.integrations import gotrue_mailer
 from who2be_api.main import app
-from who2be_api.testing.api_helpers import agent_token, db_execute
+from who2be_api.testing.api_helpers import agent_token, db_execute, db_fetchval
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -828,5 +829,207 @@ def test_pending_rejects_agent_tokens() -> None:
             res = client.get(_PENDING, headers=token_auth)
             assert res.status_code == 403, res.text
             assert res.json()["reason"] == "account_route_requires_human"
+    finally:
+        cleanup_workspaces([owner])
+
+
+# --------------------------------------------------------------------------
+# POST /v1/invitations/pending/{id}/accept — Annahme per Klick, ohne Token
+# --------------------------------------------------------------------------
+
+
+def _accept_pending(invitation_id: str) -> str:
+    return f"{_PENDING}/{invitation_id}/accept"
+
+
+def _role_of(ws: UUID, user_id: UUID) -> str | None:
+    role: str | None = db_fetchval(
+        "SELECT role FROM workspace_member WHERE workspace_id = $1 AND user_id = $2",
+        ws,
+        user_id,
+    )
+    return role
+
+
+def _accepted_at(invitation_id: str) -> object:
+    return db_fetchval(
+        "SELECT accepted_at FROM workspace_invitation WHERE id = $1", UUID(invitation_id)
+    )
+
+
+@pytest.mark.integration
+def test_accept_pending_joins_with_the_role_and_is_single_use() -> None:
+    """Bestaetigt: Annahme per ID, Mitglied mit der Rolle der Einladung, danach
+    nicht mehr offen; der zweite Klick ist 410 wie beim geteilten Link."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    invitee = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(invitee, "Click.Invitee@Example.com", confirmed=True)
+    auth = _auth(invitee, email="click.invitee@example.com")
+
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, admin, ws, "CLICK.invitee@example.com", "viewer")
+            listed = client.get(_PENDING, headers=auth)
+            assert [r["id"] for r in listed.json()] == [invitation["id"]]
+
+            res = client.post(_accept_pending(invitation["id"]), headers=auth)
+            assert res.status_code == 200, res.text
+            assert res.json() == {"workspace_id": str(ws)}
+            assert _role_of(ws, invitee) == "viewer"
+            assert _accepted_at(invitation["id"]) is not None
+            assert client.get(_PENDING, headers=auth).json() == []
+
+            again = client.post(_accept_pending(invitation["id"]), headers=auth)
+            assert again.status_code == 410, again.text
+            assert again.json()["reason"] == "invitation_no_longer_valid"
+            assert _role_of(ws, invitee) == "viewer"
+    finally:
+        cleanup_workspaces([admin, invitee])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("state", ["revoked", "expired"])
+def test_accept_pending_on_a_closed_invitation_is_gone(state: str) -> None:
+    """Widerrufen oder abgelaufen, aber an die eigene Adresse: 410, kein Beitritt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    invitee = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(invitee, "click.closed@example.com", confirmed=True)
+
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, admin, ws, "click.closed@example.com")
+            if state == "revoked":
+                gone = client.delete(
+                    f"/v1/workspaces/{ws}/invitations/{invitation['id']}", headers=_auth(admin)
+                )
+                assert gone.status_code == 204, gone.text
+            else:
+                _expire_invitation(invitation["id"])
+            res = client.post(
+                _accept_pending(invitation["id"]),
+                headers=_auth(invitee, email="click.closed@example.com"),
+            )
+            assert res.status_code == 410, res.text
+            assert res.json()["reason"] == "invitation_no_longer_valid"
+            assert _role_of(ws, invitee) is None
+    finally:
+        cleanup_workspaces([admin, invitee])
+
+
+@pytest.mark.integration
+def test_accept_pending_unconfirmed_account_is_rejected_and_stays_open() -> None:
+    """Unbestaetigt: 403 `invitation_email_unconfirmed`, die Einladung bleibt
+    offen — und der geteilte Link nimmt sie weiterhin an (Owner-Entscheidung)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    invitee = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(invitee, "click.unconfirmed@example.com", confirmed=False)
+    auth = _auth(invitee, email="click.unconfirmed@example.com")
+
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, admin, ws, "click.unconfirmed@example.com")
+            res = client.post(_accept_pending(invitation["id"]), headers=auth)
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "invitation_email_unconfirmed"
+            assert _role_of(ws, invitee) is None
+            assert _accepted_at(invitation["id"]) is None
+
+            shared = client.post(
+                "/v1/invitations/accept", json={"token": invitation["token"]}, headers=auth
+            )
+            assert shared.status_code == 200, shared.text
+            assert _role_of(ws, invitee) == "editor"
+    finally:
+        cleanup_workspaces([admin, invitee])
+
+
+@pytest.mark.integration
+def test_accept_pending_without_email_claim_is_rejected() -> None:
+    """Ohne `email`-Claim: 403 `invitation_email_required`, kein Beitritt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    invitee = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(invitee, "click.noclaim@example.com", confirmed=True)
+
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, admin, ws, "click.noclaim@example.com")
+            res = client.post(_accept_pending(invitation["id"]), headers=_auth(invitee))
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "invitation_email_required"
+            assert _role_of(ws, invitee) is None
+            assert _accepted_at(invitation["id"]) is None
+    finally:
+        cleanup_workspaces([admin, invitee])
+
+
+@pytest.mark.integration
+def test_accept_pending_foreign_and_unknown_ids_are_indistinguishable() -> None:
+    """Die ID einer Einladung an eine fremde Adresse endet wie eine unbekannte
+    ID: 404 `invitation_not_found`, gleiche Antwort, keine Mitgliedschaft, die
+    fremde Einladung bleibt offen (kein Existenz-Orakel, ADR-0036)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin = fresh_user_id()
+    clicker = fresh_user_id()
+    ws = setup_workspace(admin)
+    _account(clicker, "click.clicker@example.com", confirmed=True)
+    auth = _auth(clicker, email="click.clicker@example.com")
+
+    try:
+        with TestClient(app) as client:
+            foreign = _invite(client, admin, ws, "click.someone-else@example.com", "admin")
+            res = client.post(_accept_pending(foreign["id"]), headers=auth)
+            assert res.status_code == 404, res.text
+            unknown = client.post(_accept_pending(str(uuid4())), headers=auth)
+            assert unknown.status_code == 404, unknown.text
+            assert res.json() == unknown.json()
+            assert res.json()["reason"] == "invitation_not_found"
+            assert _role_of(ws, clicker) is None
+            assert _accepted_at(foreign["id"]) is None
+    finally:
+        cleanup_workspaces([admin, clicker])
+
+
+@pytest.mark.integration
+def test_accept_pending_rejects_agent_tokens() -> None:
+    """Nur Menschen: ein agent-gebundener `w2b_`-Token bekommt 403."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    try:
+        with TestClient(app) as client:
+            invitation = _invite(client, owner, ws, "click.agent@example.com")
+            _agent_id, token_auth = agent_token(
+                client, f"/v1/workspaces/{ws}", "[Click] Agent", {}, _auth(owner)
+            )
+            res = client.post(_accept_pending(invitation["id"]), headers=token_auth)
+            assert res.status_code == 403, res.text
+            assert res.json()["reason"] == "account_route_requires_human"
+            assert _accepted_at(invitation["id"]) is None
     finally:
         cleanup_workspaces([owner])
