@@ -546,11 +546,17 @@
       "title": "Zusammensetzung",
       "systemPrompt": "System-Prompt",
       "persona": "Persona",
-      "playbooksLinked": "{{count}} verknüpfte Playbooks",
+      "playbooksLinked_one": "{{count}} verknüpftes Playbook",
+      "playbooksLinked_other": "{{count}} verknüpfte Playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
-      "noPlaybooks": "Keine Playbooks verknüpft."
+      "noPlaybooks": "Keine Playbooks verknüpft.",
+      "summaryPlaybooks_one": "{{count}} Playbook",
+      "summaryPlaybooks_other": "{{count}} Playbooks",
+      "summaryNoPlaybooks": "keine Playbooks",
+      "summaryNoPersona": "Ohne Persona",
+      "summarySeparator": " · "
     },
     "copy": {
       "plain": "Kopieren",
