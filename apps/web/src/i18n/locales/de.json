@@ -538,7 +538,8 @@
       "modelProviderLabel": "Anbieter",
       "modelProviderPlaceholder": "z. B. anthropic, openai, local",
       "modelNameLabel": "Modell",
-      "modelNamePlaceholder": "z. B. claude-opus-5"
+      "modelNamePlaceholder": "z. B. claude-opus-5",
+      "modelNotSet": "Kein Modell hinterlegt."
     },
     "hierarchy": {
       "title": "Zusammensetzung",

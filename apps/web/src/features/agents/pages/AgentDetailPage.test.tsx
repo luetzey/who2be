@@ -245,14 +245,19 @@ describe('AgentDetailPage', () => {
         'Dupliziere den Agenten, um eine eigene, frei anpassbare Kopie zu erhalten.',
       ),
     ).toBeInTheDocument()
-    // Kein Loesch-Button, Editor gesperrt. ("Name" ist doppelt gelabelt —
-    // Editor-Formular + Token-Formular — daher ueber den Wert selektieren.)
+    // Kein Loesch-Button; Werte als Lesetext (Audit A7), kein Speichern.
+    // ("Name" ist doppelt gelabelt — Editor + Token-Formular — daher ueber
+    // die Tag-Art selektieren.)
     expect(screen.queryByTestId('delete-agent-trigger')).not.toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Builder')).toBeInTheDocument()
+      const outputs = screen
+        .getAllByLabelText('Name')
+        .filter((node) => node.tagName === 'OUTPUT')
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0]).toHaveTextContent('Builder')
     })
-    expect(screen.getByDisplayValue('Builder')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
+    expect(screen.queryByDisplayValue('Builder')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
 
     // Duplizieren bleibt erlaubt und navigiert zur Kopie.
     const duplicate = screen.getByTestId('duplicate-agent')

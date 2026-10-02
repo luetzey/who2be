@@ -527,6 +527,17 @@ text-muted-foreground`. Heute auf `LoginPage` und `SignupPage`; die anderen
 Auth-Pages tragen noch die Eyebrow und ziehen bei Bedarf nach — keine dritte
 Variante daneben erfinden.
 
+**Verwaltete Eintraege (Audit A7):** Inhalte, die nur gelesen werden
+koennen, weil das System sie pflegt (`is_managed`), sind Lesetext und kein
+inaktives Bedienelement — `disabled` (`opacity-50`) drueckte sie hell auf
+3,71:1. Sie stehen ueber `components/ui/read-only-field.tsx` als `<output>`
+in derselben Feld-Optik, aber in `text-foreground`; das `<label for>` bleibt
+zugeordnet, Listen (Tags, Trigger) erscheinen als Kapseln, leere Werte
+entfallen (kein Platzhalter), der Speichern-Knopf entfaellt ganz.
+Schalter mit Zustand (Checkbox, Radio) bleiben gesperrte Bedienelemente.
+Fuer Viewer gilt das Muster (noch) nicht: dort bleibt das Formular sichtbar
+gesperrt, weil die Rolle wechseln kann.
+
 ## 11. A11y-Minimum
 
 - **Kontrast:** Brand-Tinte (`--brand` ↔ `--brand-foreground`) muss
