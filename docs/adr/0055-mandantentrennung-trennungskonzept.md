@@ -240,8 +240,12 @@ festgelegt.
     Migrationsköpfen
     (`apps/api/src/who2be_api/migrations/0037_rls_policies.sql`,
     `apps/api/src/who2be_api/migrations/0050_rls_workspace_invitation.sql`,
-    `apps/api/src/who2be_api/migrations/0068_rls_control_plane.sql`). Das
+    `apps/api/src/who2be_api/migrations/0068_rls_control_plane.sql`,
+    `apps/api/src/who2be_api/migrations/0092_rls_control_plane_tables.sql`). Das
     Restrisiko dazu ist R1.
+  - Für Workspaces ist die Policy beim Schreiben enger als beim Lesen: Ist eine
+    Org gesetzt, muss eine neue oder geänderte Workspace-Zeile in genau dieser
+    Org liegen (`apps/api/src/who2be_api/migrations/0092_rls_control_plane_tables.sql`).
 - RLS ist eingeschaltet (`ENABLE`), aber nicht erzwungen (`FORCE`). Der Owner
   der Tabellen umgeht RLS (Restrisiko R2).
 
@@ -319,10 +323,10 @@ schwächer ist als die erste.
 
 | # | Restrisiko | Wirkung | Behandlung |
 |---|---|---|---|
-| R1 | **Permissive Policies in den Auflösungspfaden.** Ein Teil der Policies filtert nicht, solange kein Mandant gesetzt ist (Login, Token-Lookup, Einladung, OAuth-Code, Billing-Webhook). In diesen Pfaden trägt allein die Anwendungsschicht die Trennung. | Ein Abfragefehler in einem Steuerpfad ohne Mandanten-Kontext würde von RLS nicht aufgefangen. | Bewusst so, die Begründung steht in den Migrationen 0037, 0050 und 0068. Wie die Policies strikt werden, ist offen (Abschnitt 6). |
+| R1 | **Permissive Policies in den Auflösungspfaden.** Ein Teil der Policies filtert nicht, solange kein Mandant gesetzt ist (Login, Token-Lookup, Einladung, OAuth-Code, Billing-Webhook). In diesen Pfaden trägt allein die Anwendungsschicht die Trennung. | Ein Abfragefehler in einem Steuerpfad ohne Mandanten-Kontext würde von RLS nicht aufgefangen. | Bewusst so, die Begründung steht in den Migrationen 0037, 0050, 0068 und 0092. Wie die Policies strikt werden, ist offen (Abschnitt 6). |
 | R2 | **RLS nicht erzwungen, Owner-Verbindungen zur Laufzeit.** Keine Tabelle hat `FORCE ROW LEVEL SECURITY`. Der Owner umgeht RLS. Zur Laufzeit verbinden drei serverseitige Pfade als Owner: der Builder-Content-Sync beim Start (`apps/api/src/who2be_api/main.py#lifespan`), der Chunk-Backfill (`apps/api/src/who2be_api/core/chunk_backfill.py#_run`) und der Purge-Job (`apps/api/src/who2be_api/core/purge.py#_run`). | Ein Fehler in diesen Jobs wirkt mandantenübergreifend. Keiner der Pfade verarbeitet Nutzereingaben. | Akzeptiert. `FORCE` würde nur wirken, wenn der Owner kein Superuser wäre. Ein Nicht-Superuser-Owner wird zusammen mit Abschnitt 6 geprüft. |
-| R3 | **Steuer-Tabellen ohne zweite Linie.** Die Stammdaten von Organisation und Workspace, der Statusverlauf und einzelne Steuer-Tabellen haben bis zur Härtung keine eigene Policy. Der Coverage-Test nimmt `workspace` ausdrücklich aus, der Statusverlauf hat keine Mandantenspalte. | Für diese Tabellen gibt es bis zur Härtung nur die Anwendungsschicht. | Wird gehärtet (Owner-Entscheidung 3, „Control-Plane-Tabellen absichern“): Policies für Organisation und Workspace, eine Mandantenspalte und eine strikte Policy für den Statusverlauf. Die globale OAuth-Client-Registry bleibt bewusst ohne Mandant. |
-| R4 | **Reste nach dem Org-Purge.** (a) Der Statusverlauf hängt über `entity_id` an den Entities, hat aber keinen FK und keine Kaskade. Nach dem Löschen einer Organisation bleiben die Zeilen stehen. Akteurs-IDs werden beim Konto-Purge anonymisiert. (b) Die SQLite-Dateien des Tabellen-Stores bleiben liegen, bis der Betreiber sie entfernt (Abschnitt 4.6). | Rest-Metadaten (Entity-ID, Statuswechsel, Zeitpunkt, Notiz) und Tabelleninhalte bleiben nach der Löschung bestehen. Das betrifft Löschung und Rückgabe (Art. 28 Abs. 3 lit. g, SDM Prüfschritt 5). | (a) wird mit R3 behoben: Mit der Mandantenspalte räumt der Org-Purge den Statusverlauf ab, ein Test belegt das. (b) ist bewusst so (ein falsch konfigurierter Purge soll keine fremden Dateien löschen) und als Betreiber-Schritt dokumentiert. |
+| R3 | **Geschlossen (Migration 0092, PR #747).** **Steuer-Tabellen ohne zweite Linie.** Die Stammdaten von Organisation und Workspace und der Statusverlauf hatten bis Migration 0092 keine eigene Policy, die MCP-Zähler nur eine permissive. | Behoben bis auf die Auflösungspfade: Ohne gesetzten Mandanten sind Organisation und Workspace weiter lesbar (Login, Organisationsliste, Workspace anlegen); dafür gilt R1. | Gehärtet mit Migration 0092 (Owner-Entscheidung 3, „Control-Plane-Tabellen absichern“): Policies für Organisation und Workspace, eine Mandantenspalte mit strikter Policy für den Statusverlauf, eine strikte Policy für die MCP-Zähler. Ist eine Org gesetzt, muss eine geschriebene Workspace-Zeile in dieser Org liegen. Die globale OAuth-Client-Registry bleibt bewusst ohne Mandant. |
+| R4 | **(a) geschlossen (Migration 0092, PR #747), (b) offen.** **Reste nach dem Org-Purge.** (a) Der Statusverlauf hing über `entity_id` an den Entities, ohne FK und ohne Kaskade. (b) Die SQLite-Dateien des Tabellen-Stores bleiben liegen, bis der Betreiber sie entfernt (Abschnitt 4.6). | (a) Behoben bis auf Altbestand: Zeilen, deren Entity schon vor Migration 0092 gelöscht war, lassen sich keinem Workspace zuordnen und bleiben stehen; für die App-Rolle sind sie unsichtbar. (b) Tabelleninhalte bleiben nach der Löschung bestehen. Das betrifft Löschung und Rückgabe (Art. 28 Abs. 3 lit. g, SDM Prüfschritt 5). | (a) Mit Migration 0092 hängt der Statusverlauf per FK mit Kaskade am Workspace; der Org-Purge räumt ihn ab, ein Test belegt das. Ob der nicht zuordenbare Altbestand einmalig gelöscht wird, entscheidet der Owner. (b) ist bewusst so (ein falsch konfigurierter Purge soll keine fremden Dateien löschen) und als Betreiber-Schritt dokumentiert. |
 | R5 | **Fehler der RLS-Engine.** Ein Fehler in PostgreSQL selbst (Beispiel CVE-2024-10976) kann eine falsche Policy anwenden. | Eine DB-Grenze hätte das verhindert (Abschnitt 3.2). | Akzeptiert. Für Who2Be ist das Risiko gering: eine App-Rolle, keine rollenspezifischen Policies, aktuelles Image (Bericht §4). Patch-Stand über die Image-Pflege. |
 | R6 | **Keine kundenindividuellen Backup- und Wiederherstellungs-Parameter.** Ein Dump gilt für alle Mandanten, und eine Punkt-in-Zeit-Wiederherstellung geht nur für den ganzen Cluster. | Der Rest-Einwand der OH Cloud 2014 bleibt bestehen (Abschnitt 3.3). Eine einzelne Org lässt sich nur mit Werkzeug zurückspielen. | Teilweise behandelt durch Export/Import je Org (`who2be-org-transfer`, Abschnitt 4.6): Eine einzelne Org lässt sich exportieren und, nach dem Org-Purge, aus dem Archiv zurückspielen. Der Zeitpunkt ist der des Exports, nicht frei wählbar. Vollständig erst mit eigener Instanz (Abschnitt 9). |
 
@@ -363,16 +367,11 @@ Integrationstests mit echter Datenbank):
 | Der Konto-Purge anonymisiert die Audit-Referenzen | `apps/api/tests/test_purge_erasure.py#test_purge_anonymises_audit_and_keeps_entitlement_history` | Löschpfad je Nutzer. |
 | Eine importierte Org bleibt von einer fremden Org getrennt | `apps/api/tests/test_org_transfer.py#test_import_next_to_foreign_org_keeps_tenants_apart` | Der Fingerabdruck der fremden Org ändert sich nicht. Der REST-Isolationslauf findet zwischen beiden Orgs keinen Befund. |
 | Ein manipuliertes Archiv schreibt nicht in einen fremden Mandanten | `apps/api/tests/test_org_transfer.py#test_tampered_archive_is_rejected` | Fremde Zeile, fremde Referenz, Migrationsstand, Prüfsumme und Zugangsdaten führen zum Abbruch ohne Rückstände. |
-
-Geplant und Teil der Owner-Entscheidung:
-
-- **API- und MCP-Isolationstests je Endpunkt** (Karte t_40307837): Die Routen
-  werden aus dem Router-Baum aufgezählt und als Mandant A mit Objekt-IDs von
-  Mandant B aufgerufen, erwartet ist 403 bzw. 404. Neue Routen werden
-  automatisch erfasst. Läuft null Prüfungen, gilt das als Fehlschlag. Damit wird
-  die manuelle Stichprobe vom 2026-09-30 zum CI-Gate.
-- **Isolations- und Purge-Test für die gehärteten Steuer-Tabellen** (Karte
-  t_8ed14f76, R3/R4).
+| Organisation, Workspace, Statusverlauf und MCP-Zähler sind als `who2be_app` ohne `WHERE` mandantengetrennt | `apps/api/tests/test_rls_control_plane.py#test_control_plane_tables_hide_foreign_tenant_without_where` | Härtung R3 (Migration 0092). Eine Workspace-Zeile lässt sich bei gesetzter Org nicht in eine andere Org verschieben. |
+| Der Org-Purge lässt keinen Statusverlauf zurück | `apps/api/tests/test_rls_control_plane.py#test_org_purge_leaves_no_status_history` | Behebung R4a. |
+| Login, Workspace-Verwaltung, Statuswechsel und Token-Zugriff laufen unter `who2be_app` | `apps/api/tests/test_rls_control_plane_api.py#test_login_and_workspace_lifecycle_as_app_role`, `apps/api/tests/test_rls_control_plane_api.py#test_status_history_and_tokens_as_app_role` | Die Härtung bricht keinen Auflösungspfad. |
+| Kein REST-Endpunkt und kein MCP-Tool überschreitet die Mandantengrenze | `apps/api/tests/test_tenant_isolation_api.py#test_no_route_crosses_the_tenant_boundary`, `apps/api/tests/test_tenant_isolation_mcp.py#test_no_mcp_tool_crosses_the_tenant_boundary` | Jede Route und jedes Tool wird als Mandant A mit Objekt-IDs von Mandant B aufgerufen, erwartet ist 403 bzw. 404. Läuft null Prüfungen, gilt das als Fehlschlag. Die manuelle Stichprobe vom 2026-09-30 ist damit ein CI-Gate (PR #749). |
+| Neue Routen und Tools werden automatisch erfasst | `apps/api/tests/test_tenant_isolation_api.py#test_every_route_is_probed_or_exempt`, `apps/api/tests/test_tenant_isolation_mcp.py#test_every_tool_is_probed_or_exempt` | Eine Route oder ein Tool ohne Prüfung und ohne ausdrückliche Ausnahme macht den Test rot. |
 
 C5 OPS-24 verlangt außerdem eine Risikoanalyse „gemäß OIS-07“. Diese ADR
 liefert das Konzept und die ausgewiesenen Restrisiken. Eine formale
@@ -412,7 +411,9 @@ Rückweg).
 - Folgepakete aus der Owner-Entscheidung, jedes in einem eigenen PR:
   1. E-Mail-Zugriff über die Funktion (Entscheidung 1), in zwei Paketen.
   2. Härtung der Steuer-Tabellen und Purge des Statusverlaufs (R3, R4).
-  3. API- und MCP-Isolationstests je Endpunkt (Abschnitt 7).
+     Umgesetzt (Migration 0092, PR #747).
+  3. API- und MCP-Isolationstests je Endpunkt (Abschnitt 7). Umgesetzt
+     (PR #749).
   4. Export und Import je Organisation (Abschnitt 4.6, R6). Paket 1 umgesetzt
      (`who2be-org-transfer`). Offen sind Identitäts-Mapping, Self-Service-Rückgabe
      und die Migration älterer Archive.
