@@ -566,6 +566,18 @@ describe('ResourceDetailPage — Managed-Lock & Rollen', () => {
     expect(screen.queryByText('Sub-Resources bearbeiten')).not.toBeInTheDocument()
   })
 
+  it('is_managed: Werte als zugeordneter Lesetext statt gesperrter Felder (Audit A7)', async () => {
+    renderDetailPage(
+      detailHandlers({ resource: resourceWith({ is_managed: true }) }),
+    )
+
+    await screen.findByTestId('managed-notice')
+    const name = screen.getByLabelText('Name')
+    expect(name.tagName).toBe('OUTPUT')
+    expect(name).toHaveClass('text-foreground')
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
+  })
+
   it('ohne Managed-Flag: keine Notice, Status-Bar und Danger-Zone sind sichtbar', async () => {
     renderDetailPage(detailHandlers())
 

@@ -9,6 +9,7 @@ import { FormSection } from '@/components/layout/FormSection'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { TagInput } from '@/components/ui/tag-input'
 
 import { ResourceEditor } from '@/components/editor/ResourceEditor'
@@ -65,42 +66,55 @@ export function ResourceEditorForm({
                 </p>
               }
             >
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('common:fields.name')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        required
-                        data-testid="resource-name-input"
-                        placeholder={t('form.namePlaceholder')}
-                        {...field}
-                        disabled={isViewer}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('common:fields.description')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('form.descriptionPlaceholder')}
-                        {...field}
-                        disabled={isViewer}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {locked ? (
+                // Audit A7: verwaltet → Lesetext statt gesperrter Felder (§10.2).
+                <>
+                  <ReadOnlyField label={t('common:fields.name')} value={form.watch('name')} />
+                  <ReadOnlyField
+                    label={t('common:fields.description')}
+                    value={form.watch('description')}
+                  />
+                </>
+              ) : (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('common:fields.name')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            required
+                            data-testid="resource-name-input"
+                            placeholder={t('form.namePlaceholder')}
+                            {...field}
+                            disabled={isViewer}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('common:fields.description')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t('form.descriptionPlaceholder')}
+                            {...field}
+                            disabled={isViewer}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
             </FormSection>
 
             <FormSection
@@ -141,6 +155,9 @@ export function ResourceEditorForm({
                 </p>
               }
             >
+              {locked ? (
+                <ReadOnlyField label={t('common:fields.tags')} value={form.watch('tags')} />
+              ) : (
               <FormField
                 control={form.control}
                 name="tags"
@@ -161,6 +178,7 @@ export function ResourceEditorForm({
                   </FormItem>
                 )}
               />
+              )}
             </FormSection>
 
             {actions !== undefined ? actions : null}

@@ -9,6 +9,7 @@ import { FormSection } from '@/components/layout/FormSection'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { Select } from '@/components/ui/select'
 import { TagInput } from '@/components/ui/tag-input'
 
@@ -111,6 +112,21 @@ export function PlaybookEditorForm({
                   </div>
                 }
               >
+                {locked ? (
+                  // Audit A7: verwaltet → Lesetext statt gesperrter Felder (§10.2).
+                  <>
+                    <ReadOnlyField label={t('common:fields.name')} value={form.watch('name')} />
+                    <ReadOnlyField
+                      label={t('form.typeLabel')}
+                      value={TYPE_LABELS[currentType] ?? currentType}
+                    />
+                    <ReadOnlyField
+                      label={t('common:fields.description')}
+                      value={form.watch('description')}
+                    />
+                  </>
+                ) : (
+                  <>
                 <FormField
                   control={form.control}
                   name="name"
@@ -174,6 +190,8 @@ export function PlaybookEditorForm({
                     </FormItem>
                   )}
                 />
+                  </>
+                )}
               </FormSection>
 
               <FormSection
@@ -204,6 +222,13 @@ export function PlaybookEditorForm({
                     </FormItem>
                   )}
                 />
+                {locked ? (
+                  <>
+                    <ReadOnlyField label={t('common:fields.tags')} value={form.watch('tags')} />
+                    <ReadOnlyField label={t('form.triggersLabel')} value={form.watch('triggers')} />
+                  </>
+                ) : (
+                  <>
                 <FormField
                   control={form.control}
                   name="tags"
@@ -246,6 +271,8 @@ export function PlaybookEditorForm({
                     </FormItem>
                   )}
                 />
+                  </>
+                )}
               </FormSection>
 
               {actions !== undefined ? actions : null}
