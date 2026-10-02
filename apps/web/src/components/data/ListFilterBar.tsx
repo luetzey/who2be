@@ -1,4 +1,5 @@
-import { AlertCircle, Search, X } from 'lucide-react'
+import { AlertCircle, Search, SlidersHorizontal, X } from 'lucide-react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -142,6 +143,26 @@ export function ListFilterBar({
   // Null-Zaehler-Rauschen, haelt aber die aktive Auswahl sichtbar.
   const showAttention = counts.attention > 0 || status === 'attention'
 
+  // Audit A11: unterhalb `md` bleiben Status-Chips und Suche sichtbar, die
+  // Zusatz-Facetten (Tag/Typ/Agent/Sprache/Gruppieren) liegen hinter
+  // „Filter (n)“. n zaehlt nur aktive Filter — Gruppieren ist eine
+  // Anzeige-Praeferenz (wie in der PlaybookListToolbar). Ab `md` sind die
+  // Facetten immer da, der Knopf entfaellt.
+  const [facetsOpen, setFacetsOpen] = useState(false)
+  const facetsId = useId()
+  const showTag = Boolean(onTagChange) && availableTags.length > 0
+  const showType = Boolean(onTypeChange) && availableTypes.length > 0
+  const showAgent = Boolean(onAgentChange) && agents.length > 0
+  const showLocale = Boolean(onLocaleChange) && locales.length > 0
+  const showGroup = Boolean(onGroupChange) && groupOptions.length > 0
+  const hasFacets = showTag || showType || showAgent || showLocale || showGroup
+  const facetCount = [
+    onTagChange ? tag : '',
+    onTypeChange ? type : '',
+    onAgentChange ? agent : '',
+    onLocaleChange ? locale : '',
+  ].filter((value) => value !== '').length
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 pt-6">
@@ -184,25 +205,51 @@ export function ListFilterBar({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${idPrefix}-search`}>{t('data:filter.searchLabel')}</Label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              {/* pl-9 ist bewusst off-scale (funktionaler Icon-Inset):
-                  left-3 (12px) + size-4 (16px) + 8px Luft = 36px, damit der
-                  Eingabetext nicht unter dem Such-Icon liegt. */}
-              <Input
-                id={`${idPrefix}-search`}
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder={t('data:filter.searchPlaceholder')}
-                className="pl-9"
-              />
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                {/* pl-9 ist bewusst off-scale (funktionaler Icon-Inset):
+                    left-3 (12px) + size-4 (16px) + 8px Luft = 36px, damit der
+                    Eingabetext nicht unter dem Such-Icon liegt. */}
+                <Input
+                  id={`${idPrefix}-search`}
+                  value={query}
+                  onChange={(event) => onQueryChange(event.target.value)}
+                  placeholder={t('data:filter.searchPlaceholder')}
+                  className="pl-9"
+                />
+              </div>
+              {hasFacets ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 gap-2 md:hidden"
+                  aria-expanded={facetsOpen}
+                  aria-controls={facetsId}
+                  data-testid="list-filter-facets-toggle"
+                  onClick={() => setFacetsOpen((open) => !open)}
+                >
+                  <SlidersHorizontal aria-hidden="true" />
+                  {facetCount > 0
+                    ? t('data:filter.moreFiltersCount', { count: facetCount })
+                    : t('data:filter.moreFilters')}
+                </Button>
+              ) : null}
             </div>
           </div>
 
-          {onTagChange && availableTags.length > 0 ? (
+          {/* `contents`: die Facetten bleiben Kinder des Rasters (ab `md`
+              unveraendertes Layout); unter `md` eingeklappt `hidden` und damit
+              auch nicht im Tab-Fokus/A11y-Tree. */}
+          <div
+            id={facetsId}
+            className={cn(facetsOpen ? 'contents' : 'hidden', 'md:contents')}
+            data-testid="list-filter-facets"
+          >
+          {showTag && onTagChange ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-tag`}>{t('data:filter.tagLabel')}</Label>
               <Select
@@ -220,7 +267,7 @@ export function ListFilterBar({
             </div>
           ) : null}
 
-          {onTypeChange && availableTypes.length > 0 ? (
+          {showType && onTypeChange ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-type`}>{t('data:filter.typeLabel')}</Label>
               <Select
@@ -238,7 +285,7 @@ export function ListFilterBar({
             </div>
           ) : null}
 
-          {onAgentChange && agents.length > 0 ? (
+          {showAgent && onAgentChange ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-agent`}>{t('data:filter.agentLabel')}</Label>
               <Select
@@ -256,7 +303,7 @@ export function ListFilterBar({
             </div>
           ) : null}
 
-          {onLocaleChange && locales.length > 0 ? (
+          {showLocale && onLocaleChange ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-locale`}>{t('data:filter.localeLabel')}</Label>
               <Select
@@ -274,7 +321,7 @@ export function ListFilterBar({
             </div>
           ) : null}
 
-          {onGroupChange && groupOptions.length > 0 ? (
+          {showGroup && onGroupChange ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-group`}>{t('data:filter.groupLabel')}</Label>
               <Select
@@ -290,6 +337,7 @@ export function ListFilterBar({
               </Select>
             </div>
           ) : null}
+          </div>
         </div>
 
         {onAgentChange && agent !== '' ? (

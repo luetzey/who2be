@@ -167,3 +167,65 @@ describe('ListFilterBar', () => {
     expect(props.onReset).toHaveBeenCalled()
   })
 })
+
+// Audit A11: unterhalb `md` liegen die Zusatz-Facetten hinter „Filter (n)“.
+// jsdom hat kein Layout — die Breakpoint-Aussage ist ein Klassen-Vertrag
+// (`hidden` + `md:contents` bzw. `md:hidden`); die Wirkung im Browser ist im
+// Handoff der Karte t_648b4527 gemessen.
+describe('ListFilterBar — Filter (n) unter md (A11)', () => {
+  function withFacets(overrides: Record<string, unknown> = {}) {
+    return {
+      ...baseProps(),
+      availableTags: ['a', 'b'],
+      tag: '',
+      onTagChange: vi.fn(),
+      agents: [{ id: 'a1', name: 'Support-Bot' }],
+      agent: '',
+      onAgentChange: vi.fn(),
+      locales: [{ value: 'de-DE', label: 'Deutsch' }],
+      locale: '',
+      onLocaleChange: vi.fn(),
+      ...overrides,
+    }
+  }
+
+  it('klappt die Facetten unter md ein und per Knopf auf', () => {
+    render(<ListFilterBar {...withFacets()} />)
+    const toggle = screen.getByRole('button', { name: 'Filter' })
+    const facets = screen.getByTestId('list-filter-facets')
+
+    expect(toggle).toHaveClass('md:hidden')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAttribute('aria-controls', facets.id)
+    // Eingeklappt: `hidden` (nicht im A11y-Tree), ab `md` immer sichtbar.
+    expect(facets).toHaveClass('hidden', 'md:contents')
+    expect(facets).toContainElement(screen.getByLabelText('Tag'))
+    // Suche bleibt ausserhalb des eingeklappten Bereichs.
+    expect(facets).not.toContainElement(screen.getByLabelText('Suche'))
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(facets).toHaveClass('contents')
+    expect(facets).not.toHaveClass('hidden')
+  })
+
+  it('zaehlt aktive Zusatzfilter im Knopf, Gruppieren nicht', () => {
+    render(
+      <ListFilterBar
+        {...withFacets({
+          tag: 'a',
+          locale: 'de-DE',
+          groupOptions: [{ value: 'tag', label: 'Nach Tag' }],
+          group: 'tag',
+          onGroupChange: vi.fn(),
+        })}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Filter (2)' })).toBeInTheDocument()
+  })
+
+  it('rendert keinen Filter-Knopf ohne Zusatz-Facetten', () => {
+    render(<ListFilterBar {...baseProps()} />)
+    expect(screen.queryByTestId('list-filter-facets-toggle')).not.toBeInTheDocument()
+  })
+})

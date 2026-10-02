@@ -317,6 +317,7 @@
       "emptyFilteredTitle": "Keine Treffer",
       "emptyFilteredDescription": "Keine Einträge passen zu den aktiven Filtern. Passe Suche oder Status an.",
       "moreFilters": "Filter",
+      "moreFiltersCount": "Filter ({{count}})",
       "clearSearch": "Suche leeren"
     }
   },
