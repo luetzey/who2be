@@ -113,30 +113,38 @@ verdrahten. Checkliste fuer `GOTRUE_SMTP_ADMIN_EMAIL=no-reply@<sender-domain>`:
       einem externen Postfach (nicht nur Provider-Log) den Eingang + den
       Confirm-Link pruefen.
 
-**Mail-Link-Ziele (`GOTRUE_MAILER_URLPATHS_*`) — gegen das Web verifiziert:**
-Die Pfade im Compose decken sich mit den React-Routen in
-`apps/web/src/app/routes.tsx`:
+**Mail-Link-Ziele (`GOTRUE_MAILER_URLPATHS_*`) — alle vier auf GoTrue-verify:**
+Jeder Link aus einer GoTrue-Mail zeigt auf GoTrue, nicht auf die Web-App. In
+die Web-App fuehrt erst der Redirect danach:
 
-| GoTrue-URLPATH        | Compose-Wert             | Ziel                                |
-|-----------------------|--------------------------|-------------------------------------|
-| `CONFIRMATION`        | `/auth/callback`         | `/auth/callback` (Web-Route) ✓      |
-| `EMAIL_CHANGE`        | `/auth/callback`         | `/auth/callback` (Web-Route) ✓      |
-| `RECOVERY`            | `/onboarding/set-password` | `/onboarding/set-password` ✓      |
-| `INVITE`              | `/auth/v1/verify`        | GoTrue-verify hinter dem auth-gateway |
+| GoTrue-URLPATH | Compose-Wert      | Redirect nach verify (`redirect_to`, gesetzt von)                      |
+|----------------|-------------------|------------------------------------------------------------------------|
+| `CONFIRMATION` | `/auth/v1/verify` | `/auth/callback` (Web, `SignupPage`)                                    |
+| `EMAIL_CHANGE` | `/auth/v1/verify` | `SITE_URL` (Web, `AccountPage` setzt kein `redirect_to`; ohne Referer)  |
+| `RECOVERY`     | `/auth/v1/verify` | `/onboarding/set-password` (Web, `ResetPasswordPage`)                   |
+| `INVITE`       | `/auth/v1/verify` | `/invitations` (API, siehe unten)                                       |
 
-**Einladung — der Link zeigt auf GoTrue, nicht auf die Web-App.** GoTrue
-(v2.197.0, `internal/mailer/templatemailer/templatemailer.go`, `InviteMail`)
-baut den Mail-Link aus `API_EXTERNAL_URL` (`https://supabase.<DOMAIN>`) plus
-`GOTRUE_MAILER_URLPATHS_INVITE` und haengt `token`, `type` und `redirect_to`
-als Query an. Unter `supabase.<DOMAIN>` reicht der auth-gateway nur `/auth/v1/*`
-an GoTrue durch; deshalb muss der Pfad `/auth/v1/verify` sein. GoTrue prueft
-dort den Token, meldet den Eingeladenen an und leitet auf `redirect_to` weiter.
-Das setzt die API (`apps/api/.../integrations/gotrue_mailer.py`) auf
-`{WEB_BASE_URL}/invitations` — die Seite mit den offenen Einladungen an die
-Adresse des Kontos, Annahme per Klick. Der Einladungs-Token steht weder im
-Link noch in den Benutzer-Metadaten; er gilt nur fuer den Link, den ein Admin
-selbst weitergibt. Mit dem frueheren Wert `/invitations` zeigte der Link auf
-`https://supabase.<DOMAIN>/invitations` und lief in ein 404.
+**Warum `/auth/v1/verify`:** GoTrue (v2.197.0,
+`internal/mailer/templatemailer/templatemailer.go`, in `ConfirmationMail`,
+`EmailChangeMail`, `RecoveryMail` und `InviteMail` jeweils
+`externalURL.ResolveReference(path)`) baut den Mail-Link aus `API_EXTERNAL_URL`
+(`https://supabase.<DOMAIN>`) plus dem URLPATH und haengt `token`, `type` und
+`redirect_to` als Query an. `SITE_URL` spielt fuer den Link keine Rolle. Unter
+`supabase.<DOMAIN>` reicht der auth-gateway nur `/auth/v1/*` an GoTrue durch;
+jeder andere Pfad (frueher `/auth/callback`, `/onboarding/set-password`,
+`/invitations`) lief dort in ein 404. GoTrue prueft in verify den Token, legt
+die Session an und antwortet mit `303` auf `redirect_to`, die Tokens stehen
+im Fragment (`#access_token=…&type=signup|recovery|invite|email_change`). Der
+Web-Client liest sie per `detectSessionInUrl` aus. Beim Email-Wechsel mit
+bestaetigter alter Adresse kommen zwei Mails; der erste Klick endet mit
+`#message=Confirmation link accepted…`, erst der zweite traegt die Session.
+
+Bei der Einladung setzt die API `redirect_to`
+(`apps/api/src/who2be_api/integrations/gotrue_mailer.py#build_invitations_url`).
+Der Einladungs-Token steht weder im Link noch in den
+Benutzer-Metadaten; er gilt nur fuer den Link, den ein Admin selbst
+weitergibt. `/invitations` zeigt die offenen Einladungen an die Adresse des
+Kontos, Annahme per Klick.
 
 Wichtig ist ausserdem, dass `SITE_URL` dem App-Origin (`WEB_BASE_URL`, Default
 `https://app.<DOMAIN>`) entspricht, damit das `redirect_to`-Ziel die

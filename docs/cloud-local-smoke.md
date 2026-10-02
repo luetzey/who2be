@@ -151,10 +151,13 @@ E-Mail **bestaetigen** (echte Cloud-Reise). Die Mail landet in Mailpit.
 
 2. **Verify-Mail oeffnen:** Mailpit-UI auf <http://localhost:8025>. Die
    „Confirm your signup"-Mail anklicken → **Confirm**-Link folgen. Der Link
-   zeigt auf `http://localhost:5173/auth/callback#access_token=…`
-   (`GOTRUE_MAILER_URLPATHS_CONFIRMATION=/auth/callback`).
+   zeigt auf `http://localhost:9999/auth/v1/verify?token=…&type=signup&redirect_to=…`
+   (`GOTRUE_MAILER_URLPATHS_CONFIRMATION=/auth/v1/verify`, Basis
+   `API_EXTERNAL_URL`). GoTrue antwortet mit `303` auf
+   `http://localhost:5173/auth/callback#access_token=…`; beim Signup per `curl`
+   ohne `redirect_to` auf `SITE_URL` (`http://localhost:5173#access_token=…`).
 
-   - [ ] Klick landet auf der Web-`/auth/callback`-Route und ist eingeloggt.
+   - [ ] Klick landet in der Web-App (`/auth/callback` bzw. `/`) und ist eingeloggt.
 
 3. **Login** (falls die Session nicht direkt steht): <http://localhost:5173/login>
    mit denselben Credentials → Redirect auf das Default-Workspace-Dashboard.

@@ -112,13 +112,13 @@ services:
       # Staging-Smoke: Autoconfirm AN ⇒ kein SMTP noetig (Signups sofort nutzbar).
       # Fuer Prod auf false + GOTRUE_SMTP_* setzen.
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
-      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
-      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
-      GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
-      # Einladung: identisch zur Hetzner-Config — der Mail-Link trifft
-      # GoTrue-verify hinter dem auth-gateway, danach Redirect auf die
-      # Pending-Seite {WEB_BASE_URL}/invitations (Begruendung in
+      # Mail-Link-Ziele: identisch zur Hetzner-Config — alle vier Links
+      # treffen GoTrue-verify hinter dem auth-gateway, danach Redirect auf
+      # redirect_to bzw. SITE_URL (Begruendung in
       # deploy/hetzner/supabase/docker-compose.yml).
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
       # Social-Login (Track K) — default AUS; pro Provider per .env aktivieren.
       # Identisch zu deploy/hetzner/supabase/docker-compose.yml: die
