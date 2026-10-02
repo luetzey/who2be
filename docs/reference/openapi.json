@@ -7381,6 +7381,72 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/memories/revoke-auto": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Revoke Auto Memories",
+        "operationId": "revoke_auto_memories_v1_workspaces__workspace_id__memories_revoke_auto_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryRevokeAuto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MemoryRevokeAutoPreview"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MemoryRevokeAutoResult"
+                    }
+                  ],
+                  "title": "Response Revoke Auto Memories V1 Workspaces  Workspace Id  Memories Revoke Auto Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/me/memories": {
       "get": {
         "tags": [
@@ -17679,6 +17745,49 @@
         "title": "MemoryAutoRow",
         "description": "Zeile der Freigabematrix Art x Herkunft (ADR-0053 4.2).\n\n`user_fact` meint Kategorien ohne Verhaltenswirkung (alles ausser\n`instruction`); `proposal` steht fuer Aenderungs-/Loeschvorschlaege."
       },
+      "MemoryBatchItemResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ok"
+        ],
+        "title": "MemoryBatchItemResult",
+        "description": "Ergebnis je Eintrag einer Sammelaktion (`batch`, `revoke-auto`, ADR-0053 6.4.1)."
+      },
       "MemoryCategory": {
         "type": "string",
         "enum": [
@@ -18326,6 +18435,137 @@
         ],
         "title": "MemoryRead",
         "description": "Ein persistiertes Memory (read-only, Verwaltungs-Sicht).\n\n`retrieval_count`/`last_retrieved_at` sind das Nutzungs-Log: sie zeigen,\nob und wann das Gedaechtnis real abgerufen wurde (Transparenz-Anforderung\nADR-0044). Retrieval-Antworten an Agenten nutzen NICHT dieses Modell —\nsie liefern nur id/fact/category (ohne context/triage_note)."
+      },
+      "MemoryRevokeAuto": {
+        "properties": {
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MemoryOrigin"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "include_other_users": {
+            "type": "boolean",
+            "title": "Include Other Users",
+            "default": false
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "since"
+        ],
+        "title": "MemoryRevokeAuto",
+        "description": "Body von `POST /memories/revoke-auto` — Not-Aus (ADR-0053 6.4.1).\n\nBetroffen sind aktive, unbestaetigte Eintraege mit einem Ereignis\n`auto_activated` im halboffenen Zeitraum `since <= t < until`. `agent_id`\nfiltert auf den einreichenden Agenten, `origin` auf die Herkunft (Liste).\nOhne `dry_run` ist `expected_count` Pflicht: die Zahl, die ein Mensch in\nder Vorschau gesehen und bestaetigt hat."
+      },
+      "MemoryRevokeAutoPreview": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "hidden_count": {
+            "type": "integer",
+            "title": "Hidden Count"
+          },
+          "sample": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryRead"
+            },
+            "type": "array",
+            "title": "Sample"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "hidden_count",
+          "sample"
+        ],
+        "title": "MemoryRevokeAutoPreview",
+        "description": "Antwort mit `dry_run=true`: nichts geaendert.\n\n`count` ist die Zahl aller Treffer, `hidden_count` ihr Anteil aus dem\nNutzergedaechtnis anderer Personen (nur bei `include_other_users`, also\nnur beim Admin groesser als null). `sample` nennt hoechstens\n`MEMORY_REVOKE_SAMPLE_SIZE` Eintraege, die der Aufrufer sehen darf —\nfremdes Nutzergedaechtnis erscheint nie, auch nicht mit seiner ID."
+      },
+      "MemoryRevokeAutoResult": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "hidden_count": {
+            "type": "integer",
+            "title": "Hidden Count"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryBatchItemResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "hidden_count",
+          "results"
+        ],
+        "title": "MemoryRevokeAutoResult",
+        "description": "Antwort ohne `dry_run`: alle Treffer zurueckgenommen (alle oder keiner).\n\n`results` nennt nur sichtbare Eintraege; zurueckgenommene Eintraege aus\nfremdem Nutzergedaechtnis zaehlt allein `hidden_count`."
       },
       "MemoryRollback": {
         "properties": {
