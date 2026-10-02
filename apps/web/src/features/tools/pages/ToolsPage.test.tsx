@@ -204,3 +204,34 @@ describe('ToolsPage — Umbruch bei 320px (#562)', () => {
     expect(classes).toContain('max-w-full')
   })
 })
+
+// Audit A13-Rest (Folge zu #777): drei Tags und „+n“ unter `md`, Knopf im
+// Fluss (W3=a); jsdom ohne Layout — geprueft wird die TagList-Verdrahtung.
+describe('ToolsPage — Tags „+n“ in der Listen-Karte (A13)', () => {
+  it('zeigt drei Tags und „+2“, Klick klappt in der Karte auf', async () => {
+    const base = tool()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            tool({ content: { ...base.content, tags: ['t1', 't2', 't3', 't4', 't5'] } }),
+          ]),
+          { status: 200 },
+        ),
+      ),
+    )
+    renderPage()
+
+    const card = within(await screen.findByRole('listitem'))
+    const more = card.getByRole('button', { name: '2 weitere anzeigen' })
+    const rest = card.getByTestId('tag-list-rest')
+    expect(more).toHaveTextContent('+2')
+    expect(rest).toHaveClass('hidden', 'md:contents')
+    expect(rest).toHaveTextContent('t4t5')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(rest).not.toHaveClass('hidden')
+  })
+})

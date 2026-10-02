@@ -16,6 +16,7 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
@@ -137,11 +138,11 @@ export function PersonasPage() {
                       <>
                         <Badge variant="secondary">v{persona.current_version}</Badge>
                         <LocaleBadge locale={persona.locale} />
-                        {tags.map((tag) => (
-                          <Badge key={tag} variant="outline">
-                            {tag}
-                          </Badge>
-                        ))}
+                        <TagList
+                          tags={tags}
+                          label={t('common:fields.tags')}
+                          renderTag={(tag) => <Badge variant="outline">{tag}</Badge>}
+                        />
                       </>
                     }
                     status={
