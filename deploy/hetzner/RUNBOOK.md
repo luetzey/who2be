@@ -2016,6 +2016,24 @@ Worauf im Log zu achten ist:
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 
+### Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)
+
+Eigener Einstiegspunkt neben `who2be-purge` (ADR-0053 3.1.3): setzt
+unbestaetigte Gedaechtnis-Eintraege (`pending` und automatisch aktivierte
+ohne Bestaetigung), deren `expires_at` erreicht ist, auf `expired` und
+schreibt je Eintrag das Ereignis `expired`. Geloescht wird nichts. Idempotent;
+ein ausgefallener Lauf holt der naechste nach — es verfaellt dann nur spaeter,
+nichts geht verloren.
+
+```bash
+# Host-Crontab des Deploy-Users (crontab -e), Vorschlag: taeglich nach dem Purge
+45 3 * * * cd /opt/who2be && docker compose run --rm api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
+```
+
+Braucht nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass). Taeglich reicht: die
+Frist betraegt 30 Tage, ein Tag Versatz ist fachlich ohne Belang. Ausgabe:
+`Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.`
+
 ---
 
 ## Betrieb der Compose-Dienste `seaweedfs` / `blobstore-bootstrap`

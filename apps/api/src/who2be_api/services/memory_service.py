@@ -165,6 +165,70 @@ _INJECTION_PATTERN = re.compile(
 )
 
 
+# Secret-Scan (ADR-0053 7.1 #2, Paket C2b): Zugangsdaten und Geheimnisse
+# gehoeren nie ins Gedaechtnis — weder als Nutzerfakt noch als Arbeitsnotiz
+# (3.1.5). Der Scan ist ein Vorfilter mit bekannten Formen, kein Beweis fuer
+# Geheimnisfreiheit (nicht tragend, 7.1 #2): er faengt das Versehen, nicht den
+# gezielten Umweg. Er laeuft UNABHAENGIG von der Waechter-Konfiguration —
+# `off` und Allow-Phrasen schalten nur den Injection-Filter ab, nicht diesen.
+#
+# Bewusst eng: jedes Muster verlangt eine Form, die in einem Fakt ueber einen
+# Menschen nicht vorkommt (Schluesselblock, Zuweisung eines Wertes an ein
+# Geheimnis-Feld, Zugangsdaten in einer URL, bekannte Token-Praefixe). Das
+# Wort „Passwort“ allein blockt nicht — „Nutzer nutzt einen Passwortmanager“
+# ist ein legitimer Fakt.
+_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # Schluesselblock (PEM/OpenSSH).
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"),
+    # Geheimnis-Feld mit zugewiesenem Wert: `passwort: …`, `api_key=…`.
+    re.compile(
+        r"(?i)\b(pass(wor[dt])?|pwd|kennwort|secret|geheimnis|api[ _-]?key|"
+        r"access[ _-]?key|secret[ _-]?key|private[ _-]?key|client[ _-]?secret|"
+        r"auth[ _-]?token|access[ _-]?token|bearer[ _-]?token|token)\s*[:=]\s*"
+        r"[\"']?[^\s\"']{6,}"
+    ),
+    # Dasselbe in Prosa: „das Passwort des Nutzers lautet X“. Der Wert muss
+    # wie ein Zugangswert aussehen (mindestens 8 Zeichen, Ziffer UND
+    # Buchstabe), damit „das Passwort ist sicher“ ein Fakt bleibt.
+    re.compile(
+        r"(?i)\b(passwor[dt]|kennwort|passphrase|pin|api[ _-]?key|secret|token|"
+        r"zugangsdaten|credentials?)\b[^\n]{0,40}?"
+        r"(?:\s(?:lautet|lauten|ist|sind|is|are)\b\s*:?|[:=])\s*[\"']?"
+        r"(?=[^\s\"']*\d)(?=[^\s\"']*[A-Za-z])[^\s\"']{8,}"
+    ),
+    # Authorization-Header mit Wert.
+    re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{20,}"),
+    # Zugangsdaten in einer URL: `schema://nutzer:wert@host`.
+    re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]+:[^\s/@]+@[^\s/]+"),
+    # JSON Web Token (drei base64url-Teile; `eyJ` ist ein base64-kodiertes `{"`).
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    # Bekannte Token-Praefixe: eigener API-Token und verbreitete Anbieter.
+    re.compile(
+        r"\b(w2b_[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|"
+        r"glpat-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|"
+        r"sk-[A-Za-z0-9_-]{20,}|(AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})"
+    ),
+)
+
+_SECRET_REJECTION = (
+    "Nicht gespeichert — der Inhalt sieht nach Zugangsdaten oder einem Geheimnis "
+    "aus. Passwoerter, Schluessel und Tokens gehoeren nicht ins Gedaechtnis."
+)
+
+
+def _secret_rejection(text: str) -> str | None:
+    """Secret-Verdikt fuer `text` (ADR-0053 7.1 #2) oder None.
+
+    Reflektiert den Treffer bewusst NICHT ins Fehlerdetail: das Geheimnis
+    soll nicht ueber die Fehlerantwort zurueck in den Agent-Kontext oder in
+    ein Log laufen.
+    """
+    for pattern in _SECRET_PATTERNS:
+        if pattern.search(text):
+            return _SECRET_REJECTION
+    return None
+
+
 def _covered_by_allow_phrase(text: str, span: tuple[int, int], allow_phrases: list[str]) -> bool:
     """True, wenn der Regex-Treffer `span` vollstaendig in einem Vorkommen
     einer Allow-Phrase liegt (case-insensitiv).
@@ -317,6 +381,18 @@ class MemoryService:
                 reason="memory_importance_too_low",
                 params={"importance": data.importance, "minimum": MEMORY_MIN_IMPORTANCE},
             )
+        # Secret-Scan (7.1 #2) vor dem Injection-Waechter und unabhaengig von
+        # dessen Konfiguration: auch `off` laesst kein Geheimnis durch. Gleicher
+        # Grund `memory_guard_rejected` — fuer den Agenten ist beides „dieser
+        # Inhalt gehoert nicht ins Gedaechtnis“.
+        for text in (data.fact, data.context or ""):
+            secret = _secret_rejection(text) if text else None
+            if secret is not None:
+                raise ApiError(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=secret,
+                    reason="memory_guard_rejected",
+                )
         # Injection-Verdikt gemaess Workspace-Konfiguration (ADR-0044-Addendum):
         # standard = Built-in, custom = Built-in mit Allow-Suppression +
         # Block-Phrasen, off = kein Injection-Filter (Owner-Entscheidung,
@@ -583,7 +659,7 @@ class MemoryService:
         # Dedup-Basis unveraendert erhalten).
         fact = data.fact if data.action == MemoryTriageAction.approve else None
         updated = await self._repo.triage(
-            ctx.workspace_id, agent_id, memory_id, new_status, fact, data.note
+            ctx.workspace_id, agent_id, memory_id, new_status, fact, data.note, ctx.user_id
         )
         if updated is None:  # Race: parallel triagiert
             raise ApiError(
