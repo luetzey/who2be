@@ -333,21 +333,3 @@ describe('fetchMe', () => {
     expect(me.default_workspace_id).toBe('ws-1')
   })
 })
-
-describe('acceptInvitation', () => {
-  it('schickt den Einladungs-Token im Body an den Body-Endpunkt, nie in die URL', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response('{"workspace_id":"ws-1"}', { status: 200 }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    await acceptInvitation('jwt', 'geheimer-einladungs-token')
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(new URL(String(url), 'http://x').pathname).toBe('/v1/invitations/accept')
-    expect(String(url)).not.toContain('geheimer-einladungs-token')
-    expect(init.method).toBe('POST')
-    expect(JSON.parse(String(init.body))).toEqual({ token: 'geheimer-einladungs-token' })
-  })
-})

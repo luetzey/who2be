@@ -238,7 +238,9 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   )
 
   // Falsche Email: Guard blockt, kein Redirect. Eigener BrowserContext pro
-  // Rolle — sauberer als zweifaches Einloggen derselben Page.
+  // Rolle — sauberer als zweifaches Einloggen derselben Page. Hier der
+  // Legacy-Link (Token im Pfad): er funktioniert weiter, die Seite nimmt per
+  // Body an und raeumt den Token aus der Adresszeile.
   const wrongContext = await browser.newContext()
   const wrongPage = await wrongContext.newPage()
   await loginAs(wrongPage, wrongUser)
@@ -246,15 +248,17 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   await wrongPage.goto(`/invitations/${invitation.token}/accept`)
   await wrongPage.getByTestId('invitation-accept-submit').click()
   await expect(wrongPage.getByTestId('error-alert')).toBeVisible()
-  expect(wrongPage.url()).toContain(`/invitations/${invitation.token}/accept`)
+  expect(new URL(wrongPage.url()).pathname).toBe('/invitations/accept')
+  expect(wrongPage.url()).not.toContain(invitation.token)
   await wrongContext.close()
 
-  // Korrekte Email: Beitritt + Redirect in den Workspace.
+  // Korrekte Email ueber den geteilten Link (Token im Fragment): Beitritt +
+  // Redirect in den Workspace.
   const rightContext = await browser.newContext()
   const rightPage = await rightContext.newPage()
   await loginAs(rightPage, rightUser)
   await decideCookieConsent(rightPage)
-  await rightPage.goto(`/invitations/${invitation.token}/accept`)
+  await rightPage.goto(`/invitations/accept#token=${invitation.token}`)
   await rightPage.getByTestId('invitation-accept-submit').click()
   await rightPage.waitForURL(/\/w\/.+/)
   await rightContext.close()
