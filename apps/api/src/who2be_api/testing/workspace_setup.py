@@ -23,7 +23,8 @@ _AUTH_USERS_STUB = """
         raw_user_meta_data  jsonb,
         encrypted_password  text,
         created_at          timestamptz,
-        last_sign_in_at     timestamptz
+        last_sign_in_at     timestamptz,
+        email_confirmed_at  timestamptz
     );
     -- Defensive: aeltere Test-Runs haben die Tabelle ohne diese Spalten
     -- angelegt; bei geteilter Test-DB sonst Fehler.
@@ -32,6 +33,7 @@ _AUTH_USERS_STUB = """
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS encrypted_password text;
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS created_at timestamptz;
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS last_sign_in_at timestamptz;
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at timestamptz;
 """
 
 

@@ -61,7 +61,15 @@ async def update_workspace(
     # ADR-0051: der Fehler-Body ist Teil des Vertrags, also steht er im
     # Schema. Nur deklarativ — den `reason` setzt die Service-Stelle, nie
     # der Router.
-    responses={409: {"model": ApiErrorBody, "description": "reason: last_workspace_undeletable"}},
+    responses={
+        409: {
+            "model": ApiErrorBody,
+            "description": (
+                "reason: last_workspace_undeletable | concurrent_conflict "
+                "(Agenten mit protokollierten Zugriffen, ADR-0047 H5)"
+            ),
+        }
+    },
 )
 @limiter.limit(write_limit)
 async def delete_workspace(

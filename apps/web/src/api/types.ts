@@ -327,6 +327,18 @@ export interface InvitationAcceptResult {
   workspace_id: string
 }
 
+// Offene Einladung an die bestaetigte E-Mail-Adresse des eigenen Kontos
+// (`GET /v1/invitations/pending`, `PendingInvitationRead`). Traegt bewusst
+// keinen Token: angenommen wird per Klick ueber die `id`.
+export interface PendingInvitation {
+  id: string
+  workspace_id: string
+  workspace_name: string
+  role: WorkspaceRole
+  expires_at: string
+  created_at: string
+}
+
 // Dashboard-Endpoint (Phase 2.1b §2.1.E + Phase-3-Fix Track 1). Felder
 // spiegeln das Backend-DTO aus `packages/models/.../dashboard.py`. `actor`
 // und `entity_name` werden absichtlich als optional getragen: alte

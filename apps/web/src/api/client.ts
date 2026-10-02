@@ -49,6 +49,7 @@ import type {
   Organization,
   OrganizationDeletion,
   OrganizationInput,
+  PendingInvitation,
   Persona,
   PersonaInput,
   PersonaVersion,
@@ -297,15 +298,37 @@ export function fetchMe(token: string): Promise<Me> {
 }
 
 // Invitation-Annahme ist bewusst NICHT workspace-scoped: der Einladende kennt
-// den Ziel-Workspace, der Eingeladene noch nicht. Der Pfad traegt nur den
-// Klartext-Token; die Response liefert den Workspace, in den man eingetreten ist.
+// den Ziel-Workspace, der Eingeladene noch nicht. Der Klartext-Token reist im
+// Body, nie in Pfad oder Query — sonst stuende er in Access-Logs zwischen
+// Browser und API. Die Response liefert den Workspace, in den man eingetreten ist.
 export function acceptInvitation(
   token: string,
   invitationToken: string,
 ): Promise<InvitationAcceptResult> {
+  return request<InvitationAcceptResult>(token, '/v1/invitations/accept', {
+    method: 'POST',
+    body: JSON.stringify({ token: invitationToken }),
+  })
+}
+
+// Offene Einladungen fuer die bestaetigte E-Mail-Adresse des eingeloggten
+// Kontos, ueber alle Workspaces. Ziel des tokenlosen Mail-Links: weder diese
+// Liste noch die Annahme darunter kennt einen Einladungs-Token. Ohne
+// bestaetigte Adresse antwortet die API 403 `invitation_email_unconfirmed`
+// (bzw. `invitation_email_required`).
+export function listPendingInvitations(token: string): Promise<PendingInvitation[]> {
+  return request<PendingInvitation[]>(token, '/v1/invitations/pending')
+}
+
+// Annahme per Klick ueber die ID aus `listPendingInvitations`. Fremde oder
+// unbekannte ID: 404; angenommen, widerrufen oder abgelaufen: 410.
+export function acceptPendingInvitation(
+  token: string,
+  invitationId: string,
+): Promise<InvitationAcceptResult> {
   return request<InvitationAcceptResult>(
     token,
-    `/v1/invitations/${invitationToken}/accept`,
+    `/v1/invitations/pending/${encodeURIComponent(invitationId)}/accept`,
     { method: 'POST' },
   )
 }

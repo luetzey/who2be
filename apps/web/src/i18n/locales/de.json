@@ -158,6 +158,8 @@
       "invitation_not_found": "Einladung nicht gefunden.",
       "invitation_no_longer_valid": "Einladung ist nicht mehr gueltig.",
       "invitation_email_mismatch": "Diese Einladung ist fuer eine andere Email-Adresse.",
+      "invitation_email_required": "Diese Einladung lässt sich nur mit einem Konto annehmen, das eine bestätigte E-Mail-Adresse trägt.",
+      "invitation_email_unconfirmed": "Bestätige zuerst die E-Mail-Adresse deines Kontos, dann kannst du die Einladung annehmen.",
       "personal_organization_undeletable": "Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
       "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
@@ -315,6 +317,7 @@
       "emptyFilteredTitle": "Keine Treffer",
       "emptyFilteredDescription": "Keine Einträge passen zu den aktiven Filtern. Passe Suche oder Status an.",
       "moreFilters": "Filter",
+      "moreFiltersCount": "Filter ({{count}})",
       "clearSearch": "Suche leeren"
     }
   },
@@ -536,17 +539,24 @@
       "modelProviderLabel": "Anbieter",
       "modelProviderPlaceholder": "z. B. anthropic, openai, local",
       "modelNameLabel": "Modell",
-      "modelNamePlaceholder": "z. B. claude-opus-5"
+      "modelNamePlaceholder": "z. B. claude-opus-5",
+      "modelNotSet": "Kein Modell hinterlegt."
     },
     "hierarchy": {
       "title": "Zusammensetzung",
       "systemPrompt": "System-Prompt",
       "persona": "Persona",
-      "playbooksLinked": "{{count}} verknüpfte Playbooks",
+      "playbooksLinked_one": "{{count}} verknüpftes Playbook",
+      "playbooksLinked_other": "{{count}} verknüpfte Playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
-      "noPlaybooks": "Keine Playbooks verknüpft."
+      "noPlaybooks": "Keine Playbooks verknüpft.",
+      "summaryPlaybooks_one": "{{count}} Playbook",
+      "summaryPlaybooks_other": "{{count}} Playbooks",
+      "summaryNoPlaybooks": "keine Playbooks",
+      "summaryNoPersona": "Ohne Persona",
+      "summarySeparator": " · "
     },
     "copy": {
       "plain": "Kopieren",
@@ -763,6 +773,19 @@
         "emailMismatch": "Diese Einladung ist für eine andere Email-Adresse.",
         "generic": "Einladung konnte nicht angenommen werden."
       }
+    },
+    "pendingInvitations": {
+      "title": "Deine Einladungen",
+      "description": "Offene Einladungen an die E-Mail-Adresse deines Kontos. Nimm eine an, um dem Workspace beizutreten.",
+      "listLabel": "Offene Einladungen",
+      "role": "Rolle: {{role}}",
+      "expires": "gültig bis {{date}}",
+      "acceptFor": "Einladung in {{workspace}} annehmen",
+      "accepting": "Wird angenommen…",
+      "emptyTitle": "Keine offenen Einladungen",
+      "emptyDescription": "Für die E-Mail-Adresse deines Kontos liegt gerade keine Einladung vor. Angenommene Einladungen findest du in deinen Workspaces.",
+      "continue": "Weiter zu Who2Be",
+      "emailTitle": "E-Mail-Adresse bestätigen"
     },
     "callback": {
       "loadingTitle": "Anmeldung wird abgeschlossen…",

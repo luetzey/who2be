@@ -9,6 +9,7 @@ import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
+import { CountPill } from '@/components/data/CountPill'
 import { EntityCard } from '@/components/data/EntityCard'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -17,6 +18,7 @@ import { LoadingState } from '@/components/data/LoadingState'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -67,12 +69,7 @@ export function ToolsPage() {
           title={t('tools:list.title')}
           titleAddon={
             tools.length > 0 ? (
-              <span
-                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
-                aria-label={`${tools.length}`}
-              >
-                {tools.length}
-              </span>
+              <CountPill count={tools.length} label={`${tools.length}`} />
             ) : undefined
           }
           description={t('tools:list.description')}
@@ -144,15 +141,15 @@ export function ToolsPage() {
                           v{tool.current_version}
                         </Badge>
                         <LocaleBadge locale={tool.locale} />
-                        {tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            className="max-w-full text-xs break-words"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
+                        <TagList
+                          tags={tags}
+                          label={t('common:fields.tags')}
+                          renderTag={(tag) => (
+                            <Badge variant="outline" className="max-w-full text-xs break-words">
+                              {tag}
+                            </Badge>
+                          )}
+                        />
                       </>
                     }
                     status={

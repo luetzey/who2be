@@ -11883,7 +11883,7 @@
           "organizations"
         ],
         "summary": "Delete Organization",
-        "description": "Merkt eine Company-Org zur Loeschung vor (Soft-Delete, 30-Tage-Grace).\n\nNur der Org-Owner darf das; Personal-Orgs laufen ueber die Konto-Loeschung.",
+        "description": "Merkt eine Company-Org zur Loeschung vor (Soft-Delete, 30-Tage-Grace).\n\nNur der Org-Owner darf das; Personal-Orgs laufen ueber die Konto-Loeschung.\nNicht-Mitglieder erhalten dieselbe 404 wie bei einer unbekannten Org.",
         "operationId": "delete_organization_v1_organizations__organization_id__delete",
         "security": [
           {
@@ -12175,7 +12175,7 @@
             "description": "Successful Response"
           },
           "409": {
-            "description": "reason: last_workspace_undeletable",
+            "description": "reason: last_workspace_undeletable | concurrent_conflict (Agenten mit protokollierten Zugriffen, ADR-0047 H5)",
             "content": {
               "application/json": {
                 "schema": {
@@ -12226,13 +12226,142 @@
         ]
       }
     },
+    "/v1/invitations/pending": {
+      "get": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "List Pending Invitations",
+        "description": "Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.\n\nUeber alle Workspaces, nur nicht angenommene, nicht widerrufene und nicht\nabgelaufene. Nur mit bestaetigter Adresse: ohne `email` im Login 403\n`invitation_email_required`, ohne Bestaetigung 403\n`invitation_email_unconfirmed`.",
+        "operationId": "list_pending_invitations_v1_invitations_pending_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PendingInvitationRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Pending Invitations V1 Invitations Pending Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/invitations/pending/{invitation_id}/accept": {
+      "post": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Accept Pending Invitation",
+        "description": "Nimmt eine Einladung an die eigene Adresse per Klick an — ohne Token.\n\nDie ID stammt aus `GET /v1/invitations/pending`. Gleiche Bestaetigungs-\npruefung wie dort (403 `invitation_email_required` bzw.\n`invitation_email_unconfirmed`). Fremde oder unbekannte ID: 404. Bereits\nangenommen, widerrufen oder abgelaufen: 410 wie beim geteilten Link.",
+        "operationId": "accept_pending_invitation_v1_invitations_pending__invitation_id__accept_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invitation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAcceptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invitations/accept": {
+      "post": {
+        "tags": [
+          "invitations"
+        ],
+        "summary": "Accept Invitation By Body",
+        "description": "Nimmt eine Einladung an; der Klartext-Token steht im Body.\n\nDer Aufrufer muss eine Email-Adresse im Login tragen, die zur Einladung\npasst — sonst 403 (`invitation_email_required` bzw.\n`invitation_email_mismatch`).",
+        "operationId": "accept_invitation_by_body_v1_invitations_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationAccept"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAcceptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/invitations/{token}/accept": {
       "post": {
         "tags": [
           "invitations"
         ],
         "summary": "Accept Invitation",
+        "description": "Veraltet: Token im Pfad. Nachfolger ist `POST /v1/invitations/accept`.\n\nBleibt bis zum Datum im `Sunset`-Header erreichbar, damit bereits\nverschickte Einladungslinks weiter funktionieren; es gelten dieselben\nPruefungen wie beim Body-Endpunkt.",
         "operationId": "accept_invitation_v1_invitations__token__accept_post",
+        "deprecated": true,
         "security": [
           {
             "HTTPBearer": []
@@ -13424,6 +13553,7 @@
               "invitation_no_longer_valid",
               "invitation_email_mismatch",
               "invitation_email_required",
+              "invitation_email_unconfirmed",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
@@ -15614,6 +15744,21 @@
         "title": "IngestResult",
         "description": "Ergebnis eines Ingests: Blob- + abgeleitetes Doc-Artifact (ADR-0048).\n\n`deduplicated=True`: dieselbe (area, sha256)-Kombination existierte\nbereits — der Ingest ist idempotent, die bestehenden IDs kommen zurueck."
       },
+      "InvitationAccept": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "InvitationAccept",
+        "description": "Eingabe fuer `POST /v1/invitations/{token}/accept`.\n\nTraegt den Klartext-Token aus der Einladungs-Mail; der Server vergleicht\ndessen Hash gegen `workspace_invitation.token_hash`."
+      },
       "InvitationAcceptResult": {
         "properties": {
           "workspace_id": {
@@ -17492,6 +17637,48 @@
         ],
         "title": "OrganizationRead",
         "description": "Organization-Metadaten."
+      },
+      "PendingInvitationRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/WorkspaceRole"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "workspace_name",
+          "role",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "PendingInvitationRead",
+        "description": "Offene Einladung fuer die E-Mail-Adresse des eigenen Kontos.\n\nBewusst ohne Token und ohne Token-Hash: angenommen wird per Klick ueber die\nID, nicht ueber ein Geheimnis in der Antwort."
       },
       "PersonaContent": {
         "properties": {

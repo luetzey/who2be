@@ -1,7 +1,8 @@
 """Integrationstests fuer Account-/Org-Lifecycle (Track O, Plan §3.2).
 
 Belegt: `DELETE /v1/me` mottet Account + Personal-Org ein (Soft-Delete);
-`DELETE /v1/organizations/{id}` ist owner-only und schuetzt Personal-Orgs;
+`DELETE /v1/organizations/{id}` ist owner-only, schuetzt Personal-Orgs und
+antwortet Nicht-Mitgliedern wie bei einer unbekannten Org (ADR-0036);
 eingemottete Orgs verschwinden aus den Reads und sperren den Workspace-Zugriff;
 der Hard-Purge raeumt faellige Eintraege endgueltig ab.
 """
@@ -9,7 +10,7 @@ der Hard-Purge raeumt faellige Eintraege endgueltig ab.
 import asyncio
 import secrets
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import jwt
@@ -176,11 +177,19 @@ def test_delete_organization_owner_only(monkeypatch: pytest.MonkeyPatch) -> None
             assert created.status_code == 201
             org_id = created.json()["id"]
 
-            # Nicht-Owner darf nicht loeschen.
-            forbidden = client.delete(f"/v1/organizations/{org_id}", headers=_auth(other))
-            assert forbidden.status_code == 403
+            # Referenz: unbekannte Org-ID → 404. Jede Antwort an ein
+            # Nicht-Mitglied muss byte-gleich sein (ADR-0036, kein Orakel).
+            unknown = client.delete(f"/v1/organizations/{uuid4()}", headers=_auth(other))
+            assert unknown.status_code == 404
+            assert unknown.json()["reason"] == "organization_not_found"
 
-            # Personal-Org laeuft ueber Konto-Loeschung → 400.
+            # Nicht-Mitglied auf fremde Company-Org → 404 wie unbekannt.
+            foreign_company = client.delete(f"/v1/organizations/{org_id}", headers=_auth(other))
+            assert foreign_company.status_code == 404
+            assert foreign_company.json() == unknown.json()
+
+            # Nicht-Mitglied auf fremde Personal-Org → 404 wie unbekannt
+            # (verraet weder Existenz noch Art der Org).
             personal = asyncio.run(
                 _fetchrow(
                     "SELECT id FROM organization WHERE kind = 'personal' AND slug = $1",
@@ -188,8 +197,28 @@ def test_delete_organization_owner_only(monkeypatch: pytest.MonkeyPatch) -> None
                 )
             )
             assert personal is not None
+            foreign_personal = client.delete(
+                f"/v1/organizations/{personal['id']}", headers=_auth(other)
+            )
+            assert foreign_personal.status_code == 404
+            assert foreign_personal.json() == unknown.json()
+
+            # Mitglied ohne Owner-Rolle → 403.
+            asyncio.run(
+                _execute(
+                    "INSERT INTO org_member (org_id, user_id, role) VALUES ($1, $2, 'member')",
+                    UUID(org_id),
+                    other,
+                )
+            )
+            forbidden = client.delete(f"/v1/organizations/{org_id}", headers=_auth(other))
+            assert forbidden.status_code == 403
+            assert forbidden.json()["reason"] == "organization_owner_required"
+
+            # Owner auf eigene Personal-Org: laeuft ueber Konto-Loeschung → 400.
             bad = client.delete(f"/v1/organizations/{personal['id']}", headers=_auth(owner))
             assert bad.status_code == 400
+            assert bad.json()["reason"] == "personal_organization_undeletable"
 
             # Owner loescht die Company-Org (Soft-Delete).
             ok = client.delete(f"/v1/organizations/{org_id}", headers=_auth(owner))

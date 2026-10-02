@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Copy } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -8,7 +8,7 @@ import { z } from 'zod'
 
 import i18n from '@/i18n'
 
-import type { Invitation, WorkspaceRole } from '@/api/types'
+import type { Invitation, Member, WorkspaceRole } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import { isDowngrade, ROLE_ORDER, roleLabel } from '@/lib/roles'
@@ -56,9 +57,92 @@ function describeError(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback
 }
 
+// Der Token steht im URL-Fragment, nie im Pfad oder in einer Query: das
+// Fragment verlässt den Browser nicht, landet also in keinem Server- oder
+// Proxy-Log. Die Accept-Seite liest es per URLSearchParams und schickt den
+// Token im Body an POST /v1/invitations/accept.
 function acceptUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  return `${origin}/invitations/${token}/accept`
+  return `${origin}/invitations/accept#${new URLSearchParams({ token }).toString()}`
+}
+
+interface MemberListItemProps {
+  member: Member
+  onChangeRole: (userId: string, currentRole: WorkspaceRole, nextRole: WorkspaceRole) => Promise<void>
+  onRemove: (userId: string) => Promise<void>
+}
+
+/**
+ * Mitglied als Listenzeile (W5=a, nur unter md). Prioritaetsfelder stehen
+ * immer da: der Name — die E-Mail, ein eigenes Namensfeld hat `Member` nicht —
+ * und die Rolle samt Auswahl, weil Rolle aendern die haeufigste Aktion ist.
+ * Beitrittsdatum und das destruktive Entfernen liegen hinter dem Aufklapper;
+ * so steht „Entfernen“ nicht direkt neben der Rollenauswahl im Daumenbereich.
+ *
+ * Der Aufklapper nutzt die gemeinsamen Texte `common:actions.showMore/Less`;
+ * welches Mitglied gemeint ist, sagt `aria-describedby` auf den Namen. Ein
+ * eigenes `aria-label` wuerde den sichtbaren Text verdecken (WCAG 2.5.3).
+ */
+function MemberListItem({ member, onChangeRole, onRemove }: MemberListItemProps) {
+  const { t } = useTranslation('settings')
+  const [open, setOpen] = useState(false)
+  const nameId = useId()
+  const detailsId = useId()
+  const name = member.email ? member.email : member.user_id
+
+  return (
+    <li className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span id={nameId} className="min-w-0 flex-1 basis-40 font-medium wrap-anywhere">
+          {name}
+        </span>
+        <Select
+          aria-label={t('members.list.roleAriaLabel', { email: member.email })}
+          className="w-auto min-w-32"
+          value={member.role}
+          onChange={(event) =>
+            void onChangeRole(member.user_id, member.role, event.target.value as WorkspaceRole)
+          }
+        >
+          {ROLE_ORDER.map((option) => (
+            <option key={option} value={option}>
+              {roleLabel(option)}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <Button
+        type="button"
+        variant="link"
+        className="min-h-11 self-start px-0"
+        aria-expanded={open}
+        aria-controls={detailsId}
+        aria-describedby={nameId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? t('common:actions.showLess') : t('common:actions.showMore')}
+      </Button>
+      <div
+        id={detailsId}
+        hidden={!open}
+        className="flex flex-wrap items-center justify-between gap-3"
+      >
+        <dl className="flex gap-2 text-sm">
+          <dt className="text-muted-foreground">{t('members.list.colJoined')}</dt>
+          <dd>{new Date(member.joined_at).toLocaleDateString()}</dd>
+        </dl>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="h-10"
+          onClick={() => void onRemove(member.user_id)}
+        >
+          {t('members.list.removeButton')}
+        </Button>
+      </div>
+    </li>
+  )
 }
 
 export function MembersPage() {
@@ -71,6 +155,8 @@ export function MembersPage() {
   // Klartext-Token der in dieser Sitzung erstellten Invitations — das Backend
   // liefert ihn nur einmal bei der Erstellung (Hash-only, ADR-0023).
   const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({})
+  const isMobile = useIsMobile()
+  const listTitleId = useId()
 
   const isBlocked = role === 'editor' || role === 'viewer'
 
@@ -169,7 +255,7 @@ export function MembersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t('members.list.title')}</CardTitle>
+            <CardTitle id={listTitleId}>{t('members.list.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DataView
@@ -179,6 +265,27 @@ export function MembersPage() {
               emptyTitle={t('members.list.emptyTitle')}
               emptyDescription={t('members.list.emptyDescription')}
             >
+              {isMobile ? (
+                // W5=a (Mobil-Spec M11): unter md keine Tabelle, sondern eine
+                // Liste mit Prioritaetsfeldern — Name (E-Mail) und Rolle
+                // sichtbar, Beitritt und Entfernen hinter „Mehr anzeigen“.
+                // Gemessen war die Tabelle bei 320 px nur 238 von 619 px
+                // sichtbar (innerer Querscroller).
+                <ul
+                  className="flex flex-col divide-y divide-border"
+                  aria-labelledby={listTitleId}
+                  data-testid="members-list"
+                >
+                  {members.members.map((member) => (
+                    <MemberListItem
+                      key={member.user_id}
+                      member={member}
+                      onChangeRole={onChangeRole}
+                      onRemove={onRemove}
+                    />
+                  ))}
+                </ul>
+              ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -231,6 +338,7 @@ export function MembersPage() {
                   ))}
                 </TableBody>
               </Table>
+              )}
             </DataView>
           </CardContent>
         </Card>

@@ -566,6 +566,18 @@ describe('ResourceDetailPage — Managed-Lock & Rollen', () => {
     expect(screen.queryByText('Sub-Resources bearbeiten')).not.toBeInTheDocument()
   })
 
+  it('is_managed: Werte als zugeordneter Lesetext statt gesperrter Felder (Audit A7)', async () => {
+    renderDetailPage(
+      detailHandlers({ resource: resourceWith({ is_managed: true }) }),
+    )
+
+    await screen.findByTestId('managed-notice')
+    const name = screen.getByLabelText('Name')
+    expect(name.tagName).toBe('OUTPUT')
+    expect(name).toHaveClass('text-foreground')
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
+  })
+
   it('ohne Managed-Flag: keine Notice, Status-Bar und Danger-Zone sind sichtbar', async () => {
     renderDetailPage(detailHandlers())
 
@@ -746,6 +758,46 @@ describe('ResourceDetailPage — Header-Aktionen (Slug/Duplizieren/Feedback)', (
     renderDetailPage(detailHandlers(), { me: meWithRole('viewer') })
 
     expect(await screen.findByTestId('duplicate-resource')).toBeDisabled()
+  })
+
+  // Audit A13: unter md liegen Feedback/Export/Duplizieren hinter „Mehr".
+  // jsdom rendert kein CSS — Sichtbarkeit je Viewport belegt
+  // e2e/status-actions-viewport.spec.ts, hier der Vertrag (Slot + Knopf).
+  it('Audit A13: Kopf-Aktionen liegen unter md hinter „Mehr"', async () => {
+    renderDetailPage(detailHandlers(), { me: meWithRole('editor') })
+
+    const more = await screen.findByTestId('detail-header-more')
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).toHaveClass('hidden', 'md:flex')
+    expect(slot).toContainElement(screen.getByTestId('duplicate-resource'))
+    expect(slot).toContainElement(screen.getByTestId('export-resource-trigger'))
+    expect(slot).toContainElement(screen.getByRole('button', { name: 'Feedback geben' }))
+  })
+
+  // Audit A13-Rest: unter md drei Tags, Rest hinter „+n“ (TagList).
+  it('Audit A13: Tags klappen unter md nach drei auf „+n“ ein', async () => {
+    const tags = ['tag-a1', 'tag-a2', 'tag-a3', 'tag-a4', 'tag-a5']
+    renderDetailPage(
+      detailHandlers({
+        resource: {
+          ...resource(),
+          content: { description: 'd', blocks: [], tags },
+        },
+      }),
+    )
+
+    const more = await screen.findByRole('button', { name: '2 weitere anzeigen' })
+    expect(more).toHaveTextContent('+2')
+    const rest = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(rest).toHaveClass('hidden', 'md:contents')
+    // Die Tags stehen auch im Editor-Feld — deshalb gezielt im Kopf suchen.
+    const inHeader = (tag: string) =>
+      screen.getAllByText(tag).find((el) => el.closest('[data-testid="tag-list"]'))
+    expect(rest).toContainElement(inHeader('tag-a4') ?? null)
+    expect(rest).not.toContainElement(inHeader('tag-a3') ?? null)
+    expect(inHeader('tag-a3')).toBeDefined()
   })
 })
 

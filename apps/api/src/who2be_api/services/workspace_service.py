@@ -14,6 +14,7 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.repositories.organization_repository import OrganizationRepository
 from who2be_api.repositories.workspace_repository import (
+    AccessLogRetainedError,
     LastWorkspaceError,
     WorkspaceRepository,
 )
@@ -122,6 +123,21 @@ class WorkspaceService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Der letzte Workspace einer Organization kann nicht geloescht werden.",
                 reason="last_workspace_undeletable",
+            ) from exc
+        except AccessLogRetainedError as exc:
+            # Owner-Entscheidung 2026-10-01 (Board t_19169bdd): wie der
+            # Agent-Delete (ADR-0047 H5) 409 statt Mitloeschen oder
+            # Soft-Delete. `concurrent_conflict` ist dort die Wahl fuer „der
+            # Datenbestand laesst die Aktion nicht zu" — kein neuer Grund.
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Agenten dieses Workspaces haben protokollierte Zugriffe — "
+                    "Loeschung nur ueber den Retention-/Purge-Pfad. Das "
+                    "Zugriffsprotokoll ist append-only und ueberlebt Agent und "
+                    "Workspace bewusst."
+                ),
+                reason="concurrent_conflict",
             ) from exc
         if not deleted:
             raise _not_found()

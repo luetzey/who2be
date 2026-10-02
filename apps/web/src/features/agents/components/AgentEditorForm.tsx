@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
@@ -163,7 +164,7 @@ export function AgentEditorForm({
     }
   }
 
-  const submitButton = (
+  const submitButton = locked ? null : (
     <div className="flex justify-end">
       <Button
         type="submit"
@@ -215,6 +216,10 @@ export function AgentEditorForm({
                     description={t('form.identity.description')}
                     help={<p>{t('form.identity.help')}</p>}
                   >
+                {locked ? (
+                  // Audit A7: verwaltet → Lesetext statt gesperrtem Feld (§10.2).
+                  <ReadOnlyField label={t('common:fields.name')} value={form.watch('name')} />
+                ) : (
                 <FormField
                   control={form.control}
                   name="name"
@@ -228,6 +233,7 @@ export function AgentEditorForm({
                     </FormItem>
                   )}
                 />
+                )}
                 <FormField
                   control={form.control}
                   name="description"
@@ -274,6 +280,28 @@ export function AgentEditorForm({
                   </p>
                 }
               >
+                {locked ? (
+                  <>
+                    <ReadOnlyField
+                      label={t('form.persona.label')}
+                      value={personas.find((p) => p.id === form.watch('persona_id'))?.name}
+                    />
+                    <ReadOnlyField
+                      label={t('form.template.label')}
+                      value={(() => {
+                        const tpl = templates.find(
+                          (item) => item.id === form.watch('system_prompt_template_id'),
+                        )
+                        return tpl ? `${tpl.name} (${tpl.slug})` : undefined
+                      })()}
+                    />
+                    <ReadOnlyField
+                      label={t('form.statusField.label')}
+                      value={t(`form.statusField.${form.watch('status')}`)}
+                    />
+                  </>
+                ) : (
+                  <>
                 <FormField
                   control={form.control}
                   name="persona_id"
@@ -346,6 +374,8 @@ export function AgentEditorForm({
                     </FormItem>
                   )}
                 />
+                  </>
+                )}
                   </FormSection>
 
                   {/*
@@ -368,6 +398,27 @@ export function AgentEditorForm({
                     description={t('form.modelDescription')}
                     help={<p>{t('form.modelHelp')}</p>}
                   >
+                    {locked ? (
+                      !form.watch('model_provider')?.trim() &&
+                      !form.watch('model_name')?.trim() ? (
+                        // Beide leer: ein Satz statt einer leeren Sektion.
+                        <p className="text-sm text-muted-foreground">
+                          {t('form.modelNotSet')}
+                        </p>
+                      ) : (
+                      <>
+                        <ReadOnlyField
+                          label={t('form.modelProviderLabel')}
+                          value={form.watch('model_provider')}
+                        />
+                        <ReadOnlyField
+                          label={t('form.modelNameLabel')}
+                          value={form.watch('model_name')}
+                        />
+                      </>
+                      )
+                    ) : (
+                      <>
                     <FormField
                       control={form.control}
                       name="model_provider"
@@ -402,6 +453,8 @@ export function AgentEditorForm({
                         </FormItem>
                       )}
                     />
+                      </>
+                    )}
                   </FormSection>
 
                   {submitButton}

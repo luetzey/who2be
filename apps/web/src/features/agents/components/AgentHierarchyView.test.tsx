@@ -1,8 +1,8 @@
 import type { Session } from '@supabase/supabase-js'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_TOOL_POLICY,
@@ -13,8 +13,20 @@ import {
   type SystemPromptTemplate,
 } from '@/api/types'
 import { SessionContext } from '@/auth/session-context'
+import i18n from '@/i18n'
 
 import { AgentHierarchyView } from './AgentHierarchyView'
+
+// Breakpoint steuerbar: jsdom kennt kein `matchMedia`; der Default `false`
+// ist der Desktop-Pfad (alle Playbooks), `true` der Pfad unter `md`.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => viewport.mobile,
+}))
+
+afterEach(() => {
+  viewport.mobile = false
+})
 
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [] }
@@ -213,5 +225,226 @@ describe('AgentHierarchyView — Responsive (#570)', () => {
       expect(row).toHaveClass('min-h-10')
       expect(row).toHaveClass('md:min-h-0')
     }
+  })
+})
+
+function manyPlaybooks(count: number): Playbook[] {
+  const [template] = mockPlaybooks()
+  return Array.from({ length: count }, (_, index) => ({
+    ...template,
+    id: `pb-${index + 1}`,
+    name: `Playbook ${index + 1}`,
+  }))
+}
+
+function renderMany(count: number) {
+  return renderView(
+    <AgentHierarchyView
+      agent={mockAgent()}
+      persona={mockPersona()}
+      template={mockTemplate()}
+      playbooks={manyPlaybooks(count)}
+    />,
+  )
+}
+
+// Mobil-Spec P7, M6 (Namen): Vorher kuerzte `truncate` auch kurze Namen
+// unnoetig. Die Namen sind Links zum Volltext, deshalb ist eine Begrenzung
+// auf zwei Zeilen erlaubt (Spec M6.1) — mehr nicht. Klassen-Vertrag.
+describe('AgentHierarchyView — Namen brechen um (Mobil-Spec M6)', () => {
+  it('kuerzt Playbook-, Persona- und System-Prompt-Namen erst nach zwei Zeilen', () => {
+    renderView(
+      <AgentHierarchyView
+        agent={mockAgent()}
+        persona={mockPersona()}
+        template={mockTemplate()}
+        playbooks={mockPlaybooks()}
+      />,
+    )
+    const names = [
+      screen.getByText('Reset-Mail'),
+      screen.getByRole('link', { name: 'Coach Carla' }),
+      screen.getByRole('link', { name: 'Customer-Support-Agent' }),
+    ]
+    for (const name of names) {
+      expect(name).toHaveClass('wrap-anywhere', 'line-clamp-2')
+      expect(name).not.toHaveClass('truncate')
+    }
+  })
+})
+
+// PM-Zusatz zu P7 (Muster M9): Vor den Tabs stand die Karte mit allen
+// 14 Playbooks (942 px bei 320). Unter `md` zuerst 4 im Seitenfluss plus
+// „{{count}} weitere anzeigen“ (je 8); ab `md` unveraendert alle.
+describe('AgentHierarchyView — Playbook-Liste unter md (Muster M9)', () => {
+  // Seit dem Designer-Delta t_42bff43b startet die Karte unter md zu; die
+  // P7-Zusicherungen gelten fuer den aufgeklappten Inhalt.
+  function expand() {
+    fireEvent.click(screen.getByTestId('agent-hierarchy-toggle'))
+  }
+
+  it('zeigt unter md vier Playbooks und einen Knopf fuer die naechsten acht', () => {
+    viewport.mobile = true
+    renderMany(14)
+    expand()
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
+    expect(screen.getByRole('button', { name: '8 weitere anzeigen' })).toBeInTheDocument()
+    // Die Liste nennt weiter die Gesamtzahl.
+    expect(screen.getByRole('list', { name: '14 verknüpfte Playbooks' })).toBeInTheDocument()
+  })
+
+  it('laedt je acht nach, setzt den Fokus auf den ersten neuen Eintrag und meldet den Stand', () => {
+    viewport.mobile = true
+    renderMany(15)
+    expand()
+    const live = document.querySelector('[aria-live="polite"]')
+    expect(live).toHaveTextContent('')
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
+    })
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(12)
+    expect(document.activeElement).toHaveTextContent('Playbook 5')
+    expect(live).toHaveTextContent('12 von 15 angezeigt')
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: '3 weitere anzeigen' }))
+    })
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(15)
+    expect(document.activeElement).toHaveTextContent('Playbook 13')
+    expect(live).toHaveTextContent('15 von 15 angezeigt')
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('zeigt bei hoechstens vier Playbooks keinen Knopf', () => {
+    viewport.mobile = true
+    renderMany(4)
+    expand()
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+
+  it('zeigt ab md alle Playbooks ohne Knopf', () => {
+    renderMany(14)
+    expect(screen.getAllByTestId('agent-hierarchy-playbook')).toHaveLength(14)
+    expect(screen.queryByRole('button', { name: /weitere anzeigen/ })).not.toBeInTheDocument()
+  })
+})
+
+// Designer-Delta t_42bff43b (Option a): Unter md startet die Karte zu, damit
+// die Tabs bei 320 px nahe an einen Bildschirm rutschen (Mobil-Spec M2,
+// gemessen vorher 1,80). Der Schalter nennt Persona und Playbook-Zahl.
+describe('AgentHierarchyView — Zusammensetzung unter md zugeklappt', () => {
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage('de')
+    })
+  })
+
+  function toggle() {
+    return screen.getByRole('button', { name: /^Zusammensetzung/ })
+  }
+
+  it('startet unter md zugeklappt: Schalter mit Zusammenfassung, Inhalt weder sichtbar noch per Tab erreichbar', () => {
+    viewport.mobile = true
+    renderMany(14)
+    const button = toggle()
+    // Zugaenglicher Name = sichtbarer Text, kein abweichendes aria-label.
+    expect(button).toHaveAccessibleName('Zusammensetzung Coach Carla · 14 Playbooks')
+    expect(button).not.toHaveAttribute('aria-label')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    const content = document.getElementById(button.getAttribute('aria-controls') ?? '')
+    expect(content).not.toBeNull()
+    expect(content).toHaveAttribute('hidden')
+    // Kein Link der Karte im A11y-Tree, also auch keiner im Tab-Fluss.
+    expect(within(screen.getByTestId('agent-hierarchy')).queryAllByRole('link')).toHaveLength(0)
+    // Kuerzen auf eine Zeile; der volle Name ist per Aufklappen erreichbar.
+    expect(screen.getByTestId('agent-hierarchy-summary')).toHaveClass('truncate')
+  })
+
+  it('klappt auf und wieder zu, der Fokus bleibt auf dem Schalter, die Zahl der Playbooks bleibt', () => {
+    viewport.mobile = true
+    renderMany(14)
+    const button = toggle()
+    button.focus()
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(document.activeElement).toBe(button)
+    const content = document.getElementById(button.getAttribute('aria-controls') ?? '')
+    expect(content).not.toHaveAttribute('hidden')
+    expect(screen.getByRole('link', { name: 'Coach Carla' })).toBeInTheDocument()
+    // Der Schalter bleibt einzeilig (Spec §3.1: keine Hoehenaenderung).
+    expect(screen.getByTestId('agent-hierarchy-summary')).toHaveClass('truncate')
+    // Die Ueberschrift steht nur im Schalter, nicht doppelt im Inhalt.
+    expect(screen.getAllByText('Zusammensetzung')).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: '8 weitere anzeigen' }))
+    expect(screen.getAllByRole('link', { name: /^Playbook / })).toHaveLength(12)
+
+    // „Weitere anzeigen“ setzt den Fokus auf den ersten neuen Eintrag (P7);
+    // zum Zuklappen geht der Nutzer zurueck auf den Schalter.
+    button.focus()
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(content).toHaveAttribute('hidden')
+    expect(document.activeElement).toBe(button)
+
+    fireEvent.click(button)
+    expect(screen.getAllByRole('link', { name: /^Playbook / })).toHaveLength(12)
+  })
+
+  it('hat keine Animation: weder Transition am Schalter noch drehender Chevron', () => {
+    viewport.mobile = true
+    renderMany(2)
+    const button = toggle()
+    // Die Button-Basis bringt `transition-colors` mit; `transition-none`
+    // hebt sie auf (tailwind-merge laesst nur die letzte Transition stehen).
+    expect(button).toHaveClass('transition-none')
+    expect(button.className).not.toMatch(/transition-(colors|all|transform)|animate-|rotate-/)
+    for (const icon of button.querySelectorAll('svg')) {
+      expect(icon.getAttribute('class') ?? '').not.toMatch(/transition|rotate-/)
+      expect(icon).toHaveAttribute('aria-hidden', 'true')
+    }
+  })
+
+  it.each([
+    ['de', 'Persona', 14, 'Coach Carla · 14 Playbooks', mockPersona()],
+    ['de', 'Persona', 1, 'Coach Carla · 1 Playbook', mockPersona()],
+    ['de', 'Persona', 0, 'Coach Carla · keine Playbooks', mockPersona()],
+    ['de', 'ohne Persona', 14, 'Ohne Persona · 14 Playbooks', null],
+    ['de', 'ohne Persona', 0, 'Ohne Persona · keine Playbooks', null],
+    ['en', 'Persona', 14, 'Coach Carla · 14 playbooks', mockPersona()],
+    ['en', 'Persona', 1, 'Coach Carla · 1 playbook', mockPersona()],
+    ['en', 'Persona', 0, 'Coach Carla · no playbooks', mockPersona()],
+    ['en', 'ohne Persona', 14, 'No persona · 14 playbooks', null],
+    ['en', 'ohne Persona', 0, 'No persona · no playbooks', null],
+  ] as const)('fasst zusammen (%s, %s, %i Playbooks): „%s“', async (lang, _label, count, expected, persona) => {
+    await act(async () => {
+      await i18n.changeLanguage(lang)
+    })
+    viewport.mobile = true
+    renderView(
+      <AgentHierarchyView
+        agent={mockAgent()}
+        persona={persona}
+        template={mockTemplate()}
+        playbooks={manyPlaybooks(count)}
+      />,
+    )
+    expect(screen.getByTestId('agent-hierarchy-summary')).toHaveTextContent(expected)
+  })
+
+  it('nennt ein einzelnes verknuepftes Playbook im Singular', () => {
+    renderMany(1)
+    expect(screen.getByRole('list', { name: '1 verknüpftes Playbook' })).toBeInTheDocument()
+  })
+
+  it('zeigt ab md keinen Schalter und den Inhalt offen wie bisher', () => {
+    renderMany(14)
+    expect(screen.queryByTestId('agent-hierarchy-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Zusammensetzung/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Zusammensetzung')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Coach Carla' })).toBeInTheDocument()
+    expect(screen.getByTestId('agent-hierarchy').querySelector('[hidden]')).toBeNull()
   })
 })

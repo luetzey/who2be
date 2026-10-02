@@ -40,6 +40,12 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
      Auth-Delete wird `account_deletion.purged_at = now()` gesetzt
      (idempotenter Retry, falls der Auth-Call scheitert).
 
+**Rueckgabe vor der Loeschung (Art. 28 Abs. 3 lit. g):** Verlangt der Kunde
+seine Daten zurueck, exportiert der Betreiber die Organisation waehrend der
+Grace mit `who2be-org-transfer export` als gpg-verschluesseltes Archiv
+(`docs/org-export-import.md`). Das Archiv ist nach der Uebergabe beim Betreiber
+zu loeschen; es liegt ausserhalb von Purge und Backup-Retention.
+
 ---
 
 ## 2 · Anonymisierung ueberlebender Audit-Referenzen (WP-D)
@@ -315,6 +321,11 @@ dem des Workspace.
 `agent_memories` und das Nutzergedaechtnis **nur des exportierenden
 Menschen** als `user_memories`, beide mit der Historie je Eintrag unter
 `events`. Nutzergedaechtnis anderer Mitglieder steht nicht im Buendel.
+`agent_memories` folgt der Rollengrenze der Oberflaeche (ab `editor`, wie
+`MemoryService.list_memories`): fuer einen `viewer` bleibt der Block leer, und
+`export_manifest.agent_memories` traegt `included: false` samt Begruendung.
+Die Historie wird nur fuer die tatsaechlich exportierten Eintraege gelesen,
+nicht workspace-weit. Belegt in `apps/api/tests/test_memory_compliance.py`.
 
 ---
 

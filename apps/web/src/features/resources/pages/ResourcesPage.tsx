@@ -18,6 +18,7 @@ import { LoadingState } from '@/components/data/LoadingState'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
@@ -135,11 +136,15 @@ export function ResourcesPage() {
                   {resource.slug}
                 </Badge>
               ) : null}
-              {tags.map((tag) => (
-                <Badge key={tag} variant="outline" className="max-w-full text-xs break-words">
-                  {tag}
-                </Badge>
-              ))}
+              <TagList
+                tags={tags}
+                label={t('common:fields.tags')}
+                renderTag={(tag) => (
+                  <Badge variant="outline" className="max-w-full text-xs break-words">
+                    {tag}
+                  </Badge>
+                )}
+              />
             </>
           }
           status={

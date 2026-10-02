@@ -48,9 +48,12 @@ export function UsedByList({ items, empty, className, ...props }: UsedByListProp
                 size="sm"
               />
             ) : null}
+            {/* Mobil-Spec M6: Der Name bricht um statt nach ~91 px (320)
+                abzuschneiden. Weil die Zeile ein Link ist, darf sie nach zwei
+                Zeilen kuerzen (Spec M6.1); der Link fuehrt zum Volltext. */}
             <Link
               to={entry.href}
-              className="min-w-0 flex-1 truncate rounded-sm font-medium text-foreground after:absolute after:inset-0 after:rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="line-clamp-2 min-w-0 flex-1 rounded-sm font-medium wrap-anywhere text-foreground after:absolute after:inset-0 after:rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {entry.name}
             </Link>

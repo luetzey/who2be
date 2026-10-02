@@ -230,7 +230,7 @@ def test_invitation_service_records_issued_and_revoked(
     # supabase_url) — wir patchen es zur Sicherheit auf eine reine async No-op.
     from who2be_api.services import invitation_service
 
-    async def _noop_mail(email: str, plaintext: str) -> None:
+    async def _noop_mail(email: str) -> None:
         return None
 
     monkeypatch.setattr(invitation_service, "send_invitation_email", _noop_mail)
@@ -257,8 +257,8 @@ def test_invitation_service_records_issued_and_revoked(
 class _FakeLifecycleRepo:
     """Minimaler Stub fuer `AccountLifecycleService` — kein Konflikt-Pfad."""
 
-    async def is_org_owner(self, org_id: UUID, user_id: UUID) -> bool:
-        return True
+    async def org_role(self, org_id: UUID, user_id: UUID) -> str | None:
+        return "owner"
 
     async def org_kind(self, org_id: UUID) -> str | None:
         return "company"

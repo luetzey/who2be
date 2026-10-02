@@ -132,3 +132,63 @@ describe('Destructive-Text: Kontrast nach WCAG AA (Audit A6, design-language.md 
     }
   })
 })
+
+// --- Alpha-Komposition ------------------------------------------------------
+// Tailwind 4 setzt `text-foreground/70` als `color-mix(in oklab, …)`; der
+// Browser zeichnet das Ergebnis aber wie jede halbtransparente Farbe als
+// Ueberblendung im gamma-kodierten sRGB auf den Hintergrund. Gemessen wird
+// deshalb die berechnete Endfarbe auf der Flaeche, nicht das Token allein.
+
+type Srgb = [number, number, number]
+
+const encode = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+const decode = (x: number) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)
+
+function toSrgb(color: Oklch): Srgb {
+  const [r, g, b] = toLinearSrgb(color)
+  return [encode(r), encode(g), encode(b)]
+}
+
+function over(fg: Srgb, alpha: number, bg: Srgb): Srgb {
+  return [0, 1, 2].map((i) => fg[i] * alpha + bg[i] * (1 - alpha)) as Srgb
+}
+
+function srgbLuminance([r, g, b]: Srgb): number {
+  return 0.2126 * decode(r) + 0.7152 * decode(g) + 0.0722 * decode(b)
+}
+
+function srgbContrast(a: Srgb, b: Srgb): number {
+  const [hi, lo] = [srgbLuminance(a), srgbLuminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * Audit A12: Zaehler-Pill neben dem H1 der Listen (Agents, Playbooks,
+ * System-Prompts, Tools). Vorher `text-muted-foreground` auf `bg-muted`:
+ * hell 4,35:1. Jetzt `text-foreground/70` (`COUNT_PILL_TEXT` in
+ * components/data/CountPill.tsx): gerechnet 7,33:1 hell / 7,82:1 dunkel,
+ * im Browser gemessen 7,40:1 / 7,80:1 (Rundung der 8-Bit-Kanaele).
+ */
+describe('Zaehler-Pill: Kontrast nach WCAG AA (Audit A12)', () => {
+  const PILL_ALPHA = 0.7
+
+  it('CountPill nutzt genau text-foreground/70 (Alpha dieses Tests)', () => {
+    const source = readFileSync(resolve(__dirname, '../components/data/CountPill.tsx'), 'utf8')
+    expect(source).toMatch(/COUNT_PILL_TEXT = 'text-foreground\/70'/)
+  })
+
+  it('Referenz: der alte Wert text-muted-foreground auf bg-muted faellt hell unter 4,5:1', () => {
+    const css = block('light (:root)')
+    const ratio = contrastRatio(token(css, '--muted-foreground'), token(css, '--muted'))
+    expect(ratio).toBeLessThan(WCAG_AA_NORMAL_TEXT)
+  })
+
+  for (const name of Object.keys(THEME_BLOCKS)) {
+    it(`${name}: text-foreground/70 auf bg-muted >= 4,5:1`, () => {
+      const css = block(name)
+      const surface = toSrgb(token(css, '--muted'))
+      const text = over(toSrgb(token(css, '--foreground')), PILL_ALPHA, surface)
+      expect(srgbContrast(text, surface)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT)
+    })
+  }
+})

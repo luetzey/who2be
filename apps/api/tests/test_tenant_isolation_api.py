@@ -50,12 +50,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import db_execute, db_fetchval
 from who2be_api.testing.tenant_pair import (
     ANCHOR_DENIED,
     DENIED,
@@ -68,7 +70,7 @@ from who2be_api.testing.tenant_pair import (
     leaks,
     seed_tenant,
 )
-from who2be_api.testing.workspace_setup import cleanup_workspaces
+from who2be_api.testing.workspace_setup import cleanup_workspaces, seed_auth_user
 
 _WS = "/v1/workspaces/{workspace_id}"
 # Pfad-Parameter, die keine Objekt-ID sind: der Workspace selbst (V1) und
@@ -122,7 +124,7 @@ PROBES: dict[str, Probe] = {
     # --- Workspace selbst --------------------------------------------------
     f"GET {_WS}": Probe(),
     f"PATCH {_WS}": Probe(body={"name": "iso"}),
-    f"DELETE {_WS}": Probe(known="Fix in Arbeit (Board t_19169bdd)"),
+    f"DELETE {_WS}": Probe(),
     f"GET {_WS}/whoami": Probe(),
     f"GET {_WS}/dashboard": Probe(),
     f"GET {_WS}/billing/entitlement": Probe(),
@@ -430,9 +432,29 @@ PROBES: dict[str, Probe] = {
     "POST /v1/organizations/{organization_id}/workspaces": Probe(
         body={"name": "iso", "slug": "iso-probe"}
     ),
-    "DELETE /v1/organizations/{organization_id}": Probe(known="Fix in Arbeit (Board t_977db967)"),
+    "DELETE /v1/organizations/{organization_id}": Probe(),
+    # Offene Einladungen des eigenen Kontos, ueber alle Workspaces hinweg —
+    # genau deshalb hier: B hat eine offene Einladung auf B's Adresse, A darf
+    # sie nicht sehen (V3, Leck-Check). Beide Konten sind bestaetigt
+    # (`_confirm_accounts` in `run_isolation`), sonst antwortete die Route 403.
+    "GET /v1/invitations/pending": Probe(),
+    # Annahme per Klick: die ID einer Einladung an B's eigene Adresse. Als A
+    # (andere, ebenfalls bestaetigte Adresse) muss sie wie eine unbekannte ID
+    # mit 404 enden und B unveraendert lassen; die Gegenprobe (B nimmt die
+    # eigene an) kommt durch. `own_invitation_id` setzt `_own_invitations`.
+    "POST /v1/invitations/pending/{invitation_id}/accept": Probe(
+        path={"invitation_id": "own_invitation_id"}
+    ),
     # Der Einladungs-Token ist das Objekt: A haelt den Token einer Einladung
     # in B. Ohne passende E-Mail im Login muss die Annahme scheitern (L1).
+    # Beide Annahmewege teilen den Service; der Body-Weg ist der Nachfolger.
+    "POST /v1/invitations/accept": Probe(
+        body={"token": "<<invite_token>>"},
+        oracle_exempt=(
+            "Der Token ist ein 256-Bit-Geheimnis aus der Einladungs-Mail. Wer ihn "
+            "hat, darf wissen, dass er gilt (403 bei falscher E-Mail statt 404)."
+        ),
+    ),
     "POST /v1/invitations/{token}/accept": Probe(
         path={"token": "invite_token"},
         oracle_exempt=(
@@ -530,6 +552,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "persona_id", "playbook_id", "resource_id", "tool_id", "template_id", "agent_id",
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
+        "own_invitation_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -642,6 +665,38 @@ def isolation_env(tmp_path: Path) -> Iterator[None]:
         yield
 
 
+def _confirm_accounts(*tenants: Tenant) -> None:
+    """Bestaetigte Konten im `auth.users`-Stub, mit der Adresse aus dem JWT.
+
+    `seed_tenant` setzt den `email`-Claim auf `<marker>@example.com` (klein)
+    und laedt auf genau diese Adresse eine eigene Einladung ein. Ohne
+    bestaetigtes Konto antwortete `GET /v1/invitations/pending` mit 403, und
+    die V3-Probe saehe nie eine Liste.
+    """
+    for t in tenants:
+        seed_auth_user(t.user_id, f"{t.marker.lower()}@example.com", None)
+        db_execute("UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1", t.user_id)
+
+
+def _own_invitations(ghost: Tenant, *tenants: Tenant) -> None:
+    """ID der Einladung, die `seed_tenant` auf die eigene Adresse ausstellt.
+
+    Ziel der Annahme per Klick (`POST /v1/invitations/pending/{id}/accept`).
+    `seed_tenant` gibt nur den Token heraus; die ID kommt deshalb aus der DB.
+    Der Geist bekommt eine Zufalls-ID — seine IDs stehen schon fest, wenn
+    dieser Lauf beginnt (`ghost_of` vor `run_isolation`).
+    """
+    for t in tenants:
+        t.ids["own_invitation_id"] = str(
+            db_fetchval(
+                "SELECT id FROM workspace_invitation WHERE workspace_id = $1 AND email = $2",
+                t.workspace_id,
+                f"{t.marker.lower()}@example.com",
+            )
+        )
+    ghost.ids["own_invitation_id"] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -727,6 +782,9 @@ def _probe_as_a(
 def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Report:
     """Alle Proben als A, dann der Fingerabdruck, dann die Gegenprobe als B."""
     report = Report()
+    # Hier statt beim Aufrufer: auch test_org_transfer.py faehrt diesen Lauf.
+    _confirm_accounts(a, b)
+    _own_invitations(ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():

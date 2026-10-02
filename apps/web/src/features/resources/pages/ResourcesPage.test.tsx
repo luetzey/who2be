@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderInRoutes } from '@/test/render'
@@ -109,5 +109,33 @@ describe('ResourcesPage — Umbruch bei 320px (#564)', () => {
     const classes = (badge as HTMLElement).className.split(/\s+/)
     expect(classes).toContain('break-words')
     expect(classes).toContain('max-w-full')
+  })
+})
+
+// Audit A13-Rest (Folge zu #777): Listen-Karten zeigen unter `md` drei Tags
+// und „+n“; der Knopf klappt im Fluss auf (W3=a), ab `md` stehen alle Tags
+// da. jsdom hat kein Layout — geprueft wird die Verdrahtung mit TagList.
+describe('ResourcesPage — Tags „+n“ in der Listen-Karte (A13)', () => {
+  it('zeigt drei Tags und „+2“, Klick klappt in der Karte auf', async () => {
+    renderWith([resource('r1', 'Onboarding', ['t1', 't2', 't3', 't4', 't5'])], [
+      '/w/ws-1/resources',
+    ])
+
+    // renderInRoutes bringt die AppLayout-Navigation mit (eigene <li>) —
+    // die Karte ist das <article> um den Titel-Link.
+    const link = await screen.findByRole('link', { name: 'Onboarding' })
+    const card = within(link.closest('article') as HTMLElement)
+    const more = card.getByRole('button', { name: '2 weitere anzeigen' })
+    const rest = card.getByTestId('tag-list-rest')
+    expect(more).toHaveTextContent('+2')
+    expect(rest).toHaveClass('hidden', 'md:contents')
+    expect(rest).toHaveTextContent('t4t5')
+    expect(rest).not.toHaveTextContent('t1')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(rest).not.toHaveClass('hidden')
+    // Kein Seitenwechsel: die Karte steht noch da.
+    expect(card.getByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
   })
 })

@@ -162,6 +162,33 @@ describe('PlaybookRow — Responsive', () => {
     expect(tags.children).toHaveLength(12)
   })
 
+  it('kuerzt einen ueberlangen Einzel-Tag im gedeckelten Block, statt ihn ueber die Textspalte ragen zu lassen', () => {
+    // t_97e7a2be: TagStr erlaubt 100 Zeichen ohne Leerzeichen. So ein Tag
+    // bricht nicht um und ragte nach links ueber die Textspalte (gemessen am
+    // gebauten CSS: 579/419/419px Ueberdeckung bei 768/1024/1280). Die Badge
+    // ist jetzt auf die Blockbreite begrenzt, der Text endet mit „…", der
+    // volle Name steht im `title`.
+    const longTag = 'b'.repeat(100)
+    renderRow(playbook({ tags: ['kurz', longTag] }))
+
+    // Ohne Deckel am Wrapper waechst er als Item der `items-end`-Spalte auf
+    // die Breite des laengsten Tags — die Badge-Klassen allein reichen nicht
+    // (in Chromium gemessen: Ueberdeckung unveraendert 579px bei 768).
+    expect(screen.getByLabelText('Tags').className.split(/\s+/)).toContain('max-w-full')
+
+    const badge = screen.getByTitle(longTag)
+    const badgeClasses = badge.className.split(/\s+/)
+    expect(badgeClasses).toContain('max-w-full')
+    expect(badgeClasses).toContain('min-w-0')
+    const label = screen.getByText(longTag)
+    expect(badge).toContainElement(label)
+    expect(label.className.split(/\s+/)).toContain('truncate')
+    // Der volle Name bleibt im DOM (Screenreader), nicht nur im Tooltip.
+    expect(label.textContent).toBe(longTag)
+    // Auch kurze Tags tragen den Titel, damit das Verhalten einheitlich ist.
+    expect(screen.getByTitle('kurz')).toHaveTextContent('kurz')
+  })
+
   it('hebt Composite-Umschalter und Kind-Link unterhalb md auf die von Issue #573 AK 5 geforderten 40px', () => {
     renderRow(
       playbook({

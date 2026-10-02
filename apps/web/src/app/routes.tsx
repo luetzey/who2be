@@ -16,6 +16,9 @@ import {
   SignupPage,
 } from '@/features/auth'
 import { CookieConsentBanner, LegalLayout } from '@/features/legal/layout'
+// Eager wie die uebrigen Auth-Seiten: `/invitations` liegt ausserhalb von
+// `AppLayout` und damit ausserhalb jeder Suspense-Boundary.
+import { PendingInvitationsPage } from '@/features/auth/pages/PendingInvitationsPage'
 
 import { AppLayout } from './AppLayout'
 import { PublicLayout } from './PublicLayout'
@@ -305,6 +308,11 @@ export function RouterRoot() {
               {/* OAuth-/E-Mail-Confirm-Landing: public, etabliert die Session
                   aus dem URL-Hash und leitet dann weiter. */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              {/* Geteilter Einladungslink: Token im Fragment
+                  (`/invitations/accept#token=…`), die Page schickt ihn im Body. */}
+              <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
+              {/* Uebergang fuer bereits verschickte Links mit Token im Pfad —
+                  die Page nimmt ebenfalls per Body an und raeumt die Adresse. */}
               <Route
                 path="/invitations/:token/accept"
                 element={<InvitationAcceptPage />}
@@ -325,6 +333,11 @@ export function RouterRoot() {
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />
               <Route path="/onboarding/set-password" element={<SetPasswordPage />} />
+              {/* Ziel des tokenlosen Links aus der Einladungsmail
+                  (GOTRUE_MAILER_URLPATHS_INVITE): offene Einladungen an die
+                  Konto-Adresse, Annahme per Klick. Ohne Session faengt
+                  RequireAuth ab und fuehrt per `next` hierher zurueck. */}
+              <Route path="/invitations" element={<PendingInvitationsPage />} />
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />

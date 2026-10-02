@@ -14,6 +14,7 @@ import { DetailHeader } from '@/components/data/DetailHeader'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
@@ -117,18 +118,20 @@ export function ToolDetailPage() {
                       pendingDraft={tool.has_pending_draft}
                     />
                     <LocaleBadge locale={tool.locale} />
-                    {tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="secondary"
-                        className="max-w-full text-xs break-words"
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
+                    <TagList
+                      tags={tags}
+                      label={t('common:fields.tags')}
+                      renderTag={(tag) => (
+                        <Badge variant="secondary" className="max-w-full text-xs break-words">
+                          {tag}
+                        </Badge>
+                      )}
+                    />
                   </>
                 }
                 description={description}
+                // Audit A13: Export ist Sekundaeraktion — unter md hinter „Mehr".
+                collapseActionsBelowMd
                 actions={
                   <EntityExportButton
                     entityKind="external-tool"

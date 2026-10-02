@@ -77,6 +77,8 @@ export function SystemPromptDetailPage() {
                 </>
               }
               description={template.content.description}
+              // Audit A13: Duplizieren ist Sekundaeraktion — unter md hinter „Mehr".
+              collapseActionsBelowMd
               actions={
                 <EntityDuplicateButton
                   texts={{

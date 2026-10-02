@@ -33,4 +33,15 @@ describe('UsedByList', () => {
     const { container } = renderList(<UsedByList items={[]} />)
     expect(container).toBeEmptyDOMElement()
   })
+
+  // Mobil-Spec M6 (P7): bei 320 px zeigte `truncate` nur ~91 px vom Namen.
+  // Der Name bricht jetzt um; weil die Zeile ein Link zum Volltext ist, darf
+  // sie nach zwei Zeilen kuerzen (Spec M6.1). Klassen-Vertrag, jsdom hat
+  // kein Layout.
+  it('bricht lange Namen um und kuerzt erst nach zwei Zeilen (M6)', () => {
+    renderList(<UsedByList items={ITEMS} />)
+    const link = screen.getByRole('link', { name: 'Onboarding-Flow' })
+    expect(link).toHaveClass('wrap-anywhere', 'line-clamp-2')
+    expect(link).not.toHaveClass('truncate')
+  })
 })

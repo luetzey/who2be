@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,6 +20,12 @@ vi.mock('@/lib/feedback', () => ({
 // (Toast-Pfade), nicht der Browser-Fallback.
 vi.mock('@/lib/clipboard', () => ({
   copyToClipboard: vi.fn(async () => undefined),
+}))
+
+// Breakpoint steuerbar; Default `false` = Desktop-Tabelle der uebrigen Tests.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => viewport.mobile,
 }))
 
 const session = { access_token: 'jwt' } as unknown as Session
@@ -62,6 +68,7 @@ function renderMembers(role: WorkspaceRole = 'admin') {
 }
 
 afterEach(() => {
+  viewport.mobile = false
   vi.unstubAllGlobals()
   vi.mocked(notify.success).mockClear()
   vi.mocked(notify.error).mockClear()
@@ -444,7 +451,7 @@ describe('MembersPage — Invitations', () => {
       expect(notify.success).toHaveBeenCalledWith('Einladungs-Link kopiert.')
     })
     expect(copyToClipboard).toHaveBeenCalledWith(
-      `${window.location.origin}/invitations/tok-neu/accept`,
+      `${window.location.origin}/invitations/accept#token=tok-neu`,
     )
   })
 
@@ -494,8 +501,39 @@ describe('MembersPage — Invitations', () => {
       expect(notify.success).toHaveBeenCalledWith('Einladungs-Link kopiert.')
     })
     expect(copyToClipboard).toHaveBeenCalledWith(
-      `${window.location.origin}/invitations/tok-liste/accept`,
+      `${window.location.origin}/invitations/accept#token=tok-liste`,
     )
+  })
+
+  it('Kopierter Link trägt den Token nur im Fragment, URL-sicher kodiert', async () => {
+    // Token mit Zeichen, die in Pfad, Query und Fragment eine Bedeutung haben.
+    const raw = 'a/b?c#d&e=f+g h%'
+    stubFetch(
+      settingsHandlers({
+        invitations: () => [invitation({ token: raw })],
+      }),
+    )
+
+    renderMembers('admin')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Link kopieren' }))
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1)
+    })
+    const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string
+    const url = new URL(copied)
+    expect(url.origin).toBe(window.location.origin)
+    expect(url.pathname).toBe('/invitations/accept')
+    expect(url.search).toBe('')
+    expect(url.hash.startsWith('#token=')).toBe(true)
+    // Genau ein Parameter, und er liest sich so zurück, wie die Accept-Seite ihn liest.
+    const params = new URLSearchParams(url.hash.slice(1))
+    expect([...params.keys()]).toEqual(['token'])
+    expect(params.get('token')).toBe(raw)
+    // Kein Zeichen bricht aus dem Fragment aus: ein einziges '#', kein rohes '&', '/', '?' oder Leerzeichen.
+    expect(copied.split('#')).toHaveLength(2)
+    expect(url.hash).not.toMatch(/[ &/?]/)
   })
 
   it('Copy-Fehler mit Error: zeigt die Fehlermeldung des Clipboards', async () => {
@@ -623,5 +661,81 @@ describe('MembersPage — Responsive (#568)', () => {
     )
     expect(address.className.split(/\s+/)).toContain('break-all')
     expect(address.parentElement?.className.split(/\s+/)).toContain('min-w-0')
+  })
+})
+
+// W5=a (Mobil-Spec M11): unter md Liste statt Tabelle.
+describe('MembersPage — Mitglieder als Liste (unter md)', () => {
+  it('rendert eine Liste mit Name und Rolle, ohne Tabelle', async () => {
+    viewport.mobile = true
+    stubFetch(
+      settingsHandlers({
+        members: () => [member(), member({ user_id: 'm2', email: 'lesen@who2be.dev', role: 'viewer' })],
+      }),
+    )
+    renderMembers('admin')
+
+    const list = await screen.findByRole('list', { name: 'Mitglieder' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(within(list).getByText('coder@who2be.dev')).toHaveClass('wrap-anywhere')
+    expect(within(list).getByLabelText('Rolle von lesen@who2be.dev')).toHaveValue('viewer')
+  })
+
+  it('verbirgt Beitritt und Entfernen hinter „Mehr anzeigen“', async () => {
+    viewport.mobile = true
+    stubFetch(settingsHandlers())
+    renderMembers('admin')
+
+    const toggle = await screen.findByRole('button', { name: 'Mehr anzeigen' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAccessibleDescription('coder@who2be.dev')
+    expect(screen.queryByRole('button', { name: 'Entfernen' })).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Weniger anzeigen' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Entfernen' })).toBeVisible()
+    expect(screen.getByText('Beigetreten')).toBeInTheDocument()
+  })
+
+  it('aendert die Rolle und entfernt ueber dieselben Handler wie die Tabelle', async () => {
+    viewport.mobile = true
+    let removed = false
+    const patchBodies: string[] = []
+    const base = settingsHandlers({ members: () => (removed ? [] : [member()]) })
+    stubFetch((path, method, init) => {
+      if (method === 'PATCH' && path === `${WS_PREFIX}/members/m1`) {
+        patchBodies.push(String(init?.body))
+        return jsonResponse(member({ role: 'admin' }))
+      }
+      if (method === 'DELETE' && path === `${WS_PREFIX}/members/m1`) {
+        removed = true
+        return new Response(null, { status: 204 })
+      }
+      return base(path, method, init)
+    })
+    renderMembers('admin')
+
+    fireEvent.change(await screen.findByLabelText('Rolle von coder@who2be.dev'), {
+      target: { value: 'admin' },
+    })
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('Rolle aktualisiert.'))
+    expect(patchBodies[0]).toContain('"role":"admin"')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr anzeigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }))
+    await waitFor(() => expect(screen.queryByText('coder@who2be.dev')).not.toBeInTheDocument())
+  })
+
+  it('zeigt die user_id, wenn das Mitglied keine E-Mail hat', async () => {
+    viewport.mobile = true
+    stubFetch(settingsHandlers({ members: () => [member({ email: '' })] }))
+    renderMembers('admin')
+
+    const list = await screen.findByRole('list', { name: 'Mitglieder' })
+    expect(within(list).getByText('m1')).toBeInTheDocument()
   })
 })

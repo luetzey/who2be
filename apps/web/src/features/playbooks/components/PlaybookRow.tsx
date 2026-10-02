@@ -243,10 +243,21 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
           allein stehend kostete er eine leere Zeile samt `gap-4`. */}
       <div className="hidden shrink-0 flex-col items-end justify-between gap-2 md:flex md:max-w-40 lg:max-w-xs">
         {playbook.tags.length > 0 ? (
-          <div className="flex flex-wrap justify-end gap-1" aria-label={t('common:fields.tags')}>
+          // Ein einzelner Tag ohne Leerzeichen (TagStr: bis 100 Zeichen) bricht
+          // nicht um und ragte nach links ueber die Textspalte — gemessen
+          // 579/419/419px bei 768/1024/1280 (t_97e7a2be). Zwei Deckel noetig:
+          // `max-w-full` am Wrapper, weil er als Item der `items-end`-Spalte
+          // sonst so breit wird wie sein laengster Tag; `max-w-full min-w-0`
+          // an der Badge. Der innere Span kuerzt mit „…" (`text-overflow`
+          // greift nicht am `inline-flex`-Container selbst); der volle Name
+          // steht im `title` und bleibt als Text im DOM.
+          <div
+            className="flex max-w-full flex-wrap justify-end gap-1"
+            aria-label={t('common:fields.tags')}
+          >
             {playbook.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
-                {tag}
+              <Badge key={tag} variant="secondary" title={tag} className="max-w-full min-w-0">
+                <span className="truncate">{tag}</span>
               </Badge>
             ))}
           </div>

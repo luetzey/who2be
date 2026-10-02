@@ -92,6 +92,20 @@ class LastWorkspaceError(Exception):
     """
 
 
+class AccessLogRetainedError(Exception):
+    """Ein Agent des Workspaces hat Zeilen im Zugriffsprotokoll.
+
+    `agent_access_log.agent_id` ist seit Migration 0080 `ON DELETE NO ACTION`
+    (ADR-0047 H5): das Protokoll ist append-only und ueberlebt den Agenten.
+    Damit blockiert es auch den Workspace-Delete, der die Agenten zuerst
+    entfernt. Der legitime Loeschpfad ist der Org-Purge (`core/purge.py`).
+    """
+
+
+# Name des FK aus Migration 0080 — nur DIESE Verletzung wird uebersetzt.
+_ACCESS_LOG_AGENT_FK = "agent_access_log_agent_id_fkey"
+
+
 async def _scope_to_new_workspace(
     conn: asyncpg.Connection, workspace_id: UUID, org_id: UUID
 ) -> None:
@@ -143,7 +157,8 @@ async def ensure_personal_workspace(
 
     ``content_locale`` (ADR-0045) bestimmt die Content-Sprache des Workspaces
     und damit die Sprache der geseedeten Standard-Inhalte; abgeleitet wird sie
-    vom Aufrufer (me-Flow: ``preferred_locale`` aus ``auth.users``). Bei einem
+    vom Aufrufer (me-Flow: ``preferred_locale`` aus dem eigenen Profil, gelesen
+    ueber ``w2b_user_profiles``, Migration 0090). Bei einem
     Re-Lauf bleibt die bestehende Workspace-Sprache erhalten (kein Update im
     ON-CONFLICT-Zweig) — die Seeds prallen dann ohnehin an ihren Guards ab.
 
@@ -298,6 +313,12 @@ class PgWorkspaceRepository:
         Workspace-Cascade wuerden Persona/Template ebenfalls geloescht — die
         RESTRICT-Pruefung koennte dann je nach Cascade-Reihenfolge feuern.
         Erst Agents weg, dann Workspace → der Cascade laeuft konfliktfrei.
+
+        Zugriffsprotokoll: hat ein Agent des Workspaces Zeilen in
+        `agent_access_log`, scheitert der Agent-Delete am FK ohne Cascade
+        (Migration 0080, ADR-0047 H5) — `AccessLogRetainedError`, die
+        Transaktion rollt zurueck, nichts ist geloescht. Andere
+        FK-Verletzungen bleiben unuebersetzt (das waere ein echter Defekt).
         """
         async with self._pool.acquire() as conn, conn.transaction():
             org_id = await conn.fetchval(
@@ -312,7 +333,12 @@ class PgWorkspaceRepository:
             )
             if remaining <= 1:
                 raise LastWorkspaceError
-            await conn.execute("DELETE FROM agent WHERE workspace_id = $1", workspace_id)
+            try:
+                await conn.execute("DELETE FROM agent WHERE workspace_id = $1", workspace_id)
+            except asyncpg.ForeignKeyViolationError as exc:
+                if exc.constraint_name == _ACCESS_LOG_AGENT_FK:
+                    raise AccessLogRetainedError from exc
+                raise
             await conn.execute("DELETE FROM workspace WHERE id = $1", workspace_id)
         return True
 

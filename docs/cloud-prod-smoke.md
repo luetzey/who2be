@@ -99,10 +99,14 @@ die Verify-Mail landet im **realen Postfach** der genutzten Adresse (kein Mailpi
 
 2. **Verify-Mail oeffnen:** im echten Postfach die „Confirm your signup"-Mail
    suchen (ggf. Spam pruefen) → **Confirm**-Link folgen. Der Link zeigt auf
-   `https://app.${DOMAIN}/auth/callback#access_token=…`
-   (`GOTRUE_MAILER_URLPATHS_CONFIRMATION=/auth/callback`, `SITE_URL=https://app.${DOMAIN}`).
+   `https://supabase.${DOMAIN}/auth/v1/verify?token=…&type=signup&redirect_to=…`
+   (`GOTRUE_MAILER_URLPATHS_CONFIRMATION=/auth/v1/verify`, Basis
+   `API_EXTERNAL_URL`). GoTrue antwortet mit `303` auf
+   `https://app.${DOMAIN}/auth/callback#access_token=…`. Beim Signup per `curl`
+   fehlt `redirect_to`; dann landet der Redirect auf `SITE_URL`
+   (`https://app.${DOMAIN}#access_token=…`), die Session steht trotzdem.
 
-   - [ ] Klick landet auf der Web-`/auth/callback`-Route und ist eingeloggt.
+   - [ ] Klick landet in der Web-App (`/auth/callback` bzw. `/`) und ist eingeloggt.
 
 3. **Login** (falls die Session nicht direkt steht):
    <https://app.${DOMAIN}/login> → Redirect auf das Default-Workspace-Dashboard.

@@ -203,3 +203,52 @@ describe('PersonasPage', () => {
     })
   })
 })
+
+// Audit A13-Rest (Folge zu #777): drei Tags und „+n“ unter `md`, Knopf im
+// Fluss (W3=a); jsdom ohne Layout — geprueft wird die TagList-Verdrahtung.
+describe('PersonasPage — Tags „+n“ in der Listen-Karte (A13)', () => {
+  it('zeigt drei Tags und „+2“, Klick klappt in der Karte auf', async () => {
+    const persona = {
+      id: 'p1',
+      workspace_id: 'ws-1',
+      owner_id: 'o1',
+      name: 'QA-Bot',
+      current_version: 1,
+      content: {
+        description: 'd',
+        system_prompt: 's',
+        traits: [],
+        tags: ['t1', 't2', 't3', 't4', 't5'],
+      },
+      created_at: '2026-05-21T00:00:00Z',
+      updated_at: '2026-05-21T00:00:00Z',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify([persona]), { status: 200 })),
+    )
+
+    render(
+      <SessionContext.Provider
+        value={{ session: fakeSession, me: fakeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
+        <AuthTokenProvider>
+          <BrowserRouter>
+            <PersonasPage />
+          </BrowserRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    const more = await screen.findByRole('button', { name: '2 weitere anzeigen' })
+    const rest = screen.getByTestId('tag-list-rest')
+    expect(more).toHaveTextContent('+2')
+    expect(rest).toHaveClass('hidden', 'md:contents')
+    expect(rest).toHaveTextContent('t4t5')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(rest).not.toHaveClass('hidden')
+    expect(screen.getByText('QA-Bot')).toBeInTheDocument()
+  })
+})

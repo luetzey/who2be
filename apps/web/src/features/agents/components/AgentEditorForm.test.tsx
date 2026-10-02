@@ -206,7 +206,7 @@ describe('AgentEditorForm', () => {
     expect(screen.getByLabelText('Persona-Tags')).toHaveValue('')
   })
 
-  it('sperrt alle Felder + Speichern, wenn vom System verwaltet (locked)', () => {
+  it('zeigt verwaltete Werte als Lesetext statt gesperrter Felder, ohne Speichern (Audit A7)', () => {
     render(
       <Harness
         agent={makeAgent({
@@ -216,17 +216,49 @@ describe('AgentEditorForm', () => {
           activatable: true,
           missing: [],
           is_managed: true,
+          status: 'enabled',
+          model_provider: 'anthropic',
+          model_name: '',
         })}
         locked
       />,
     )
 
-    // Konfiguration-Tab (Default): Name + Speichern gesperrt.
-    expect(screen.getByLabelText('Name')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
-    // Werkzeuge-&-Rechte-Tab: Policy-Felder + Speichern ebenfalls gesperrt.
+    // Konfiguration-Tab (Default): Name ist ein <output>, das Label bleibt
+    // zugeordnet; kein Eingabefeld, kein (wirkungsloser) Speichern-Knopf.
+    const name = screen.getByLabelText('Name')
+    expect(name.tagName).toBe('OUTPUT')
+    expect(name).toHaveClass('text-foreground')
+    expect(name).not.toHaveClass('text-muted-foreground')
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Aktiv')
+    expect(screen.getByLabelText('Anbieter')).toHaveTextContent('anthropic')
+    // Leerer Wert: Feld entfaellt statt Platzhalter („z. B. claude-opus-5").
+    expect(screen.queryByLabelText('Modell')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+    // Werkzeuge-&-Rechte-Tab: Policy-Schalter bleiben gesperrte Bedienelemente.
     openToolsTab()
     expect(screen.getByLabelText('Playbooks lesen')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+  })
+
+  it('verwaltet ohne Modell: ein Satz statt leerer Sektion (Audit A7)', () => {
+    render(
+      <Harness
+        agent={makeAgent({ is_managed: true, model_provider: '', model_name: '' })}
+        locked
+      />,
+    )
+
+    expect(screen.getByText('Kein Modell hinterlegt.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Anbieter')).not.toBeInTheDocument()
+  })
+
+  it('Viewer ohne Verwaltung behaelt Felder und gesperrten Speichern-Knopf', () => {
+    roleRef.current = 'viewer'
+    render(<Harness agent={makeAgent({ name: 'Mein Agent' })} />)
+
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
   })
 

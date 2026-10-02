@@ -16,7 +16,12 @@ from fastapi import status
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, hash_token
 from who2be_api.integrations.gotrue_mailer import send_invitation_email
-from who2be_api.repositories.invitation_repository import InvitationRepository
+from who2be_api.repositories.invitation_repository import (
+    AcceptResult,
+    InvitationRepository,
+    PendingInvitation,
+    PendingInvitationRepository,
+)
 from who2be_api.services.audit_service import AuditService
 from who2be_models import InvitationCreate, InvitationCreated, InvitationRead
 
@@ -63,8 +68,9 @@ class InvitationService:
                 detail={"role": data.role.value},
             )
         # Best-effort: ein Mail-Fehler darf die (persistierte) Invitation nicht
-        # kippen — der Klartext-Token kommt ohnehin im Result zurueck.
-        await send_invitation_email(data.email, plaintext)
+        # kippen — der Klartext-Token kommt ohnehin im Result zurueck. Die Mail
+        # selbst bekommt den Token bewusst nicht (Link auf die Pending-Seite).
+        await send_invitation_email(data.email)
         return InvitationCreated(**invitation.model_dump(), token=plaintext)
 
     async def list_pending(self, ctx: WorkspaceContext) -> list[InvitationRead]:
@@ -98,36 +104,137 @@ class InvitationService:
         fail-closed und ohne Default fuer `jwt_email`.
         """
         result = await self._repo.accept(hash_token(token), user_id, jwt_email)
-        if result.status == "not_found":
+        return _accepted_workspace(result)
+
+
+def _accepted_workspace(result: AcceptResult) -> UUID:
+    """HTTP-Abbildung eines Accept-Ergebnisses — fuer beide Annahmewege gleich.
+
+    Geteilter Link (Token) und Annahme per Klick (ID) laufen ueber dieselbe
+    Repository-Transaktion; dieselbe Abbildung haelt ihre Antworten gleich.
+    """
+    if result.status == "not_found":
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Einladung nicht gefunden.",
+            reason="invitation_not_found",
+        )
+    if result.status == "gone":
+        # Ein Grund fuer alle drei Endzustaende (akzeptiert/widerrufen/
+        # abgelaufen) — genau wie `detail`, das sie schon heute nicht
+        # unterscheidet: welcher es war, ist fuer den Eingeladenen
+        # gleichbedeutend und fuer einen Fremden eine Information zu viel.
+        raise ApiError(
+            status_code=status.HTTP_410_GONE,
+            detail="Einladung ist nicht mehr gueltig.",
+            reason="invitation_no_longer_valid",
+        )
+    if result.status == "email_required":
+        raise ApiError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Diese Einladung laesst sich nur mit einem Konto annehmen, "
+                "das eine bestaetigte Email-Adresse traegt."
+            ),
+            reason="invitation_email_required",
+        )
+    if result.status == "email_mismatch":
+        raise ApiError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Diese Einladung ist fuer eine andere Email-Adresse.",
+            reason="invitation_email_mismatch",
+        )
+    assert result.workspace_id is not None
+    return result.workspace_id
+
+
+class PendingInvitationService:
+    """Offene Einladungen fuer die E-Mail-Adresse des eingeloggten Kontos.
+
+    Kontoweit (ohne Workspace) und deshalb neben `InvitationService` statt
+    darin: dessen Repository-Vertrag bleibt workspace-gebunden.
+    """
+
+    def __init__(self, repo: PendingInvitationRepository) -> None:
+        self._repo = repo
+
+    async def list_for_account(
+        self, user_id: UUID, jwt_email: str | None
+    ) -> list[PendingInvitation]:
+        """Ohne Token gibt es nur noch das Konto als Beleg fuer den Besitz der
+        Adresse — deshalb erst nach bestaetigter Adresse: 403
+        `invitation_email_required` ohne `email`-Claim, 403
+        `invitation_email_unconfirmed`, wenn GoTrue die Adresse des Kontos nicht
+        bestaetigt hat oder der Claim nicht die Kontoadresse ist (fail-closed).
+        """
+        email = await self._confirmed_address(
+            user_id,
+            jwt_email,
+            required=(
+                "Offene Einladungen gibt es nur fuer ein Konto, "
+                "das eine bestaetigte Email-Adresse traegt."
+            ),
+            unconfirmed=(
+                "Offene Einladungen sind erst sichtbar, wenn die Email-Adresse "
+                "des Kontos bestaetigt ist."
+            ),
+        )
+        return await self._repo.list_pending_for_email(email)
+
+    async def accept_for_account(
+        self, invitation_id: UUID, user_id: UUID, jwt_email: str | None
+    ) -> UUID:
+        """Nimmt die Einladung `invitation_id` per Klick an; gibt die
+        `workspace_id` zurueck.
+
+        Dieselbe Bestaetigungspruefung wie `list_for_account` (403), dann:
+        lautet die Einladung nicht auf die Kontoadresse oder gibt es sie nicht,
+        404 `invitation_not_found` — beides gleich, kein Existenz-Orakel.
+        Angenommen wird ueber dieselbe Repository-Transaktion wie beim
+        geteilten Link, deshalb auch dieselben Antworten (410 fuer
+        angenommen/widerrufen/abgelaufen).
+        """
+        email = await self._confirmed_address(
+            user_id,
+            jwt_email,
+            required=(
+                "Diese Einladung laesst sich nur mit einem Konto annehmen, "
+                "das eine bestaetigte Email-Adresse traegt."
+            ),
+            unconfirmed=(
+                "Einladungen lassen sich erst annehmen, wenn die Email-Adresse "
+                "des Kontos bestaetigt ist."
+            ),
+        )
+        invitation = await self._repo.find_for_account(invitation_id, email)
+        if invitation is None:
             raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Einladung nicht gefunden.",
                 reason="invitation_not_found",
             )
-        if result.status == "gone":
-            # Ein Grund fuer alle drei Endzustaende (akzeptiert/widerrufen/
-            # abgelaufen) — genau wie `detail`, das sie schon heute nicht
-            # unterscheidet: welcher es war, ist fuer den Eingeladenen
-            # gleichbedeutend und fuer einen Fremden eine Information zu viel.
-            raise ApiError(
-                status_code=status.HTTP_410_GONE,
-                detail="Einladung ist nicht mehr gueltig.",
-                reason="invitation_no_longer_valid",
-            )
-        if result.status == "email_required":
+        result = await self._repo.accept(invitation.token_hash, user_id, email)
+        return _accepted_workspace(result)
+
+    async def _confirmed_address(
+        self, user_id: UUID, jwt_email: str | None, *, required: str, unconfirmed: str
+    ) -> str:
+        """Die bestaetigte Adresse des Kontos — oder 403 (fail-closed)."""
+        if jwt_email is None:
             raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Diese Einladung laesst sich nur mit einem Konto annehmen, "
-                    "das eine bestaetigte Email-Adresse traegt."
-                ),
+                detail=required,
                 reason="invitation_email_required",
             )
-        if result.status == "email_mismatch":
+        account = await self._repo.self_account_email(user_id)
+        if (
+            not account.confirmed
+            or account.email is None
+            or account.email.lower() != jwt_email.lower()
+        ):
             raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Diese Einladung ist fuer eine andere Email-Adresse.",
-                reason="invitation_email_mismatch",
+                detail=unconfirmed,
+                reason="invitation_email_unconfirmed",
             )
-        assert result.workspace_id is not None
-        return result.workspace_id
+        return account.email

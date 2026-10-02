@@ -80,16 +80,39 @@ const playbook: Playbook = {
   updated_at: 't',
 }
 
-function Harness({ source = playbook }: { source?: Playbook } = {}) {
+function Harness({ source = playbook, locked }: { source?: Playbook; locked?: boolean } = {}) {
   const { form, initialBodyBlocks } = usePlaybookForm(source)
   return (
     <PlaybookEditorForm
       form={form}
       formKey={`${source.id}-${source.current_version}`}
       initialBodyBlocks={initialBodyBlocks}
+      locked={locked}
     />
   )
 }
+
+describe('PlaybookEditorForm — verwaltet (Audit A7)', () => {
+  it('zeigt Werte als zugeordneten Lesetext, Tags/Trigger als Kapseln, Leeres entfaellt', () => {
+    render(
+      <Harness
+        source={{ ...playbook, content: { ...playbook.content, description: '  ' } }}
+        locked
+      />,
+    )
+
+    const name = screen.getByLabelText('Name')
+    expect(name.tagName).toBe('OUTPUT')
+    expect(name).toHaveTextContent('Reset-Mail')
+    expect(screen.getByLabelText('Typ')).toHaveTextContent('Workflow')
+    expect(screen.queryByRole('combobox', { name: 'Typ' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Tags')).toHaveTextContent('support')
+    expect(screen.getByLabelText('Trigger')).toHaveTextContent('passwort vergessen')
+    // Leere Beschreibung: kein Feld mit Platzhalter.
+    expect(screen.queryByLabelText('Beschreibung')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('playbook-name-input')).not.toBeInTheDocument()
+  })
+})
 
 describe('PlaybookEditorForm', () => {
   it('rendert den Typ als Select mit sechs Optionen', async () => {

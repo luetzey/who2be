@@ -428,6 +428,52 @@ test('M11: breite Tabelle ist fokussierbar, benannt, erste Spalte fixiert, Hinwe
 })
 
 /**
+ * Mobil-Spec P7, M10: Im Artefakt-Detail lag die Textspalte bei 320 px neben
+ * dem Anker-Knopf und war 170 px breit. Unter md nutzt der Text die volle
+ * Blockbreite; der Knopf sitzt oben rechts im Block, der Text fliesst um ihn.
+ *
+ * Rot-Probe: gegen das Image von origin/main rot (Textspalte schmaler als der
+ * Block).
+ */
+test('M10: Artefakt-Text unter md in voller Blockbreite', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  const area = await call<{ id: string }>('/work-areas', { name: 'E2E Artefakt-Area' })
+  const artifact = await call<{ id: string }>(`/work-areas/${area.id}/artifacts`, {
+    title: 'E2E Protokoll',
+    content_md: Array.from(
+      { length: 4 },
+      (_, i) => `Absatz ${i + 1}: Im Quartalsgespräch wurde die neue Preisliste vereinbart.`,
+    ).join('\n\n'),
+    occurred_at: '2026-09-29T10:00:00Z',
+  })
+
+  const isPhone = (page.viewportSize()?.width ?? 0) < 768
+  await page.goto(`/w/${workspaceId}/workarea/areas/${area.id}/artifacts/${artifact.id}`)
+  const text = page.locator('main ol pre').first()
+  await expect(text).toBeVisible()
+  await expectNoHorizontalScroll(page, 'workarea/artifacts/:id')
+  const widths = await text.evaluate((el) => ({
+    text: el.getBoundingClientRect().width,
+    block: (el.parentElement as HTMLElement).clientWidth,
+  }))
+  if (isPhone) {
+    // `li` hat 2 × 8 px Polsterung; der Text fuellt den Rest ganz.
+    expect(widths.text, 'Artefakt-Text unter md nicht in voller Breite').toBeGreaterThanOrEqual(
+      widths.block - 16 - 1,
+    )
+  }
+})
+
+/**
  * Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ oeffnen
  * unterhalb `md` eine eigene Vollbildseite statt eines Dialogs; ab `md`
  * bleibt der Dialog. Geprueft auf jedem Profil, scharf auf `mobile-320`:
@@ -477,8 +523,21 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
     return
   }
 
+  // Audit A13: unter md liegt „Feedback geben“ im Seitenkopf hinter „Mehr“
+  // (`DetailHeader.collapseActionsBelowMd`). Eingeklappt ist der Link
+  // `hidden` und damit nicht im A11y-Tree; erst aufklappen, dann klicken.
+  // Nach jeder Navigation ist der Kopf wieder eingeklappt.
+  const openGiveFeedback = async () => {
+    const more = page.getByTestId('detail-header-more')
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('link', { name: giveName })).toHaveCount(0)
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await page.getByRole('link', { name: giveName }).click()
+  }
+
   // --- Feedback geben: oeffnen, ausfuellen, absenden, zurueck mit Bestaetigung.
-  await page.getByRole('link', { name: giveName }).click()
+  await openGiveFeedback()
   await expect(page).toHaveURL(new RegExp(`/feedback/give/resource/${resource.id}`))
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(giveName)
@@ -501,7 +560,7 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
   )
 
   // --- Browser-Zurueck: Seite oeffnen, Browser-Zurueck fuehrt zur Ausgangsseite.
-  await page.getByRole('link', { name: giveName }).click()
+  await openGiveFeedback()
   await expect(page).toHaveURL(/\/feedback\/give\//)
   await page.goBack()
   await expect(page).toHaveURL((url) => `${url.pathname}${url.search}` === origin)
@@ -609,4 +668,264 @@ test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', as
   await page.goto(`${ws}/resources/${resource.id}?tab=versions`)
   await expect(page.getByRole('tab', { selected: true })).toHaveText(/Versionen|Versions/)
   expect(new URL(page.url()).searchParams.get('tab')).toBe('versions')
+})
+
+/**
+ * Mobil-Spec M2 + Designer-Delta t_42bff43b (Option a): Unter md startet die
+ * Karte „Zusammensetzung“ im Agent-Detail zugeklappt. Vorher lag die
+ * Oberkante der Tab-Leiste bei 320 × 568 auf 1,80 Bildschirmen (Agent mit
+ * Persona, System-Prompt und 14 Playbooks), nach dem Umbau gemessen 0,90.
+ *
+ * Geprueft unter md: Schalter zu, mindestens 44 px hoch, keine Links der
+ * Karte erreichbar; Tab-Oberkante <= 1,2 Bildschirme bei 320 px Breite und
+ * <= 0,9 auf den breiteren Phones. Aufgeklappt wie nach P7: vier Playbooks
+ * und „8 weitere anzeigen“. Ab md kein Schalter, Karte offen.
+ *
+ * Rot-Probe: `useState(false)` fuer `open` in `AgentHierarchyView.tsx` auf
+ * `true` → rot auf `mobile-320` und `mobile-iphone-13`.
+ */
+test('M2: Agent-Detail unter md mit zugeklappter Zusammensetzung, Tabs frueh', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, method: 'POST' | 'PUT', data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  const description = 'Begleitet neue Teammitglieder durch die ersten Wochen und fasst Rückfragen zusammen.'
+  const persona = await call<{ id: string }>('/personas', 'POST', {
+    name: 'E2E Onboarding-Begleitung',
+    content: { description, tags: [], content: blockDoc('Profil') },
+  })
+  const systemPrompt = await call<{ id: string }>('/system-prompts', 'POST', {
+    name: 'E2E Kundenservice-Grundprompt',
+    content: { description, body: JSON.stringify(blockDoc('Du bist {{ persona.name }}').blocks) },
+  })
+  const playbookIds: string[] = []
+  for (let i = 1; i <= 14; i++) {
+    const playbook = await call<{ id: string }>('/playbooks', 'POST', {
+      name: `E2E Zusammensetzung Playbook ${i}`,
+      content: { description: 'Kurz.' },
+    })
+    playbookIds.push(playbook.id)
+  }
+  await call(`/personas/${persona.id}/playbooks`, 'PUT', { playbook_ids: playbookIds })
+  const agent = await call<{ id: string }>('/agents', 'POST', {
+    name: 'E2E Vertriebs-Assistent',
+    description,
+    persona_id: persona.id,
+    system_prompt_template_id: systemPrompt.id,
+  })
+
+  await page.goto(`/w/${workspaceId}/agents/${agent.id}`)
+  const card = page.getByTestId('agent-hierarchy')
+  await expect(card).toBeVisible()
+  const viewport = page.viewportSize()!
+  const toggle = card.getByRole('button', { name: /^(Zusammensetzung|Composition)/ })
+
+  if (viewport.width >= 768) {
+    await expect(toggle).toHaveCount(0)
+    await expect(card.getByRole('link', { name: 'E2E Onboarding-Begleitung' })).toBeVisible()
+    return
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toContainText(/E2E Onboarding-Begleitung · 14 (Playbooks|playbooks)/)
+  await expect(card.getByRole('link')).toHaveCount(0)
+  const probe = await page.evaluate(() => {
+    const tabs = document.querySelector('[role="tablist"]')!
+    const button = document.querySelector('[data-testid="agent-hierarchy-toggle"]')!
+    return {
+      screens: (tabs.getBoundingClientRect().top + window.scrollY) / window.innerHeight,
+      buttonHeight: button.getBoundingClientRect().height,
+    }
+  })
+  expect(probe.buttonHeight).toBeGreaterThanOrEqual(44)
+  const limit = viewport.width <= 320 ? 1.2 : 0.9
+  expect(probe.screens, `Tab-Oberkante in Bildschirmen bei ${viewport.width} px`).toBeLessThanOrEqual(
+    limit,
+  )
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(toggle).toBeFocused()
+  await expect(card.getByTestId('agent-hierarchy-playbook')).toHaveCount(4)
+  await expect(card.getByRole('button', { name: /^(8 weitere anzeigen|Show 8 more)$/ })).toBeVisible()
+  await expectNoHorizontalScroll(page, 'agents/:id (Zusammensetzung offen)')
+})
+
+/**
+ * Mobil-Spec M4 (Owner-Weiche W2=a): Der Text-Diff im Versionen-Tab bricht
+ * auf jeder Breite um, statt seitlich zu scrollen. Vorher war der Wrapper
+ * `overflow-x-auto` mit `scrollWidth` 12.919 px bei 210 px (320) bzw.
+ * 280 px (390). Eine 1.100-Zeichen-Beschreibung lag als eine einzige Zeile da.
+ *
+ * Geprueft auf jedem Profil, Desktop eingeschlossen (W2=a, keine
+ * Doppeldarstellung): Im Diff hat kein Element `scrollWidth > clientWidth`.
+ * Ausgenommen sind die `sr-only`-Praefixe (1 px, nicht sichtbar). Jede Zeile
+ * hat die feste Rinne links, die Folgezeilen beginnen rechts davon. Die Seite
+ * scrollt nicht horizontal.
+ *
+ * Rot-Probe: `overflow-x-auto` + `min-w-max` + `whitespace-pre` in
+ * `VersionDiffView.tsx` zurueck → rot auf jedem Profil.
+ */
+test('M4: Versions-Diff bricht um, kein Seitwaerts-Scroller (W2=a)', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, method: 'POST' | 'PUT', data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  // v1 aktiv, v2 als Entwurf mit langer Beschreibung samt URL ohne
+  // Trennstelle. Das Persona-Profil beginnt mit der Beschreibung, also steht
+  // sie im Text-Diff.
+  const sentence = 'Moderiert Feedbackgespräche zwischen Teammitgliedern und hält Vereinbarungen fest. '
+  const longDescription = `${sentence.repeat(12)}Leitfaden: ${LONG_URL}`
+  const persona = await call<{ id: string }>('/personas', 'POST', {
+    name: 'E2E Diff Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+  for (const to of ['review', 'active']) {
+    await call(`/personas/${persona.id}/versions/1/transition`, 'POST', { to })
+  }
+  await call(`/personas/${persona.id}`, 'PUT', {
+    name: 'E2E Diff Persona',
+    content: { description: longDescription, tags: [], content: blockDoc('Profil') },
+  })
+
+  await page.goto(`/w/${workspaceId}/personas/${persona.id}?tab=versions&diff=2`)
+  const diff = page.getByRole('list', { name: /^(Inhalts-Diff|Content diff)$/ })
+  await expect(diff).toBeVisible()
+  // Der Verursacher muss gerendert sein, sonst misst die Probe blind gruen.
+  await expect(diff.getByText(LONG_URL, { exact: false })).toBeVisible()
+  await expectNoHorizontalScroll(page, 'personas/:id?tab=versions (Diff offen)')
+
+  const probe = await diff.evaluate((list) => {
+    const wrapper = list.parentElement as HTMLElement
+    const scrollers = [wrapper, ...Array.from(list.querySelectorAll<HTMLElement>('*'))]
+      .filter((el) => !el.classList.contains('sr-only'))
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
+      .map((el) => `${el.tagName.toLowerCase()}.${el.className} ${el.scrollWidth}/${el.clientWidth}`)
+    const line = list.querySelector<HTMLElement>('li[data-kind="added"]')!
+    const [gutter, text] = Array.from(line.children) as HTMLElement[]
+    const gutterBox = gutter.getBoundingClientRect()
+    const textBox = text.getBoundingClientRect()
+    return {
+      scrollers,
+      gutterWidth: Math.round(gutterBox.width),
+      textOffset: Math.round(textBox.left - gutterBox.left),
+      textLines: Math.round(textBox.height / parseFloat(getComputedStyle(text).lineHeight)),
+    }
+  })
+  expect(probe.scrollers, 'Elemente im Diff mit eigener Scrollweite').toEqual([])
+  // Rinne 1,25 rem = 20 px; der Text (und damit jede Folgezeile) beginnt
+  // rechts davon, nicht unter dem Zeichen.
+  expect(probe.gutterWidth).toBe(20)
+  expect(probe.textOffset).toBeGreaterThanOrEqual(20)
+  // Die lange Zeile ist wirklich umbrochen (vorher: genau eine Zeile).
+  expect(probe.textLines).toBeGreaterThan(1)
+})
+
+test('M9/M11: Mitglieder als Liste, Auswahllisten ohne Scroll-in-Scroll unter md', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const post = <T>(path: string, data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method: 'POST', data })
+
+  // Zwoelf Kandidaten je Liste: mehr als die 8er-Schrittweite, damit unter md
+  // der „weitere anzeigen“-Knopf entsteht.
+  const persona = await post<{ id: string }>('/personas', {
+    name: 'E2E Auswahl Persona',
+    content: { description: 'Kurz.', tags: [], content: blockDoc('Profil') },
+  })
+  const resource = await post<{ id: string }>('/resources', {
+    name: 'E2E Auswahl Resource',
+    content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+  })
+  for (let i = 1; i <= 12; i++) {
+    await post('/playbooks', { name: `E2E Auswahl Playbook ${i}`, content: { description: 'Kurz.' } })
+    await post('/resources', {
+      name: `E2E Auswahl Kandidat ${i} ${LONG_URL}`,
+      content: { description: 'Kurz.', blocks: blockDoc('Inhalt').blocks },
+    })
+  }
+
+  const ws = `/w/${workspaceId}`
+  const mobile = page.viewportSize()!.width < 768
+
+  // Mitglieder: unter md Liste ohne Tabelle, ab md die Tabelle.
+  await page.goto(`${ws}/settings/members`)
+  if (mobile) {
+    await expect(page.getByTestId('members-list').getByRole('listitem')).toHaveCount(1)
+    await expect(page.getByRole('table')).toHaveCount(0)
+    await page.getByRole('button', { name: /Mehr anzeigen|Show more/ }).click()
+    await expect(page.getByRole('button', { name: /Entfernen|Remove/ })).toBeVisible()
+  } else {
+    await expect(page.getByRole('table')).toHaveCount(1)
+  }
+  await expectNoHorizontalScroll(page)
+
+  // Beide Auswahllisten: dasselbe Muster, je nach Breite.
+  const pickers: Array<[string, string, () => Promise<void>]> = [
+    [
+      `${ws}/personas/${persona.id}?tab=playbooks`,
+      'persona-playbooks-available',
+      () => page.getByRole('button', { name: /Verknüpfungen bearbeiten|Edit links/ }).click(),
+    ],
+    [`${ws}/resources/${resource.id}?tab=sub`, 'sub-resource-available', async () => {}],
+  ]
+  for (const [path, testId, open] of pickers) {
+    await page.goto(path)
+    await open()
+    const frame = page.getByTestId(testId)
+    const list = frame.getByRole('list')
+    await expect(list).toBeVisible()
+    const style = await frame.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      return { maxHeight: cs.maxHeight, overflowY: cs.overflowY, tab: el.getAttribute('tabindex') }
+    })
+    if (mobile) {
+      expect(style, `${testId}: kein innerer Scroller unter md`).toEqual({
+        maxHeight: 'none',
+        overflowY: 'visible',
+        tab: null,
+      })
+      // Der Seed-Workspace bringt eigene Eintraege mit; die Gesamtzahl steht
+      // deshalb nicht fest — der Knopf nennt, wie viele er nachlaedt.
+      await expect(list.getByRole('listitem')).toHaveCount(8)
+      const more = page.getByRole('button', { name: /weitere anzeigen|more/ })
+      const step = Number((await more.textContent())?.match(/\d+/)?.[0])
+      expect(step).toBeGreaterThan(0)
+      await more.click()
+      await expect(list.getByRole('listitem')).toHaveCount(8 + step)
+      // Fokus liegt im ersten neuen Eintrag, nicht auf body.
+      expect(
+        await list.getByRole('listitem').nth(8).evaluate((li) => li.contains(document.activeElement)),
+      ).toBe(true)
+    } else {
+      expect(style.overflowY).toBe('auto')
+      expect(style.tab).toBe('0')
+      await expect.poll(() => list.getByRole('listitem').count()).toBeGreaterThanOrEqual(12)
+      await expect(page.getByRole('button', { name: /weitere anzeigen|Show \d+ more/ })).toHaveCount(0)
+    }
+    await expectNoHorizontalScroll(page)
+  }
 })
