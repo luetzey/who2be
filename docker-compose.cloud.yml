@@ -98,13 +98,16 @@ services:
       GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-dev}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-no-reply@who2be.local}
       GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-Who2Be}
-      # Mail-Link-Ziele relativ zu GOTRUE_SITE_URL — identisch zur Prod-Config
-      # (deploy/hetzner/supabase/docker-compose.yml), damit der lokale Smoke die
-      # echten Web-Routen trifft (/auth/callback, /onboarding/set-password, …).
-      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
-      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
-      GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
-      GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+      # Mail-Link-Ziele — identisch zur Prod-Config
+      # (deploy/hetzner/supabase/docker-compose.yml, dort die Begruendung):
+      # GoTrue baut den Link aus API_EXTERNAL_URL (lokal der auth-gateway auf
+      # :9999), nicht aus SITE_URL. Der Link trifft daher GoTrue-verify, das
+      # danach auf redirect_to in der Web-App weiterleitet (/auth/callback,
+      # /onboarding/set-password, /invitations).
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
     depends_on:
       mailpit:
         condition: service_healthy
