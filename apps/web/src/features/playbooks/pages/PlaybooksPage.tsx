@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Section } from '@/components/layout/Section'
 import { Stack } from '@/components/layout/Stack'
 import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
+import { CountPill } from '@/components/data/CountPill'
 import { DataView } from '@/components/data/DataView'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
@@ -116,12 +117,10 @@ export function PlaybooksPage() {
           title={t('playbooks:list.title')}
           titleAddon={
             playbooks.length > 0 ? (
-              <span
-                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
-                aria-label={t('playbooks:list.countLabel', { count: playbooks.length })}
-              >
-                {playbooks.length}
-              </span>
+              <CountPill
+                count={playbooks.length}
+                label={t('playbooks:list.countLabel', { count: playbooks.length })}
+              />
             ) : undefined
           }
           description={t('playbooks:list.description')}

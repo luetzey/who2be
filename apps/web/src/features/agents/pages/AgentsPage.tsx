@@ -19,6 +19,7 @@ import type { Agent } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CountPill } from '@/components/data/CountPill'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
@@ -221,12 +222,10 @@ export function AgentsPage() {
           title={t('page.title')}
           titleAddon={
             agents.length > 0 ? (
-              <span
-                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
-                aria-label={t('card.countAria', { count: agents.length })}
-              >
-                {agents.length}
-              </span>
+              <CountPill
+                count={agents.length}
+                label={t('card.countAria', { count: agents.length })}
+              />
             ) : undefined
           }
           description={t('page.description')}
