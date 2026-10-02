@@ -1,6 +1,38 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-28 (50. Lauf — Lernschleife B1: Schema `test_case`/`test_run` mit Modellen, Repository und RLS-Tests; Capabilities und Compliance-Naben als B1b/B1c abgespalten)_
+_Stand: 2026-10-01 (Export und Import je Organisation: Betreiber-Werkzeug `who2be-org-transfer`, PR #756 gemergt; Folgepakete P2–P4 offen)_
+
+## Export und Import je Organisation (2026-10-01, Karte t_18cb3e8b)
+
+**Stand:** PR #756 ist gemergt (188e16e7). Das Betreiber-Werkzeug
+`who2be-org-transfer` (`apps/api/src/who2be_api/core/org_transfer.py`)
+exportiert eine Organisation vollstaendig — Postgres-Zeilen, SQLite-Dateien des
+Tabellen-Stores, Blobs — als gpg-verschluesseltes tar-Archiv und importiert sie
+fail-closed wieder: Pruefsummen, identische Migrationsmenge, Mandanten- und
+FK-Abschluss, keine Zugangsdaten-Tabellen; Postgres in einer Transaktion,
+Dateien bei Fehlschlag wieder entfernt. Zweck: Rueckgabe nach Art. 28 Abs. 3
+lit. g DSGVO, Wiederherstellung einer einzelnen Org, spaeter der Umzug
+(ADR-0055 §4.6, R6). Anleitung: `docs/org-export-import.md`, Plan:
+`.claude/plan/2026-10-01-1645_org-export-import.md`. Der Export filtert nicht
+nach `deleted_at`; eine soft-geloeschte Org laesst sich waehrend der Grace
+exportieren (Rueckgabe-Absatz in `docs/compliance/data-retention-and-erasure.md` §1).
+
+**Beleg:** `apps/api/tests/test_org_transfer.py` — 12 Tests im ersten Stand,
+nach Review Runde 1 zwei weitere (heute 14 gesammelt): Round-Trip in ein leeres
+Schema mit identischen Pruefsummen, Isolation neben einer fremden Org per
+`run_isolation`, Kollision, Rollback nach Teil-Schreiben, manipulierte Archive,
+CLI nur verschluesselt. Rot-Proben: `_check_tenancy` bzw. `_check_references`
+einzeln ausgeschaltet -> `foreign_row` bzw. `foreign_reference` rot. Der
+Review-Blocker (FK auf eine im Archiv fehlende Elterntabelle wurde
+uebersprungen) ist an zwei unabhaengigen Stellen geschlossen, beide per
+Rot-Probe belegt.
+
+**Offen (Folgepakete, @pm schlaegt sie separat vor):**
+- P2 Identitaets-Mapping fuer den Umzug in eine fremde Instanz (W2-B).
+- P3 Self-Service-Rueckgabe fuer den Org-Admin (API, UI, i18n).
+- P4 Migration aelterer Archive (`format_version`).
+- Review-Nit: Eine kuenftige FK von einer import- auf eine export_only-Tabelle
+  wuerde nur ueber den DB-FK geprueft; heute gibt es keine (gemessen).
 
 ## Lernschleife B1: Prüffall und Prüflauf im Schema (2026-09-28, 50. Lauf, Karte t_dc2f9582)
 
