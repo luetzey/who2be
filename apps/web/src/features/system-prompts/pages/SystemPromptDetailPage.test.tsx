@@ -206,14 +206,14 @@ describe('SystemPromptDetailPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Zur Review einreichen' }),
     ).not.toBeInTheDocument()
-    // Editor gesperrt.
+    // Audit A7: verwaltet → Werte als Lesetext, kein Speichern-Knopf.
     await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toHaveValue('Support-Template')
+      expect(screen.getByLabelText('Name')).toHaveTextContent('Support-Template')
     })
-    expect(screen.getByLabelText('Name')).toBeDisabled()
+    expect(screen.getByLabelText('Name').tagName).toBe('OUTPUT')
     expect(
-      screen.getByRole('button', { name: 'Neue Version speichern' }),
-    ).toBeDisabled()
+      screen.queryByRole('button', { name: 'Neue Version speichern' }),
+    ).not.toBeInTheDocument()
   })
 
   it('Review-Status als Admin: Aktivieren feuert die Transition und laedt neu', async () => {

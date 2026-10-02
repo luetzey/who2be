@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { ReadOnlyField } from '@/components/ui/read-only-field'
 
 import type { SystemPromptEditorValues } from '../hooks/useSystemPromptForm'
 
@@ -69,41 +70,58 @@ export function SystemPromptEditorForm({
                     </p>
                   }
                 >
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common:fields.name')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            required
-                            placeholder={t('form.identity.name.placeholder')}
-                            {...field}
-                            disabled={isViewer}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('common:fields.description')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder={t('form.identity.description.placeholder')}
-                            {...field}
-                            disabled={isViewer}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {locked ? (
+                    // Audit A7: verwaltete Eintraege zeigen Werte als Lesetext
+                    // (§10.2), leere Felder entfallen statt Platzhalter.
+                    <>
+                      <ReadOnlyField
+                        label={t('common:fields.name')}
+                        value={form.watch('name')}
+                      />
+                      <ReadOnlyField
+                        label={t('common:fields.description')}
+                        value={form.watch('description')}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('common:fields.name')}</FormLabel>
+                            <FormControl>
+                              <Input
+                                required
+                                placeholder={t('form.identity.name.placeholder')}
+                                {...field}
+                                disabled={isViewer}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="description"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('common:fields.description')}</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder={t('form.identity.description.placeholder')}
+                                {...field}
+                                disabled={isViewer}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
                 </FormSection>
 
                 <FormSection
@@ -139,16 +157,20 @@ export function SystemPromptEditorForm({
                   />
                 </FormSection>
 
-                <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    variant="brand"
-                    disabled={form.formState.isSubmitting || isViewer}
-                    title={isViewer ? t('form.viewerTooltip') : undefined}
-                  >
-                    {t('form.saveVersion')}
-                  </Button>
-                </div>
+                {/* Audit A7: bei verwalteten Eintraegen entfaellt Speichern ganz
+                    (vorher 50 %-Brand-Knopf ohne Funktion). */}
+                {locked ? null : (
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      variant="brand"
+                      disabled={form.formState.isSubmitting || isViewer}
+                      title={isViewer ? t('form.viewerTooltip') : undefined}
+                    >
+                      {t('form.saveVersion')}
+                    </Button>
+                  </div>
+                )}
               </form>
             </Form>
           </CardContent>
