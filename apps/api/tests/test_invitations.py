@@ -12,10 +12,13 @@ Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 """
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import asyncpg
+import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -23,8 +26,11 @@ from fastapi.testclient import TestClient
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.core.security import WorkspaceContext
 from who2be_api.integrations import gotrue_mailer
 from who2be_api.main import app
+from who2be_api.repositories.invitation_repository import AcceptResult
+from who2be_api.services.invitation_service import InvitationService
 from who2be_api.testing.api_helpers import agent_token, db_execute, db_fetchval
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -32,6 +38,7 @@ from who2be_api.testing.workspace_setup import (
     seed_auth_user,
     setup_workspace,
 )
+from who2be_models import InvitationCreate, InvitationRead, WorkspaceRole
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -387,16 +394,92 @@ def test_member_role_update_and_last_admin_guard() -> None:
         cleanup_workspaces([admin_id, second_id])
 
 
-def test_build_accept_url_carries_magic_marker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 3-D: der Magic-Link traegt `?via=magic`, damit das Frontend
-    weiss, dass es Auto-Accept ohne Klick fahren darf."""
+class _MailOnlyInvitationRepo:
+    """Repo-Stub fuer den Mail-Test: legt nur an, alles andere wird nicht gebraucht."""
+
+    async def create(
+        self,
+        workspace_id: UUID,
+        email: str,
+        role: WorkspaceRole,
+        token_hash: str,
+        expires_at: datetime,
+        created_by: UUID,
+    ) -> InvitationRead:
+        return InvitationRead(
+            id=uuid4(), email=email, role=role, expires_at=expires_at, created_at=datetime.now(UTC)
+        )
+
+    async def list_pending_by_workspace(
+        self, workspace_id: UUID
+    ) -> list[InvitationRead]:  # pragma: no cover
+        raise NotImplementedError
+
+    async def accept(
+        self, token_hash: str, user_id: UUID, expected_email: str | None = None
+    ) -> AcceptResult:  # pragma: no cover
+        raise NotImplementedError
+
+    async def revoke(self, workspace_id: UUID, invitation_id: UUID) -> bool:  # pragma: no cover
+        raise NotImplementedError
+
+
+def test_invitation_mail_links_to_pending_page_without_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S2b: die Einladungsmail traegt keinen Einladungs-Token.
+
+    GoTrue uebernimmt `redirect_to` als Query in den Mail-Link, und `data` wird
+    zu `user_metadata` im Access-Token. Beides darf den Token nicht enthalten:
+    `redirect_to` zeigt auf die Pending-Seite, `data` wird gar nicht gesendet.
+    Gemessen wird am echten Request, den der Service beim Anlegen ausloest.
+    """
     monkeypatch.setattr(
         gotrue_mailer,
         "get_settings",
-        lambda: Settings(web_base_url="https://app.who2be.dev"),
+        lambda: Settings(
+            web_base_url="https://app.who2be.dev/",
+            supabase_url="https://supabase.who2be.dev",
+            supabase_service_key="service-key",
+        ),
     )
-    url = gotrue_mailer.build_accept_url("tkn-abc")
-    assert url == "https://app.who2be.dev/invitations/tkn-abc/accept?via=magic"
+    sent: list[httpx.Request] = []
+
+    def _gotrue(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={})
+
+    real_client = httpx.AsyncClient
+
+    def _client(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        return real_client(*args, transport=httpx.MockTransport(_gotrue), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client)
+
+    service = InvitationService(_MailOnlyInvitationRepo())
+    ctx = WorkspaceContext(workspace_id=uuid4(), user_id=uuid4(), role=WorkspaceRole.admin)
+    created = asyncio.run(
+        service.create(ctx, InvitationCreate(email="neu@example.com", role=WorkspaceRole.editor))
+    )
+
+    assert len(sent) == 1
+    request = sent[0]
+    assert request.url.path == "/auth/v1/invite"
+    assert request.url.params["redirect_to"] == "https://app.who2be.dev/invitations"
+    assert json.loads(request.content) == {"email": "neu@example.com"}
+    # Der Token existiert (Antwort fuer den geteilten Link), steht aber nirgends
+    # im Request an GoTrue — weder in der URL noch im Body.
+    assert created.token
+    assert created.token not in str(request.url)
+    assert created.token not in request.content.decode()
+
+
+def test_invitation_mail_is_skipped_without_gotrue_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne GoTrue-Konfiguration kein Versand — die Einladung selbst bleibt gueltig."""
+    monkeypatch.setattr(gotrue_mailer, "get_settings", lambda: Settings(supabase_url=""))
+    assert asyncio.run(gotrue_mailer.send_invitation_email("neu@example.com")) is False
 
 
 @pytest.mark.integration

@@ -87,3 +87,16 @@ describe('PlaybookListToolbar — Responsive (#573)', () => {
     }
   })
 })
+
+describe('PlaybookListToolbar — Filter (n) (Audit A11)', () => {
+  it('beschriftet den Filter-Knopf mit der Zahl aktiver Facetten', () => {
+    // baseProps: Agent und Sprache aktiv, Tag/Typ leer -> 2.
+    render(<PlaybookListToolbar {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Filter (2)' })).toBeInTheDocument()
+  })
+
+  it('zeigt ohne aktive Facette nur „Filter“', () => {
+    render(<PlaybookListToolbar {...baseProps} agent="" locale="" />)
+    expect(screen.getByRole('button', { name: 'Filter' })).toBeInTheDocument()
+  })
+})

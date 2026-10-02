@@ -81,7 +81,20 @@ SMTP: Signup-Confirm, Password-Recovery und Invitation-Magic-Link.
 sind dann sofort bestaetigt, ohne Mail-Klick. Das ist ausdruecklich nur die
 Ausnahme; sobald ein zweiter User per Invitation dazukommen soll, braucht es
 echte Zustellung (`GOTRUE_MAILER_AUTOCONFIRM=false` + SMTP), sonst kommt die
-Magic-Link-Mail nicht an.
+Einladungsmail nicht an.
+
+> **Warnung: `GOTRUE_MAILER_AUTOCONFIRM=true` und offene Einladungen.**
+> Die Einladungsmail enthaelt keinen Einladungs-Token. Wer ihrem Link folgt,
+> landet eingeloggt auf `/invitations` und sieht dort die offenen Einladungen
+> an die E-Mail-Adresse seines Kontos. Die API zeigt sie nur, wenn GoTrue die
+> Adresse als bestaetigt fuehrt (sonst `403 invitation_email_unconfirmed`).
+> Mit `GOTRUE_MAILER_AUTOCONFIRM=true` gilt jede Adresse sofort als
+> bestaetigt, ohne dass jemand ein Postfach geoeffnet hat — die Bestaetigung
+> ist dann **kein Besitznachweis**. Wer ein Konto auf eine fremde Adresse
+> registriert, sieht und uebernimmt die offenen Einladungen an diese Adresse.
+> Deshalb: sobald jemand eingeladen wird, `GOTRUE_MAILER_AUTOCONFIRM=false`
+> und funktionierender SMTP. Achtung: der Dokploy-Compose
+> (`deploy/dokploy/docker-compose.yml`) setzt den Default auf `true`.
 
 **Produktiv (Confirm-Pflicht, `GOTRUE_MAILER_AUTOCONFIRM=false`):** SMTP-Provider
 waehlen (z. B. Postmark, Mailgun, AWS SES, Brevo) und die Sender-Domain sauber
@@ -100,26 +113,42 @@ verdrahten. Checkliste fuer `GOTRUE_SMTP_ADMIN_EMAIL=no-reply@<sender-domain>`:
       einem externen Postfach (nicht nur Provider-Log) den Eingang + den
       Confirm-Link pruefen.
 
-**Mail-Link-Ziele (`GOTRUE_MAILER_URLPATHS_*`) — gegen das Web verifiziert:**
-Die Pfade im Compose decken sich mit den React-Routen in
-`apps/web/src/app/routes.tsx`:
+**Mail-Link-Ziele (`GOTRUE_MAILER_URLPATHS_*`) — alle vier auf GoTrue-verify:**
+Jeder Link aus einer GoTrue-Mail zeigt auf GoTrue, nicht auf die Web-App. In
+die Web-App fuehrt erst der Redirect danach:
 
-| GoTrue-URLPATH        | Compose-Wert             | Web-Route (`routes.tsx`)            |
-|-----------------------|--------------------------|-------------------------------------|
-| `CONFIRMATION`        | `/auth/callback`         | `/auth/callback` ✓                  |
-| `EMAIL_CHANGE`        | `/auth/callback`         | `/auth/callback` ✓                  |
-| `RECOVERY`            | `/onboarding/set-password` | `/onboarding/set-password` ✓      |
-| `INVITE`              | `/invitations`           | (Fallback — siehe Hinweis)          |
+| GoTrue-URLPATH | Compose-Wert      | Redirect nach verify (`redirect_to`, gesetzt von)                      |
+|----------------|-------------------|------------------------------------------------------------------------|
+| `CONFIRMATION` | `/auth/v1/verify` | `/auth/callback` (Web, `SignupPage`)                                    |
+| `EMAIL_CHANGE` | `/auth/v1/verify` | `SITE_URL` (Web, `AccountPage` setzt kein `redirect_to`; ohne Referer)  |
+| `RECOVERY`     | `/auth/v1/verify` | `/onboarding/set-password` (Web, `ResetPasswordPage`)                   |
+| `INVITE`       | `/auth/v1/verify` | `/invitations` (API, siehe unten)                                       |
 
-In der Praxis liefern alle App-Flows ein explizites `redirect_to` mit, das den
-statischen URLPATH **ueberschreibt**: Signup/OAuth `→ /auth/callback`, Recovery
-`→ /onboarding/set-password`, und die Invitation-Mail zeigt API-seitig auf
-`{WEB_BASE_URL}/invitations/{token}/accept?via=magic`
-(`apps/api/.../integrations/gotrue_mailer.py`). Die echte Accept-Route ist also
-`/invitations/:token/accept` (Token im Pfad) — `GOTRUE_MAILER_URLPATHS_INVITE`
-bleibt nur ein harmloser Default. Wichtig ist, dass `SITE_URL` dem App-Origin
-(`WEB_BASE_URL`, Default `https://app.<DOMAIN>`) entspricht, damit das
-`redirect_to`-Ziel die GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
+**Warum `/auth/v1/verify`:** GoTrue (v2.197.0,
+`internal/mailer/templatemailer/templatemailer.go`, in `ConfirmationMail`,
+`EmailChangeMail`, `RecoveryMail` und `InviteMail` jeweils
+`externalURL.ResolveReference(path)`) baut den Mail-Link aus `API_EXTERNAL_URL`
+(`https://supabase.<DOMAIN>`) plus dem URLPATH und haengt `token`, `type` und
+`redirect_to` als Query an. `SITE_URL` spielt fuer den Link keine Rolle. Unter
+`supabase.<DOMAIN>` reicht der auth-gateway nur `/auth/v1/*` an GoTrue durch;
+jeder andere Pfad (frueher `/auth/callback`, `/onboarding/set-password`,
+`/invitations`) lief dort in ein 404. GoTrue prueft in verify den Token, legt
+die Session an und antwortet mit `303` auf `redirect_to`, die Tokens stehen
+im Fragment (`#access_token=…&type=signup|recovery|invite|email_change`). Der
+Web-Client liest sie per `detectSessionInUrl` aus. Beim Email-Wechsel mit
+bestaetigter alter Adresse kommen zwei Mails; der erste Klick endet mit
+`#message=Confirmation link accepted…`, erst der zweite traegt die Session.
+
+Bei der Einladung setzt die API `redirect_to`
+(`apps/api/src/who2be_api/integrations/gotrue_mailer.py#build_invitations_url`).
+Der Einladungs-Token steht weder im Link noch in den
+Benutzer-Metadaten; er gilt nur fuer den Link, den ein Admin selbst
+weitergibt. `/invitations` zeigt die offenen Einladungen an die Adresse des
+Kontos, Annahme per Klick.
+
+Wichtig ist ausserdem, dass `SITE_URL` dem App-Origin (`WEB_BASE_URL`, Default
+`https://app.<DOMAIN>`) entspricht, damit das `redirect_to`-Ziel die
+GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
 
 ## Cloud-Edition: nur externe Provider (Google, GitHub, Apple)
 
@@ -212,8 +241,8 @@ aber das ist ein Notbehelf, kein Betriebsmodus.
 `POST /magiclink`. `POST /invite`, `POST /verify`, `POST /recover` und
 `PUT /user` haben keinen solchen Check — der Einladungsweg der App
 (`POST /auth/v1/invite` mit `service_role`-Key) ist davon unberuehrt. Ein
-eingeladener Nutzer, der noch kein Konto hat, landet ueber den Magic-Link
-eingeloggt auf `/invitations/:token/accept`.
+eingeladener Nutzer, der noch kein Konto hat, landet ueber den Link in der
+Einladungsmail eingeloggt auf `/invitations` und nimmt dort per Klick an.
 
 **Dritter Provider: Apple.** Sign in with Apple kommt in der Cloud dazu und ist
 in der Einrichtung deutlich aufwendiger als die beiden hier — eigener

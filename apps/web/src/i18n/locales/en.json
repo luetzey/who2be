@@ -317,6 +317,7 @@
       "emptyFilteredTitle": "No matches",
       "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status.",
       "moreFilters": "Filters",
+      "moreFiltersCount": "Filters ({{count}})",
       "clearSearch": "Clear search"
     }
   },
@@ -545,11 +546,17 @@
       "title": "Composition",
       "systemPrompt": "System prompt",
       "persona": "Persona",
-      "playbooksLinked": "{{count}} linked playbooks",
+      "playbooksLinked_one": "{{count}} linked playbook",
+      "playbooksLinked_other": "{{count}} linked playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
-      "noPlaybooks": "No playbooks linked."
+      "noPlaybooks": "No playbooks linked.",
+      "summaryPlaybooks_one": "{{count}} playbook",
+      "summaryPlaybooks_other": "{{count}} playbooks",
+      "summaryNoPlaybooks": "no playbooks",
+      "summaryNoPersona": "No persona",
+      "summarySeparator": " · "
     },
     "copy": {
       "plain": "Copy",
@@ -766,6 +773,19 @@
         "emailMismatch": "This invitation is for a different email address.",
         "generic": "Could not accept invitation."
       }
+    },
+    "pendingInvitations": {
+      "title": "Your invitations",
+      "description": "Open invitations to your account's email address. Accept one to join the workspace.",
+      "listLabel": "Open invitations",
+      "role": "Role: {{role}}",
+      "expires": "valid until {{date}}",
+      "acceptFor": "Accept invitation to {{workspace}}",
+      "accepting": "Accepting…",
+      "emptyTitle": "No open invitations",
+      "emptyDescription": "There is currently no invitation for your account's email address. Invitations you accepted are in your workspaces.",
+      "continue": "Continue to Who2Be",
+      "emailTitle": "Confirm your email address"
     },
     "callback": {
       "loadingTitle": "Completing sign-in…",

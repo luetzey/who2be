@@ -173,12 +173,20 @@ services:
       GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL}
       GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-Who2Be}
-      # Mail-Link-Ziele (relativ zu SITE_URL): Confirm/Email-Change landen auf
-      # der OAuth-/Confirm-Callback-Route, Recovery auf der Set-Password-Seite.
-      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
-      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
-      GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
-      GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+      # Mail-Link-Ziele: ALLE vier Links muessen GoTrue-verify treffen. GoTrue
+      # haengt den URLPATH an API_EXTERNAL_URL (supabase.${DOMAIN}), NICHT an
+      # SITE_URL (v2.197.0 templatemailer.go, je Mailart
+      # `externalURL.ResolveReference(path)`); der auth-gateway reicht nur
+      # /auth/v1/* durch, jeder andere Pfad liefert dort 404. Nach verify
+      # leitet GoTrue auf redirect_to weiter, das der Aufrufer setzt (Web:
+      # /auth/callback bzw. /onboarding/set-password, API: /invitations) und
+      # das die Allowlist oben passieren muss; sonst auf SITE_URL.
+      # Diese vier Zeilen sind in docker-compose.cloud.yml und
+      # deploy/dokploy/docker-compose.yml identisch.
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
       # Social-Login (Track K) — default AUS; pro Provider per .env aktivieren.
       # Die Provider-Redirect-URI zeigt auf die GoTrue-Callback-Route hinter
       # dem auth-gateway (/auth/v1/callback → intern /callback).

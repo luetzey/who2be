@@ -451,7 +451,7 @@ describe('MembersPage — Invitations', () => {
       expect(notify.success).toHaveBeenCalledWith('Einladungs-Link kopiert.')
     })
     expect(copyToClipboard).toHaveBeenCalledWith(
-      `${window.location.origin}/invitations/tok-neu/accept`,
+      `${window.location.origin}/invitations/accept#token=tok-neu`,
     )
   })
 
@@ -501,8 +501,39 @@ describe('MembersPage — Invitations', () => {
       expect(notify.success).toHaveBeenCalledWith('Einladungs-Link kopiert.')
     })
     expect(copyToClipboard).toHaveBeenCalledWith(
-      `${window.location.origin}/invitations/tok-liste/accept`,
+      `${window.location.origin}/invitations/accept#token=tok-liste`,
     )
+  })
+
+  it('Kopierter Link trägt den Token nur im Fragment, URL-sicher kodiert', async () => {
+    // Token mit Zeichen, die in Pfad, Query und Fragment eine Bedeutung haben.
+    const raw = 'a/b?c#d&e=f+g h%'
+    stubFetch(
+      settingsHandlers({
+        invitations: () => [invitation({ token: raw })],
+      }),
+    )
+
+    renderMembers('admin')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Link kopieren' }))
+
+    await waitFor(() => {
+      expect(copyToClipboard).toHaveBeenCalledTimes(1)
+    })
+    const copied = vi.mocked(copyToClipboard).mock.calls[0]?.[0] as string
+    const url = new URL(copied)
+    expect(url.origin).toBe(window.location.origin)
+    expect(url.pathname).toBe('/invitations/accept')
+    expect(url.search).toBe('')
+    expect(url.hash.startsWith('#token=')).toBe(true)
+    // Genau ein Parameter, und er liest sich so zurück, wie die Accept-Seite ihn liest.
+    const params = new URLSearchParams(url.hash.slice(1))
+    expect([...params.keys()]).toEqual(['token'])
+    expect(params.get('token')).toBe(raw)
+    // Kein Zeichen bricht aus dem Fragment aus: ein einziges '#', kein rohes '&', '/', '?' oder Leerzeichen.
+    expect(copied.split('#')).toHaveLength(2)
+    expect(url.hash).not.toMatch(/[ &/?]/)
   })
 
   it('Copy-Fehler mit Error: zeigt die Fehlermeldung des Clipboards', async () => {

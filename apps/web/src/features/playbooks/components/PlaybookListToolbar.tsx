@@ -195,10 +195,11 @@ export function PlaybookListToolbar({
           <PopoverTrigger asChild>
             <Button type="button" variant="outline" className="gap-2">
               <SlidersHorizontal className="size-4" aria-hidden="true" />
-              {t('data:filter.moreFilters')}
-              {facetCount > 0 ? (
-                <span className="text-muted-foreground tabular-nums">{facetCount}</span>
-              ) : null}
+              {/* Audit A11: gleiche Beschriftung „Filter (n)“ wie die
+                  ListFilterBar unter `md`. */}
+              {facetCount > 0
+                ? t('data:filter.moreFiltersCount', { count: facetCount })
+                : t('data:filter.moreFilters')}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="flex w-72 flex-col gap-4">

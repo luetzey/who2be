@@ -57,9 +57,13 @@ function describeError(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback
 }
 
+// Der Token steht im URL-Fragment, nie im Pfad oder in einer Query: das
+// Fragment verlässt den Browser nicht, landet also in keinem Server- oder
+// Proxy-Log. Die Accept-Seite liest es per URLSearchParams und schickt den
+// Token im Body an POST /v1/invitations/accept.
 function acceptUrl(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  return `${origin}/invitations/${token}/accept`
+  return `${origin}/invitations/accept#${new URLSearchParams({ token }).toString()}`
 }
 
 interface MemberListItemProps {
