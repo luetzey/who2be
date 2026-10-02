@@ -1842,10 +1842,9 @@ async def save_memory(
     1 Satz): WORAUS du den Fakt geschlossen hast — nur fuer die menschliche
     Freigabe-Ansicht, nie im Retrieval.
 
-    Je nach Agent-Konfiguration ist der Fakt sofort aktiv (`status='active'`)
-    oder ein VORSCHLAG (`status='pending'`), der erst nach menschlicher
-    Freigabe abrufbar wird — sag dem Nutzer im zweiten Fall, dass der Eintrag
-    auf Freigabe wartet. Duplikate/abgelehnte Vorschlaege weist der Server mit
+    Der Fakt wird als VORSCHLAG (`status='pending'`) gespeichert und erst nach
+    menschlicher Freigabe abrufbar — sag dem Nutzer, dass der Eintrag auf
+    Freigabe wartet. Duplikate/abgelehnte Vorschlaege weist der Server mit
     409 ab; das ist kein Fehler von dir, einfach nicht erneut versuchen.
     """
     client = await build_client()

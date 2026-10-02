@@ -25,3 +25,8 @@
   und höchstens 500 Einträge im Nutzergedächtnis je Workspace und Nutzer
   (`memory_cap_reached` mit `scope: "user"`). Migration 0095 legt die Spalte
   `workspace.memory_auto_policy` an.
+
+  Das MCP-Werkzeug `save_memory` hat noch keinen `origin`-Parameter und
+  sendet übergangsweise fest `inferred`. Über MCP gespeicherte Fakten landen
+  deshalb immer als Vorschlag in der Freigabe, auch bei eingeschalteter
+  Zelle. Der echte Parameter folgt mit Paket C4.
