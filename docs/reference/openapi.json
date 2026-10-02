@@ -14678,6 +14678,7 @@
               "memory_note_cap_reached",
               "memory_proposal_not_pending",
               "memory_transition_invalid",
+              "memory_batch_count_mismatch",
               "persona_mode_unknown",
               "placeholder_kind_unknown",
               "entity_version_not_found",

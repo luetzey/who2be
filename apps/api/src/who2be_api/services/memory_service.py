@@ -36,7 +36,11 @@ from who2be_api.core.security import (
     role_satisfies,
 )
 from who2be_api.embeddings import build_embedding_port
-from who2be_api.repositories.memory_repository import MemoryOwner, MemoryRepository
+from who2be_api.repositories.memory_repository import (
+    MemoryOwner,
+    MemoryRepository,
+    MemoryRevokeSelection,
+)
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
     MEMORY_MAX_PER_USER,
@@ -61,16 +65,21 @@ from who2be_models import (
 from who2be_models.memory import (
     MEMORY_AUTO_SWITCHABLE_CELLS,
     MEMORY_MAX_NOTES_PER_AGENT,
+    MEMORY_REVOKE_SAMPLE_SIZE,
     MemoryAutoCell,
     MemoryAutoPolicy,
     MemoryAutoPolicyRead,
     MemoryAutoRow,
+    MemoryBatchItemResult,
     MemoryEventKind,
     MemoryEventRead,
     MemoryProposalCreate,
     MemoryProposalDecision,
     MemoryProposalRead,
     MemoryProposalStatus,
+    MemoryRevokeAuto,
+    MemoryRevokeAutoPreview,
+    MemoryRevokeAutoResult,
     MemoryRollback,
     MemorySaveResult,
 )
@@ -1016,3 +1025,65 @@ class MemoryService:
         owner = await self._owner(ctx, None)
         if not await self._repo.delete_owned(ctx.workspace_id, owner, memory_id, ctx.user_id):
             raise _memory_not_found()
+
+    # --------------------------------------------------- Not-Aus (6.4.1, C3b-2)
+
+    async def revoke_auto(
+        self, ctx: WorkspaceContext, data: MemoryRevokeAuto
+    ) -> MemoryRevokeAutoPreview | MemoryRevokeAutoResult:
+        """Notfall-Ruecknahme automatisch aktivierter Eintraege (ADR-0053 6.4.1).
+
+        Rechte: `editor` und Mensch — Agentengedaechtnis und das eigene
+        Nutzergedaechtnis. `include_other_users=true` ist `admin` vorbehalten
+        (403 `insufficient_role`); auch dann sieht der Admin vom fremden
+        Nutzergedaechtnis nur die Anzahl (`hidden_count`), nie Inhalt oder ID
+        (Owner-Entscheidung 3a, 3.1.1).
+
+        `dry_run` aendert nichts. Sonst wird alles oder nichts zurueckgenommen:
+        weicht die Trefferzahl von `expected_count` ab, kommt 409
+        `memory_batch_count_mismatch` mit `params={count}` und es bleibt alles,
+        wie es war.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        self._require_human(ctx)
+        if data.include_other_users:
+            require_role(ctx, WorkspaceRole.admin)
+        if data.agent_id is not None:
+            await self._require_agent(ctx, data.agent_id)
+        selection = MemoryRevokeSelection(
+            viewer_user_id=ctx.user_id,
+            since=data.since,
+            until=data.until,
+            agent_id=data.agent_id,
+            origins=tuple(data.origin) if data.origin is not None else None,
+            include_other_users=data.include_other_users,
+        )
+        if data.dry_run:
+            preview = await self._repo.preview_auto_revocable(
+                ctx.workspace_id, selection, MEMORY_REVOKE_SAMPLE_SIZE
+            )
+            return MemoryRevokeAutoPreview(
+                count=preview.count, hidden_count=preview.hidden_count, sample=preview.visible
+            )
+        assert data.expected_count is not None  # Modell-Validator
+        outcome = await self._repo.revoke_auto(
+            ctx.workspace_id,
+            selection,
+            expected_count=data.expected_count,
+            actor_id=ctx.user_id,
+        )
+        if not outcome.applied:
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Es gibt {outcome.count} betroffene Eintraege, bestaetigt waren "
+                    f"{data.expected_count}. Nichts geaendert — bitte die Vorschau neu laden."
+                ),
+                reason="memory_batch_count_mismatch",
+                params={"count": outcome.count},
+            )
+        return MemoryRevokeAutoResult(
+            count=outcome.count,
+            hidden_count=outcome.hidden_count,
+            results=[MemoryBatchItemResult(id=m.id, ok=True) for m in outcome.visible],
+        )

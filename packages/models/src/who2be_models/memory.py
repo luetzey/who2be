@@ -488,6 +488,82 @@ class MemoryRollback(BaseModel):
     event_id: UUID
 
 
+# Vorschau des Not-Aus: hoechstens so viele sichtbare Eintraege (ADR-0053 6.4.1).
+MEMORY_REVOKE_SAMPLE_SIZE = 5
+
+
+class MemoryRevokeAuto(BaseModel):
+    """Body von `POST /memories/revoke-auto` — Not-Aus (ADR-0053 6.4.1).
+
+    Betroffen sind aktive, unbestaetigte Eintraege mit einem Ereignis
+    `auto_activated` im halboffenen Zeitraum `since <= t < until`. `agent_id`
+    filtert auf den einreichenden Agenten, `origin` auf die Herkunft (Liste).
+    Ohne `dry_run` ist `expected_count` Pflicht: die Zahl, die ein Mensch in
+    der Vorschau gesehen und bestaetigt hat.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    since: datetime
+    until: datetime | None = None
+    agent_id: UUID | None = None
+    origin: list[MemoryOrigin] | None = Field(default=None, min_length=1)
+    include_other_users: bool = False
+    dry_run: bool = False
+    expected_count: int | None = Field(default=None, ge=0)
+
+    @field_validator("since", "until")
+    @classmethod
+    def _aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Zeitpunkt braucht eine Zeitzone.")
+        return value
+
+    @model_validator(mode="after")
+    def _consistent(self) -> MemoryRevokeAuto:
+        if self.until is not None and self.until <= self.since:
+            raise ValueError("`until` muss nach `since` liegen.")
+        if not self.dry_run and self.expected_count is None:
+            raise ValueError("`expected_count` ist ohne dry_run Pflicht.")
+        return self
+
+
+class MemoryRevokeAutoPreview(BaseModel):
+    """Antwort mit `dry_run=true`: nichts geaendert.
+
+    `count` ist die Zahl aller Treffer, `hidden_count` ihr Anteil aus dem
+    Nutzergedaechtnis anderer Personen (nur bei `include_other_users`, also
+    nur beim Admin groesser als null). `sample` nennt hoechstens
+    `MEMORY_REVOKE_SAMPLE_SIZE` Eintraege, die der Aufrufer sehen darf —
+    fremdes Nutzergedaechtnis erscheint nie, auch nicht mit seiner ID.
+    """
+
+    count: int
+    hidden_count: int
+    sample: list[MemoryRead]
+
+
+class MemoryBatchItemResult(BaseModel):
+    """Ergebnis je Eintrag einer Sammelaktion (`batch`, `revoke-auto`, ADR-0053 6.4.1)."""
+
+    id: UUID
+    ok: bool
+    reason: str | None = None
+    params: dict[str, Any] | None = None
+
+
+class MemoryRevokeAutoResult(BaseModel):
+    """Antwort ohne `dry_run`: alle Treffer zurueckgenommen (alle oder keiner).
+
+    `results` nennt nur sichtbare Eintraege; zurueckgenommene Eintraege aus
+    fremdem Nutzergedaechtnis zaehlt allein `hidden_count`.
+    """
+
+    count: int
+    hidden_count: int
+    results: list[MemoryBatchItemResult]
+
+
 class MemoryHit(BaseModel):
     """Ein Retrieval-Treffer fuer Agenten (bewusst schmal).
 
