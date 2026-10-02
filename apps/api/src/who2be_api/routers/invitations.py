@@ -8,7 +8,9 @@ Zwei Router:
   akzeptiert die Einladung per Klartext-Token und wird Mitglied.
   Single-use; akzeptiert/widerrufen/abgelaufen → 410 Gone. Dazu
   `GET /v1/invitations/pending`: die offenen Einladungen fuer die bestaetigte
-  E-Mail-Adresse des eigenen Kontos.
+  E-Mail-Adresse des eigenen Kontos, und
+  `POST /v1/invitations/pending/{invitation_id}/accept`: deren Annahme per
+  Klick, ohne Token.
 
 Der Token reist im Request-Body (`POST /v1/invitations/accept`), nicht im
 Pfad: ein Pfad landet in jedem Access-Log zwischen Browser und API, ein Body
@@ -126,6 +128,24 @@ async def list_pending_invitations(
         )
         for p in pending
     ]
+
+
+@accept_router.post("/pending/{invitation_id}/accept")
+@limiter.limit(write_limit)
+async def accept_pending_invitation(
+    request: Request, invitation_id: UUID, principal: Principal, service: PendingService
+) -> InvitationAcceptResult:
+    """Nimmt eine Einladung an die eigene Adresse per Klick an — ohne Token.
+
+    Die ID stammt aus `GET /v1/invitations/pending`. Gleiche Bestaetigungs-
+    pruefung wie dort (403 `invitation_email_required` bzw.
+    `invitation_email_unconfirmed`). Fremde oder unbekannte ID: 404. Bereits
+    angenommen, widerrufen oder abgelaufen: 410 wie beim geteilten Link.
+    """
+    workspace_id = await service.accept_for_account(
+        invitation_id, principal.user_id, principal.email
+    )
+    return InvitationAcceptResult(workspace_id=workspace_id)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

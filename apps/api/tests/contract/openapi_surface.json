@@ -51,6 +51,11 @@
   },
   {
     "method": "POST",
+    "path": "/v1/invitations/pending/{invitation_id}/accept",
+    "operationId": "accept_pending_invitation_v1_invitations_pending__invitation_id__accept_post"
+  },
+  {
+    "method": "POST",
     "path": "/v1/invitations/{token}/accept",
     "operationId": "accept_invitation_v1_invitations__token__accept_post"
   },
