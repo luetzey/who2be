@@ -62,9 +62,12 @@ die Compose aus `DOMAIN` ab.
 > Registrierung angegebene Adresse sofort als bestätigt, ohne Besitznachweis —
 > und die offenen Einladungen (`/v1/invitations/pending`) hängen an genau
 > dieser Adresse. Eine öffentlich erreichbare Instanz braucht
-> `GOTRUE_MAILER_AUTOCONFIRM=false` und echten SMTP (`GOTRUE_SMTP_*`). Stand
-> heute reicht diese Compose `GOTRUE_SMTP_*` **nicht** an den `auth`-Dienst
-> durch. Details:
+> `GOTRUE_MAILER_AUTOCONFIRM=false` und echten SMTP: dazu `GOTRUE_SMTP_HOST`,
+> `GOTRUE_SMTP_PORT` (Default `587`), `GOTRUE_SMTP_USER`, `GOTRUE_SMTP_PASS`,
+> `GOTRUE_SMTP_ADMIN_EMAIL` und `GOTRUE_SMTP_SENDER_NAME` in der
+> Dokploy-Environment setzen — die Compose reicht sie an den `auth`-Dienst
+> durch. Mit dem Cloud-Overlay (`docker-compose.cloud.yml`) ist SMTP Pflicht;
+> dort steht der Autoconfirm-Default auf `false`. Details:
 > [Signup & Einladungen → Self-Hosting ohne Mailversand](signup-and-invites.md#self-hosting-ohne-mailversand).
 
 ## 4. Domains — schon in der Compose verdrahtet (KEIN UI-Mapping nötig)

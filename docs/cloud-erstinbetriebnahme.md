@@ -27,44 +27,44 @@ Reihenfolge** du sie brauchst und **was du vorher besorgt haben musst**.
 
 ---
 
-## Die gute Nachricht zuerst: SMTP brauchst du fuer den Testlauf wahrscheinlich nicht
+## Vorab: Die Cloud braucht Mailversand (SMTP)
 
-Das ist die wichtigste Vereinfachung der ganzen Liste, deshalb steht sie oben.
+Owner-Entscheidung vom 2026-10-02: **In der Cloud-Edition ist Mailversand
+Pflicht.** Nur die lokale On-Prem-Edition laeuft bewusst ohne Mails. Deshalb
+steht `GOTRUE_MAILER_AUTOCONFIRM` in der Cloud per Default auf `false` — im
+Hetzner-Supabase-Stack ohnehin, im Dokploy-Weg ueber das Cloud-Overlay
+`deploy/dokploy/docker-compose.cloud.yml`.
 
-In der Cloud-Edition meldest du dich ueber **Google oder GitHub** an —
-E-Mail/Passwort ist dort abgeschaltet (Owner-Entscheidung, auf `main`
-umgesetzt). Und GoTrue bestaetigt einen ueber den Provider angelegten Account
-**selbst**, ohne
-eine einzige Mail: liefert der Provider eine als verifiziert markierte
-E-Mail-Adresse mit, wird der Nutzer direkt bestaetigt — der Zweig
-`CandidateEmail.Verified || Mailer.Autoconfirm` ruft `user.Confirm`
-([GoTrue v2.196.0, `createAccountFromExternalIdentity`](https://github.com/supabase/auth/blob/v2.196.0/internal/api/external.go)).
+- [ ] **SMTP-Zugang bei einem Mail-Provider besorgen.**
+      *Wer: nur du · Dauer: 30 min bis 1 Tag (Absender-Domain verifizieren,
+      SPF/DKIM im DNS) · Danach anders: Bestaetigungs-, Einladungs- und
+      Adresswechsel-Mails gehen raus.*
+      Mitnehmen: `GOTRUE_SMTP_HOST`, `GOTRUE_SMTP_PORT` (meist `587`),
+      `GOTRUE_SMTP_USER`, `GOTRUE_SMTP_PASS`, `GOTRUE_SMTP_ADMIN_EMAIL`
+      (Absenderadresse) und optional `GOTRUE_SMTP_SENDER_NAME` (Default
+      `Who2Be`). Der Mail-Provider ist ein weiterer Auftragsverarbeiter (siehe
+      Phase 0 Punkt 5).
 
-**Fuer dich heisst das:**
+**Was ohne Mail trotzdem geht, und was nicht:**
 
-- [ ] **Kein SMTP-Provider fuer den Solo-Testlauf.** Du brauchst weder einen
-      Mail-Dienst noch `GOTRUE_MAILER_AUTOCONFIRM=true` — der Autoconfirm-
-      Schalter ist beim reinen OAuth-Weg **ohne Wirkung**, weil der
-      Verified-Zweig ohnehin vorher greift. Voraussetzung ist
-      allein, dass die E-Mail-Adresse deines Google- bzw. GitHub-Kontos dort
-      **verifiziert** ist — bei einem normal genutzten Konto ist sie das.
-      *Wer: du · Dauer: 0 · Danach anders: ein Beschaffungspunkt weniger, und
-      Phase 1 verliert einen Schritt.*
-
-**Die zwei Einschraenkungen, damit du nicht spaeter ueberrascht wirst:**
-
-1. **Ist die Provider-Mail nicht verifiziert**, verschickt GoTrue doch eine
+1. **OAuth-Anmeldung mit verifizierter Provider-Mail.** In der Cloud meldest
+   du dich ueber **Google oder GitHub** an — E-Mail/Passwort ist dort
+   abgeschaltet. Liefert der Provider eine als verifiziert markierte Adresse
+   mit, bestaetigt GoTrue den Account selbst, ohne Mail — der Zweig
+   `CandidateEmail.Verified || Mailer.Autoconfirm` ruft `user.Confirm`
+   ([GoTrue v2.196.0, `createAccountFromExternalIdentity`](https://github.com/supabase/auth/blob/v2.196.0/internal/api/external.go)).
+   Ist die Provider-Mail **nicht** verifiziert, verschickt GoTrue eine
    Bestaetigungsmail und lehnt die Anmeldung mit
-   `provider_email_needs_verification` ab — dann brauchst du entweder SMTP oder
-   eine verifizierte Adresse beim Provider. Das Symptom ist eindeutig, du
-   erkennst es sofort.
-2. **Team-Einladungen und E-Mail-Adresswechsel gehen weiter per Mail** und
+   `provider_email_needs_verification` ab — ohne SMTP kommt diese Mail nie an.
+2. **Team-Einladungen und E-Mail-Adresswechsel gehen immer per Mail** und
    brauchen SMTP (`apps/api/src/who2be_api/integrations/gotrue_mailer.py`).
-   Beides ist **nicht** Teil des Solo-Testlaufs. Vor dem ersten Nutzer, den du
-   einlaedst, brauchst du einen Mailversand — nicht vorher. Welche Mailpfade in
-   der Cloud aktiv bleiben, steht als Tabelle im
+   Welche Mailpfade in der Cloud aktiv bleiben, steht als Tabelle im
    [Supabase-README](../deploy/hetzner/supabase/README.md), Abschnitt
    „Cloud-Edition: nur externe Provider".
+
+Fuer einen allerersten Solo-Smoke ohne SMTP laesst sich
+`GOTRUE_MAILER_AUTOCONFIRM=true` per Environment voruebergehend setzen — das
+ist eine Ausnahme fuer den Smoke, nicht der Cloud-Betrieb.
 
 > **Kein Fallback ueber E-Mail/Passwort.** In der Cloud ist der Weg
 > zugeschaltet-aus: das Web-Bundle laeuft mit `VITE_WHO2BE_EDITION=cloud` und
@@ -436,8 +436,6 @@ in dieser Reihenfolge abarbeitet.
 
 Damit die Liste nicht laenger wirkt, als sie ist:
 
-- **Kein SMTP-Provider** (siehe oben) — erst vor dem ersten eingeladenen Nutzer;
-  Team-Einladungen und E-Mail-Wechsel sind das, was ohne ihn nicht geht.
 - **Kein Apple-Provider** — zwei Anmeldewege genuegen, und im Repo gibt es
   dafuer noch keine Anleitung.
 - **Keine CI/CD-Verdrahtung.** `DEPLOY_HOST`, `DEPLOY_USER`,

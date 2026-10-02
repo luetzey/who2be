@@ -196,10 +196,12 @@ Die Cloud-Version braucht Mailversand. Die On-Prem-Edition soll bewusst auch
 >
 > Ist die Instanz öffentlich erreichbar, gehört
 > `GOTRUE_MAILER_AUTOCONFIRM=false` gesetzt und echter SMTP verdrahtet
-> (`GOTRUE_SMTP_*`, siehe „Voraussetzungen für den Mailversand"). Stand heute
-> reicht der Dokploy-Compose `GOTRUE_SMTP_*` **nicht** an den `auth`-Dienst
-> durch — Variablen nur in der Dokploy-Environment zu setzen, genügt dort
-> also nicht. Ohne SMTP bleibt Weg B (geteilter Link) der Einladungsweg.
+> (`GOTRUE_SMTP_*`, siehe „Voraussetzungen für den Mailversand"). Im
+> Dokploy-Betrieb genügt es, die `GOTRUE_SMTP_*`-Variablen in der
+> Dokploy-Environment zu setzen — der Compose reicht sie optional an den
+> `auth`-Dienst durch (`GOTRUE_SMTP_PORT` mit Default `587`). Mit dem
+> Cloud-Overlay ist SMTP Pflicht, der Autoconfirm-Default steht dort auf
+> `false`. Ohne SMTP bleibt Weg B (geteilter Link) der Einladungsweg.
 >
 > Hintergrund und dieselbe Warnung für den Hetzner-Betrieb:
 > [Supabase-README → Mailer](../deploy/hetzner/supabase/README.md#mailer-verify---invitation-mails).

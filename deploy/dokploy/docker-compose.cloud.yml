@@ -41,12 +41,18 @@
 # ausgeschlossen) UND einen Eintrag in WHO2BE_BILLING_OVERRIDE_OPERATORS;
 # Schrittfolge in docs/cloud-prod-smoke.md.
 #
-# Fuer echte Cloud-Mail-Paritaet zusaetzlich in der Basis-`auth` setzen:
-#   GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_* (echter Provider). Fuer einen
-#   ersten Solo-Smoke darf autoconfirm (Basis-Default) `true` bleiben.
+# Mailversand ist in der Cloud PFLICHT (Owner-Entscheidung 2026-10-02): das
+# Overlay setzt GOTRUE_MAILER_AUTOCONFIRM per Default auf false (Basis: true).
+# Dafuer in Dokploy → Environment GOTRUE_SMTP_HOST/_PORT/_USER/_PASS/
+# _ADMIN_EMAIL/_SENDER_NAME mit einem echten Provider belegen — die Basis-`auth`
+# reicht sie durch. Nur fuer einen ersten Solo-Smoke ohne SMTP darf
+# GOTRUE_MAILER_AUTOCONFIRM=true per Environment uebersteuert werden.
 services:
   auth:
     environment:
+      # Cloud = Mail-Bestaetigung Pflicht (siehe Kopfkommentar). Override auf
+      # true nur fuer einen Solo-Smoke ohne SMTP.
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-false}
       # Cloud-Auth: NUR externe Provider (Google, GitHub, Apple) — Owner-
       # Entscheidung 2026-09-24. Gegenstueck zum Build-Arg
       # VITE_WHO2BE_EDITION=cloud bei
