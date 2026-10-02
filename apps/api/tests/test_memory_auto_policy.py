@@ -21,14 +21,18 @@ from typing import Any
 from uuid import UUID
 
 import asyncpg
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from fastmcp import Client
 
 from who2be_api.core.config import get_settings
 from who2be_api.main import app
 from who2be_api.services.memory_service import decide_memory_status, matrix_row
 from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_mcp import server as mcp_server
+from who2be_mcp.client import ApiClient
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
     MEMORY_MAX_PER_USER,
@@ -462,5 +466,55 @@ def test_caps_near_the_limit(make_auth_headers: AuthFactory) -> None:
             assert user_full.status_code == 409
             assert user_full.json()["reason"] == "memory_cap_reached"
             assert user_full.json()["params"] == {"maximum": MEMORY_MAX_PER_USER, "scope": "user"}
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_mcp_save_memory_bridge_sends_inferred(
+    make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bruecke bis C4 (t_889762ed): das MCP-Tool `save_memory` hat noch keinen
+    `origin`-Parameter und sendet fest `inferred`. Speichern ueber MCP
+    funktioniert also weiter, aber nur als Vorschlag — auch fuer einen
+    `auto`-Agenten mit eingeschalteter Zelle, weil `inferred` nie automatisch
+    aktiviert."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            _, auto = agent_token(client, prefix, "p-mcp", {"memory_mode": "auto"}, auth)
+            put = client.put(
+                f"{prefix}/memory-auto-policy", json={"enabled_cells": [_CELL]}, headers=auth
+            )
+            assert put.status_code == 200, put.text
+        token = auto["Authorization"].removeprefix("Bearer ")
+
+        async def _build() -> ApiClient:
+            return ApiClient("http://testserver", token, ws, transport=httpx.ASGITransport(app=app))
+
+        monkeypatch.setattr(mcp_server, "build_client", _build)
+
+        async def _call() -> Any:
+            async with app.router.lifespan_context(app), Client(mcp_server.mcp) as mcp_client:
+                return await mcp_client.call_tool(
+                    "save_memory",
+                    {"fact": "Nutzer mag Gruen", "category": "preference", "importance": 7},
+                    raise_on_error=False,
+                )
+
+        result = asyncio.run(_call())
+        assert not result.is_error, result.content
+        rows = _sql(
+            "SELECT origin, source, status FROM agent_memory WHERE workspace_id = $1 AND fact = $2",
+            ws,
+            "Nutzer mag Gruen",
+        )
+        assert [(r["origin"], r["source"], r["status"]) for r in rows] == [
+            ("inferred", "agent", "pending")
+        ]
     finally:
         cleanup_workspaces([owner])

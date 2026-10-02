@@ -59,6 +59,7 @@ from who2be_models import (
     MemoryCategory,
     MemoryCreate,
     MemoryHit,
+    MemoryOrigin,
     MemoryRead,
     PersonaCreate,
     PersonaPlaybookLinkSet,
@@ -1849,7 +1850,16 @@ async def save_memory(
     """
     client = await build_client()
     return await client.save_memory(
-        MemoryCreate(fact=fact, category=category, importance=importance, context=context)
+        MemoryCreate(
+            fact=fact,
+            category=category,
+            importance=importance,
+            context=context,
+            # Bruecke bis C4, t_889762ed: `origin` ist serverseitig Pflicht
+            # (ADR-0053 M8). `inferred` aktiviert nie automatisch, alles geht
+            # in die Freigabe; C4 ersetzt das durch einen echten Parameter.
+            origin=MemoryOrigin.inferred,
+        )
     )
 
 
