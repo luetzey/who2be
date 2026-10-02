@@ -18,5 +18,7 @@
   `who2be-purge`): setzt fällige unbestätigte Einträge auf `expired` und
   schreibt je Eintrag das Ereignis `expired`. Gelöscht wird nichts —
   abgelaufene Einträge zählen weiter für die Dublettenprüfung. Betrieb: einmal
-  täglich per Cron, z. B.
-  `docker compose run --rm api who2be-memory-expire`.
+  täglich per Host-Cron gegen den Produktions-Stack; Cron-Zeile je Edition,
+  Einrichtung und Verifikation stehen im Hetzner-Runbook
+  (`deploy/hetzner/RUNBOOK.md`, Abschnitt „Verfall unbestaetigten
+  Gedaechtnisses“).

@@ -20,6 +20,7 @@ Aktive Sektionen:
 - [Provisioning-Nachweise](#provisioning-nachweise) — Protokoll fuer SSH-Zustand und Host-Update-Automatik (W8/S4)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
+- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) — Host-Crons fuer DSGVO-Purge und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **einmalig eintragen**, sonst laeuft keiner der Jobs
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
@@ -496,6 +497,19 @@ und der Abnahme. Reihenfolge einhalten:
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
       `push: main` via `deploy/hetzner/scripts/deploy.sh <sha>`; Rollback identisch
       mit altem SHA.
+- [ ] **7b — Host-Crons eintragen (Purge, Memory-Verfall):** in der Crontab des
+      Deploy-Users je eine Zeile fuer den
+      [Retention-Cron `who2be-purge`](#retention-cron-who2be-purge) und den
+      [Verfall unbestaetigten Gedaechtnisses `who2be-memory-expire`](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire)
+      — jeweils die Zeile der **Cloud-Edition** (mit Overlay und `--env-file`).
+      Ohne diese Eintraege laeuft keiner der beiden Jobs: es wird nichts
+      gepurgt, und unbestaetigtes Gedaechtnis verfaellt nie. Verifikation:
+      ```bash
+      crontab -l | grep -E 'who2be-(purge|memory-expire)'
+      # → je eine Zeile; am Folgetag:
+      tail -1 /var/log/who2be-memory-expire.log
+      # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
+      ```
 - [ ] **8 — Abnahme-Reise fahren:** [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md)
       (Signup → Verify → Pro → MCP-Quota 429 → Downgrade 402 → RLS-Nachweis).
 
@@ -2025,14 +2039,45 @@ schreibt je Eintrag das Ereignis `expired`. Geloescht wird nichts. Idempotent;
 ein ausgefallener Lauf holt der naechste nach — es verfaellt dann nur spaeter,
 nichts geht verloren.
 
+Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
+`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
+nacktes `docker compose run` in `/opt/who2be` liest die Root-
+`docker-compose.yml` (Dev-Stack mit eigener Dev-DB) und laesst in der
+Produktions-DB nichts verfallen. Genau **eine** der beiden Zeilen eintragen,
+passend zur Edition:
+
 ```bash
-# Host-Crontab des Deploy-Users (crontab -e), Vorschlag: taeglich nach dem Purge
-45 3 * * * cd /opt/who2be && docker compose run --rm api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
+# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
+# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
+# der Job laeuft gar nicht).
+install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-memory-expire.log
+
+# Host-Crontab des Deploy-Users (crontab -e), Vorschlag: taeglich 03:45.
+# On-Prem-Edition:
+45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
+# Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
+45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
 ```
 
-Braucht nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass). Taeglich reicht: die
-Frist betraegt 30 Tage, ein Tag Versatz ist fachlich ohne Belang. Ausgabe:
+`--no-deps`: der Job braucht nur die laufende DB; ohne den Schalter startet
+`run` die Abhaengigkeiten des `api`-Dienstes mit (u. a. `migrate`). Er braucht
+nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass) — der `api`-Dienst bringt sie in
+beiden Editionen mit. Taeglich reicht: die Frist betraegt 30 Tage, ein Tag
+Versatz ist fachlich ohne Belang. Ausgabe:
 `Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.`
+
+**Verifikation**, dass der Job eingeplant ist und laeuft:
+
+```bash
+crontab -l | grep who2be-memory-expire
+# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
+# Sofort-Probe statt bis 03:45 warten: die eingetragene Cron-Zeile ab `cd`
+# von Hand ausfuehren, OHNE die Umleitung `>> …` — Ausgabe dann im Terminal:
+# → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
+# Am Folgetag: der naechtliche Lauf hat geschrieben
+tail -1 /var/log/who2be-memory-expire.log
+# → Gedaechtnis: … abgelaufen.   (leere Datei ⇒ Cron lief nicht; Fehlertext ⇒ Ursache steht dort)
+```
 
 ---
 
