@@ -297,17 +297,17 @@ export function fetchMe(token: string): Promise<Me> {
 }
 
 // Invitation-Annahme ist bewusst NICHT workspace-scoped: der Einladende kennt
-// den Ziel-Workspace, der Eingeladene noch nicht. Der Pfad traegt nur den
-// Klartext-Token; die Response liefert den Workspace, in den man eingetreten ist.
+// den Ziel-Workspace, der Eingeladene noch nicht. Der Klartext-Token reist im
+// Body, nie in Pfad oder Query — sonst stuende er in Access-Logs zwischen
+// Browser und API. Die Response liefert den Workspace, in den man eingetreten ist.
 export function acceptInvitation(
   token: string,
   invitationToken: string,
 ): Promise<InvitationAcceptResult> {
-  return request<InvitationAcceptResult>(
-    token,
-    `/v1/invitations/${invitationToken}/accept`,
-    { method: 'POST' },
-  )
+  return request<InvitationAcceptResult>(token, '/v1/invitations/accept', {
+    method: 'POST',
+    body: JSON.stringify({ token: invitationToken }),
+  })
 }
 
 // OAuth-Remote-MCP-Consent (ADR-0034-Folge): die eingeloggte Web-Session

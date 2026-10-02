@@ -12,10 +12,61 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { notify } from '@/lib/feedback'
 
+/** Tokenfreie Adresse der Seite — Ziel jedes Ruecksprungs (`next`). */
+const ACCEPT_PATH = '/invitations/accept'
+
+// Der Token ueberlebt Login, Passwort-Setzen und den Ruecksprung im
+// sessionStorage (Tab-Lifetime) statt in einer URL: alles, was in Pfad oder
+// Query steht, landet in Access-Logs, Verlauf und Referrer.
+const STORAGE_KEY = 'who2be.invitationToken'
+
+function readStoredToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function storeToken(token: string): void {
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, token)
+  } catch {
+    // Ohne sessionStorage geht der Token nur ueber einen Login-Umweg
+    // verloren; im selben Seitenaufruf bleibt er im State erhalten.
+  }
+}
+
+function clearStoredToken(): void {
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // siehe storeToken
+  }
+}
+
+/** `#token=…` aus dem Fragment des geteilten Links; sonst `null`. */
+function tokenFromHash(hash: string): string | null {
+  const value = new URLSearchParams(hash.replace(/^#/, '')).get('token')
+  return value === null || value === '' ? null : value
+}
+
+const EMAIL_REASONS = new Set(['invitation_email_required', 'invitation_email_unconfirmed'])
+
+function reasonOf(cause: ApiError): string | null {
+  const body = cause.body
+  if (body !== null && typeof body === 'object' && 'reason' in body) {
+    const reason = (body as { reason: unknown }).reason
+    return typeof reason === 'string' ? reason : null
+  }
+  return null
+}
 
 export function InvitationAcceptPage() {
   const { t } = useTranslation('auth')
-  const { token } = useParams<{ token: string }>()
+  // Legacy-Route `/invitations/:token/accept` fuer bereits verschickte Links;
+  // der neue geteilte Link traegt den Token im Fragment (`#token=…`).
+  const { token: pathToken } = useParams<{ token: string }>()
   const { session, me } = useSession()
   const authToken = useAuthToken()
   const location = useLocation()
@@ -25,6 +76,21 @@ export function InvitationAcceptPage() {
   // an. Manueller Aufruf ohne den Marker behaelt den klassischen
   // Button-Flow (Token wurde geteilt, der User entscheidet aktiv).
   const isMagicLink = searchParams.get('via') === 'magic'
+
+  const hashToken = tokenFromHash(location.hash)
+  const urlToken = hashToken ?? (pathToken !== undefined && pathToken !== '' ? pathToken : null)
+  // Token aus der Adresse sofort beim Rendern sichern — noch bevor einer der
+  // Redirects unten (Login, Passwort setzen) die Adresse verlaesst. Idempotent,
+  // daher auch unter StrictMode-Doppel-Render unkritisch.
+  if (urlToken !== null) {
+    storeToken(urlToken)
+  }
+  // Pro Mount im State: nach dem Aufraeumen der Adresse (oder nach einem
+  // 404/410, der den Speicher leert) bleibt der Token fuer diese Seite erhalten.
+  const [token, setToken] = useState<string | null>(() => urlToken ?? readStoredToken())
+  if (urlToken !== null && urlToken !== token) {
+    setToken(urlToken)
+  }
 
   const [accepting, setAccepting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +110,14 @@ export function InvitationAcceptPage() {
           return t('invitation.error.notFound')
         }
         if (cause.status === 403) {
+          // Fehlende bzw. unbestaetigte Konto-Adresse ist ein anderes Problem
+          // als die falsche Adresse — der Nutzer muss etwas anderes tun.
+          const reason = reasonOf(cause)
+          if (reason !== null && EMAIL_REASONS.has(reason)) {
+            return reason === 'invitation_email_required'
+              ? t('common:errors.invitation_email_required')
+              : t('common:errors.invitation_email_unconfirmed')
+          }
           return t('invitation.error.emailMismatch')
         }
       }
@@ -58,9 +132,14 @@ export function InvitationAcceptPage() {
       setError(null)
       try {
         const result = await acceptInvitation(currentAuthToken, currentToken)
+        clearStoredToken()
         notify.success(t('invitation.success'))
         setAcceptedWorkspace(result.workspace_id)
       } catch (cause) {
+        // Verbrauchter oder unbekannter Token wird nie mehr gueltig.
+        if (cause instanceof ApiError && (cause.status === 404 || cause.status === 410)) {
+          clearStoredToken()
+        }
         setError(messageForError(cause))
       } finally {
         setAccepting(false)
@@ -69,27 +148,41 @@ export function InvitationAcceptPage() {
     [t, messageForError],
   )
 
+  const addressCarriesToken = urlToken !== null
+
   useEffect(() => {
     if (
       !isMagicLink
       || autoAcceptedRef.current
       || session === null
-      || token === undefined
-      || token === ''
+      || me === null
+      || addressCarriesToken
+      || token === null
     ) {
       return
     }
     autoAcceptedRef.current = true
     void runAccept(token, authToken)
-  }, [isMagicLink, session, token, authToken, runAccept])
+  }, [isMagicLink, session, me, addressCarriesToken, token, authToken, runAccept])
+
+  // Ruecksprung-Ziel ohne Token: der Token liegt im sessionStorage.
+  const tokenFreeTarget = `${ACCEPT_PATH}${location.search}`
 
   // Ohne Session geht die Annahme nicht — zurück zum Login, der via `next`
   // wieder hierher zurückspringt. Magic-Link-User sind nach dem GoTrue-Callback
   // immer eingeloggt; landet er trotzdem hier ohne Session, ist der Callback
   // schiefgegangen — Login-Redirect ist die richtige Recovery.
   if (session === null) {
-    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    const next = encodeURIComponent(tokenFreeTarget)
     return <Navigate to={`/login?next=${next}`} replace />
+  }
+
+  // Token aus der Adresszeile nehmen (replace = `history.replaceState`), damit
+  // er weder im Verlauf noch im Referrer stehen bleibt. Ein anderes Fragment
+  // (z. B. die GoTrue-Session `#access_token=…`) bleibt erhalten.
+  if (addressCarriesToken) {
+    const keepHash = hashToken === null ? location.hash : ''
+    return <Navigate to={`${tokenFreeTarget}${keepHash}`} replace />
   }
 
   // Session ist da, aber `/v1/me` ist noch unterwegs — das passiert beim
@@ -121,7 +214,7 @@ export function InvitationAcceptPage() {
   // wieder greift). Andernfalls bleibt der User in einer Sackgasse, sobald
   // der Magic-Link-Token einmal verbraucht ist.
   if (isMagicLink && me.has_password === false) {
-    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    const next = encodeURIComponent(tokenFreeTarget)
     return <Navigate to={`/onboarding/set-password?next=${next}`} replace />
   }
 
@@ -129,7 +222,7 @@ export function InvitationAcceptPage() {
     return <Navigate to={`/w/${acceptedWorkspace}/dashboard`} replace />
   }
 
-  if (token === undefined || token === '') {
+  if (token === null) {
     return <Navigate to="/" replace />
   }
 
