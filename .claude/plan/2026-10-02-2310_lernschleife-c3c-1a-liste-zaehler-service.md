@@ -60,3 +60,13 @@ Filter wiederverwendet.
 - volle DoD laut CONTRIBUTING.md auf frischer DB
 - Rot-Proben: Sichtbarkeitsklausel entschärft (fremdes Nutzergedächtnis
   sichtbar), Lesson-Regel entfernt, Keyset-Tiebreak entfernt.
+
+## Review-Runde 1 (Nacharbeit)
+
+- Befund @reviewer: `test_subject_user_counts_only_admin_and_only_numbers`
+  belegte nicht, dass `q` in der `subject_user_id`-Facette wirkungslos ist
+  (q="Krimis" traf genau den gezählten Eintrag).
+- Korrektur nur im Test: Proben mit q ohne Treffer, q mit Teiltreffer,
+  scope=agent und scope+q; jede würde bei wirksamem Filter die Zahl ändern.
+- Rot-Proben: q-Bedingung aus dem else-Zweig gezogen → rot; scope-Bedingung
+  aus dem else-Zweig gezogen → rot. Produktivcode unverändert.

@@ -261,9 +261,20 @@ def test_subject_user_counts_only_admin_and_only_numbers() -> None:
         # Inhalt und Eintrags-IDs erscheinen nicht, nur Personen und Zahlen.
         dumped = counts.model_dump_json()
         assert "Hoerbuecher" not in dumped and "Krimis" not in dumped
-        # Facette mit Filter: status wirkt, q nicht (kein Abtasten ueber Zahlen).
+        # Facette mit Filter: status wirkt, q und scope nicht (kein Abtasten
+        # fremden Inhalts ueber Zahlen). Die Proben sind so gewaehlt, dass ein
+        # wirksames q/scope die Zahl sichtbar veraendern wuerde.
+        everyone = {str(env.viewer): 2, str(env.editor): 1}
+        for probe in (
+            MemoryFilter(q="gibt es nicht"),
+            MemoryFilter(q="Krimis"),
+            MemoryFilter(scope=MemoryScope.agent),
+            MemoryFilter(scope=MemoryScope.agent, q="Agentenfakt"),
+        ):
+            probed = await env.service.count_workspace_memories(env.as_admin, probe, group)
+            assert probed.groups[MemoryCountGroup.subject_user_id] == everyone, probe
         pending = await env.service.count_workspace_memories(
-            env.as_admin, MemoryFilter(status=MemoryStatus.pending, q="Krimis"), group
+            env.as_admin, MemoryFilter(status=MemoryStatus.pending, q="gibt es nicht"), group
         )
         assert pending.groups[MemoryCountGroup.subject_user_id] == {str(env.viewer): 1}
 
