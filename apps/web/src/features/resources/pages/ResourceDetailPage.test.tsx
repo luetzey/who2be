@@ -747,6 +747,22 @@ describe('ResourceDetailPage — Header-Aktionen (Slug/Duplizieren/Feedback)', (
 
     expect(await screen.findByTestId('duplicate-resource')).toBeDisabled()
   })
+
+  // Audit A13: unter md liegen Feedback/Export/Duplizieren hinter „Mehr".
+  // jsdom rendert kein CSS — Sichtbarkeit je Viewport belegt
+  // e2e/status-actions-viewport.spec.ts, hier der Vertrag (Slot + Knopf).
+  it('Audit A13: Kopf-Aktionen liegen unter md hinter „Mehr"', async () => {
+    renderDetailPage(detailHandlers(), { me: meWithRole('editor') })
+
+    const more = await screen.findByTestId('detail-header-more')
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).toHaveClass('hidden', 'md:flex')
+    expect(slot).toContainElement(screen.getByTestId('duplicate-resource'))
+    expect(slot).toContainElement(screen.getByTestId('export-resource-trigger'))
+    expect(slot).toContainElement(screen.getByRole('button', { name: 'Feedback geben' }))
+  })
 })
 
 describe('ResourceDetailPage — Delete-Flow', () => {

@@ -523,8 +523,21 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
     return
   }
 
+  // Audit A13: unter md liegt „Feedback geben“ im Seitenkopf hinter „Mehr“
+  // (`DetailHeader.collapseActionsBelowMd`). Eingeklappt ist der Link
+  // `hidden` und damit nicht im A11y-Tree; erst aufklappen, dann klicken.
+  // Nach jeder Navigation ist der Kopf wieder eingeklappt.
+  const openGiveFeedback = async () => {
+    const more = page.getByTestId('detail-header-more')
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('link', { name: giveName })).toHaveCount(0)
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await page.getByRole('link', { name: giveName }).click()
+  }
+
   // --- Feedback geben: oeffnen, ausfuellen, absenden, zurueck mit Bestaetigung.
-  await page.getByRole('link', { name: giveName }).click()
+  await openGiveFeedback()
   await expect(page).toHaveURL(new RegExp(`/feedback/give/resource/${resource.id}`))
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(giveName)
@@ -547,7 +560,7 @@ test('W4=b: Feedback geben/Problem melden unter md als eigene Seite, ab md Dialo
   )
 
   // --- Browser-Zurueck: Seite oeffnen, Browser-Zurueck fuehrt zur Ausgangsseite.
-  await page.getByRole('link', { name: giveName }).click()
+  await openGiveFeedback()
   await expect(page).toHaveURL(/\/feedback\/give\//)
   await page.goBack()
   await expect(page).toHaveURL((url) => `${url.pathname}${url.search}` === origin)
