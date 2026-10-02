@@ -315,6 +315,11 @@ dem des Workspace.
 `agent_memories` und das Nutzergedaechtnis **nur des exportierenden
 Menschen** als `user_memories`, beide mit der Historie je Eintrag unter
 `events`. Nutzergedaechtnis anderer Mitglieder steht nicht im Buendel.
+`agent_memories` folgt der Rollengrenze der Oberflaeche (ab `editor`, wie
+`MemoryService.list_memories`): fuer einen `viewer` bleibt der Block leer, und
+`export_manifest.agent_memories` traegt `included: false` samt Begruendung.
+Die Historie wird nur fuer die tatsaechlich exportierten Eintraege gelesen,
+nicht workspace-weit. Belegt in `apps/api/tests/test_memory_compliance.py`.
 
 ---
 

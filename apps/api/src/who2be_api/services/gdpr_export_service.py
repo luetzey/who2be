@@ -38,9 +38,11 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.entity_sql import safe_entity
+from who2be_api.core.security import role_satisfies
 from who2be_api.core.tenancy import scope_to_self, tenant_scope
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.tablestore import AreaStoreMissingError, TableStore, quote_identifier
+from who2be_models import WorkspaceRole
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,28 @@ _BLOB_EXPORT_NOTE = (
     "werden vom Betreiber daraus ausgeleitet (RUNBOOK, Abschnitt "
     '„MinIO-/BlobStore-Backup").'
 )
+
+# Hinweis im Export-Manifest, wenn `agent_memories` wegen der Rolle leer bleibt.
+_AGENT_MEMORY_WITHHELD_NOTE = (
+    "Das Agentengedaechtnis dieses Workspace ist ab der Rolle editor sichtbar "
+    "(wie in der Oberflaeche) und deshalb nicht enthalten. Es ist ein Inhalt des "
+    "Workspace, kein Datum ueber dich; Fakten ueber dich stehen unter "
+    "`user_memories`."
+)
+
+
+def _can_read_agent_memory(role: str) -> bool:
+    """Gleiche Grenze wie `MemoryService.list_memories` (`require_role` editor).
+
+    Unbekannte Rollenwerte schliessen aus (fail-closed) statt den Export
+    scheitern zu lassen.
+    """
+    try:
+        actual = WorkspaceRole(role)
+    except ValueError:
+        return False
+    return role_satisfies(actual, WorkspaceRole.editor)
+
 
 # KB-Zusatztabellen ohne generierte Spalten — `SELECT *` ist hier sicher.
 _KB_TABLES: tuple[tuple[str, str], ...] = (
@@ -251,13 +275,21 @@ class GdprExportService:
             # und das Nutzergedaechtnis (`scope='user'`, gehoert genau EINEM
             # Menschen, 3.1.1). Letzteres geht nur an diesen Menschen — ein
             # ungefiltertes SELECT lieferte ihm die Nutzerfakten der uebrigen
-            # Mitglieder mit aus. Beide Bloecke tragen ihre Historie
-            # (`agent_memory_event`, 3.1.2) je Eintrag unter `events`.
-            memories = await self._pool.fetch(
-                f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
-                "WHERE workspace_id = $1 AND scope = 'agent' "
-                "ORDER BY created_at ASC, id ASC",
-                workspace_id,
+            # Mitglieder mit aus. Das Agentengedaechtnis folgt derselben
+            # Rollengrenze wie die Oberflaeche (`MemoryService.list_memories`:
+            # ab editor) — der Export ist kein Seiteneingang fuer viewer.
+            # Beide Bloecke tragen ihre Historie (`agent_memory_event`, 3.1.2)
+            # je Eintrag unter `events`.
+            agent_memory_visible = _can_read_agent_memory(role)
+            memories = (
+                await self._pool.fetch(
+                    f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
+                    "WHERE workspace_id = $1 AND scope = 'agent' "
+                    "ORDER BY created_at ASC, id ASC",
+                    workspace_id,
+                )
+                if agent_memory_visible
+                else []
             )
             user_memories = await self._pool.fetch(
                 f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
@@ -266,10 +298,21 @@ class GdprExportService:
                 workspace_id,
                 user_id,
             )
-            memory_events = await self._pool.fetch(
-                "SELECT * FROM agent_memory_event WHERE workspace_id = $1 "
-                "ORDER BY memory_id ASC, created_at ASC, id ASC",
-                workspace_id,
+            # Historie NUR der exportierten Eintraege laden — nicht workspace-
+            # weit. Sonst laegen Ereignisse (mit Fakt-Schnappschuss in
+            # `before`/`after`) zu fremden Nutzerfakten im Speicher, und
+            # nur `_with_events` stuende zwischen ihnen und dem Buendel.
+            exported_ids = [row["id"] for row in (*memories, *user_memories)]
+            memory_events = (
+                await self._pool.fetch(
+                    "SELECT * FROM agent_memory_event "
+                    "WHERE workspace_id = $1 AND memory_id = ANY($2::uuid[]) "
+                    "ORDER BY memory_id ASC, created_at ASC, id ASC",
+                    workspace_id,
+                    exported_ids,
+                )
+                if exported_ids
+                else []
             )
             # WorkArea + KB + Zugriffslog (WP20). Der Tabellen-Dump liest die
             # SQLite-Dateien AUSSERHALB von Postgres, braucht aber den Katalog
@@ -323,6 +366,13 @@ class GdprExportService:
             "agents": [_clean(row) for row in agents],
             "agent_memories": _with_events(memories, memory_events),
             "user_memories": _with_events(user_memories, memory_events),
+            "export_manifest": {
+                "agent_memories": (
+                    {"included": True}
+                    if agent_memory_visible
+                    else {"included": False, "reason": _AGENT_MEMORY_WITHHELD_NOTE}
+                ),
+            },
             "work_areas": work_areas,
             "wa_blobs": {"note": _BLOB_EXPORT_NOTE, "items": blobs},
             "wa_tables": tables,
