@@ -123,7 +123,8 @@ aus dem letzten Snapshot (§Tabellen-Store-Backup).
 ### Legitime zweite Prozesse
 
 Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
-die API laeuft: der Retention-Cron (`docker compose run --rm api who2be-purge`)
+die API laeuft: der Retention-Cron (`docker compose … run --rm --no-deps api who2be-purge`,
+Zeile siehe [Retention-Cron](#retention-cron-who2be-purge))
 und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
 kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
 Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
@@ -497,18 +498,29 @@ und der Abnahme. Reihenfolge einhalten:
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
       `push: main` via `deploy/hetzner/scripts/deploy.sh <sha>`; Rollback identisch
       mit altem SHA.
-- [ ] **7b — Host-Crons eintragen (Purge, Memory-Verfall):** in der Crontab des
+- [ ] **7b — Host-Crons eintragen (Backup, Purge, Memory-Verfall):** in der Crontab des
       Deploy-Users je eine Zeile fuer den
+      [Backup-Lauf](#trigger-routine), den
       [Retention-Cron `who2be-purge`](#retention-cron-who2be-purge) und den
       [Verfall unbestaetigten Gedaechtnisses `who2be-memory-expire`](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire)
-      — jeweils die Zeile der **Cloud-Edition** (mit Overlay und `--env-file`).
-      Ohne diese Eintraege laeuft keiner der beiden Jobs: es wird nichts
-      gepurgt, und unbestaetigtes Gedaechtnis verfaellt nie. Verifikation:
+      — jeweils die Zeile der **Cloud-Edition** (mit Overlay und `--env-file`),
+      vorher die Log-Dateien unter `/var/log` per `install` anlegen (steht bei
+      jeder Zeile). Ohne diese Eintraege laeuft keiner der Jobs: es gibt kein
+      Backup, es wird nichts gepurgt, und unbestaetigtes Gedaechtnis verfaellt
+      nie. Verifikation:
       ```bash
-      crontab -l | grep -E 'who2be-(purge|memory-expire)'
-      # → je eine Zeile; am Folgetag:
+      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup'
+      # → je eine Zeile (drei insgesamt), jede mit
+      #   -f deploy/hetzner/who2be/docker-compose.yml -f …cloud.yml --env-file
+      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup' | grep -vc -- '--env-file'
+      # → 0   (sonst laeuft eine Zeile gegen die Root-Compose = Dev-Stack)
+      # am Folgetag:
+      tail -2 /var/log/who2be-purge.log
+      # → Purge: … / Retention: …
       tail -1 /var/log/who2be-memory-expire.log
       # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
+      ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -1
+      # → Dump vom heutigen Tag (weitere Pruefung: Backup & Restore, Verifikation)
       ```
 - [ ] **8 — Abnahme-Reise fahren:** [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md)
       (Signup → Verify → Pro → MCP-Quota 429 → Downgrade 402 → RLS-Nachweis).
@@ -1524,7 +1536,9 @@ Snapshot.
 
 ```bash
 # 1) Greift der Volume-Mount? (Der Container sieht /data/tablestore.)
-docker compose --profile backup run --rm --entrypoint sh backup \
+#    $COMPOSE = Produktions-Stack, s. „Initial-Setup" — ein nacktes
+#    `docker compose` in /opt/who2be kennt keinen Dienst `backup`.
+$COMPOSE --profile backup run --rm --entrypoint sh backup \
   -c 'ls -la /data/tablestore'
 
 # 2) Was erwartet der Katalog?
@@ -1576,18 +1590,46 @@ ssh-keygen -t ed25519 -f /opt/who2be/secrets/ssh/storage_box_ed25519 -N "" \
 # 4) .env auf dem Host fuellen (deploy/hetzner/.env):
 #    POSTGRES_PASSWORD, BACKUP_GPG_RECIPIENT, RESTIC_REPOSITORY, RESTIC_PASSWORD
 
-# 5) Erstlauf — restic init passiert idempotent im Script
-cd /opt/who2be && docker compose --profile backup run --rm backup
+# 5) Erstlauf — restic init passiert idempotent im Script.
+#    Produktions-Stack ansprechen (wie deploy.sh), NICHT nacktes `docker compose`:
+#    das liest in /opt/who2be die Root-docker-compose.yml (Dev-Stack), die gar
+#    keinen Dienst `backup` kennt. Der Dienst steht im Basis-File; fuer die
+#    Cloud-Edition das Overlay trotzdem mitgeben, damit Projekt und Konfiguration
+#    dieselben sind wie beim Deploy.
+cd /opt/who2be
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env"
+# Cloud-Edition statt dessen:
+# COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+$COMPOSE --profile backup run --rm backup
 ```
 
 ### Trigger (Routine)
 
+Genau **eine** der beiden Zeilen eintragen, passend zur Edition:
+
 ```bash
-# Host-Crontab fuer den Deploy-User (crontab -e):
-15 3 * * * cd /opt/who2be && docker compose --profile backup run --rm backup >> /var/log/who2be-backup.log 2>&1
+# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
+# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
+# der Job laeuft gar nicht).
+install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-backup.log
+
+# Host-Crontab fuer den Deploy-User (crontab -e), taeglich 03:15.
+# On-Prem-Edition:
+15 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env --profile backup run --rm backup >> /var/log/who2be-backup.log 2>&1
+# Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
+15 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env --profile backup run --rm backup >> /var/log/who2be-backup.log 2>&1
 ```
 
 Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Containers.
+
+**Verifikation**, dass der Job eingeplant ist:
+
+```bash
+crontab -l | grep 'run --rm backup'
+# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
+```
+
+Am Folgetag zeigt [Verifikation](#verifikation) unten, ob der Lauf gesichert hat.
 
 ### Alarmweg (Dead-Man's-Switch)
 
@@ -1637,13 +1679,19 @@ Pushgateway + `time() - push_time_seconds > 93600`) erfüllt denselben Zweck.
 Ein Alarmweg, der nie ausgelöst wurde, ist so viel wert wie ein ungetestetes Backup.
 
 ```bash
+# $COMPOSE wie unter „Initial-Setup" (Produktions-Stack, passend zur Edition):
+# Cloud-Edition: zusaetzlich -f deploy/hetzner/who2be/docker-compose.cloud.yml
+# direkt nach dem Basis-File.
+cd /opt/who2be
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env"
+
 # 1) Erfolgsfall: Ping muss ankommen, Lauf muss gruen sein.
-cd /opt/who2be && docker compose --profile backup run --rm backup; echo "exit=$?"
+$COMPOSE --profile backup run --rm backup; echo "exit=$?"
 #    -> exit=0, und beim Empfaenger ist ein frischer Ping protokolliert.
 
 # 2) Fehlerfall erzwingen: Offsite-Ziel unerreichbar machen.
 RESTIC_REPOSITORY="sftp:nobody@127.0.0.1:/nonexistent" \
-  docker compose --profile backup run --rm \
+  $COMPOSE --profile backup run --rm \
   -e RESTIC_REPOSITORY backup; echo "exit=$?"
 #    -> exit!=0, KEIN neuer Ping beim Empfaenger,
 #    -> und der lokale Dump liegt trotzdem da:
@@ -1814,7 +1862,9 @@ aws --endpoint-url "http://${WHO2BE_BLOBSTORE_ENDPOINT}" \
 ```
 
 - **Von Hand ausloesen** (Diagnose, Erstbefuellung) laeuft ueber den ganzen Lauf:
-  `cd /opt/who2be && docker compose --profile backup run --rm backup`.
+  `cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env --profile backup run --rm backup`
+  (Cloud-Edition: zusaetzlich `-f deploy/hetzner/who2be/docker-compose.cloud.yml`
+  nach dem Basis-File, s. „Trigger (Routine)").
 - **Netz:** der `backup`-Service haengt dafuer an `app-net` **und**
   `supabase-net` — ohne `app-net` sieht er den Bucket nicht.
 - **Fehlschlag:** ein gescheiterter Sync macht den ganzen Lauf rot und
@@ -1991,15 +2041,46 @@ Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach der
 idempotent — ein Lauf ohne faellige Daten ist ein No-op, ein abgebrochener
 Lauf wird vom naechsten fortgesetzt.
 
+Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
+`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
+nacktes `docker compose run` in `/opt/who2be` liest die Root-
+`docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest verdrahteter
+Dev-DB) und purgt in der Produktions-DB nichts. Genau **eine** der beiden
+Zeilen eintragen, passend zur Edition:
+
 ```bash
-# Host-Crontab des Deploy-Users (crontab -e):
-30 3 * * * cd /opt/who2be && docker compose run --rm api who2be-purge >> /var/log/who2be-purge.log 2>&1
+# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
+# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
+# der Job laeuft gar nicht).
+install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-purge.log
+
+# Host-Crontab des Deploy-Users (crontab -e), taeglich 03:30.
+# On-Prem-Edition:
+30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
+# Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
+30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
 ```
 
 Der Lauf braucht `DATABASE_URL` (Owner-Rolle, RLS-Bypass), und fuer die
 Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
-`WHO2BE_TABLESTORE_DIR`-Werte wie die API — `docker compose run api` bringt
-beides mit, ein Lauf ausserhalb des Compose-Kontexts nicht.
+`WHO2BE_TABLESTORE_DIR`-Werte wie die API. Der `api`-Dienst des
+Produktions-Stacks bringt beides in beiden Editionen mit (das Cloud-Overlay
+ergaenzt `APP_DATABASE_URL`, laesst `DATABASE_URL` aber stehen); ein Lauf
+ausserhalb dieses Compose-Kontexts hat beides nicht. `--no-deps`: der Job
+braucht nur die laufenden Dienste DB und `seaweedfs`. Ohne den Schalter startet
+`run` die Abhaengigkeiten des `api`-Dienstes mit, darunter `migrate`.
+
+**Verifikation**, dass der Job eingeplant ist und laeuft:
+
+```bash
+crontab -l | grep who2be-purge
+# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
+# Sofort-Probe: die eingetragene Cron-Zeile ab `cd` von Hand ausfuehren, OHNE
+# die Umleitung `>> …` — Ausgabe dann im Terminal (zwei Zeilen, s. u.).
+# Am Folgetag:
+tail -2 /var/log/who2be-purge.log
+# → Purge: … / Retention: …   (leere Datei ⇒ Cron lief nicht)
+```
 
 **Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
 ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert

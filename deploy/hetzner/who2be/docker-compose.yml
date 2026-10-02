@@ -383,8 +383,11 @@ services:
     mem_limit: 256m
 
   # C5a/C5b — pg_dump | gpg lokal + restic offsite.
-  # Default-up startet diesen Service NICHT (profile=backup). Host-Cron triggert:
-  #   15 3 * * * cd /opt/who2be && docker compose --profile backup run --rm backup
+  # Default-up startet diesen Service NICHT (profile=backup). Host-Cron triggert
+  # gegen DIESES File (nicht die Root-Compose, die keinen `backup` kennt);
+  # Cloud zusaetzlich mit `-f …/docker-compose.cloud.yml` — Zeilen je Edition im
+  # RUNBOOK §Backup & Restore, „Trigger (Routine)":
+  #   15 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env --profile backup run --rm backup
   # GPG-Keyring und SSH-Keys werden vom Host gemountet — auf Hetzner liegen sie
   # in /opt/who2be/secrets/{gpg,ssh} (Mode 600/700, Owner deploy).
   backup:
