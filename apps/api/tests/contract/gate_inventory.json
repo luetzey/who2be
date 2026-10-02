@@ -134,6 +134,26 @@
       "reason": "Memory-Vorschlag eines Agenten, keine Inhalts-Entity: agent_memory steht nicht in entity_quota_service._COUNT_QUERY. Gebremst nur durch write_limit."
     },
     {
+      "path": "/agent-memory-proposals",
+      "name": "propose_memory_change",
+      "reason": "Aenderungs-/Loeschvorschlag eines Agenten zu einem bestehenden Memory (ADR-0053 3.1.4), keine Inhalts-Entity: agent_memory_proposal steht nicht in entity_quota_service._COUNT_QUERY. Gebremst durch write_limit und require_write_rate."
+    },
+    {
+      "path": "/agents/{agent_id}/memories/{memory_id}/confirm",
+      "name": "confirm_agent_memory",
+      "reason": "Statuswechsel an einem bestehenden Memory (bestaetigen, Verfall aufheben), legt nichts Neues an."
+    },
+    {
+      "path": "/agents/{agent_id}/memories/{memory_id}/reactivate",
+      "name": "reactivate_agent_memory",
+      "reason": "Statuswechsel expired -> active an einem bestehenden Memory, legt nichts Neues an."
+    },
+    {
+      "path": "/agents/{agent_id}/memories/{memory_id}/rollback",
+      "name": "rollback_agent_memory",
+      "reason": "Setzt ein bestehendes Memory auf den Stand vor einem Ereignis zurueck, legt nichts Neues an."
+    },
+    {
       "path": "/agents/{agent_id}/memories/{memory_id}/triage",
       "name": "triage_memory",
       "reason": "Statuswechsel an einem bestehenden Memory (approve/reject), legt nichts Neues an."
@@ -172,6 +192,31 @@
       "path": "/kb/nodes",
       "name": "create_node",
       "reason": "Node der kuratierten Knowledge Base; zaehlt in keinem Kontingent (plans.md fuehrt die KB in keiner Spalte)."
+    },
+    {
+      "path": "/me/memories/{memory_id}/confirm",
+      "name": "confirm_my_memory",
+      "reason": "Statuswechsel an einem bestehenden Eintrag des eigenen Nutzergedaechtnisses, legt nichts Neues an."
+    },
+    {
+      "path": "/me/memories/{memory_id}/reactivate",
+      "name": "reactivate_my_memory",
+      "reason": "Statuswechsel expired -> active im eigenen Nutzergedaechtnis, legt nichts Neues an."
+    },
+    {
+      "path": "/me/memories/{memory_id}/rollback",
+      "name": "rollback_my_memory",
+      "reason": "Setzt einen bestehenden Eintrag des eigenen Nutzergedaechtnisses zurueck, legt nichts Neues an."
+    },
+    {
+      "path": "/me/memories/{memory_id}/triage",
+      "name": "triage_my_memory",
+      "reason": "Statuswechsel (approve/reject) an einem bestehenden Eintrag des eigenen Nutzergedaechtnisses, legt nichts Neues an."
+    },
+    {
+      "path": "/memory-proposals/{proposal_id}/decide",
+      "name": "decide_memory_proposal",
+      "reason": "Entscheidung ueber einen bestehenden Vorschlag (annehmen/ablehnen), legt keine neue Entity an."
     },
     {
       "path": "/oauth/consent",
