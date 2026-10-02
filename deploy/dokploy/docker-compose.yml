@@ -17,7 +17,7 @@
 # via scripts/gen_test_jwt.py), SEAWEEDFS_S3_SECRET_KEY (Objekt-Store, ADR-0048
 # — ohne Wert bricht der Stack bewusst ab). GOTRUE_MAILER_AUTOCONFIRM steht per
 # Default auf true (Betrieb ohne SMTP) — nur lokal/im vertrauenswuerdigen Netz;
-# Hinweis am auth-Dienst unten.
+# Hinweis am auth-Dienst unten. Optional: GOTRUE_SMTP_* fuer echten Mailversand.
 #
 # Persistente Nutzdaten liegen in DREI Volumes: db-data (Postgres),
 # seaweedfs-data (Blobs, ADR-0048) und tablestore-data (SQLite je WorkArea,
@@ -116,10 +116,20 @@ services:
       # angegebene Adresse gilt sofort als bestaetigt, ohne Besitznachweis.
       # Die offenen Einladungen (/v1/invitations/pending) haengen an genau
       # dieser bestaetigten Adresse. Oeffentlich erreichbare Instanz: auf
-      # false setzen und echten SMTP (GOTRUE_SMTP_*) verdrahten — diese
-      # Compose reicht GOTRUE_SMTP_* bisher NICHT an diesen Dienst durch.
+      # false setzen und GOTRUE_SMTP_* (unten) in der Dokploy-Environment
+      # mit einem echten Provider belegen.
       # Details: docs/signup-and-invites.md §2 (Self-Hosting ohne Mailversand).
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      # SMTP-Mailer — optional, nur noetig bei GOTRUE_MAILER_AUTOCONFIRM=false
+      # (bzw. fuer Einladungs-/Adresswechsel-Mails). Leer = kein Mailversand.
+      # PORT braucht einen numerischen Default: GoTrue parst ihn als Zahl, ein
+      # leerer Wert liesse den Dienst nicht starten.
+      GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-Who2Be}
       # Mail-Link-Ziele: identisch zur Hetzner-Config — alle vier Links
       # treffen GoTrue-verify hinter dem auth-gateway, danach Redirect auf
       # redirect_to bzw. SITE_URL (Begruendung in
