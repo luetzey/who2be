@@ -6101,7 +6101,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryRead"
+                  "$ref": "#/components/schemas/MemorySaveResult"
                 }
               }
             }
@@ -6343,6 +6343,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MemoryGuardConfig"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/memory-auto-policy": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Get Memory Auto Policy",
+        "operationId": "get_memory_auto_policy_v1_workspaces__workspace_id__memory_auto_policy_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryAutoPolicyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Update Memory Auto Policy",
+        "operationId": "update_memory_auto_policy_v1_workspaces__workspace_id__memory_auto_policy_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryAutoPolicy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryAutoPolicyRead"
                 }
               }
             }
@@ -13495,6 +13599,9 @@
               "memory_importance_too_low",
               "memory_duplicate",
               "memory_cap_reached",
+              "memory_origin_required",
+              "memory_kind_scope_invalid",
+              "memory_note_cap_reached",
               "persona_mode_unknown",
               "placeholder_kind_unknown",
               "entity_version_not_found",
@@ -16414,6 +16521,77 @@
         "title": "MeWorkspace",
         "description": "Workspace + Rolle des aktuellen Users."
       },
+      "MemoryAutoCell": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/MemoryAutoRow"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/MemoryOrigin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row",
+          "origin"
+        ],
+        "title": "MemoryAutoCell",
+        "description": "Eine Zelle der Freigabematrix: Zeile x deklarierte Herkunft."
+      },
+      "MemoryAutoPolicy": {
+        "properties": {
+          "enabled_cells": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryAutoCell"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Enabled Cells"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MemoryAutoPolicy",
+        "description": "Workspace-Einstellung der Freigabematrix (JSONB `workspace.memory_auto_policy`).\n\n`{}` (Spalten-Default) = keine Zelle eingeschaltet (Weiche M3): ein Agent\nmit `memory_mode=auto` wirkt dann wie `suggest`. Eingeschaltete\nNie-Zellen werden nicht abgelehnt, sondern ignoriert (4.2)."
+      },
+      "MemoryAutoPolicyRead": {
+        "properties": {
+          "enabled_cells": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryAutoCell"
+            },
+            "type": "array",
+            "title": "Enabled Cells"
+          },
+          "switchable_cells": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryAutoCell"
+            },
+            "type": "array",
+            "title": "Switchable Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled_cells",
+          "switchable_cells"
+        ],
+        "title": "MemoryAutoPolicyRead",
+        "description": "Antwort von `GET/PUT /memory-auto-policy`.\n\n`enabled_cells` ist die wirksame Einstellung (Nie-Zellen sind bereits\nherausgefiltert); `switchable_cells` nennt, was ueberhaupt schaltbar ist\n— eine Quelle fuer die Oberflaeche (C6) statt einer zweiten Kopie."
+      },
+      "MemoryAutoRow": {
+        "type": "string",
+        "enum": [
+          "user_fact",
+          "user_fact_instruction",
+          "agent_note",
+          "lesson",
+          "proposal"
+        ],
+        "title": "MemoryAutoRow",
+        "description": "Zeile der Freigabematrix Art x Herkunft (ADR-0053 4.2).\n\n`user_fact` meint Kategorien ohne Verhaltenswirkung (alles ausser\n`instruction`); `proposal` steht fuer Aenderungs-/Loeschvorschlaege."
+      },
       "MemoryCategory": {
         "type": "string",
         "enum": [
@@ -16457,6 +16635,24 @@
               }
             ],
             "title": "Context"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemoryKind",
+            "default": "user_fact"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/MemoryScope",
+            "default": "agent"
           }
         },
         "additionalProperties": false,
@@ -16465,7 +16661,7 @@
           "fact"
         ],
         "title": "MemoryCreate",
-        "description": "Eingabe von `save_memory`: ein vorgeschlagener Fakt.\n\n`context` (optional): 1 Satz, WORAUS der Agent den Fakt geschlossen hat —\nnur fuer die Triage-Ansicht, nie im Retrieval."
+        "description": "Eingabe von `save_memory`: ein vorgeschlagener Fakt.\n\n`context` (optional): 1 Satz, WORAUS der Agent den Fakt geschlossen hat —\nnur fuer die Triage-Ansicht, nie im Retrieval.\n\n`origin` ist fachlich Pflicht (Weiche M8): der Agent deklariert die\nHerkunft. Das Feld ist im Schema optional, damit der Server das Fehlen\nmit dem stabilen Grund `memory_origin_required` beantworten kann statt\nmit einem generischen Validierungsfehler. `legacy_unknown` ist kein\ndeklarierbarer Wert (nur Bestand). Den Kanal (`source`) setzt der Server\naus dem Aufrufweg; ein Feld dafuer gibt es bewusst nicht."
       },
       "MemoryDirective": {
         "type": "string",
@@ -16759,6 +16955,213 @@
         ],
         "title": "MemoryRead",
         "description": "Ein persistiertes Memory (read-only, Verwaltungs-Sicht).\n\n`retrieval_count`/`last_retrieved_at` sind das Nutzungs-Log: sie zeigen,\nob und wann das Gedaechtnis real abgerufen wurde (Transparenz-Anforderung\nADR-0044). Retrieval-Antworten an Agenten nutzen NICHT dieses Modell —\nsie liefern nur id/fact/category (ohne context/triage_note)."
+      },
+      "MemorySaveResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemoryStatus"
+          },
+          "fact": {
+            "type": "string",
+            "title": "Fact"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "category": {
+            "$ref": "#/components/schemas/MemoryCategory"
+          },
+          "importance": {
+            "type": "integer",
+            "title": "Importance"
+          },
+          "source": {
+            "$ref": "#/components/schemas/MemorySource"
+          },
+          "triage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triage Note"
+          },
+          "retrieval_count": {
+            "type": "integer",
+            "title": "Retrieval Count"
+          },
+          "last_retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Retrieved At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemoryKind",
+            "default": "user_fact"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/MemoryScope",
+            "default": "agent"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/MemoryOrigin",
+            "default": "legacy_unknown"
+          },
+          "created_by_agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Agent Id"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "occurrence_count": {
+            "type": "integer",
+            "title": "Occurrence Count",
+            "default": 1
+          },
+          "converted_case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converted Case Id"
+          },
+          "auto_activated": {
+            "type": "boolean",
+            "title": "Auto Activated",
+            "default": false
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "agent_id",
+          "status",
+          "fact",
+          "category",
+          "importance",
+          "source",
+          "retrieval_count",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MemorySaveResult",
+        "description": "Antwort von `save_memory` (ADR-0053 6.4).\n\n`auto_activated`: die Freigabematrix hat den Eintrag automatisch aktiv\ngesetzt — aktiv, aber unbestaetigt, mit Verfallszeitpunkt.\n`merged_into`: ein `lesson`-Vorschlag traf einen bestehenden\nLernvorschlag desselben Agenten (3.1.6); die Antwort ist dann dieser\nTreffer mit erhoehtem `occurrence_count` und unveraendertem Status."
       },
       "MemoryScope": {
         "type": "string",

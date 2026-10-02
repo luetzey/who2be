@@ -380,7 +380,12 @@ def seed_tenant(client: TestClient, label: str, jwt_secret: str) -> Tenant:
     memory = _ok(
         client.post(
             f"{p}/agent-memories",
-            json={"fact": f"{marker} Nutzer mag Indigo", "category": "preference", "importance": 7},
+            json={
+                "fact": f"{marker} Nutzer mag Indigo",
+                "category": "preference",
+                "importance": 7,
+                "origin": "user_stated",
+            },
             headers=t.agent,
         ),
         "memory",

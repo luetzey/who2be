@@ -59,6 +59,7 @@ from who2be_models import (
     MemoryCategory,
     MemoryCreate,
     MemoryHit,
+    MemoryOrigin,
     MemoryRead,
     PersonaCreate,
     PersonaPlaybookLinkSet,
@@ -1841,15 +1842,23 @@ async def save_memory(
     1 Satz): WORAUS du den Fakt geschlossen hast — nur fuer die menschliche
     Freigabe-Ansicht, nie im Retrieval.
 
-    Je nach Agent-Konfiguration ist der Fakt sofort aktiv (`status='active'`)
-    oder ein VORSCHLAG (`status='pending'`), der erst nach menschlicher
-    Freigabe abrufbar wird — sag dem Nutzer im zweiten Fall, dass der Eintrag
-    auf Freigabe wartet. Duplikate/abgelehnte Vorschlaege weist der Server mit
+    Der Fakt wird als VORSCHLAG (`status='pending'`) gespeichert und erst nach
+    menschlicher Freigabe abrufbar — sag dem Nutzer, dass der Eintrag auf
+    Freigabe wartet. Duplikate/abgelehnte Vorschlaege weist der Server mit
     409 ab; das ist kein Fehler von dir, einfach nicht erneut versuchen.
     """
     client = await build_client()
     return await client.save_memory(
-        MemoryCreate(fact=fact, category=category, importance=importance, context=context)
+        MemoryCreate(
+            fact=fact,
+            category=category,
+            importance=importance,
+            context=context,
+            # Bruecke bis C4, t_889762ed: `origin` ist serverseitig Pflicht
+            # (ADR-0053 M8). `inferred` aktiviert nie automatisch, alles geht
+            # in die Freigabe; C4 ersetzt das durch einen echten Parameter.
+            origin=MemoryOrigin.inferred,
+        )
     )
 
 

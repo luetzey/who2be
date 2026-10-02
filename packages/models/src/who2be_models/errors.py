@@ -159,7 +159,11 @@ ProblemReason = Literal[
     "agent_not_activatable",  # 409 — Persona/Template fehlt (params: missing)
     "memory_importance_too_low",  # 422 — unter Mindestschwelle (params: importance, minimum)
     "memory_duplicate",  # 409 — zu aehnlich (params: duplicate_id, duplicate_fact)
-    "memory_cap_reached",  # 409 — Obergrenze des Agenten erreicht (params: maximum)
+    "memory_cap_reached",  # 409 — Obergrenze erreicht (params: maximum[, scope='user'])
+    # Lernschleife Phase C — Gedaechtnis 2.0 (ADR-0053 6.1, Paket C2a):
+    "memory_origin_required",  # 422 — save_memory ohne deklarierte Herkunft (`origin`)
+    "memory_kind_scope_invalid",  # 422 — Art x Scope nicht erlaubt (params: kind, scope)
+    "memory_note_cap_reached",  # 409 — Obergrenze `agent_note` je Agent (params: maximum)
     "persona_mode_unknown",  # 422 — Persona-Modus existiert nicht (params: mode, available)
     "placeholder_kind_unknown",  # 422 — unbekannter Placeholder-Typ (params: kind)
     "entity_version_not_found",  # 404 — Version einer Entitaet unbekannt (params: label)
