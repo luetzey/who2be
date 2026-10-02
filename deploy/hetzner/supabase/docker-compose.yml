@@ -178,7 +178,13 @@ services:
       GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
       GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
-      GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+      # Einladung: der Mail-Link muss GoTrue-verify treffen. GoTrue haengt den
+      # URLPATH an API_EXTERNAL_URL (supabase.${DOMAIN}), NICHT an SITE_URL
+      # (v2.197.0 templatemailer.go `InviteMail`: ResolveReference auf
+      # externalURL); der auth-gateway reicht nur /auth/v1/* durch. Nach verify
+      # leitet GoTrue auf redirect_to = {WEB_BASE_URL}/invitations (Pending-
+      # Seite, ohne Einladungs-Token) weiter.
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
       # Social-Login (Track K) — default AUS; pro Provider per .env aktivieren.
       # Die Provider-Redirect-URI zeigt auf die GoTrue-Callback-Route hinter
       # dem auth-gateway (/auth/v1/callback → intern /callback).

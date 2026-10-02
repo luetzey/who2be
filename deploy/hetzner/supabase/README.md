@@ -81,7 +81,20 @@ SMTP: Signup-Confirm, Password-Recovery und Invitation-Magic-Link.
 sind dann sofort bestaetigt, ohne Mail-Klick. Das ist ausdruecklich nur die
 Ausnahme; sobald ein zweiter User per Invitation dazukommen soll, braucht es
 echte Zustellung (`GOTRUE_MAILER_AUTOCONFIRM=false` + SMTP), sonst kommt die
-Magic-Link-Mail nicht an.
+Einladungsmail nicht an.
+
+> **Warnung: `GOTRUE_MAILER_AUTOCONFIRM=true` und offene Einladungen.**
+> Die Einladungsmail enthaelt keinen Einladungs-Token. Wer ihrem Link folgt,
+> landet eingeloggt auf `/invitations` und sieht dort die offenen Einladungen
+> an die E-Mail-Adresse seines Kontos. Die API zeigt sie nur, wenn GoTrue die
+> Adresse als bestaetigt fuehrt (sonst `403 invitation_email_unconfirmed`).
+> Mit `GOTRUE_MAILER_AUTOCONFIRM=true` gilt jede Adresse sofort als
+> bestaetigt, ohne dass jemand ein Postfach geoeffnet hat — die Bestaetigung
+> ist dann **kein Besitznachweis**. Wer ein Konto auf eine fremde Adresse
+> registriert, sieht und uebernimmt die offenen Einladungen an diese Adresse.
+> Deshalb: sobald jemand eingeladen wird, `GOTRUE_MAILER_AUTOCONFIRM=false`
+> und funktionierender SMTP. Achtung: der Dokploy-Compose
+> (`deploy/dokploy/docker-compose.yml`) setzt den Default auf `true`.
 
 **Produktiv (Confirm-Pflicht, `GOTRUE_MAILER_AUTOCONFIRM=false`):** SMTP-Provider
 waehlen (z. B. Postmark, Mailgun, AWS SES, Brevo) und die Sender-Domain sauber
@@ -104,22 +117,30 @@ verdrahten. Checkliste fuer `GOTRUE_SMTP_ADMIN_EMAIL=no-reply@<sender-domain>`:
 Die Pfade im Compose decken sich mit den React-Routen in
 `apps/web/src/app/routes.tsx`:
 
-| GoTrue-URLPATH        | Compose-Wert             | Web-Route (`routes.tsx`)            |
+| GoTrue-URLPATH        | Compose-Wert             | Ziel                                |
 |-----------------------|--------------------------|-------------------------------------|
-| `CONFIRMATION`        | `/auth/callback`         | `/auth/callback` ✓                  |
-| `EMAIL_CHANGE`        | `/auth/callback`         | `/auth/callback` ✓                  |
+| `CONFIRMATION`        | `/auth/callback`         | `/auth/callback` (Web-Route) ✓      |
+| `EMAIL_CHANGE`        | `/auth/callback`         | `/auth/callback` (Web-Route) ✓      |
 | `RECOVERY`            | `/onboarding/set-password` | `/onboarding/set-password` ✓      |
-| `INVITE`              | `/invitations`           | (Fallback — siehe Hinweis)          |
+| `INVITE`              | `/auth/v1/verify`        | GoTrue-verify hinter dem auth-gateway |
 
-In der Praxis liefern alle App-Flows ein explizites `redirect_to` mit, das den
-statischen URLPATH **ueberschreibt**: Signup/OAuth `→ /auth/callback`, Recovery
-`→ /onboarding/set-password`, und die Invitation-Mail zeigt API-seitig auf
-`{WEB_BASE_URL}/invitations/{token}/accept?via=magic`
-(`apps/api/.../integrations/gotrue_mailer.py`). Die echte Accept-Route ist also
-`/invitations/:token/accept` (Token im Pfad) — `GOTRUE_MAILER_URLPATHS_INVITE`
-bleibt nur ein harmloser Default. Wichtig ist, dass `SITE_URL` dem App-Origin
-(`WEB_BASE_URL`, Default `https://app.<DOMAIN>`) entspricht, damit das
-`redirect_to`-Ziel die GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
+**Einladung — der Link zeigt auf GoTrue, nicht auf die Web-App.** GoTrue
+(v2.197.0, `internal/mailer/templatemailer/templatemailer.go`, `InviteMail`)
+baut den Mail-Link aus `API_EXTERNAL_URL` (`https://supabase.<DOMAIN>`) plus
+`GOTRUE_MAILER_URLPATHS_INVITE` und haengt `token`, `type` und `redirect_to`
+als Query an. Unter `supabase.<DOMAIN>` reicht der auth-gateway nur `/auth/v1/*`
+an GoTrue durch; deshalb muss der Pfad `/auth/v1/verify` sein. GoTrue prueft
+dort den Token, meldet den Eingeladenen an und leitet auf `redirect_to` weiter.
+Das setzt die API (`apps/api/.../integrations/gotrue_mailer.py`) auf
+`{WEB_BASE_URL}/invitations` — die Seite mit den offenen Einladungen an die
+Adresse des Kontos, Annahme per Klick. Der Einladungs-Token steht weder im
+Link noch in den Benutzer-Metadaten; er gilt nur fuer den Link, den ein Admin
+selbst weitergibt. Mit dem frueheren Wert `/invitations` zeigte der Link auf
+`https://supabase.<DOMAIN>/invitations` und lief in ein 404.
+
+Wichtig ist ausserdem, dass `SITE_URL` dem App-Origin (`WEB_BASE_URL`, Default
+`https://app.<DOMAIN>`) entspricht, damit das `redirect_to`-Ziel die
+GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
 
 ## Cloud-Edition: nur externe Provider (Google, GitHub, Apple)
 
@@ -212,8 +233,8 @@ aber das ist ein Notbehelf, kein Betriebsmodus.
 `POST /magiclink`. `POST /invite`, `POST /verify`, `POST /recover` und
 `PUT /user` haben keinen solchen Check — der Einladungsweg der App
 (`POST /auth/v1/invite` mit `service_role`-Key) ist davon unberuehrt. Ein
-eingeladener Nutzer, der noch kein Konto hat, landet ueber den Magic-Link
-eingeloggt auf `/invitations/:token/accept`.
+eingeladener Nutzer, der noch kein Konto hat, landet ueber den Link in der
+Einladungsmail eingeloggt auf `/invitations` und nimmt dort per Klick an.
 
 **Dritter Provider: Apple.** Sign in with Apple kommt in der Cloud dazu und ist
 in der Einrichtung deutlich aufwendiger als die beiden hier — eigener

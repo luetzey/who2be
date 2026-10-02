@@ -6,12 +6,14 @@ ist `supabase_url`/`supabase_service_key` nicht konfiguriert oder schlaegt der
 Call fehl, wird das nur geloggt; die Invitation bleibt gueltig und der Caller
 kann den Klartext-Token aus dem 201-Body manuell teilen.
 
-Der Magic-Link von GoTrue zeigt via `redirect_to` auf die Web-Accept-Route
-`{web_base_url}/invitations/{token}/accept?via=magic`, die den Token an
-`POST /v1/invitations/{token}/accept` weiterreicht. Das `via=magic`-Marker-
-Query signalisiert dem Frontend, dass es sich um einen GoTrue-Magic-Link
-handelt — der User ist nach dem GoTrue-Callback bereits eingeloggt, die Page
-nimmt die Einladung automatisch an (kein „Annehmen"-Klick mehr).
+Die Mail traegt **keinen** Einladungs-Token. `redirect_to` zeigt auf die
+Web-Seite `{web_base_url}/invitations`: nach dem GoTrue-Verify ist der User
+eingeloggt und sieht dort die offenen Einladungen an die Adresse seines Kontos
+(`GET /v1/invitations/pending`), angenommen wird per Klick. So bleibt der Token
+aus allem heraus, was unterwegs geloggt wird oder im JWT landet: aus der
+`redirect_to`-Query (GoTrue setzt sie in den Mail-Link, Proxies loggen sie mit)
+und aus den User-Metadaten (`data` wird zu `user_metadata` und steht damit in
+jedem Access-Token). Der Token gilt nur noch fuer den manuell geteilten Link.
 """
 
 import logging
@@ -25,13 +27,13 @@ logger = logging.getLogger(__name__)
 _TIMEOUT_SECONDS = 5.0
 
 
-def build_accept_url(token: str) -> str:
-    """Web-Accept-Route fuer einen Klartext-Token (mit Magic-Link-Marker)."""
+def build_invitations_url() -> str:
+    """Web-Seite mit den offenen Einladungen des eingeloggten Kontos."""
     base = get_settings().web_base_url.rstrip("/")
-    return f"{base}/invitations/{token}/accept?via=magic"
+    return f"{base}/invitations"
 
 
-async def send_invitation_email(email: str, token: str) -> bool:
+async def send_invitation_email(email: str) -> bool:
     """Schickt die Einladungs-Mail ueber GoTrue. True bei erfolgreichem Versand.
 
     Fehler werden geschluckt (best-effort) — der Aufrufer darf den Rueckgabewert
@@ -44,18 +46,17 @@ async def send_invitation_email(email: str, token: str) -> bool:
         logger.info("GoTrue nicht konfiguriert — Invitation-Mail uebersprungen.")
         return False
 
-    accept_url = build_accept_url(token)
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
             response = await client.post(
                 f"{base}/auth/v1/invite",
-                params={"redirect_to": accept_url},
+                params={"redirect_to": build_invitations_url()},
                 headers={
                     "apikey": service_key,
                     "Authorization": f"Bearer {service_key}",
                     "Content-Type": "application/json",
                 },
-                json={"email": email, "data": {"who2be_accept_url": accept_url}},
+                json={"email": email},
             )
             response.raise_for_status()
     except (httpx.HTTPError, OSError) as exc:
