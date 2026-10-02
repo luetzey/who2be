@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import status
@@ -40,6 +42,7 @@ from who2be_api.repositories.memory_repository import (
     MemoryOwner,
     MemoryRepository,
     MemoryRevokeSelection,
+    MemoryVisibility,
 )
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
@@ -61,9 +64,12 @@ from who2be_models import (
     MemoryTriageAction,
     MemoryUpdate,
     WorkspaceRole,
+    encode_cursor,
 )
 from who2be_models.memory import (
     MEMORY_AUTO_SWITCHABLE_CELLS,
+    MEMORY_LIST_LIMIT_DEFAULT,
+    MEMORY_LIST_LIMIT_MAX,
     MEMORY_MAX_NOTES_PER_AGENT,
     MEMORY_REVOKE_SAMPLE_SIZE,
     MemoryAutoCell,
@@ -71,8 +77,13 @@ from who2be_models.memory import (
     MemoryAutoPolicyRead,
     MemoryAutoRow,
     MemoryBatchItemResult,
+    MemoryCountGroup,
+    MemoryCounts,
     MemoryEventKind,
     MemoryEventRead,
+    MemoryFilter,
+    MemoryListSort,
+    MemoryPage,
     MemoryProposalCreate,
     MemoryProposalDecision,
     MemoryProposalRead,
@@ -1086,4 +1097,78 @@ class MemoryService:
             count=outcome.count,
             hidden_count=outcome.hidden_count,
             results=[MemoryBatchItemResult(id=m.id, ok=True) for m in outcome.visible],
+        )
+
+    # ------------------------ Workspace-weite Liste und Zaehler (6.4.1, C3c-1a)
+
+    async def _visibility(self, ctx: WorkspaceContext, filters: MemoryFilter) -> MemoryVisibility:
+        """Rechte der workspace-weiten Sicht (ADR-0053 6.4.1 „Sichtbarkeit“).
+
+        Mensch ab `viewer`: das eigene Nutzergedaechtnis; ab `editor` dazu
+        das Agentengedaechtnis aller Agenten. Fremdes Nutzergedaechtnis nie,
+        auch nicht fuer `admin` (Owner-Entscheidung 3a). Ein Agent aus einem
+        anderen Workspace im Filter ist `agent_not_found`.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        self._require_human(ctx)
+        if filters.agent_id is not None:
+            await self._require_agent(ctx, filters.agent_id)
+        return MemoryVisibility(
+            viewer_user_id=ctx.user_id,
+            include_agent_scope=role_satisfies(ctx.role, WorkspaceRole.editor),
+        )
+
+    async def list_workspace_memories(
+        self,
+        ctx: WorkspaceContext,
+        filters: MemoryFilter,
+        *,
+        sort: MemoryListSort = MemoryListSort.newest,
+        limit: int = MEMORY_LIST_LIMIT_DEFAULT,
+        cursor: tuple[datetime, UUID] | None = None,
+    ) -> MemoryPage:
+        """Workspace-weite Liste ueber alle Agenten und Status (`GET /memories`).
+
+        `status=pending` ist die Warteschlange (Frage 2 = a). Keyset-Seiten
+        auf `(created_at, id)`, hoechstens `MEMORY_LIST_LIMIT_MAX` je Seite;
+        `next_cursor` ist opak und `None` auf der letzten Seite.
+        """
+        visibility = await self._visibility(ctx, filters)
+        limit = max(1, min(limit, MEMORY_LIST_LIMIT_MAX))
+        # `limit + 1`-Peek wie im Bestand (persona_service.list_all): gibt es
+        # eine Folgezeile, entsteht der Cursor aus der letzten Zeile der Seite.
+        rows = await self._repo.list_visible(
+            ctx.workspace_id, visibility, filters, sort=sort, limit=limit + 1, cursor=cursor
+        )
+        next_cursor: str | None = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            next_cursor = encode_cursor(rows[-1].created_at, rows[-1].id)
+        return MemoryPage(items=rows, next_cursor=next_cursor)
+
+    async def count_workspace_memories(
+        self,
+        ctx: WorkspaceContext,
+        filters: MemoryFilter,
+        group_by: Sequence[MemoryCountGroup] = (),
+    ) -> MemoryCounts:
+        """Zaehler zur workspace-weiten Liste (`GET /memories/counts`).
+
+        `total` entspricht der Laenge der Liste mit denselben Filtern; jede
+        Gruppe zaehlt ohne ihren eigenen Filter (Facetten). Der Zaehler der
+        Warteschlange ist `status=pending` und schliesst Lernvorschlaege aus
+        (6.4.1 „Zaehler“). `subject_user_id` ist `admin` vorbehalten und
+        liefert vom Nutzergedaechtnis anderer Personen nur Zahlen (3a).
+        """
+        visibility = await self._visibility(ctx, filters)
+        groups = list(dict.fromkeys(group_by))
+        if MemoryCountGroup.subject_user_id in groups:
+            require_role(ctx, WorkspaceRole.admin)
+        total = await self._repo.count_visible(ctx.workspace_id, visibility, filters)
+        return MemoryCounts(
+            total=total,
+            groups={
+                group: await self._repo.count_grouped(ctx.workspace_id, visibility, filters, group)
+                for group in groups
+            },
         )
