@@ -1885,3 +1885,28 @@ die Karte schliesst deren Einfuehrung aus).
   Migration, eigene Karte falls gewuenscht); Log-Zeilen beim Workspace-Delete
   mitloeschen (machte das Log wieder ueber einen normalen API-Aufruf loeschbar,
   widerspricht H5).
+
+## 2026-10-01 — Org-Export/-Import: generisch aus dem Schema, IDs unveraendert, Import fail-closed
+
+- **Entscheidung:** `who2be-org-transfer` (PR #756, ADR-0055 §4.6) erkennt
+  Tabellen und Fremdschluessel zur Laufzeit aus dem Schema (`pg_constraint`),
+  statt eine Tabellenliste zu pflegen. Benannt sind nur die Ausnahmen (global,
+  Zugangsdaten, nur Export).
+- **Fail-closed:** Eine Tabelle ohne `workspace_id`/`org_id` und ohne Klasse
+  bricht den Export ab. Der Import bricht vor dem ersten Schreiben ab bei
+  abweichender Migrationsmenge, falscher Pruefsumme, fremdem Mandanten,
+  fehlender import-Tabelle oder einer Referenz ausserhalb des Archivs.
+- **Kein ID-Remap:** IDs bleiben unveraendert, eine Kollision ist ein Abbruch.
+  Inhalte tragen IDs inline (`{{resource:<id>}}`); ein Remap muesste jede
+  dieser Stellen finden und umschreiben und braeche sonst still Verweise.
+- **FK-Abschluss als Ergaenzung zur Mandantenpruefung:** Die Mandantenpruefung
+  sieht nur `workspace_id`/`org_id` einer Zeile. Ob eine Zeile ueber einen
+  Fremdschluessel an einem Objekt einer fremden Org haengt, faengt erst die
+  Pruefung ab, dass jede Referenz im Archiv bleibt. Beide greifen unabhaengig
+  (Rot-Proben in #756).
+- **Owner-Weichen:** W1 = A (Entitlements nur Export, kein Import), W2 = A
+  (Nutzer-IDs unveraendert, kein Identitaets-Mapping), W3 = A (Zugangsdaten nie
+  im Archiv), W4 = B (Archiv immer gpg-verschluesselt, kein Klartext-Pfad).
+- **Verworfen:** `pg_dump` (kein Zeilenfilter je Org); ID-Remap (s. o.);
+  Klartext-Archiv (personenbezogene Daten unverschluesselt beim Betreiber und
+  auf dem Uebergabeweg).
