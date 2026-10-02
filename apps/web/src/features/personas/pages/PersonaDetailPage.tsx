@@ -13,6 +13,7 @@ import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { Container } from '@/components/layout/Container'
@@ -126,11 +127,11 @@ export function PersonaDetailPage() {
                         pendingDraft={persona.has_pending_draft}
                         testId="persona-status-badge"
                       />
-                      {tags.map((tag) => (
-                        <MetaPill key={tag} tone="persona">
-                          {tag}
-                        </MetaPill>
-                      ))}
+                      <TagList
+                        tags={tags}
+                        label={t('common:fields.tags')}
+                        renderTag={(tag) => <MetaPill tone="persona">{tag}</MetaPill>}
+                      />
                     </>
                   }
                   description={persona.content.description}
