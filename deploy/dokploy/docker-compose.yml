@@ -15,8 +15,9 @@
 # Pflicht-Env (in Dokploy → Environment): DOMAIN, POSTGRES_PASSWORD, JWT_SECRET
 # (>=32 Zeichen), VITE_SUPABASE_ANON_KEY (JWT role=anon, signiert mit JWT_SECRET
 # via scripts/gen_test_jwt.py), SEAWEEDFS_S3_SECRET_KEY (Objekt-Store, ADR-0048
-# — ohne Wert bricht der Stack bewusst ab). Fuer einen Staging-Smoke ohne SMTP:
-# GOTRUE_MAILER_AUTOCONFIRM=true.
+# — ohne Wert bricht der Stack bewusst ab). GOTRUE_MAILER_AUTOCONFIRM steht per
+# Default auf true (Betrieb ohne SMTP) — nur lokal/im vertrauenswuerdigen Netz;
+# Hinweis am auth-Dienst unten.
 #
 # Persistente Nutzdaten liegen in DREI Volumes: db-data (Postgres),
 # seaweedfs-data (Blobs, ADR-0048) und tablestore-data (SQLite je WorkArea,
@@ -109,8 +110,15 @@ services:
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
-      # Staging-Smoke: Autoconfirm AN ⇒ kein SMTP noetig (Signups sofort nutzbar).
-      # Fuer Prod auf false + GOTRUE_SMTP_* setzen.
+      # Default true (bewusste Entscheidung): die On-Prem-Edition soll ohne
+      # Mailversand laufen — gedacht fuer lokalen Betrieb bzw. ein
+      # vertrauenswuerdiges Netz ohne SMTP. Folge: jede bei der Registrierung
+      # angegebene Adresse gilt sofort als bestaetigt, ohne Besitznachweis.
+      # Die offenen Einladungen (/v1/invitations/pending) haengen an genau
+      # dieser bestaetigten Adresse. Oeffentlich erreichbare Instanz: auf
+      # false setzen und echten SMTP (GOTRUE_SMTP_*) verdrahten — diese
+      # Compose reicht GOTRUE_SMTP_* bisher NICHT an diesen Dienst durch.
+      # Details: docs/signup-and-invites.md §2 (Self-Hosting ohne Mailversand).
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
       # Mail-Link-Ziele: identisch zur Hetzner-Config — alle vier Links
       # treffen GoTrue-verify hinter dem auth-gateway, danach Redirect auf

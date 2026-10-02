@@ -51,10 +51,21 @@ DOMAIN=<deine-domain>            # z. B. who2be.example.com → api./app./mcp. d
 POSTGRES_PASSWORD=<stark>
 JWT_SECRET=<dein 32+-Zeichen-Secret aus Schritt 1>
 VITE_SUPABASE_ANON_KEY=<anon-JWT aus Schritt 1>
-GOTRUE_MAILER_AUTOCONFIRM=true   # Staging ohne SMTP; fuer Prod auf false + SMTP
+GOTRUE_MAILER_AUTOCONFIRM=true   # Default; Betrieb ohne SMTP — Hinweis unten
 ```
 Mehr ist nicht nötig — alle URLs (api./app./mcp./supabase., OAuth, VITE) leitet
 die Compose aus `DOMAIN` ab.
+
+> **Hinweis: `GOTRUE_MAILER_AUTOCONFIRM=true` nur lokal bzw. im
+> vertrauenswürdigen Netz.** Der Default `true` ist bewusst gewählt: die
+> On-Prem-Edition soll ohne Mailversand laufen. Dann gilt jede bei der
+> Registrierung angegebene Adresse sofort als bestätigt, ohne Besitznachweis —
+> und die offenen Einladungen (`/v1/invitations/pending`) hängen an genau
+> dieser Adresse. Eine öffentlich erreichbare Instanz braucht
+> `GOTRUE_MAILER_AUTOCONFIRM=false` und echten SMTP (`GOTRUE_SMTP_*`). Stand
+> heute reicht diese Compose `GOTRUE_SMTP_*` **nicht** an den `auth`-Dienst
+> durch. Details:
+> [Signup & Einladungen → Self-Hosting ohne Mailversand](signup-and-invites.md#self-hosting-ohne-mailversand).
 
 ## 4. Domains — schon in der Compose verdrahtet (KEIN UI-Mapping nötig)
 
