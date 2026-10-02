@@ -7,7 +7,8 @@ Bearbeiten, Loeschen, dazu Historie/Rollback/Bestaetigen/Reaktivieren
 (ADR-0053 6.4). Vorschlaege (3.1.4): `POST /agent-memory-proposals` (Agent-Pfad,
 nur `pending`), Liste und Entscheidung durch Menschen. Eigenes
 Nutzergedaechtnis unter `/me/memories*` — ohne Personen-Parameter, also nie
-fremd adressierbar (3.1.1). Autorisierung liegt im Service. Mount unter
+fremd adressierbar (3.1.1). Not-Aus `POST /memories/revoke-auto` (6.4.1).
+Autorisierung liegt im Service. Mount unter
 `/v1/workspaces/{ws_id}`.
 
 Rate-Limit-Paritaet (Review 2026-07-20 SEC-2/SEC-3): die agent-gerichteten
@@ -45,6 +46,9 @@ from who2be_models.memory import (
     MemoryProposalDecision,
     MemoryProposalRead,
     MemoryProposalStatus,
+    MemoryRevokeAuto,
+    MemoryRevokeAutoPreview,
+    MemoryRevokeAutoResult,
     MemoryRollback,
     MemorySaveResult,
 )
@@ -257,6 +261,22 @@ async def decide_memory_proposal(
     service: Service,
 ) -> MemoryProposalRead:
     return await service.decide_proposal(ctx, proposal_id, data)
+
+
+# ------------------------------------------------- Not-Aus (ADR-0053 6.4.1)
+
+
+@router.post("/memories/revoke-auto")
+@limiter.limit(write_limit)
+async def revoke_auto_memories(
+    request: Request, data: MemoryRevokeAuto, ctx: Ctx, service: Service
+) -> MemoryRevokeAutoPreview | MemoryRevokeAutoResult:
+    # Notfall-Ruecknahme automatisch aktivierter, unbestaetigter Eintraege
+    # (-> pending, je Eintrag `auto_revoked`). `dry_run` liefert nur die
+    # Vorschau; sonst ist `expected_count` Pflicht, Abweichung 409
+    # `memory_batch_count_mismatch`. editor; `include_other_users` nur admin,
+    # und fremdes Nutzergedaechtnis erscheint nur als `hidden_count` (3.1.1).
+    return await service.revoke_auto(ctx, data)
 
 
 # ------------------------------------------ Eigenes Nutzergedaechtnis (3.1.1)

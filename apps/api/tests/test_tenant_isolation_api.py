@@ -288,6 +288,11 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/agents/{{agent_id}}/memory-proposals": Probe(),
     f"GET {_WS}/memory-proposals": Probe(query={"agent_id": "<<agent_id>>"}),
     f"POST {_WS}/memory-proposals/{{proposal_id}}/decide": Probe(body={"accept": False}),
+    # Not-Aus (6.4.1, C3b-2b): `agent_id` ist die Objekt-Referenz (V1/V2).
+    # `dry_run`, damit die Gegenprobe den Bestand von B nicht zuruecknimmt.
+    f"POST {_WS}/memories/revoke-auto": Probe(
+        body={"since": "2020-01-01T00:00:00Z", "agent_id": "<<agent_id>>", "dry_run": True}
+    ),
     # --- Eigenes Nutzergedaechtnis (3.1.1) ---------------------------------
     f"GET {_WS}/me/memories": Probe(),
     f"POST {_WS}/me/memories/{{memory_id}}/triage": Probe(

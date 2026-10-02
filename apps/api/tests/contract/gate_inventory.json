@@ -214,6 +214,11 @@
       "reason": "Statuswechsel (approve/reject) an einem bestehenden Eintrag des eigenen Nutzergedaechtnisses, legt nichts Neues an."
     },
     {
+      "path": "/memories/revoke-auto",
+      "name": "revoke_auto_memories",
+      "reason": "Not-Aus (ADR-0053 6.4.1): setzt bestehende, automatisch aktivierte Eintraege auf pending zurueck, legt nichts Neues an."
+    },
+    {
       "path": "/memory-proposals/{proposal_id}/decide",
       "name": "decide_memory_proposal",
       "reason": "Entscheidung ueber einen bestehenden Vorschlag (annehmen/ablehnen), legt keine neue Entity an."
