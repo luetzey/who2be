@@ -125,6 +125,11 @@
     "operationId": "search_memory_v1_workspaces__workspace_id__agent_memories_search_get"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agent-memory-proposals",
+    "operationId": "propose_memory_change_v1_workspaces__workspace_id__agent_memory_proposals_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/agents",
     "operationId": "list_agents_v1_workspaces__workspace_id__agents_get"
@@ -186,8 +191,33 @@
   },
   {
     "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/confirm",
+    "operationId": "confirm_agent_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__confirm_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/history",
+    "operationId": "agent_memory_history_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__history_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/reactivate",
+    "operationId": "reactivate_agent_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__reactivate_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/rollback",
+    "operationId": "rollback_agent_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__rollback_post"
+  },
+  {
+    "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/triage",
     "operationId": "triage_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__triage_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-proposals",
+    "operationId": "list_agent_memory_proposals_v1_workspaces__workspace_id__agents__agent_id__memory_proposals_get"
   },
   {
     "method": "GET",
@@ -371,6 +401,46 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/me/memories",
+    "operationId": "list_my_memories_v1_workspaces__workspace_id__me_memories_get"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}",
+    "operationId": "delete_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__delete"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}",
+    "operationId": "update_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__put"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/confirm",
+    "operationId": "confirm_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__confirm_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/history",
+    "operationId": "my_memory_history_v1_workspaces__workspace_id__me_memories__memory_id__history_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/reactivate",
+    "operationId": "reactivate_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__reactivate_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/rollback",
+    "operationId": "rollback_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__rollback_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/triage",
+    "operationId": "triage_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__triage_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/members",
     "operationId": "list_members_v1_workspaces__workspace_id__members_get"
   },
@@ -403,6 +473,16 @@
     "method": "PUT",
     "path": "/v1/workspaces/{workspace_id}/memory-guard",
     "operationId": "update_memory_guard_v1_workspaces__workspace_id__memory_guard_put"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/memory-proposals",
+    "operationId": "list_memory_proposals_v1_workspaces__workspace_id__memory_proposals_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/memory-proposals/{proposal_id}/decide",
+    "operationId": "decide_memory_proposal_v1_workspaces__workspace_id__memory_proposals__proposal_id__decide_post"
   },
   {
     "method": "GET",

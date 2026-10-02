@@ -3,7 +3,11 @@
 Agent-Pfad (`/agent-memories*`, agent-gebundener Token, operiert IMMER auf
 `ctx.agent_id` — nie auf einem Pfad-Parameter): save/search/list. Management-
 Pfad (`/agents/{agent_id}/memories*`, human-only editor+): Liste, Triage,
-Bearbeiten, Loeschen. Autorisierung liegt im Service. Mount unter
+Bearbeiten, Loeschen, dazu Historie/Rollback/Bestaetigen/Reaktivieren
+(ADR-0053 6.4). Vorschlaege (3.1.4): `POST /agent-memory-proposals` (Agent-Pfad,
+nur `pending`), Liste und Entscheidung durch Menschen. Eigenes
+Nutzergedaechtnis unter `/me/memories*` — ohne Personen-Parameter, also nie
+fremd adressierbar (3.1.1). Autorisierung liegt im Service. Mount unter
 `/v1/workspaces/{ws_id}`.
 
 Rate-Limit-Paritaet (Review 2026-07-20 SEC-2/SEC-3): die agent-gerichteten
@@ -33,7 +37,17 @@ from who2be_models import (
     MemoryTriage,
     MemoryUpdate,
 )
-from who2be_models.memory import MemoryAutoPolicy, MemoryAutoPolicyRead, MemorySaveResult
+from who2be_models.memory import (
+    MemoryAutoPolicy,
+    MemoryAutoPolicyRead,
+    MemoryEventRead,
+    MemoryProposalCreate,
+    MemoryProposalDecision,
+    MemoryProposalRead,
+    MemoryProposalStatus,
+    MemoryRollback,
+    MemorySaveResult,
+)
 
 router = APIRouter(tags=["memory"])
 
@@ -156,3 +170,157 @@ async def delete_memory(agent_id: UUID, memory_id: UUID, ctx: Ctx, service: Serv
 @router.delete("/agents/{agent_id}/memories", status_code=204)
 async def delete_all_memories(agent_id: UUID, ctx: Ctx, service: Service) -> None:
     await service.delete_all(ctx, agent_id)
+
+
+# ------------------- Historie, Rollback, Bestaetigen, Reaktivieren (ADR-0053 6.4)
+
+
+@router.get("/agents/{agent_id}/memories/{memory_id}/history")
+async def agent_memory_history(
+    agent_id: UUID, memory_id: UUID, ctx: Ctx, service: Service
+) -> list[MemoryEventRead]:
+    return await service.history(ctx, agent_id, memory_id)
+
+
+@router.post("/agents/{agent_id}/memories/{memory_id}/rollback")
+@limiter.limit(write_limit)
+async def rollback_agent_memory(
+    request: Request,
+    agent_id: UUID,
+    memory_id: UUID,
+    data: MemoryRollback,
+    ctx: Ctx,
+    service: Service,
+) -> MemoryRead:
+    return await service.rollback(ctx, agent_id, memory_id, data)
+
+
+@router.post("/agents/{agent_id}/memories/{memory_id}/confirm")
+@limiter.limit(write_limit)
+async def confirm_agent_memory(
+    request: Request, agent_id: UUID, memory_id: UUID, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.confirm(ctx, agent_id, memory_id)
+
+
+@router.post("/agents/{agent_id}/memories/{memory_id}/reactivate")
+@limiter.limit(write_limit)
+async def reactivate_agent_memory(
+    request: Request, agent_id: UUID, memory_id: UUID, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.reactivate(ctx, agent_id, memory_id)
+
+
+# ------------------------------------------- Vorschlaege von Agenten (3.1.4)
+
+
+@router.post("/agent-memory-proposals", status_code=201)
+@limiter.limit(write_limit)
+async def propose_memory_change(
+    request: Request, data: MemoryProposalCreate, ctx: Ctx, service: Service
+) -> MemoryProposalRead:
+    # Agent-Pfad (agent-gebundener Token, `ctx.agent_id`): legt NUR einen
+    # Vorschlag an (immer `pending`), nie eine direkte Aenderung. Fremde oder
+    # nicht abrufbare Eintraege sind `memory_not_found`. MCP-Anbindung in C4.
+    return await service.propose(ctx, data)
+
+
+@router.get("/agents/{agent_id}/memory-proposals")
+async def list_agent_memory_proposals(
+    agent_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    status: Annotated[MemoryProposalStatus | None, Query()] = None,
+) -> list[MemoryProposalRead]:
+    return await service.list_proposals(ctx, agent_id=agent_id, status_filter=status)
+
+
+@router.get("/memory-proposals")
+async def list_memory_proposals(
+    ctx: Ctx,
+    service: Service,
+    status: Annotated[MemoryProposalStatus | None, Query()] = None,
+    agent_id: Annotated[UUID | None, Query()] = None,
+) -> list[MemoryProposalRead]:
+    # Workspace-weit (6.4.1). Vorschlaege zum Nutzergedaechtnis anderer
+    # Personen erscheinen nie — auch nicht fuer admin (3.1.1).
+    return await service.list_proposals(ctx, agent_id=agent_id, status_filter=status)
+
+
+@router.post("/memory-proposals/{proposal_id}/decide")
+@limiter.limit(write_limit)
+async def decide_memory_proposal(
+    request: Request,
+    proposal_id: UUID,
+    data: MemoryProposalDecision,
+    ctx: Ctx,
+    service: Service,
+) -> MemoryProposalRead:
+    return await service.decide_proposal(ctx, proposal_id, data)
+
+
+# ------------------------------------------ Eigenes Nutzergedaechtnis (3.1.1)
+#
+# Kein Pfad-Parameter fuer die Person: der Besitzer ist IMMER der Aufrufer.
+# So gibt es keinen Weg, ueber den jemand (auch admin) ein fremdes
+# Nutzergedaechtnis adressiert.
+
+
+@router.get("/me/memories")
+async def list_my_memories(
+    ctx: Ctx,
+    service: Service,
+    status: Annotated[MemoryStatus | None, Query()] = None,
+) -> list[MemoryRead]:
+    return await service.list_my_memories(ctx, status)
+
+
+@router.post("/me/memories/{memory_id}/triage")
+@limiter.limit(write_limit)
+async def triage_my_memory(
+    request: Request, memory_id: UUID, data: MemoryTriage, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.triage_my(ctx, memory_id, data)
+
+
+@router.put("/me/memories/{memory_id}")
+@limiter.limit(write_limit)
+async def update_my_memory(
+    request: Request, memory_id: UUID, data: MemoryUpdate, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.update_my(ctx, memory_id, data)
+
+
+@router.delete("/me/memories/{memory_id}", status_code=204)
+@limiter.limit(write_limit)
+async def delete_my_memory(request: Request, memory_id: UUID, ctx: Ctx, service: Service) -> None:
+    await service.delete_my(ctx, memory_id)
+
+
+@router.get("/me/memories/{memory_id}/history")
+async def my_memory_history(memory_id: UUID, ctx: Ctx, service: Service) -> list[MemoryEventRead]:
+    return await service.history(ctx, None, memory_id)
+
+
+@router.post("/me/memories/{memory_id}/rollback")
+@limiter.limit(write_limit)
+async def rollback_my_memory(
+    request: Request, memory_id: UUID, data: MemoryRollback, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.rollback(ctx, None, memory_id, data)
+
+
+@router.post("/me/memories/{memory_id}/confirm")
+@limiter.limit(write_limit)
+async def confirm_my_memory(
+    request: Request, memory_id: UUID, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.confirm(ctx, None, memory_id)
+
+
+@router.post("/me/memories/{memory_id}/reactivate")
+@limiter.limit(write_limit)
+async def reactivate_my_memory(
+    request: Request, memory_id: UUID, ctx: Ctx, service: Service
+) -> MemoryRead:
+    return await service.reactivate(ctx, None, memory_id)

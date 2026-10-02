@@ -271,6 +271,38 @@ PROBES: dict[str, Probe] = {
     # dieser Reihenfolge, und danach gaebe es die Einzel-Memory nicht mehr.
     f"DELETE {_WS}/agents/{{agent_id}}/memories/{{memory_id}}": Probe(),
     f"DELETE {_WS}/agents/{{agent_id}}/memories": Probe(),
+    # Historie/Rollback/Bestaetigen (ADR-0053 6.4, C3b). Das Ereignis ist ein
+    # `created` ohne Vorzustand: die Gegenprobe endet fachlich mit 409 nach
+    # dem Lookup, die fremde Referenz im Body (V2-mix) an der Zugehoerigkeit.
+    f"GET {_WS}/agents/{{agent_id}}/memories/{{memory_id}}/history": Probe(),
+    f"POST {_WS}/agents/{{agent_id}}/memories/{{memory_id}}/rollback": Probe(
+        body={"event_id": "<<memory_event_id>>"}
+    ),
+    f"POST {_WS}/agents/{{agent_id}}/memories/{{memory_id}}/confirm": Probe(),
+    f"POST {_WS}/agents/{{agent_id}}/memories/{{memory_id}}/reactivate": Probe(),
+    # --- Vorschlaege (3.1.4); IDs setzt `_memory_extras` ---------------------
+    f"POST {_WS}/agent-memory-proposals": Probe(
+        body={"memory_id": "<<active_memory_id>>", "action": "delete", "reason": "iso"},
+        agent=True,
+    ),
+    f"GET {_WS}/agents/{{agent_id}}/memory-proposals": Probe(),
+    f"GET {_WS}/memory-proposals": Probe(query={"agent_id": "<<agent_id>>"}),
+    f"POST {_WS}/memory-proposals/{{proposal_id}}/decide": Probe(body={"accept": False}),
+    # --- Eigenes Nutzergedaechtnis (3.1.1) ---------------------------------
+    f"GET {_WS}/me/memories": Probe(),
+    f"POST {_WS}/me/memories/{{memory_id}}/triage": Probe(
+        body={"action": "reject"}, path={"memory_id": "user_memory_id"}
+    ),
+    f"PUT {_WS}/me/memories/{{memory_id}}": Probe(
+        body={"fact": "iso"}, path={"memory_id": "user_memory_id"}
+    ),
+    f"GET {_WS}/me/memories/{{memory_id}}/history": Probe(path={"memory_id": "user_memory_id"}),
+    f"POST {_WS}/me/memories/{{memory_id}}/rollback": Probe(
+        body={"event_id": "<<user_memory_event_id>>"}, path={"memory_id": "user_memory_id"}
+    ),
+    f"POST {_WS}/me/memories/{{memory_id}}/confirm": Probe(path={"memory_id": "user_memory_id"}),
+    f"POST {_WS}/me/memories/{{memory_id}}/reactivate": Probe(path={"memory_id": "user_memory_id"}),
+    f"DELETE {_WS}/me/memories/{{memory_id}}": Probe(path={"memory_id": "user_memory_id"}),
     # --- Agenten-Gedaechtnis (nur Agent-Token) -----------------------------
     f"GET {_WS}/agent-memories": Probe(agent=True),
     f"POST {_WS}/agent-memories": Probe(
@@ -552,7 +584,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "persona_id", "playbook_id", "resource_id", "tool_id", "template_id", "agent_id",
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
-        "own_invitation_id",
+        "own_invitation_id", "user_memory_id", "proposal_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -697,6 +729,71 @@ def _own_invitations(ghost: Tenant, *tenants: Tenant) -> None:
     ghost.ids["own_invitation_id"] = str(uuid4())
 
 
+def _seed_memory(t: Tenant, fact: str, status: str, subject: object) -> str:
+    """Eintrag mit Marker; `subject` gesetzt = Nutzergedaechtnis, sonst Agent."""
+    return str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, "
+            " status, fact, category, importance, kind, scope, origin, source, "
+            " subject_user_id) "
+            "VALUES ($1, CASE WHEN $5::uuid IS NULL THEN $2::uuid END, $2::uuid, $3, "
+            "        $4, 'preference', 6, 'user_fact', "
+            "        CASE WHEN $5::uuid IS NULL THEN 'agent' ELSE 'user' END, "
+            "        'user_stated', 'agent', $5::uuid) RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            status,
+            f"{t.marker} {fact}",
+            subject,
+        )
+    )
+
+
+def _seed_created_event(t: Tenant, memory_id: str) -> str:
+    return str(
+        db_fetchval(
+            "INSERT INTO agent_memory_event (workspace_id, memory_id, event, actor_kind, "
+            " after) VALUES ($1, $2::uuid, 'created', 'system', '{}'::jsonb) RETURNING id",
+            t.workspace_id,
+            memory_id,
+        )
+    )
+
+
+def _memory_extras(ghost: Tenant, *tenants: Tenant) -> None:
+    """Gedaechtnis-Objekte fuer die C3b-Routen (ADR-0053 6.4), direkt in der DB.
+
+    `seed_tenant` legt nur einen offenen Agenten-Eintrag an. Vorschlaege
+    brauchen einen aktiven Eintrag, `/me/memories` einen Eintrag im
+    Nutzergedaechtnis des Mandanten-Menschen, Rollback ein Ereignis. Alle
+    Fakten tragen den Marker, damit ein Leck im Antworttext auffaellt.
+    """
+    for t in tenants:
+        t.ids["memory_event_id"] = _seed_created_event(t, t.ids["memory_id"])
+        t.ids["active_memory_id"] = _seed_memory(t, "Nutzer mag Ocker", "active", None)
+        t.ids["proposal_id"] = str(
+            db_fetchval(
+                "INSERT INTO agent_memory_proposal (workspace_id, memory_id, agent_id, action, "
+                " new_fact, reason) VALUES ($1, $2::uuid, $3::uuid, 'change', $4, 'iso') "
+                "RETURNING id",
+                t.workspace_id,
+                t.ids["active_memory_id"],
+                t.ids["agent_id"],
+                f"{t.marker} Nutzer mag Umbra",
+            )
+        )
+        t.ids["user_memory_id"] = _seed_memory(t, "Nutzer liest Krimis", "pending", t.user_id)
+        t.ids["user_memory_event_id"] = _seed_created_event(t, t.ids["user_memory_id"])
+    for key in (
+        "memory_event_id",
+        "active_memory_id",
+        "proposal_id",
+        "user_memory_id",
+        "user_memory_event_id",
+    ):
+        ghost.ids[key] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -785,6 +882,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
     # Hier statt beim Aufrufer: auch test_org_transfer.py faehrt diesen Lauf.
     _confirm_accounts(a, b)
     _own_invitations(ghost, a, b)
+    _memory_extras(ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():
