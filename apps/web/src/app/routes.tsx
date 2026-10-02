@@ -305,6 +305,11 @@ export function RouterRoot() {
               {/* OAuth-/E-Mail-Confirm-Landing: public, etabliert die Session
                   aus dem URL-Hash und leitet dann weiter. */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              {/* Geteilter Einladungslink: Token im Fragment
+                  (`/invitations/accept#token=…`), die Page schickt ihn im Body. */}
+              <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
+              {/* Uebergang fuer bereits verschickte Links mit Token im Pfad —
+                  die Page nimmt ebenfalls per Body an und raeumt die Adresse. */}
               <Route
                 path="/invitations/:token/accept"
                 element={<InvitationAcceptPage />}

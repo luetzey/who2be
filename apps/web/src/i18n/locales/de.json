@@ -158,6 +158,8 @@
       "invitation_not_found": "Einladung nicht gefunden.",
       "invitation_no_longer_valid": "Einladung ist nicht mehr gueltig.",
       "invitation_email_mismatch": "Diese Einladung ist fuer eine andere Email-Adresse.",
+      "invitation_email_required": "Diese Einladung lässt sich nur mit einem Konto annehmen, das eine bestätigte E-Mail-Adresse trägt.",
+      "invitation_email_unconfirmed": "Bestätige zuerst die E-Mail-Adresse deines Kontos, dann kannst du die Einladung annehmen.",
       "personal_organization_undeletable": "Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
       "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
