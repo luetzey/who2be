@@ -29,7 +29,7 @@ Aktive Sektionen:
 ## Betriebsgrenze: genau EIN API-Container
 
 > ⛔ **Der `api`-Dienst darf nie in mehr als einer laufenden Instanz existieren.**
-> Kein `replicas`, kein `docker compose up --scale api=2`, kein
+> Kein `replicas`, kein `docker compose … up --scale api=2`, kein
 > `WEB_CONCURRENCY`/`--workers`, kein zweiter Host auf demselben Volume.
 
 **Warum.** Die Zeilen der Agenten-Tabellen liegen nicht in Postgres, sondern in
@@ -57,7 +57,7 @@ nichts darueber, ob die Grenze eingehalten wird.
 
 ### Erzeugt ein Deploy kurzzeitig zwei API-Container?
 
-**Nein.** `deploy.sh` faehrt `docker compose up -d --wait --remove-orphans` ohne
+**Nein.** `deploy.sh` faehrt `docker compose … up -d --wait --remove-orphans` ohne
 `--scale`, und Compose recreated einen Service in dieser Reihenfolge: neuen
 Container **erzeugen** (nicht starten) → alten **stoppen** → alten entfernen →
 umbenennen → erst in der folgenden Start-Phase starten (`recreateContainer` in
@@ -156,7 +156,7 @@ Cloud-Abnahme in [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md).
   verschluesselt **nicht** fuer dich — das ist laut Hetzners eigenen TOMs
   Kundenpflicht. Sie wird deshalb selbst per LUKS eingerichtet, und zwar in
   [Schritt 3b](#3b--at-rest-verschluesselung-luks-vor-dem-ersten-bring-up)
-  **vor** dem ersten `docker compose up`.
+  **vor** dem ersten `docker compose … up`.
 
 ### 2 — deploy-User + Grund-Hardening
 
@@ -540,7 +540,7 @@ nicht offen sein":
 2. **`WHO2BE_LAUNCH_MODE=coming_soon`** (+ optional `WHO2BE_LAUNCH_CONTACT`)
    fuer die Web-UI: `/signup` zeigt eine Hinweisseite (DE/EN) statt des
    Formulars, der Login-Link "Registrieren" fuehrt dorthin.
-3. Beide Variablen sind Runtime (kein Rebuild) — ein `docker compose restart
+3. Beide Variablen sind Runtime (kein Rebuild) — ein `docker compose … restart
    web` (bzw. `up -d`) nach dem `.env`-Aendern genuegt, **vorausgesetzt** der
    `web`-Service in `who2be/docker-compose.yml` reicht sie als Container-Env
    durch (siehe Kommentar in `deploy/hetzner/.env.example`).
@@ -568,7 +568,7 @@ zurueckholt. Entscheidung:
 - **Was:** `api`/`migrate` (Cloud-Edition) auf dem Hetzner-Host aus dem
   ausgecheckten Quellcode bauen (`runtime-cloud`-Target), statt sie aus GHCR
   zu ziehen.
-- **Trigger:** `deploy.sh` bricht im Cloud-Zweig beim `docker compose pull`
+- **Trigger:** `deploy.sh` bricht im Cloud-Zweig beim `docker compose … pull`
   ab (GHCR nicht erreichbar, oder Host-Login fehlt/ist abgelaufen) **und**
   der Deploy ist dringend (Hotfix, Rollback unter Zeitdruck, kein Warten auf
   die Registry moeglich).
@@ -733,7 +733,8 @@ bevor die Zeile geschrieben wird — der OAuth-Endpunkt liegt auf
 `api.<DOMAIN>`. Wer beim Debuggen einen dieser Werte vermisst: das ist Absicht,
 nicht ein Fehler.
 
-Container-Logs (stdout/stderr) liest wie gewohnt `docker compose logs <dienst>`;
+Container-Logs (stdout/stderr) liest wie gewohnt `docker compose … logs <dienst>`
+(mit den `-f`-/`--env-file`-Argumenten des jeweiligen Stacks);
 sie sind je Dienst auf 3 x 10 MB gedeckelt.
 
 ### Ressourcen-Limits und was bei Ueberschreitung passiert
@@ -1005,6 +1006,7 @@ Relying-Party-Konfiguration, statt den Start abzubrechen — ein fehlendes
 Faktor, nicht den Stack. Nach dem Update im Log gegenpruefen:
 
 ```bash
+# $COMPOSE wie unter „Verifikation" oben (Supabase-Stack)
 $COMPOSE logs --no-color auth | grep -i "WebAuthn configuration is invalid"
 # → KEINE Ausgabe
 ```
@@ -1342,7 +1344,7 @@ Querverweise die Variante noch kennen.
 ### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet) · der gueltige Weg
 
 LUKS wird selbst eingerichtet — einmalig beim Provisioning, **vor** dem ersten
-`docker compose up`. Danach ist es nur noch mit Downtime und Restore-Risiko
+`docker compose … up`. Danach ist es nur noch mit Downtime und Restore-Risiko
 nachholbar, weil die Daten dafuer umziehen muessen:
 
 1. Block-Device als LUKS-Container initialisieren (Beispiel-Device — am realen
@@ -1541,12 +1543,13 @@ Snapshot.
 $COMPOSE --profile backup run --rm --entrypoint sh backup \
   -c 'ls -la /data/tablestore'
 
-# 2) Was erwartet der Katalog?
-docker compose exec db psql -U supabase_admin -d postgres -Atc \
+# 2) Was erwartet der Katalog? `db` gehoert zum Supabase-Stack, nicht zu $COMPOSE.
+SUPABASE_COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml --env-file deploy/hetzner/supabase/.env"
+$SUPABASE_COMPOSE exec db psql -U supabase_admin -d postgres -Atc \
   "SELECT DISTINCT workspace_id || '/' || area_id || '.sqlite' FROM wa_table"
 
 # 3) Stimmt der Bucket-Name? (WHO2BE_BLOBSTORE_BUCKET vs. tatsaechliches Bucket)
-docker compose exec seaweedfs \
+$COMPOSE exec seaweedfs \
   sh -c 'echo "s3.bucket.list" | weed shell' 2>/dev/null || true
 ```
 
@@ -1771,17 +1774,25 @@ restic -r "${RESTIC_REPOSITORY}" restore latest --tag dump --target /tmp/restore
 LATEST=$(ls -1t /tmp/restore/var/backups/who2be/dump-*.pgc.gpg | head -1)
 gpg --decrypt "$LATEST" > /tmp/dump.pgc
 
-# 3) Leere Ziel-DB anlegen + pg_restore
-docker compose exec db psql -U supabase_admin postgres \
+# 3) Leere Ziel-DB anlegen + pg_restore.
+#    `db` laeuft im Supabase-Stack — ein nacktes `docker compose` in /opt/who2be
+#    liest die Root-docker-compose.yml (Dev-Stack) und traefe den falschen
+#    Container oder gar keinen.
+cd /opt/who2be
+SUPABASE_COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml --env-file deploy/hetzner/supabase/.env"
+$SUPABASE_COMPOSE exec db psql -U supabase_admin postgres \
   -c "CREATE DATABASE who2be_restore"
-docker compose exec -T db pg_restore -U supabase_admin -d who2be_restore \
+$SUPABASE_COMPOSE exec -T db pg_restore -U supabase_admin -d who2be_restore \
   --clean --if-exists < /tmp/dump.pgc
 
 # 4) Objekt-Store zurueckspielen  -> §SeaweedFS-/BlobStore-Backup, Abschnitt Restore
 # 5) Tabellen-Store zurueckspielen -> §Tabellen-Store-Backup, Abschnitt Restore
 
-# 6) Verifizieren: Persona-Count entspricht der prod-DB
-docker compose exec db psql -U supabase_admin who2be_restore \
+# 6) Verifizieren: Persona-Count entspricht der prod-DB (Datenbank `postgres`,
+#    s. DATABASE_URL in deploy/hetzner/.env)
+$SUPABASE_COMPOSE exec db psql -U supabase_admin who2be_restore \
+  -c "SELECT count(*) FROM persona"
+$SUPABASE_COMPOSE exec db psql -U supabase_admin postgres \
   -c "SELECT count(*) FROM persona"
 ```
 
@@ -1839,8 +1850,11 @@ unten.
 >   -v /tmp/blob-migration:/data amazon/aws-cli \
 >   --endpoint-url http://seaweedfs:8333 s3 sync /data s3://who2be-blobs
 >
-> # Verifikation: Objekt-Zahl muss zur Katalog-Zeile passen (s. Hinweis unten)
-> docker compose exec db psql -U supabase_admin who2be -tAc "SELECT count(*) FROM wa_blob"
+> # Verifikation: Objekt-Zahl muss zur Katalog-Zeile passen (s. Hinweis unten).
+> # `db` = Supabase-Stack, Prod-Datenbank heisst `postgres`.
+> docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+>   --env-file deploy/hetzner/supabase/.env \
+>   exec db psql -U supabase_admin postgres -tAc "SELECT count(*) FROM wa_blob"
 > ```
 >
 > Erst nach verifizierter Uebertragung `minio`/`minio-data` aus der
@@ -1892,7 +1906,10 @@ docker run --rm --network app-net \
   --endpoint-url http://seaweedfs:8333 s3 sync /data s3://who2be-blobs
 
 # Konsistenz-Check: jede wa_blob-Zeile muss ein Objekt haben
-docker compose exec db psql -U supabase_admin who2be -tAc \
+# (`db` = Supabase-Stack, Prod-Datenbank `postgres`; aus /opt/who2be heraus)
+docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env \
+  exec db psql -U supabase_admin postgres -tAc \
   "SELECT count(*) FROM wa_blob"
 docker run --rm --network app-net \
   -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
@@ -2025,10 +2042,16 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
 > personenbezogene Daten (Loeschkonzept §4a).
 
 ```bash
-# Kandidaten: Verzeichnisse ohne Workspace-Zeile
-docker compose exec db psql -U supabase_admin who2be -tAc \
+# Kandidaten: Verzeichnisse ohne Workspace-Zeile.
+# `db` = Supabase-Stack (Prod-Datenbank `postgres`), `api` = App-Stack.
+# Cloud-Edition: in COMPOSE zusaetzlich
+# -f deploy/hetzner/who2be/docker-compose.cloud.yml direkt nach dem Basis-File.
+cd /opt/who2be
+SUPABASE_COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml --env-file deploy/hetzner/supabase/.env"
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env"
+$SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -tAc \
   "SELECT id FROM workspace" | sort > /tmp/ws-live.txt
-docker compose exec api ls /data/tablestore | sort > /tmp/ws-dirs.txt
+$COMPOSE exec -T api ls /data/tablestore | sort > /tmp/ws-dirs.txt
 comm -13 /tmp/ws-live.txt /tmp/ws-dirs.txt   # -> nach Pruefung loeschen
 ```
 
@@ -2043,7 +2066,7 @@ Lauf wird vom naechsten fortgesetzt.
 
 Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
 `--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose run` in `/opt/who2be` liest die Root-
+nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
 `docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest verdrahteter
 Dev-DB) und purgt in der Produktions-DB nichts. Genau **eine** der beiden
 Zeilen eintragen, passend zur Edition:
@@ -2122,7 +2145,7 @@ nichts geht verloren.
 
 Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
 `--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose run` in `/opt/who2be` liest die Root-
+nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
 `docker-compose.yml` (Dev-Stack mit eigener Dev-DB) und laesst in der
 Produktions-DB nichts verfallen. Genau **eine** der beiden Zeilen eintragen,
 passend zur Edition:
@@ -2196,7 +2219,9 @@ gegen jeden S3-kompatiblen Endpoint.
   git-fremden Secret-Datei auf dem Host. Dieselben zwei Variablen fuettern
   auch den Bootstrap und die API (`WHO2BE_BLOBSTORE_ACCESS_KEY`/
   `_SECRET_KEY`) — ein einziger Satz Werte, eine einzige Stelle zum Rotieren
-  (`.env` aendern + `docker compose up -d seaweedfs blobstore-bootstrap api`).
+  (`deploy/hetzner/.env` aendern +
+  `$COMPOSE up -d seaweedfs blobstore-bootstrap api`, `$COMPOSE` wie im
+  Smoke unten).
   **In Prod niemals** die Dev-Defaults aus `scripts/seaweedfs-s3.json`
   (`who2be-dev`/`who2be-dev-secret`) verwenden.
 - **`blobstore-bootstrap`** — One-Shot: legt `who2be-blobs` idempotent an und
@@ -2209,7 +2234,7 @@ gegen jeden S3-kompatiblen Endpoint.
 - **Healthcheck:** `http://127.0.0.1:9333/cluster/status` (Master-Port) —
   **bewusst NICHT** `8333/healthz`: der S3-Handler liest den Pfad als
   Bucket-Namen und antwortet 404 (bekannter Fallstrick, seaweedfs#8243), der
-  Stack bliebe damit dauerhaft unhealthy. Rot? → `docker compose logs
+  Stack bliebe damit dauerhaft unhealthy. Rot? → `$COMPOSE logs
   seaweedfs`, meist ein Volume-/Rechteproblem auf `seaweedfs-data`.
 - **Degradation:** ohne `WHO2BE_BLOBSTORE_*` in der API laeuft der Stack
   vollstaendig weiter; nur Ingest und Blob-Reads antworten 503
@@ -2221,9 +2246,15 @@ gegen jeden S3-kompatiblen Endpoint.
   Tabellen-Zeilen bei intaktem Katalog.
 
 ```bash
-# Smoke nach dem Deploy
-docker compose ps seaweedfs blobstore-bootstrap   # seaweedfs healthy, bootstrap exited 0
-docker compose exec api python -c \
+# Smoke nach dem Deploy — Produktions-Stack wie deploy.sh, nicht nacktes
+# `docker compose` (das liest in /opt/who2be den Dev-Stack).
+cd /opt/who2be
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env"
+# Cloud-Edition statt dessen:
+# COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+# --all: der beendete One-Shot erscheint sonst nicht
+$COMPOSE ps --all seaweedfs blobstore-bootstrap   # seaweedfs healthy, bootstrap exited 0
+$COMPOSE exec api python -c \
   "from who2be_api.blobstore import build_blob_store; print(build_blob_store())"
 # -> MinioBlobStore-Instanz (nicht None; der Adapter/Klassenname kommt vom
 #    Apache-2.0-SDK und bleibt unveraendert), sonst fehlt WHO2BE_BLOBSTORE_*
