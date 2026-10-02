@@ -671,6 +671,96 @@ test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', as
 })
 
 /**
+ * Mobil-Spec M2 + Designer-Delta t_42bff43b (Option a): Unter md startet die
+ * Karte „Zusammensetzung“ im Agent-Detail zugeklappt. Vorher lag die
+ * Oberkante der Tab-Leiste bei 320 × 568 auf 1,80 Bildschirmen (Agent mit
+ * Persona, System-Prompt und 14 Playbooks), nach dem Umbau gemessen 0,90.
+ *
+ * Geprueft unter md: Schalter zu, mindestens 44 px hoch, keine Links der
+ * Karte erreichbar; Tab-Oberkante <= 1,2 Bildschirme bei 320 px Breite und
+ * <= 0,9 auf den breiteren Phones. Aufgeklappt wie nach P7: vier Playbooks
+ * und „8 weitere anzeigen“. Ab md kein Schalter, Karte offen.
+ *
+ * Rot-Probe: `useState(false)` fuer `open` in `AgentHierarchyView.tsx` auf
+ * `true` → rot auf `mobile-320` und `mobile-iphone-13`.
+ */
+test('M2: Agent-Detail unter md mit zugeklappter Zusammensetzung, Tabs frueh', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const base = `/v1/workspaces/${workspaceId}`
+  const call = <T>(path: string, method: 'POST' | 'PUT', data: unknown) =>
+    apiRequest<T>(request, token, `${base}${path}`, { method, data })
+
+  const description = 'Begleitet neue Teammitglieder durch die ersten Wochen und fasst Rückfragen zusammen.'
+  const persona = await call<{ id: string }>('/personas', 'POST', {
+    name: 'E2E Onboarding-Begleitung',
+    content: { description, tags: [], content: blockDoc('Profil') },
+  })
+  const systemPrompt = await call<{ id: string }>('/system-prompts', 'POST', {
+    name: 'E2E Kundenservice-Grundprompt',
+    content: { description, body: JSON.stringify(blockDoc('Du bist {{ persona.name }}').blocks) },
+  })
+  const playbookIds: string[] = []
+  for (let i = 1; i <= 14; i++) {
+    const playbook = await call<{ id: string }>('/playbooks', 'POST', {
+      name: `E2E Zusammensetzung Playbook ${i}`,
+      content: { description: 'Kurz.' },
+    })
+    playbookIds.push(playbook.id)
+  }
+  await call(`/personas/${persona.id}/playbooks`, 'PUT', { playbook_ids: playbookIds })
+  const agent = await call<{ id: string }>('/agents', 'POST', {
+    name: 'E2E Vertriebs-Assistent',
+    description,
+    persona_id: persona.id,
+    system_prompt_template_id: systemPrompt.id,
+  })
+
+  await page.goto(`/w/${workspaceId}/agents/${agent.id}`)
+  const card = page.getByTestId('agent-hierarchy')
+  await expect(card).toBeVisible()
+  const viewport = page.viewportSize()!
+  const toggle = card.getByRole('button', { name: /^(Zusammensetzung|Composition)/ })
+
+  if (viewport.width >= 768) {
+    await expect(toggle).toHaveCount(0)
+    await expect(card.getByRole('link', { name: 'E2E Onboarding-Begleitung' })).toBeVisible()
+    return
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(toggle).toContainText(/E2E Onboarding-Begleitung · 14 (Playbooks|playbooks)/)
+  await expect(card.getByRole('link')).toHaveCount(0)
+  const probe = await page.evaluate(() => {
+    const tabs = document.querySelector('[role="tablist"]')!
+    const button = document.querySelector('[data-testid="agent-hierarchy-toggle"]')!
+    return {
+      screens: (tabs.getBoundingClientRect().top + window.scrollY) / window.innerHeight,
+      buttonHeight: button.getBoundingClientRect().height,
+    }
+  })
+  expect(probe.buttonHeight).toBeGreaterThanOrEqual(44)
+  const limit = viewport.width <= 320 ? 1.2 : 0.9
+  expect(probe.screens, `Tab-Oberkante in Bildschirmen bei ${viewport.width} px`).toBeLessThanOrEqual(
+    limit,
+  )
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(toggle).toBeFocused()
+  await expect(card.getByTestId('agent-hierarchy-playbook')).toHaveCount(4)
+  await expect(card.getByRole('button', { name: /^(8 weitere anzeigen|Show 8 more)$/ })).toBeVisible()
+  await expectNoHorizontalScroll(page, 'agents/:id (Zusammensetzung offen)')
+})
+
+/**
  * Mobil-Spec M4 (Owner-Weiche W2=a): Der Text-Diff im Versionen-Tab bricht
  * auf jeder Breite um, statt seitlich zu scrollen. Vorher war der Wrapper
  * `overflow-x-auto` mit `scrollWidth` 12.919 px bei 210 px (320) bzw.

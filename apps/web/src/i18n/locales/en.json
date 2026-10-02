@@ -546,11 +546,17 @@
       "title": "Composition",
       "systemPrompt": "System prompt",
       "persona": "Persona",
-      "playbooksLinked": "{{count}} linked playbooks",
+      "playbooksLinked_one": "{{count}} linked playbook",
+      "playbooksLinked_other": "{{count}} linked playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
-      "noPlaybooks": "No playbooks linked."
+      "noPlaybooks": "No playbooks linked.",
+      "summaryPlaybooks_one": "{{count}} playbook",
+      "summaryPlaybooks_other": "{{count}} playbooks",
+      "summaryNoPlaybooks": "no playbooks",
+      "summaryNoPersona": "No persona",
+      "summarySeparator": " · "
     },
     "copy": {
       "plain": "Copy",
