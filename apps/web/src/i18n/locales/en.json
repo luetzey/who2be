@@ -317,6 +317,7 @@
       "emptyFilteredTitle": "No matches",
       "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status.",
       "moreFilters": "Filters",
+      "moreFiltersCount": "Filters ({{count}})",
       "clearSearch": "Clear search"
     }
   },
