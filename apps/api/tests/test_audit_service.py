@@ -230,7 +230,7 @@ def test_invitation_service_records_issued_and_revoked(
     # supabase_url) — wir patchen es zur Sicherheit auf eine reine async No-op.
     from who2be_api.services import invitation_service
 
-    async def _noop_mail(email: str, plaintext: str) -> None:
+    async def _noop_mail(email: str) -> None:
         return None
 
     monkeypatch.setattr(invitation_service, "send_invitation_email", _noop_mail)

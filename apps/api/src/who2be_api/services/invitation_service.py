@@ -68,8 +68,9 @@ class InvitationService:
                 detail={"role": data.role.value},
             )
         # Best-effort: ein Mail-Fehler darf die (persistierte) Invitation nicht
-        # kippen — der Klartext-Token kommt ohnehin im Result zurueck.
-        await send_invitation_email(data.email, plaintext)
+        # kippen — der Klartext-Token kommt ohnehin im Result zurueck. Die Mail
+        # selbst bekommt den Token bewusst nicht (Link auf die Pending-Seite).
+        await send_invitation_email(data.email)
         return InvitationCreated(**invitation.model_dump(), token=plaintext)
 
     async def list_pending(self, ctx: WorkspaceContext) -> list[InvitationRead]:
