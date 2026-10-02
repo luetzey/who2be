@@ -767,6 +767,19 @@
         "generic": "Einladung konnte nicht angenommen werden."
       }
     },
+    "pendingInvitations": {
+      "title": "Deine Einladungen",
+      "description": "Offene Einladungen an die E-Mail-Adresse deines Kontos. Nimm eine an, um dem Workspace beizutreten.",
+      "listLabel": "Offene Einladungen",
+      "role": "Rolle: {{role}}",
+      "expires": "gültig bis {{date}}",
+      "acceptFor": "Einladung in {{workspace}} annehmen",
+      "accepting": "Wird angenommen…",
+      "emptyTitle": "Keine offenen Einladungen",
+      "emptyDescription": "Für die E-Mail-Adresse deines Kontos liegt gerade keine Einladung vor. Angenommene Einladungen findest du in deinen Workspaces.",
+      "continue": "Weiter zu Who2Be",
+      "emailTitle": "E-Mail-Adresse bestätigen"
+    },
     "callback": {
       "loadingTitle": "Anmeldung wird abgeschlossen…",
       "loadingDescription": "Einen Moment, wir richten deine Sitzung ein.",
