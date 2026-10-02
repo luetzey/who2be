@@ -137,6 +137,25 @@ describe('CopyPromptButton', () => {
     expect(screen.getByTestId('copy-prompt-primary')).toBeDisabled()
     expect(screen.getByTestId('copy-prompt-dropdown-trigger')).toBeDisabled()
   })
+
+  // Audit A10: Detailseite = primaere Aktion (brand), Listenzeile = outline.
+  it('ist ohne variant brand (Detailseite), mit variant="outline" auf beiden Teilen outline', () => {
+    const { unmount } = render(<CopyPromptButton agentId="a1" />)
+    expect(screen.getByTestId('copy-prompt-primary').className).toContain('bg-brand')
+    expect(screen.getByTestId('copy-prompt-dropdown-trigger').className).toContain('bg-brand')
+    unmount()
+
+    render(<CopyPromptButton agentId="a1" variant="outline" />)
+    for (const id of ['copy-prompt-primary', 'copy-prompt-dropdown-trigger']) {
+      const part = screen.getByTestId(id)
+      expect(part.className).not.toMatch(/(^|\s)bg-brand(\s|$)/)
+      expect(part.className).toContain('border-input')
+    }
+    // Kein heller Brand-Trennstrich auf weisser Flaeche; die Raender ueberlappen.
+    const trigger = screen.getByTestId('copy-prompt-dropdown-trigger')
+    expect(trigger.className).not.toContain('border-l-primary-foreground/30')
+    expect(trigger).toHaveClass('-ml-px')
+  })
 })
 
 // Responsive-Vertrag #570 (AK 4): der Dropdown-Teil des Split-Buttons traegt
