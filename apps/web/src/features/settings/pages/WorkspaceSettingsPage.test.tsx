@@ -48,11 +48,23 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), { status })
 }
 
-// Admin-Renders zeigen die Memory-Wächter-Sektion, die beim Mount ihre
-// Konfiguration laedt (GET .../memory-guard) — Tests, die die restlichen
-// Workspace-Aktionen pruefen, brauchen dafuer einen Stub-Treffer.
+// Admin-Renders zeigen die Memory-Wächter-Sektion und die Auto-Freigabe
+// (Lernschleife C6), die beim Mount ihre Konfiguration laden (GET
+// .../memory-guard, .../memory-auto-policy) — Tests, die die restlichen
+// Workspace-Aktionen pruefen, brauchen dafuer Stub-Treffer.
 function memoryGuardResponse(): Response {
   return jsonResponse({ mode: 'standard', allow_phrases: [], block_phrases: [] })
+}
+
+function memorySettingsResponse(url: string): Response | null {
+  if (url.includes('/memory-guard')) return memoryGuardResponse()
+  if (url.includes('/memory-auto-policy')) {
+    return jsonResponse({
+      enabled_cells: [],
+      switchable_cells: [{ row: 'user_fact', origin: 'user_stated' }],
+    })
+  }
+  return null
 }
 
 function LocationProbe() {
@@ -122,10 +134,7 @@ describe('WorkspaceSettingsPage', () => {
             created_at: '2026-06-02T10:00:00Z',
           })
         }
-        if (url.includes('/memory-guard')) {
-          return memoryGuardResponse()
-        }
-        return jsonResponse([])
+        return memorySettingsResponse(url) ?? jsonResponse([])
       }),
     )
 
@@ -143,12 +152,7 @@ describe('WorkspaceSettingsPage', () => {
   it('sperrt das Löschen, wenn es der letzte Workspace ist', () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input).includes('/memory-guard')) {
-          return memoryGuardResponse()
-        }
-        return jsonResponse([])
-      }),
+      vi.fn(async (input: RequestInfo | URL) => memorySettingsResponse(String(input)) ?? jsonResponse([])),
     )
     renderPage('admin', 1)
     expect(screen.getByRole('button', { name: 'Workspace löschen' })).toBeDisabled()
@@ -164,10 +168,7 @@ describe('WorkspaceSettingsPage', () => {
           deleteUrl = url
           return jsonResponse(null, 204)
         }
-        if (url.includes('/memory-guard')) {
-          return memoryGuardResponse()
-        }
-        return jsonResponse([])
+        return memorySettingsResponse(url) ?? jsonResponse([])
       }),
     )
 
@@ -202,5 +203,29 @@ describe('WorkspaceSettingsPage', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse([])))
     renderPage('editor', 2)
     expect(screen.queryByText('Memory-Wächter')).toBeNull()
+  })
+
+  it('zeigt die Auto-Freigabe nur Admins und lädt sie für Nicht-Admins nicht (C6)', () => {
+    const fetchMock = vi.fn(async () => jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage('editor', 2)
+    expect(screen.queryByText('Automatische Freigabe')).toBeNull()
+    expect(screen.queryByRole('switch')).toBeNull()
+    const urls = fetchMock.mock.calls.map((call: unknown[]) => String(call[0]))
+    expect(urls.some((url) => url.includes('/memory-auto-policy'))).toBe(false)
+  })
+
+  it('setzt die Auto-Freigabe für Admins direkt über den Memory-Wächter (C6)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => memorySettingsResponse(String(input)) ?? jsonResponse([])),
+    )
+    const { container } = renderPage('admin', 2)
+    await screen.findByRole('switch')
+    const approval = container.querySelector('#memory-approval')
+    const guard = container.querySelector('#memory-guard')
+    expect(approval).not.toBeNull()
+    expect(guard).not.toBeNull()
+    expect(approval!.compareDocumentPosition(guard!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

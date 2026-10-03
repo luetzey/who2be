@@ -519,13 +519,13 @@
       "memory": {
         "title": "Memory",
         "description": "Whether and how the agent stores facts across sessions.",
-        "help": "Suggestions in \"With approval\" mode land as a draft in the memory section below and only become retrievable after human approval. In \"Automatic\" mode they become active immediately — server-side guards (injection filter, dedup, length/cap limits) run in every mode.",
+        "help": "Suggestions in \"With approval\" mode land as a draft awaiting approval and only become retrievable after human approval. In \"Automatic (workspace rules)\" mode, only what is turned on under Settings → Workspace → Memory is approved without review; everything else waits for approval. Server-side guards (injection filter, dedup, length/cap limits) run in every mode.",
         "modeLabel": "Storage mode",
         "mode": {
           "off": "Off",
           "read_only": "Read only",
           "suggest": "With approval",
-          "auto": "Automatic"
+          "auto": "Automatic (workspace rules)"
         },
         "directiveLabel": "Directive",
         "directive": {
@@ -3038,6 +3038,95 @@
         "savedPass": "Rated as passed.",
         "savedFail": "Rated as failed.",
         "error": "Saving the judgment failed."
+      }
+    },
+    "autoPolicy": {
+      "sectionTitle": "Memory",
+      "title": "Automatic approval",
+      "intro": "Decide which entries may take effect without your review. Everything else waits for approval. Only applies to agents whose memory is set to \"Automatic (workspace rules)\".",
+      "matrixCaption": "Automatic approval by kind and source",
+      "kindHeader": "Kind",
+      "origin": {
+        "user_stated": "Said by you",
+        "inferred": "Inferred by the agent",
+        "external_content": "From a web page, file or tool"
+      },
+      "row": {
+        "user_fact": "User fact",
+        "user_fact_instruction": "User fact with instruction",
+        "agent_note": "Agent note",
+        "proposal": "Change/deletion",
+        "lesson": "Lesson suggestion"
+      },
+      "allOrigins": "All sources",
+      "lessonNever": "Never takes effect directly",
+      "alwaysReview": "Always review",
+      "on": "On",
+      "off": "Off",
+      "reasonLabel": "Reason: {{row}}, {{origin}}",
+      "reasonLabelRow": "Reason: {{row}}",
+      "locked": {
+        "inferred": "Inferences can be wrong even when they sound plausible. A person sees them first.",
+        "external_content": "External content can contain instructions that look like facts. So never automatic.",
+        "instruction": "Entries in the \"instruction\" category tell the agent how to work. We treat that like a behavior change.",
+        "agent_note": "Notes about tools and environment steer how the agent works. We treat that like a behavior change.",
+        "proposal": "A proposal to change approved content always needs a person – otherwise an agent could quietly overwrite what was reviewed.",
+        "lesson": "Lesson suggestions never flow into a prompt. They are counted and can become a new version through a case, a test case and your approval.",
+        "generic": "The server never approves this combination automatically."
+      },
+      "humanChannel": "Anything a person enters themselves counts as confirmed right away.",
+      "expiry": "Unconfirmed entries expire after {{days}} days. Retrievals don't extend that.",
+      "legacyAuto": "Agents set to \"Automatic\" only approve what is turned on here. While everything is off, every entry waits for approval.",
+      "guardOff": {
+        "title": "The memory guard is off.",
+        "description": "Automatically approved entries are then not checked for instruction patterns.",
+        "action": "Configure guard"
+      },
+      "toastOn": "Applies to new entries from now on. What's already waiting stays in the queue.",
+      "toastOff": "Automatic approval off. New entries wait for approval again.",
+      "loadError": "The setting could not be loaded.",
+      "saveError": "The setting could not be saved.",
+      "humanOnly": "Can only be changed with a real sign-in.",
+      "limits": {
+        "disclosure": "What automatic approval doesn't catch (8 points)",
+        "title": "Turn on automatic approval?",
+        "intro": "Entries of this kind then take effect right away, without anyone reading them. The filters keep running – but they don't catch everything:",
+        "instructionData": {
+          "title": "A sentence can be a fact and an instruction at once.",
+          "body": "\"Lutz likes short answers\" is both. No check separates the two reliably."
+        },
+        "adaptiveAttacks": {
+          "title": "Targeted attacks get past filters.",
+          "body": "In measurements, checks and protective framing were bypassed by targeted attacks, including by people."
+        },
+        "contextual": {
+          "title": "Some entries only act in a particular situation.",
+          "body": "On their own they look harmless and only stand out once they take effect."
+        },
+        "plausible": {
+          "title": "Plausible isn't the same as correct.",
+          "body": "\"You prefer provider X\" can be wrong, and no filter notices."
+        },
+        "userSource": {
+          "title": "Even what you said yourself can be outdated or a slip.",
+          "body": "\"Said by you\" doesn't mean \"still true\"."
+        },
+        "selfReinforcing": {
+          "title": "Mistakes can reinforce themselves.",
+          "body": "An agent building on a wrong entry produces more that fit it. Memory can also reinforce the agent telling you what you want to hear."
+        },
+        "drift": {
+          "title": "Many small entries can slowly shift direction.",
+          "body": "Each one on its own is unremarkable."
+        },
+        "rollbackLate": {
+          "title": "Pulling back only helps once someone notices.",
+          "body": "What the agent did until then stays done."
+        },
+        "stillHappens": "What still happens: the filter checks every entry while it is turned on. The source is recorded. Every step is in the history. Unconfirmed entries expire after {{days}} days.",
+        "checkbox": "I've read what automatic approval doesn't catch.",
+        "confirm": "Approve automatically",
+        "confirmHint": "Please confirm first that you have read the list."
       }
     },
     "activateWarning": {

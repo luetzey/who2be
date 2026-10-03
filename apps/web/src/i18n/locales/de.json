@@ -519,13 +519,13 @@
       "memory": {
         "title": "Gedächtnis",
         "description": "Ob und wie der Agent Fakten über Sitzungen hinweg speichert.",
-        "help": "Vorschläge im Modus „Mit Freigabe“ landen als Entwurf in der Gedächtnis-Sektion unten und werden erst nach menschlicher Freigabe abrufbar. Im Modus „Automatisch“ werden sie sofort aktiv — serverseitige Wächter (Injection-Filter, Dedup, Längen-/Cap-Grenzen) laufen in jedem Modus.",
+        "help": "Vorschläge im Modus „Mit Freigabe“ landen als Entwurf zur Freigabe und werden erst nach menschlicher Freigabe abrufbar. Im Modus „Automatisch nach Workspace-Regeln“ wird ohne Prüfung nur frei, was unter Einstellungen → Workspace → Gedächtnis eingeschaltet ist; alles andere landet zur Freigabe. Serverseitige Wächter (Injection-Filter, Dedup, Längen-/Cap-Grenzen) laufen in jedem Modus.",
         "modeLabel": "Speicher-Modus",
         "mode": {
           "off": "Aus",
           "read_only": "Nur lesen",
           "suggest": "Mit Freigabe",
-          "auto": "Automatisch"
+          "auto": "Automatisch nach Workspace-Regeln"
         },
         "directiveLabel": "Verbindlichkeit",
         "directive": {
@@ -3038,6 +3038,95 @@
         "savedPass": "Als bestanden bewertet.",
         "savedFail": "Als nicht bestanden bewertet.",
         "error": "Bewertung konnte nicht gespeichert werden."
+      }
+    },
+    "autoPolicy": {
+      "sectionTitle": "Gedächtnis",
+      "title": "Automatische Freigabe",
+      "intro": "Lege fest, welche Einträge ohne deine Prüfung wirksam werden dürfen. Alles andere landet zur Freigabe. Gilt nur für Agenten, deren Gedächtnis auf „Automatisch nach Workspace-Regeln“ steht.",
+      "matrixCaption": "Automatische Freigabe nach Art und Herkunft",
+      "kindHeader": "Art",
+      "origin": {
+        "user_stated": "Von dir gesagt",
+        "inferred": "Vom Agenten geschlossen",
+        "external_content": "Aus Webseite, Datei oder Werkzeug"
+      },
+      "row": {
+        "user_fact": "Nutzerfakt",
+        "user_fact_instruction": "Nutzerfakt mit Anweisung",
+        "agent_note": "Agentennotiz",
+        "proposal": "Änderung/Löschung",
+        "lesson": "Lernvorschlag"
+      },
+      "allOrigins": "Alle Herkünfte",
+      "lessonNever": "Wirkt nie direkt",
+      "alwaysReview": "Immer prüfen",
+      "on": "An",
+      "off": "Aus",
+      "reasonLabel": "Grund: {{row}}, {{origin}}",
+      "reasonLabelRow": "Grund: {{row}}",
+      "locked": {
+        "inferred": "Schlussfolgerungen können falsch sein, auch wenn sie plausibel klingen. Ein Mensch sieht sie vorher.",
+        "external_content": "Fremde Inhalte können Anweisungen enthalten, die wie Fakten aussehen. Deshalb nie automatisch.",
+        "instruction": "Einträge der Kategorie „Anweisung“ sagen dem Agenten, wie er arbeiten soll. Das behandeln wir wie eine Verhaltensänderung.",
+        "agent_note": "Notizen über Werkzeuge und Umgebung steuern, wie der Agent arbeitet. Das behandeln wir wie eine Verhaltensänderung.",
+        "proposal": "Ein Vorschlag, freigegebene Inhalte zu ändern, braucht immer einen Menschen – sonst könnte ein Agent Geprüftes still überschreiben.",
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden.",
+        "generic": "Diese Kombination gibt der Server nie automatisch frei."
+      },
+      "humanChannel": "Was ein Mensch selbst einträgt, gilt sofort als bestätigt.",
+      "expiry": "Unbestätigte Einträge laufen nach {{days}} Tagen ab. Abrufe verlängern die Frist nicht.",
+      "legacyAuto": "Agenten auf „Automatisch“ geben nur frei, was hier eingeschaltet ist. Solange alles aus ist, landet jeder Eintrag zur Freigabe.",
+      "guardOff": {
+        "title": "Der Memory-Wächter ist aus.",
+        "description": "Automatisch freigegebene Einträge werden dann nicht auf Anweisungsmuster geprüft.",
+        "action": "Wächter einstellen"
+      },
+      "toastOn": "Gilt ab jetzt für neue Einträge. Was schon wartet, bleibt zur Freigabe.",
+      "toastOff": "Automatische Freigabe aus. Neue Einträge landen wieder zur Freigabe.",
+      "loadError": "Die Einstellung konnte nicht geladen werden.",
+      "saveError": "Die Einstellung konnte nicht gespeichert werden.",
+      "humanOnly": "Nur mit echter Anmeldung änderbar.",
+      "limits": {
+        "disclosure": "Was automatische Freigabe nicht abfängt (8 Punkte)",
+        "title": "Automatische Freigabe einschalten?",
+        "intro": "Einträge dieser Art werden dann sofort wirksam, ohne dass jemand sie liest. Die Wächter laufen weiter – aber sie fangen nicht alles ab:",
+        "instructionData": {
+          "title": "Ein Satz kann Fakt und Anweisung zugleich sein.",
+          "body": "„Lutz mag kurze Antworten“ ist beides. Keine Prüfung trennt das zuverlässig."
+        },
+        "adaptiveAttacks": {
+          "title": "Wer gezielt angreift, kommt an Filtern vorbei.",
+          "body": "In Messungen wurden Prüfungen und Schutzrahmen von gezielten Angriffen umgangen, auch von Menschen."
+        },
+        "contextual": {
+          "title": "Manche Einträge wirken nur in einer bestimmten Lage.",
+          "body": "Einzeln sehen sie harmlos aus und fallen erst auf, wenn sie wirken."
+        },
+        "plausible": {
+          "title": "Plausibel heißt nicht richtig.",
+          "body": "„Du bevorzugst Anbieter X“ kann falsch sein, und kein Filter merkt das."
+        },
+        "userSource": {
+          "title": "Auch was du selbst gesagt hast, kann veraltet oder ein Versehen sein.",
+          "body": "„Von dir gesagt“ heißt nicht „stimmt noch“."
+        },
+        "selfReinforcing": {
+          "title": "Fehler können sich verstärken.",
+          "body": "Ein Agent, der auf einen falschen Eintrag baut, erzeugt weitere, die dazu passen. Gedächtnis kann auch verstärken, dass der Agent dir nach dem Mund redet."
+        },
+        "drift": {
+          "title": "Viele kleine Einträge können langsam die Richtung ändern.",
+          "body": "Jeder für sich ist unauffällig."
+        },
+        "rollbackLate": {
+          "title": "Zurücknehmen hilft erst, wenn jemand den Fehler bemerkt.",
+          "body": "Was der Agent bis dahin getan hat, bleibt getan."
+        },
+        "stillHappens": "Was weiterhin passiert: Der Wächter prüft jeden Eintrag, solange er eingeschaltet ist. Die Herkunft wird festgehalten. Jeder Schritt steht im Verlauf. Unbestätigte Einträge laufen nach {{days}} Tagen ab.",
+        "checkbox": "Ich habe gelesen, was automatische Freigabe nicht abfängt.",
+        "confirm": "Automatisch freigeben",
+        "confirmHint": "Bitte zuerst bestätigen, dass du die Liste gelesen hast."
       }
     },
     "activateWarning": {

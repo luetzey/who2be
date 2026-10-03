@@ -769,6 +769,34 @@ export interface MemoryGuardConfig {
   block_phrases: string[]
 }
 
+// ADR-0053 4.1/4.2 — Freigabematrix Art x Herkunft (`GET/PUT
+// /memory-auto-policy`, admin + echte Anmeldung). Spiegelt `MemoryAutoRow`,
+// `MemoryAutoCell`, `MemoryAutoPolicy`, `MemoryAutoPolicyRead` aus
+// packages/models. `switchable_cells` ist die einzige Quelle dafuer, welche
+// Zelle die Oberflaeche schalten laesst — die UI kodiert keine Sperrliste.
+export type MemoryAutoRow =
+  | 'user_fact'
+  | 'user_fact_instruction'
+  | 'agent_note'
+  | 'lesson'
+  | 'proposal'
+export type MemoryOrigin = 'user_stated' | 'inferred' | 'external_content' | 'legacy_unknown'
+
+export interface MemoryAutoCell {
+  row: MemoryAutoRow
+  origin: MemoryOrigin
+}
+
+export interface MemoryAutoPolicy {
+  enabled_cells: MemoryAutoCell[]
+}
+
+export interface MemoryAutoPolicyRead {
+  // Wirksame Einstellung; Nie-Zellen hat der Server bereits herausgefiltert.
+  enabled_cells: MemoryAutoCell[]
+  switchable_cells: MemoryAutoCell[]
+}
+
 export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
