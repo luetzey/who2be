@@ -368,6 +368,15 @@ async def count_workspace_memories(
     return await service.count_workspace_memories(ctx, filters, group_by or ())
 
 
+@router.get("/memories/{memory_id}")
+async def get_workspace_memory(memory_id: UUID, ctx: Ctx, service: Service) -> MemoryRead:
+    # Einzelabruf fuer Deep-Links (`?entry=<id>`), ohne den Besitzer kennen zu
+    # muessen. Sichtbarkeit wie `GET /memories`; alles Unsichtbare — fremdes
+    # Nutzergedaechtnis auch fuer admin, Agentengedaechtnis fuer viewer — ist
+    # 404 `memory_not_found` wie eine unbekannte ID (kein Existenz-Leak).
+    return await service.get_workspace_memory(ctx, memory_id)
+
+
 @router.post("/memories/batch")
 @limiter.limit(write_limit)
 async def batch_memories(

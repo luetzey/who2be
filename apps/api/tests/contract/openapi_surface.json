@@ -481,6 +481,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/memories/{memory_id}",
+    "operationId": "get_workspace_memory_v1_workspaces__workspace_id__memories__memory_id__get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/memory-auto-policy",
     "operationId": "get_memory_auto_policy_v1_workspaces__workspace_id__memory_auto_policy_get"
   },

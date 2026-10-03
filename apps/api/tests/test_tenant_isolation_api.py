@@ -301,6 +301,9 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/memories/counts": Probe(
         query={"agent_id": "<<agent_id>>", "group_by": ["agent", "status"]}
     ),
+    # Einzelabruf (t_ef8822fa): fremde Memory-ID ist `memory_not_found` (V1/V2),
+    # das eigene Agentengedaechtnis in der Gegenprobe 200.
+    f"GET {_WS}/memories/{{memory_id}}": Probe(),
     # Stapel (6.4.1, C3c-2b): die IDs im Body waehlen aus, statt die Route zu
     # adressieren. Eine fremde ID ist je Eintrag `memory_not_found` (200, wie
     # eine unbekannte) — deshalb `filters`; der Fingerabdruck belegt, dass bei

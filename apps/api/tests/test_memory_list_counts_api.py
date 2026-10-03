@@ -362,3 +362,58 @@ def test_rechte(env: Env) -> None:
         _reason(env.get("/memories/counts", env.editor_h, agent_id=unknown), 404)
         == "agent_not_found"
     )
+
+
+# ------------------------------------------- Einzelabruf (t_ef8822fa)
+
+
+def test_einzelabruf_sichtbarkeit_wie_liste(env: Env) -> None:
+    """`GET /memories/{id}` zeigt genau, was `GET /memories` dem Aufrufer zeigt.
+
+    Unsichtbares ist 404 `memory_not_found` mit derselben Antwort wie eine
+    unbekannte ID: fremdes Nutzergedaechtnis auch fuer admin (3a),
+    Agentengedaechtnis fuer viewer. Kein 403, kein Existenz-Leak.
+    """
+    secret = "Editor hat eine Nussallergie"
+    foreign = env.memory(secret, subject=env.editor, status="pending")
+    own = env.memory("Admin mag Tee", subject=env.owner)
+    viewer_own = env.memory("Viewer mag Hoerspiele", subject=env.viewer)
+    agent_mem = env.memory("Agentenfakt", status="pending")
+    unknown = "00000000-0000-0000-0000-000000000000"
+
+    def get(memory_id: object, headers: dict[str, str]) -> Any:
+        return env.get(f"/memories/{memory_id}", headers)
+
+    # Sichtbar: eigenes Nutzergedaechtnis ab viewer, Agentengedaechtnis ab editor.
+    for memory_id, headers in (
+        (own, env.admin_h),
+        (agent_mem, env.admin_h),
+        (agent_mem, env.editor_h),
+        (foreign, env.editor_h),
+        (viewer_own, env.viewer_h),
+    ):
+        res = get(memory_id, headers)
+        assert res.status_code == 200, res.text
+        assert res.json()["id"] == str(memory_id)
+    body = get(agent_mem, env.editor_h).json()
+    assert body["fact"] == "Agentenfakt"
+    assert body["status"] == "pending"
+    assert body["agent_id"] == str(env.agent)
+
+    # Unsichtbar = unbekannt: gleicher Status, gleicher reason, gleicher Text.
+    expected = get(unknown, env.admin_h)
+    assert _reason(expected, 404) == "memory_not_found"
+    for memory_id, headers in (
+        (foreign, env.admin_h),  # fremdes Nutzergedaechtnis, auch admin
+        (own, env.editor_h),  # fremdes Nutzergedaechtnis, editor
+        (agent_mem, env.viewer_h),  # viewer sieht kein Agentengedaechtnis
+        (own, env.viewer_h),
+    ):
+        res = get(memory_id, headers)
+        assert _reason(res, 404) == "memory_not_found", (memory_id, headers)
+        assert res.json()["detail"] == expected.json()["detail"]
+        assert secret not in res.text
+
+    # Agent-gebundener Token: 403 wie die Liste; ungueltige ID: 422.
+    assert _reason(get(agent_mem, env.agent_h), 403) == "missing_capability"
+    assert get("keine-uuid", env.admin_h).status_code == 422

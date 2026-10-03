@@ -1014,6 +1014,7 @@ REST:
 |---|---|---|
 | `GET /memories?status&exclude_status&kind&scope&agent_id&origin&source&health&held&q&sort&cursor&limit` | ab `viewer`, Sichtbarkeit siehe unten | allgemeine Liste über alle Agenten, alle Status; `limit ≤ 50`, Cursor-Paginierung. `GET /memories?status=pending` ist die workspace-weite Warteschlange (Frage 2 = a). `status`, `exclude_status`, `kind` und `origin` sind wiederholbar (siehe „Mehrfachwerte“) |
 | `GET /memories/counts?group_by&<Filter wie oben>&created_after` | wie `GET /memories` | Zähler je Gruppe (`agent`, `kind`, `status`, `origin`, `source`, `health`); je Gruppe ohne den eigenen Filter (Facetten). `group_by=subject_user_id` mit `scope=user` nur `admin` und nur Zahlen (W5 = a) |
+| `GET /memories/{memory_id}` | wie `GET /memories` | ein Eintrag (`MemoryRead`) für Deep-Links, ohne den Besitzer zu kennen. Was die Liste dem Aufrufer nicht zeigt (fremdes Nutzergedächtnis auch für `admin`, Agentengedächtnis für `viewer`, anderer Workspace), ist `404 memory_not_found` wie eine unbekannte ID |
 | `POST /memories/batch` | je Eintrag wie die Einzelaktion | Body `{action: approve·reject·confirm·delete, ids[≤100] \| filter, expected_count?, note?}`, Antwort `{results:[{id, ok, reason?, params?}]}` |
 | `GET /memory-proposals?status&agent_id` | `editor`; Vorschläge zum eigenen Nutzergedächtnis ab `viewer` | Vorschläge workspace-weit, Gegenstück zu `GET /agents/{agent_id}/memory-proposals` |
 | `POST /memories/revoke-auto` | `editor`; fremdes Nutzergedächtnis nur `admin` | Notfall-Rücknahme, siehe unten |
