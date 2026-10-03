@@ -647,15 +647,18 @@ class MemoryService:
             return []
         k = max(1, min(k, _SEARCH_K_MAX))
         query_vector = await self._embed(query)
+        # Agentengedaechtnis UND Nutzergedaechtnis des Token-Besitzers (C4).
         return await self._repo.search_active(
-            ctx.workspace_id, ctx.agent_id, query, k, query_vector
+            ctx.workspace_id, ctx.agent_id, query, k, query_vector, user_id=ctx.user_id
         )
 
     async def list_active(self, ctx: WorkspaceContext, limit: int) -> list[MemoryHit]:
         require_memory_mode(ctx, MemoryMode.read_only)
         assert ctx.agent_id is not None
         limit = max(1, min(limit, _LIST_LIMIT_MAX))
-        return await self._repo.list_active(ctx.workspace_id, ctx.agent_id, limit)
+        return await self._repo.list_active(
+            ctx.workspace_id, ctx.agent_id, limit, user_id=ctx.user_id
+        )
 
     # ------------------------------------------------------------- Management
 
