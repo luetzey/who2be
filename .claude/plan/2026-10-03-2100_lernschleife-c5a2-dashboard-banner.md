@@ -50,8 +50,8 @@ Tab-Zähler „Zur Freigabe“ und verlinkt auf `/memory?tab=approval`.
 ## Schritte
 - [x] Hook + Banner
 - [x] Tests + Rot-Proben (Link, scope=user, kein subject_user_id, kein Banner bei Fehler, nicht aus kpis) — alle rot, danach grün
-- [ ] DoD lokal (Node 22): tsc -b, lint, i18n:check, test:coverage, build, license:check
-- [ ] 390 px messen
+- [x] DoD lokal (Node 22.23.3): tsc -b 0, lint 0 Fehler, i18n:check 0, test:coverage 0 (1821/1821), build 0, license:check 0
+- [x] 1280/390 hell+dunkel: scrollWidth == clientWidth, Link `/w/<ws>/memory?tab=approval`
 - [ ] Push, PR, CI
 
 ## Folgekandidat (nicht in dieser Karte)
