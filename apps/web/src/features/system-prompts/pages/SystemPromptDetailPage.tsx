@@ -1,4 +1,4 @@
-import { ClipboardCheck, Clock, GitBranch, ScrollText, SquarePen } from 'lucide-react'
+import { ClipboardCheck, Clock, GitBranch, Pencil, ScrollText } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -8,12 +8,10 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
-import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
 import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
 import { useVersionDeepLink } from '@/components/version/versionDeepLink'
@@ -61,21 +59,15 @@ export function SystemPromptDetailPage() {
               title={template.name}
               backHref={wsPath('/system-prompts')}
               backLabel={t('nav.backToList')}
-              badges={
-                <>
-                  {/* #566: siehe SystemPromptsPage — derselbe Slug, zweite
-                      Fundstelle. Gemessen bei 320px: 497px ohne Cap. */}
-                  <Badge variant="outline" className="max-w-full font-mono break-all">
-                    {template.slug}
-                  </Badge>
-                  <StatusBadge
-                    status={template.current_status}
-                    pendingDraft={template.has_pending_draft}
-                  />
-                  <Badge variant="secondary">v{template.current_version}</Badge>
-                  <LocaleBadge locale={template.locale} />
-                </>
+              status={
+                <StatusBadge
+                  status={template.current_status}
+                  pendingDraft={template.has_pending_draft}
+                />
               }
+              version={template.current_version}
+              locale={template.locale}
+              slug={template.slug}
               description={template.content.description}
               // Audit A13: Duplizieren ist Sekundaeraktion — unter md hinter „Mehr".
               collapseActionsBelowMd
@@ -130,7 +122,7 @@ export function SystemPromptDetailPage() {
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList aria-label={t('common:tabs.detailViewAria')}>
                 <TabsTrigger value="edit">
-                  <SquarePen aria-hidden="true" />
+                  <Pencil aria-hidden="true" />
                   {t('common:actions.edit')}
                 </TabsTrigger>
                 {/* Lernschleife B4b (Spec S10): ohne Zaehler (§2.3). */}

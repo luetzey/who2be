@@ -3,16 +3,19 @@ import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { EntityIcon, type EntityTone } from './EntityIcon'
 import { ExpandableText } from './ExpandableText'
+import { LocaleBadge } from './LocaleBadge'
 
 // Geteilter Detail-Page-Header (Design-Handoff „Detail-Redesign"). Identischer
-// Block in System-Prompt-/Agent-/Resource-Detail: optionaler Zurueck-Link,
-// EntityIcon-Kachel, H1, eine Reihe Badges (Slug/Status/Tags) als Slot,
-// Beschreibung und ein rechter Action-Slot.
+// Block in allen *DetailPage: optionaler Zurueck-Link, EntityIcon-Kachel, H1,
+// Meta-Chips in fester Slot-Reihenfolge (Audit A8:
+// Status · Version · Sprache · Slug · Tags), Beschreibung und ein rechter
+// Action-Slot.
 //
 // Lebt unter `components/data/`, weil er die geteilte EntityIcon-Kachel + das
 // Back-Link-Muster kapselt (ueber PageHeader hinaus).
@@ -24,7 +27,25 @@ interface DetailHeaderProps {
   /** Ziel des Zurueck-Links; ohne diesen Prop wird kein Link gerendert. */
   backHref?: string
   backLabel?: string
-  /** Badges neben dem H1 (Slug / StatusBadge / Tags). */
+  /**
+   * Audit A8: feste Meta-Slots in fester Reihenfolge
+   * `Status · Version · Sprache · Slug · Tags` (PM-Entscheidung A). Die
+   * Reihenfolge legt der Header fest, nicht die Seite — so kann sie nicht
+   * mehr je Entitaetstyp auseinanderlaufen. Leere Slots entfallen.
+   */
+  status?: ReactNode
+  /** Aktuelle Versionsnummer; der Header rendert daraus den Chip `v<n>`. */
+  version?: number
+  /** Inhaltssprache (ADR-0045); rendert `LocaleBadge`. */
+  locale?: string
+  /** Technischer Bezeichner (Slug, Tool-Alias), monospace mit Umbruch. */
+  slug?: string
+  /** Tag-Liste (z. B. `TagList`); der Tag-Stil bleibt Sache der Seite. */
+  tags?: ReactNode
+  /**
+   * Freie Badges hinter den festen Slots — nur fuer unversionierte Seiten
+   * (Feedback, Arbeitsbereich), die keine der Slot-Angaben haben.
+   */
   badges?: ReactNode
   description?: string
   /** Rechter Action-Slot (z. B. „Duplizieren"). */
@@ -47,6 +68,11 @@ export function DetailHeader({
   title,
   backHref,
   backLabel,
+  status,
+  version,
+  locale,
+  slug,
+  tags,
   badges,
   description,
   actions,
@@ -81,6 +107,25 @@ export function DetailHeader({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">{title}</h1>
+              {status}
+              {version !== undefined ? (
+                <Badge variant="secondary" data-testid="detail-header-version">
+                  v{version}
+                </Badge>
+              ) : null}
+              <LocaleBadge locale={locale} />
+              {slug !== undefined && slug !== '' ? (
+                // #564/#566: Slug ohne Trennstellen — `break-all` + Cap,
+                // sonst 497 px breit bei 320 px Viewport.
+                <Badge
+                  variant="outline"
+                  className="max-w-full font-mono text-xs break-all"
+                  data-testid="detail-header-slug"
+                >
+                  {slug}
+                </Badge>
+              ) : null}
+              {tags}
               {badges}
             </div>
             {description !== undefined && description !== '' ? (

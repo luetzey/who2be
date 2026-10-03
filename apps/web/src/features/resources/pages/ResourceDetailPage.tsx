@@ -19,7 +19,6 @@ import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
-import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { TagList } from '@/components/data/TagList'
@@ -133,29 +132,25 @@ export function ResourceDetailPage() {
                 icon={FileText}
                 iconTone="resource"
                 title={resource.name}
-                badges={
-                  <>
-                    <StatusBadge
-                      status={resource.current_status}
-                      pendingDraft={resource.has_pending_draft}
-                    />
-                    <LocaleBadge locale={resource.locale} />
-                    {resource.slug ? (
-                      // #564: siehe ResourcesPage — Slug ohne Trennstellen.
-                      <Badge variant="outline" className="max-w-full font-mono text-xs break-all">
-                        {resource.slug}
+                status={
+                  <StatusBadge
+                    status={resource.current_status}
+                    pendingDraft={resource.has_pending_draft}
+                  />
+                }
+                version={resource.current_version}
+                locale={resource.locale}
+                slug={resource.slug}
+                tags={
+                  <TagList
+                    tags={tags}
+                    label={t('common:fields.tags')}
+                    renderTag={(tag) => (
+                      <Badge variant="secondary" className="max-w-full text-xs break-words">
+                        {tag}
                       </Badge>
-                    ) : null}
-                    <TagList
-                      tags={tags}
-                      label={t('common:fields.tags')}
-                      renderTag={(tag) => (
-                        <Badge variant="secondary" className="max-w-full text-xs break-words">
-                          {tag}
-                        </Badge>
-                      )}
-                    />
-                  </>
+                    )}
+                  />
                 }
                 description={description}
                 // Audit A13: Feedback, Export, Duplizieren sind Sekundaer-
