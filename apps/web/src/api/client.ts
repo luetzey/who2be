@@ -47,6 +47,7 @@ import type {
   MemoryBatchResult,
   MemoryCountGroup,
   MemoryCounts,
+  MemoryEventRead,
   MemoryFilter,
   MemoryGuardConfig,
   MemoryListSort,
@@ -55,6 +56,7 @@ import type {
   MemoryProposalRead,
   MemoryProposalStatus,
   MemoryRead,
+  MemoryRollbackInput,
   MemoryStatus,
   MemoryTriageInput,
   MemoryUpdateInput,
@@ -681,6 +683,14 @@ export interface Api {
   // (`/me/memories/...`); ein fremdes ist auf keinem Pfad adressierbar.
   confirmMemory: (agentId: string | null, memoryId: string) => Promise<MemoryRead>
   reactivateMemory: (agentId: string | null, memoryId: string) => Promise<MemoryRead>
+  // ADR-0053 3.1.2 — Historie (aelteste zuerst) und Rollback auf `before` des
+  // gewaehlten Ereignisses. Besitzer-Pfad wie oben (`null` = eigenes).
+  getMemoryHistory: (agentId: string | null, memoryId: string) => Promise<MemoryEventRead[]>
+  rollbackMemory: (
+    agentId: string | null,
+    memoryId: string,
+    input: MemoryRollbackInput,
+  ) => Promise<MemoryRead>
   // ADR-0044-Addendum — Workspace-Injection-Filter-Konfiguration. Admin-only
   // (editor/viewer + Agent-Tokens 403 serverseitig).
   getMemoryGuard: () => Promise<MemoryGuardConfig>
@@ -706,6 +716,9 @@ export interface Api {
     limit?: number
   }) => Promise<MemoryPage>
   triageMyMemory: (memoryId: string, input: MemoryTriageInput) => Promise<MemoryRead>
+  updateMyMemory: (memoryId: string, input: MemoryUpdateInput) => Promise<MemoryRead>
+  // Hard-Delete; der Verlauf geht per Cascade mit (M5, Migration 0091).
+  deleteMyMemory: (memoryId: string) => Promise<void>
   // ADR-0053 3.1.4 — Vorschlaege workspace-weit; `decide` entscheidet einen.
   listMemoryProposals: (filter?: {
     status?: MemoryProposalStatus
@@ -1236,6 +1249,21 @@ export function createApi(token: string, workspaceId: string): Api {
           : `${ws}/agents/${agentId}/memories/${memoryId}/reactivate`,
         { method: 'POST' },
       ),
+    getMemoryHistory: (agentId, memoryId) =>
+      request<MemoryEventRead[]>(
+        token,
+        agentId === null
+          ? `${ws}/me/memories/${memoryId}/history`
+          : `${ws}/agents/${agentId}/memories/${memoryId}/history`,
+      ),
+    rollbackMemory: (agentId, memoryId, input) =>
+      request<MemoryRead>(
+        token,
+        agentId === null
+          ? `${ws}/me/memories/${memoryId}/rollback`
+          : `${ws}/agents/${agentId}/memories/${memoryId}/rollback`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
     getMemoryGuard: () => request<MemoryGuardConfig>(token, `${ws}/memory-guard`),
     updateMemoryGuard: (config) =>
       request<MemoryGuardConfig>(token, `${ws}/memory-guard`, {
@@ -1282,6 +1310,13 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    updateMyMemory: (memoryId, input) =>
+      request<MemoryRead>(token, `${ws}/me/memories/${memoryId}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    deleteMyMemory: (memoryId) =>
+      request<void>(token, `${ws}/me/memories/${memoryId}`, { method: 'DELETE' }),
     listMemoryProposals: (filter) => {
       const params = new URLSearchParams()
       if (filter?.status) params.set('status', filter.status)

@@ -1,6 +1,7 @@
-import { ChevronDown, TriangleAlert } from 'lucide-react'
+import { ChevronDown, History, TriangleAlert } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link, useInRouterContext, useSearchParams } from 'react-router-dom'
 
 import type { MemoryProposalRead, MemoryRead } from '@/api/types'
 import { ExpandableText } from '@/components/data/ExpandableText'
@@ -167,6 +168,8 @@ export function MemoryRow({
   onReject,
 }: MemoryRowProps) {
   const { t, i18n } = useTranslation('learning')
+  // Ausserhalb eines Routers (isolierte Tests) gibt es kein Detail-Sheet.
+  const inRouter = useInRouterContext()
   const detailsId = useId()
   const factId = useId()
   const cause = holdCauseOf(memory)
@@ -272,15 +275,18 @@ export function MemoryRow({
             <dd>{created}</dd>
           </dl>
           {failure !== null ? <RowFailure message={failure} /> : null}
-          {canAct ? (
+          {canAct || inRouter ? (
             <div className="flex flex-wrap justify-end gap-2">
-              <RejectDialog
-                triggerLabel={t('approval.reject')}
-                title={t('approval.rejectTitle')}
-                disabled={busy}
-                onReject={(note) => onReject(memory, note)}
-              />
-              {isLesson ? null : (
+              {inRouter ? <HistoryButton memory={memory} /> : null}
+              {canAct ? (
+                <RejectDialog
+                  triggerLabel={t('approval.reject')}
+                  title={t('approval.rejectTitle')}
+                  disabled={busy}
+                  onReject={(note) => onReject(memory, note)}
+                />
+              ) : null}
+              {!canAct || isLesson ? null : (
                 <Button
                   type="button"
                   variant="default"
@@ -299,6 +305,40 @@ export function MemoryRow({
         <RowFailure message={failure} />
       ) : null}
     </div>
+  )
+}
+
+// --------------------------------------------------------- Detail-Sheet-Link
+
+/** Router-State, mit dem eine Liste dem Detail-Sheet den Eintrag mitgibt. */
+export interface MemoryEntryState {
+  memory: MemoryRead
+}
+
+/**
+ * Ziel des Detail-Sheets (Spec §7, `?entry=<id>`): aktuelle Parameter
+ * bleiben, `entry` kommt dazu. Der Eintrag reist im Router-State mit, damit
+ * das Sheet ihn ohne Suchlauf sofort zeigt (es gibt kein `GET` je Eintrag).
+ */
+export function useEntryLink(memory: MemoryRead) {
+  const [params] = useSearchParams()
+  const next = new URLSearchParams(params)
+  next.set('entry', memory.id)
+  const state: MemoryEntryState = { memory }
+  return { to: { search: `?${next.toString()}` }, state }
+}
+
+/** „Verlauf“ in der aufgeklappten Zeile der Warteschlange (S1′). */
+function HistoryButton({ memory }: { memory: MemoryRead }) {
+  const { t } = useTranslation('learning')
+  const link = useEntryLink(memory)
+  return (
+    <Button asChild variant="ghost" size="sm" className={ROW_ACTION}>
+      <Link {...link} data-testid="open-history" aria-haspopup="dialog">
+        <History aria-hidden="true" />
+        {t('approval.history')}
+      </Link>
+    </Button>
   )
 }
 
@@ -472,7 +512,7 @@ export function ProposalRow({
   )
 }
 
-function ChangeDiff({ before, after }: { before: string | null; after: string }) {
+export function ChangeDiff({ before, after }: { before: string | null; after: string }) {
   const { t } = useTranslation('learning')
   if (before === null) {
     return <p className="text-sm break-words">{after}</p>

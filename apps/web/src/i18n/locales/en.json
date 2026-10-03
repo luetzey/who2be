@@ -3239,7 +3239,8 @@
       "alreadyDecided": "Already decided.",
       "alreadyDecidedBy": "Already decided by {{name}}.",
       "capReachedUser": "Your user memory is full ({{maximum}} entries, rejected ones included). Delete old entries before new ones can be added.",
-      "capReachedNote": "This agent's notes are full. Delete old ones before new ones can be added."
+      "capReachedNote": "This agent's notes are full. Delete old ones before new ones can be added.",
+      "history": "History"
     },
     "batch": {
       "done": {
@@ -3373,7 +3374,83 @@
         "action": "View agents"
       },
       "noMatch": "No entries match these filters",
-      "gone": "This entry no longer exists."
+      "gone": "This entry no longer exists.",
+      "openDetail": "Open details for “{{fact}}”"
+    },
+    "detail": {
+      "title": "Entry",
+      "loading": "Loading entry…",
+      "provenance": "Provenance",
+      "channel": "Channel",
+      "channelServer": "{{channel}} (set by server)",
+      "perAgent": "Per agent",
+      "reason": "Reason",
+      "kindScope": "Type · Scope",
+      "scope": {
+        "agent": "this agent only",
+        "user": "user memory"
+      },
+      "category": "Category",
+      "importance": "Importance {{value}}",
+      "created": "Created",
+      "delivery": "Delivery",
+      "deliveredLast_one": "Delivered {{count}}×, last {{when}}",
+      "deliveredLast_other": "Delivered {{count}}×, last {{when}}",
+      "neverDelivered": "Never delivered yet",
+      "notVisible": "This entry no longer exists or you're not allowed to see it.",
+      "moreActions": "More actions",
+      "delete": "Delete…",
+      "deleteTitle": "Delete this entry permanently?",
+      "deleteBody": "The entry and its history will be removed permanently. This can't be undone.",
+      "deleteSubmit": "Delete permanently",
+      "done": {
+        "reject": "Rejected.",
+        "edit": "Saved.",
+        "delete": "Deleted."
+      }
+    },
+    "history": {
+      "title": "History",
+      "empty": "No history yet.",
+      "loadError": "The history couldn't be loaded.",
+      "older_one": "Load older entry ({{count}})",
+      "older_other": "Load older ({{count}})",
+      "reason": "Reason: “{{reason}}”",
+      "rule": "Rule: {{kind}} × {{origin}}",
+      "event": {
+        "created": "Suggested",
+        "auto_activated": "Approved automatically",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "edited": "Edited",
+        "editedBeforeApproval": "Edited before approval",
+        "confirmed": "Confirmed",
+        "expired": "Expired",
+        "reactivated": "Reactivated",
+        "change_proposed": "Change suggested",
+        "delete_proposed": "Deletion suggested",
+        "proposal_accepted": "Proposal accepted",
+        "proposal_rejected": "Proposal rejected",
+        "rolled_back": "Earlier state restored",
+        "converted": "Turned into a case",
+        "merged": "Suggested again",
+        "auto_revoked": "Automatic approval pulled back"
+      },
+      "actor": {
+        "system": "Automatic",
+        "by": "by {{name}}",
+        "you": "by you",
+        "agentUnknown": "by an agent",
+        "humanUnknown": "by a member"
+      },
+      "restoreBefore": "Restore the state before this change",
+      "restoreTitle": "Restore the state before this change?",
+      "restoreBody": "This is what the entry will look like afterwards. The history is extended, nothing is lost.",
+      "restoreSubmit": "Restore",
+      "statusChange": "Status: {{from}} → {{to}}",
+      "categoryChange": "Category: {{from}} → {{to}}",
+      "importanceChange": "Importance: {{from}} → {{to}}",
+      "restored": "Earlier state restored."
     }
   }
 }

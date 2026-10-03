@@ -1,4 +1,4 @@
-import { Bot, TriangleAlert } from 'lucide-react'
+import { Bot, ChevronRight, TriangleAlert } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ExpandableText } from '@/components/data/ExpandableText'
 import { LoadingState } from '@/components/data/LoadingState'
-import { RejectDialog, holdCauseOf } from '@/components/memory/MemoryRow'
+import { RejectDialog, holdCauseOf, useEntryLink } from '@/components/memory/MemoryRow'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -45,8 +45,8 @@ import {
 
 // Liste des Tabs „Eintraege“ (Gedaechtnisverwaltung S2′, §6.4–§6.7, §9).
 // Freitext ist immer ein Textknoten (ADR-0038) und bricht mit `break-words`.
-// Detail-Sheet, Bearbeiten und Verlauf kommen mit C5c — bis dahin hat die
-// Zeile keinen Chevron und keine Aktion, die dorthin zeigen wuerde.
+// Der Chevron je Zeile oeffnet das Detail-Sheet (C5c-1), aber nur, wenn der
+// Aufrufer `detailLinks` setzt (dort wertet ein Sheet `?entry=` aus).
 
 // Zeilenaktionen: 40 px unter md, Standardhoehe darueber (Spec §15).
 const ROW_ACTION = 'min-h-10 md:min-h-0'
@@ -97,7 +97,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 // ---------------------------------------------------------------- StatusLine
 
 /** Zeile 2: Status als Punkt + Wort, dazu Frist bzw. Auslieferungen. */
-function StatusLine({ memory }: { memory: MemoryRead }) {
+export function StatusLine({ memory }: { memory: MemoryRead }) {
   const { t } = useTranslation('learning')
   // Bezugszeit einmal je Zeile festhalten (Render bleibt rein).
   const [now] = useState(() => Date.now())
@@ -153,6 +153,30 @@ interface EntryRowProps {
   failure: string | null
   onAction: (memory: MemoryRead, action: RowAction) => Promise<void>
   readOnly: boolean
+  detailLink: boolean
+}
+
+/** Chevron rechts: Link-Button zum Detail-Sheet (Spec §7, §15 „Namen“). */
+function DetailLink({ memory }: { memory: MemoryRead }) {
+  const { t } = useTranslation('learning')
+  const link = useEntryLink(memory)
+  return (
+    <Button
+      asChild
+      variant="ghost"
+      size="icon"
+      className="size-11 shrink-0 md:size-8"
+    >
+      <Link
+        {...link}
+        data-testid="open-detail"
+        aria-haspopup="dialog"
+        aria-label={t('entries.openDetail', { fact: shorten(memory.fact) })}
+      >
+        <ChevronRight aria-hidden="true" />
+      </Link>
+    </Button>
+  )
 }
 
 function EntryRow({
@@ -163,6 +187,7 @@ function EntryRow({
   failure,
   onAction,
   readOnly,
+  detailLink,
 }: EntryRowProps) {
   const { t } = useTranslation('learning')
   const wsPath = useWorkspacePath()
@@ -278,6 +303,7 @@ function EntryRow({
           </div>
         ) : null}
       </div>
+      {detailLink ? <DetailLink memory={memory} /> : null}
     </div>
   )
 }
@@ -299,6 +325,9 @@ export interface MemoryListProps {
   readOnly?: boolean
   // Leerzustand ohne Filter; Default ist der des Tabs „Eintraege“.
   emptyState?: ReactNode
+  // Chevron je Zeile zum Detail-Sheet (`?entry=`, C5c-1). Nur, wo ein
+  // `MemoryDetailSheet` die URL auswertet — sonst waere er ein toter Knopf.
+  detailLinks?: boolean
 }
 
 /**
@@ -315,6 +344,7 @@ export function MemoryList({
   fixedAgentId,
   readOnly = false,
   emptyState,
+  detailLinks = false,
 }: MemoryListProps) {
   const { t, i18n } = useTranslation('learning')
   const api = useApi()
@@ -560,6 +590,7 @@ export function MemoryList({
                 failure={failures.get(memory.id) ?? null}
                 onAction={rowAction}
                 readOnly={readOnly}
+                detailLink={detailLinks}
               />
             </li>
           ))}
