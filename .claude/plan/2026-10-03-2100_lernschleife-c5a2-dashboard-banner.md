@@ -23,7 +23,9 @@ Tab-Zähler „Zur Freigabe“ und verlinkt auf `/memory?tab=approval`.
 - Quelle = Tab-Zähler: `GET /memories/counts?status=pending` (Server schließt
   `lesson` dort aus, memory_repository.py:1989) + offene Vorschläge aus
   `GET /memory-proposals?status=pending`. Gemeinsame Funktion
-  `countApprovalQueue` in `useMemoryApi.ts`, von `useMemoryTabCounts` und dem
+  `countApprovalQueue` in `apps/web/src/hooks/useApprovalCount.ts` (neu, weil
+  ESLint `no-restricted-imports` Cross-Feature-Imports dashboard → memory
+  verbietet und auf `@/hooks` verweist), von `useMemoryTabCounts` und dem
   neuen `useApprovalCount` genutzt (Single Source of Truth).
 - viewer: `scope=user` (wie `useApprovalQueue`), editor+: ohne `scope`
   (Server liefert Agentengedächtnis + eigenes Nutzergedächtnis). Rolle `null`:
@@ -35,18 +37,24 @@ Tab-Zähler „Zur Freigabe“ und verlinkt auf `/memory?tab=approval`.
 - Texte (Spec §10 + Delta): Titel „{{count}} Einträge zur Freigabe“ /
   "{{count}} entries awaiting approval", Aktion „Freigeben“ / "Review".
 
-## Dateien (7 inkl. Plan)
-1. apps/web/src/features/memory/hooks/useMemoryApi.ts
-2. apps/web/src/features/dashboard/pages/DashboardPage.tsx
-3. apps/web/src/features/dashboard/pages/DashboardPage.test.tsx
-4. apps/web/src/i18n/locales/de.json
-5. apps/web/src/i18n/locales/en.json
-6. changelog.d/t-5c835da2-lernschleife-c5a2-dashboard-banner.changed.md
-7. dieser Plan
+## Dateien (8 inkl. Plan)
+1. apps/web/src/hooks/useApprovalCount.ts (neu)
+2. apps/web/src/features/memory/hooks/useMemoryApi.ts
+3. apps/web/src/features/dashboard/pages/DashboardPage.tsx
+4. apps/web/src/features/dashboard/pages/DashboardPage.test.tsx
+5. apps/web/src/i18n/locales/de.json
+6. apps/web/src/i18n/locales/en.json
+7. changelog.d/t-5c835da2-lernschleife-c5a2-dashboard-banner.changed.md
+8. dieser Plan
 
 ## Schritte
-- [ ] Hook + Banner
-- [ ] Tests + Rot-Proben (Link, scope=user, kein subject_user_id, kein Banner bei Fehler)
+- [x] Hook + Banner
+- [x] Tests + Rot-Proben (Link, scope=user, kein subject_user_id, kein Banner bei Fehler, nicht aus kpis) — alle rot, danach grün
 - [ ] DoD lokal (Node 22): tsc -b, lint, i18n:check, test:coverage, build, license:check
 - [ ] 390 px messen
 - [ ] Push, PR, CI
+
+## Folgekandidat (nicht in dieser Karte)
+- API: `kpis.pending_memories` zählt `lesson` und fremdes Nutzergedächtnis
+  (`_ATTENTION_COUNTS`). Das Web nutzt das Feld nicht mehr; Feld entfernen
+  oder korrekt filtern ist eine API-Karte.

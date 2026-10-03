@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { type Api, ApiError } from '@/api/client'
+import { ApiError } from '@/api/client'
 import type {
   Agent,
   MemoryBatchItemResult,
@@ -19,6 +19,7 @@ import type {
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useSession } from '@/auth/session-context'
+import { countApprovalQueue } from '@/hooks/useApprovalCount'
 
 // Seitengroesse der Warteschlange (Spec S1′ „Viele“: 50 je Seite).
 export const QUEUE_PAGE_SIZE = 50
@@ -368,54 +369,6 @@ export function memoryFilterOf(filters: EntryFilters): MemoryFilter {
 export interface MemoryTabCounts {
   approval: number | null
   entries: number | null
-}
-
-/**
- * Zahl der Warteschlange „Zur Freigabe“ — die EINE Quelle fuer Tab-Zaehler
- * und Dashboard-Banner (Gedaechtnisverwaltung §11.1): `status=pending` (der
- * Server schliesst Lernvorschlaege dort aus) plus offene Aenderungs-/
- * Loeschvorschlaege. Viewer zaehlen nur das eigene Nutzergedaechtnis
- * (`scope=user`, wie `useApprovalQueue`); fremdes Nutzergedaechtnis wird nie
- * angefragt, auch nicht als Zahl (ADR-0053 3.1.1).
- */
-export async function countApprovalQueue(api: Api, canManageAgents: boolean): Promise<number> {
-  const filter: MemoryFilter = { status: 'pending' }
-  if (!canManageAgents) filter.scope = 'user'
-  const [pending, proposals] = await Promise.all([
-    api.countMemories(filter),
-    api.listMemoryProposals({ status: 'pending' }),
-  ])
-  const open = proposals.filter((proposal) => proposal.status === 'pending').length
-  return pending.total + open
-}
-
-/**
- * Zahl fuer den Dashboard-Banner (Lernschleife C5a-2): dieselbe Menge wie der
- * Tab-Zaehler „Zur Freigabe“. `null`, solange die Rolle fehlt, die Zahl laedt
- * oder nicht ladbar ist — dann behauptet das Dashboard nichts.
- */
-export function useApprovalCount(): number | null {
-  const api = useApi()
-  const role = useCurrentWorkspaceRole()
-  const [count, setCount] = useState<number | null>(null)
-
-  useEffect(() => {
-    setCount(null)
-    if (role === null) return
-    let cancelled = false
-    countApprovalQueue(api, role !== 'viewer')
-      .then((total) => {
-        if (!cancelled) setCount(total)
-      })
-      .catch(() => {
-        if (!cancelled) setCount(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [api, role])
-
-  return count
 }
 
 /**

@@ -27,7 +27,7 @@ import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { statusLabel } from '@/components/version'
-import { useApprovalCount } from '@/features/memory/hooks/useMemoryApi'
+import { useApprovalCount } from '@/hooks/useApprovalCount'
 import { cn } from '@/lib/utils'
 
 import { ActivityRow } from '../components/ActivityRow'
