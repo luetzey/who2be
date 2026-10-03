@@ -7862,6 +7862,64 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/memories/batch": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Batch Memories",
+        "operationId": "batch_memories_v1_workspaces__workspace_id__memories_batch_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryBatchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/memories/revoke-auto": {
       "post": {
         "tags": [
@@ -13165,6 +13223,64 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/members/{user_id}/memories": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Purge Member Memories",
+        "operationId": "purge_member_memories_v1_workspaces__workspace_id__members__user_id__memories_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryPurgeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/invitations": {
       "post": {
         "tags": [
@@ -18227,6 +18343,17 @@
         "title": "MemoryAutoRow",
         "description": "Zeile der Freigabematrix Art x Herkunft (ADR-0053 4.2).\n\n`user_fact` meint Kategorien ohne Verhaltenswirkung (alles ausser\n`instruction`); `proposal` steht fuer Aenderungs-/Loeschvorschlaege."
       },
+      "MemoryBatchAction": {
+        "type": "string",
+        "enum": [
+          "approve",
+          "reject",
+          "confirm",
+          "delete"
+        ],
+        "title": "MemoryBatchAction",
+        "description": "Aktion eines Stapels — je Eintrag dieselbe wie die Einzelaktion.\n\n`approve`/`reject` entsprechen der Triage, `confirm` dem Bestaetigen\n(3.1.3), `delete` dem Loeschen. Aenderungs- und Loeschvorschlaege laufen\nnicht ueber den Stapel, sondern einzeln ueber `decide` (3.1.4)."
+      },
       "MemoryBatchItemResult": {
         "properties": {
           "id": {
@@ -18269,6 +18396,88 @@
         ],
         "title": "MemoryBatchItemResult",
         "description": "Ergebnis je Eintrag einer Sammelaktion (`batch`, `revoke-auto`, ADR-0053 6.4.1)."
+      },
+      "MemoryBatchRequest": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/MemoryBatchAction"
+          },
+          "ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 100,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ids"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "MemoryBatchRequest",
+        "description": "Body von `POST /memories/batch` (ADR-0053 6.4.1).\n\nGenau eines von `ids` (1 bis `MEMORY_BATCH_MAX_IDS`, Dubletten werden\nreihenfolgetreu entfernt) oder `filter` (wie `GET /memories`). Im\nFilter-Modus ist `expected_count` Pflicht: die Zahl, die ein Mensch\ngesehen und bestaetigt hat. `note` wirkt nur bei `approve`/`reject` als\nTriage-Notiz."
+      },
+      "MemoryBatchResult": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryBatchItemResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "MemoryBatchResult",
+        "description": "Antwort eines Stapels: ein Ergebnis je Eintrag, Teilerfolg moeglich."
       },
       "MemoryCategory": {
         "type": "string",
@@ -18507,6 +18716,122 @@
         ],
         "title": "MemoryEventRead",
         "description": "Ein persistiertes Historien-Ereignis (read-only)."
+      },
+      "MemoryFilter": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemorySource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "held": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "created_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MemoryFilter",
+        "description": "Filter der workspace-weiten Liste, ihrer Zaehler und der Stapel-Auswahl.\n\nAlle Felder sind optional und wirken mit UND. `agent_id` trifft beim\nAgentengedaechtnis den Besitzer, beim Nutzergedaechtnis den einreichenden\nAgenten. `held` (zurueckgehalten) ist abgeleitet: `pending` und Herkunft\n`external_content`/`inferred` oder Kategorie `instruction`.\n`status=pending` ist die Warteschlange und schliesst Lernvorschlaege aus,\nausser bei `kind=lesson` (6.4.1 „Zaehler“)."
       },
       "MemoryGuardConfig": {
         "properties": {
@@ -18817,6 +19142,20 @@
         ],
         "title": "MemoryProposalStatus",
         "description": "Status eines Vorschlags. Es gibt keinen Weg zu `accepted` ohne Menschen."
+      },
+      "MemoryPurgeResult": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "MemoryPurgeResult",
+        "description": "Antwort von `DELETE /members/{user_id}/memories` — nur die Anzahl (3a)."
       },
       "MemoryRead": {
         "properties": {

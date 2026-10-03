@@ -2,7 +2,9 @@
 
 Lesen ist jedem Mitglied erlaubt; Rollen-Aenderung und Entfernen sind
 admin-only (`require_role`-Gate, Plan §2.3.B — durch Prompt A zur vollen
-Permission-Matrix ausgebaut).
+Permission-Matrix ausgebaut). Ebenfalls admin-only: das Loeschen des
+Nutzergedaechtnisses einer Person (`DELETE /{user_id}/memories`, ADR-0053
+6.4.1 W5 = a) ueber den Memory-Service.
 """
 
 from typing import Annotated
@@ -24,8 +26,11 @@ from who2be_api.repositories.token_repository import PgTokenRepository
 from who2be_api.repositories.workspace_member_repository import (
     PgWorkspaceMemberRepository,
 )
+from who2be_api.routers.memory import get_memory_service
+from who2be_api.services.memory_service import MemoryService
 from who2be_api.services.workspace_member_service import WorkspaceMemberService
 from who2be_models import WorkspaceMemberRead, WorkspaceMemberUpdate, WorkspaceRole
+from who2be_models.memory import MemoryPurgeResult
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -66,3 +71,22 @@ async def remove_member(request: Request, user_id: UUID, ctx: Ctx, service: Serv
     require_role(ctx, WorkspaceRole.admin)
     deny_agent_bound_workspace_admin(ctx)
     await service.remove(ctx.workspace_id, user_id, actor_id=ctx.user_id)
+
+
+@router.delete("/{user_id}/memories")
+@limiter.limit(write_limit)
+async def purge_member_memories(
+    request: Request,
+    user_id: UUID,
+    ctx: Ctx,
+    memory: Annotated[MemoryService, Depends(get_memory_service)],
+) -> MemoryPurgeResult:
+    # Loescht das gesamte Nutzergedaechtnis dieser Person im Workspace
+    # (ADR-0053 6.4.1, W5 = a). Antwort nur die Anzahl, nie Inhalt oder IDs
+    # (Owner 3a); `audit_log` bekommt eine inhaltsfreie Zeile
+    # `memory.user_purged`. Bewusst ohne Mitgliedschaftspruefung: das
+    # Nutzergedaechtnis ueberlebt das Entfernen des Mitglieds und muss danach
+    # loeschbar bleiben; eine unbekannte Person ergibt `{deleted: 0}`.
+    require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
+    return await memory.purge_user_memories(ctx, user_id)
