@@ -219,6 +219,9 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "search_memory": _MEMORY_READ,
     "list_memories": _MEMORY_READ,
     "save_memory": _MEMORY_SUGGEST,
+    # Aenderungs-/Loeschvorschlag (ADR-0053 3.1.4, C4b): schreibt wie
+    # `save_memory`, darum dieselbe Stufe; ein Mensch entscheidet immer.
+    "propose_memory_change": _MEMORY_SUGGEST,
     # --- WorkArea (ADR-0047, WP8) — Rohmaterial-Tools aus `tools/workarea.py`:
     #     Writes verlangen `workarea_write` (Default aus); die Reads sind
     #     grant-dynamisch immer gelistet, die API/`core/workarea_scope.py`

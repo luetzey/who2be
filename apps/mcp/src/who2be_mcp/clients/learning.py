@@ -5,7 +5,7 @@ Entscheidung 3.2): paket-internes Friend-Modul des `ApiClient`, nutzt dessen
 `_get`/`_write` und damit dieselbe Fehler-Uebersetzung in `ToolError`
 (`problem_message`: `detail` + `reason`).
 
-Pfade: Router `test_cases.py` unter `/v1/workspaces/{ws_id}`.
+Pfade: Router `test_cases.py` und `memory.py` unter `/v1/workspaces/{ws_id}`.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from who2be_mcp.client import ApiClient
 from who2be_models import EntityType, TestCaseRead, TestRunCreate, TestRunRead
+from who2be_models.memory import MemoryProposalCreate, MemoryProposalRead
 
 
 class TestRunBatch(BaseModel):
@@ -66,3 +67,18 @@ async def submit_test_results(client: ApiClient, data: TestRunBatch) -> list[Tes
     """`POST .../test-runs` — eine Ergebnis-Charge, alles oder nichts."""
     payload = await client._write("POST", f"{client._workspace_prefix}/test-runs", data)
     return [TestRunRead.model_validate(item) for item in payload]
+
+
+async def propose_memory_change(
+    client: ApiClient, data: MemoryProposalCreate
+) -> MemoryProposalRead:
+    """`POST .../agent-memory-proposals` (ADR-0053 3.1.4) — immer `pending`.
+
+    Fremde oder nicht abrufbare Eintraege beantwortet der Server mit 404
+    `memory_not_found` (als `ToolError` durchgereicht), ohne zu verraten, ob
+    es sie gibt.
+    """
+    payload = await client._write(
+        "POST", f"{client._workspace_prefix}/agent-memory-proposals", data
+    )
+    return MemoryProposalRead.model_validate(payload)

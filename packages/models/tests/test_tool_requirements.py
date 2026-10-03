@@ -251,8 +251,9 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
     # prueft die Gegenrichtung gegen den Server, und
     # `test_doc_tool_count.py` haelt README/ROADMAP an dieselbe Zahl.
-    # Seit B3 (ADR-0053) + 2 Lernschleifen-Tools aus `tools/learning.py`.
-    assert len(MCP_TOOL_REQUIREMENTS) == 85
+    # Seit B3 (ADR-0053) + 2 Lernschleifen-Tools aus `tools/learning.py`,
+    # seit C4b + `propose_memory_change` (ebenda).
+    assert len(MCP_TOOL_REQUIREMENTS) == 86
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 
@@ -336,16 +337,20 @@ def test_memory_tools_follow_memory_mode_ladder() -> None:
     assert is_tool_visible("search_memory", read_only) is True
     assert is_tool_visible("list_memories", read_only) is True
     assert is_tool_visible("save_memory", read_only) is False
+    # Vorschlagen ist Schreiben (C4b): erst ab `suggest`, wie `save_memory`.
+    assert is_tool_visible("propose_memory_change", read_only) is False
+    assert is_tool_visible("propose_memory_change", off) is False
     for mode in (MemoryMode.suggest, MemoryMode.auto):
         policy = AgentToolPolicy(memory_mode=mode)
         assert is_tool_visible("search_memory", policy) is True
         assert is_tool_visible("save_memory", policy) is True
+        assert is_tool_visible("propose_memory_change", policy) is True
 
 
 def test_memory_tools_hidden_for_unrestricted_whoami() -> None:
     # Unrestricted (Mensch/ungebundener Token): kein Memory-Namespace, also
     # keine Memory-Tools — obwohl alle anderen Reads sichtbar sind.
-    for name in ("search_memory", "list_memories", "save_memory"):
+    for name in ("search_memory", "list_memories", "save_memory", "propose_memory_change"):
         assert (
             is_tool_visible_for(
                 name,
