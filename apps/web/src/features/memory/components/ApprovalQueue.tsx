@@ -163,9 +163,16 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
     }
     for (const memory of data.items) ensure(groupKeyOf(memory)).items.push(memory)
     for (const entry of data.proposals) {
-      // Vorschlaege zum Nutzergedaechtnis kommen nur zur Person selbst.
+      // Gruppe nach dem Ziel des Vorschlags, nicht nach dem einreichenden
+      // Agenten: zielt er aufs eigene Nutzergedaechtnis, steht er dort (mit
+      // Agentenname an der Zeile). Ohne aufloesbares Ziel faellt er auf den
+      // Agenten zurueck, sofern die Person dessen Gruppe sieht.
       const key = entry.proposal.agent_id
-      const ownTarget = !data.agents.some((agent) => agent.id === key) || !data.canManageAgents
+      const knownAgent = data.agents.some((agent) => agent.id === key)
+      const ownTarget =
+        !data.canManageAgents ||
+        entry.targetScope === 'user' ||
+        (entry.targetScope === null && !knownAgent)
       ensure(ownTarget ? MINE_GROUP : key).proposals.push(entry)
     }
     const mine = byKey.get(MINE_GROUP)
@@ -445,17 +452,19 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
               <h3
                 id={headingId}
                 tabIndex={-1}
-                className="text-xs font-semibold tracking-wide break-words uppercase"
+                className="min-w-0 text-xs font-semibold tracking-wide break-words uppercase"
               >
                 {group.label} ({formatNumber.format(group.total + group.proposals.length)})
               </h3>
               {canGroupApprove ? (
-                <div className="flex flex-col gap-1 md:items-end">
+                <div className="flex min-w-0 flex-col gap-1 md:max-w-xs md:shrink-0 md:items-end">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="min-h-10 w-full md:min-h-0 md:w-auto"
+                    // Lange Agentennamen brechen um, statt die Seite zu
+                    // verbreitern (Button-Basis ist `whitespace-nowrap`).
+                    className="h-auto min-h-10 w-full py-2 break-words whitespace-normal md:min-h-9 md:w-auto md:text-right"
                     aria-label={
                       group.key === MINE_GROUP
                         ? t('approval.groupApproveMine', { count: group.total })

@@ -318,7 +318,14 @@ function RowFailure({ message }: { message: string }) {
 
 type DiffToken = { text: string; op: 'same' | 'added' | 'removed' }
 
-/** Wort-Diff (LCS ueber Woerter und Leerraum); Fakten sind kurz (≤ 300 Zeichen). */
+/**
+ * Wort-Diff (LCS ueber Woerter und Leerraum); Fakten sind kurz (≤ 300 Zeichen).
+ *
+ * Danach werden Aenderungsstrecken zusammengefasst: Leerraum, der zwischen
+ * zwei geaenderten Woertern als „gleich“ erkannt wurde, gehoert zur Strecke.
+ * Jede Strecke erscheint als ein entfernter Block, dann ein hinzugefuegter —
+ * sonst verschraenken sich alte und neue Woerter („Frauseit Schmidt.Oktober“).
+ */
 export function wordDiff(before: string, after: string): DiffToken[] {
   const a = before.split(/(\s+)/).filter((token) => token !== '')
   const b = after.split(/(\s+)/).filter((token) => token !== '')
@@ -346,7 +353,44 @@ export function wordDiff(before: string, after: string): DiffToken[] {
   }
   while (i < a.length) out.push({ text: a[i++], op: 'removed' })
   while (j < b.length) out.push({ text: b[j++], op: 'added' })
-  return out
+  return groupChanges(out)
+}
+
+const WHITESPACE = /^\s+$/
+
+function groupChanges(tokens: DiffToken[]): DiffToken[] {
+  const result: DiffToken[] = []
+  let k = 0
+  while (k < tokens.length) {
+    if (tokens[k].op === 'same') {
+      result.push(tokens[k++])
+      continue
+    }
+    // Strecke: Aenderungen plus Leerraum dazwischen, solange danach noch
+    // eine Aenderung folgt.
+    let removed = ''
+    let added = ''
+    while (k < tokens.length) {
+      const token = tokens[k]
+      if (token.op === 'removed') removed += token.text
+      else if (token.op === 'added') added += token.text
+      else {
+        let next = k
+        while (next < tokens.length && tokens[next].op === 'same' && WHITESPACE.test(tokens[next].text)) next++
+        if (next === k || next >= tokens.length || tokens[next].op === 'same') break
+        const gap = tokens.slice(k, next).map((t) => t.text).join('')
+        if (removed !== '') removed += gap
+        if (added !== '') added += gap
+        k = next
+        continue
+      }
+      k++
+    }
+    if (removed !== '') result.push({ text: removed.trimEnd(), op: 'removed' })
+    if (removed !== '' && added !== '') result.push({ text: ' ', op: 'same' })
+    if (added !== '') result.push({ text: added.trimEnd(), op: 'added' })
+  }
+  return result
 }
 
 export interface ProposalRowProps {

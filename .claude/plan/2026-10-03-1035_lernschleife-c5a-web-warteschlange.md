@@ -58,5 +58,31 @@ CI `all-green` gegen den Head-SHA; Screenshots 1280/390.
 - [x] Locales (+ `legacyAuto` → „in „Zur Freigabe““)
 - [x] Tests (10 neu, AppShell-Nav, Client-Contract um 7 Memory-Methoden) + 8 Rot-Proben (alle rot)
 - [x] DoD web: lint 0 Fehler, tsc, test:coverage 1776/1776, Skip-Budget 0, build, license:check
-- [ ] Screenshots 1280/390 — nicht gemacht: keine Mock-/Auth-Infrastruktur fürs Rendern ohne Supabase-Login
-- [ ] PR, CI all-green
+- [x] Screenshots 1280/390 (hell + dunkel; Liste, Stapelleiste, Gruppendialog) — Review-Runde 1 nachgeholt, siehe unten
+- [x] PR #800, CI all-green auf 7cbe5058 (Runde 1)
+
+## Review-Runde 1 (Changes requested) — nachgezogen
+
+- **Screenshots/Overflow**: Dev-Server des Worktrees gegen den lokalen Stack
+  (Auth 57999, API 57800), Memory-Endpunkte per `page.route`, Agent/Login echt.
+  Erstmessung **rot**: 390 px → `scrollWidth` 425 (Gruppenknopf „Alle 3 von
+  <langer Agentname> freigeben“ mit Button-Basis `whitespace-nowrap`), iPad 810 →
+  927. Fix in `ApprovalQueue.tsx`: Knopf bricht um (`whitespace-normal`,
+  `h-auto`), Gruppenkopf `min-w-0`. Danach je Zustand/Breite/Schema
+  `scrollWidth == clientWidth` (1280/1280, 390/390).
+- **e2e**: neuer Test in `e2e/scroll-guard.spec.ts` (alle vier Profile) mit
+  Zurückgehaltenen (URL ohne Trennstelle), Agentengruppe mit langem Namen,
+  Vorschlag, offener Stapelleiste und Gruppendialog. Rot-Probe: ohne
+  `whitespace-normal` rot auf mobile-320 und mobile-iphone-13.
+- **Wort-Diff** (beim Sichten der Screenshots gefunden): alte und neue Wörter
+  verschränkten sich („Frauseit Schmidt.Oktober“). `wordDiff` fasst
+  Änderungsstrecken jetzt zu einem entfernten + einem neuen Block zusammen.
+  Test + Rot-Probe.
+- **Nit Gruppenzuordnung**: Vorschläge werden nach ihrem Ziel gruppiert
+  (eigenes Nutzergedächtnis vs. Agentengedächtnis), nicht nach `agent_id`.
+  Test + Rot-Probe.
+- **Nit Latenz**: Zurückgehaltene laden parallel zum Rest.
+- **Nit Legacy-Liste ohne Paging**: als bekannte Grenze bis L5 im Code vermerkt.
+- **Nit doppelte Agentenladung** (AgentFilter + Hook): bleibt; braucht
+  geteilten Agent-Cache, gehört nicht in diese Karte.
+- **Folgekarten** angelegt (Dashboard-Link/Kachel, Tastaturkürzel).

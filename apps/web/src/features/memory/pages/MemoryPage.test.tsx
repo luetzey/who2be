@@ -99,6 +99,8 @@ interface StubOptions {
   items?: MemoryRead[]
   proposals?: MemoryProposalRead[]
   agentCounts?: Record<string, number>
+  myMemories?: MemoryRead[]
+  agentMemories?: MemoryRead[]
   batch?: (body: Record<string, unknown>) => Response
 }
 
@@ -113,6 +115,8 @@ function stubApi({
   items = [],
   proposals = [],
   agentCounts = {},
+  myMemories = [],
+  agentMemories = [memory({ id: 'm-old', status: 'active', fact: 'Python 3.13 ist installiert.' })],
   batch,
 }: StubOptions = {}) {
   const calls: Call[] = []
@@ -137,10 +141,8 @@ function stubApi({
         groups: { agent: agentCounts },
       })
     }
-    if (path.endsWith('/me/memories')) return jsonResponse({ items: [], next_cursor: null })
-    if (/\/agents\/[^/]+\/memories$/.test(path)) {
-      return jsonResponse([memory({ id: 'm-old', status: 'active', fact: 'Python 3.13 ist installiert.' })])
-    }
+    if (path.endsWith('/me/memories')) return jsonResponse({ items: myMemories, next_cursor: null })
+    if (/\/agents\/[^/]+\/memories$/.test(path)) return jsonResponse(agentMemories)
     if (path.endsWith('/memories')) {
       const rows = parsed.searchParams.get('held') === 'true' ? held : items
       return jsonResponse({ items: rows, next_cursor: null })
@@ -239,6 +241,21 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
     )
     const decide = calls.find((c) => c.url.endsWith('/memory-proposals/p1/decide'))!
     expect(decide.body).toEqual({ accept: true })
+  })
+
+  it('ordnet einen Agentenvorschlag aufs eigene Nutzergedächtnis der eigenen Gruppe zu, nicht dem Agenten', async () => {
+    stubApi({
+      proposals: [proposal({ id: 'p-user', memory_id: 'mine-1', new_fact: 'Ich arbeite mit Neovim.' })],
+      agentMemories: [],
+      myMemories: [
+        memory({ id: 'mine-1', status: 'active', scope: 'user', kind: 'user_fact', agent_id: null, subject_user_id: 'u1', fact: 'Ich arbeite mit Vim.' }),
+      ],
+    })
+    renderPage()
+    const row = await screen.findByTestId('memory-proposal-row')
+    const section = row.closest('section')!
+    expect(within(section).getByRole('heading', { level: 3 })).toHaveTextContent('Dein Nutzergedächtnis')
+    await waitFor(() => expect(row.querySelector('del')).toHaveTextContent('Vim.'))
   })
 
   it('rendert fremdes Nutzergedächtnis nie und fragt nie nach subject_user_id-Gruppen (admin)', async () => {
@@ -357,5 +374,19 @@ describe('wordDiff', () => {
     const tokens = wordDiff('Python 3.13 ist da', 'Python 3.14 ist da')
     expect(tokens.filter((t) => t.op === 'removed').map((t) => t.text)).toEqual(['3.13'])
     expect(tokens.filter((t) => t.op === 'added').map((t) => t.text)).toEqual(['3.14'])
+  })
+
+  it('fasst benachbarte Änderungen zu einem entfernten und einem neuen Block zusammen', () => {
+    const tokens = wordDiff(
+      'Der Ansprechpartner ist Frau Schmidt.',
+      'Der Ansprechpartner ist seit Oktober Herr Yilmaz.',
+    )
+    expect(tokens.filter((t) => t.op === 'removed').map((t) => t.text)).toEqual(['Frau Schmidt.'])
+    expect(tokens.filter((t) => t.op === 'added').map((t) => t.text)).toEqual([
+      'seit Oktober Herr Yilmaz.',
+    ])
+    expect(tokens.map((t) => t.text).join('')).toBe(
+      'Der Ansprechpartner ist Frau Schmidt. seit Oktober Herr Yilmaz.',
+    )
   })
 })
