@@ -16,7 +16,6 @@ const sampleData: DashboardData = {
     active_playbooks: 34,
     active_resources: 7,
     pending_reviews: 3,
-    pending_memories: 2,
     pending_system_prompts: 1,
   },
   activity: [
@@ -65,9 +64,9 @@ describe('DashboardPage', () => {
     expect(within(kpis).getByText('7')).toBeInTheDocument()
     // Pending-Reviews steckt jetzt im Aufmerksamkeits-Band statt in einer KPI.
     expect(screen.getByText('3 Versionen liegen zur Review')).toBeInTheDocument()
-    // Der Gedaechtnis-Banner zaehlt NICHT aus `kpis.pending_memories` (das
-    // zaehlt Lernvorschlaege und fremdes Nutzergedaechtnis mit). Ohne Rolle
-    // (Default-`me` ohne Mitgliedschaft) fragt er nichts an und zeigt nichts.
+    // Der Gedaechtnis-Banner zaehlt aus `/memories/counts` (rollengerecht).
+    // Ohne Rolle (Default-`me` ohne Mitgliedschaft) fragt er nichts an und
+    // zeigt nichts.
     expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
     expect(screen.getByText('1 System-Prompt liegt zur Review')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Zur Review/ })).toHaveAttribute(
@@ -394,8 +393,7 @@ describe('DashboardPage — Review-Banner (Audit A4)', () => {
 // Vorschlaege) und verlinkt auf `/memory?tab=approval`.
 describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => {
   const quiet: DashboardData = {
-    // `pending_memories` absichtlich abweichend: der Banner darf es nicht nutzen.
-    kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0, pending_memories: 9 },
+    kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0 },
     activity: [],
     status_distribution: {
       persona: { draft: 0, review: 0, active: 1, inactive: 0 },
@@ -507,7 +505,7 @@ describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => 
     },
   )
 
-  it('bei 0: kein Banner, „Alles erledigt“ (nicht kpis.pending_memories)', async () => {
+  it('bei 0: kein Banner, „Alles erledigt“', async () => {
     vi.stubGlobal('fetch', memoryFetch({ pending: 0 }))
     renderAs('editor')
 

@@ -170,7 +170,6 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
                 "active_playbooks": 6,
                 "active_resources": 1,
                 "pending_reviews": 0,
-                "pending_memories": 0,
                 "pending_system_prompts": 0,
             }
             assert body["activity"] == []
@@ -315,8 +314,12 @@ def test_dashboard_aggregates_status_and_activity(
         cleanup_workspaces([owner])
 
 
-def _insert_pending_memory(workspace_id: UUID, fact: str) -> None:
-    """Legt einen pending Memory-Vorschlag am Seed-Builder-Agenten ab."""
+def _seed_foreign_and_lesson_memories(workspace_id: UUID, other_user: UUID) -> None:
+    """Pending Nutzergedaechtnis von `other_user` plus eine pending lesson.
+
+    Beides darf weder ein viewer noch ein editor zu Gesicht bekommen — auch
+    nicht als Zahl (ADR-0053 3.1.1).
+    """
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
@@ -326,11 +329,37 @@ def _insert_pending_memory(workspace_id: UUID, fact: str) -> None:
             )
             assert agent_id is not None, "Workspace-Seed hat keinen Agenten angelegt"
             await conn.execute(
-                "INSERT INTO agent_memory (workspace_id, agent_id, status, fact) "
-                "VALUES ($1, $2, 'pending', $3)",
+                "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, "
+                " status, fact, kind, scope, origin, subject_user_id) "
+                "VALUES ($1, NULL, $2, 'pending', 'Fremder Fakt', 'user_fact', 'user', "
+                "        'user_stated', $3)",
                 workspace_id,
                 agent_id,
-                fact,
+                other_user,
+            )
+            await conn.execute(
+                "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, "
+                " status, fact, kind, scope, origin) "
+                "VALUES ($1, $2, $2, 'pending', 'Lernvorschlag', 'lesson', 'agent', "
+                "        'inferred')",
+                workspace_id,
+                agent_id,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _add_member(workspace_id: UUID, user_id: UUID, role: str) -> None:
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "INSERT INTO workspace_member (workspace_id, user_id, role) VALUES ($1, $2, $3)",
+                workspace_id,
+                user_id,
+                role,
             )
         finally:
             await conn.close()
@@ -339,12 +368,11 @@ def _insert_pending_memory(workspace_id: UUID, fact: str) -> None:
 
 
 @pytest.mark.integration
-def test_dashboard_counts_pending_memories_and_system_prompt_reviews(
+def test_dashboard_counts_system_prompt_reviews(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Aufmerksamkeits-Zaehler: pending Memories (ADR-0044) + System-Prompt-
-    Templates, deren aktuelle Version zur Review liegt — inkl. Isolation
-    gegen einen zweiten Workspace."""
+    """Aufmerksamkeits-Zaehler: System-Prompt-Templates, deren aktuelle
+    Version zur Review liegt — inkl. Isolation gegen einen zweiten Workspace."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -362,9 +390,7 @@ def test_dashboard_counts_pending_memories_and_system_prompt_reviews(
             base_a = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()["kpis"]
             base_b = client.get(f"/v1/workspaces/{ws_b}/dashboard", headers=auth_b).json()["kpis"]
 
-            # Zwei pending Memories in A; ein Template dessen v1 zur Review liegt.
-            _insert_pending_memory(ws_a, "Nutzer bevorzugt knappe Antworten.")
-            _insert_pending_memory(ws_a, "Projekt-Deadline ist Ende Q3.")
+            # Ein Template, dessen v1 zur Review liegt.
             template = client.post(
                 f"/v1/workspaces/{ws_a}/system-prompts",
                 json={"name": "Attention-Test", "content": {"body": "Du bist ein Test-Agent."}},
@@ -375,17 +401,62 @@ def test_dashboard_counts_pending_memories_and_system_prompt_reviews(
             )
 
             kpis_a = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()["kpis"]
-            assert kpis_a["pending_memories"] == base_a["pending_memories"] + 2
             assert kpis_a["pending_system_prompts"] == base_a["pending_system_prompts"] + 1
             # System-Prompts zaehlen NICHT in die Entity-Review-KPI hinein.
             assert kpis_a["pending_reviews"] == base_a["pending_reviews"]
 
             # Workspace B bleibt unberuehrt (Cross-Workspace-Isolation).
             kpis_b = client.get(f"/v1/workspaces/{ws_b}/dashboard", headers=auth_b).json()["kpis"]
-            assert kpis_b["pending_memories"] == base_b["pending_memories"]
             assert kpis_b["pending_system_prompts"] == base_b["pending_system_prompts"]
     finally:
         cleanup_workspaces([owner_a, owner_b])
+
+
+@pytest.mark.integration
+def test_dashboard_leaks_no_foreign_user_memory_or_lessons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rot-Probe ADR-0053 3.1.1: fremdes Nutzergedaechtnis und Lernvorschlaege
+    gehen in keine Zahl von `GET /dashboard` ein — fuer viewer und editor.
+
+    Gegen den alten Code rot: `kpis.pending_memories` zaehlte jede pending
+    Zeile des Workspaces und stieg hier um 2.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    viewer = fresh_user_id()
+    editor = fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, viewer, "viewer")
+    _add_member(ws, editor, "editor")
+    url = f"/v1/workspaces/{ws}/dashboard"
+
+    try:
+        with TestClient(app) as client:
+            before = {
+                role: client.get(url, headers=_auth(user)).json()
+                for role, user in (("viewer", viewer), ("editor", editor))
+            }
+
+            # Nutzergedaechtnis des Owners (fuer viewer/editor fremd) + lesson.
+            _seed_foreign_and_lesson_memories(ws, owner)
+
+            for role, user in (("viewer", viewer), ("editor", editor)):
+                resp = client.get(url, headers=_auth(user))
+                assert resp.status_code == 200, role
+                body = resp.json()
+                assert "pending_memories" not in body["kpis"], role
+                # Keine Zahl der Antwort hat sich durch den Seed bewegt.
+                assert body["kpis"] == before[role]["kpis"], role
+                assert body["status_distribution"] == before[role]["status_distribution"], role
+                assert "Fremder Fakt" not in resp.text, role
+                assert "Lernvorschlag" not in resp.text, role
+    finally:
+        cleanup_workspaces([owner, viewer, editor])
 
 
 @pytest.mark.integration
