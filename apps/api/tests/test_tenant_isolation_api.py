@@ -288,6 +288,12 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/agents/{{agent_id}}/memory-proposals": Probe(),
     f"GET {_WS}/memory-proposals": Probe(query={"agent_id": "<<agent_id>>"}),
     f"POST {_WS}/memory-proposals/{{proposal_id}}/decide": Probe(body={"accept": False}),
+    # Workspace-weite Liste und Zaehler (6.4.1, C3c-1b): `agent_id` ist die
+    # Objekt-Referenz; ein fremder Agent ist `agent_not_found` (V1/V2).
+    f"GET {_WS}/memories": Probe(query={"agent_id": "<<agent_id>>"}),
+    f"GET {_WS}/memories/counts": Probe(
+        query={"agent_id": "<<agent_id>>", "group_by": ["agent", "status"]}
+    ),
     # Not-Aus (6.4.1, C3b-2b): `agent_id` ist die Objekt-Referenz (V1/V2).
     # `dry_run`, damit die Gegenprobe den Bestand von B nicht zuruecknimmt.
     f"POST {_WS}/memories/revoke-auto": Probe(

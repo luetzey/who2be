@@ -7,7 +7,8 @@ Bearbeiten, Loeschen, dazu Historie/Rollback/Bestaetigen/Reaktivieren
 (ADR-0053 6.4). Vorschlaege (3.1.4): `POST /agent-memory-proposals` (Agent-Pfad,
 nur `pending`), Liste und Entscheidung durch Menschen. Eigenes
 Nutzergedaechtnis unter `/me/memories*` — ohne Personen-Parameter, also nie
-fremd adressierbar (3.1.1). Not-Aus `POST /memories/revoke-auto` (6.4.1).
+fremd adressierbar (3.1.1). Workspace-weite Liste `GET /memories` und
+Zaehler `GET /memories/counts`, Not-Aus `POST /memories/revoke-auto` (6.4.1).
 Autorisierung liegt im Service. Mount unter
 `/v1/workspaces/{ws_id}`.
 
@@ -22,8 +23,10 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import AwareDatetime
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.pagination import PageCursor
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.memory_repository import PgMemoryRepository
@@ -39,9 +42,20 @@ from who2be_models import (
     MemoryUpdate,
 )
 from who2be_models.memory import (
+    MEMORY_LIST_LIMIT_DEFAULT,
+    MEMORY_LIST_LIMIT_MAX,
+    MEMORY_LIST_QUERY_MAX_LENGTH,
     MemoryAutoPolicy,
     MemoryAutoPolicyRead,
+    MemoryCountGroup,
+    MemoryCounts,
     MemoryEventRead,
+    MemoryFilter,
+    MemoryHealth,
+    MemoryKind,
+    MemoryListSort,
+    MemoryOrigin,
+    MemoryPage,
     MemoryProposalCreate,
     MemoryProposalDecision,
     MemoryProposalRead,
@@ -51,6 +65,8 @@ from who2be_models.memory import (
     MemoryRevokeAutoResult,
     MemoryRollback,
     MemorySaveResult,
+    MemoryScope,
+    MemorySource,
 )
 
 router = APIRouter(tags=["memory"])
@@ -261,6 +277,75 @@ async def decide_memory_proposal(
     service: Service,
 ) -> MemoryProposalRead:
     return await service.decide_proposal(ctx, proposal_id, data)
+
+
+# ---------------------- Workspace-weite Liste und Zaehler (ADR-0053 6.4.1)
+
+
+def memory_filter(
+    status: Annotated[MemoryStatus | None, Query()] = None,
+    kind: Annotated[MemoryKind | None, Query()] = None,
+    scope: Annotated[MemoryScope | None, Query()] = None,
+    agent_id: Annotated[UUID | None, Query()] = None,
+    origin: Annotated[MemoryOrigin | None, Query()] = None,
+    source: Annotated[MemorySource | None, Query()] = None,
+    health: Annotated[MemoryHealth | None, Query()] = None,
+    held: Annotated[bool | None, Query()] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=MEMORY_LIST_QUERY_MAX_LENGTH)] = None,
+    created_after: Annotated[AwareDatetime | None, Query()] = None,
+) -> MemoryFilter:
+    """Gemeinsame Filter von `GET /memories` und `GET /memories/counts`.
+
+    Die Query-Parameter tragen dieselben Grenzen wie `MemoryFilter`; ein
+    ungueltiger Wert ist damit 422 der Anfrage, nie ein Fehler beim Bau des
+    Modells.
+    """
+    return MemoryFilter(
+        status=status,
+        kind=kind,
+        scope=scope,
+        agent_id=agent_id,
+        origin=origin,
+        source=source,
+        health=health,
+        held=held,
+        q=q,
+        created_after=created_after,
+    )
+
+
+Filters = Annotated[MemoryFilter, Depends(memory_filter)]
+
+
+@router.get("/memories")
+async def list_workspace_memories(
+    ctx: Ctx,
+    service: Service,
+    filters: Filters,
+    cursor: PageCursor,
+    sort: Annotated[MemoryListSort, Query()] = MemoryListSort.newest,
+    limit: Annotated[int, Query(ge=1, le=MEMORY_LIST_LIMIT_MAX)] = MEMORY_LIST_LIMIT_DEFAULT,
+) -> MemoryPage:
+    # Allgemeine Liste ueber alle Agenten und Status; `status=pending` ist die
+    # Warteschlange (ohne Lernvorschlaege). Ab viewer das eigene
+    # Nutzergedaechtnis, ab editor dazu alle Agenten; fremdes
+    # Nutzergedaechtnis nie, auch nicht fuer admin (Owner 3a).
+    return await service.list_workspace_memories(
+        ctx, filters, sort=sort, limit=limit, cursor=cursor
+    )
+
+
+@router.get("/memories/counts")
+async def count_workspace_memories(
+    ctx: Ctx,
+    service: Service,
+    filters: Filters,
+    group_by: Annotated[list[MemoryCountGroup] | None, Query()] = None,
+) -> MemoryCounts:
+    # `total` = Laenge der Liste mit denselben Filtern; je Gruppe ohne den
+    # eigenen Filter (Facetten). `group_by=subject_user_id` nur admin und nur
+    # als Zahl je Person.
+    return await service.count_workspace_memories(ctx, filters, group_by or ())
 
 
 # ------------------------------------------------- Not-Aus (ADR-0053 6.4.1)

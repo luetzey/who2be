@@ -7381,6 +7381,487 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/memories": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "List Workspace Memories",
+        "operationId": "list_workspace_memories_v1_workspaces__workspace_id__memories_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MemoryListSort",
+              "default": "newest"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryOrigin"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemorySource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "health",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryHealth"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Health"
+            }
+          },
+          {
+            "name": "held",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Held"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/memories/counts": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Count Workspace Memories",
+        "operationId": "count_workspace_memories_v1_workspaces__workspace_id__memories_counts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "group_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryCountGroup"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryOrigin"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemorySource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "health",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemoryHealth"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Health"
+            }
+          },
+          {
+            "name": "held",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Held"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/memories/revoke-auto": {
       "post": {
         "tags": [
@@ -17801,6 +18282,47 @@
         "title": "MemoryCategory",
         "description": "Fachliche Einordnung eines Fakts (Kap. 10.5 des Memory-Konzepts)."
       },
+      "MemoryCountGroup": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "kind",
+          "status",
+          "origin",
+          "source",
+          "health",
+          "subject_user_id"
+        ],
+        "title": "MemoryCountGroup",
+        "description": "Gruppe eines Zaehlers in `GET /memories/counts` (ADR-0053 6.4.1).\n\n`subject_user_id` ist `admin` vorbehalten und zaehlt das\nNutzergedaechtnis je Person — nur als Zahl (Owner-Entscheidung 3a)."
+      },
+      "MemoryCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "groups": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/MemoryCountGroup"
+            },
+            "type": "object",
+            "title": "Groups"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "MemoryCounts",
+        "description": "Antwort von `GET /memories/counts` (ADR-0053 6.4.1).\n\n`total` zaehlt die Eintraege, die die Liste mit denselben Filtern zeigt.\n`groups` nennt je angefragter Gruppe die Anzahl je Wert — jeweils ohne\nden eigenen Filter dieser Gruppe (Facetten). `health` meldet alle Werte,\nauch mit 0; die uebrigen Gruppen nur vorhandene Werte."
+      },
       "MemoryCreate": {
         "properties": {
           "fact": {
@@ -18023,6 +18545,18 @@
         "title": "MemoryGuardMode",
         "description": "Modus des workspace-weiten Injection-Waechters (ADR-0044-Addendum).\n\n- ``standard``: Built-in-Filter (Default).\n- ``custom``: Built-in-Filter + workspace-eigene Allow-/Block-Phrasen.\n- ``off``: kein Injection-Filter — bewusste Owner-Entscheidung (gilt auch\n  fuer auto-Agenten); Importance/Dedup/Cap/Rate-Limit bleiben immer aktiv."
       },
+      "MemoryHealth": {
+        "type": "string",
+        "enum": [
+          "unconfirmed",
+          "expiring_soon",
+          "never_delivered",
+          "stale_delivery",
+          "external_or_inferred"
+        ],
+        "title": "MemoryHealth",
+        "description": "Vom Server berechneter Gesundheitszustand (ADR-0053 6.4.1, Filter `health`).\n\n- ``unconfirmed``: `active`, `confirmed_at IS NULL`.\n- ``expiring_soon``: `pending` oder `active`, `expires_at` in den naechsten\n  `MEMORY_HEALTH_EXPIRING_DAYS` Tagen.\n- ``never_delivered``: `active`, `retrieval_count = 0`, aelter als\n  `MEMORY_HEALTH_NEVER_DELIVERED_DAYS` Tage.\n- ``stale_delivery``: `active`, `last_retrieved_at` aelter als\n  `MEMORY_HEALTH_STALE_DELIVERY_DAYS` Tage.\n- ``external_or_inferred``: Herkunft `external_content` oder `inferred`.\n\nDie Zustaende schliessen sich nicht aus."
+      },
       "MemoryHit": {
         "properties": {
           "id": {
@@ -18057,6 +18591,15 @@
         "title": "MemoryKind",
         "description": "Art eines Gedaechtniseintrags (ADR-0053 3.1, DB-CHECK).\n\n`lesson` kann in der Datenbank nie `active` werden (DB-CHECK) und\nfliesst damit nie in einen Abruf."
       },
+      "MemoryListSort": {
+        "type": "string",
+        "enum": [
+          "newest",
+          "oldest"
+        ],
+        "title": "MemoryListSort",
+        "description": "Sortierung von `GET /memories`; Keyset auf `(created_at, id)`."
+      },
       "MemoryMode": {
         "type": "string",
         "enum": [
@@ -18078,6 +18621,34 @@
         ],
         "title": "MemoryOrigin",
         "description": "Vom Agenten deklarierte Herkunft (Weiche M8); Bestand `legacy_unknown`."
+      },
+      "MemoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "MemoryPage",
+        "description": "Eine Seite von `GET /memories`; `next_cursor` ist `None` am Ende."
       },
       "MemoryProposalAction": {
         "type": "string",
