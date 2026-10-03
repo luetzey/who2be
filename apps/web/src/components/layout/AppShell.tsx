@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Bot,
+  Brain,
   FileText,
   FolderOpen,
   LayoutDashboard,
@@ -84,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
       // und veroeffentlichte Inhalte.
       { to: '/workarea', labelKey: 'nav.workarea', icon: FolderOpen },
       { to: '/feedback', labelKey: 'nav.feedback', icon: MessageSquare },
+      { to: '/memory', labelKey: 'nav.memory', icon: Brain },
     ],
   },
   {

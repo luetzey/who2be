@@ -245,7 +245,8 @@
       "groups": {
         "buildingBlocks": "Bausteine",
         "operations": "Betrieb"
-      }
+      },
+      "memory": "Gedächtnis"
     },
     "signOut": "Abmelden",
     "language": {
@@ -3076,7 +3077,7 @@
       },
       "humanChannel": "Was ein Mensch selbst einträgt, gilt sofort als bestätigt.",
       "expiry": "Unbestätigte Einträge laufen nach {{days}} Tagen ab. Abrufe verlängern die Frist nicht.",
-      "legacyAuto": "Agenten auf „Automatisch“ geben nur frei, was hier eingeschaltet ist. Solange alles aus ist, landet jeder Eintrag zur Freigabe.",
+      "legacyAuto": "Agenten auf „Automatisch“ geben nur frei, was hier eingeschaltet ist. Solange alles aus ist, landet jeder Eintrag in „Zur Freigabe“.",
       "guardOff": {
         "title": "Der Memory-Wächter ist aus.",
         "description": "Automatisch freigegebene Einträge werden dann nicht auf Anweisungsmuster geprüft.",
@@ -3155,6 +3156,142 @@
           "title": "Begründung fehlt",
           "body": "Der Server braucht eine Begründung, warum trotz offener Prüffälle aktiviert wird. Trag sie oben ein."
         }
+      }
+    },
+    "page": {
+      "title": "Gedächtnis",
+      "description": "Was deine Agenten sich merken – über ihre Arbeit und über dich.",
+      "tabs": {
+        "approval": "Zur Freigabe"
+      }
+    },
+    "kind": {
+      "user_fact": "Nutzerfakt",
+      "agent_note": "Agentennotiz",
+      "lesson": "Lernvorschlag"
+    },
+    "origin": {
+      "user_stated": "Von dir gesagt",
+      "inferred": "Vom Agenten geschlossen",
+      "external_content": "Aus Webseite, Datei oder Werkzeug",
+      "legacy_unknown": "Unbekannt (ältere Einträge)",
+      "perAgent": "{{origin}} (laut Agent)"
+    },
+    "channel": {
+      "agent": "Agent",
+      "human": "Mensch",
+      "import": "Import"
+    },
+    "proposal": {
+      "alreadyDecided": "Über diesen Vorschlag wurde schon entschieden."
+    },
+    "approval": {
+      "search": "Suche",
+      "searchPlaceholder": "In Vorschlägen suchen…",
+      "agentFilter": "Agent",
+      "allAgents": "Alle Agenten",
+      "heldBackTitle": "Zurückgehalten – einzeln prüfen",
+      "hold": {
+        "external": "Aus Webseite, Datei oder Werkzeug (laut Agent)",
+        "externalWhy": "Einträge aus fremden Inhalten werden nie automatisch wirksam. Prüfe, ob das stimmt und ob du es so willst.",
+        "instruction": "Als Anweisung eingeordnet",
+        "instructionWhy": "Der Eintrag sagt dem Agenten, wie er arbeiten soll. Das wirkt wie eine Regel – lies ihn, bevor er gilt.",
+        "inferred": "Vom Agenten geschlossen",
+        "inferredWhy": "Du hast das nicht selbst gesagt – der Agent hat es abgeleitet. Prüfe, ob es stimmt."
+      },
+      "whyHere": "Warum hier:",
+      "agentReason": "Begründung des Agenten",
+      "factLabel": "Fakt",
+      "channel": "Kanal",
+      "category": "Kategorie",
+      "created": "Vorgeschlagen",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "rejectTitle": "Eintrag ablehnen?",
+      "rejectNote": "Notiz (optional)",
+      "rejectKeepsDedup": "Abgelehnte Einträge bleiben gespeichert, damit der Agent sie nicht erneut vorschlägt.",
+      "applyChange": "Änderung übernehmen",
+      "applyDelete": "Löschung übernehmen",
+      "selectRow": "„{{fact}}“ auswählen",
+      "groupMine": "Dein Nutzergedächtnis",
+      "groupApproveAgent": "Alle {{count}} von {{agent}} freigeben",
+      "groupApproveAgentAria": "Alle {{count}} Einträge von {{agent}} freigeben",
+      "groupApproveMine": "Alle {{count}} freigeben",
+      "groupExcludes": "Zurückgehaltene und Änderungsvorschläge sind nicht dabei.",
+      "groupConfirm": {
+        "title": "{{count}} Einträge von {{agent}} freigeben?",
+        "titleMine": "{{count}} Einträge in dein Nutzergedächtnis übernehmen?",
+        "body": "Sie werden sofort wirksam und gelten als von dir freigegeben. Zurückgehaltene und Änderungsvorschläge bleiben in der Warteschlange.",
+        "more": "und {{count}} weitere",
+        "submit": "{{count}} freigeben"
+      },
+      "countChanged": "Inzwischen sind es {{count}}. Erneut bestätigen?",
+      "moreInGroup": "{{count}} weitere von {{agent}} –",
+      "onlyAgent": "Nur {{agent}} zeigen",
+      "moreHeld": "{{count}} weitere zurückgehaltene – nach Agent filtern",
+      "loadMore": "Weitere laden",
+      "selectionLimit": "Höchstens 100 auf einmal.",
+      "bulk": {
+        "region": "Auswahl",
+        "selected": "{{count}} ausgewählt",
+        "approve": "Auswahl freigeben ({{count}})",
+        "reject": "Auswahl ablehnen",
+        "rejectTitle_one": "{{count}} Eintrag ablehnen?",
+        "rejectTitle_other": "{{count}} Einträge ablehnen?"
+      },
+      "proposal": {
+        "change": "Änderungsvorschlag",
+        "delete": "Löschvorschlag",
+        "rejectTitle": "Vorschlag ablehnen?",
+        "unknownFact": "Der bisherige Eintrag ließ sich nicht laden.",
+        "srDiff": "Vorher: {{before}}. Nachher: {{after}}.",
+        "accepted": "Vorschlag übernommen.",
+        "rejected": "Vorschlag abgelehnt."
+      },
+      "emptyViewer": {
+        "title": "Nichts zur Freigabe",
+        "body": "Wenn ein Agent sich etwas über dich merken will, entscheidest du hier."
+      },
+      "emptyEditor": {
+        "body": "Neue Vorschläge deiner Agenten erscheinen hier. Was automatisch freigegeben wird, legt ein Admin unter Einstellungen → Workspace fest.",
+        "action": "Auto-Freigabe ansehen"
+      },
+      "emptyAllOff": {
+        "title": "Kein Agent speichert Erinnerungen",
+        "body": "Das Gedächtnis ist bei allen Agenten auf „Aus“. Du schaltest es je Agent unter Konfiguration → Gedächtnis ein.",
+        "action": "Agenten ansehen"
+      },
+      "noMatch": "Keine Treffer",
+      "resetFilters": "Filter zurücksetzen",
+      "loadError": "Die Warteschlange ließ sich nicht laden.",
+      "forbidden": "Dafür fehlen dir die Rechte (ab Rolle {{role}}).",
+      "alreadyDecided": "Schon entschieden.",
+      "alreadyDecidedBy": "Schon von {{name}} entschieden.",
+      "capReachedUser": "Dein Nutzergedächtnis ist voll ({{maximum}} Einträge, abgelehnte zählen mit). Lösche alte Einträge, bevor neue dazukommen.",
+      "capReachedNote": "Die Agentennotizen dieses Agenten sind voll. Lösche alte, bevor neue dazukommen."
+    },
+    "batch": {
+      "done": {
+        "approve": "{{count}} freigegeben",
+        "reject": "{{count}} abgelehnt"
+      },
+      "partial": {
+        "approve": "{{ok}} freigegeben, {{failed}} nicht möglich",
+        "reject": "{{ok}} abgelehnt, {{failed}} nicht möglich"
+      },
+      "partialBanner": {
+        "approve_one": "{{count}} Eintrag konnte nicht freigegeben werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
+        "approve_other": "{{count}} Einträge konnten nicht freigegeben werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile.",
+        "reject_one": "{{count}} Eintrag konnte nicht abgelehnt werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
+        "reject_other": "{{count}} Einträge konnten nicht abgelehnt werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile."
+      },
+      "failedAll": "Das hat nicht geklappt. Es wurde nichts geändert.",
+      "reason": {
+        "memory_not_found": "Gibt es nicht mehr.",
+        "memory_cap_reached": "Obergrenze erreicht – erst alte Einträge löschen.",
+        "memory_held": "Nur einzeln freigebbar.",
+        "forbidden": "Dafür fehlen dir die Rechte.",
+        "other": "Nicht möglich ({{code}})."
       }
     }
   }

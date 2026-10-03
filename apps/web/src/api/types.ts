@@ -708,7 +708,14 @@ export type ReadScope = 'all' | 'assigned' | 'none'
 // ADR-0044 — Agent-Memory (kuratiert, agentisch). Lebenszyklus: `pending`
 // (nur Triage-UI, retrieval-unsichtbar) → `active` (einzig retrieval-sichtbar)
 // oder `rejected` (bleibt als Dedup-Wächter-Zeile bestehen, endgültig loeschbar).
-export type MemoryStatus = 'pending' | 'active' | 'rejected'
+// ADR-0053 3.1: `expired` (Verfall ohne Bestaetigung) und `converted` (Lern-
+// vorschlag wurde zum Fall) kommen mit Phase C dazu.
+export type MemoryStatus = 'pending' | 'active' | 'rejected' | 'expired' | 'converted'
+// ADR-0053 3.1 — Art und Bereich. Ein `lesson` wird nie `active` (DB-CHECK).
+export type MemoryKind = 'user_fact' | 'agent_note' | 'lesson'
+export type MemoryScope = 'agent' | 'user'
+// Kanal, den der SERVER setzt (anders als `origin`, das der Agent behauptet).
+export type MemorySource = 'agent' | 'human' | 'import'
 export type MemoryCategory =
   | 'preference'
   | 'fact'
@@ -725,19 +732,126 @@ export type MemoryDirective = 'required' | 'recommended'
 
 export interface MemoryRead {
   id: string
-  agent_id: string
+  // `null` beim Nutzergedaechtnis (`scope='user'`); dort traegt
+  // `created_by_agent_id` den einreichenden Agenten.
+  agent_id: string | null
   status: MemoryStatus
   fact: string
   // Nur Triage-Hilfe (1 Satz Begruendung des Agenten) — nie im Retrieval/Prompt.
   context: string | null
   category: MemoryCategory
   importance: number
-  source: string
+  source: MemorySource
   triage_note: string | null
   retrieval_count: number
   last_retrieved_at: string | null
   created_at: string
   updated_at: string
+  // ADR-0053 3.1 (Phase C). Optional, damit aeltere Fixtures gueltig bleiben;
+  // der Server liefert sie immer.
+  kind?: MemoryKind
+  scope?: MemoryScope
+  subject_user_id?: string | null
+  origin?: MemoryOrigin
+  created_by_agent_id?: string | null
+  confirmed_at?: string | null
+  confirmed_by?: string | null
+  expires_at?: string | null
+  occurrence_count?: number
+  converted_case_id?: string | null
+}
+
+// ADR-0053 6.4.1 — workspace-weite Liste (`GET /memories`), Zaehler
+// (`GET /memories/counts`) und Stapel (`POST /memories/batch`). Fremdes
+// Nutzergedaechtnis liefert der Server nie, auch nicht an admin (3.1.1).
+export type MemoryHealth =
+  | 'unconfirmed'
+  | 'expiring_soon'
+  | 'never_delivered'
+  | 'stale_delivery'
+  | 'external_or_inferred'
+export type MemoryListSort = 'newest' | 'oldest'
+// `subject_user_id` ist admin-only und liefert nur Zahlen; die Web-App fragt
+// es in C5a nicht an.
+export type MemoryCountGroup =
+  | 'agent'
+  | 'kind'
+  | 'status'
+  | 'origin'
+  | 'source'
+  | 'health'
+  | 'subject_user_id'
+
+// Spiegelt `MemoryFilter`. `held` ist serverseitig abgeleitet: `pending` und
+// Herkunft `external_content`/`inferred` oder Kategorie `instruction`.
+// `status='pending'` schliesst Lernvorschlaege aus, ausser bei `kind='lesson'`.
+export interface MemoryFilter {
+  status?: MemoryStatus
+  kind?: MemoryKind
+  scope?: MemoryScope
+  agent_id?: string
+  origin?: MemoryOrigin
+  source?: MemorySource
+  health?: MemoryHealth
+  held?: boolean
+  q?: string
+  created_after?: string
+}
+
+export interface MemoryPage {
+  items: MemoryRead[]
+  next_cursor: string | null
+}
+
+export interface MemoryCounts {
+  total: number
+  groups?: Partial<Record<MemoryCountGroup, Record<string, number>>>
+}
+
+export type MemoryBatchAction = 'approve' | 'reject' | 'confirm' | 'delete'
+
+// Entweder `ids` (hoechstens 100) oder `filter` mit `expected_count`
+// (Abweichung 409 `memory_batch_count_mismatch` mit `params.count`).
+export interface MemoryBatchRequest {
+  action: MemoryBatchAction
+  ids?: string[]
+  filter?: MemoryFilter
+  expected_count?: number
+  note?: string
+}
+
+export interface MemoryBatchItemResult {
+  id: string
+  ok: boolean
+  reason?: string | null
+  params?: Record<string, unknown> | null
+}
+
+export interface MemoryBatchResult {
+  results: MemoryBatchItemResult[]
+}
+
+// ADR-0053 3.1.4 — Aenderungs-/Loeschvorschlag eines Agenten. Wird nie
+// automatisch angenommen (4.2); entschieden wird per `decide`.
+export type MemoryProposalAction = 'change' | 'delete'
+export type MemoryProposalStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface MemoryProposalRead {
+  id: string
+  memory_id: string
+  agent_id: string
+  action: MemoryProposalAction
+  new_fact: string | null
+  reason: string
+  status: MemoryProposalStatus
+  decided_by: string | null
+  decided_at: string | null
+  created_at: string
+}
+
+export interface MemoryProposalDecision {
+  accept: boolean
+  note?: string
 }
 
 export interface MemoryTriageInput {
