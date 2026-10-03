@@ -1298,7 +1298,10 @@ export function createApi(token: string, workspaceId: string): Api {
       const query = params.toString()
       return request<MemoryPage>(token, `${ws}/memories${query ? `?${query}` : ''}`)
     },
-    getMemory: (memoryId) => request<MemoryRead>(token, `${ws}/memories/${memoryId}`),
+    // `memoryId` kommt roh aus `?entry=` der URL: kodieren, damit `../x` den
+    // Pfad nicht verlaesst (Client-Side Path Traversal).
+    getMemory: (memoryId) =>
+      request<MemoryRead>(token, `${ws}/memories/${encodeURIComponent(memoryId)}`),
     countMemories: (filter, groupBy) => {
       const params = memoryFilterParams(filter)
       for (const group of groupBy ?? []) params.append('group_by', group)

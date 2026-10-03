@@ -456,6 +456,25 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     ).toBeNull()
   })
 
+  it('kodiert die ID aus ?entry=, sodass ../x den Memory-Pfad nicht verlässt', async () => {
+    // `?entry=..%2F..%2Fx` kommt als `../../x` an. Roh in den Pfad gesetzt,
+    // macht der Browser daraus `/v1/workspaces/x` (Client-Side Path Traversal).
+    const { calls } = stubApi()
+    renderPage('/w/ws-1/memory?tab=entries&entry=..%2F..%2Fx')
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(
+      await within(sheet).findByText(
+        'Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      calls.some((call) => call.path === '/v1/workspaces/ws-1/memories/..%2F..%2Fx'),
+    ).toBe(true)
+    expect(
+      calls.filter((call) => !call.path.startsWith('/v1/workspaces/ws-1/')).map((c) => c.path),
+    ).toEqual([])
+  })
+
   it('zeigt einen Verlaufsfehler nur im Verlaufsabschnitt', async () => {
     stubApi({ history: jsonResponse({ detail: 'kaputt' }, 500) })
     const sheet = await openSheet()

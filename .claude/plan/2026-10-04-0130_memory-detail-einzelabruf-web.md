@@ -50,4 +50,7 @@ bis zu 10 Seiten `listMemories` auf; jeder Fehler (auch Netzfehler) wird zu
       Netzfehler+Retry, Serverfehler 500; zurueckgesetzt)
 - [x] Changelog-Fragment
 - [x] Web-DoD (Node 22): lint 0 Fehler (90 Warnungen = main-Baseline), tsc -b, i18n:check, test:coverage 1825/1825, build, license:check gruen
-- [ ] Push, PR, CI
+- [x] Push, PR, CI (PR #811, 17/17 gruen auf ec6c9a54)
+- [x] Review Runde 1: getMemory kodiert die ID (`encodeURIComponent`, CSPT aus `?entry=`),
+      Test mit `entry=..%2F..%2Fx` (Rot-Probe ohne Kodierung -> rot); Screenshots
+      1280/390 hell/dunkel fuer Fehler- und Nicht-gefunden-Zustand mit Messwert im Sheet
