@@ -52,12 +52,19 @@ from who2be_models import (
     MemoryStatus,
 )
 from who2be_models.memory import (
+    MEMORY_HEALTH_EXPIRING_DAYS,
+    MEMORY_HEALTH_NEVER_DELIVERED_DAYS,
+    MEMORY_HEALTH_STALE_DELIVERY_DAYS,
     MEMORY_UNCONFIRMED_TTL_DAYS,
     MemoryActorKind,
     MemoryAutoCell,
     MemoryAutoPolicy,
+    MemoryCountGroup,
     MemoryEventKind,
+    MemoryFilter,
+    MemoryHealth,
     MemoryKind,
+    MemoryListSort,
     MemoryOrigin,
     MemoryProposalAction,
     MemoryProposalCreate,
@@ -399,6 +406,47 @@ class MemoryRepository(Protocol):
         expected_count: int,
         actor_id: UUID,
     ) -> MemoryRevokeOutcome: ...
+
+    # --- Paket C3c-1a: workspace-weite Liste und Zaehler (6.4.1)
+
+    async def list_visible(
+        self,
+        workspace_id: UUID,
+        visibility: MemoryVisibility,
+        filters: MemoryFilter,
+        *,
+        sort: MemoryListSort,
+        limit: int,
+        cursor: tuple[datetime, UUID] | None,
+    ) -> list[MemoryRead]: ...
+
+    async def count_visible(
+        self, workspace_id: UUID, visibility: MemoryVisibility, filters: MemoryFilter
+    ) -> int: ...
+
+    async def count_grouped(
+        self,
+        workspace_id: UUID,
+        visibility: MemoryVisibility,
+        filters: MemoryFilter,
+        group: MemoryCountGroup,
+    ) -> dict[str, int]: ...
+
+
+@dataclass(frozen=True)
+class MemoryVisibility:
+    """Was ein Mensch in der workspace-weiten Sicht sehen darf (ADR-0053 6.4.1).
+
+    Immer das eigene Nutzergedaechtnis (`viewer_user_id`); das
+    Agentengedaechtnis aller Agenten nur mit `include_agent_scope` (ab
+    `editor`). Das Nutzergedaechtnis anderer Personen gehoert nie zur Sicht
+    (3.1.1, Owner-Entscheidung 3a). Einzige Ausnahme ist die Zaehler-Gruppe
+    `subject_user_id`: sie zaehlt jedes Nutzergedaechtnis, liefert aber nur
+    Zahlen, und der Service gibt sie nur `admin` frei.
+    """
+
+    viewer_user_id: UUID
+    include_agent_scope: bool
 
 
 @dataclass(frozen=True)
@@ -1619,6 +1667,219 @@ class PgMemoryRepository:
             visible=[m for m in after if m.id not in hidden_ids],
             applied=True,
         )
+
+    # ------------------------- Workspace-weite Liste und Zaehler (6.4.1, C3c-1a)
+
+    async def list_visible(
+        self,
+        workspace_id: UUID,
+        visibility: MemoryVisibility,
+        filters: MemoryFilter,
+        *,
+        sort: MemoryListSort,
+        limit: int,
+        cursor: tuple[datetime, UUID] | None,
+    ) -> list[MemoryRead]:
+        """Eine Seite der sichtbaren Eintraege, Keyset auf `(created_at, id)`.
+
+        Beide Sortierschluessel laufen in dieselbe Richtung; `id` bricht
+        Gleichstaende, damit die Reihenfolge deterministisch ist und keine
+        Zeile an einer Seitengrenze doppelt erscheint oder fehlt.
+        """
+        where = _memory_where(workspace_id, visibility, filters)
+        direction, compare = ("ASC", ">") if sort == MemoryListSort.oldest else ("DESC", "<")
+        if cursor is not None:
+            at, after_id = cursor
+            where.add(
+                f"(m.created_at, m.id) {compare} "
+                f"({where.bind(at)}::timestamptz, {where.bind(after_id)}::uuid)"
+            )
+        rows = await self._pool.fetch(
+            f"SELECT {_READ_COLUMNS_M} FROM agent_memory m WHERE {where.sql} "
+            f"ORDER BY m.created_at {direction}, m.id {direction} "
+            f"LIMIT {where.bind(limit)}",
+            *where.args,
+        )
+        return [MemoryRead.model_validate(dict(row)) for row in rows]
+
+    async def count_visible(
+        self, workspace_id: UUID, visibility: MemoryVisibility, filters: MemoryFilter
+    ) -> int:
+        """Anzahl der Eintraege, die `list_visible` mit denselben Filtern zeigt."""
+        where = _memory_where(workspace_id, visibility, filters)
+        count = await self._pool.fetchval(
+            f"SELECT COUNT(*)::int FROM agent_memory m WHERE {where.sql}", *where.args
+        )
+        return int(count or 0)
+
+    async def count_grouped(
+        self,
+        workspace_id: UUID,
+        visibility: MemoryVisibility,
+        filters: MemoryFilter,
+        group: MemoryCountGroup,
+    ) -> dict[str, int]:
+        """Facetten-Zaehler einer Gruppe, ohne den eigenen Filter dieser Gruppe.
+
+        Jeder Wert ist so gezaehlt, dass er der Laenge von `list_visible` mit
+        diesem Wert als Filter entspricht. `health` meldet alle Zustaende
+        (auch 0), weil sie sich nicht ausschliessen und nicht per `GROUP BY`
+        entstehen. Werte ohne Schluessel (Eintrag ohne Agent) fallen weg.
+
+        `subject_user_id` zaehlt das Nutzergedaechtnis ALLER Personen im
+        Workspace — nur Zahlen, ohne Freitextsuche (sonst waere fremder
+        Inhalt ueber Zahlen abtastbar). Die Freigabe (nur `admin`) liegt im
+        Service.
+        """
+        if group == MemoryCountGroup.health:
+            where = _memory_where(workspace_id, visibility, filters, skip=group)
+            columns = ", ".join(
+                f"COUNT(*) FILTER (WHERE {_HEALTH_SQL[h]})::int AS {h.value}" for h in MemoryHealth
+            )
+            row = await self._pool.fetchrow(
+                f"SELECT {columns} FROM agent_memory m WHERE {where.sql}", *where.args
+            )
+            assert row is not None
+            return {h.value: int(row[h.value]) for h in MemoryHealth}
+        where = _memory_where(
+            workspace_id,
+            visibility,
+            filters,
+            skip=group,
+            all_user_memory=group == MemoryCountGroup.subject_user_id,
+        )
+        key = _GROUP_KEY_SQL[group]
+        rows = await self._pool.fetch(
+            f"SELECT {key} AS key, COUNT(*)::int AS n FROM agent_memory m "
+            f"WHERE {where.sql} AND {key} IS NOT NULL GROUP BY 1 ORDER BY 1",
+            *where.args,
+        )
+        return {row["key"]: int(row["n"]) for row in rows}
+
+
+# Filterbau der workspace-weiten Sicht (6.4.1). Liste, Zaehler und spaeter die
+# Stapel-Auswahl per Filter (C3c-2a) nutzen ihn gemeinsam, damit alle drei
+# dieselbe Menge meinen. Jeder Wert aus `MemoryFilter` wird gebunden; der
+# SQL-Text besteht nur aus festen Zeichenketten dieses Moduls.
+_HEALTH_SQL: dict[MemoryHealth, str] = {
+    MemoryHealth.unconfirmed: "m.status = 'active' AND m.confirmed_at IS NULL",
+    # Ohne Untergrenze: ein ueberfaelliger Eintrag, den der Verfallsjob noch
+    # nicht erreicht hat, verfaellt ebenfalls gleich.
+    MemoryHealth.expiring_soon: (
+        "m.status IN ('pending', 'active') "
+        f"AND m.expires_at < now() + make_interval(days => {int(MEMORY_HEALTH_EXPIRING_DAYS)})"
+    ),
+    MemoryHealth.never_delivered: (
+        "m.status = 'active' AND m.retrieval_count = 0 AND m.created_at < "
+        f"now() - make_interval(days => {int(MEMORY_HEALTH_NEVER_DELIVERED_DAYS)})"
+    ),
+    MemoryHealth.stale_delivery: (
+        "m.status = 'active' AND m.last_retrieved_at < "
+        f"now() - make_interval(days => {int(MEMORY_HEALTH_STALE_DELIVERY_DAYS)})"
+    ),
+    MemoryHealth.external_or_inferred: "m.origin IN ('external_content', 'inferred')",
+}
+
+# Zurueckgehalten (6.4.1, PM-Entscheidung F1 = a): abgeleitet, kein Feld.
+_HELD_SQL = (
+    "m.status = 'pending' "
+    "AND (m.origin IN ('external_content', 'inferred') OR m.category = 'instruction')"
+)
+
+# Der Agent eines Eintrags: beim Agentengedaechtnis der Besitzer, beim
+# Nutzergedaechtnis (`agent_id IS NULL`, 3.1.1) der einreichende Agent.
+_AGENT_SQL = "COALESCE(m.agent_id, m.created_by_agent_id)"
+
+_GROUP_KEY_SQL: dict[MemoryCountGroup, str] = {
+    MemoryCountGroup.agent: f"{_AGENT_SQL}::text",
+    MemoryCountGroup.kind: "m.kind",
+    MemoryCountGroup.status: "m.status",
+    MemoryCountGroup.origin: "m.origin",
+    MemoryCountGroup.source: "m.source",
+    MemoryCountGroup.subject_user_id: "m.subject_user_id::text",
+}
+
+
+class _Where:
+    """Sammelt Bedingungen und gebundene Parameter (`$1` ist der Workspace)."""
+
+    def __init__(self, workspace_id: UUID) -> None:
+        self.args: list[object] = [workspace_id]
+        self._parts: list[str] = ["m.workspace_id = $1"]
+
+    def bind(self, value: object) -> str:
+        self.args.append(value)
+        return f"${len(self.args)}"
+
+    def add(self, condition: str) -> None:
+        self._parts.append(condition)
+
+    @property
+    def sql(self) -> str:
+        return " AND ".join(f"({part})" for part in self._parts)
+
+
+def _escape_like(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _memory_where(
+    workspace_id: UUID,
+    visibility: MemoryVisibility,
+    filters: MemoryFilter,
+    *,
+    skip: MemoryCountGroup | None = None,
+    all_user_memory: bool = False,
+) -> _Where:
+    """Bedingung der workspace-weiten Sicht samt Filtern.
+
+    `skip` laesst den Filter einer Zaehler-Gruppe weg (Facette).
+    `all_user_memory` ersetzt die Sichtbarkeit durch „jedes
+    Nutzergedaechtnis“ und laesst `scope` und `q` weg — nur fuer die
+    Zaehler-Gruppe `subject_user_id`.
+
+    Warteschlangen-Regel (6.4.1 „Zaehler“): `status=pending` schliesst
+    Lernvorschlaege aus, ausser bei `kind=lesson`. In der Facette `status`
+    gilt dasselbe fuer den Wert `pending`, in der Facette `kind` traegt der
+    Wert `lesson` die Ausnahme selbst.
+    """
+    where = _Where(workspace_id)
+    if all_user_memory:
+        where.add("m.scope = 'user'")
+    else:
+        own = f"m.scope = 'user' AND m.subject_user_id = {where.bind(visibility.viewer_user_id)}"
+        where.add(f"({own}) OR m.scope = 'agent'" if visibility.include_agent_scope else own)
+        if filters.scope is not None:
+            where.add(f"m.scope = {where.bind(filters.scope.value)}")
+        if filters.q is not None:
+            where.add(f"m.fact ILIKE '%' || {where.bind(_escape_like(filters.q))} || '%'")
+    explicit_lesson = filters.kind == MemoryKind.lesson
+    if skip == MemoryCountGroup.status:
+        if not explicit_lesson:
+            where.add("NOT (m.status = 'pending' AND m.kind = 'lesson')")
+    elif filters.status is not None:
+        where.add(f"m.status = {where.bind(filters.status.value)}")
+        if (
+            filters.status == MemoryStatus.pending
+            and not explicit_lesson
+            and skip != MemoryCountGroup.kind
+        ):
+            where.add("m.kind <> 'lesson'")
+    if filters.kind is not None and skip != MemoryCountGroup.kind:
+        where.add(f"m.kind = {where.bind(filters.kind.value)}")
+    if filters.agent_id is not None and skip != MemoryCountGroup.agent:
+        where.add(f"{_AGENT_SQL} = {where.bind(filters.agent_id)}::uuid")
+    if filters.origin is not None and skip != MemoryCountGroup.origin:
+        where.add(f"m.origin = {where.bind(filters.origin.value)}")
+    if filters.source is not None and skip != MemoryCountGroup.source:
+        where.add(f"m.source = {where.bind(filters.source.value)}")
+    if filters.health is not None and skip != MemoryCountGroup.health:
+        where.add(_HEALTH_SQL[filters.health])
+    if filters.held is not None:
+        where.add(_HELD_SQL if filters.held else f"NOT ({_HELD_SQL})")
+    if filters.created_after is not None:
+        where.add(f"m.created_at >= {where.bind(filters.created_after)}::timestamptz")
+    return where
 
 
 # Not-Aus-Auswahl (6.4.1). Parameter: $1 Workspace, $2 Aufrufer (fuer die

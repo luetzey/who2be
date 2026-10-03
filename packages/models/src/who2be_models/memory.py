@@ -564,6 +564,117 @@ class MemoryRevokeAutoResult(BaseModel):
     results: list[MemoryBatchItemResult]
 
 
+# ------------------------------------- Workspace-weite Liste und Zaehler (6.4.1)
+
+# `GET /memories`: hoechstens so viele Eintraege je Seite (ADR-0053 6.4.1).
+MEMORY_LIST_LIMIT_MAX = 50
+MEMORY_LIST_LIMIT_DEFAULT = 20
+# Freitextsuche `q` (Teilstring ueber `fact`).
+MEMORY_LIST_QUERY_MAX_LENGTH = 200
+# Grenzen der Gesundheits-Filter (ADR-0053 6.4.1, Design-Entscheidung W3 = a;
+# gesetzte Annahmen).
+MEMORY_HEALTH_EXPIRING_DAYS = 7
+MEMORY_HEALTH_NEVER_DELIVERED_DAYS = 30
+MEMORY_HEALTH_STALE_DELIVERY_DAYS = 90
+
+
+class MemoryHealth(StrEnum):
+    """Vom Server berechneter Gesundheitszustand (ADR-0053 6.4.1, Filter `health`).
+
+    - ``unconfirmed``: `active`, `confirmed_at IS NULL`.
+    - ``expiring_soon``: `pending` oder `active`, `expires_at` in den naechsten
+      `MEMORY_HEALTH_EXPIRING_DAYS` Tagen.
+    - ``never_delivered``: `active`, `retrieval_count = 0`, aelter als
+      `MEMORY_HEALTH_NEVER_DELIVERED_DAYS` Tage.
+    - ``stale_delivery``: `active`, `last_retrieved_at` aelter als
+      `MEMORY_HEALTH_STALE_DELIVERY_DAYS` Tage.
+    - ``external_or_inferred``: Herkunft `external_content` oder `inferred`.
+
+    Die Zustaende schliessen sich nicht aus.
+    """
+
+    unconfirmed = "unconfirmed"
+    expiring_soon = "expiring_soon"
+    never_delivered = "never_delivered"
+    stale_delivery = "stale_delivery"
+    external_or_inferred = "external_or_inferred"
+
+
+class MemoryListSort(StrEnum):
+    """Sortierung von `GET /memories`; Keyset auf `(created_at, id)`."""
+
+    newest = "newest"
+    oldest = "oldest"
+
+
+class MemoryCountGroup(StrEnum):
+    """Gruppe eines Zaehlers in `GET /memories/counts` (ADR-0053 6.4.1).
+
+    `subject_user_id` ist `admin` vorbehalten und zaehlt das
+    Nutzergedaechtnis je Person — nur als Zahl (Owner-Entscheidung 3a).
+    """
+
+    agent = "agent"
+    kind = "kind"
+    status = "status"
+    origin = "origin"
+    source = "source"
+    health = "health"
+    subject_user_id = "subject_user_id"
+
+
+class MemoryFilter(BaseModel):
+    """Filter der workspace-weiten Liste, ihrer Zaehler und der Stapel-Auswahl.
+
+    Alle Felder sind optional und wirken mit UND. `agent_id` trifft beim
+    Agentengedaechtnis den Besitzer, beim Nutzergedaechtnis den einreichenden
+    Agenten. `held` (zurueckgehalten) ist abgeleitet: `pending` und Herkunft
+    `external_content`/`inferred` oder Kategorie `instruction`.
+    `status=pending` ist die Warteschlange und schliesst Lernvorschlaege aus,
+    ausser bei `kind=lesson` (6.4.1 „Zaehler“).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: MemoryStatus | None = None
+    kind: MemoryKind | None = None
+    scope: MemoryScope | None = None
+    agent_id: UUID | None = None
+    origin: MemoryOrigin | None = None
+    source: MemorySource | None = None
+    health: MemoryHealth | None = None
+    held: bool | None = None
+    q: str | None = Field(default=None, min_length=1, max_length=MEMORY_LIST_QUERY_MAX_LENGTH)
+    created_after: datetime | None = None
+
+    @field_validator("created_after")
+    @classmethod
+    def _aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Zeitpunkt braucht eine Zeitzone.")
+        return value
+
+
+class MemoryPage(BaseModel):
+    """Eine Seite von `GET /memories`; `next_cursor` ist `None` am Ende."""
+
+    items: list[MemoryRead]
+    next_cursor: str | None = None
+
+
+class MemoryCounts(BaseModel):
+    """Antwort von `GET /memories/counts` (ADR-0053 6.4.1).
+
+    `total` zaehlt die Eintraege, die die Liste mit denselben Filtern zeigt.
+    `groups` nennt je angefragter Gruppe die Anzahl je Wert — jeweils ohne
+    den eigenen Filter dieser Gruppe (Facetten). `health` meldet alle Werte,
+    auch mit 0; die uebrigen Gruppen nur vorhandene Werte.
+    """
+
+    total: int
+    groups: dict[MemoryCountGroup, dict[str, int]] = Field(default_factory=dict)
+
+
 class MemoryHit(BaseModel):
     """Ein Retrieval-Treffer fuer Agenten (bewusst schmal).
 
