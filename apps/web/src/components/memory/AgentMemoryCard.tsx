@@ -1,7 +1,7 @@
 import { Brain, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import type { Agent } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -9,8 +9,10 @@ import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { EmptyState } from '@/components/data/EmptyState'
+import { MemoryDetailSheet } from '@/components/memory/MemoryDetailSheet'
 import { ActiveFilterChips, FilterSheetButton } from '@/components/memory/MemoryFacets'
 import { MemoryList } from '@/components/memory/MemoryList'
+import type { MemoryEntryState } from '@/components/memory/MemoryRow'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -146,7 +148,7 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
   const memoryOff = (agent.tool_policy.memory_mode ?? 'off') === 'off'
 
   // Deep-Link `#memory`: zur Karte scrollen und sie kurz hervorheben.
-  const { hash } = useLocation()
+  const { hash, state } = useLocation()
   const cardRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (hash !== '#memory') return
@@ -177,6 +179,21 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
     setNonce((value) => value + 1)
   }
 
+  // Detail-Sheet (C5c-2, Spec §6.6/§7): der Chevron je Zeile setzt
+  // `?entry=<id>` und gibt den Eintrag im Router-State mit (wie auf /memory).
+  const [params, setParams] = useSearchParams()
+  const entryId = params.get('entry')
+  const entryState = (state as Partial<MemoryEntryState> | null)?.memory ?? null
+  const closeEntry = () =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('entry')
+        return next
+      },
+      { replace: true },
+    )
+
   // „In der Gedaechtnisverwaltung oeffnen“ uebernimmt die gesetzten Filter.
   const centralHref = useMemo(() => {
     const params = new URLSearchParams({ tab: 'entries', agent: agent.id })
@@ -201,7 +218,9 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1.5">
-            <CardTitle>{t('memory.title')}</CardTitle>
+            <CardTitle tabIndex={-1} className="outline-none" data-memory-card-heading>
+              {t('memory.title')}
+            </CardTitle>
             <CardDescription>{t('memory.description')}</CardDescription>
           </div>
           {(counts.total ?? 0) > 0 ? (
@@ -327,6 +346,7 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
               onChanged={() => setNonce((value) => value + 1)}
               fixedAgentId={agent.id}
               readOnly={memoryOff}
+              detailLinks
               emptyState={
                 <EmptyState
                   title={t('memory.empty.title')}
@@ -345,6 +365,13 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
           {t('memory.openCentral')} <span aria-hidden="true">→</span>
         </Link>
       </CardContent>
+      <MemoryDetailSheet
+        entryId={entryId}
+        initial={entryState}
+        onClose={closeEntry}
+        onChanged={refresh}
+        fallbackFocus={() => cardRef.current?.querySelector<HTMLElement>('[data-memory-card-heading]') ?? null}
+      />
     </Card>
   )
 }

@@ -145,6 +145,7 @@ function stubApi({
     }
     if (path.endsWith('/memories')) return jsonResponse({ items, next_cursor: null })
     if (path.endsWith('/memory-proposals')) return jsonResponse(proposals)
+    if (path.endsWith('/history')) return jsonResponse([])
     if (path.endsWith('/agents')) return jsonResponse([agent()])
     return jsonResponse([])
   })
@@ -314,6 +315,31 @@ describe('AgentMemoryCard (C5b-2, Spec §6.6)', () => {
     const card = await screen.findByTestId('agent-memory-card')
     expect(card).toHaveAttribute('id', 'memory')
     await waitFor(() => expect(card).toHaveAttribute('data-highlighted', 'true'))
+  })
+
+  it('Chevron je Zeile öffnet das Detail-Sheet über ?entry= (kein toter Knopf)', async () => {
+    const { calls } = stubApi({ items: [memory({ fact: 'Nutzt uv statt pip.' })] })
+    renderCard()
+    const chevron = await screen.findByTestId('open-detail')
+    expect(chevron).toHaveAccessibleName('Details zu „Nutzt uv statt pip.“ öffnen')
+    fireEvent.click(chevron)
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(within(sheet).getByTestId('detail-fact')).toHaveTextContent('Nutzt uv statt pip.')
+    // Eintrag kam aus der Liste mit: Verlauf geladen, keine Suche nach ihm.
+    await waitFor(() =>
+      expect(calls.some((c) => /\/agents\/a1\/memories\/m1\/history$/.test(c.url.pathname))).toBe(
+        true,
+      ),
+    )
+    fireEvent.keyDown(sheet, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('memory-detail-sheet')).toBeNull())
+  })
+
+  it('Deep-Link ?entry= auf der Agent-Seite öffnet das Sheet', async () => {
+    stubApi({ items: [memory({ fact: 'Nutzt uv statt pip.' })] })
+    renderCard(agent(), 'editor', '/w/ws-1/agents/a1?entry=m1')
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(await within(sheet).findByTestId('detail-fact')).toHaveTextContent('Nutzt uv statt pip.')
   })
 
   it('hat keine axe-Verstöße', async () => {

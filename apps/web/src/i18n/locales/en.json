@@ -3133,7 +3133,35 @@
         "approval": "Awaiting approval",
         "entries": "Entries"
       },
-      "tabsAria": "Memory sections"
+      "tabsAria": "Memory sections",
+      "moreActions": "More actions"
+    },
+    "pullback": {
+      "menu": "Pull back automatic approvals…",
+      "title": "Pull back automatic approvals",
+      "description": "Entries that took effect without human review go back to \"Awaiting approval\". Nothing is deleted.",
+      "period": "Time period",
+      "period24h": "Last 24 hours",
+      "period7d": "Last 7 days",
+      "since": "Since",
+      "sinceDate": "Date to pull back from",
+      "scope": "Scope",
+      "scopeAll": "All agents and user memory",
+      "scopeAllEditor": "All agents and your user memory",
+      "scopeAgent": "One agent only",
+      "agent": "Agent",
+      "editorNote": "Only an admin can pull back other members' user memory.",
+      "counting": "Counting…",
+      "countError": "The count couldn't be determined.",
+      "affects_one": "Affects {{formatted}} entry.",
+      "affects_other": "Affects {{formatted}} entries.",
+      "hidden_one": "and {{formatted}} entry in other members' user memory",
+      "hidden_other": "and {{formatted}} entries in other members' user memory",
+      "none": "No automatically approved entries in this period.",
+      "submit": "Pull back {{formatted}}",
+      "waitReason": "Possible once counting is done.",
+      "done_one": "{{formatted}} entry pulled back. It's now awaiting approval.",
+      "done_other": "{{formatted}} entries pulled back. They're now awaiting approval."
     },
     "kind": {
       "user_fact": "User fact",
