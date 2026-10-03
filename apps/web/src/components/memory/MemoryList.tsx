@@ -1,5 +1,5 @@
 import { Bot, TriangleAlert } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -146,18 +146,28 @@ function StatusLine({ memory }: { memory: MemoryRead }) {
 
 interface EntryRowProps {
   memory: MemoryRead
+  // `null` blendet den Agent-Link aus (unbekannt oder Agent-Seite selbst).
   agentName: string | null
   selected: boolean
   onToggleSelect: (id: string) => void
   failure: string | null
   onAction: (memory: MemoryRead, action: RowAction) => Promise<void>
+  readOnly: boolean
 }
 
-function EntryRow({ memory, agentName, selected, onToggleSelect, failure, onAction }: EntryRowProps) {
+function EntryRow({
+  memory,
+  agentName,
+  selected,
+  onToggleSelect,
+  failure,
+  onAction,
+  readOnly,
+}: EntryRowProps) {
   const { t } = useTranslation('learning')
   const wsPath = useWorkspacePath()
   const [busy, setBusy] = useState(false)
-  const action = rowActionOf(memory)
+  const action = readOnly ? null : rowActionOf(memory)
   const held = holdCauseOf(memory) !== null
   const kind = memory.kind ?? 'agent_note'
   const kindLabel = kind === 'user_fact' ? t('kind.user_fact_agent') : t(`kind.${kind}`)
@@ -183,7 +193,7 @@ function EntryRow({ memory, agentName, selected, onToggleSelect, failure, onActi
       data-memory-id={memory.id}
       className="flex min-w-0 items-start gap-3 p-4"
     >
-      {held ? (
+      {readOnly ? null : held ? (
         // Zurueckgehaltene haben auch hier keine Checkbox (Spec §6.4); der
         // Platzhalter haelt die Spalte buendig.
         <span className="size-4 shrink-0" aria-hidden="true" />
@@ -235,7 +245,7 @@ function EntryRow({ memory, agentName, selected, onToggleSelect, failure, onActi
             {failure}
           </p>
         ) : null}
-        {decidesInQueue(memory) ? (
+        {!readOnly && decidesInQueue(memory) ? (
           <div className="flex justify-end pt-1">
             <Button asChild variant="outline" size="sm" className={ROW_ACTION}>
               <Link
@@ -281,6 +291,14 @@ export interface MemoryListProps {
   onResetFilters: () => void
   // Nach jeder Aenderung (Tab-Zaehler aktualisieren).
   onChanged?: () => void
+  // Agent-Seite (Spec §6.6): Agent ist fest gesetzt — er zaehlt nicht als
+  // Filter, und die Zeile verlinkt nicht auf die Seite, auf der sie steht.
+  fixedAgentId?: string
+  // Nur lesen (Gedaechtnis beim Agenten aus, §6.6): keine Auswahl, keine
+  // Zeilen- oder Stapelaktion.
+  readOnly?: boolean
+  // Leerzustand ohne Filter; Default ist der des Tabs „Eintraege“.
+  emptyState?: ReactNode
 }
 
 /**
@@ -288,7 +306,16 @@ export interface MemoryListProps {
  * Filter-Stapel. Gesamtzahlen kommen aus `counts` (Server), nie aus der
  * geladenen Teilmenge.
  */
-export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged }: MemoryListProps) {
+export function MemoryList({
+  data,
+  filters,
+  onFilter,
+  onResetFilters,
+  onChanged,
+  fixedAgentId,
+  readOnly = false,
+  emptyState,
+}: MemoryListProps) {
   const { t, i18n } = useTranslation('learning')
   const api = useApi()
   const wsPath = useWorkspacePath()
@@ -427,7 +454,7 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
   const filtered =
     filters.q !== '' ||
     (['agent', 'kind', 'status', 'health', 'origin', 'source'] as const).some(
-      (facet) => filters[facet] !== '',
+      (facet) => filters[facet] !== '' && !(facet === 'agent' && fixedAgentId !== undefined),
     )
 
   if (data.loading && data.items.length === 0) {
@@ -453,7 +480,7 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
 
   const remaining = total !== null ? Math.max(0, total - data.items.length) : null
   const limitReached = data.items.length >= ENTRIES_LOADED_LIMIT
-  const confirmAll = filters.health === 'unconfirmed' && total !== null && total > 0
+  const confirmAll = !readOnly && filters.health === 'unconfirmed' && total !== null && total > 0
 
   return (
     <div ref={listRef} className="flex min-w-0 flex-col gap-4 pb-28 md:pb-20">
@@ -505,6 +532,8 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
               </Button>
             }
           />
+        ) : emptyState !== undefined ? (
+          emptyState
         ) : (
           <EmptyState
             title={t('entries.empty.title')}
@@ -525,11 +554,12 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
             <li key={memory.id} className="min-w-0">
               <EntryRow
                 memory={memory}
-                agentName={agentName(memory.agent_id)}
+                agentName={fixedAgentId !== undefined ? null : agentName(memory.agent_id)}
                 selected={selected.has(memory.id)}
                 onToggleSelect={toggleSelect}
                 failure={failures.get(memory.id) ?? null}
                 onAction={rowAction}
+                readOnly={readOnly}
               />
             </li>
           ))}
@@ -555,7 +585,7 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
         </Button>
       ) : null}
 
-      {selected.size > 0 ? (
+      {!readOnly && selected.size > 0 ? (
         <div
           role="region"
           aria-label={t('approval.bulk.region')}

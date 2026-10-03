@@ -217,13 +217,15 @@ function activeFacetCount(filters: EntryFilters, hideAgent = false): number {
 /**
  * „Filter (n)“ unter `lg`: oeffnet die Facetten als Sheet — unter `md` von
  * unten in voller Hoehe, sonst von rechts (Spec §6.1, §14). Filter wirken
- * sofort; „n Eintraege zeigen“ schliesst nur.
+ * sofort; „n Eintraege zeigen“ schliesst nur. `alwaysVisible`: auch ab `lg`
+ * (Agent-Seite, §6.6 — dort gibt es keine Facettenspalte).
  */
 export function FilterSheetButton({
   total,
   onReset,
+  alwaysVisible = false,
   ...props
-}: FacetsProps & { total: number | null; onReset: () => void }) {
+}: FacetsProps & { total: number | null; onReset: () => void; alwaysVisible?: boolean }) {
   const { t, i18n } = useTranslation('learning')
   const [open, setOpen] = useState(false)
   const mobile = useIsMobile()
@@ -234,7 +236,7 @@ export function FilterSheetButton({
       <Button
         type="button"
         variant="outline"
-        className="min-h-11 md:min-h-9 lg:hidden"
+        className={cn('min-h-11 md:min-h-9', !alwaysVisible && 'lg:hidden')}
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
       >
