@@ -234,4 +234,4 @@ def test_admin_sieht_fremdes_nutzergedaechtnis_nur_als_zahl(env: Env) -> None:
     own = env.client.get(
         f"{env.prefix}/me/memories", params={"status": "pending"}, headers=env.editor_h
     )
-    assert [m["id"] for m in own.json()] == [str(foreign)]
+    assert [m["id"] for m in own.json()["items"]] == [str(foreign)]
