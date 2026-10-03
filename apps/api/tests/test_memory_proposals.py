@@ -563,8 +563,9 @@ def test_own_user_memory_curated_only_by_the_person() -> None:
         viewer = env.human(env.viewer, WorkspaceRole.viewer)
         admin = env.human(env.owner, WorkspaceRole.admin)
 
-        assert [m.id for m in await env.service.list_my_memories(viewer, None)] == [mine]
-        assert await env.service.list_my_memories(admin, None) == []
+        page = await env.service.list_my_memories(viewer, None)
+        assert [m.id for m in page.items] == [mine] and page.next_cursor is None
+        assert (await env.service.list_my_memories(admin, None)).items == []
         confirmed = await env.service.confirm(viewer, None, mine)
         assert confirmed.confirmed_by == env.viewer
         # admin erreicht das fremde Nutzergedaechtnis ueber keinen Pfad.

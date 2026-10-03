@@ -326,7 +326,7 @@ def test_admin_sieht_fremdes_nutzergedaechtnis_nicht(env: Env) -> None:
 
     # Die Person selbst sieht und entscheidet — schon als editor ohne admin-Rechte.
     own = c.get(env.url("/me/memories"), headers=env.editor_h)
-    assert [m["id"] for m in own.json()] == [str(mem)]
+    assert [m["id"] for m in own.json()["items"]] == [str(mem)]
     own_proposals = c.get(env.url("/memory-proposals"), headers=env.editor_h)
     assert str(proposal) in [p["id"] for p in own_proposals.json()]
     decided = c.post(
@@ -444,9 +444,10 @@ def test_me_memories_kuratieren(env: Env) -> None:
 
     listed = c.get(env.url("/me/memories"), headers=me)
     assert listed.status_code == 200, listed.text
-    assert {m["id"] for m in listed.json()} == {str(pending), str(active), str(expired)}
+    assert {m["id"] for m in listed.json()["items"]} == {str(pending), str(active), str(expired)}
+    assert listed.json()["next_cursor"] is None
     only_pending = c.get(env.url("/me/memories"), params={"status": "pending"}, headers=me)
-    assert [m["id"] for m in only_pending.json()] == [str(pending)]
+    assert [m["id"] for m in only_pending.json()["items"]] == [str(pending)]
     assert _reason(c.get(env.url("/me/memories"), headers=env.agent_h), 403) == (
         "missing_capability"
     )
@@ -523,3 +524,81 @@ def test_me_memories_kuratieren(env: Env) -> None:
     assert _reason(c.delete(env.url(f"/me/memories/{expired}"), headers=env.agent_h), 403) == (
         "missing_capability"
     )
+
+
+def test_me_memories_suche_und_seiten(env: Env) -> None:
+    """6.4.1: `q`, `cursor`, `limit` wie `GET /memories` — Sicht nur das eigene Nutzergedaechtnis.
+
+    Aufrufer ist editor: Er saehe in `GET /memories` auch das
+    Agentengedaechtnis; `/me/memories` zeigt es trotzdem nicht. Fremdes
+    Nutzergedaechtnis bleibt auch fuer admin verborgen (Owner 3a).
+    """
+    c = env.client
+    me = env.editor_h
+    own = [env.memory(f"Editor Notiz {i}", subject=env.editor) for i in range(5)]
+    # Feste, verschiedene Zeitpunkte: Reihenfolge und Seitengrenzen deterministisch.
+    for i, memory_id in enumerate(own):
+        db_execute(
+            "UPDATE agent_memory SET created_at = now() - make_interval(mins => $2) WHERE id = $1",
+            memory_id,
+            10 - i,
+        )
+    tea = env.memory("Editor trinkt Tee", subject=env.editor)
+    foreign_secret = "Viewer trinkt Tee heimlich"
+    foreign = env.memory(foreign_secret, subject=env.viewer)
+    agent_tea = env.memory("Agent trinkt Tee")
+
+    # Seiten: neueste zuerst, 2 + 2 + 2, jede Zeile genau einmal, Ende ohne Cursor.
+    seen: list[str] = []
+    cursor: str | None = None
+    pages = 0
+    while True:
+        params: dict[str, Any] = {"limit": 2}
+        if cursor is not None:
+            params["cursor"] = cursor
+        res = c.get(env.url("/me/memories"), params=params, headers=me)
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert len(body["items"]) <= 2
+        seen += [m["id"] for m in body["items"]]
+        pages += 1
+        # Obergrenze: ein Cursor, der nicht weiterkommt, wird rot statt endlos.
+        assert pages <= 3, seen
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    assert pages == 3
+    assert seen == [str(tea), *[str(m) for m in reversed(own)]]
+    assert str(foreign) not in seen and str(agent_tea) not in seen
+
+    # Standard-`limit` (20) liefert alles auf einer Seite.
+    whole = c.get(env.url("/me/memories"), headers=me).json()
+    assert [m["id"] for m in whole["items"]] == seen and whole["next_cursor"] is None
+
+    # `q`: Teilstring ueber `fact`, ohne Gross-/Kleinschreibung, nur eigene Treffer.
+    hits = c.get(env.url("/me/memories"), params={"q": "tee"}, headers=me)
+    assert hits.status_code == 200, hits.text
+    assert [m["id"] for m in hits.json()["items"]] == [str(tea)]
+    assert foreign_secret not in hits.text and "Agent trinkt Tee" not in hits.text
+    # `%` ist ein Zeichen, kein Platzhalter (Escaping wie `GET /memories`).
+    assert c.get(env.url("/me/memories"), params={"q": "%"}, headers=me).json()["items"] == []
+    # `q` und `status` wirken zusammen.
+    assert (
+        c.get(
+            env.url("/me/memories"), params={"q": "Notiz", "status": "pending"}, headers=me
+        ).json()["items"]
+        == []
+    )
+
+    # admin sucht nach dem fremden Fakt: kein Treffer, kein Inhalt.
+    admin_hits = c.get(env.url("/me/memories"), params={"q": "heimlich"}, headers=env.admin_h)
+    assert admin_hits.status_code == 200, admin_hits.text
+    assert admin_hits.json() == {"items": [], "next_cursor": None}
+
+    # Grenzen wie `GET /memories`: 422 statt stiller Kappung.
+    for params in ({"limit": 51}, {"limit": 0}, {"q": ""}, {"q": "x" * 201}):
+        assert c.get(env.url("/me/memories"), params=params, headers=me).status_code == 422
+    bad = c.get(env.url("/me/memories"), params={"cursor": "kaputt"}, headers=me)
+    assert _reason(bad, 422) == "invalid_cursor"
+    full = c.get(env.url("/me/memories"), params={"limit": 50}, headers=me)
+    assert full.status_code == 200, full.text
