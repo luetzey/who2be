@@ -929,3 +929,151 @@ test('M9/M11: Mitglieder als Liste, Auswahllisten ohne Scroll-in-Scroll unter md
     await expectNoHorizontalScroll(page)
   }
 })
+
+/**
+ * Gedaechtnis-Spec §5 / C5a (t_10a996a6): Die Warteschlange „Zur Freigabe“
+ * rendert auf jeder Breite ohne horizontalen Seiten-Scroll — mit den
+ * breitesten Bausteinen der Seite gleichzeitig: Zurueckgehaltene mit langem
+ * Fakt (URL ohne Trennstelle), Gruppenkopf mit langem Agentennamen und
+ * „Alle … freigeben“, Aenderungsvorschlag mit Wort-Diff, offene Stapelleiste
+ * (fixed bottom) und der Bestaetigungsdialog der Gruppenfreigabe.
+ *
+ * Der Agent ist echt (Seed ueber die API), die Gedaechtnis-Endpunkte werden
+ * per `page.route` bedient: die Eintraege liefen sonst ueber den Agentenpfad
+ * mit MCP-Token und Policy, und gemessen werden soll hier das Layout, nicht
+ * die Schreibkette (die decken die API-Tests ab).
+ *
+ * Rot-Probe: `whitespace-normal` am Gruppen-Freigabeknopf in
+ * `ApprovalQueue.tsx` entfernt (Button-Basis `whitespace-nowrap`) → rot auf
+ * `mobile-320` und `mobile-iphone-13` (gemessen 425 > 390 px).
+ */
+test('C5a: /memory „Zur Freigabe“ ohne Seiten-Scroll – Gruppen, Vorschlag, Stapelleiste, Dialog', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const me = await apiRequest<{ user_id: string }>(request, token, '/v1/me')
+  const agentName = 'E2E Vertriebsassistenz für Bestandskunden Nord und Süd'
+  const agent = await apiRequest<{ id: string }>(
+    request,
+    token,
+    `/v1/workspaces/${workspaceId}/agents`,
+    { method: 'POST', data: { name: agentName } },
+  )
+
+  const now = '2026-10-03T08:00:00Z'
+  const row = (id: string, fact: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    agent_id: agent.id,
+    status: 'pending',
+    fact,
+    context: 'Aus dem Gespräch vom Vormittag.',
+    category: 'fact',
+    importance: 3,
+    source: 'agent',
+    triage_note: null,
+    retrieval_count: 0,
+    last_retrieved_at: null,
+    created_at: now,
+    updated_at: now,
+    kind: 'agent_note',
+    scope: 'agent',
+    subject_user_id: null,
+    origin: 'user_stated',
+    created_by_agent_id: agent.id,
+    occurrence_count: 1,
+    ...extra,
+  })
+  const held = [
+    row('e2e-held-1', `Laut Wiki gilt die Preisliste ${LONG_URL} ab sofort für alle Kunden.`, {
+      origin: 'external_content',
+    }),
+    row('e2e-held-2', 'Antworte Kunden aus Österreich immer mit Sie.', { category: 'instruction' }),
+  ]
+  const items = [
+    row('e2e-mine-1', 'Ich bevorzuge kurze Zusammenfassungen am Ende.', {
+      agent_id: null,
+      scope: 'user',
+      kind: 'user_fact',
+      subject_user_id: me.user_id,
+    }),
+    row('e2e-note-1', 'Bestandskunden Nord bestellen meist im ersten Quartal.'),
+    row('e2e-note-2', 'Rückfragen zu Lieferterminen gehen an die Logistik.'),
+    row('e2e-note-3', 'Rabattstaffeln stehen im CRM unter Konditionen.'),
+  ]
+  const target = row('e2e-target-1', 'Der Ansprechpartner bei Kunde Nord ist Frau Schmidt.', {
+    status: 'active',
+  })
+  const proposals = [
+    {
+      id: 'e2e-proposal-1',
+      memory_id: target.id,
+      agent_id: agent.id,
+      action: 'change',
+      new_fact: 'Der Ansprechpartner bei Kunde Nord ist seit Oktober Herr Yilmaz.',
+      reason: 'Wechsel im Einkauf laut Mail vom 2. Oktober.',
+      status: 'pending',
+      decided_by: null,
+      decided_at: null,
+      created_at: now,
+    },
+  ]
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  })
+  await page.route(/\/v1\/workspaces\/[^/]+\/memories\/counts(\?|$)/, (route) => {
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('held') === 'true') return route.fulfill(json({ total: held.length }))
+    if (params.get('scope') === 'user') return route.fulfill(json({ total: 1 }))
+    return route.fulfill(json({ total: 3, groups: { agent: { [agent.id]: 3 } } }))
+  })
+  await page.route(/\/v1\/workspaces\/[^/]+\/memories(\?|$)/, (route) => {
+    const params = new URL(route.request().url()).searchParams
+    const rows = params.get('held') === 'true' ? held : items
+    return route.fulfill(json({ items: rows, next_cursor: null }))
+  })
+  await page.route(/\/v1\/workspaces\/[^/]+\/memory-proposals(\?|$)/, (route) =>
+    route.fulfill(json(proposals)),
+  )
+  await page.route(/\/v1\/workspaces\/[^/]+\/me\/memories(\?|$)/, (route) =>
+    route.fulfill(json({ items: [items[0]], next_cursor: null })),
+  )
+  await page.route(/\/v1\/workspaces\/[^/]+\/agents\/[^/]+\/memories(\?|$)/, (route) =>
+    route.fulfill(json([target])),
+  )
+
+  await page.goto(`/w/${workspaceId}/memory`)
+  await expect(page).toHaveURL(/[?&]tab=approval/)
+  await expect(page.getByTestId('memory-held-row')).toHaveCount(2)
+  await expect(page.getByTestId('memory-proposal-row')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: new RegExp(agentName) })).toBeVisible()
+  // Der Verursacher muss gerendert sein, sonst misst die Probe blind gruen.
+  await expect(page.getByText(LONG_URL, { exact: false }).first()).toBeVisible()
+  await expectNoHorizontalScroll(page, 'memory?tab=approval')
+
+  // Stapelleiste: liegt ganz im Viewport, die Seite bleibt ohne Seiten-Scroll.
+  await page.getByRole('checkbox', { name: /Bestandskunden Nord bestellen/ }).check()
+  const bar = page.getByRole('region', { name: /^(Auswahl|Selection)/ })
+  await expect(bar).toBeVisible()
+  const viewportWidth = page.viewportSize()?.width ?? 0
+  const barBox = await bar.boundingBox()
+  expect(barBox, 'Stapelleiste ohne Bounding-Box').not.toBeNull()
+  expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+  await expectNoHorizontalScroll(page, 'memory?tab=approval (Stapelleiste offen)')
+
+  // Gruppenfreigabe: Dialog passt in den Viewport.
+  await page.getByRole('button', { name: new RegExp(`${agentName}`) }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  const dialogBox = await dialog.boundingBox()
+  expect(dialogBox!.x).toBeGreaterThanOrEqual(-1)
+  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+  await expectNoHorizontalScroll(page, 'memory?tab=approval (Gruppendialog)')
+})

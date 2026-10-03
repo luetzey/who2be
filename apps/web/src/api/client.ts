@@ -43,7 +43,17 @@ import type {
   MemberUpdateInput,
   MemoryAutoPolicy,
   MemoryAutoPolicyRead,
+  MemoryBatchRequest,
+  MemoryBatchResult,
+  MemoryCountGroup,
+  MemoryCounts,
+  MemoryFilter,
   MemoryGuardConfig,
+  MemoryListSort,
+  MemoryPage,
+  MemoryProposalDecision,
+  MemoryProposalRead,
+  MemoryProposalStatus,
   MemoryRead,
   MemoryStatus,
   MemoryTriageInput,
@@ -399,6 +409,18 @@ export function oauthConsentPreview(
   })
 }
 
+// Query-Parameter von `GET /memories` und `/memories/counts` aus einem
+// `MemoryFilter`. Leere Werte bleiben weg — der Server versteht fehlend als
+// „kein Filter“, ein leerer String waere 422.
+function memoryFilterParams(filter: MemoryFilter): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filter)) {
+    if (value === undefined || value === null || value === '') continue
+    params.set(key, String(value))
+  }
+  return params
+}
+
 /**
  * Optionale Zusatzfelder fuer `POST .../versions/{v}/transition`. Der Server
  * (`VersionTransitionRequest`, `extra=forbid`) kennt genau `to`, `note`,
@@ -662,6 +684,32 @@ export interface Api {
   // eingeloggter Mensch, jeder API-Token 403). PUT liefert den wirksamen Stand.
   getMemoryAutoPolicy: () => Promise<MemoryAutoPolicyRead>
   updateMemoryAutoPolicy: (policy: MemoryAutoPolicy) => Promise<MemoryAutoPolicyRead>
+  // ADR-0053 6.4.1 — workspace-weite Liste, Zaehler und Stapel. Fremdes
+  // Nutzergedaechtnis liefert der Server nie (3.1.1, auch nicht an admin).
+  listMemories: (
+    filter: MemoryFilter,
+    options?: { cursor?: string; limit?: number; sort?: MemoryListSort },
+  ) => Promise<MemoryPage>
+  countMemories: (filter: MemoryFilter, groupBy?: MemoryCountGroup[]) => Promise<MemoryCounts>
+  batchMemories: (input: MemoryBatchRequest) => Promise<MemoryBatchResult>
+  // Eigenes Nutzergedaechtnis (3.1.1): der Besitzer ist IMMER der Aufrufer.
+  // Seitenweise (C3c-3): `limit` hoechstens 50, `cursor` aus `next_cursor`.
+  listMyMemories: (options?: {
+    status?: MemoryStatus
+    q?: string
+    cursor?: string
+    limit?: number
+  }) => Promise<MemoryPage>
+  triageMyMemory: (memoryId: string, input: MemoryTriageInput) => Promise<MemoryRead>
+  // ADR-0053 3.1.4 — Vorschlaege workspace-weit; `decide` entscheidet einen.
+  listMemoryProposals: (filter?: {
+    status?: MemoryProposalStatus
+    agent_id?: string
+  }) => Promise<MemoryProposalRead[]>
+  decideMemoryProposal: (
+    proposalId: string,
+    input: MemoryProposalDecision,
+  ) => Promise<MemoryProposalRead>
   // Duplizieren (Deep-Copy des Inhalts als frische Draft, Muster `copyAgent`).
   // Der Server leitet Namen ("<Name> (Kopie)") + frischen Slug selbst ab.
   duplicatePersona: (id: string) => Promise<Persona>
@@ -1179,6 +1227,54 @@ export function createApi(token: string, workspaceId: string): Api {
       request<MemoryAutoPolicyRead>(token, `${ws}/memory-auto-policy`, {
         method: 'PUT',
         body: JSON.stringify(policy),
+      }),
+    listMemories: (filter, options) => {
+      const params = memoryFilterParams(filter)
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      if (options?.sort) params.set('sort', options.sort)
+      const query = params.toString()
+      return request<MemoryPage>(token, `${ws}/memories${query ? `?${query}` : ''}`)
+    },
+    countMemories: (filter, groupBy) => {
+      const params = memoryFilterParams(filter)
+      for (const group of groupBy ?? []) params.append('group_by', group)
+      const query = params.toString()
+      return request<MemoryCounts>(token, `${ws}/memories/counts${query ? `?${query}` : ''}`)
+    },
+    batchMemories: (input) =>
+      request<MemoryBatchResult>(token, `${ws}/memories/batch`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listMyMemories: (options) => {
+      const params = new URLSearchParams()
+      if (options?.status) params.set('status', options.status)
+      if (options?.q) params.set('q', options.q)
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      const query = params.toString()
+      return request<MemoryPage>(token, `${ws}/me/memories${query ? `?${query}` : ''}`)
+    },
+    triageMyMemory: (memoryId, input) =>
+      request<MemoryRead>(token, `${ws}/me/memories/${memoryId}/triage`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listMemoryProposals: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.status) params.set('status', filter.status)
+      if (filter?.agent_id) params.set('agent_id', filter.agent_id)
+      const query = params.toString()
+      return request<MemoryProposalRead[]>(
+        token,
+        `${ws}/memory-proposals${query ? `?${query}` : ''}`,
+      )
+    },
+    decideMemoryProposal: (proposalId, input) =>
+      request<MemoryProposalRead>(token, `${ws}/memory-proposals/${proposalId}/decide`, {
+        method: 'POST',
+        body: JSON.stringify(input),
       }),
     duplicatePersona: (id) =>
       request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),

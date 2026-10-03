@@ -245,7 +245,8 @@
       "groups": {
         "buildingBlocks": "Building blocks",
         "operations": "Operations"
-      }
+      },
+      "memory": "Memory"
     },
     "signOut": "Sign out",
     "language": {
@@ -3076,7 +3077,7 @@
       },
       "humanChannel": "Anything a person enters themselves counts as confirmed right away.",
       "expiry": "Unconfirmed entries expire after {{days}} days. Retrievals don't extend that.",
-      "legacyAuto": "Agents set to \"Automatic\" only approve what is turned on here. While everything is off, every entry waits for approval.",
+      "legacyAuto": "Agents set to \"Automatic\" only approve what is turned on here. While everything is off, every entry goes to \"Awaiting approval\".",
       "guardOff": {
         "title": "The memory guard is off.",
         "description": "Automatically approved entries are then not checked for instruction patterns.",
@@ -3155,6 +3156,142 @@
           "title": "Reason missing",
           "body": "The server needs a reason why you activate despite open test cases. Enter it above."
         }
+      }
+    },
+    "page": {
+      "title": "Memory",
+      "description": "What your agents remember – about their work and about you.",
+      "tabs": {
+        "approval": "Awaiting approval"
+      }
+    },
+    "kind": {
+      "user_fact": "User fact",
+      "agent_note": "Agent note",
+      "lesson": "Learning suggestion"
+    },
+    "origin": {
+      "user_stated": "Said by you",
+      "inferred": "Inferred by the agent",
+      "external_content": "From a web page, file or tool",
+      "legacy_unknown": "Unknown (older entries)",
+      "perAgent": "{{origin}} (per agent)"
+    },
+    "channel": {
+      "agent": "Agent",
+      "human": "Person",
+      "import": "Import"
+    },
+    "proposal": {
+      "alreadyDecided": "This proposal has already been decided."
+    },
+    "approval": {
+      "search": "Search",
+      "searchPlaceholder": "Search suggestions…",
+      "agentFilter": "Agent",
+      "allAgents": "All agents",
+      "heldBackTitle": "Held back – review one by one",
+      "hold": {
+        "external": "From a web page, file or tool (per agent)",
+        "externalWhy": "Entries from external content never take effect automatically. Check that it's right and that you want it.",
+        "instruction": "Classified as an instruction",
+        "instructionWhy": "The entry tells the agent how to work. That acts like a rule – read it before it applies.",
+        "inferred": "Inferred by the agent",
+        "inferredWhy": "You didn't say this yourself – the agent concluded it. Check that it's right."
+      },
+      "whyHere": "Why it's here:",
+      "agentReason": "Agent's reason",
+      "factLabel": "Fact",
+      "channel": "Channel",
+      "category": "Category",
+      "created": "Suggested",
+      "approve": "Approve",
+      "reject": "Reject",
+      "rejectTitle": "Reject entry?",
+      "rejectNote": "Note (optional)",
+      "rejectKeepsDedup": "Rejected entries are kept so the agent doesn't suggest them again.",
+      "applyChange": "Apply change",
+      "applyDelete": "Apply deletion",
+      "selectRow": "Select \"{{fact}}\"",
+      "groupMine": "Your user memory",
+      "groupApproveAgent": "Approve all {{count}} from {{agent}}",
+      "groupApproveAgentAria": "Approve all {{count}} entries from {{agent}}",
+      "groupApproveMine": "Approve all {{count}}",
+      "groupExcludes": "Held-back entries and change proposals are not included.",
+      "groupConfirm": {
+        "title": "Approve {{count}} entries from {{agent}}?",
+        "titleMine": "Add {{count}} entries to your user memory?",
+        "body": "They take effect right away and count as approved by you. Held-back entries and change proposals stay in the queue.",
+        "more": "and {{count}} more",
+        "submit": "Approve {{count}}"
+      },
+      "countChanged": "There are now {{count}}. Confirm again?",
+      "moreInGroup": "{{count}} more from {{agent}} –",
+      "onlyAgent": "Show {{agent}} only",
+      "moreHeld": "{{count}} more held back – filter by agent",
+      "loadMore": "Load more",
+      "selectionLimit": "At most 100 at a time.",
+      "bulk": {
+        "region": "Selection",
+        "selected": "{{count}} selected",
+        "approve": "Approve selection ({{count}})",
+        "reject": "Reject selection",
+        "rejectTitle_one": "Reject {{count}} entry?",
+        "rejectTitle_other": "Reject {{count}} entries?"
+      },
+      "proposal": {
+        "change": "Change proposal",
+        "delete": "Deletion proposal",
+        "rejectTitle": "Reject proposal?",
+        "unknownFact": "The current entry couldn't be loaded.",
+        "srDiff": "Before: {{before}}. After: {{after}}.",
+        "accepted": "Proposal applied.",
+        "rejected": "Proposal rejected."
+      },
+      "emptyViewer": {
+        "title": "Nothing awaiting approval",
+        "body": "When an agent wants to remember something about you, you decide here."
+      },
+      "emptyEditor": {
+        "body": "New suggestions from your agents show up here. What gets approved automatically is set by an admin under Settings → Workspace.",
+        "action": "View auto-approval"
+      },
+      "emptyAllOff": {
+        "title": "No agent stores memories",
+        "body": "Memory is off for all agents. Turn it on per agent under Configuration → Memory.",
+        "action": "View agents"
+      },
+      "noMatch": "No matches",
+      "resetFilters": "Reset filters",
+      "loadError": "The queue couldn't be loaded.",
+      "forbidden": "You don't have permission for this (requires role {{role}}).",
+      "alreadyDecided": "Already decided.",
+      "alreadyDecidedBy": "Already decided by {{name}}.",
+      "capReachedUser": "Your user memory is full ({{maximum}} entries, rejected ones included). Delete old entries before new ones can be added.",
+      "capReachedNote": "This agent's notes are full. Delete old ones before new ones can be added."
+    },
+    "batch": {
+      "done": {
+        "approve": "{{count}} approved",
+        "reject": "{{count}} rejected"
+      },
+      "partial": {
+        "approve": "{{ok}} approved, {{failed}} not possible",
+        "reject": "{{ok}} rejected, {{failed}} not possible"
+      },
+      "partialBanner": {
+        "approve_one": "{{count}} entry couldn't be approved. It's still selected; the reason is shown on the row.",
+        "approve_other": "{{count}} entries couldn't be approved. They're still selected; the reason is shown on each row.",
+        "reject_one": "{{count}} entry couldn't be rejected. It's still selected; the reason is shown on the row.",
+        "reject_other": "{{count}} entries couldn't be rejected. They're still selected; the reason is shown on each row."
+      },
+      "failedAll": "That didn't work. Nothing was changed.",
+      "reason": {
+        "memory_not_found": "No longer exists.",
+        "memory_cap_reached": "Limit reached – delete old entries first.",
+        "memory_held": "Can only be approved one by one.",
+        "forbidden": "You don't have permission for this.",
+        "other": "Not possible ({{code}})."
       }
     }
   }

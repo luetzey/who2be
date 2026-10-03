@@ -126,6 +126,12 @@ const FeedbackOverviewPage = lazy(() =>
     default: mod.FeedbackOverviewPage,
   })),
 )
+// ADR-0053 / Spec Gedaechtnisverwaltung §11.2: workspace-weites Gedaechtnis.
+const MemoryPage = lazy(() =>
+  import('@/features/memory/pages/MemoryPage').then((mod) => ({
+    default: mod.MemoryPage,
+  })),
+)
 const FeedbackDetailPage = lazy(() =>
   import('@/features/feedback/pages/FeedbackDetailPage').then((mod) => ({
     default: mod.FeedbackDetailPage,
@@ -354,6 +360,7 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/tools/new" element={<ToolNewPage />} />
                 <Route path="/w/:workspaceId/tools/:id" element={<ToolDetailPage />} />
                 <Route path="/w/:workspaceId/feedback" element={<FeedbackOverviewPage />} />
+                <Route path="/w/:workspaceId/memory" element={<MemoryPage />} />
                 {/* Literal `item`-Segment vor der dynamischen `:entityType`-Route:
                     ein einzelnes Feedback (per feedbackId), nicht ein Element. In
                     react-router v7 gewinnt das statische Segment ohnehin, die

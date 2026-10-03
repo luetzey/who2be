@@ -110,6 +110,7 @@ const NAV_LABELS = [
   'Externe Tools',
   'Arbeitsbereich',
   'Feedback',
+  'Gedächtnis',
   'Einstellungen',
 ]
 
@@ -121,7 +122,7 @@ const NAV_GROUPS_DE: { heading: string | null; links: string[] }[] = [
     heading: 'Bausteine',
     links: ['System-Prompts', 'Personas', 'Playbooks', 'Resources', 'Externe Tools'],
   },
-  { heading: 'Betrieb', links: ['Arbeitsbereich', 'Feedback'] },
+  { heading: 'Betrieb', links: ['Arbeitsbereich', 'Feedback', 'Gedächtnis'] },
   { heading: null, links: ['Einstellungen'] },
 ]
 
@@ -282,7 +283,7 @@ describe('AppShell', () => {
           heading: 'Building blocks',
           links: ['System prompts', 'Personas', 'Playbooks', 'Resources', 'External tools'],
         },
-        { heading: 'Operations', links: ['Work area', 'Feedback'] },
+        { heading: 'Operations', links: ['Work area', 'Feedback', 'Memory'] },
         { heading: null, links: ['Settings'] },
       ])
     })

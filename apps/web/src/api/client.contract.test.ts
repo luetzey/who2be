@@ -199,6 +199,14 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.kbNeighbors({ anchor: `node:${ID}` }),
     api.getEntitlement(),
     api.createCheckout({} as never),
+    // ADR-0053 C5a: workspace-weite Gedaechtnis-Warteschlange.
+    api.listMemories({ status: 'pending' }),
+    api.countMemories({ status: 'pending' }, ['agent']),
+    api.batchMemories({ action: 'approve', ids: [ID] }),
+    api.listMyMemories(),
+    api.triageMyMemory(ID, { action: 'approve' }),
+    api.listMemoryProposals({ status: 'pending' }),
+    api.decideMemoryProposal(ID, { accept: true }),
   ]
   await Promise.all(invocations)
 
