@@ -708,6 +708,9 @@ export interface Api {
     filter: MemoryFilter,
     options?: { cursor?: string; limit?: number; sort?: MemoryListSort },
   ) => Promise<MemoryPage>
+  // Einzelabruf ohne Besitzer (Deep-Link `?entry=<id>`). Sichtbarkeit wie die
+  // Liste; alles Unsichtbare ist 404 `memory_not_found` wie eine unbekannte ID.
+  getMemory: (memoryId: string) => Promise<MemoryRead>
   countMemories: (filter: MemoryFilter, groupBy?: MemoryCountGroup[]) => Promise<MemoryCounts>
   batchMemories: (input: MemoryBatchRequest) => Promise<MemoryBatchResult>
   // Not-Aus (6.4.1): erst die Vorschau (`dry_run`), dann mit `expected_count`.
@@ -1295,6 +1298,7 @@ export function createApi(token: string, workspaceId: string): Api {
       const query = params.toString()
       return request<MemoryPage>(token, `${ws}/memories${query ? `?${query}` : ''}`)
     },
+    getMemory: (memoryId) => request<MemoryRead>(token, `${ws}/memories/${memoryId}`),
     countMemories: (filter, groupBy) => {
       const params = memoryFilterParams(filter)
       for (const group of groupBy ?? []) params.append('group_by', group)

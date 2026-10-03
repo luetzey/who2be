@@ -15,6 +15,7 @@ import type { Member, MemoryEventRead, MemoryRead } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useSession } from '@/auth/session-context'
+import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { StatusLine } from '@/components/memory/MemoryList'
 import { MemoryHistory } from '@/components/memory/MemoryHistory'
 import { HoldReason, RejectDialog, holdCauseOf } from '@/components/memory/MemoryRow'
@@ -50,7 +51,6 @@ import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import {
-  QUEUE_PAGE_SIZE,
   apiReason,
   useReasonText,
   visibleToMe,
@@ -59,11 +59,6 @@ import {
 // Detail-Sheet eines Gedaechtniseintrags (Gedaechtnisverwaltung S3′, §7,
 // §13.5, §14, §15; ADR-0053 3.1.2/3.1.3). Geoeffnet ueber `?entry=<id>`.
 // Freitext bleibt Textknoten (ADR-0038) und bricht mit `break-words`.
-
-// Deep-Link ohne Router-State: so viele Seiten der workspace-weiten Liste
-// werden hoechstens nach dem Eintrag durchsucht (= Ladegrenze der Liste).
-// Die API hat kein `GET` je Eintrag.
-export const DEEP_LINK_PAGES = 10
 
 const ACTION = 'min-h-11 md:min-h-9'
 
@@ -172,45 +167,37 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
     initial !== null && visibleToMe(initial, userId) ? initial : null,
   )
   const [missing, setMissing] = useState(false)
+  // Netz-/Serverfehler beim Deep-Link — nicht dasselbe wie „nicht gefunden“.
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [events, setEvents] = useState<MemoryEventRead[] | null>(null)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [historyNonce, setHistoryNonce] = useState(0)
   const [members, setMembers] = useState<Member[]>([])
   const [busy, setBusy] = useState(false)
 
-  // Deep-Link: Eintrag seitenweise suchen. Fremdes Nutzergedaechtnis liefert
-  // der Server nie; `visibleToMe` verwirft es trotzdem (3.1.1).
+  // Deep-Link: Einzelabruf. Unsichtbares beantwortet der Server mit 404 wie
+  // eine unbekannte ID; `visibleToMe` verwirft fremdes Nutzergedaechtnis
+  // trotzdem (3.1.1). Nur 404 heisst „nicht gefunden“, alles andere ist ein
+  // Ladefehler mit Retry.
   useEffect(() => {
-    if (memory !== null || missing) return
+    if (memory !== null || missing || loadError !== null) return
     let cancelled = false
-    const run = async () => {
-      try {
-        let cursor: string | undefined
-        for (let page = 0; page < DEEP_LINK_PAGES; page += 1) {
-          const result = await api.listMemories(canManageAgents ? {} : { scope: 'user' }, {
-            limit: QUEUE_PAGE_SIZE,
-            cursor,
-          })
-          if (cancelled) return
-          const hit = result.items.find((item) => item.id === entryId)
-          if (hit !== undefined) {
-            if (visibleToMe(hit, userId)) setMemory(hit)
-            else setMissing(true)
-            return
-          }
-          if (result.next_cursor === null) break
-          cursor = result.next_cursor
-        }
-        if (!cancelled) setMissing(true)
-      } catch {
-        if (!cancelled) setMissing(true)
-      }
-    }
-    void run()
+    api
+      .getMemory(entryId)
+      .then((hit) => {
+        if (cancelled) return
+        if (visibleToMe(hit, userId)) setMemory(hit)
+        else setMissing(true)
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return
+        if (isGone(cause)) setMissing(true)
+        else setLoadError(cause instanceof Error ? cause.message : String(cause))
+      })
     return () => {
       cancelled = true
     }
-  }, [api, canManageAgents, entryId, memory, missing, userId])
+  }, [api, entryId, memory, missing, loadError, userId])
 
   const memoryId = memory?.id ?? null
   const owner = memory !== null ? ownerOf(memory) : undefined
@@ -296,14 +283,22 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
   }
 
   if (memory === null) {
+    const failed = loadError !== null
     return (
       <>
         <SheetHeader className="sticky top-0 z-10 border-b bg-background p-4 pr-12 text-left">
           <SheetTitle ref={titleRef} tabIndex={-1} className="outline-none">
             {t('detail.title')}
           </SheetTitle>
-          <SheetDescription id={descriptionId} className={missing ? undefined : 'sr-only'}>
-            {missing ? t('detail.notVisible') : t('detail.loading')}
+          <SheetDescription
+            id={descriptionId}
+            className={missing || failed ? undefined : 'sr-only'}
+          >
+            {missing
+              ? t('detail.notVisible')
+              : failed
+                ? t('detail.loadError')
+                : t('detail.loading')}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 p-4">
@@ -311,6 +306,18 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
             <Button type="button" variant="outline" className="self-start" onClick={onClose}>
               {t('common:actions.close')}
             </Button>
+          ) : failed ? (
+            <div className="flex flex-col gap-3" data-testid="detail-load-error">
+              <ErrorAlert title={t('detail.loadError')} message={loadError} />
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start"
+                onClick={() => setLoadError(null)}
+              >
+                {t('common:actions.retry')}
+              </Button>
+            </div>
           ) : (
             <div className="flex flex-col gap-3" aria-busy="true" data-testid="detail-loading">
               <Skeleton className="h-5 w-3/4" />
