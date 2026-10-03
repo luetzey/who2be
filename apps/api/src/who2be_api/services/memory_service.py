@@ -1185,6 +1185,30 @@ class MemoryService:
         visibility = await self._visibility(ctx, filters)
         return await self._page(ctx, visibility, filters, sort=sort, limit=limit, cursor=cursor)
 
+    async def get_workspace_memory(self, ctx: WorkspaceContext, memory_id: UUID) -> MemoryRead:
+        """Ein Eintrag der workspace-weiten Sicht (`GET /memories/{memory_id}`).
+
+        Dieselbe Sichtbarkeit wie `GET /memories`: ab `viewer` das eigene
+        Nutzergedaechtnis, ab `editor` dazu das Agentengedaechtnis. Alles
+        andere ist `memory_not_found` (404) — fremdes Nutzergedaechtnis auch
+        fuer `admin` (3a), Agentengedaechtnis fuer `viewer`, ein Eintrag aus
+        einem anderen Workspace. So unterscheidet die Antwort einen
+        unsichtbaren Eintrag nicht von einer unbekannten ID (kein Enumerieren).
+        Fremdes Nutzergedaechtnis filtert schon SQL heraus
+        (`get_batch_targets`); die Rolle prueft der Service.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        self._require_human(ctx)
+        target = (
+            await self._repo.get_batch_targets(ctx.workspace_id, ctx.user_id, [memory_id])
+        ).get(memory_id)
+        if target is None:
+            raise _memory_not_found()
+        memory = target.memory
+        if memory.scope == MemoryScope.agent and not role_satisfies(ctx.role, WorkspaceRole.editor):
+            raise _memory_not_found()
+        return memory
+
     async def _page(
         self,
         ctx: WorkspaceContext,
