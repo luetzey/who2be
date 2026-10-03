@@ -26,7 +26,7 @@ const GROUPS: { id: string; titled: boolean; links: string[] }[] = [
     titled: true,
     links: ['systemPrompts', 'personas', 'playbooks', 'resources', 'tools'],
   },
-  { id: 'operations', titled: true, links: ['workarea', 'feedback'] },
+  { id: 'operations', titled: true, links: ['workarea', 'feedback', 'memory'] },
   { id: 'settings', titled: false, links: ['settings'] },
 ]
 
@@ -44,6 +44,8 @@ const ROUTES: Record<string, RegExp> = {
   tools: /\/tools$/,
   workarea: /\/workarea$/,
   feedback: /\/feedback$/,
+  // `/memory` setzt beim Laden `?tab=approval` (Gedaechtnis-Spec §11.2).
+  memory: /\/memory(\?tab=approval)?$/,
   settings: /\/settings\/account$/,
 }
 
