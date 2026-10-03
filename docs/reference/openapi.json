@@ -6106,6 +6106,16 @@
               }
             }
           },
+          "200": {
+            "description": "Wiederholung eines Lernvorschlags (`kind=lesson`): kein neuer Eintrag, die Antwort ist der bestehende Treffer mit `merged_into` (ADR-0053 3.1.6).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySaveResult"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -18939,16 +18949,29 @@
           },
           "category": {
             "$ref": "#/components/schemas/MemoryCategory"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemoryKind"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/MemoryScope"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
           }
         },
         "type": "object",
         "required": [
           "id",
           "fact",
-          "category"
+          "category",
+          "kind",
+          "scope",
+          "confirmed"
         ],
         "title": "MemoryHit",
-        "description": "Ein Retrieval-Treffer fuer Agenten (bewusst schmal).\n\nNur id (Kurzform fuer Referenzen), Fakt und Kategorie — kein `context`,\nkeine Triage-Metadaten (Injection-/Leak-Minimierung)."
+        "description": "Ein Retrieval-Treffer fuer Agenten (bewusst schmal).\n\nid (Kurzform fuer Referenzen), Fakt, Kategorie und die Einordnung\n(ADR-0053 C4): `kind`, `scope` (Agenten- oder Nutzergedaechtnis) und\n`confirmed` (von einem Menschen bestaetigt; `false` heisst automatisch\naktiv, aber unbestaetigt). Kein `context`, keine Triage-Metadaten, kein\nPersonenbezug (Injection-/Leak-Minimierung). `lesson` erscheint hier nie."
       },
       "MemoryKind": {
         "type": "string",
