@@ -1,46 +1,70 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import {
+  ActiveFilterChips,
+  FilterSheetButton,
+  MemoryFacetColumn,
+} from '@/components/memory/MemoryFacets'
+import { MemoryList } from '@/components/memory/MemoryList'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAgents } from '@/hooks/useAgents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { ApprovalQueue } from '../components/ApprovalQueue'
+import {
+  ENTRY_FACETS,
+  entryFiltersFrom,
+  useMemoryEntries,
+  useMemoryTabCounts,
+  type EntryFacet,
+} from '../hooks/useMemoryApi'
+
+type MemoryTab = 'approval' | 'entries'
 
 /**
- * Gedaechtnis-Seite (Spec §11.2). C5a liefert nur S1′ „Zur Freigabe“; die
- * Tab-Leiste kommt mit C5b. `/memory` setzt `?tab=approval`, damit Links aus
- * Banner und Benachrichtigungen schon heute stabil sind. Suche (`q`) und
- * Agent-Filter (`agent`) stehen in der URL.
+ * Gedaechtnis-Seite (Spec §4, §11.2). Tabs „Zur Freigabe“ (C5a) und
+ * „Eintraege“ (C5b-1, nur editor+); „Mein Gedaechtnis“ folgt mit C5d.
+ * `?tab=` ist die Quelle des aktiven Tabs; Suche (`q`) und Filter stehen in
+ * der URL, damit Links stabil sind. Ein Viewer, der `?tab=entries` oeffnet,
+ * landet still auf `approval` — fuer ihn gibt es den Tab nicht (Spec §3).
  */
 export function MemoryPage() {
-  const { t } = useTranslation('learning')
+  const { t, i18n } = useTranslation('learning')
   const role = useCurrentWorkspaceRole()
   const canManageAgents = role !== null && role !== 'viewer'
   const [params, setParams] = useSearchParams()
   const searchId = useId()
+  const [countNonce, setCountNonce] = useState(0)
 
-  const agentId = params.get('agent') ?? ''
+  const requested = params.get('tab')
+  const tab: MemoryTab = requested === 'entries' && canManageAgents ? 'entries' : 'approval'
+
   const [query, setQuery] = useState(params.get('q') ?? '')
   const debouncedQuery = useDebouncedValue(query.trim())
 
+  // Fehlendes oder (fuer diese Rolle) unbekanntes `tab` korrigieren. Solange
+  // die Rolle noch laedt, bleibt `entries` stehen — sonst verlöre ein
+  // Deep-Link beim ersten Rendern seinen Tab.
   useEffect(() => {
-    if (params.get('tab') !== null) return
+    if (requested === tab) return
+    if (requested === 'entries' && role === null) return
     setParams(
       (current) => {
         const next = new URLSearchParams(current)
-        next.set('tab', 'approval')
+        next.set('tab', tab)
         return next
       },
       { replace: true },
     )
-  }, [params, setParams])
+  }, [requested, tab, role, setParams])
 
   useEffect(() => {
     if ((params.get('q') ?? '') === debouncedQuery) return
@@ -55,11 +79,11 @@ export function MemoryPage() {
     )
   }, [debouncedQuery, params, setParams])
 
-  const setAgent = (id: string) =>
+  const setParam = (key: string, value: string) =>
     setParams((current) => {
       const next = new URLSearchParams(current)
-      if (id === '') next.delete('agent')
-      else next.set('agent', id)
+      if (value === '') next.delete(key)
+      else next.set(key, value)
       return next
     })
 
@@ -68,37 +92,176 @@ export function MemoryPage() {
     setParams((current) => {
       const next = new URLSearchParams(current)
       next.delete('q')
-      next.delete('agent')
+      for (const facet of ENTRY_FACETS) next.delete(facet)
       return next
     })
   }
 
+  // Tabwechsel per Klick: nur `tab` bleibt, Filter gelten je Tab.
+  const switchTab = (value: string) => {
+    setQuery('')
+    setParams(new URLSearchParams({ tab: value }))
+    setCountNonce((value) => value + 1)
+  }
+
+  const counts = useMemoryTabCounts(canManageAgents, countNonce)
+  const format = new Intl.NumberFormat(i18n.language)
+
+  const search = (placeholder: string) => (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <Label htmlFor={searchId}>{t('approval.search')}</Label>
+      <Input
+        id={searchId}
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  )
+
+  const approval = (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
+        {search(t('approval.searchPlaceholder'))}
+        {canManageAgents ? (
+          <AgentFilter value={params.get('agent') ?? ''} onChange={(id) => setParam('agent', id)} />
+        ) : null}
+      </div>
+      <ApprovalQueue
+        q={params.get('q') ?? ''}
+        agentId={canManageAgents ? (params.get('agent') ?? '') : ''}
+        onShowAgent={(id) => setParam('agent', id)}
+        onResetFilters={resetFilters}
+      />
+    </div>
+  )
+
+  if (!canManageAgents) {
+    // Viewer: ein Tab — keine Leiste, nur die Ueberschrift (bis C5d).
+    return (
+      <Container>
+        <PageHeader title={t('page.title')} description={t('page.description')} />
+        <div className="mt-6 flex flex-col gap-6">
+          <h2 className="text-lg font-semibold">{t('page.tabs.approval')}</h2>
+          {approval}
+        </div>
+      </Container>
+    )
+  }
+
+  const tabLabel = (key: MemoryTab, count: number | null) => (
+    <>
+      <span>{t(`page.tabs.${key}`)}</span>
+      {count !== null ? (
+        <span className="text-muted-foreground tabular-nums" data-testid={`tab-count-${key}`}>
+          <span aria-hidden="true">{format.format(count)}</span>
+          <span className="sr-only">
+            , {t('entries.resultCount', { count, formatted: format.format(count) })}
+          </span>
+        </span>
+      ) : null}
+    </>
+  )
+
   return (
     <Container>
       <PageHeader title={t('page.title')} description={t('page.description')} />
-      <div className="mt-6 flex flex-col gap-6">
-        <h2 className="text-lg font-semibold">{t('page.tabs.approval')}</h2>
+      <Tabs value={tab} onValueChange={switchTab} className="mt-6">
+        <TabsList aria-label={t('page.tabsAria')}>
+          <TabsTrigger value="approval">{tabLabel('approval', counts.approval)}</TabsTrigger>
+          <TabsTrigger value="entries">{tabLabel('entries', counts.entries)}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="approval">
+          {/* Ueberschriftenfolge h1 → h2 → h3 (Gruppenkoepfe) auch mit Tabs. */}
+          <h2 className="sr-only">{t('page.tabs.approval')}</h2>
+          {approval}
+        </TabsContent>
+        <TabsContent value="entries">
+          <h2 className="sr-only">{t('page.tabs.entries')}</h2>
+          <EntriesTab
+            params={params}
+            search={search(
+              counts.entries !== null
+                ? t('entries.searchPlaceholder', {
+                    count: counts.entries,
+                    formatted: format.format(counts.entries),
+                  })
+                : t('entries.searchPlaceholderPlain'),
+            )}
+            onFilter={setParam}
+            onResetFilters={resetFilters}
+            onChanged={() => setCountNonce((value) => value + 1)}
+          />
+        </TabsContent>
+      </Tabs>
+    </Container>
+  )
+}
+
+interface EntriesTabProps {
+  params: URLSearchParams
+  search: ReactNode
+  onFilter: (key: string, value: string) => void
+  onResetFilters: () => void
+  onChanged: () => void
+}
+
+/** Tab „Eintraege“ (S2′): Facetten links ab `lg`, sonst Filter-Sheet. */
+function EntriesTab({ params, search, onFilter, onResetFilters, onChanged }: EntriesTabProps) {
+  const { t } = useTranslation('learning')
+  const sortId = useId()
+  const key = params.toString()
+  // Wertgleichheit der URL: neue Filter nur, wenn sich die Parameter aendern.
+  const filters = useMemo(() => entryFiltersFrom(new URLSearchParams(key)), [key])
+  const data = useMemoryEntries(filters, true)
+  const setFacet = (facet: EntryFacet, value: string) => onFilter(facet, value)
+  const facetProps = {
+    filters,
+    counts: data.counts,
+    countsError: data.countsError,
+    agents: data.agents,
+    onChange: setFacet,
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-start">
+      <MemoryFacetColumn {...facetProps} />
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <Label htmlFor={searchId}>{t('approval.search')}</Label>
-            <Input
-              id={searchId}
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('approval.searchPlaceholder')}
+          {search}
+          <div className="flex flex-wrap items-end gap-2">
+            <FilterSheetButton
+              {...facetProps}
+              total={data.counts?.total ?? null}
+              onReset={onResetFilters}
             />
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={sortId}>{t('entries.sort.label')}</Label>
+              <Select
+                id={sortId}
+                value={filters.sort}
+                className="min-h-11 md:min-h-10"
+                onChange={(event) =>
+                  onFilter('sort', event.target.value === 'oldest' ? 'oldest' : '')
+                }
+              >
+                <option value="newest">{t('entries.sort.newest')}</option>
+                <option value="oldest">{t('entries.sort.oldest')}</option>
+              </Select>
+            </div>
           </div>
-          {canManageAgents ? <AgentFilter value={agentId} onChange={setAgent} /> : null}
         </div>
-        <ApprovalQueue
-          q={params.get('q') ?? ''}
-          agentId={canManageAgents ? agentId : ''}
-          onShowAgent={setAgent}
-          onResetFilters={resetFilters}
+        <ActiveFilterChips filters={filters} agents={data.agents} onChange={setFacet} />
+        <MemoryList
+          data={data}
+          filters={filters}
+          onFilter={setFacet}
+          onResetFilters={onResetFilters}
+          onChanged={onChanged}
         />
       </div>
-    </Container>
+    </div>
   )
 }
 

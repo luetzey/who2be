@@ -1077,3 +1077,122 @@ test('C5a: /memory „Zur Freigabe“ ohne Seiten-Scroll – Gruppen, Vorschlag,
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
   await expectNoHorizontalScroll(page, 'memory?tab=approval (Gruppendialog)')
 })
+
+test('C5b-1: /memory „Einträge“ ohne Seiten-Scroll – Facetten, lange Zeile, Stapelleiste, Filter-Sheet', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000)
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  const token = user.session.access_token
+  const agentName = 'E2E Vertriebsassistenz für Bestandskunden Nord und Süd'
+  const agent = await apiRequest<{ id: string }>(
+    request,
+    token,
+    `/v1/workspaces/${workspaceId}/agents`,
+    { method: 'POST', data: { name: agentName } },
+  )
+
+  const now = '2026-10-03T08:00:00Z'
+  const row = (id: string, fact: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    agent_id: agent.id,
+    status: 'active',
+    fact,
+    context: 'Aus dem Gespräch vom Vormittag.',
+    category: 'fact',
+    importance: 3,
+    source: 'agent',
+    triage_note: null,
+    retrieval_count: 4,
+    last_retrieved_at: now,
+    created_at: now,
+    updated_at: now,
+    kind: 'agent_note',
+    scope: 'agent',
+    subject_user_id: null,
+    origin: 'user_stated',
+    created_by_agent_id: agent.id,
+    occurrence_count: 1,
+    confirmed_at: now,
+    expires_at: null,
+    ...extra,
+  })
+  const items = [
+    row('e2e-entry-1', `Laut Wiki gilt die Preisliste ${LONG_URL} ab sofort für alle Kunden.`, {
+      origin: 'external_content',
+      confirmed_at: null,
+      expires_at: '2026-10-08T08:00:00Z',
+    }),
+    row('e2e-entry-2', 'Rückfragen zu Lieferterminen gehen an die Logistik.', { status: 'expired' }),
+    row('e2e-entry-3', 'Rabattstaffeln stehen im CRM unter Konditionen.'),
+  ]
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  })
+  await page.route(/\/v1\/workspaces\/[^/]+\/memories\/counts(\?|$)/, (route) =>
+    route.fulfill(
+      json({
+        total: 1240,
+        groups: {
+          agent: { [agent.id]: 1240 },
+          kind: { agent_note: 1200, user_fact: 30, lesson: 10 },
+          status: { active: 1100, pending: 12, expired: 128 },
+          health: { unconfirmed: 41, expiring_soon: 9, never_delivered: 300, stale_delivery: 3, external_or_inferred: 17 },
+          origin: { user_stated: 900, inferred: 240, external_content: 100 },
+          source: { agent: 1100, user: 140 },
+        },
+      }),
+    ),
+  )
+  await page.route(/\/v1\/workspaces\/[^/]+\/memories(\?|$)/, (route) =>
+    route.fulfill(json({ items, next_cursor: 'next' })),
+  )
+  await page.route(/\/v1\/workspaces\/[^/]+\/memory-proposals(\?|$)/, (route) =>
+    route.fulfill(json([])),
+  )
+
+  await page.goto(`/w/${workspaceId}/memory?tab=entries`)
+  await expect(page.getByTestId('entries-list')).toBeVisible()
+  await expect(page.getByTestId('entry-row')).toHaveCount(3)
+  // Der Verursacher muss gerendert sein, sonst misst die Probe blind gruen.
+  await expect(page.getByText(LONG_URL, { exact: false }).first()).toBeVisible()
+  await expectNoHorizontalScroll(page, 'memory?tab=entries')
+
+  // Stapelleiste: liegt ganz im Viewport, die Seite bleibt ohne Seiten-Scroll.
+  await page.getByRole('checkbox', { name: /Rabattstaffeln/ }).check()
+  const bar = page.getByTestId('entries-bulk-bar')
+  await expect(bar).toBeVisible()
+  const viewportWidth = page.viewportSize()?.width ?? 0
+  const barBox = await bar.boundingBox()
+  expect(barBox, 'Stapelleiste ohne Bounding-Box').not.toBeNull()
+  expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+  await expectNoHorizontalScroll(page, 'memory?tab=entries (Stapelleiste offen)')
+
+  // Unter lg: Facetten im Sheet; das Sheet passt in den Viewport.
+  const filterButton = page.getByRole('button', { name: /^(Filter|Filters) \(/ })
+  if (await filterButton.isVisible()) {
+    await filterButton.click()
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+    // Slide-in (`w2b-anim-sheet-*`, translate 100 % → 0) erst auslaufen lassen;
+    // davor liegt die Box per Design noch rechts/unten ausserhalb. Gemessen
+    // wird die ENDlage — passt die nicht, bleibt die Probe rot.
+    await sheet.evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+    )
+    await expect(async () => {
+      const sheetBox = await sheet.boundingBox()
+      expect(sheetBox, 'Filter-Sheet ohne Bounding-Box').not.toBeNull()
+      expect(sheetBox!.x).toBeGreaterThanOrEqual(-1)
+      expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+      expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1)
+    }).toPass({ timeout: 5_000 })
+    await expectNoHorizontalScroll(page, 'memory?tab=entries (Filter-Sheet)')
+  }
+})

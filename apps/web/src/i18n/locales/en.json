@@ -3162,11 +3162,14 @@
       "title": "Memory",
       "description": "What your agents remember – about their work and about you.",
       "tabs": {
-        "approval": "Awaiting approval"
-      }
+        "approval": "Awaiting approval",
+        "entries": "Entries"
+      },
+      "tabsAria": "Memory sections"
     },
     "kind": {
       "user_fact": "User fact",
+      "user_fact_agent": "User fact (this agent)",
       "agent_note": "Agent note",
       "lesson": "Learning suggestion"
     },
@@ -3273,17 +3276,25 @@
     "batch": {
       "done": {
         "approve": "{{count}} approved",
-        "reject": "{{count}} rejected"
+        "reject": "{{count}} rejected",
+        "confirm": "{{count}} confirmed",
+        "delete": "{{count}} deleted"
       },
       "partial": {
         "approve": "{{ok}} approved, {{failed}} not possible",
-        "reject": "{{ok}} rejected, {{failed}} not possible"
+        "reject": "{{ok}} rejected, {{failed}} not possible",
+        "confirm": "{{ok}} confirmed, {{failed}} not possible",
+        "delete": "{{ok}} deleted, {{failed}} not possible"
       },
       "partialBanner": {
         "approve_one": "{{count}} entry couldn't be approved. It's still selected; the reason is shown on the row.",
         "approve_other": "{{count}} entries couldn't be approved. They're still selected; the reason is shown on each row.",
         "reject_one": "{{count}} entry couldn't be rejected. It's still selected; the reason is shown on the row.",
-        "reject_other": "{{count}} entries couldn't be rejected. They're still selected; the reason is shown on each row."
+        "reject_other": "{{count}} entries couldn't be rejected. They're still selected; the reason is shown on each row.",
+        "confirm_one": "{{count}} entry couldn't be confirmed. It's still selected; the reason is shown on the row.",
+        "confirm_other": "{{count}} entries couldn't be confirmed. They're still selected; the reason is shown on each row.",
+        "delete_one": "{{count}} entry couldn't be deleted. It's still selected; the reason is shown on the row.",
+        "delete_other": "{{count}} entries couldn't be deleted. They're still selected; the reason is shown on each row."
       },
       "failedAll": "That didn't work. Nothing was changed.",
       "reason": {
@@ -3293,6 +3304,108 @@
         "forbidden": "You don't have permission for this.",
         "other": "Not possible ({{code}})."
       }
+    },
+    "health": {
+      "unconfirmed": "Unconfirmed",
+      "unconfirmedHint": "Already in effect, but no person has read it. Expires unless confirmed.",
+      "expiring_soon": "Expiring soon",
+      "expiring_soonHint": "Stops taking effect within 7 days unless someone confirms it.",
+      "never_delivered": "Never delivered",
+      "never_deliveredHint": "Active for over 30 days and never delivered to an agent.",
+      "stale_delivery": "Not delivered for a long time",
+      "stale_deliveryHint": "Not delivered to any agent for over 90 days.",
+      "external_or_inferred": "External or inferred",
+      "external_or_inferredHint": "According to the agent, taken from external content or inferred. The agent states this, the server doesn't check it."
+    },
+    "entries": {
+      "searchPlaceholder": "Search {{formatted}} entries…",
+      "searchPlaceholderPlain": "Search entries…",
+      "resultCount_one": "{{formatted}} entry",
+      "resultCount_other": "{{formatted}} entries",
+      "filterButton": "Filters ({{count}})",
+      "filterTitle": "Filters",
+      "filterDescription": "Filters apply right away.",
+      "showResults_one": "Show {{formatted}} entry",
+      "showResults_other": "Show {{formatted}} entries",
+      "showResultsPlain": "Show entries",
+      "resetFilters": "Reset filters",
+      "removeFilter": "Remove filter \"{{label}}\"",
+      "activeFilters": "Active filters",
+      "facetsRegion": "Filters",
+      "hintFor": "About \"{{label}}\"",
+      "countsUnavailable": "Counts currently unavailable.",
+      "facet": {
+        "all": "All",
+        "agent": "Agent",
+        "kind": "Type",
+        "status": "Status",
+        "health": "Condition",
+        "origin": "Source per agent",
+        "source": "Channel",
+        "showAll": "Show all {{count}}"
+      },
+      "status": {
+        "active": "Active",
+        "pending": "Awaiting approval",
+        "expired": "Expired",
+        "rejected": "Rejected",
+        "converted": "Became a case"
+      },
+      "intro": "This is what each agent remembers:",
+      "kindIntro": {
+        "agent_note": "What an agent remembers about its environment and tools. Applies to that agent only.",
+        "user_fact_agent": "Facts about people that only this agent knows. The shared user memory is under \"My memory\".",
+        "lesson": "Learning suggestions never go into a prompt. They're counted and can become a new version through a case, a test case and your approval."
+      },
+      "sort": {
+        "label": "Sort",
+        "newest": "Newest first",
+        "oldest": "Oldest first"
+      },
+      "suggested": "Suggested {{count}}×",
+      "expiresIn_one": "expires in {{count}} day",
+      "expiresIn_other": "expires in {{count}} days",
+      "delivered_one": "Delivered {{count}}×",
+      "delivered_other": "Delivered {{count}}×",
+      "action": {
+        "confirm": "Confirm",
+        "reactivate": "Reactivate",
+        "approve": "Approve",
+        "decideInQueue": "Decide in the queue"
+      },
+      "done": {
+        "confirm": "Confirmed.",
+        "reactivate": "Active again.",
+        "approve": "Approved."
+      },
+      "bulk": {
+        "confirm": "Confirm ({{count}})",
+        "confirmOf": "Confirm ({{count}} of {{total}})",
+        "approve": "Approve ({{count}})",
+        "approveOf": "Approve ({{count}} of {{total}})",
+        "reject": "Reject ({{count}})",
+        "rejectOf": "Reject ({{count}} of {{total}})",
+        "delete": "Delete…",
+        "deleteTitle_one": "Permanently delete {{count}} entry?",
+        "deleteTitle_other": "Permanently delete {{count}} entries?",
+        "deleteBody": "They and their history are removed permanently. This can't be undone.",
+        "deleteSubmit": "Delete {{count}}"
+      },
+      "confirmAll": "Confirm all {{count}}",
+      "confirmAllTitle_one": "Confirm {{count}} entry?",
+      "confirmAllTitle_other": "Confirm {{count}} entries?",
+      "confirmAllBody": "Every unconfirmed entry matching these filters is confirmed and stops expiring – including ones not loaded yet.",
+      "confirmAllSubmit": "Confirm {{count}}",
+      "loadMoreCount": "Load more ({{formatted}} left)",
+      "loadedLimit": "You've loaded {{count}} entries. Narrow the list with filters or search.",
+      "loadError": "The entries couldn't be loaded.",
+      "empty": {
+        "title": "No entries yet",
+        "body": "As soon as your agents remember something, it shows up here – filterable by agent, type and condition.",
+        "action": "View agents"
+      },
+      "noMatch": "No entries match these filters",
+      "gone": "This entry no longer exists."
     }
   }
 }
