@@ -693,7 +693,13 @@ export interface Api {
   countMemories: (filter: MemoryFilter, groupBy?: MemoryCountGroup[]) => Promise<MemoryCounts>
   batchMemories: (input: MemoryBatchRequest) => Promise<MemoryBatchResult>
   // Eigenes Nutzergedaechtnis (3.1.1): der Besitzer ist IMMER der Aufrufer.
-  listMyMemories: (status?: MemoryStatus) => Promise<MemoryRead[]>
+  // Seitenweise (C3c-3): `limit` hoechstens 50, `cursor` aus `next_cursor`.
+  listMyMemories: (options?: {
+    status?: MemoryStatus
+    q?: string
+    cursor?: string
+    limit?: number
+  }) => Promise<MemoryPage>
   triageMyMemory: (memoryId: string, input: MemoryTriageInput) => Promise<MemoryRead>
   // ADR-0053 3.1.4 — Vorschlaege workspace-weit; `decide` entscheidet einen.
   listMemoryProposals: (filter?: {
@@ -1241,9 +1247,14 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    listMyMemories: (status) => {
-      const query = status !== undefined ? `?status=${status}` : ''
-      return request<MemoryRead[]>(token, `${ws}/me/memories${query}`)
+    listMyMemories: (options) => {
+      const params = new URLSearchParams()
+      if (options?.status) params.set('status', options.status)
+      if (options?.q) params.set('q', options.q)
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      const query = params.toString()
+      return request<MemoryPage>(token, `${ws}/me/memories${query ? `?${query}` : ''}`)
     },
     triageMyMemory: (memoryId, input) =>
       request<MemoryRead>(token, `${ws}/me/memories/${memoryId}/triage`, {

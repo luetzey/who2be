@@ -137,7 +137,7 @@ function stubApi({
         groups: { agent: agentCounts },
       })
     }
-    if (path.endsWith('/me/memories')) return jsonResponse([])
+    if (path.endsWith('/me/memories')) return jsonResponse({ items: [], next_cursor: null })
     if (/\/agents\/[^/]+\/memories$/.test(path)) {
       return jsonResponse([memory({ id: 'm-old', status: 'active', fact: 'Python 3.13 ist installiert.' })])
     }

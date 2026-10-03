@@ -53,8 +53,10 @@ CI `all-green` gegen den Head-SHA; Screenshots 1280/390.
 
 ## Stand
 
-- [ ] Typen + Client
-- [ ] Hook, Row, Queue, Page, Route, Nav
-- [ ] Locales
-- [ ] Tests + Rot-Proben
-- [ ] DoD, Screenshots, PR
+- [x] Typen + Client (nach Merge von #799: `listMyMemories` liefert `MemoryPage`, seitenweise)
+- [x] Hook, Row, Queue, Page, Route, Nav
+- [x] Locales (+ `legacyAuto` → „in „Zur Freigabe““)
+- [x] Tests (10 neu, AppShell-Nav, Client-Contract um 7 Memory-Methoden) + 8 Rot-Proben (alle rot)
+- [x] DoD web: lint 0 Fehler, tsc, test:coverage 1776/1776, Skip-Budget 0, build, license:check
+- [ ] Screenshots 1280/390 — nicht gemacht: keine Mock-/Auth-Infrastruktur fürs Rendern ohne Supabase-Login
+- [ ] PR, CI all-green

@@ -19,6 +19,8 @@ export const QUEUE_PAGE_SIZE = 50
 export const HELD_LOAD_LIMIT = 200
 // Stapel-Obergrenze des Servers (`ids` hoechstens 100) und der Auswahl.
 export const SELECTION_LIMIT = 100
+// Obergrenze Nutzergedaechtnis ist 500 (ADR 6.4) = 10 Seiten zu 50.
+const MY_MEMORY_PAGES = 10
 
 export interface QueueFilters {
   q: string
@@ -166,13 +168,31 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
         const agentIds = canManageAgents
           ? [...new Set(proposalRows.map((proposal) => proposal.agent_id))]
           : []
-        const sources = await Promise.allSettled([
-          proposalRows.length > 0 ? api.listMyMemories() : Promise.resolve([]),
-          ...agentIds.map((id) => api.listAgentMemories(id)),
-        ])
+        const sources = await Promise.allSettled(
+          agentIds.map((id) => api.listAgentMemories(id)),
+        )
         for (const source of sources) {
           if (source.status !== 'fulfilled' || !Array.isArray(source.value)) continue
           for (const memory of source.value) factById.set(memory.id, memory.fact)
+        }
+        // Rest zielt aufs eigene Nutzergedaechtnis: seitenweise (je 50), bis
+        // alle Ziele aufgeloest sind — hoechstens MY_MEMORY_PAGES Seiten.
+        const missing = new Set(
+          proposalRows.map((proposal) => proposal.memory_id).filter((id) => !factById.has(id)),
+        )
+        let myCursor: string | undefined
+        for (let page = 0; missing.size > 0 && page < MY_MEMORY_PAGES; page++) {
+          try {
+            const result = await api.listMyMemories({ limit: QUEUE_PAGE_SIZE, cursor: myCursor })
+            for (const memory of result.items ?? []) {
+              factById.set(memory.id, memory.fact)
+              missing.delete(memory.id)
+            }
+            if (!result.next_cursor) break
+            myCursor = result.next_cursor
+          } catch {
+            break
+          }
         }
 
         if (cancelled) return
