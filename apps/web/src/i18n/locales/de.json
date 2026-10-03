@@ -3162,11 +3162,14 @@
       "title": "Gedächtnis",
       "description": "Was deine Agenten sich merken – über ihre Arbeit und über dich.",
       "tabs": {
-        "approval": "Zur Freigabe"
-      }
+        "approval": "Zur Freigabe",
+        "entries": "Einträge"
+      },
+      "tabsAria": "Bereiche des Gedächtnisses"
     },
     "kind": {
       "user_fact": "Nutzerfakt",
+      "user_fact_agent": "Nutzerfakt (dieser Agent)",
       "agent_note": "Agentennotiz",
       "lesson": "Lernvorschlag"
     },
@@ -3273,17 +3276,25 @@
     "batch": {
       "done": {
         "approve": "{{count}} freigegeben",
-        "reject": "{{count}} abgelehnt"
+        "reject": "{{count}} abgelehnt",
+        "confirm": "{{count}} bestätigt",
+        "delete": "{{count}} gelöscht"
       },
       "partial": {
         "approve": "{{ok}} freigegeben, {{failed}} nicht möglich",
-        "reject": "{{ok}} abgelehnt, {{failed}} nicht möglich"
+        "reject": "{{ok}} abgelehnt, {{failed}} nicht möglich",
+        "confirm": "{{ok}} bestätigt, {{failed}} nicht möglich",
+        "delete": "{{ok}} gelöscht, {{failed}} nicht möglich"
       },
       "partialBanner": {
         "approve_one": "{{count}} Eintrag konnte nicht freigegeben werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
         "approve_other": "{{count}} Einträge konnten nicht freigegeben werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile.",
         "reject_one": "{{count}} Eintrag konnte nicht abgelehnt werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
-        "reject_other": "{{count}} Einträge konnten nicht abgelehnt werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile."
+        "reject_other": "{{count}} Einträge konnten nicht abgelehnt werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile.",
+        "confirm_one": "{{count}} Eintrag konnte nicht bestätigt werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
+        "confirm_other": "{{count}} Einträge konnten nicht bestätigt werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile.",
+        "delete_one": "{{count}} Eintrag konnte nicht gelöscht werden. Er ist weiter ausgewählt, der Grund steht an der Zeile.",
+        "delete_other": "{{count}} Einträge konnten nicht gelöscht werden. Sie sind weiter ausgewählt, der Grund steht an der Zeile."
       },
       "failedAll": "Das hat nicht geklappt. Es wurde nichts geändert.",
       "reason": {
@@ -3293,6 +3304,107 @@
         "forbidden": "Dafür fehlen dir die Rechte.",
         "other": "Nicht möglich ({{code}})."
       }
+    },
+    "health": {
+      "unconfirmed": "Unbestätigt",
+      "unconfirmedHint": "Wirkt schon, aber kein Mensch hat ihn gelesen. Läuft ohne Bestätigung ab.",
+      "expiring_soon": "Läuft bald ab",
+      "expiring_soonHint": "Wird in den nächsten 7 Tagen unwirksam, wenn niemand ihn bestätigt.",
+      "never_delivered": "Nie ausgeliefert",
+      "never_deliveredHint": "Seit über 30 Tagen aktiv und noch nie an einen Agenten ausgeliefert.",
+      "stale_delivery": "Lange nicht ausgeliefert",
+      "stale_deliveryHint": "Seit über 90 Tagen nicht mehr an einen Agenten ausgeliefert.",
+      "external_or_inferred": "Fremd oder abgeleitet",
+      "external_or_inferredHint": "Laut Agent aus fremdem Inhalt übernommen oder selbst geschlossen. Das gibt der Agent an, der Server prüft es nicht."
+    },
+    "entries": {
+      "searchPlaceholder": "In {{formatted}} Einträgen suchen…",
+      "searchPlaceholderPlain": "In Einträgen suchen…",
+      "resultCount_one": "{{formatted}} Eintrag",
+      "resultCount_other": "{{formatted}} Einträge",
+      "filterButton": "Filter ({{count}})",
+      "filterTitle": "Filter",
+      "filterDescription": "Filter wirken sofort.",
+      "showResults_one": "{{count}} Eintrag zeigen",
+      "showResults_other": "{{count}} Einträge zeigen",
+      "showResultsPlain": "Einträge zeigen",
+      "resetFilters": "Filter zurücksetzen",
+      "removeFilter": "Filter „{{label}}“ entfernen",
+      "activeFilters": "Aktive Filter",
+      "facetsRegion": "Filter",
+      "hintFor": "Zu „{{label}}“",
+      "countsUnavailable": "Zahlen gerade nicht verfügbar.",
+      "facet": {
+        "all": "Alle",
+        "agent": "Agent",
+        "kind": "Art",
+        "status": "Status",
+        "health": "Zustand",
+        "origin": "Herkunft laut Agent",
+        "source": "Kanal",
+        "showAll": "Alle {{count}} zeigen"
+      },
+      "status": {
+        "active": "Aktiv",
+        "pending": "Zur Freigabe",
+        "expired": "Abgelaufen",
+        "rejected": "Abgelehnt",
+        "converted": "Zu Fall geworden"
+      },
+      "intro": "Hier steht, was sich jeder Agent merkt:",
+      "kindIntro": {
+        "agent_note": "Was sich ein Agent über seine Umgebung und Werkzeuge merkt. Gilt nur für diesen Agenten.",
+        "user_fact_agent": "Fakten über Menschen, die nur dieser Agent kennt. Das gemeinsame Nutzergedächtnis steht unter „Mein Gedächtnis“.",
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden."
+      },
+      "sort": {
+        "label": "Sortierung",
+        "newest": "Neueste zuerst",
+        "oldest": "Älteste zuerst"
+      },
+      "suggested": "{{count}}× vorgeschlagen",
+      "expiresIn_one": "läuft ab in {{count}} Tag",
+      "expiresIn_other": "läuft ab in {{count}} Tagen",
+      "delivered_one": "{{count}}× ausgeliefert",
+      "delivered_other": "{{count}}× ausgeliefert",
+      "action": {
+        "confirm": "Bestätigen",
+        "reactivate": "Wieder aktivieren",
+        "approve": "Freigeben"
+      },
+      "done": {
+        "confirm": "Bestätigt.",
+        "reactivate": "Wieder aktiv.",
+        "approve": "Freigegeben."
+      },
+      "bulk": {
+        "confirm": "Bestätigen ({{count}})",
+        "confirmOf": "Bestätigen ({{count}} von {{total}})",
+        "approve": "Freigeben ({{count}})",
+        "approveOf": "Freigeben ({{count}} von {{total}})",
+        "reject": "Ablehnen ({{count}})",
+        "rejectOf": "Ablehnen ({{count}} von {{total}})",
+        "delete": "Löschen…",
+        "deleteTitle_one": "{{count}} Eintrag endgültig löschen?",
+        "deleteTitle_other": "{{count}} Einträge endgültig löschen?",
+        "deleteBody": "Sie und ihr Verlauf werden dauerhaft entfernt. Das lässt sich nicht rückgängig machen.",
+        "deleteSubmit": "{{count}} löschen"
+      },
+      "confirmAll": "Alle {{count}} bestätigen",
+      "confirmAllTitle_one": "{{count}} Eintrag bestätigen?",
+      "confirmAllTitle_other": "{{count}} Einträge bestätigen?",
+      "confirmAllBody": "Alle unbestätigten Einträge zu diesen Filtern werden bestätigt und laufen nicht mehr ab – auch die noch nicht geladenen.",
+      "confirmAllSubmit": "{{count}} bestätigen",
+      "loadMoreCount": "Weitere laden (noch {{formatted}})",
+      "loadedLimit": "Du hast {{count}} Einträge geladen. Grenze die Liste mit Filtern oder der Suche ein.",
+      "loadError": "Die Einträge ließen sich nicht laden.",
+      "empty": {
+        "title": "Noch keine Einträge",
+        "body": "Sobald deine Agenten sich etwas merken, steht es hier – nach Agent, Art und Zustand filterbar.",
+        "action": "Agenten ansehen"
+      },
+      "noMatch": "Keine Einträge für diese Filter",
+      "gone": "Diesen Eintrag gibt es nicht mehr."
     }
   }
 }

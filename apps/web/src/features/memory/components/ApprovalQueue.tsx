@@ -30,10 +30,12 @@ import {
   HELD_LOAD_LIMIT,
   MINE_GROUP,
   SELECTION_LIMIT,
+  apiReason,
   countMismatchOf,
   failuresOf,
   groupKeyOf,
   useApprovalQueue,
+  useReasonText,
   type ProposalWithTarget,
 } from '../hooks/useMemoryApi'
 
@@ -54,50 +56,6 @@ interface Group {
 }
 
 const PREVIEW_COUNT = 5
-
-/** Grund je Zeile (Spec §9). */
-function useReasonText() {
-  const { t } = useTranslation('learning')
-  return useCallback(
-    (reason: string | null | undefined, params?: Record<string, unknown> | null): string => {
-      const name = typeof params?.decided_by_name === 'string' ? params.decided_by_name : null
-      switch (reason) {
-        case 'memory_not_found':
-          return t('batch.reason.memory_not_found')
-        case 'memory_not_pending':
-        case 'memory_proposal_not_pending':
-          return name !== null
-            ? t('approval.alreadyDecidedBy', { name })
-            : t('approval.alreadyDecided')
-        case 'memory_cap_reached':
-          return params?.scope === 'user'
-            ? t('approval.capReachedUser', { maximum: params.maximum ?? 500 })
-            : t('batch.reason.memory_cap_reached')
-        case 'memory_note_cap_reached':
-          return t('approval.capReachedNote')
-        case 'memory_held':
-          return t('batch.reason.memory_held')
-        case 'forbidden':
-          return t('batch.reason.forbidden')
-        default:
-          return t('batch.reason.other', { code: reason ?? '?' })
-      }
-    },
-    [t],
-  )
-}
-
-function apiReason(cause: unknown): { reason: string | null; params: Record<string, unknown> | null } {
-  if (!(cause instanceof ApiError)) return { reason: null, params: null }
-  const body = cause.body as { reason?: unknown; params?: unknown } | null
-  return {
-    reason: typeof body?.reason === 'string' ? body.reason : null,
-    params:
-      body?.params !== null && typeof body?.params === 'object'
-        ? (body.params as Record<string, unknown>)
-        : null,
-  }
-}
 
 /**
  * S1′ „Zur Freigabe“ (Gedaechtnisverwaltung §5): zurueckgehaltene oben,

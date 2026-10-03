@@ -676,6 +676,11 @@ export interface Api {
   ) => Promise<MemoryRead>
   deleteAgentMemory: (agentId: string, memoryId: string) => Promise<void>
   deleteAllAgentMemories: (agentId: string) => Promise<void>
+  // ADR-0053 3.1.3 — Bestaetigen (aktiv + unbestaetigt) und Wieder aktivieren
+  // (abgelaufen). `agentId === null` meint das EIGENE Nutzergedaechtnis
+  // (`/me/memories/...`); ein fremdes ist auf keinem Pfad adressierbar.
+  confirmMemory: (agentId: string | null, memoryId: string) => Promise<MemoryRead>
+  reactivateMemory: (agentId: string | null, memoryId: string) => Promise<MemoryRead>
   // ADR-0044-Addendum — Workspace-Injection-Filter-Konfiguration. Admin-only
   // (editor/viewer + Agent-Tokens 403 serverseitig).
   getMemoryGuard: () => Promise<MemoryGuardConfig>
@@ -1215,6 +1220,22 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteAllAgentMemories: (agentId) =>
       request<void>(token, `${ws}/agents/${agentId}/memories`, { method: 'DELETE' }),
+    confirmMemory: (agentId, memoryId) =>
+      request<MemoryRead>(
+        token,
+        agentId === null
+          ? `${ws}/me/memories/${memoryId}/confirm`
+          : `${ws}/agents/${agentId}/memories/${memoryId}/confirm`,
+        { method: 'POST' },
+      ),
+    reactivateMemory: (agentId, memoryId) =>
+      request<MemoryRead>(
+        token,
+        agentId === null
+          ? `${ws}/me/memories/${memoryId}/reactivate`
+          : `${ws}/agents/${agentId}/memories/${memoryId}/reactivate`,
+        { method: 'POST' },
+      ),
     getMemoryGuard: () => request<MemoryGuardConfig>(token, `${ws}/memory-guard`),
     updateMemoryGuard: (config) =>
       request<MemoryGuardConfig>(token, `${ws}/memory-guard`, {

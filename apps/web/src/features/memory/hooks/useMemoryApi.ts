@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '@/api/client'
 import type {
   Agent,
   MemoryBatchItemResult,
+  MemoryCounts,
   MemoryFilter,
+  MemoryHealth,
+  MemoryKind,
+  MemoryListSort,
+  MemoryOrigin,
   MemoryProposalRead,
   MemoryRead,
+  MemorySource,
+  MemoryStatus,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
@@ -288,6 +296,295 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
     canManageAgents,
     userId,
   }
+}
+
+// ------------------------------------------------- Tab „Eintraege“ (S2′, C5b)
+
+// Ab so vielen geladenen Zeilen ersetzt ein Hinweis den Nachladeknopf
+// (Spec §6.7 „Viele“) — sonst waechst das DOM ohne Grenze.
+export const ENTRIES_LOADED_LIMIT = 500
+
+/**
+ * Facetten des Tabs „Eintraege“ in Anzeigereihenfolge (Spec §6.2). Jede ist
+ * zugleich URL-Parameter und Feld von `MemoryFilter`/`group_by`.
+ */
+export const ENTRY_FACETS = ['agent', 'kind', 'status', 'health', 'origin', 'source'] as const
+export type EntryFacet = (typeof ENTRY_FACETS)[number]
+
+// Werte je Facette (ohne „Alle“). `converted` („Zu Fall geworden“) erst ab D2.
+export const ENTRY_FACET_VALUES: Record<Exclude<EntryFacet, 'agent'>, readonly string[]> = {
+  kind: ['agent_note', 'user_fact', 'lesson'],
+  status: ['active', 'pending', 'expired', 'rejected'],
+  health: [
+    'unconfirmed',
+    'expiring_soon',
+    'never_delivered',
+    'stale_delivery',
+    'external_or_inferred',
+  ],
+  origin: ['user_stated', 'inferred', 'external_content', 'legacy_unknown'],
+  source: ['agent', 'human', 'import'],
+}
+
+/** Gesetzte Filter des Tabs; `''` heisst „Alle“. Spiegel der URL. */
+export type EntryFilters = Record<EntryFacet, string> & { q: string; sort: MemoryListSort }
+
+/** URL → Filter. Unbekannte Werte fallen still auf „Alle“ zurueck. */
+export function entryFiltersFrom(params: URLSearchParams): EntryFilters {
+  const pick = (facet: Exclude<EntryFacet, 'agent'>): string => {
+    const value = params.get(facet) ?? ''
+    return ENTRY_FACET_VALUES[facet].includes(value) ? value : ''
+  }
+  return {
+    agent: params.get('agent') ?? '',
+    kind: pick('kind'),
+    status: pick('status'),
+    health: pick('health'),
+    origin: pick('origin'),
+    source: pick('source'),
+    q: params.get('q') ?? '',
+    sort: params.get('sort') === 'oldest' ? 'oldest' : 'newest',
+  }
+}
+
+/**
+ * Filter → API. Der Tab zeigt ausschliesslich Agentengedaechtnis
+ * (`scope=agent`): das Nutzergedaechtnis gehoert in „Mein Gedaechtnis“, und
+ * fremdes ist ohnehin nie sichtbar (ADR-0053 3.1.1).
+ */
+export function memoryFilterOf(filters: EntryFilters): MemoryFilter {
+  const filter: MemoryFilter = { scope: 'agent' }
+  if (filters.agent !== '') filter.agent_id = filters.agent
+  if (filters.kind !== '') filter.kind = filters.kind as MemoryKind
+  if (filters.status !== '') filter.status = filters.status as MemoryStatus
+  if (filters.health !== '') filter.health = filters.health as MemoryHealth
+  if (filters.origin !== '') filter.origin = filters.origin as MemoryOrigin
+  if (filters.source !== '') filter.source = filters.source as MemorySource
+  // Suche ab 2 Zeichen (Spec §6.2); ein Zeichen filtert nichts.
+  if (filters.q.length >= 2) filter.q = filters.q
+  return filter
+}
+
+export interface MemoryTabCounts {
+  approval: number | null
+  entries: number | null
+}
+
+/**
+ * Zaehler der Tab-Leiste (Spec §4), immer vom Server:
+ * - Zur Freigabe = `status=pending` (der Server schliesst Lernvorschlaege
+ *   dort aus) plus offene Aenderungs-/Loeschvorschlaege
+ * - Eintraege = `scope=agent` ohne `rejected`
+ * Ein Fehler laesst nur die Zahl weg (`null`), nie den Tab.
+ */
+export function useMemoryTabCounts(enabled: boolean, nonce: number): MemoryTabCounts {
+  const api = useApi()
+  const [counts, setCounts] = useState<MemoryTabCounts>({ approval: null, entries: null })
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    Promise.all([
+      api.countMemories({ status: 'pending' }),
+      api.listMemoryProposals({ status: 'pending' }),
+    ])
+      .then(([pending, proposals]) => {
+        if (cancelled) return
+        const open = proposals.filter((proposal) => proposal.status === 'pending').length
+        setCounts((current) => ({ ...current, approval: pending.total + open }))
+      })
+      .catch(() => {
+        if (!cancelled) setCounts((current) => ({ ...current, approval: null }))
+      })
+    api
+      .countMemories({ scope: 'agent' }, ['status'])
+      .then((result) => {
+        if (cancelled) return
+        const rejected = result.groups?.status?.rejected ?? 0
+        setCounts((current) => ({ ...current, entries: Math.max(0, result.total - rejected) }))
+      })
+      .catch(() => {
+        if (!cancelled) setCounts((current) => ({ ...current, entries: null }))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, enabled, nonce])
+
+  return counts
+}
+
+export interface MemoryEntriesData {
+  items: MemoryRead[]
+  // `null`, solange die Zaehler laden oder nicht ladbar sind.
+  counts: MemoryCounts | null
+  countsError: boolean
+  agents: Agent[]
+  hasMore: boolean
+  loadingMore: boolean
+  loadMore: () => void
+  loading: boolean
+  error: ApiError | Error | null
+  reload: () => void
+}
+
+/**
+ * Daten des Tabs „Eintraege“: erste Seite der Liste und die Facetten-Zaehler
+ * laden unabhaengig voneinander (Spec §6.7) — ein Zaehlerfehler kostet nur
+ * die Zahlen, nie die Liste. Zaehler kommen immer vom Server, nie aus der
+ * geladenen Teilmenge.
+ */
+export function useMemoryEntries(filters: EntryFilters, enabled: boolean): MemoryEntriesData {
+  const api = useApi()
+  const { me } = useSession()
+  const userId = me?.user_id ?? null
+  const [items, setItems] = useState<MemoryRead[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [counts, setCounts] = useState<MemoryCounts | null>(null)
+  const [countsError, setCountsError] = useState(false)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [loading, setLoading] = useState(enabled)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<ApiError | Error | null>(null)
+  const [nonce, setNonce] = useState(0)
+  // Generation gegen spaete Antworten: ein Nachladen, das nach einem
+  // Filterwechsel ankommt, haengt nichts mehr an die neue Liste.
+  const generation = useRef(0)
+
+  const filter = useMemo(() => memoryFilterOf(filters), [filters])
+  const { sort } = filters
+
+  useEffect(() => {
+    if (!enabled) return
+    const current = ++generation.current
+    let cancelled = false
+    const run = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const page = await api.listMemories(filter, { limit: QUEUE_PAGE_SIZE, sort })
+        if (cancelled) return
+        setItems(page.items.filter((m) => visibleToMe(m, userId)))
+        setCursor(page.next_cursor)
+      } catch (cause: unknown) {
+        if (!cancelled) setError(toError(cause))
+      } finally {
+        if (!cancelled && current === generation.current) setLoading(false)
+      }
+    }
+    void run()
+    api
+      .countMemories(filter, [...ENTRY_FACETS])
+      .then((result) => {
+        if (cancelled) return
+        setCounts(result)
+        setCountsError(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCounts(null)
+        setCountsError(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, enabled, filter, sort, userId, nonce])
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    api
+      .listAgents()
+      .then((rows) => {
+        if (!cancelled) setAgents(rows)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [api, enabled])
+
+  const loadMore = useCallback(() => {
+    if (cursor === null || loadingMore) return
+    const current = generation.current
+    setLoadingMore(true)
+    api
+      .listMemories(filter, { limit: QUEUE_PAGE_SIZE, sort, cursor })
+      .then((page) => {
+        if (current !== generation.current) return
+        setItems((rows) => [...rows, ...page.items.filter((m) => visibleToMe(m, userId))])
+        setCursor(page.next_cursor)
+      })
+      .catch((cause: unknown) => setError(toError(cause)))
+      .finally(() => setLoadingMore(false))
+  }, [api, cursor, filter, loadingMore, sort, userId])
+
+  const reload = useCallback(() => setNonce((value) => value + 1), [])
+
+  return {
+    items,
+    counts,
+    countsError,
+    agents,
+    hasMore: cursor !== null,
+    loadingMore,
+    loadMore,
+    loading,
+    error,
+    reload,
+  }
+}
+
+// ----------------------------------------------------- Gruende je Zeile (§9)
+
+/** `reason` + `params` aus einer API-Fehlerantwort. */
+export function apiReason(cause: unknown): {
+  reason: string | null
+  params: Record<string, unknown> | null
+} {
+  if (!(cause instanceof ApiError)) return { reason: null, params: null }
+  const body = cause.body as { reason?: unknown; params?: unknown } | null
+  return {
+    reason: typeof body?.reason === 'string' ? body.reason : null,
+    params:
+      body?.params !== null && typeof body?.params === 'object'
+        ? (body.params as Record<string, unknown>)
+        : null,
+  }
+}
+
+/** Grund einer fehlgeschlagenen Aktion je Zeile (Spec §9) — eine Quelle fuer alle Tabs. */
+export function useReasonText() {
+  const { t } = useTranslation('learning')
+  return useCallback(
+    (reason: string | null | undefined, params?: Record<string, unknown> | null): string => {
+      const name = typeof params?.decided_by_name === 'string' ? params.decided_by_name : null
+      switch (reason) {
+        case 'memory_not_found':
+          return t('batch.reason.memory_not_found')
+        case 'memory_not_pending':
+        case 'memory_proposal_not_pending':
+        case 'memory_transition_invalid':
+          return name !== null
+            ? t('approval.alreadyDecidedBy', { name })
+            : t('approval.alreadyDecided')
+        case 'memory_cap_reached':
+          return params?.scope === 'user'
+            ? t('approval.capReachedUser', { maximum: params.maximum ?? 500 })
+            : t('batch.reason.memory_cap_reached')
+        case 'memory_note_cap_reached':
+          return t('approval.capReachedNote')
+        case 'memory_held':
+          return t('batch.reason.memory_held')
+        case 'forbidden':
+        case 'insufficient_role':
+          return t('batch.reason.forbidden')
+        default:
+          return t('batch.reason.other', { code: reason ?? '?' })
+      }
+    },
+    [t],
+  )
 }
 
 /** Fehlgeschlagene Eintraege eines Stapels, nach ID. */

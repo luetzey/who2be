@@ -207,6 +207,12 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.triageMyMemory(ID, { action: 'approve' }),
     api.listMemoryProposals({ status: 'pending' }),
     api.decideMemoryProposal(ID, { accept: true }),
+    // ADR-0053 C5b-1: Zeilenaktionen im Tab „Einträge“ (beide Besitzer-Pfade).
+    api.confirmMemory(ID, ID),
+    api.confirmMemory(null, ID),
+    api.reactivateMemory(ID, ID),
+    api.reactivateMemory(null, ID),
+    api.listMemories({ status: 'active' }, { sort: 'oldest', cursor: 'c', limit: 50 }),
   ]
   await Promise.all(invocations)
 

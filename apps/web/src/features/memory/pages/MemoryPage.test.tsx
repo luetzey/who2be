@@ -369,6 +369,226 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
   })
 })
 
+// ------------------------------------------------------------ Tab „Einträge“
+
+interface EntriesStub {
+  rows?: MemoryRead[]
+  // Antwort von `/memories/counts` je Aufruf; Standard: total = rows.length.
+  counts?: (params: URLSearchParams) => Response
+  batch?: (body: Record<string, unknown>) => Response
+  action?: (path: string) => Response
+}
+
+function stubEntries({ rows = [], counts, batch, action }: EntriesStub = {}) {
+  const calls: Call[] = []
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    const body = init?.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : null
+    calls.push({ method, url, body })
+    const parsed = new URL(url, 'http://x')
+    const path = parsed.pathname
+    if (path.endsWith('/memories/batch')) {
+      return batch ? batch(body ?? {}) : jsonResponse({ results: [] })
+    }
+    if (/\/(confirm|reactivate|triage)$/.test(path)) {
+      return action ? action(path) : jsonResponse(rows[0])
+    }
+    if (path.endsWith('/memories/counts')) {
+      if (counts) return counts(parsed.searchParams)
+      return jsonResponse({
+        total: rows.length,
+        groups: { agent: { a1: rows.length }, status: { active: rows.length } },
+      })
+    }
+    if (path.endsWith('/memories')) return jsonResponse({ items: rows, next_cursor: null })
+    if (path.endsWith('/memory-proposals')) return jsonResponse([])
+    if (path.endsWith('/agents')) {
+      return jsonResponse([{ id: 'a1', name: 'coder', tool_policy: { memory_mode: 'manual' } }])
+    }
+    return jsonResponse([])
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return { calls }
+}
+
+const ENTRIES = '/w/ws-1/memory?tab=entries'
+
+describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
+  it('lädt die Liste mit scope=agent, Facetten aus /memories/counts und zeigt die Serverzahl', async () => {
+    const { calls } = stubEntries({
+      rows: [memory({ id: 'm1', status: 'active', confirmed_at: '2026-10-02T10:00:00Z' })],
+      counts: () =>
+        jsonResponse({ total: 1240, groups: { agent: { a1: 1240 }, status: { active: 1240 } } }),
+    })
+    renderPage('editor', ENTRIES)
+    expect(await screen.findByTestId('entries-result-count')).toHaveTextContent('1.240 Einträge')
+    const list = calls.find((c) => c.method === 'GET' && /\/memories\?/.test(c.url))!
+    expect(list.url).toContain('scope=agent')
+    const facetCounts = calls.find(
+      (c) => c.url.includes('/memories/counts') && c.url.includes('group_by=health'),
+    )!
+    for (const group of ['agent', 'kind', 'status', 'health', 'origin', 'source']) {
+      expect(facetCounts.url).toContain(`group_by=${group}`)
+    }
+    expect(screen.getByRole('tab', { name: /^Einträge/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('setzt eine Facette in die URL und fragt mit genau diesem Filter neu an', async () => {
+    const { calls } = stubEntries({ rows: [memory({ id: 'm1', status: 'active' })] })
+    renderPage('editor', ENTRIES)
+    await screen.findByTestId('entries-list')
+    fireEvent.click(screen.getByRole('radio', { name: /^Abgelaufen/ }))
+    await waitFor(() =>
+      expect(calls.some((c) => /\/memories\?.*status=expired/.test(c.url))).toBe(true),
+    )
+    expect(screen.getByRole('button', { name: 'Filter „Status: Abgelaufen“ entfernen' })).toBeInTheDocument()
+  })
+
+  it('bietet „Bestätigen“ für unbestätigte und „Wieder aktivieren“ für abgelaufene Einträge an', async () => {
+    const { calls } = stubEntries({
+      rows: [
+        memory({ id: 'm1', status: 'active', confirmed_at: null, fact: 'Unbestätigt.' }),
+        memory({ id: 'm2', status: 'expired', fact: 'Abgelaufen.' }),
+        memory({ id: 'm3', status: 'active', confirmed_at: '2026-10-02T10:00:00Z', fact: 'Fertig.' }),
+      ],
+    })
+    renderPage('editor', ENTRIES)
+    await screen.findByTestId('entries-list')
+    const rows = screen.getAllByTestId('entry-row')
+    // Bestätigte aktive Zeile: keine Aktion (keine toten Knöpfe).
+    expect(within(rows[2]).queryByRole('button', { name: /Bestätigen|Wieder aktivieren/ })).toBeNull()
+
+    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Bestätigen' }))
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/agents/a1/memories/m1/confirm'))).toBe(true),
+    )
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Wieder aktivieren' }))
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'POST' && c.url.endsWith('/agents/a1/memories/m2/reactivate')),
+      ).toBe(true),
+    )
+  })
+
+  it('sendet im Stapel nur passende IDs und zeigt den Grund je Eintrag an der Zeile', async () => {
+    const { calls } = stubEntries({
+      rows: [
+        memory({ id: 'm1', status: 'active', confirmed_at: null, fact: 'Erster.' }),
+        memory({ id: 'm2', status: 'active', confirmed_at: null, fact: 'Zweiter.' }),
+        memory({ id: 'm3', status: 'expired', fact: 'Dritter.' }),
+      ],
+      batch: () =>
+        jsonResponse({
+          results: [
+            { id: 'm1', ok: true },
+            { id: 'm2', ok: false, reason: 'memory_transition_invalid', params: { status: 'expired' } },
+          ],
+        }),
+    })
+    renderPage('editor', ENTRIES)
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Erster/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Zweiter/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Dritter/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen (2 von 3)' }))
+
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/memories/batch'))).toBe(true))
+    const call = calls.find((c) => c.url.endsWith('/memories/batch'))!
+    expect(call.body).toEqual({ action: 'confirm', ids: ['m1', 'm2'] })
+    expect(await screen.findByTestId('row-failure')).toHaveTextContent('Schon entschieden.')
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Zweiter/ })).toBeChecked())
+    expect(screen.getByRole('checkbox', { name: /Erster/ })).not.toBeChecked()
+  })
+
+  it('bestätigt per Filter nur mit expected_count und fragt bei 409 neu', async () => {
+    let attempt = 0
+    const { calls } = stubEntries({
+      rows: [memory({ id: 'm1', status: 'active', confirmed_at: null })],
+      counts: () => jsonResponse({ total: 2, groups: {} }),
+      batch: () => {
+        attempt += 1
+        if (attempt === 1) {
+          return jsonResponse(
+            { detail: 'x', reason: 'memory_batch_count_mismatch', params: { count: 3 } },
+            409,
+          )
+        }
+        return jsonResponse({ results: [{ id: 'm1', ok: true }] })
+      },
+    })
+    renderPage('editor', `${ENTRIES}&health=unconfirmed&agent=a1`)
+    fireEvent.click(await screen.findByRole('button', { name: 'Alle 2 bestätigen' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: '2 bestätigen' }))
+
+    expect(await within(dialog).findByTestId('count-changed')).toHaveTextContent('Inzwischen sind es 3.')
+    const first = calls.find((c) => c.url.endsWith('/memories/batch'))!
+    expect(first.body).toEqual({
+      action: 'confirm',
+      filter: { scope: 'agent', agent_id: 'a1', health: 'unconfirmed' },
+      expected_count: 2,
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: '3 bestätigen' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const second = calls.filter((c) => c.url.endsWith('/memories/batch'))[1]
+    expect(second.body).toMatchObject({ expected_count: 3 })
+  })
+
+  it('zeigt fremdes Nutzergedächtnis nie, auch wenn es in der Antwort steckt', async () => {
+    stubEntries({
+      rows: [
+        memory({ id: 'm1', status: 'active', fact: 'Eigene Notiz.' }),
+        memory({
+          id: 'x1',
+          agent_id: null,
+          scope: 'user',
+          kind: 'user_fact',
+          subject_user_id: 'u2',
+          status: 'active',
+          fact: 'Fremder Nutzerfakt.',
+        }),
+      ],
+    })
+    renderPage('editor', ENTRIES)
+    expect(await screen.findByText('Eigene Notiz.')).toBeInTheDocument()
+    expect(screen.queryByText('Fremder Nutzerfakt.')).toBeNull()
+  })
+
+  it('blendet den Tab für Viewer aus, fällt auf „Zur Freigabe“ zurück und fragt nur scope=user an', async () => {
+    const { calls } = stubEntries()
+    renderPage('viewer', ENTRIES)
+    expect(await screen.findByText('Nichts zur Freigabe')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /^Einträge/ })).toBeNull()
+    expect(screen.queryByTestId('entries-list')).toBeNull()
+    const listCalls = calls.filter((c) => /\/memories(\/counts)?(\?|$)/.test(c.url))
+    expect(listCalls.length).toBeGreaterThan(0)
+    for (const call of listCalls) expect(call.url).toContain('scope=user')
+  })
+
+  it('lädt die Liste auch ohne Zähler und sagt das klein über den Facetten', async () => {
+    stubEntries({
+      rows: [memory({ id: 'm1', status: 'active', fact: 'Bleibt sichtbar.' })],
+      counts: () => jsonResponse({ detail: 'kaputt' }, 500),
+    })
+    renderPage('editor', ENTRIES)
+    expect(await screen.findByText('Bleibt sichtbar.')).toBeInTheDocument()
+    expect((await screen.findAllByTestId('counts-unavailable')).length).toBeGreaterThan(0)
+  })
+
+  it('hat keine axe-Violations mit Liste, Facetten und Stapelleiste', async () => {
+    stubEntries({
+      rows: [
+        memory({ id: 'm1', status: 'active', confirmed_at: null, fact: 'Erster.' }),
+        memory({ id: 'm2', status: 'expired', fact: 'Zweiter.' }),
+      ],
+    })
+    const { container } = renderPage('editor', ENTRIES)
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Erster/ }))
+    await screen.findByTestId('entries-bulk-bar')
+    expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
 describe('wordDiff', () => {
   it('markiert nur die geänderten Wörter', () => {
     const tokens = wordDiff('Python 3.13 ist da', 'Python 3.14 ist da')
