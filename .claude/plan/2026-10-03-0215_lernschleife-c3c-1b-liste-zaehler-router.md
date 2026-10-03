@@ -49,3 +49,15 @@ Routen sind GET.
 - Rot-Proben: Sichtbarkeitsklausel im Repository entschärft; `limit`-Grenze
   auf 51; Cursor nicht durchgereicht; `group_by` nicht durchgereicht; `q`
   nicht durchgereicht; Agent-Prüfung im Service entfernt (Isolationstest).
+
+## Review-Runde 1 (Changes requested) — Nachtrag
+
+Befund @reviewer: `origin`, `source`, `health`, `held` und `created_after`
+waren über HTTP nicht belegt; Mutanten (Parameter in `memory_filter()` fest
+auf `None`) blieben grün, `created_after=2020-01-01` filterte nichts.
+
+Abhilfe (nur Testdatei): Helfer `Env.memory` bekommt `origin`, `source` und
+`confirmed`; neuer Test `test_filter_origin_source_health_held_created_after`
+mit Daten, in denen jeder der fünf Filter eine echte Teilmenge liefert (Liste
+und `/memories/counts`), `created_after` liegt zwischen zwei Einträgen.
+Rot-Probe: dieselbe Mutation je Parameter — 5/5 Mutanten rot.

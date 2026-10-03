@@ -7,7 +7,9 @@ Query-Parameter kommen beim Service an, Grenzen greifen als 422, Fehler
 kommen mit `reason` zurueck. Kritische Zusicherungen, je mit Rot-Probe belegt:
 
 - Filter, `sort`, Cursor und `limit` (hoechstens 50) wirken ueber HTTP; der
-  Cursor fuehrt ohne Luecke und ohne Dublette durch die Liste.
+  Cursor fuehrt ohne Luecke und ohne Dublette durch die Liste. Jeder Filter
+  (auch origin, source, health, held, created_after) liefert ein anderes
+  Ergebnis als ohne ihn, in Liste und Zaehlern.
 - `group_by` ist wiederholbar; `group_by=subject_user_id` nur `admin`
   (403 `insufficient_role`) und nur als Zahl je Person.
 - Fremdes Nutzergedaechtnis (Owner-Entscheidung 3a): `admin` sieht es in der
@@ -73,8 +75,15 @@ class Env:
         subject: UUID | None = None,
         status: str = "active",
         kind: str = "user_fact",
+        origin: str = "user_stated",
+        source: str = "agent",
+        confirmed: bool = True,
     ) -> UUID:
-        """Legt einen Eintrag direkt an (an der Logik vorbei), je Aufruf eine Sekunde spaeter."""
+        """Legt einen Eintrag direkt an (an der Logik vorbei), je Aufruf eine Sekunde spaeter.
+
+        `confirmed=False` laesst `confirmed_at` auch bei `active` leer
+        (Zustand `unconfirmed`).
+        """
         self._clock += timedelta(seconds=1)
         submitter = agent or self.agent
         scope = "user" if subject is not None else "agent"
@@ -82,8 +91,9 @@ class Env:
             "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
             " fact, category, importance, kind, scope, origin, source, subject_user_id, "
             " confirmed_at, expires_at, created_at) "
-            "VALUES ($1, $2, $3, $4, $5, 'preference', 6, $6, $7, 'user_stated', 'agent', "
-            "        $8, CASE WHEN $4 = 'active' THEN now() END, now() + interval '30 days', $9) "
+            "VALUES ($1, $2, $3, $4, $5, 'preference', 6, $6, $7, $10, $11, "
+            "        $8, CASE WHEN $4 = 'active' AND $12 THEN now() END, "
+            "        now() + interval '30 days', $9) "
             "RETURNING id",
             self.ws,
             None if subject is not None else submitter,
@@ -94,6 +104,9 @@ class Env:
             scope,
             subject,
             self._clock,
+            origin,
+            source,
+            confirmed,
         )
         return memory_id
 
@@ -169,6 +182,50 @@ def test_filter_sort_cursor_und_limit(env: Env) -> None:
     assert naive.status_code == 422
     aware = env.get("/memories", env.editor_h, created_after="2020-01-01T00:00:00Z")
     assert len(_ids(aware)) == 5
+
+
+def test_filter_origin_source_health_held_created_after(env: Env) -> None:
+    """Jeder dieser Filter liefert ueber HTTP etwas anderes als ohne Filter."""
+    plain = env.memory("Nutzer mag Tee", status="pending")
+    inferred = env.memory(
+        "Nutzer mag wohl Jazz", status="pending", origin="inferred", source="human"
+    )
+    imported = env.memory("Nutzer mag Ocker", source="import", confirmed=False)
+    confirmed = env.memory("Nutzer mag Kiel")
+    everything = {str(m) for m in (plain, inferred, imported, confirmed)}
+    assert set(_ids(env.get("/memories", env.editor_h))) == everything
+
+    def only(**params: Any) -> set[str]:
+        return set(_ids(env.get("/memories", env.editor_h, **params)))
+
+    assert only(origin="inferred") == {str(inferred)}
+    assert only(origin="user_stated") == {str(plain), str(imported), str(confirmed)}
+    assert only(source="human") == {str(inferred)}
+    assert only(source="import") == {str(imported)}
+    # unconfirmed: active ohne confirmed_at; external_or_inferred: Herkunft.
+    assert only(health="unconfirmed") == {str(imported)}
+    assert only(health="external_or_inferred") == {str(inferred)}
+    # held: pending und Herkunft inferred/external_content (abgeleitet).
+    assert only(held="true") == {str(inferred)}
+    assert only(held="false") == {str(plain), str(imported), str(confirmed)}
+    # created_after zwischen dem ersten und dem zweiten Eintrag.
+    created = db_fetchval("SELECT created_at FROM agent_memory WHERE id = $1", plain)
+    between = (created + timedelta(milliseconds=500)).isoformat()
+    assert only(created_after=between) == {str(inferred), str(imported), str(confirmed)}
+
+    # Dieselben Filter wirken auch auf die Zaehler.
+    def total(**params: Any) -> int:
+        res = env.get("/memories/counts", env.editor_h, **params)
+        assert res.status_code == 200, res.text
+        count: int = res.json()["total"]
+        return count
+
+    assert total() == 4
+    assert total(origin="inferred") == 1
+    assert total(source="import") == 1
+    assert total(health="unconfirmed") == 1
+    assert total(held="true") == 1
+    assert total(created_after=between) == 3
 
 
 def test_counts_facetten_und_group_by(env: Env) -> None:
