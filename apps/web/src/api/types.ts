@@ -351,10 +351,9 @@ export interface DashboardKpis {
   active_playbooks: number
   active_resources?: number
   pending_reviews: number
-  // Aufmerksamkeits-Signale (optional: aeltere Backends liefern sie nicht):
-  // Gedaechtnis-Vorschlaege in der Freigabe-Schleuse (ADR-0044) und
+  // Aufmerksamkeits-Signal (optional: aeltere Backends liefern es nicht):
   // System-Prompt-Templates, deren aktuelle Version zur Review liegt.
-  pending_memories?: number
+  // Gedaechtnis-Vorschlaege zaehlt `/memories/counts`, nicht das Dashboard.
   pending_system_prompts?: number
 }
 

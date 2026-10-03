@@ -49,9 +49,10 @@ export function DashboardPage() {
   const pagination = data?.activity_pagination
   const totalPages = pagination?.total_pages ?? 1
   const pendingReviews = data?.kpis.pending_reviews ?? 0
-  // Nicht `kpis.pending_memories`: das zaehlt Lernvorschlaege und fremdes
-  // Nutzergedaechtnis mit. Dieselbe Quelle wie der Tab „Zur Freigabe“ (C5a-2);
-  // `null` (laedt/Fehler) zeigt keinen Banner und kein „Alles erledigt“.
+  // Dieselbe Quelle wie der Tab „Zur Freigabe“ (C5a-2), rollengerecht ohne
+  // Lernvorschlaege und fremdes Nutzergedaechtnis; das Dashboard selbst
+  // liefert keine Gedaechtnis-Zahl (ADR-0053 3.1.1). `null` (laedt/Fehler)
+  // zeigt keinen Banner und kein „Alles erledigt“.
   const pendingMemories = useApprovalCount()
   const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
   const allClear = pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0

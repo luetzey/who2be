@@ -109,7 +109,7 @@ class DashboardService:
         (
             (persona_counts, playbook_counts, resource_counts),
             (rows, total),
-            (pending_memories, pending_system_prompts),
+            pending_system_prompts,
         ) = await asyncio.gather(
             self._repo.status_distribution(ctx.workspace_id),
             self._repo.recent_activity(ctx.workspace_id, page_size, offset),
@@ -126,7 +126,6 @@ class DashboardService:
                 active_playbooks=playbook.active,
                 active_resources=resource.active,
                 pending_reviews=persona.review + playbook.review + resource.review,
-                pending_memories=pending_memories,
                 pending_system_prompts=pending_system_prompts,
             ),
             activity=[_to_activity(row) for row in rows],

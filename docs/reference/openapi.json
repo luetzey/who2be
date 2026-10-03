@@ -16222,12 +16222,6 @@
             "minimum": 0.0,
             "title": "Pending Reviews"
           },
-          "pending_memories": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Pending Memories",
-            "default": 0
-          },
           "pending_system_prompts": {
             "type": "integer",
             "minimum": 0.0,
