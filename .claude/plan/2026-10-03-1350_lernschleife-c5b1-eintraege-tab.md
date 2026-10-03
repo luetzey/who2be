@@ -39,13 +39,22 @@ Kein `MemoryEntriesTab.tsx`: die Tab-Verdrahtung ist klein und liegt in `MemoryP
 
 ## Schritte
 
-1. client.ts + Contract-Test (confirm/reactivate) – [ ]
-2. useMemoryApi: URL↔Filter, `useMemoryEntries` (Liste + counts parallel, Cursor, reload), `useReasonText` hierher – [ ]
-3. MemoryFacets – [ ]
-4. MemoryList (Zeile, Aktionen, Stapel, Teilfehler, Filter-Stapel) – [ ]
-5. MemoryPage Tab-Leiste + Zähler + Viewer-Fallback – [ ]
-6. i18n de/en – [ ]
-7. Tests inkl. Rot-Proben – [ ]
-8. scroll-guard + Screenshots 1280/390 hell/dunkel – [ ]
-9. Changelog, DoD-Kommandos (CONTRIBUTING) – [ ]
-10. Push, danach PR (getrennt) – [ ]
+1. client.ts + Contract-Test (confirm/reactivate) – [x]
+2. useMemoryApi: URL↔Filter, `useMemoryEntries` (Liste + counts parallel, Cursor, reload), `useReasonText` hierher – [x]
+3. MemoryFacets – [x]
+4. MemoryList (Zeile, Aktionen, Stapel, Teilfehler, Filter-Stapel) – [x]
+5. MemoryPage Tab-Leiste + Zähler + Viewer-Fallback – [x]
+6. i18n de/en – [x]
+7. Tests inkl. Rot-Proben – [x]
+8. scroll-guard + Screenshots 1280/390 hell/dunkel – [x]
+9. Changelog, DoD-Kommandos (CONTRIBUTING) – [x]
+10. Push, danach PR (getrennt) – [x]
+
+## Review-Runde 1 → Nacharbeit (Reviewer-Kommentar 709, PM-Entscheidungen)
+
+1. e2e-mobile rot (tablet-ipad-gen-7, scroll-guard C5b-1): gemessen wurde mitten im Slide-in (`w2b-anim-sheet-right`, x≈810 bei 810 px). Fix: auf `getAnimations().finished` warten, Box per `toPass` in Endlage prüfen (x, rechte und untere Kante). Lokal gegen eigenen Vite-Proxy auf Stack w2b327: alte Fassung 3/3 rot (1191 > 811), neue Fassung 8/8 grün auf allen vier Profilen; Rot-Probe Sheet `w-[1000px]` → rot (x = −190). – [x]
+2. Screenshots 1280/390 hell+dunkel inkl. Filter-Sheet bei 390, je mit scrollWidth = clientWidth (1280/1280, 390/390), als Artefakt (nicht im Repo). – [x]
+3. Zurückgehaltene pending-Zeilen (holdCauseOf ≠ null): kein „Freigeben“ mehr, stattdessen Link „In der Warteschlange entscheiden“ → `?tab=approval&agent=<id>` (PM: Variante a). Test + Rot-Probe (Bedingung entfernt → rot). – [x]
+4. Tab-Zähler „Einträge“ = dieselbe Menge wie die ungefilterte Liste (inkl. rejected), Test + Rot-Probe. Abweichungen von Spec §6.2 im PR-Body; API-Folgepunkt legt @pm an. – [x]
+5. Nit `text-destructive-text`: Die Klasse existiert nicht; `text-destructive` liest bereits `--destructive-text` (globals.css:26, Audit A6) = das Text-Token aus §6.5. Kommentar im Code. – [x]
+Nebenbei aus den Screenshots: Stapelleiste lag 1 rem über der Sidebar (16rem statt w-60 = 15rem), in MemoryList und ApprovalQueue korrigiert; „1240 Einträge zeigen“ → mit Tausenderpunkt.

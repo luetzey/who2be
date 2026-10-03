@@ -3325,8 +3325,8 @@
       "filterButton": "Filters ({{count}})",
       "filterTitle": "Filters",
       "filterDescription": "Filters apply right away.",
-      "showResults_one": "Show {{count}} entry",
-      "showResults_other": "Show {{count}} entries",
+      "showResults_one": "Show {{formatted}} entry",
+      "showResults_other": "Show {{formatted}} entries",
       "showResultsPlain": "Show entries",
       "resetFilters": "Reset filters",
       "removeFilter": "Remove filter \"{{label}}\"",
@@ -3370,7 +3370,8 @@
       "action": {
         "confirm": "Confirm",
         "reactivate": "Reactivate",
-        "approve": "Approve"
+        "approve": "Approve",
+        "decideInQueue": "Decide in the queue"
       },
       "done": {
         "confirm": "Confirmed.",

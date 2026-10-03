@@ -471,6 +471,40 @@ describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
     )
   })
 
+  it('gibt zurückgehaltenen Vorschlägen kein „Freigeben“, sondern den Weg in die Warteschlange', async () => {
+    const { calls } = stubEntries({
+      rows: [
+        memory({ id: 'h1', status: 'pending', origin: 'external_content', fact: 'Aus README.' }),
+        memory({ id: 'h2', status: 'pending', category: 'instruction', fact: 'Immer so.' }),
+        memory({ id: 'p1', status: 'pending', fact: 'Normaler Vorschlag.' }),
+      ],
+    })
+    renderPage('editor', ENTRIES)
+    await screen.findByTestId('entries-list')
+    const rows = screen.getAllByTestId('entry-row')
+    for (const row of [rows[0], rows[1]]) {
+      expect(within(row).queryByRole('button', { name: 'Freigeben' })).toBeNull()
+      expect(within(row).queryByRole('checkbox')).toBeNull()
+      const link = within(row).getByRole('link', { name: 'In der Warteschlange entscheiden' })
+      expect(link).toHaveAttribute('href', '/w/ws-1/memory?tab=approval&agent=a1')
+    }
+    // Nicht zurückgehalten: Einzelfreigabe bleibt, kein Warteschlangen-Link.
+    expect(within(rows[2]).getByRole('button', { name: 'Freigeben' })).toBeInTheDocument()
+    expect(within(rows[2]).queryByTestId('decide-in-queue')).toBeNull()
+    expect(calls.some((c) => c.method === 'POST' && /\/triage$/.test(c.url))).toBe(false)
+  })
+
+  it('zählt im Tab dieselbe Menge wie die ungefilterte Liste (inkl. abgelehnter)', async () => {
+    stubEntries({
+      rows: [memory({ id: 'm1', status: 'active', confirmed_at: '2026-10-02T10:00:00Z' })],
+      counts: () =>
+        jsonResponse({ total: 7, groups: { agent: { a1: 7 }, status: { active: 5, rejected: 2 } } }),
+    })
+    renderPage('editor', ENTRIES)
+    expect(await screen.findByTestId('entries-result-count')).toHaveTextContent('7 Einträge')
+    await waitFor(() => expect(screen.getByTestId('tab-count-entries')).toHaveTextContent('7'))
+  })
+
   it('sendet im Stapel nur passende IDs und zeigt den Grund je Eintrag an der Zeile', async () => {
     const { calls } = stubEntries({
       rows: [

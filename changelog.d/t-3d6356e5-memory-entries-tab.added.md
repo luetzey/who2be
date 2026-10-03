@@ -6,7 +6,10 @@
   health, origin according to the agent, and channel all show their counts
   from the server and are stored in the URL. Below 1024 px they move into a
   filter sheet. Each row shows one action that fits its state: "Confirm" for
-  unconfirmed entries and "Reactivate" for expired ones. A selection of up to
+  unconfirmed entries and "Reactivate" for expired ones. Held-back proposals
+  (from a web page, file or tool, inferred, or instructions) cannot be
+  approved from this list; their row links to "Awaiting approval", where they
+  are decided one by one with the reason shown. A selection of up to
   100 entries can be confirmed, approved, rejected or deleted in one step;
   entries that do not fit the action are skipped, and failures stay selected
   with the reason on their row. "Confirm all N" confirms every unconfirmed

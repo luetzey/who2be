@@ -53,13 +53,23 @@ const ROW_ACTION = 'min-h-10 md:min-h-0'
 
 type RowAction = 'confirm' | 'reactivate' | 'approve'
 
-/** Die eine sichtbare Zeilenaktion je Status (Spec §6.4), sonst `null`. */
+/**
+ * Die eine sichtbare Zeilenaktion je Status (Spec §6.4), sonst `null`.
+ * Zurueckgehaltene (`holdCauseOf` != null) bekommen hier KEIN „Freigeben“:
+ * sie werden nur in der Warteschlange entschieden, einzeln und mit
+ * sichtbarem Grund (Spec §5.2/F1) — die Zeile verlinkt stattdessen dorthin.
+ */
 function rowActionOf(memory: MemoryRead): RowAction | null {
   if (memory.kind === 'lesson') return null
   if (memory.status === 'active' && !memory.confirmed_at) return 'confirm'
   if (memory.status === 'expired') return 'reactivate'
-  if (memory.status === 'pending') return 'approve'
+  if (memory.status === 'pending' && holdCauseOf(memory) === null) return 'approve'
   return null
+}
+
+/** Zurueckgehaltener Vorschlag: Entscheidung gehoert in die Warteschlange. */
+function decidesInQueue(memory: MemoryRead): boolean {
+  return memory.status === 'pending' && memory.kind !== 'lesson' && holdCauseOf(memory) !== null
 }
 
 /** Passt ein Eintrag zur Stapelaktion? (Spec §6.5) */
@@ -224,6 +234,23 @@ function EntryRow({ memory, agentName, selected, onToggleSelect, failure, onActi
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {failure}
           </p>
+        ) : null}
+        {decidesInQueue(memory) ? (
+          <div className="flex justify-end pt-1">
+            <Button asChild variant="outline" size="sm" className={ROW_ACTION}>
+              <Link
+                data-entry-focus
+                data-testid="decide-in-queue"
+                to={wsPath(
+                  memory.agent_id
+                    ? `/memory?tab=approval&agent=${encodeURIComponent(memory.agent_id)}`
+                    : '/memory?tab=approval',
+                )}
+              >
+                {t('entries.action.decideInQueue')}
+              </Link>
+            </Button>
+          </div>
         ) : null}
         {action !== null ? (
           <div className="flex justify-end pt-1">
@@ -533,7 +560,7 @@ export function MemoryList({ data, filters, onFilter, onResetFilters, onChanged 
           role="region"
           aria-label={t('approval.bulk.region')}
           data-testid="entries-bulk-bar"
-          className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card md:left-auto md:w-[calc(100%-16rem)]"
+          className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card md:left-auto md:w-[calc(100%-15rem)]"
         >
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col">
@@ -681,6 +708,8 @@ function BulkDeleteDialog({
           type="button"
           variant="outline"
           size="sm"
+          // `text-destructive` liest `--destructive-text` (globals.css, Audit A6)
+          // = das Text-Token aus Spec §6.5; `text-destructive-text` gibt es nicht.
           className={cn(ROW_ACTION, 'text-destructive')}
           disabled={disabled}
         >

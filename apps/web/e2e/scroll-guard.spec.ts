@@ -1180,9 +1180,19 @@ test('C5b-1: /memory „Einträge“ ohne Seiten-Scroll – Facetten, lange Zeil
     await filterButton.click()
     const sheet = page.getByRole('dialog')
     await expect(sheet).toBeVisible()
-    const sheetBox = await sheet.boundingBox()
-    expect(sheetBox!.x).toBeGreaterThanOrEqual(-1)
-    expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+    // Slide-in (`w2b-anim-sheet-*`, translate 100 % → 0) erst auslaufen lassen;
+    // davor liegt die Box per Design noch rechts/unten ausserhalb. Gemessen
+    // wird die ENDlage — passt die nicht, bleibt die Probe rot.
+    await sheet.evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+    )
+    await expect(async () => {
+      const sheetBox = await sheet.boundingBox()
+      expect(sheetBox, 'Filter-Sheet ohne Bounding-Box').not.toBeNull()
+      expect(sheetBox!.x).toBeGreaterThanOrEqual(-1)
+      expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
+      expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1)
+    }).toPass({ timeout: 5_000 })
     await expectNoHorizontalScroll(page, 'memory?tab=entries (Filter-Sheet)')
   }
 })

@@ -3325,8 +3325,8 @@
       "filterButton": "Filter ({{count}})",
       "filterTitle": "Filter",
       "filterDescription": "Filter wirken sofort.",
-      "showResults_one": "{{count}} Eintrag zeigen",
-      "showResults_other": "{{count}} Einträge zeigen",
+      "showResults_one": "{{formatted}} Eintrag zeigen",
+      "showResults_other": "{{formatted}} Einträge zeigen",
       "showResultsPlain": "Einträge zeigen",
       "resetFilters": "Filter zurücksetzen",
       "removeFilter": "Filter „{{label}}“ entfernen",
@@ -3370,7 +3370,8 @@
       "action": {
         "confirm": "Bestätigen",
         "reactivate": "Wieder aktivieren",
-        "approve": "Freigeben"
+        "approve": "Freigeben",
+        "decideInQueue": "In der Warteschlange entscheiden"
       },
       "done": {
         "confirm": "Bestätigt.",

@@ -224,7 +224,7 @@ export function FilterSheetButton({
   onReset,
   ...props
 }: FacetsProps & { total: number | null; onReset: () => void }) {
-  const { t } = useTranslation('learning')
+  const { t, i18n } = useTranslation('learning')
   const [open, setOpen] = useState(false)
   const mobile = useIsMobile()
   const descriptionId = useId()
@@ -263,7 +263,10 @@ export function FilterSheetButton({
             </Button>
             <Button type="button" className="min-h-11 flex-1" onClick={() => setOpen(false)}>
               {total !== null
-                ? t('entries.showResults', { count: total })
+                ? t('entries.showResults', {
+                    count: total,
+                    formatted: new Intl.NumberFormat(i18n.language).format(total),
+                  })
                 : t('entries.showResultsPlain')}
             </Button>
           </div>

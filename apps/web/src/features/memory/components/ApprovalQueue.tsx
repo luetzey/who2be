@@ -506,7 +506,7 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
         <div
           role="region"
           aria-label={t('approval.bulk.region')}
-          className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card md:left-auto md:w-[calc(100%-16rem)]"
+          className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card md:left-auto md:w-[calc(100%-15rem)]"
         >
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col">

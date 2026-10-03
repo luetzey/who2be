@@ -374,7 +374,8 @@ export interface MemoryTabCounts {
  * Zaehler der Tab-Leiste (Spec §4), immer vom Server:
  * - Zur Freigabe = `status=pending` (der Server schliesst Lernvorschlaege
  *   dort aus) plus offene Aenderungs-/Loeschvorschlaege
- * - Eintraege = `scope=agent` ohne `rejected`
+ * - Eintraege = `scope=agent`, dieselbe Menge wie die ungefilterte Liste
+ *   (inkl. `rejected`, bis die API einen Ausschlussfilter fuer `status` hat)
  * Ein Fehler laesst nur die Zahl weg (`null`), nie den Tab.
  */
 export function useMemoryTabCounts(enabled: boolean, nonce: number): MemoryTabCounts {
@@ -397,11 +398,9 @@ export function useMemoryTabCounts(enabled: boolean, nonce: number): MemoryTabCo
         if (!cancelled) setCounts((current) => ({ ...current, approval: null }))
       })
     api
-      .countMemories({ scope: 'agent' }, ['status'])
+      .countMemories({ scope: 'agent' })
       .then((result) => {
-        if (cancelled) return
-        const rejected = result.groups?.status?.rejected ?? 0
-        setCounts((current) => ({ ...current, entries: Math.max(0, result.total - rejected) }))
+        if (!cancelled) setCounts((current) => ({ ...current, entries: result.total }))
       })
       .catch(() => {
         if (!cancelled) setCounts((current) => ({ ...current, entries: null }))
