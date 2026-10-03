@@ -27,6 +27,7 @@ import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { statusLabel } from '@/components/version'
+import { useApprovalCount } from '@/hooks/useApprovalCount'
 import { cn } from '@/lib/utils'
 
 import { ActivityRow } from '../components/ActivityRow'
@@ -48,7 +49,10 @@ export function DashboardPage() {
   const pagination = data?.activity_pagination
   const totalPages = pagination?.total_pages ?? 1
   const pendingReviews = data?.kpis.pending_reviews ?? 0
-  const pendingMemories = data?.kpis.pending_memories ?? 0
+  // Nicht `kpis.pending_memories`: das zaehlt Lernvorschlaege und fremdes
+  // Nutzergedaechtnis mit. Dieselbe Quelle wie der Tab „Zur Freigabe“ (C5a-2);
+  // `null` (laedt/Fehler) zeigt keinen Banner und kein „Alles erledigt“.
+  const pendingMemories = useApprovalCount()
   const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
   const allClear = pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0
   const reviewTargets = useReviewTargets(pendingReviews, data?.status_distribution)
@@ -124,7 +128,7 @@ export function DashboardPage() {
                       }
                     />
                   ) : null}
-                  {pendingMemories > 0 ? (
+                  {pendingMemories !== null && pendingMemories > 0 ? (
                     <AttentionBanner
                       variant="brand"
                       icon={Brain}
@@ -132,7 +136,7 @@ export function DashboardPage() {
                       description={t('attention.memories.description')}
                       actions={
                         <Button asChild variant="outline" size="sm">
-                          <Link to={wsPath('/agents')}>
+                          <Link to={wsPath('/memory?tab=approval')}>
                             {t('attention.memories.action')}
                             <ArrowRight />
                           </Link>

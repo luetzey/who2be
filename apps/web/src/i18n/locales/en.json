@@ -867,10 +867,10 @@
         }
       },
       "memories": {
-        "title_one": "1 new memory entry is awaiting approval",
-        "title_other": "{{count}} new memory entries are awaiting approval",
+        "title_one": "1 entry awaiting approval",
+        "title_other": "{{count}} entries awaiting approval",
         "description": "Approve or reject the memory suggestions from your agents.",
-        "action": "Open agents"
+        "action": "Review"
       },
       "systemPrompts": {
         "title_one": "1 system prompt is awaiting review",

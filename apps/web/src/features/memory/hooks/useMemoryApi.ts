@@ -19,6 +19,7 @@ import type {
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useSession } from '@/auth/session-context'
+import { countApprovalQueue } from '@/hooks/useApprovalCount'
 
 // Seitengroesse der Warteschlange (Spec S1′ „Viele“: 50 je Seite).
 export const QUEUE_PAGE_SIZE = 50
@@ -372,8 +373,7 @@ export interface MemoryTabCounts {
 
 /**
  * Zaehler der Tab-Leiste (Spec §4), immer vom Server:
- * - Zur Freigabe = `status=pending` (der Server schliesst Lernvorschlaege
- *   dort aus) plus offene Aenderungs-/Loeschvorschlaege
+ * - Zur Freigabe = `countApprovalQueue` (gleiche Quelle wie das Dashboard)
  * - Eintraege = `scope=agent`, dieselbe Menge wie die ungefilterte Liste
  *   (inkl. `rejected`, bis die API einen Ausschlussfilter fuer `status` hat)
  * Ein Fehler laesst nur die Zahl weg (`null`), nie den Tab.
@@ -385,14 +385,10 @@ export function useMemoryTabCounts(enabled: boolean, nonce: number): MemoryTabCo
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
-    Promise.all([
-      api.countMemories({ status: 'pending' }),
-      api.listMemoryProposals({ status: 'pending' }),
-    ])
-      .then(([pending, proposals]) => {
+    countApprovalQueue(api, true)
+      .then((approval) => {
         if (cancelled) return
-        const open = proposals.filter((proposal) => proposal.status === 'pending').length
-        setCounts((current) => ({ ...current, approval: pending.total + open }))
+        setCounts((current) => ({ ...current, approval }))
       })
       .catch(() => {
         if (!cancelled) setCounts((current) => ({ ...current, approval: null }))

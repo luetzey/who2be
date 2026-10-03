@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DashboardData } from '@/api/types'
+import type { DashboardData, Me, WorkspaceRole } from '@/api/types'
 import { renderInRoutes } from '@/test/render'
 
 import { DashboardPage } from './DashboardPage'
@@ -65,15 +65,10 @@ describe('DashboardPage', () => {
     expect(within(kpis).getByText('7')).toBeInTheDocument()
     // Pending-Reviews steckt jetzt im Aufmerksamkeits-Band statt in einer KPI.
     expect(screen.getByText('3 Versionen liegen zur Review')).toBeInTheDocument()
-    // Neue Aufmerksamkeits-Signale: pending Memories + System-Prompt-Reviews,
-    // jeweils mit Deep-Link in die Triage-Fläche.
-    expect(
-      screen.getByText('2 neue Gedächtniseinträge warten auf Freigabe'),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Agenten öffnen/ })).toHaveAttribute(
-      'href',
-      '/w/ws-1/agents',
-    )
+    // Der Gedaechtnis-Banner zaehlt NICHT aus `kpis.pending_memories` (das
+    // zaehlt Lernvorschlaege und fremdes Nutzergedaechtnis mit). Ohne Rolle
+    // (Default-`me` ohne Mitgliedschaft) fragt er nichts an und zeigt nichts.
+    expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
     expect(screen.getByText('1 System-Prompt liegt zur Review')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Zur Review/ })).toHaveAttribute(
       'href',
@@ -219,10 +214,10 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Noch keine Aktivitäten.')).toBeInTheDocument()
     })
-    // Ohne Reviews, pending Memories und System-Prompt-Reviews (Felder fehlen
-    // im Payload → Fallback 0) zeigt das Band den Alles-erledigt-Zustand.
-    expect(screen.getByText('Alles erledigt')).toBeInTheDocument()
-    expect(screen.queryByText(/Gedächtniseint/)).not.toBeInTheDocument()
+    // Ohne Rolle gibt es keine belegte Gedaechtnis-Zahl — dann behauptet das
+    // Band auch kein „Alles erledigt“ (der Fall mit Rolle und 0 steht unten).
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
+    expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
     expect(screen.queryByText(/liegt zur Review|liegen zur Review/)).not.toBeInTheDocument()
   })
 
@@ -391,5 +386,147 @@ describe('DashboardPage — Review-Banner (Audit A4)', () => {
       'href',
       '/w/ws-1/playbooks?status=review',
     )
+  })
+})
+
+// Lernschleife C5a-2: Der Gedaechtnis-Banner zaehlt aus derselben Quelle wie
+// der Tab „Zur Freigabe“ (`/memories/counts?status=pending` + offene
+// Vorschlaege) und verlinkt auf `/memory?tab=approval`.
+describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => {
+  const quiet: DashboardData = {
+    // `pending_memories` absichtlich abweichend: der Banner darf es nicht nutzen.
+    kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0, pending_memories: 9 },
+    activity: [],
+    status_distribution: {
+      persona: { draft: 0, review: 0, active: 1, inactive: 0 },
+      playbook: { draft: 0, review: 0, active: 1, inactive: 0 },
+    },
+  }
+
+  function meWithRole(role: WorkspaceRole): Me {
+    return {
+      user_id: 'u1',
+      default_workspace_id: 'ws-1',
+      organizations: [
+        {
+          id: 'org-1',
+          name: 'Acme',
+          slug: 'acme',
+          kind: 'company',
+          workspaces: [{ id: 'ws-1', name: 'Marketing', slug: 'marketing', role }],
+        },
+      ],
+    }
+  }
+
+  function memoryFetch({
+    pending,
+    proposals = 0,
+    failCounts = false,
+  }: {
+    pending: number
+    proposals?: number
+    failCounts?: boolean
+  }) {
+    return vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x')
+      const json = (body: unknown, status = 200) =>
+        Promise.resolve(new Response(JSON.stringify(body), { status }))
+      if (url.pathname.endsWith('/dashboard')) return json(quiet)
+      if (url.pathname.endsWith('/memories/counts')) {
+        return failCounts ? json({ detail: 'boom' }, 500) : json({ total: pending })
+      }
+      if (url.pathname.endsWith('/memory-proposals')) {
+        return json(
+          Array.from({ length: proposals }, (_, i) => ({ id: `p${i}`, status: 'pending' })),
+        )
+      }
+      return json({ detail: 'nope' }, 500)
+    })
+  }
+
+  function memoryUrls(fetchMock: ReturnType<typeof vi.fn>): URL[] {
+    return fetchMock.mock.calls
+      .map(([input]) => new URL(String(input), 'http://x'))
+      .filter((url) => /\/(memories|memory-proposals)/.test(url.pathname))
+  }
+
+  function renderAs(role: WorkspaceRole) {
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+      me: meWithRole(role),
+    })
+  }
+
+  it('editor: zählt pending plus offene Vorschläge und verlinkt auf /memory?tab=approval', async () => {
+    const fetchMock = memoryFetch({ pending: 2, proposals: 1 })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAs('editor')
+
+    expect(await screen.findByText('3 Einträge zur Freigabe')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Freigeben/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/memory?tab=approval',
+    )
+    const counts = memoryUrls(fetchMock).filter((u) => u.pathname.endsWith('/memories/counts'))
+    expect(counts).toHaveLength(1)
+    expect(counts[0].searchParams.get('status')).toBe('pending')
+    // editor+: Agentengedaechtnis und eigenes Nutzergedaechtnis — der Server
+    // filtert fremdes Nutzergedaechtnis; der Client grenzt nicht auf `user` ein.
+    expect(counts[0].searchParams.has('scope')).toBe(false)
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
+  })
+
+  it('viewer: fragt nur scope=user an', async () => {
+    const fetchMock = memoryFetch({ pending: 1 })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAs('viewer')
+
+    expect(await screen.findByText('1 Eintrag zur Freigabe')).toBeInTheDocument()
+    const counts = memoryUrls(fetchMock).filter((u) => u.pathname.endsWith('/memories/counts'))
+    expect(counts.length).toBeGreaterThan(0)
+    for (const url of counts) {
+      expect(url.searchParams.get('scope')).toBe('user')
+    }
+  })
+
+  it.each(['viewer', 'editor', 'admin'] as const)(
+    '%s: kein Request mit subject_user_id (auch nicht als Zahl)',
+    async (role) => {
+      const fetchMock = memoryFetch({ pending: 1 })
+      vi.stubGlobal('fetch', fetchMock)
+      renderAs(role)
+
+      await screen.findByText('1 Eintrag zur Freigabe')
+      const urls = memoryUrls(fetchMock)
+      expect(urls.length).toBeGreaterThan(0)
+      for (const url of urls) {
+        expect(url.search).not.toContain('subject_user_id')
+      }
+    },
+  )
+
+  it('bei 0: kein Banner, „Alles erledigt“ (nicht kpis.pending_memories)', async () => {
+    vi.stubGlobal('fetch', memoryFetch({ pending: 0 }))
+    renderAs('editor')
+
+    expect(await screen.findByText('Alles erledigt')).toBeInTheDocument()
+    expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
+  })
+
+  it('Zählerfehler: kein Banner und kein „Alles erledigt“', async () => {
+    const fetchMock = memoryFetch({ pending: 0, failCounts: true })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAs('editor')
+
+    await waitFor(() => {
+      expect(memoryUrls(fetchMock).length).toBeGreaterThan(0)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
   })
 })

@@ -867,10 +867,10 @@
         }
       },
       "memories": {
-        "title_one": "1 neuer Gedächtniseintrag wartet auf Freigabe",
-        "title_other": "{{count}} neue Gedächtniseinträge warten auf Freigabe",
+        "title_one": "1 Eintrag zur Freigabe",
+        "title_other": "{{count}} Einträge zur Freigabe",
         "description": "Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab.",
-        "action": "Agenten öffnen"
+        "action": "Freigeben"
       },
       "systemPrompts": {
         "title_one": "1 System-Prompt liegt zur Review",
