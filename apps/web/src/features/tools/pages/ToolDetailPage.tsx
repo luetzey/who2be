@@ -11,7 +11,6 @@ import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
-import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { TagList } from '@/components/data/TagList'
@@ -108,26 +107,25 @@ export function ToolDetailPage() {
                 icon={Plug}
                 iconTone="tools"
                 title={tool.name}
-                badges={
-                  <>
-                    <Badge variant="outline" className="max-w-full font-mono text-xs break-all">
-                      {tool.alias}
-                    </Badge>
-                    <StatusBadge
-                      status={tool.current_status}
-                      pendingDraft={tool.has_pending_draft}
-                    />
-                    <LocaleBadge locale={tool.locale} />
-                    <TagList
-                      tags={tags}
-                      label={t('common:fields.tags')}
-                      renderTag={(tag) => (
-                        <Badge variant="secondary" className="max-w-full text-xs break-words">
-                          {tag}
-                        </Badge>
-                      )}
-                    />
-                  </>
+                status={
+                  <StatusBadge
+                    status={tool.current_status}
+                    pendingDraft={tool.has_pending_draft}
+                  />
+                }
+                version={tool.current_version}
+                locale={tool.locale}
+                slug={tool.alias}
+                tags={
+                  <TagList
+                    tags={tags}
+                    label={t('common:fields.tags')}
+                    renderTag={(tag) => (
+                      <Badge variant="secondary" className="max-w-full text-xs break-words">
+                        {tag}
+                      </Badge>
+                    )}
+                  />
                 }
                 description={description}
                 // Audit A13: Export ist Sekundaeraktion — unter md hinter „Mehr".

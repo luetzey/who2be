@@ -1,4 +1,4 @@
-import { ClipboardCheck, Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
+import { ClipboardCheck, Clock, GitBranch, Layers, Pencil, Share2, Users } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -9,7 +9,6 @@ import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { SaveIndicator } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
-import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -18,7 +17,6 @@ import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -118,21 +116,21 @@ export function PersonaDetailPage() {
                   backHref={wsPath('/personas')}
                   backLabel={t('detail.back')}
                   title={persona.name}
-                  badges={
-                    <>
-                      <Badge variant="secondary">v{persona.current_version}</Badge>
-                      <LocaleBadge locale={persona.locale} />
-                      <StatusBadge
-                        status={persona.current_status}
-                        pendingDraft={persona.has_pending_draft}
-                        testId="persona-status-badge"
-                      />
-                      <TagList
-                        tags={tags}
-                        label={t('common:fields.tags')}
-                        renderTag={(tag) => <MetaPill tone="persona">{tag}</MetaPill>}
-                      />
-                    </>
+                  status={
+                    <StatusBadge
+                      status={persona.current_status}
+                      pendingDraft={persona.has_pending_draft}
+                      testId="persona-status-badge"
+                    />
+                  }
+                  version={persona.current_version}
+                  locale={persona.locale}
+                  tags={
+                    <TagList
+                      tags={tags}
+                      label={t('common:fields.tags')}
+                      renderTag={(tag) => <MetaPill tone="persona">{tag}</MetaPill>}
+                    />
                   }
                   description={persona.content.description}
                   collapseActionsBelowMd
@@ -231,7 +229,7 @@ export function PersonaDetailPage() {
                         entfallen. */}
                     <TabsList aria-label={t('common:tabs.detailViewAria')}>
                       <TabsTrigger value="edit">
-                        <SquarePen aria-hidden="true" />
+                        <Pencil aria-hidden="true" />
                         {t('common:actions.edit')}
                       </TabsTrigger>
                       <TabsTrigger value="modes">
@@ -248,7 +246,7 @@ export function PersonaDetailPage() {
                         {t('learning:testCases.title')}
                       </TabsTrigger>
                       <TabsTrigger value="versions">
-                        <History aria-hidden="true" />
+                        <GitBranch aria-hidden="true" />
                         {t('version:history.title')}
                       </TabsTrigger>
                     </TabsList>

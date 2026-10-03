@@ -127,4 +127,55 @@ describe('DetailHeader', () => {
     )
     expect(screen.queryByRole('button', { name: 'Mehr' })).not.toBeInTheDocument()
   })
+
+  // Audit A8 (PM-Entscheidung A): die Chip-Reihenfolge legt der Header fest,
+  // nicht die Seite. Die Zusicherung liest die Reihenfolge der Geschwister in
+  // der Titelzeile — egal in welcher Reihenfolge die Props uebergeben werden.
+  it('rendert die Meta-Chips in der festen Reihenfolge Status · Version · Sprache · Slug · Tags', () => {
+    renderHeader(
+      <DetailHeader
+        icon={FileText}
+        iconTone="tools"
+        title="Support-Base"
+        tags={<span data-testid="slot-tags">billing</span>}
+        slug="support-base"
+        locale="de"
+        version={3}
+        status={<span data-testid="slot-status">Aktiv</span>}
+        badges={<span data-testid="slot-extra">extra</span>}
+      />,
+    )
+    const heading = screen.getByRole('heading', { level: 1 })
+    const row = heading.parentElement
+    expect(row).not.toBeNull()
+    const order = Array.from(row?.children ?? []).map(
+      (el) => el.getAttribute('data-testid') ?? el.textContent,
+    )
+    expect(order).toEqual([
+      'Support-Base',
+      'slot-status',
+      'detail-header-version',
+      'DE',
+      'detail-header-slug',
+      'slot-tags',
+      'slot-extra',
+    ])
+    expect(screen.getByTestId('detail-header-version')).toHaveTextContent('v3')
+    // #564/#566: der Slug braucht Umbruch + Cap, sonst 497 px bei 320 px.
+    expect(screen.getByTestId('detail-header-slug')).toHaveClass(
+      'max-w-full',
+      'font-mono',
+      'break-all',
+    )
+  })
+
+  it('laesst leere Meta-Slots weg', () => {
+    renderHeader(
+      <DetailHeader icon={FileText} iconTone="tools" title="Agent" slug="" locale="" />,
+    )
+    const row = screen.getByRole('heading', { level: 1 }).parentElement
+    expect(row?.children).toHaveLength(1)
+    expect(screen.queryByTestId('detail-header-version')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('detail-header-slug')).not.toBeInTheDocument()
+  })
 })
