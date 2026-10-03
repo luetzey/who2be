@@ -948,11 +948,27 @@ class MemoryService:
         return owner, memory
 
     async def list_my_memories(
-        self, ctx: WorkspaceContext, status_filter: MemoryStatus | None
-    ) -> list[MemoryRead]:
-        """Eigenes Nutzergedaechtnis (`GET /me/memories`)."""
+        self,
+        ctx: WorkspaceContext,
+        status_filter: MemoryStatus | None = None,
+        *,
+        q: str | None = None,
+        limit: int = MEMORY_LIST_LIMIT_DEFAULT,
+        cursor: tuple[datetime, UUID] | None = None,
+    ) -> MemoryPage:
+        """Eigenes Nutzergedaechtnis (`GET /me/memories`, 6.4.1), neueste zuerst.
+
+        Derselbe Filterbau wie `GET /memories`, aber die Sicht ist NUR das
+        eigene Nutzergedaechtnis: kein Agentengedaechtnis (auch nicht fuer
+        editor) und nie das einer anderen Person (auch nicht fuer admin, 3a).
+        `q` sucht als Teilstring in `fact`; Keyset-Seiten wie dort.
+        """
         await self._owner(ctx, None)
-        return await self._repo.list_for_user(ctx.workspace_id, ctx.user_id, status_filter)
+        visibility = MemoryVisibility(viewer_user_id=ctx.user_id, include_agent_scope=False)
+        filters = MemoryFilter(status=status_filter, scope=MemoryScope.user, q=q)
+        return await self._page(
+            ctx, visibility, filters, sort=MemoryListSort.newest, limit=limit, cursor=cursor
+        )
 
     async def history(
         self, ctx: WorkspaceContext, agent_id: UUID | None, memory_id: UUID
@@ -1164,6 +1180,19 @@ class MemoryService:
         `next_cursor` ist opak und `None` auf der letzten Seite.
         """
         visibility = await self._visibility(ctx, filters)
+        return await self._page(ctx, visibility, filters, sort=sort, limit=limit, cursor=cursor)
+
+    async def _page(
+        self,
+        ctx: WorkspaceContext,
+        visibility: MemoryVisibility,
+        filters: MemoryFilter,
+        *,
+        sort: MemoryListSort,
+        limit: int,
+        cursor: tuple[datetime, UUID] | None,
+    ) -> MemoryPage:
+        """Eine Keyset-Seite der Sicht `visibility`; `next_cursor` opak, am Ende `None`."""
         limit = max(1, min(limit, MEMORY_LIST_LIMIT_MAX))
         # `limit + 1`-Peek wie im Bestand (persona_service.list_all): gibt es
         # eine Folgezeile, entsteht der Cursor aus der letzten Zeile der Seite.

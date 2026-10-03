@@ -393,9 +393,14 @@ async def revoke_auto_memories(
 async def list_my_memories(
     ctx: Ctx,
     service: Service,
+    cursor: PageCursor,
     status: Annotated[MemoryStatus | None, Query()] = None,
-) -> list[MemoryRead]:
-    return await service.list_my_memories(ctx, status)
+    q: Annotated[str | None, Query(min_length=1, max_length=MEMORY_LIST_QUERY_MAX_LENGTH)] = None,
+    limit: Annotated[int, Query(ge=1, le=MEMORY_LIST_LIMIT_MAX)] = MEMORY_LIST_LIMIT_DEFAULT,
+) -> MemoryPage:
+    # Neueste zuerst, Keyset-Seiten und `q` wie `GET /memories` (6.4.1);
+    # die Sicht ist allein das eigene Nutzergedaechtnis, ohne Agenten.
+    return await service.list_my_memories(ctx, status, q=q, limit=limit, cursor=cursor)
 
 
 @router.post("/me/memories/{memory_id}/triage")

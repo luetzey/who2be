@@ -312,10 +312,6 @@ class MemoryRepository(Protocol):
         self, workspace_id: UUID, owner: MemoryOwner, memory_id: UUID
     ) -> MemoryRead | None: ...
 
-    async def list_for_user(
-        self, workspace_id: UUID, subject_user_id: UUID, status: MemoryStatus | None
-    ) -> list[MemoryRead]: ...
-
     async def triage_owned(
         self,
         workspace_id: UUID,
@@ -1053,21 +1049,6 @@ class PgMemoryRepository:
             memory_id,
         )
         return MemoryRead.model_validate(dict(row)) if row is not None else None
-
-    async def list_for_user(
-        self, workspace_id: UUID, subject_user_id: UUID, status: MemoryStatus | None
-    ) -> list[MemoryRead]:
-        """Nutzergedaechtnis EINER Person (3.1.1), neueste zuerst."""
-        rows = await self._pool.fetch(
-            f"SELECT {_READ_COLUMNS} FROM agent_memory "
-            "WHERE workspace_id = $1 AND scope = 'user' AND subject_user_id = $2 "
-            "  AND ($3::text IS NULL OR status = $3::text) "
-            "ORDER BY created_at DESC",
-            workspace_id,
-            subject_user_id,
-            status.value if status is not None else None,
-        )
-        return [MemoryRead.model_validate(dict(row)) for row in rows]
 
     async def _mutate(
         self,
