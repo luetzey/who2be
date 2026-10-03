@@ -15,6 +15,8 @@ import { axe } from '@/test/a11y'
 // Detail-Sheet (C5c-1, Gedaechtnisverwaltung §7/§16): Rollback mit
 // `event_id`, Loeschtext mit Verlauf, „Wieder aktivieren“ nur bei `expired`,
 // fremdes Nutzergedaechtnis nie sichtbar, Chevron nur mit `detailLinks`.
+// Deep-Link ueber den Einzelabruf: nur 404 ist „nicht gefunden“, ein
+// Netz-/Serverfehler ist eine Fehlermeldung mit Retry (t_b6bfcb87).
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -132,11 +134,21 @@ interface Call {
   body: Record<string, unknown> | null
 }
 
+// Antwort des Einzelabrufs `GET /memories/{id}`: Response, Funktion (je Aufruf)
+// oder `undefined` = Eintrag aus `items` bzw. 404 `memory_not_found`.
+type DetailStub = Response | ((attempt: number) => Response | Promise<Response>)
+
+function notFound(): Response {
+  return jsonResponse({ detail: 'Memory nicht gefunden.', reason: 'memory_not_found' }, 404)
+}
+
 function stubApi({
   items = [memory()],
   history = HISTORY,
-}: { items?: MemoryRead[]; history?: MemoryEventRead[] | Response } = {}) {
+  detail,
+}: { items?: MemoryRead[]; history?: MemoryEventRead[] | Response; detail?: DetailStub } = {}) {
   const calls: Call[] = []
+  let detailAttempts = 0
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -155,6 +167,14 @@ function stubApi({
       if (path.endsWith('/reactivate')) return jsonResponse(memory({ status: 'active' }))
       if (method === 'PUT') return jsonResponse(memory({ fact: String(body?.fact) }))
       if (path.endsWith('/memories/counts')) return jsonResponse({ total: items.length })
+      const single = /^\/v1\/workspaces\/[^/]+\/memories\/([^/]+)$/.exec(path)
+      if (single !== null) {
+        detailAttempts += 1
+        if (detail instanceof Response) return detail
+        if (detail !== undefined) return detail(detailAttempts)
+        const hit = items.find((item) => item.id === single[1])
+        return hit !== undefined ? jsonResponse(hit) : notFound()
+      }
       if (path.endsWith('/memories')) return jsonResponse({ items, next_cursor: null })
       if (path.endsWith('/members')) {
         return jsonResponse([
@@ -200,6 +220,7 @@ function Providers({ role = 'editor', children }: { role?: WorkspaceRole; childr
 }
 
 const ENTRY = '/w/ws-1/memory?tab=entries&entry=m1'
+const DETAIL_PATH = '/v1/workspaces/ws-1/memories/m1'
 
 async function openSheet(entry = ENTRY) {
   renderPage(entry)
@@ -211,6 +232,7 @@ async function openSheet(entry = ENTRY) {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('MemoryDetailSheet (C5c-1)', () => {
@@ -376,6 +398,83 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     ).toBeInTheDocument()
   })
 
+  it('löst einen Deep-Link über den Einzelabruf auf, ohne die Liste zu durchsuchen', async () => {
+    const { calls } = stubApi()
+    await openSheet()
+    const single = calls.filter((call) => call.path === DETAIL_PATH)
+    expect(single).toHaveLength(1)
+    // Die Liste dahinter laedt ihre erste Seite; ein Suchlauf blaettert nicht.
+    expect(
+      calls.some((call) => call.path.endsWith('/memories') && call.path.includes('cursor')),
+    ).toBe(false)
+  })
+
+  it('zeigt bei 404 memory_not_found „nicht gefunden“ ohne Fehlermeldung', async () => {
+    stubApi({ detail: notFound() })
+    renderPage(ENTRY)
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(
+      await within(sheet).findByText(
+        'Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(sheet).queryByTestId('error-alert')).toBeNull()
+    expect(within(sheet).queryByRole('button', { name: 'Erneut versuchen' })).toBeNull()
+  })
+
+  it('zeigt einen Netzfehler als Fehlermeldung mit Retry und lädt danach den Eintrag', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { calls } = stubApi({
+      detail: (attempt) => {
+        if (attempt === 1) throw new TypeError('Failed to fetch')
+        return jsonResponse(memory())
+      },
+    })
+    renderPage(ENTRY)
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    const alert = await within(sheet).findByTestId('error-alert')
+    expect(alert).toHaveTextContent('Der Eintrag ließ sich nicht laden.')
+    expect(
+      within(sheet).queryByText('Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.'),
+    ).toBeNull()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Erneut versuchen' }))
+    expect(await within(sheet).findByTestId('detail-fact')).toHaveTextContent(
+      'Nutzt uv statt pip.',
+    )
+    expect(within(sheet).queryByTestId('error-alert')).toBeNull()
+    expect(calls.filter((call) => call.path === DETAIL_PATH)).toHaveLength(2)
+  })
+
+  it('behandelt einen Serverfehler (500) nicht als „nicht gefunden“', async () => {
+    stubApi({ detail: jsonResponse({ detail: 'kaputt' }, 500) })
+    renderPage(ENTRY)
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(await within(sheet).findByTestId('error-alert')).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Erneut versuchen' })).toBeInTheDocument()
+    expect(
+      within(sheet).queryByText('Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.'),
+    ).toBeNull()
+  })
+
+  it('kodiert die ID aus ?entry=, sodass ../x den Memory-Pfad nicht verlässt', async () => {
+    // `?entry=..%2F..%2Fx` kommt als `../../x` an. Roh in den Pfad gesetzt,
+    // macht der Browser daraus `/v1/workspaces/x` (Client-Side Path Traversal).
+    const { calls } = stubApi()
+    renderPage('/w/ws-1/memory?tab=entries&entry=..%2F..%2Fx')
+    const sheet = await screen.findByTestId('memory-detail-sheet')
+    expect(
+      await within(sheet).findByText(
+        'Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      calls.some((call) => call.path === '/v1/workspaces/ws-1/memories/..%2F..%2Fx'),
+    ).toBe(true)
+    expect(
+      calls.filter((call) => !call.path.startsWith('/v1/workspaces/ws-1/')).map((c) => c.path),
+    ).toEqual([])
+  })
+
   it('zeigt einen Verlaufsfehler nur im Verlaufsabschnitt', async () => {
     stubApi({ history: jsonResponse({ detail: 'kaputt' }, 500) })
     const sheet = await openSheet()
@@ -396,6 +495,7 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     // Kein Suchlauf: der Eintrag kam im Router-State mit.
     await within(sheet).findAllByTestId('history-item')
     expect(calls.filter((call) => call.path.endsWith('/memories')).length).toBe(listCalls)
+    expect(calls.some((call) => call.path === DETAIL_PATH)).toBe(false)
   })
 
   it('rendert ohne detailLinks keinen Chevron', () => {

@@ -144,6 +144,14 @@ function stubApi({
       return jsonResponse(counts)
     }
     if (path.endsWith('/memories')) return jsonResponse({ items, next_cursor: null })
+    // Einzelabruf des Deep-Links (`GET /memories/{id}`, nicht Besitzer-Pfade).
+    const single = /^\/v1\/workspaces\/[^/]+\/memories\/([^/]+)$/.exec(path)
+    if (single !== null) {
+      const hit = items.find((m) => m.id === single[1])
+      return hit !== undefined
+        ? jsonResponse(hit)
+        : jsonResponse({ detail: 'Memory nicht gefunden.', reason: 'memory_not_found' }, 404)
+    }
     if (path.endsWith('/memory-proposals')) return jsonResponse(proposals)
     if (path.endsWith('/history')) return jsonResponse([])
     if (path.endsWith('/agents')) return jsonResponse([agent()])

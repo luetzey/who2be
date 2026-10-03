@@ -3408,6 +3408,7 @@
     "detail": {
       "title": "Entry",
       "loading": "Loading entry…",
+      "loadError": "The entry couldn't be loaded.",
       "provenance": "Provenance",
       "channel": "Channel",
       "channelServer": "{{channel}} (set by server)",
