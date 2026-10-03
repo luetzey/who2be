@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError } from '@/api/client'
+import { type Api, ApiError } from '@/api/client'
 import type {
   Agent,
   MemoryBatchItemResult,
@@ -371,9 +371,56 @@ export interface MemoryTabCounts {
 }
 
 /**
+ * Zahl der Warteschlange „Zur Freigabe“ — die EINE Quelle fuer Tab-Zaehler
+ * und Dashboard-Banner (Gedaechtnisverwaltung §11.1): `status=pending` (der
+ * Server schliesst Lernvorschlaege dort aus) plus offene Aenderungs-/
+ * Loeschvorschlaege. Viewer zaehlen nur das eigene Nutzergedaechtnis
+ * (`scope=user`, wie `useApprovalQueue`); fremdes Nutzergedaechtnis wird nie
+ * angefragt, auch nicht als Zahl (ADR-0053 3.1.1).
+ */
+export async function countApprovalQueue(api: Api, canManageAgents: boolean): Promise<number> {
+  const filter: MemoryFilter = { status: 'pending' }
+  if (!canManageAgents) filter.scope = 'user'
+  const [pending, proposals] = await Promise.all([
+    api.countMemories(filter),
+    api.listMemoryProposals({ status: 'pending' }),
+  ])
+  const open = proposals.filter((proposal) => proposal.status === 'pending').length
+  return pending.total + open
+}
+
+/**
+ * Zahl fuer den Dashboard-Banner (Lernschleife C5a-2): dieselbe Menge wie der
+ * Tab-Zaehler „Zur Freigabe“. `null`, solange die Rolle fehlt, die Zahl laedt
+ * oder nicht ladbar ist — dann behauptet das Dashboard nichts.
+ */
+export function useApprovalCount(): number | null {
+  const api = useApi()
+  const role = useCurrentWorkspaceRole()
+  const [count, setCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    setCount(null)
+    if (role === null) return
+    let cancelled = false
+    countApprovalQueue(api, role !== 'viewer')
+      .then((total) => {
+        if (!cancelled) setCount(total)
+      })
+      .catch(() => {
+        if (!cancelled) setCount(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, role])
+
+  return count
+}
+
+/**
  * Zaehler der Tab-Leiste (Spec §4), immer vom Server:
- * - Zur Freigabe = `status=pending` (der Server schliesst Lernvorschlaege
- *   dort aus) plus offene Aenderungs-/Loeschvorschlaege
+ * - Zur Freigabe = `countApprovalQueue` (gleiche Quelle wie das Dashboard)
  * - Eintraege = `scope=agent`, dieselbe Menge wie die ungefilterte Liste
  *   (inkl. `rejected`, bis die API einen Ausschlussfilter fuer `status` hat)
  * Ein Fehler laesst nur die Zahl weg (`null`), nie den Tab.
@@ -385,14 +432,10 @@ export function useMemoryTabCounts(enabled: boolean, nonce: number): MemoryTabCo
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
-    Promise.all([
-      api.countMemories({ status: 'pending' }),
-      api.listMemoryProposals({ status: 'pending' }),
-    ])
-      .then(([pending, proposals]) => {
+    countApprovalQueue(api, true)
+      .then((approval) => {
         if (cancelled) return
-        const open = proposals.filter((proposal) => proposal.status === 'pending').length
-        setCounts((current) => ({ ...current, approval: pending.total + open }))
+        setCounts((current) => ({ ...current, approval }))
       })
       .catch(() => {
         if (!cancelled) setCounts((current) => ({ ...current, approval: null }))
