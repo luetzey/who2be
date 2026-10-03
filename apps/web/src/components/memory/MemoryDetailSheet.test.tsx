@@ -232,6 +232,19 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     expect(within(items[2]).getByText('von researcher')).toBeInTheDocument()
   })
 
+  it('lässt lange Werte ohne Leerzeichen in der Herkunft umbrechen statt überlaufen', async () => {
+    // jsdom rechnet kein Layout: geprüft werden die Klassen, die den
+    // Overflow im Browser verhindern (Messung 1280: dd lief bis x=1627).
+    stubApi()
+    const sheet = await openSheet()
+    const dl = within(sheet).getByTestId('detail-provenance')
+    expect(dl.className).toContain('sm:grid-cols-[auto_minmax(0,1fr)]')
+    for (const dd of Array.from(dl.querySelectorAll('dd'))) {
+      expect(dd).toHaveClass('min-w-0')
+    }
+    expect(within(sheet).getByText('Nutzer sagte: nimm uv')).toHaveClass('wrap-anywhere')
+  })
+
   it('sendet beim Rollback die gewählte event_id und zeigt den Diff „jetzt → danach“', async () => {
     const { calls } = stubApi()
     const sheet = await openSheet()

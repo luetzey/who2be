@@ -656,31 +656,37 @@ function Provenance({ memory, agentName }: { memory: MemoryRead; agentName: stri
       <h3 id={`provenance-${memory.id}`} className="text-sm font-semibold">
         {t('detail.provenance')}
       </h3>
-      <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+      {/* minmax(0,1fr) + wrap-anywhere: lange URLs/Namen ohne Leerzeichen
+          duerfen die Wertspalte nicht ueber den Sheet-Rand schieben (1fr hat
+          min-content als Untergrenze, break-words senkt die nicht). */}
+      <dl
+        className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-[auto_minmax(0,1fr)]"
+        data-testid="detail-provenance"
+      >
         <dt className="text-muted-foreground">{t('detail.channel')}</dt>
-        <dd className="break-words">{t('detail.channelServer', { channel })}</dd>
+        <dd className="min-w-0 wrap-anywhere">{t('detail.channelServer', { channel })}</dd>
         <dt className="text-muted-foreground">{t('detail.perAgent')}</dt>
-        <dd className="flex min-w-0 items-start gap-1.5 break-words" data-testid="detail-origin">
+        <dd className="flex min-w-0 items-start gap-1.5 wrap-anywhere" data-testid="detail-origin">
           {risky ? <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> : null}
           {t(`origin.${origin}`)}
         </dd>
         {memory.context !== null && memory.context !== '' ? (
           <>
             <dt className="text-muted-foreground">{t('detail.reason')}</dt>
-            <dd className="break-words whitespace-pre-wrap">{memory.context}</dd>
+            <dd className="min-w-0 wrap-anywhere whitespace-pre-wrap">{memory.context}</dd>
           </>
         ) : null}
         <dt className="text-muted-foreground">{t('detail.kindScope')}</dt>
-        <dd className="break-words">
+        <dd className="min-w-0 wrap-anywhere">
           {t(`kind.${kind}`)} · {t(`detail.scope.${memory.scope === 'user' ? 'user' : 'agent'}`)}
         </dd>
         <dt className="text-muted-foreground">{t('detail.category')}</dt>
-        <dd className="break-words">
+        <dd className="min-w-0 wrap-anywhere">
           {t(`agents:memory.category.${memory.category}`)} ·{' '}
           {t('detail.importance', { value: memory.importance })}
         </dd>
         <dt className="text-muted-foreground">{t('detail.created')}</dt>
-        <dd>
+        <dd className="min-w-0">
           <time dateTime={memory.created_at}>{created}</time>
         </dd>
       </dl>
