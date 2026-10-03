@@ -455,9 +455,19 @@
     "operationId": "update_member_role_v1_workspaces__workspace_id__members__user_id__patch"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/members/{user_id}/memories",
+    "operationId": "purge_member_memories_v1_workspaces__workspace_id__members__user_id__memories_delete"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/memories",
     "operationId": "list_workspace_memories_v1_workspaces__workspace_id__memories_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/memories/batch",
+    "operationId": "batch_memories_v1_workspaces__workspace_id__memories_batch_post"
   },
   {
     "method": "GET",

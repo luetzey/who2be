@@ -131,6 +131,13 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/members": Probe(),
     f"PATCH {_WS}/members/{{user_id}}": Probe(body={"role": "viewer"}),
     f"DELETE {_WS}/members/{{user_id}}": Probe(),
+    # Admin-Loeschen des Nutzergedaechtnisses (6.4.1 W5 = a, C3c-2b). Im
+    # eigenen Workspace ergibt eine fremde Person `{deleted: 0}` wie eine
+    # unbekannte (bewusst ohne Mitgliedschaftspruefung, das Gedaechtnis
+    # ueberlebt den Austritt) — deshalb `filters`. Das Mitglied von B traegt
+    # ein eigenes Nutzergedaechtnis (`member_memory_id`), damit der
+    # Fingerabdruck ein Loeschen ueber die Workspace-Grenze sieht.
+    f"DELETE {_WS}/members/{{user_id}}/memories": Probe(filters=True),
     f"GET {_WS}/invitations": Probe(),
     f"POST {_WS}/invitations": Probe(body={"email": "iso-probe@example.com", "role": "viewer"}),
     f"DELETE {_WS}/invitations/{{invitation_id}}": Probe(),
@@ -293,6 +300,13 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/memories": Probe(query={"agent_id": "<<agent_id>>"}),
     f"GET {_WS}/memories/counts": Probe(
         query={"agent_id": "<<agent_id>>", "group_by": ["agent", "status"]}
+    ),
+    # Stapel (6.4.1, C3c-2b): die IDs im Body waehlen aus, statt die Route zu
+    # adressieren. Eine fremde ID ist je Eintrag `memory_not_found` (200, wie
+    # eine unbekannte) — deshalb `filters`; der Fingerabdruck belegt, dass bei
+    # B nichts geaendert wurde.
+    f"POST {_WS}/memories/batch": Probe(
+        body={"action": "reject", "ids": ["<<memory_id>>"]}, filters=True
     ),
     # Not-Aus (6.4.1, C3b-2b): `agent_id` ist die Objekt-Referenz (V1/V2).
     # `dry_run`, damit die Gegenprobe den Bestand von B nicht zuruecknimmt.
@@ -795,12 +809,15 @@ def _memory_extras(ghost: Tenant, *tenants: Tenant) -> None:
         )
         t.ids["user_memory_id"] = _seed_memory(t, "Nutzer liest Krimis", "pending", t.user_id)
         t.ids["user_memory_event_id"] = _seed_created_event(t, t.ids["user_memory_id"])
+        # Nutzergedaechtnis des zweiten Mitglieds: Ziel des Admin-Loeschens.
+        t.ids["member_memory_id"] = _seed_memory(t, "Nutzer mag Moos", "active", t.ids["user_id"])
     for key in (
         "memory_event_id",
         "active_memory_id",
         "proposal_id",
         "user_memory_id",
         "user_memory_event_id",
+        "member_memory_id",
     ):
         ghost.ids[key] = str(uuid4())
 

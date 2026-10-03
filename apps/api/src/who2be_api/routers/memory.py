@@ -8,7 +8,9 @@ Bearbeiten, Loeschen, dazu Historie/Rollback/Bestaetigen/Reaktivieren
 nur `pending`), Liste und Entscheidung durch Menschen. Eigenes
 Nutzergedaechtnis unter `/me/memories*` — ohne Personen-Parameter, also nie
 fremd adressierbar (3.1.1). Workspace-weite Liste `GET /memories` und
-Zaehler `GET /memories/counts`, Not-Aus `POST /memories/revoke-auto` (6.4.1).
+Zaehler `GET /memories/counts`, Stapel `POST /memories/batch`, Not-Aus
+`POST /memories/revoke-auto` (6.4.1). Das Admin-Loeschen eines fremden
+Nutzergedaechtnisses liegt unter `/members/{user_id}/memories` (members.py).
 Autorisierung liegt im Service. Mount unter
 `/v1/workspaces/{ws_id}`.
 
@@ -47,6 +49,8 @@ from who2be_models.memory import (
     MEMORY_LIST_QUERY_MAX_LENGTH,
     MemoryAutoPolicy,
     MemoryAutoPolicyRead,
+    MemoryBatchRequest,
+    MemoryBatchResult,
     MemoryCountGroup,
     MemoryCounts,
     MemoryEventRead,
@@ -346,6 +350,20 @@ async def count_workspace_memories(
     # eigenen Filter (Facetten). `group_by=subject_user_id` nur admin und nur
     # als Zahl je Person.
     return await service.count_workspace_memories(ctx, filters, group_by or ())
+
+
+@router.post("/memories/batch")
+@limiter.limit(write_limit)
+async def batch_memories(
+    request: Request, data: MemoryBatchRequest, ctx: Ctx, service: Service
+) -> MemoryBatchResult:
+    # Sammelaktion approve|reject|confirm|delete per `ids` (hoechstens 100)
+    # oder `filter` mit `expected_count` (Abweichung 409
+    # `memory_batch_count_mismatch`, nichts geaendert). Je Eintrag die
+    # Einzelaktion; ein Fehler steht im Ergebnis dieses Eintrags (Teilerfolg,
+    # 200). Fremdes Nutzergedaechtnis je Eintrag `memory_not_found`, auch fuer
+    # admin; viewer mit Agentengedaechtnis 403 auf den ganzen Aufruf.
+    return await service.batch(ctx, data)
 
 
 # ------------------------------------------------- Not-Aus (ADR-0053 6.4.1)
