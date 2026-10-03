@@ -56,6 +56,7 @@ from who2be_models.memory import (
     MEMORY_HEALTH_NEVER_DELIVERED_DAYS,
     MEMORY_HEALTH_STALE_DELIVERY_DAYS,
     MEMORY_UNCONFIRMED_TTL_DAYS,
+    MEMORY_USER_PURGED_AUDIT_ACTION,
     MemoryActorKind,
     MemoryAutoCell,
     MemoryAutoPolicy,
@@ -431,6 +432,28 @@ class MemoryRepository(Protocol):
         filters: MemoryFilter,
         group: MemoryCountGroup,
     ) -> dict[str, int]: ...
+
+    # --- Paket C3c-2a: Stapel und Purge (6.4.1)
+
+    async def select_batch_ids(
+        self, workspace_id: UUID, visibility: MemoryVisibility, filters: MemoryFilter
+    ) -> list[UUID]: ...
+
+    async def get_batch_targets(
+        self, workspace_id: UUID, viewer_user_id: UUID, ids: Sequence[UUID]
+    ) -> dict[UUID, MemoryBatchTarget]: ...
+
+    async def purge_user_memories(
+        self, workspace_id: UUID, subject_user_id: UUID, actor_id: UUID
+    ) -> int: ...
+
+
+@dataclass(frozen=True)
+class MemoryBatchTarget:
+    """Ein Ziel eines Stapels samt abgeleitetem `held` (6.4.1, `_HELD_SQL`)."""
+
+    memory: MemoryRead
+    held: bool
 
 
 @dataclass(frozen=True)
@@ -1756,9 +1779,84 @@ class PgMemoryRepository:
         )
         return {row["key"]: int(row["n"]) for row in rows}
 
+    # ------------------------------------------ Stapel und Purge (6.4.1, C3c-2a)
 
-# Filterbau der workspace-weiten Sicht (6.4.1). Liste, Zaehler und spaeter die
-# Stapel-Auswahl per Filter (C3c-2a) nutzen ihn gemeinsam, damit alle drei
+    async def select_batch_ids(
+        self, workspace_id: UUID, visibility: MemoryVisibility, filters: MemoryFilter
+    ) -> list[UUID]:
+        """IDs der Stapel-Auswahl per Filter — dieselbe Menge wie `list_visible`.
+
+        Gemeinsamer Filterbau mit Liste und Zaehlern: fremdes Nutzergedaechtnis
+        gehoert nie zur Auswahl. Sortiert nach `(created_at, id)`, damit die
+        Ergebnisse je Eintrag eine feste Reihenfolge haben.
+        """
+        where = _memory_where(workspace_id, visibility, filters)
+        rows = await self._pool.fetch(
+            f"SELECT m.id FROM agent_memory m WHERE {where.sql} ORDER BY m.created_at, m.id",
+            *where.args,
+        )
+        return [row["id"] for row in rows]
+
+    async def get_batch_targets(
+        self, workspace_id: UUID, viewer_user_id: UUID, ids: Sequence[UUID]
+    ) -> dict[UUID, MemoryBatchTarget]:
+        """Die Eintraege aus `ids`, die als Stapel-Ziel in Frage kommen.
+
+        Das ist Agentengedaechtnis und das EIGENE Nutzergedaechtnis von
+        `viewer_user_id`. Fremdes Nutzergedaechtnis filtert schon SQL heraus —
+        sein Inhalt verlaesst die Datenbank nicht, und fuer den Service ist es
+        von einer unbekannten ID nicht zu unterscheiden (`memory_not_found`,
+        Owner-Entscheidung 3a). Ob die Rolle fuer Agentengedaechtnis reicht,
+        entscheidet der Service.
+        """
+        rows = await self._pool.fetch(
+            f"SELECT {_READ_COLUMNS_M}, ({_HELD_SQL}) AS held FROM agent_memory m "
+            "WHERE m.workspace_id = $1 AND m.id = ANY($2::uuid[]) "
+            "  AND (m.scope = 'agent' OR (m.scope = 'user' AND m.subject_user_id = $3))",
+            workspace_id,
+            list(ids),
+            viewer_user_id,
+        )
+        targets: dict[UUID, MemoryBatchTarget] = {}
+        for row in rows:
+            memory = MemoryRead.model_validate({k: v for k, v in row.items() if k != "held"})
+            targets[memory.id] = MemoryBatchTarget(memory=memory, held=bool(row["held"]))
+        return targets
+
+    async def purge_user_memories(
+        self, workspace_id: UUID, subject_user_id: UUID, actor_id: UUID
+    ) -> int:
+        """Loescht das ganze Nutzergedaechtnis einer Person im Workspace (6.4.1 W5 = a).
+
+        Hard-Delete (Historie und Vorschlaege gehen per Cascade mit) und genau
+        EINE inhaltsfreie `audit_log`-Zeile `memory.user_purged` mit
+        `target=<user_id>` und `detail={count}` — auch bei null Eintraegen,
+        damit der Eingriff selbst belegt ist. Beides in einer Transaktion.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            deleted = _affected(
+                await conn.execute(
+                    "DELETE FROM agent_memory "
+                    "WHERE workspace_id = $1 AND scope = 'user' AND subject_user_id = $2",
+                    workspace_id,
+                    subject_user_id,
+                )
+            )
+            await conn.execute(
+                "INSERT INTO audit_log (workspace_id, actor_id, action, target, detail) "
+                "VALUES ($1, $2, $3, $4, $5::jsonb)",
+                workspace_id,
+                actor_id,
+                MEMORY_USER_PURGED_AUDIT_ACTION,
+                str(subject_user_id),
+                {"count": deleted},
+            )
+        return deleted
+
+
+# Filterbau der workspace-weiten Sicht (6.4.1). Liste, Zaehler und die
+# Stapel-Auswahl per Filter (C3c-2a, `select_batch_ids`) nutzen ihn
+# gemeinsam, damit alle drei
 # dieselbe Menge meinen. Jeder Wert aus `MemoryFilter` wird gebunden; der
 # SQL-Text besteht nur aus festen Zeichenketten dieses Moduls.
 _HEALTH_SQL: dict[MemoryHealth, str] = {

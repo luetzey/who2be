@@ -675,6 +675,73 @@ class MemoryCounts(BaseModel):
     groups: dict[MemoryCountGroup, dict[str, int]] = Field(default_factory=dict)
 
 
+# ------------------------------------------------- Stapel und Purge (6.4.1)
+
+# `POST /memories/batch`: hoechstens so viele IDs je Aufruf (ADR-0053 6.4.1).
+MEMORY_BATCH_MAX_IDS = 100
+# Inhaltsfreie Spur des Admin-Loeschens (6.4.1 W5 = a): `target=<user_id>`,
+# `detail={count}`.
+MEMORY_USER_PURGED_AUDIT_ACTION = "memory.user_purged"
+
+
+class MemoryBatchAction(StrEnum):
+    """Aktion eines Stapels — je Eintrag dieselbe wie die Einzelaktion.
+
+    `approve`/`reject` entsprechen der Triage, `confirm` dem Bestaetigen
+    (3.1.3), `delete` dem Loeschen. Aenderungs- und Loeschvorschlaege laufen
+    nicht ueber den Stapel, sondern einzeln ueber `decide` (3.1.4).
+    """
+
+    approve = "approve"
+    reject = "reject"
+    confirm = "confirm"
+    delete = "delete"
+
+
+class MemoryBatchRequest(BaseModel):
+    """Body von `POST /memories/batch` (ADR-0053 6.4.1).
+
+    Genau eines von `ids` (1 bis `MEMORY_BATCH_MAX_IDS`, Dubletten werden
+    reihenfolgetreu entfernt) oder `filter` (wie `GET /memories`). Im
+    Filter-Modus ist `expected_count` Pflicht: die Zahl, die ein Mensch
+    gesehen und bestaetigt hat. `note` wirkt nur bei `approve`/`reject` als
+    Triage-Notiz.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: MemoryBatchAction
+    ids: list[UUID] | None = Field(default=None, min_length=1, max_length=MEMORY_BATCH_MAX_IDS)
+    filter: MemoryFilter | None = None
+    expected_count: int | None = Field(default=None, ge=0)
+    note: str | None = Field(default=None, max_length=MEMORY_TRIAGE_NOTE_MAX_LENGTH)
+
+    @field_validator("ids")
+    @classmethod
+    def _unique(cls, value: list[UUID] | None) -> list[UUID] | None:
+        return list(dict.fromkeys(value)) if value is not None else None
+
+    @model_validator(mode="after")
+    def _one_mode(self) -> MemoryBatchRequest:
+        if (self.ids is None) == (self.filter is None):
+            raise ValueError("Genau eines von `ids` oder `filter` angeben.")
+        if self.filter is not None and self.expected_count is None:
+            raise ValueError("`expected_count` ist im Filter-Modus Pflicht.")
+        return self
+
+
+class MemoryBatchResult(BaseModel):
+    """Antwort eines Stapels: ein Ergebnis je Eintrag, Teilerfolg moeglich."""
+
+    results: list[MemoryBatchItemResult]
+
+
+class MemoryPurgeResult(BaseModel):
+    """Antwort von `DELETE /members/{user_id}/memories` — nur die Anzahl (3a)."""
+
+    deleted: int
+
+
 class MemoryHit(BaseModel):
     """Ein Retrieval-Treffer fuer Agenten (bewusst schmal).
 
