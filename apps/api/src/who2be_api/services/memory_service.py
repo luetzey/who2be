@@ -39,6 +39,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.embeddings import build_embedding_port
 from who2be_api.repositories.memory_repository import (
+    MemoryBatchTarget,
     MemoryOwner,
     MemoryRepository,
     MemoryRevokeSelection,
@@ -76,7 +77,10 @@ from who2be_models.memory import (
     MemoryAutoPolicy,
     MemoryAutoPolicyRead,
     MemoryAutoRow,
+    MemoryBatchAction,
     MemoryBatchItemResult,
+    MemoryBatchRequest,
+    MemoryBatchResult,
     MemoryCountGroup,
     MemoryCounts,
     MemoryEventKind,
@@ -88,6 +92,7 @@ from who2be_models.memory import (
     MemoryProposalDecision,
     MemoryProposalRead,
     MemoryProposalStatus,
+    MemoryPurgeResult,
     MemoryRevokeAuto,
     MemoryRevokeAutoPreview,
     MemoryRevokeAutoResult,
@@ -365,6 +370,37 @@ def _transition_invalid(memory: MemoryRead, *, event: MemoryEventKind | None = N
         detail=detail,
         reason="memory_transition_invalid",
         params=params,
+    )
+
+
+def _reject_lesson_approval(memory: MemoryRead, action: MemoryTriageAction) -> None:
+    """Ein Lernvorschlag wird nie freigegeben (3.1.6, Matrix 4.2; DB-CHECK in 0091).
+
+    Ohne diese Pruefung liefe die Freigabe in die CHECK-Verletzung (500) —
+    einzeln wie im Stapel. Ablehnen bleibt erlaubt.
+    """
+    if action == MemoryTriageAction.approve and memory.kind == MemoryKind.lesson:
+        raise _transition_invalid(memory)
+
+
+def _memory_held() -> ApiError:
+    # Nur als Ergebnis je Eintrag eines Stapels (ADR-0053 6.1/6.4.1).
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Zurueckgehaltene Eintraege werden nur einzeln freigegeben.",
+        reason="memory_held",
+    )
+
+
+def _batch_count_mismatch(count: int, expected: int) -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"Es gibt {count} betroffene Eintraege, bestaetigt waren "
+            f"{expected}. Nichts geaendert — bitte die Vorschau neu laden."
+        ),
+        reason="memory_batch_count_mismatch",
+        params={"count": count},
     )
 
 
@@ -718,6 +754,7 @@ class MemoryService:
                 detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
                 reason="memory_not_pending",
             )
+        _reject_lesson_approval(existing, data.action)
         new_status = (
             MemoryStatus.active
             if data.action == MemoryTriageAction.approve
@@ -995,6 +1032,7 @@ class MemoryService:
                 detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
                 reason="memory_not_pending",
             )
+        _reject_lesson_approval(memory, data.action)
         approve = data.action == MemoryTriageAction.approve
         updated = await self._repo.triage_owned(
             ctx.workspace_id,
@@ -1084,15 +1122,7 @@ class MemoryService:
             actor_id=ctx.user_id,
         )
         if not outcome.applied:
-            raise ApiError(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Es gibt {outcome.count} betroffene Eintraege, bestaetigt waren "
-                    f"{data.expected_count}. Nichts geaendert — bitte die Vorschau neu laden."
-                ),
-                reason="memory_batch_count_mismatch",
-                params={"count": outcome.count},
-            )
+            raise _batch_count_mismatch(outcome.count, data.expected_count)
         return MemoryRevokeAutoResult(
             count=outcome.count,
             hidden_count=outcome.hidden_count,
@@ -1172,3 +1202,96 @@ class MemoryService:
                 for group in groups
             },
         )
+
+    # ------------------------------------------ Stapel und Purge (6.4.1, C3c-2a)
+
+    async def batch(self, ctx: WorkspaceContext, data: MemoryBatchRequest) -> MemoryBatchResult:
+        """Sammelaktion `approve | reject | confirm | delete` (`POST /memories/batch`).
+
+        Auswahl: `ids` (hoechstens 100) oder `filter` mit derselben Sichtbarkeit
+        wie `GET /memories`. Im Filter-Modus gilt alles oder nichts fuer die
+        Zahl: weicht die Trefferzahl von `expected_count` ab, kommt 409
+        `memory_batch_count_mismatch` mit `params={count}` und nichts aendert
+        sich.
+
+        Je Eintrag laeuft genau die Einzelaktion (Rechte, Status, Obergrenzen);
+        ein Fehler bricht den Stapel nicht ab, sondern steht im Ergebnis dieses
+        Eintrags. Zusaetzlich nur: `approve` auf einen zurueckgehaltenen
+        Eintrag ergibt `memory_held` — der wird nur einzeln freigegeben.
+
+        Rechte: Mensch ab `viewer`. Fremdes Nutzergedaechtnis und unbekannte
+        IDs sind je Eintrag `memory_not_found`, auch fuer `admin` (3a). Nennt
+        ein `viewer` Agentengedaechtnis, verlangt die Aktion `editor`: 403
+        `insufficient_role` auf den ganzen Aufruf, nichts geaendert.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        self._require_human(ctx)
+        if data.filter is not None:
+            visibility = await self._visibility(ctx, data.filter)
+            ids = await self._repo.select_batch_ids(ctx.workspace_id, visibility, data.filter)
+            assert data.expected_count is not None  # Modell-Validator
+            if len(ids) != data.expected_count:
+                raise _batch_count_mismatch(len(ids), data.expected_count)
+        else:
+            assert data.ids is not None  # Modell-Validator
+            ids = data.ids
+        targets = await self._repo.get_batch_targets(ctx.workspace_id, ctx.user_id, ids)
+        if any(t.memory.scope == MemoryScope.agent for t in targets.values()):
+            require_role(ctx, WorkspaceRole.editor)
+        results: list[MemoryBatchItemResult] = []
+        for memory_id in ids:
+            target = targets.get(memory_id)
+            try:
+                if target is None:
+                    raise _memory_not_found()
+                await self._batch_one(ctx, data, target)
+            except ApiError as exc:
+                results.append(
+                    MemoryBatchItemResult(
+                        id=memory_id, ok=False, reason=exc.reason, params=exc.params
+                    )
+                )
+            else:
+                results.append(MemoryBatchItemResult(id=memory_id, ok=True))
+        return MemoryBatchResult(results=results)
+
+    async def _batch_one(
+        self, ctx: WorkspaceContext, data: MemoryBatchRequest, target: MemoryBatchTarget
+    ) -> None:
+        """Ein Eintrag des Stapels ueber die Einzelaktion seines Besitzers."""
+        memory = target.memory
+        # Nutzergedaechtnis (`agent_id=None`): nur das eigene erreicht diesen
+        # Punkt (Repository-Filter); Agentengedaechtnis traegt immer seinen
+        # Agenten (Invariante 0091).
+        agent_id = memory.agent_id if memory.scope == MemoryScope.agent else None
+        action = data.action
+        if action in (MemoryBatchAction.approve, MemoryBatchAction.reject):
+            if action == MemoryBatchAction.approve and target.held:
+                raise _memory_held()
+            triage = MemoryTriage(action=MemoryTriageAction(action.value), note=data.note)
+            if agent_id is None:
+                await self.triage_my(ctx, memory.id, triage)
+            else:
+                await self.triage(ctx, agent_id, memory.id, triage)
+        elif action == MemoryBatchAction.confirm:
+            await self.confirm(ctx, agent_id, memory.id)
+        elif agent_id is None:
+            await self.delete_my(ctx, memory.id)
+        else:
+            await self.delete_memory(ctx, agent_id, memory.id)
+
+    async def purge_user_memories(
+        self, ctx: WorkspaceContext, subject_user_id: UUID
+    ) -> MemoryPurgeResult:
+        """Loescht das Nutzergedaechtnis einer Person im Workspace (6.4.1 W5 = a).
+
+        Nur `admin` (mit MFA) und Mensch. Die Antwort nennt nur die Anzahl, nie
+        Inhalt oder IDs (Owner-Entscheidung 3a); `audit_log` bekommt eine
+        inhaltsfreie Zeile `memory.user_purged`.
+        """
+        require_role(ctx, WorkspaceRole.admin)
+        self._require_human(ctx)
+        deleted = await self._repo.purge_user_memories(
+            ctx.workspace_id, subject_user_id, ctx.user_id
+        )
+        return MemoryPurgeResult(deleted=deleted)

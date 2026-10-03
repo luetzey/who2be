@@ -305,6 +305,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "memory_proposal_not_pending": "Vorschlag bereits entschieden",
     "memory_transition_invalid": "Statuswechsel des Memorys nicht moeglich",
     "memory_batch_count_mismatch": "Trefferzahl weicht von der bestaetigten Anzahl ab",
+    "memory_held": "Zurueckgehaltener Eintrag nur einzeln freigebbar",
     "persona_mode_unknown": "Unbekannter Persona-Modus",
     "placeholder_kind_unknown": "Unbekannter Placeholder-Typ",
     "entity_version_not_found": "Version nicht gefunden",
