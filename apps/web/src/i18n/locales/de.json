@@ -3408,6 +3408,7 @@
     "detail": {
       "title": "Eintrag",
       "loading": "Eintrag wird geladen…",
+      "loadError": "Der Eintrag ließ sich nicht laden.",
       "provenance": "Herkunft",
       "channel": "Kanal",
       "channelServer": "{{channel}} (vom Server)",
