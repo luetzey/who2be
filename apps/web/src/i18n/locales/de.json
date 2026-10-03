@@ -617,9 +617,20 @@
     },
     "memory": {
       "title": "Gedächtnis",
-      "description": "Fakten, die der Agent über Sitzungen hinweg gemerkt hat — kuratiert und jederzeit einsehbar, bearbeitbar und löschbar.",
-      "pendingBadge_one": "{{count}} zur Freigabe",
-      "pendingBadge_other": "{{count}} zur Freigabe",
+      "description": "Was sich dieser Agent merkt – Agentennotizen, Nutzerfakten und Lernvorschläge, nach Art und Zustand filterbar.",
+      "pendingHint_one": "{{formatted}} Eintrag wartet auf Freigabe.",
+      "pendingHint_other": "{{formatted}} Einträge warten auf Freigabe.",
+      "toApproval": "Zur Freigabe",
+      "fixedAgent": "Agent: {{agent}}",
+      "openCentral": "In der Gedächtnisverwaltung öffnen",
+      "capEntries_one": "{{formatted}} von {{maximum}} Einträgen",
+      "capEntries_other": "{{formatted}} von {{maximum}} Einträgen",
+      "capNotes_one": "{{formatted}} von {{maximum}} Agentennotizen",
+      "capNotes_other": "{{formatted}} von {{maximum}} Agentennotizen",
+      "nearlyFull": "fast voll",
+      "off": "Das Gedächtnis ist für diesen Agenten aus.",
+      "offReadOnly": "Die vorhandenen Einträge stehen unten zum Lesen.",
+      "actions": "Weitere Aktionen zum Gedächtnis von {{name}}",
       "empty": {
         "title": "Noch keine Erinnerungen",
         "description": "Dieser Agent hat bisher nichts gespeichert."
@@ -632,56 +643,13 @@
         "entity": "Entität",
         "general": "Allgemein"
       },
-      "importance": "Wichtigkeit {{value}}/10",
-      "triage": {
-        "title": "Zur Freigabe",
-        "contextLabel": "Begründung des Agenten",
-        "factLabel": "Fakt",
-        "approve": "Freigeben",
-        "approveSuccess": "Erinnerung freigegeben.",
-        "reject": "Ablehnen",
-        "rejectDialogTitle": "Vorschlag ablehnen?",
-        "rejectDialogDescription": "Der Vorschlag wird abgelehnt und nicht ins Gedächtnis übernommen.",
-        "rejectNoteLabel": "Notiz (optional)",
-        "rejectNotePlaceholder": "Warum wird abgelehnt?",
-        "rejectConfirm": "Ablehnen",
-        "rejectSuccess": "Vorschlag abgelehnt.",
-        "error": "Aktion fehlgeschlagen."
-      },
-      "active": {
-        "title": "Aktive Erinnerungen",
-        "emptyTitle": "Noch keine aktiven Erinnerungen",
-        "edit": "Bearbeiten",
-        "save": "Speichern",
-        "cancel": "Abbrechen",
-        "updateSuccess": "Erinnerung aktualisiert.",
-        "updateError": "Speichern fehlgeschlagen.",
-        "factLabel": "Fakt",
-        "importanceLabel": "Wichtigkeit",
-        "usage_one": "{{count}}× abgerufen, zuletzt {{date}}",
-        "usage_other": "{{count}}× abgerufen, zuletzt {{date}}",
-        "usageNever": "noch nie abgerufen"
-      },
-      "rejected": {
-        "toggle_one": "{{count}} abgelehnte Erinnerung",
-        "toggle_other": "{{count}} abgelehnte Erinnerungen",
-        "noteLabel": "Notiz",
-        "noNote": "Keine Notiz."
-      },
-      "delete": {
-        "label": "Löschen",
-        "ariaLabel": "Erinnerung löschen",
-        "dialogTitle": "Erinnerung löschen?",
-        "dialogDescription": "Wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-        "confirmLabel": "Endgültig löschen",
-        "success": "Erinnerung gelöscht.",
-        "error": "Löschen fehlgeschlagen."
-      },
       "deleteAll": {
         "label": "Alle löschen",
-        "dialogTitle": "Alle Erinnerungen löschen?",
-        "dialogDescription": "Alle Erinnerungen dieses Agenten werden dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-        "confirmLabel": "Alle endgültig löschen",
+        "dialogTitle_one": "{{formatted}} Eintrag endgültig löschen?",
+        "dialogTitle_other": "Alle {{formatted}} Einträge endgültig löschen?",
+        "dialogDescription": "Das gesamte Gedächtnis dieses Agenten wird dauerhaft entfernt. Das lässt sich nicht rückgängig machen.",
+        "confirmLabel_one": "{{formatted}} löschen",
+        "confirmLabel_other": "{{formatted}} löschen",
         "success": "Alle Erinnerungen gelöscht.",
         "error": "Löschen fehlgeschlagen."
       }
