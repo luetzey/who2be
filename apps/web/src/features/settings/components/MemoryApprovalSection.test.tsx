@@ -243,7 +243,7 @@ describe('MemoryApprovalSection (Lernschleife C6, ADR-0053 4.2/4.3)', () => {
     stubApi({ initial: policy(true), guardMode: 'off' })
     renderSection()
     expect(await screen.findByText('Der Memory-Wächter ist aus.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Wächter einstellen' })).toHaveAttribute('href', '#memory-guard')
+    expect(screen.getByRole('link', { name: 'Wächter einstellen' }).getAttribute('href')).toMatch(/#memory-guard$/)
   })
 
   it('warnt nicht, solange alles aus ist', async () => {

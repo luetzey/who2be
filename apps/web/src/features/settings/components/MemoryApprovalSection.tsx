@@ -1,6 +1,7 @@
 import { Eye, Info, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
 import type {
@@ -91,14 +92,15 @@ interface CellSwitchProps {
 function CellSwitch({ checked, disabled, labelledBy, onToggle }: CellSwitchProps) {
   const { t } = useTranslation('learning')
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       role="switch"
       aria-checked={checked}
       aria-labelledby={labelledBy}
       disabled={disabled}
       onClick={onToggle}
-      className="group inline-flex min-h-8 items-center gap-2 rounded-md text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-auto min-h-8 gap-2 px-1 font-normal hover:bg-transparent"
     >
       <span
         aria-hidden="true"
@@ -115,7 +117,7 @@ function CellSwitch({ checked, disabled, labelledBy, onToggle }: CellSwitchProps
         />
       </span>
       <span aria-hidden="true">{checked ? t('autoPolicy.on') : t('autoPolicy.off')}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -315,8 +317,19 @@ export function MemoryApprovalSection() {
                 title={t('autoPolicy.guardOff.title')}
                 description={t('autoPolicy.guardOff.description')}
                 actions={
+                  // Sprung zum Waechter auf derselben Seite. `Link` mit Hash
+                  // aendert die URL, scrollt aber nicht von selbst (Router-
+                  // Navigation) — deshalb scrollt der Klick selbst dorthin.
                   <Button asChild variant="outline" size="sm">
-                    <a href="#memory-guard">{t('autoPolicy.guardOff.action')}</a>
+                    <Link
+                      to={{ hash: '#memory-guard' }}
+                      onClick={() => {
+                        const target = document.getElementById('memory-guard')
+                        target?.scrollIntoView({ block: 'start' })
+                      }}
+                    >
+                      {t('autoPolicy.guardOff.action')}
+                    </Link>
                   </Button>
                 }
               />
