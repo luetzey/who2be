@@ -41,6 +41,7 @@ import { Label } from '@/components/ui/label'
 import { useWorkspaceContentLocale } from '@/hooks/useWorkspaceContentLocale'
 import { notify } from '@/lib/feedback'
 
+import { MemoryApprovalSection } from '../components/MemoryApprovalSection'
 import { MemoryGuardSection } from '../components/MemoryGuardSection'
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
 
@@ -205,7 +206,15 @@ export function WorkspaceSettingsPage() {
           </CardContent>
         </Card>
 
-        {isAdmin ? <MemoryGuardSection /> : null}
+        {/* Lernschleife C6: Auto-Freigabe direkt ueber dem Waechter — beide
+            gehoeren zusammen (Spec S4). Beide nur fuer Admins. */}
+        {isAdmin ? <MemoryApprovalSection /> : null}
+
+        {isAdmin ? (
+          <div id="memory-guard" className="scroll-mt-20">
+            <MemoryGuardSection />
+          </div>
+        ) : null}
 
         {isAdmin ? (
           <Card className="border-destructive/40">

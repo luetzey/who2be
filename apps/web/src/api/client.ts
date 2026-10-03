@@ -41,6 +41,8 @@ import type {
   Me,
   Member,
   MemberUpdateInput,
+  MemoryAutoPolicy,
+  MemoryAutoPolicyRead,
   MemoryGuardConfig,
   MemoryRead,
   MemoryStatus,
@@ -656,6 +658,10 @@ export interface Api {
   // (editor/viewer + Agent-Tokens 403 serverseitig).
   getMemoryGuard: () => Promise<MemoryGuardConfig>
   updateMemoryGuard: (config: MemoryGuardConfig) => Promise<MemoryGuardConfig>
+  // ADR-0053 4.1/4.2 — Freigabematrix. Gleiches Gate wie der Waechter (admin +
+  // eingeloggter Mensch, jeder API-Token 403). PUT liefert den wirksamen Stand.
+  getMemoryAutoPolicy: () => Promise<MemoryAutoPolicyRead>
+  updateMemoryAutoPolicy: (policy: MemoryAutoPolicy) => Promise<MemoryAutoPolicyRead>
   // Duplizieren (Deep-Copy des Inhalts als frische Draft, Muster `copyAgent`).
   // Der Server leitet Namen ("<Name> (Kopie)") + frischen Slug selbst ab.
   duplicatePersona: (id: string) => Promise<Persona>
@@ -1166,6 +1172,13 @@ export function createApi(token: string, workspaceId: string): Api {
       request<MemoryGuardConfig>(token, `${ws}/memory-guard`, {
         method: 'PUT',
         body: JSON.stringify(config),
+      }),
+    getMemoryAutoPolicy: () =>
+      request<MemoryAutoPolicyRead>(token, `${ws}/memory-auto-policy`),
+    updateMemoryAutoPolicy: (policy) =>
+      request<MemoryAutoPolicyRead>(token, `${ws}/memory-auto-policy`, {
+        method: 'PUT',
+        body: JSON.stringify(policy),
       }),
     duplicatePersona: (id) =>
       request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),
