@@ -3239,7 +3239,8 @@
       "alreadyDecided": "Schon entschieden.",
       "alreadyDecidedBy": "Schon von {{name}} entschieden.",
       "capReachedUser": "Dein Nutzergedächtnis ist voll ({{maximum}} Einträge, abgelehnte zählen mit). Lösche alte Einträge, bevor neue dazukommen.",
-      "capReachedNote": "Die Agentennotizen dieses Agenten sind voll. Lösche alte, bevor neue dazukommen."
+      "capReachedNote": "Die Agentennotizen dieses Agenten sind voll. Lösche alte, bevor neue dazukommen.",
+      "history": "Verlauf"
     },
     "batch": {
       "done": {
@@ -3373,7 +3374,83 @@
         "action": "Agenten ansehen"
       },
       "noMatch": "Keine Einträge für diese Filter",
-      "gone": "Diesen Eintrag gibt es nicht mehr."
+      "gone": "Diesen Eintrag gibt es nicht mehr.",
+      "openDetail": "Details zu „{{fact}}“ öffnen"
+    },
+    "detail": {
+      "title": "Eintrag",
+      "loading": "Eintrag wird geladen…",
+      "provenance": "Herkunft",
+      "channel": "Kanal",
+      "channelServer": "{{channel}} (vom Server)",
+      "perAgent": "Laut Agent",
+      "reason": "Begründung",
+      "kindScope": "Art · Bereich",
+      "scope": {
+        "agent": "nur dieser Agent",
+        "user": "Nutzergedächtnis"
+      },
+      "category": "Kategorie",
+      "importance": "Wichtigkeit {{value}}",
+      "created": "Angelegt",
+      "delivery": "Auslieferung",
+      "deliveredLast_one": "{{count}}× ausgeliefert, zuletzt {{when}}",
+      "deliveredLast_other": "{{count}}× ausgeliefert, zuletzt {{when}}",
+      "neverDelivered": "Noch nie ausgeliefert",
+      "notVisible": "Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.",
+      "moreActions": "Weitere Aktionen",
+      "delete": "Löschen…",
+      "deleteTitle": "Eintrag endgültig löschen?",
+      "deleteBody": "Eintrag und sein Verlauf werden dauerhaft entfernt. Das lässt sich nicht rückgängig machen.",
+      "deleteSubmit": "Endgültig löschen",
+      "done": {
+        "reject": "Abgelehnt.",
+        "edit": "Gespeichert.",
+        "delete": "Gelöscht."
+      }
+    },
+    "history": {
+      "title": "Verlauf",
+      "empty": "Noch keine Einträge im Verlauf.",
+      "loadError": "Der Verlauf ließ sich nicht laden.",
+      "older_one": "Älteren Eintrag laden ({{count}})",
+      "older_other": "Ältere laden ({{count}})",
+      "reason": "Begründung: „{{reason}}“",
+      "rule": "Regel: {{kind}} × {{origin}}",
+      "event": {
+        "created": "Vorgeschlagen",
+        "auto_activated": "Automatisch freigegeben",
+        "approved": "Freigegeben",
+        "rejected": "Abgelehnt",
+        "edited": "Bearbeitet",
+        "editedBeforeApproval": "Vor Freigabe geändert",
+        "confirmed": "Bestätigt",
+        "expired": "Abgelaufen",
+        "reactivated": "Wieder aktiviert",
+        "change_proposed": "Änderung vorgeschlagen",
+        "delete_proposed": "Löschung vorgeschlagen",
+        "proposal_accepted": "Vorschlag übernommen",
+        "proposal_rejected": "Vorschlag abgelehnt",
+        "rolled_back": "Früheren Stand wiederhergestellt",
+        "converted": "Zu Fall geworden",
+        "merged": "Erneut vorgeschlagen",
+        "auto_revoked": "Automatische Freigabe zurückgenommen"
+      },
+      "actor": {
+        "system": "Automatisch",
+        "by": "von {{name}}",
+        "you": "von dir",
+        "agentUnknown": "von einem Agenten",
+        "humanUnknown": "von einem Mitglied"
+      },
+      "restoreBefore": "Stand vor dieser Änderung wiederherstellen",
+      "restoreTitle": "Stand vor dieser Änderung wiederherstellen?",
+      "restoreBody": "So sieht der Eintrag danach aus. Der Verlauf wird fortgeschrieben, nichts geht verloren.",
+      "restoreSubmit": "Wiederherstellen",
+      "statusChange": "Status: {{from}} → {{to}}",
+      "categoryChange": "Kategorie: {{from}} → {{to}}",
+      "importanceChange": "Wichtigkeit: {{from}} → {{to}}",
+      "restored": "Früheren Stand wiederhergestellt."
     }
   }
 }

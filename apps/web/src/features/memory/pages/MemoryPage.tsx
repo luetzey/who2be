@@ -1,16 +1,18 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { MemoryDetailSheet } from '@/components/memory/MemoryDetailSheet'
 import {
   ActiveFilterChips,
   FilterSheetButton,
   MemoryFacetColumn,
 } from '@/components/memory/MemoryFacets'
 import { MemoryList } from '@/components/memory/MemoryList'
+import type { MemoryEntryState } from '@/components/memory/MemoryRow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -35,6 +37,7 @@ type MemoryTab = 'approval' | 'entries'
  * `?tab=` ist die Quelle des aktiven Tabs; Suche (`q`) und Filter stehen in
  * der URL, damit Links stabil sind. Ein Viewer, der `?tab=entries` oeffnet,
  * landet still auf `approval` — fuer ihn gibt es den Tab nicht (Spec §3).
+ * `?entry=<id>` oeffnet das Detail-Sheet (C5c-1) ueber beiden Tabs.
  */
 export function MemoryPage() {
   const { t, i18n } = useTranslation('learning')
@@ -107,6 +110,35 @@ export function MemoryPage() {
   const counts = useMemoryTabCounts(canManageAgents, countNonce)
   const format = new Intl.NumberFormat(i18n.language)
 
+  // Detail-Sheet (C5c-1): `?entry=<id>`; der Eintrag kommt, wenn vorhanden,
+  // aus der Liste im Router-State mit.
+  const location = useLocation()
+  const entryId = params.get('entry')
+  const entryState = (location.state as Partial<MemoryEntryState> | null)?.memory ?? null
+  const [listNonce, setListNonce] = useState(0)
+  const closeEntry = () =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('entry')
+        return next
+      },
+      { replace: true },
+    )
+  const entryChanged = () => {
+    setCountNonce((value) => value + 1)
+    setListNonce((value) => value + 1)
+  }
+  const sheet = (
+    <MemoryDetailSheet
+      entryId={entryId}
+      initial={entryState}
+      onClose={closeEntry}
+      onChanged={entryChanged}
+      fallbackFocus={() => document.querySelector<HTMLElement>('[data-memory-tab-heading]')}
+    />
+  )
+
   const search = (placeholder: string) => (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
       <Label htmlFor={searchId}>{t('approval.search')}</Label>
@@ -129,6 +161,7 @@ export function MemoryPage() {
         ) : null}
       </div>
       <ApprovalQueue
+        key={listNonce}
         q={params.get('q') ?? ''}
         agentId={canManageAgents ? (params.get('agent') ?? '') : ''}
         onShowAgent={(id) => setParam('agent', id)}
@@ -143,9 +176,12 @@ export function MemoryPage() {
       <Container>
         <PageHeader title={t('page.title')} description={t('page.description')} />
         <div className="mt-6 flex flex-col gap-6">
-          <h2 className="text-lg font-semibold">{t('page.tabs.approval')}</h2>
+          <h2 className="text-lg font-semibold outline-none" tabIndex={-1} data-memory-tab-heading>
+            {t('page.tabs.approval')}
+          </h2>
           {approval}
         </div>
+        {sheet}
       </Container>
     )
   }
@@ -174,13 +210,18 @@ export function MemoryPage() {
         </TabsList>
         <TabsContent value="approval">
           {/* Ueberschriftenfolge h1 → h2 → h3 (Gruppenkoepfe) auch mit Tabs. */}
-          <h2 className="sr-only">{t('page.tabs.approval')}</h2>
+          <h2 className="sr-only" tabIndex={-1} data-memory-tab-heading>
+            {t('page.tabs.approval')}
+          </h2>
           {approval}
         </TabsContent>
         <TabsContent value="entries">
-          <h2 className="sr-only">{t('page.tabs.entries')}</h2>
+          <h2 className="sr-only" tabIndex={-1} data-memory-tab-heading>
+            {t('page.tabs.entries')}
+          </h2>
           <EntriesTab
             params={params}
+            reloadNonce={listNonce}
             search={search(
               counts.entries !== null
                 ? t('entries.searchPlaceholder', {
@@ -195,12 +236,15 @@ export function MemoryPage() {
           />
         </TabsContent>
       </Tabs>
+      {sheet}
     </Container>
   )
 }
 
 interface EntriesTabProps {
   params: URLSearchParams
+  // Erhoeht sich nach einer Aenderung im Detail-Sheet → Liste neu laden.
+  reloadNonce: number
   search: ReactNode
   onFilter: (key: string, value: string) => void
   onResetFilters: () => void
@@ -208,13 +252,29 @@ interface EntriesTabProps {
 }
 
 /** Tab „Eintraege“ (S2′): Facetten links ab `lg`, sonst Filter-Sheet. */
-function EntriesTab({ params, search, onFilter, onResetFilters, onChanged }: EntriesTabProps) {
+function EntriesTab({
+  params,
+  reloadNonce,
+  search,
+  onFilter,
+  onResetFilters,
+  onChanged,
+}: EntriesTabProps) {
   const { t } = useTranslation('learning')
   const sortId = useId()
-  const key = params.toString()
+  // `entry` (Detail-Sheet) ist kein Filter: oeffnen/schliessen laedt nichts neu.
+  const key = useMemo(() => {
+    const next = new URLSearchParams(params)
+    next.delete('entry')
+    return next.toString()
+  }, [params])
   // Wertgleichheit der URL: neue Filter nur, wenn sich die Parameter aendern.
   const filters = useMemo(() => entryFiltersFrom(new URLSearchParams(key)), [key])
   const data = useMemoryEntries(filters, true)
+  const { reload } = data
+  useEffect(() => {
+    if (reloadNonce > 0) reload()
+  }, [reload, reloadNonce])
   const setFacet = (facet: EntryFacet, value: string) => onFilter(facet, value)
   const facetProps = {
     filters,
@@ -259,6 +319,7 @@ function EntriesTab({ params, search, onFilter, onResetFilters, onChanged }: Ent
           onFilter={setFacet}
           onResetFilters={onResetFilters}
           onChanged={onChanged}
+          detailLinks
         />
       </div>
     </div>

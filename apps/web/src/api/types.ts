@@ -867,6 +867,56 @@ export interface MemoryUpdateInput {
   importance?: number
 }
 
+// ADR-0053 3.1.2 — Historie eines Eintrags (append-only). `before`/`after`
+// sind Schnappschuesse ohne `context`/`triage_note` (Felder siehe
+// `MemoryEventSnapshot`). `auto_revoked` schreibt der Not-Aus (6.4.1).
+export type MemoryEventKind =
+  | 'created'
+  | 'auto_activated'
+  | 'approved'
+  | 'rejected'
+  | 'edited'
+  | 'confirmed'
+  | 'expired'
+  | 'reactivated'
+  | 'change_proposed'
+  | 'delete_proposed'
+  | 'proposal_accepted'
+  | 'proposal_rejected'
+  | 'rolled_back'
+  | 'converted'
+  | 'merged'
+  | 'auto_revoked'
+// `system` = Verfallsjob bzw. Freigabematrix.
+export type MemoryActorKind = 'human' | 'agent' | 'system'
+
+export interface MemoryEventSnapshot {
+  fact?: string
+  category?: MemoryCategory
+  importance?: number
+  status?: MemoryStatus
+  kind?: MemoryKind
+  origin?: MemoryOrigin
+}
+
+export interface MemoryEventRead {
+  id: string
+  memory_id: string
+  event: MemoryEventKind
+  actor_kind: MemoryActorKind
+  actor_id: string | null
+  agent_id: string | null
+  before: MemoryEventSnapshot | null
+  after: MemoryEventSnapshot | null
+  reason: string | null
+  created_at: string
+}
+
+// Stellt den Stand `before` des gewaehlten Ereignisses her (3.1.2).
+export interface MemoryRollbackInput {
+  event_id: string
+}
+
 // ADR-0044-Addendum — Workspace-weiter Injection-Filter fuer save_memory,
 // konfigurierbar pro Workspace (admin-only, Agent-Tokens 403). 'standard'
 // (Default) = eingebauter Filter; 'custom' = eingebauter Filter + eigene

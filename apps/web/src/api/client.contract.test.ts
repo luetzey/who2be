@@ -213,6 +213,15 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.reactivateMemory(ID, ID),
     api.reactivateMemory(null, ID),
     api.listMemories({ status: 'active' }, { sort: 'oldest', cursor: 'c', limit: 50 }),
+    // ADR-0053 C5c-1: Detail-Sheet (Verlauf, Rollback, Bearbeiten, Löschen).
+    api.getMemoryHistory(ID, ID),
+    api.getMemoryHistory(null, ID),
+    api.rollbackMemory(ID, ID, { event_id: ID }),
+    api.rollbackMemory(null, ID, { event_id: ID }),
+    api.updateAgentMemory(ID, ID, { fact: 'x' }),
+    api.updateMyMemory(ID, { fact: 'x' }),
+    api.deleteAgentMemory(ID, ID),
+    api.deleteMyMemory(ID),
   ]
   await Promise.all(invocations)
 
