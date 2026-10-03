@@ -222,6 +222,9 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.updateMyMemory(ID, { fact: 'x' }),
     api.deleteAgentMemory(ID, ID),
     api.deleteMyMemory(ID),
+    // ADR-0053 C5c-2: Not-Aus (Vorschau und Ausführung).
+    api.previewRevokeAuto({ since: '2026-10-01T00:00:00Z' }),
+    api.revokeAuto({ since: '2026-10-01T00:00:00Z', expected_count: 1 }),
   ]
   await Promise.all(invocations)
 

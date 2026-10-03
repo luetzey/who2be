@@ -14,7 +14,7 @@ import { axe } from '@/test/a11y'
 
 // Detail-Sheet (C5c-1, Gedaechtnisverwaltung §7/§16): Rollback mit
 // `event_id`, Loeschtext mit Verlauf, „Wieder aktivieren“ nur bei `expired`,
-// fremdes Nutzergedaechtnis nie sichtbar, Agent-Seite ohne Chevron.
+// fremdes Nutzergedaechtnis nie sichtbar, Chevron nur mit `detailLinks`.
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -398,7 +398,7 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     expect(calls.filter((call) => call.path.endsWith('/memories')).length).toBe(listCalls)
   })
 
-  it('rendert ohne detailLinks (Agent-Seite) keinen Chevron', () => {
+  it('rendert ohne detailLinks keinen Chevron', () => {
     const data: MemoryEntriesData = {
       items: [memory()],
       counts: { total: 1 },

@@ -3133,7 +3133,35 @@
         "approval": "Zur Freigabe",
         "entries": "Einträge"
       },
-      "tabsAria": "Bereiche des Gedächtnisses"
+      "tabsAria": "Bereiche des Gedächtnisses",
+      "moreActions": "Weitere Aktionen"
+    },
+    "pullback": {
+      "menu": "Automatisch Freigegebenes zurücknehmen…",
+      "title": "Automatisch Freigegebenes zurücknehmen",
+      "description": "Einträge, die ohne menschliche Prüfung wirksam wurden, gehen zurück in „Zur Freigabe“. Gelöscht wird nichts.",
+      "period": "Zeitraum",
+      "period24h": "Letzte 24 Stunden",
+      "period7d": "Letzte 7 Tage",
+      "since": "Seit",
+      "sinceDate": "Datum, ab dem zurückgenommen wird",
+      "scope": "Umfang",
+      "scopeAll": "Alle Agenten und das Nutzergedächtnis",
+      "scopeAllEditor": "Alle Agenten und dein Nutzergedächtnis",
+      "scopeAgent": "Nur ein Agent",
+      "agent": "Agent",
+      "editorNote": "Das Nutzergedächtnis anderer Mitglieder kann nur ein Admin zurücknehmen.",
+      "counting": "Wird gezählt…",
+      "countError": "Die Zahl ließ sich nicht ermitteln.",
+      "affects_one": "Betrifft {{formatted}} Eintrag.",
+      "affects_other": "Betrifft {{formatted}} Einträge.",
+      "hidden_one": "und {{formatted}} Eintrag im Nutzergedächtnis anderer Mitglieder",
+      "hidden_other": "und {{formatted}} Einträge im Nutzergedächtnis anderer Mitglieder",
+      "none": "Keine automatisch freigegebenen Einträge in diesem Zeitraum.",
+      "submit": "{{formatted}} zurücknehmen",
+      "waitReason": "Erst nach dem Zählen möglich.",
+      "done_one": "{{formatted}} Eintrag zurückgenommen. Er wartet jetzt in „Zur Freigabe“.",
+      "done_other": "{{formatted}} Einträge zurückgenommen. Sie warten jetzt in „Zur Freigabe“."
     },
     "kind": {
       "user_fact": "Nutzerfakt",

@@ -56,6 +56,9 @@ import type {
   MemoryProposalRead,
   MemoryProposalStatus,
   MemoryRead,
+  MemoryRevokeAutoPreview,
+  MemoryRevokeAutoRequest,
+  MemoryRevokeAutoResult,
   MemoryRollbackInput,
   MemoryStatus,
   MemoryTriageInput,
@@ -707,6 +710,13 @@ export interface Api {
   ) => Promise<MemoryPage>
   countMemories: (filter: MemoryFilter, groupBy?: MemoryCountGroup[]) => Promise<MemoryCounts>
   batchMemories: (input: MemoryBatchRequest) => Promise<MemoryBatchResult>
+  // Not-Aus (6.4.1): erst die Vorschau (`dry_run`), dann mit `expected_count`.
+  previewRevokeAuto: (
+    input: Omit<MemoryRevokeAutoRequest, 'dry_run' | 'expected_count'>,
+  ) => Promise<MemoryRevokeAutoPreview>
+  revokeAuto: (
+    input: Omit<MemoryRevokeAutoRequest, 'dry_run'> & { expected_count: number },
+  ) => Promise<MemoryRevokeAutoResult>
   // Eigenes Nutzergedaechtnis (3.1.1): der Besitzer ist IMMER der Aufrufer.
   // Seitenweise (C3c-3): `limit` hoechstens 50, `cursor` aus `next_cursor`.
   listMyMemories: (options?: {
@@ -1295,6 +1305,16 @@ export function createApi(token: string, workspaceId: string): Api {
       request<MemoryBatchResult>(token, `${ws}/memories/batch`, {
         method: 'POST',
         body: JSON.stringify(input),
+      }),
+    previewRevokeAuto: (input) =>
+      request<MemoryRevokeAutoPreview>(token, `${ws}/memories/revoke-auto`, {
+        method: 'POST',
+        body: JSON.stringify({ ...input, dry_run: true }),
+      }),
+    revokeAuto: (input) =>
+      request<MemoryRevokeAutoResult>(token, `${ws}/memories/revoke-auto`, {
+        method: 'POST',
+        body: JSON.stringify({ ...input, dry_run: false }),
       }),
     listMyMemories: (options) => {
       const params = new URLSearchParams()

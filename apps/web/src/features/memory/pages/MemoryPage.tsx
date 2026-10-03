@@ -1,3 +1,4 @@
+import { MoreHorizontal, Undo2 } from 'lucide-react'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router-dom'
@@ -13,6 +14,13 @@ import {
 } from '@/components/memory/MemoryFacets'
 import { MemoryList } from '@/components/memory/MemoryList'
 import type { MemoryEntryState } from '@/components/memory/MemoryRow'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -21,6 +29,7 @@ import { useAgents } from '@/hooks/useAgents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { ApprovalQueue } from '../components/ApprovalQueue'
+import { PullBackDialog } from '../components/PullBackDialog'
 import {
   ENTRY_FACETS,
   entryFiltersFrom,
@@ -110,6 +119,42 @@ export function MemoryPage() {
   const counts = useMemoryTabCounts(canManageAgents, countNonce)
   const format = new Intl.NumberFormat(i18n.language)
 
+  // Not-Aus (C5c-2, Spec §8): Overflow im Seitenkopf oder `?pullback=1`
+  // (Link aus S4). Nur editor+; fuer viewer bleibt der Parameter wirkungslos.
+  const pullbackOpen = canManageAgents && params.get('pullback') === '1'
+  const setPullback = (open: boolean) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (open) next.set('pullback', '1')
+        else next.delete('pullback')
+        return next
+      },
+      { replace: !open },
+    )
+  const pullbackMenu = canManageAgents ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-11 md:size-9"
+          aria-label={t('page.moreActions')}
+          data-testid="memory-page-actions"
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => setPullback(true)} data-testid="pullback-menu">
+          <Undo2 aria-hidden="true" />
+          {t('pullback.menu')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null
+
   // Detail-Sheet (C5c-1): `?entry=<id>`; der Eintrag kommt, wenn vorhanden,
   // aus der Liste im Router-State mit.
   const location = useLocation()
@@ -138,6 +183,11 @@ export function MemoryPage() {
       fallbackFocus={() => document.querySelector<HTMLElement>('[data-memory-tab-heading]')}
     />
   )
+  // Nach dem Not-Aus: Zaehler und Listen neu (die Eintraege warten jetzt in
+  // „Zur Freigabe“). Der Fokus geht per Radix zurueck zum Overflow-Knopf.
+  const pullback = canManageAgents ? (
+    <PullBackDialog open={pullbackOpen} onClose={() => setPullback(false)} onDone={entryChanged} />
+  ) : null
 
   const search = (placeholder: string) => (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -202,7 +252,7 @@ export function MemoryPage() {
 
   return (
     <Container>
-      <PageHeader title={t('page.title')} description={t('page.description')} />
+      <PageHeader title={t('page.title')} description={t('page.description')} actions={pullbackMenu} />
       <Tabs value={tab} onValueChange={switchTab} className="mt-6">
         <TabsList aria-label={t('page.tabsAria')}>
           <TabsTrigger value="approval">{tabLabel('approval', counts.approval)}</TabsTrigger>
@@ -237,6 +287,7 @@ export function MemoryPage() {
         </TabsContent>
       </Tabs>
       {sheet}
+      {pullback}
     </Container>
   )
 }

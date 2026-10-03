@@ -831,6 +831,34 @@ export interface MemoryBatchResult {
   results: MemoryBatchItemResult[]
 }
 
+// ADR-0053 6.4.1 — Not-Aus `POST /memories/revoke-auto`: aktive, unbestaetigte
+// Eintraege mit `auto_activated` seit `since` gehen zurueck auf `pending`.
+// Ohne `dry_run` ist `expected_count` Pflicht (Abweichung 409
+// `memory_batch_count_mismatch` mit `params.count`); `include_other_users`
+// nur admin. Alles oder nichts — es gibt keinen Teilerfolg.
+export interface MemoryRevokeAutoRequest {
+  since: string
+  until?: string
+  agent_id?: string
+  include_other_users?: boolean
+  dry_run?: boolean
+  expected_count?: number
+}
+
+// Antwort mit `dry_run`: `sample` nennt hoechstens 5 sichtbare Eintraege,
+// fremdes Nutzergedaechtnis zaehlt nur `hidden_count`.
+export interface MemoryRevokeAutoPreview {
+  count: number
+  hidden_count: number
+  sample: MemoryRead[]
+}
+
+export interface MemoryRevokeAutoResult {
+  count: number
+  hidden_count: number
+  results: MemoryBatchItemResult[]
+}
+
 // ADR-0053 3.1.4 — Aenderungs-/Loeschvorschlag eines Agenten. Wird nie
 // automatisch angenommen (4.2); entschieden wird per `decide`.
 export type MemoryProposalAction = 'change' | 'delete'
