@@ -299,11 +299,12 @@ async def decide_memory_proposal(
 
 
 def memory_filter(
-    status: Annotated[MemoryStatus | None, Query()] = None,
-    kind: Annotated[MemoryKind | None, Query()] = None,
+    status: Annotated[list[MemoryStatus] | None, Query()] = None,
+    exclude_status: Annotated[list[MemoryStatus] | None, Query()] = None,
+    kind: Annotated[list[MemoryKind] | None, Query()] = None,
     scope: Annotated[MemoryScope | None, Query()] = None,
     agent_id: Annotated[UUID | None, Query()] = None,
-    origin: Annotated[MemoryOrigin | None, Query()] = None,
+    origin: Annotated[list[MemoryOrigin] | None, Query()] = None,
     source: Annotated[MemorySource | None, Query()] = None,
     health: Annotated[MemoryHealth | None, Query()] = None,
     held: Annotated[bool | None, Query()] = None,
@@ -314,10 +315,13 @@ def memory_filter(
 
     Die Query-Parameter tragen dieselben Grenzen wie `MemoryFilter`; ein
     ungueltiger Wert ist damit 422 der Anfrage, nie ein Fehler beim Bau des
-    Modells.
+    Modells. `status`, `exclude_status`, `kind` und `origin` lassen sich
+    wiederholen (`?status=active&status=pending`): ODER innerhalb, UND
+    zwischen den Parametern (Gedaechtnisverwaltung §6.2).
     """
     return MemoryFilter(
         status=status,
+        exclude_status=exclude_status,
         kind=kind,
         scope=scope,
         agent_id=agent_id,

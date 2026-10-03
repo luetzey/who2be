@@ -1012,7 +1012,7 @@ REST:
 
 | Methode, Pfad | Rolle | Zweck |
 |---|---|---|
-| `GET /memories?status&kind&scope&agent_id&origin&source&health&held&q&sort&cursor&limit` | ab `viewer`, Sichtbarkeit siehe unten | allgemeine Liste über alle Agenten, alle Status; `limit ≤ 50`, Cursor-Paginierung. `GET /memories?status=pending` ist die workspace-weite Warteschlange (Frage 2 = a) |
+| `GET /memories?status&exclude_status&kind&scope&agent_id&origin&source&health&held&q&sort&cursor&limit` | ab `viewer`, Sichtbarkeit siehe unten | allgemeine Liste über alle Agenten, alle Status; `limit ≤ 50`, Cursor-Paginierung. `GET /memories?status=pending` ist die workspace-weite Warteschlange (Frage 2 = a). `status`, `exclude_status`, `kind` und `origin` sind wiederholbar (siehe „Mehrfachwerte“) |
 | `GET /memories/counts?group_by&<Filter wie oben>&created_after` | wie `GET /memories` | Zähler je Gruppe (`agent`, `kind`, `status`, `origin`, `source`, `health`); je Gruppe ohne den eigenen Filter (Facetten). `group_by=subject_user_id` mit `scope=user` nur `admin` und nur Zahlen (W5 = a) |
 | `POST /memories/batch` | je Eintrag wie die Einzelaktion | Body `{action: approve·reject·confirm·delete, ids[≤100] \| filter, expected_count?, note?}`, Antwort `{results:[{id, ok, reason?, params?}]}` |
 | `GET /memory-proposals?status&agent_id` | `editor`; Vorschläge zum eigenen Nutzergedächtnis ab `viewer` | Vorschläge workspace-weit, Gegenstück zu `GET /agents/{agent_id}/memory-proposals` |
@@ -1047,6 +1047,18 @@ dieselbe Regel nutzen:
   30 Tage), `stale_delivery` (`active`, `last_retrieved_at` älter als 90 Tage)
   und `external_or_inferred` (`origin`). Die Grenzen 7/30/90 Tage stammen aus
   der Design-Entscheidung W3 = a und sind gesetzte Annahmen.
+
+**Mehrfachwerte und Ausschluss** (Nachtrag 2026-10-03, Gedächtnisverwaltung
+§6.2). `status`, `kind` und `origin` nehmen mehrere Werte: im Query-String als
+wiederholter Parameter (`?status=active&status=pending`), im `filter` von
+`batch` als Liste; ein Einzelwert bleibt gültig. Innerhalb eines Feldes gilt
+ODER, zwischen den Feldern UND. `exclude_status` (ebenso wiederholbar)
+schließt Status aus; die Standardansicht „alles außer Abgelehnt“ ist
+`exclude_status=rejected`. Die Zähler-Gruppe `status` lässt Auswahl und
+Ausschluss weg, damit auch ein ausgeschlossener Status seine Zahl hat. Die
+Warteschlangen-Regel gilt, sobald `pending` unter den Status und `lesson`
+nicht unter den Arten ist. Liste, Zähler und `batch` teilen denselben
+Filterbau und meinen dieselbe Menge.
 
 **Stapel (`batch`).** Jeder Eintrag läuft durch dieselbe Prüfung wie die
 Einzelaktion (Rechte, Status, Obergrenzen); ein Teilfehler bricht den Stapel

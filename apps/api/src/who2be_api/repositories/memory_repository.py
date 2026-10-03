@@ -38,6 +38,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -1949,6 +1950,10 @@ class _Where:
         return " AND ".join(f"({part})" for part in self._parts)
 
 
+def _values(items: Sequence[StrEnum]) -> list[str]:
+    return [item.value for item in items]
+
+
 def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -1968,10 +1973,16 @@ def _memory_where(
     Nutzergedaechtnis“ und laesst `scope` und `q` weg — nur fuer die
     Zaehler-Gruppe `subject_user_id`.
 
-    Warteschlangen-Regel (6.4.1 „Zaehler“): `status=pending` schliesst
-    Lernvorschlaege aus, ausser bei `kind=lesson`. In der Facette `status`
-    gilt dasselbe fuer den Wert `pending`, in der Facette `kind` traegt der
-    Wert `lesson` die Ausnahme selbst.
+    Mehrfachwerte (§6.2): innerhalb von `status`, `kind` und `origin` gilt
+    ODER (`= ANY`), zwischen den Feldern UND; `exclude_status` schliesst aus
+    (`<> ALL`). Die Facette `status` laesst beides weg — positive Auswahl
+    und Ausschluss —, damit auch ein ausgeschlossener Status seine Zahl hat.
+
+    Warteschlangen-Regel (6.4.1 „Zaehler“): ist `pending` unter den Status
+    und `lesson` nicht unter den Arten, zaehlen Lernvorschlaege im Status
+    `pending` nicht mit. In der Facette `status` gilt dasselbe fuer den Wert
+    `pending`, in der Facette `kind` traegt der Wert `lesson` die Ausnahme
+    selbst. Fuer einen einzelnen Status ist das die bisherige Regel.
     """
     where = _Where(workspace_id)
     if all_user_memory:
@@ -1983,24 +1994,27 @@ def _memory_where(
             where.add(f"m.scope = {where.bind(filters.scope.value)}")
         if filters.q is not None:
             where.add(f"m.fact ILIKE '%' || {where.bind(_escape_like(filters.q))} || '%'")
-    explicit_lesson = filters.kind == MemoryKind.lesson
+    explicit_lesson = MemoryKind.lesson in filters.kinds
     if skip == MemoryCountGroup.status:
         if not explicit_lesson:
             where.add("NOT (m.status = 'pending' AND m.kind = 'lesson')")
-    elif filters.status is not None:
-        where.add(f"m.status = {where.bind(filters.status.value)}")
-        if (
-            filters.status == MemoryStatus.pending
-            and not explicit_lesson
-            and skip != MemoryCountGroup.kind
-        ):
-            where.add("m.kind <> 'lesson'")
-    if filters.kind is not None and skip != MemoryCountGroup.kind:
-        where.add(f"m.kind = {where.bind(filters.kind.value)}")
+    else:
+        if filters.statuses:
+            where.add(f"m.status = ANY({where.bind(_values(filters.statuses))}::text[])")
+            if (
+                MemoryStatus.pending in filters.statuses
+                and not explicit_lesson
+                and skip != MemoryCountGroup.kind
+            ):
+                where.add("NOT (m.status = 'pending' AND m.kind = 'lesson')")
+        if filters.excluded_statuses:
+            where.add(f"m.status <> ALL({where.bind(_values(filters.excluded_statuses))}::text[])")
+    if filters.kinds and skip != MemoryCountGroup.kind:
+        where.add(f"m.kind = ANY({where.bind(_values(filters.kinds))}::text[])")
     if filters.agent_id is not None and skip != MemoryCountGroup.agent:
         where.add(f"{_AGENT_SQL} = {where.bind(filters.agent_id)}::uuid")
-    if filters.origin is not None and skip != MemoryCountGroup.origin:
-        where.add(f"m.origin = {where.bind(filters.origin.value)}")
+    if filters.origins and skip != MemoryCountGroup.origin:
+        where.add(f"m.origin = ANY({where.bind(_values(filters.origins))}::text[])")
     if filters.source is not None and skip != MemoryCountGroup.source:
         where.add(f"m.source = {where.bind(filters.source.value)}")
     if filters.health is not None and skip != MemoryCountGroup.health:
