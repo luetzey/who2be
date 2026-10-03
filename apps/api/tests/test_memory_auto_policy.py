@@ -473,14 +473,13 @@ def test_caps_near_the_limit(make_auth_headers: AuthFactory) -> None:
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
-def test_mcp_save_memory_bridge_sends_inferred(
+def test_mcp_save_memory_origin_steers_the_matrix(
     make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Bruecke bis C4 (t_889762ed): das MCP-Tool `save_memory` hat noch keinen
-    `origin`-Parameter und sendet fest `inferred`. Speichern ueber MCP
-    funktioniert also weiter, aber nur als Vorschlag — auch fuer einen
-    `auto`-Agenten mit eingeschalteter Zelle, weil `inferred` nie automatisch
-    aktiviert."""
+    """Seit C4b (Nachfolger der `inferred`-Bruecke): das MCP-Tool reicht die
+    deklarierte Herkunft durch. Fuer einen `auto`-Agenten mit eingeschalteter
+    Zelle `user_fact x user_stated` wird `user_stated` automatisch aktiv,
+    `inferred` bleibt Vorschlag — ueber die volle MCP-Kette, nicht nur REST."""
     owner = fresh_user_id()
     ws = setup_workspace(owner)
     auth = make_auth_headers(owner)
@@ -499,23 +498,35 @@ def test_mcp_save_memory_bridge_sends_inferred(
 
         monkeypatch.setattr(mcp_server, "build_client", _build)
 
-        async def _call() -> Any:
+        async def _call() -> list[Any]:
             async with app.router.lifespan_context(app), Client(mcp_server.mcp) as mcp_client:
-                return await mcp_client.call_tool(
-                    "save_memory",
-                    {"fact": "Nutzer mag Gruen", "category": "preference", "importance": 7},
-                    raise_on_error=False,
-                )
+                return [
+                    await mcp_client.call_tool(
+                        "save_memory",
+                        {
+                            "fact": fact,
+                            "origin": origin,
+                            "category": "preference",
+                            "importance": 7,
+                        },
+                        raise_on_error=False,
+                    )
+                    for fact, origin in (
+                        ("Nutzer mag Gruen", "user_stated"),
+                        ("Nutzer mag vermutlich Blau", "inferred"),
+                    )
+                ]
 
-        result = asyncio.run(_call())
-        assert not result.is_error, result.content
+        results = asyncio.run(_call())
+        assert all(not r.is_error for r in results), [r.content for r in results]
         rows = _sql(
-            "SELECT origin, source, status FROM agent_memory WHERE workspace_id = $1 AND fact = $2",
+            "SELECT fact, origin, status, confirmed_at IS NULL AS unconfirmed "
+            "FROM agent_memory WHERE workspace_id = $1 ORDER BY fact",
             ws,
-            "Nutzer mag Gruen",
         )
-        assert [(r["origin"], r["source"], r["status"]) for r in rows] == [
-            ("inferred", "agent", "pending")
+        assert [(r["fact"], r["origin"], r["status"], r["unconfirmed"]) for r in rows] == [
+            ("Nutzer mag Gruen", "user_stated", "active", True),
+            ("Nutzer mag vermutlich Blau", "inferred", "pending", True),
         ]
     finally:
         cleanup_workspaces([owner])

@@ -220,8 +220,9 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     # `promote_artifact` seit WP19) + 11 Tabellen-/Timeline-Tools (WP19 plus
     # `list_tables`/`delete_table`, Befund 2026-08-17: Tabellen waren ueber
     # MCP weder auffindbar noch loeschbar) + 2 Lernschleifen-Tools (B3,
-    # ADR-0053: `list_test_cases`/`submit_test_results`).
-    assert len(names) == 85
+    # ADR-0053: `list_test_cases`/`submit_test_results`) + C4b
+    # `propose_memory_change`.
+    assert len(names) == 86
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -281,7 +282,7 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    # 85 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    # 86 Tools minus die 4 Memory-Tools (ohne Agent-Bindung kein Namespace).
     assert len(names) == 82
 
 

@@ -67,7 +67,7 @@ agents at runtime through an MCP server.
   later inactive); draft → active is not a permitted transition. Putting a
   version live takes the admin role, each change is recorded in a status
   history, and any two versions can be diffed or an earlier one restored
-- **MCP server** — 85 tools: read, write, full-text + semantic search,
+- **MCP server** — 86 tools: read, write, full-text + semantic search,
   discovery, and the feedback flywheel (`record_usage`/`submit_feedback`);
   connect via stdio or the OAuth 2.1 remote connector, e.g. to Claude Code
   or Claude.ai. Writing personas, playbooks, resources or agents is off per
