@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -632,15 +632,24 @@ class MemoryFilter(BaseModel):
     `external_content`/`inferred` oder Kategorie `instruction`.
     `status=pending` ist die Warteschlange und schliesst Lernvorschlaege aus,
     ausser bei `kind=lesson` (6.4.1 „Zaehler“).
+
+    Mehrfachwerte (Gedaechtnisverwaltung §6.2): `status`, `kind` und `origin`
+    nehmen einen Wert oder eine Liste; innerhalb eines Feldes gilt ODER.
+    `exclude_status` schliesst Status aus (Standardansicht ohne `rejected`).
+    Der Validator nimmt auch einen Einzelwert an und legt jedes dieser Felder
+    als duplikatfreie Liste ab; eine leere Liste heisst „kein Filter“ und wird
+    zu `None`. Ist `pending` unter den Status und `lesson` nicht unter den
+    Arten, gilt die Warteschlangen-Regel fuer den Wert `pending`.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    status: MemoryStatus | None = None
-    kind: MemoryKind | None = None
+    status: list[MemoryStatus] | MemoryStatus | None = None
+    exclude_status: list[MemoryStatus] | MemoryStatus | None = None
+    kind: list[MemoryKind] | MemoryKind | None = None
     scope: MemoryScope | None = None
     agent_id: UUID | None = None
-    origin: MemoryOrigin | None = None
+    origin: list[MemoryOrigin] | MemoryOrigin | None = None
     source: MemorySource | None = None
     health: MemoryHealth | None = None
     held: bool | None = None
@@ -653,6 +662,53 @@ class MemoryFilter(BaseModel):
         if value is not None and value.tzinfo is None:
             raise ValueError("Zeitpunkt braucht eine Zeitzone.")
         return value
+
+    @field_validator("status", "exclude_status", "kind", "origin", mode="before")
+    @classmethod
+    def _as_list(cls, value: object) -> object:
+        # Einzelwert -> Liste (Bestand: `filter: {status: "pending"}`).
+        if value is None or isinstance(value, list):
+            return value
+        return [value]
+
+    @field_validator("status", "exclude_status", "kind", "origin")
+    @classmethod
+    def _unique(cls, value: list[Any] | None) -> list[Any] | None:
+        # Dubletten raus (Reihenfolge bleibt), leere Liste -> kein Filter.
+        if value is None:
+            return None
+        return list(dict.fromkeys(value)) or None
+
+    @property
+    def statuses(self) -> list[MemoryStatus]:
+        """Gewaehlte Status (leer = alle)."""
+        return _as_list(self.status)
+
+    @property
+    def excluded_statuses(self) -> list[MemoryStatus]:
+        """Ausgeschlossene Status (leer = keiner)."""
+        return _as_list(self.exclude_status)
+
+    @property
+    def kinds(self) -> list[MemoryKind]:
+        """Gewaehlte Arten (leer = alle)."""
+        return _as_list(self.kind)
+
+    @property
+    def origins(self) -> list[MemoryOrigin]:
+        """Gewaehlte Herkuenfte (leer = alle)."""
+        return _as_list(self.origin)
+
+
+_E = TypeVar("_E", bound=StrEnum)
+
+
+def _as_list(value: list[_E] | _E | None) -> list[_E]:
+    # Nach der Validierung steht hier immer eine Liste oder None; der
+    # Einzelwert-Zweig gilt fuer `model_construct` ohne Validierung.
+    if value is None:
+        return []
+    return list(value) if isinstance(value, list) else [value]
 
 
 class MemoryPage(BaseModel):

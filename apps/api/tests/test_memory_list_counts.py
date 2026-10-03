@@ -12,7 +12,9 @@ Zusicherungen, je mit Rot-Probe im Review belegt:
 - Keyset-Seiten auf `(created_at, id)` sind deterministisch, ohne Luecke
   und ohne Dublette — auch bei gleichem `created_at`.
 - Filter: status, kind, scope, agent_id, origin, source, health, held, q,
-  created_after.
+  created_after; Mehrfachwerte (ODER) fuer status, kind, origin und der
+  Ausschluss exclude_status (Gedaechtnisverwaltung §6.2). Liste, Zaehler
+  und Stapel-Auswahl per Filter meinen dieselbe Menge.
 - Agent-gebundene Tokens: 403.
 
 Die Router-Seite folgt mit C3c-1b.
@@ -40,6 +42,8 @@ from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id
 from who2be_models import MemoryMode, WorkspaceRole, decode_cursor
 from who2be_models.memory import (
     MEMORY_LIST_LIMIT_MAX,
+    MemoryBatchAction,
+    MemoryBatchRequest,
     MemoryCountGroup,
     MemoryFilter,
     MemoryHealth,
@@ -511,7 +515,154 @@ def test_limit_is_capped_at_fifty() -> None:
     _run(case)
 
 
+# ------------------------------------------- Mehrfachwerte und Ausschluss (§6.2)
+
+
+def test_multi_values_or_within_and_between_and_exclude_status() -> None:
+    async def case(env: Env) -> None:
+        active = await env.memory("Aktiv", origin="inferred")
+        pending = await env.memory("Offen", status="pending", kind="agent_note")
+        rejected = await env.memory("Abgelehnt", status="rejected")
+        expired = await env.memory("Abgelaufen", status="expired", origin="external_content")
+        lesson = await env.memory("Lernvorschlag", status="pending", kind="lesson")
+        ed = env.as_editor
+
+        # ODER innerhalb eines Feldes (Werte als Text, wie sie die API annimmt).
+        assert await _ids(env, ed, status=["active", "expired"]) == {active, expired}
+        assert await _ids(env, ed, kind=["agent_note", "lesson"]) == {pending, lesson}
+        assert await _ids(env, ed, origin=["inferred", "external_content"]) == {active, expired}
+        # UND zwischen den Feldern.
+        assert await _ids(env, ed, status=["active", "expired"], origin=["external_content"]) == {
+            expired
+        }
+        # Ein Einzelwert wirkt wie bisher (Bestand: Batch-Body des Web-Clients).
+        assert await _ids(env, ed, status=MemoryStatus.rejected) == {rejected}
+        # Standardansicht §6.2: alle Status ausser „Abgelehnt“ — samt Lernvorschlag.
+        assert await _ids(env, ed, exclude_status=["rejected"]) == {
+            active,
+            pending,
+            expired,
+            lesson,
+        }
+        assert await _ids(env, ed, exclude_status=["rejected", "pending"]) == {active, expired}
+        # Auswahl und Ausschluss zugleich: der Ausschluss gewinnt.
+        assert await _ids(env, ed, status=["active", "rejected"], exclude_status="rejected") == {
+            active
+        }
+        # Warteschlangen-Regel auch in der Mehrfachauswahl: `pending` ohne
+        # `lesson` unter den Arten laesst Lernvorschlaege weg ...
+        assert await _ids(env, ed, status=["pending", "active"]) == {pending, active}
+        # ... mit `lesson` unter den Arten gehoeren sie dazu.
+        assert await _ids(env, ed, status=["pending"], kind=["lesson", "agent_note"]) == {
+            pending,
+            lesson,
+        }
+
+    _run(case)
+
+
+def test_status_facet_ignores_selection_and_exclusion() -> None:
+    async def case(env: Env) -> None:
+        await env.memory("Aktiv")
+        await env.memory("Offen", status="pending")
+        await env.memory("Abgelehnt", status="rejected")
+        await env.memory("Abgelehnt 2", status="rejected", origin="inferred")
+        counts = await env.service.count_workspace_memories(
+            env.as_editor,
+            MemoryFilter(exclude_status=[MemoryStatus.rejected], origin=[MemoryOrigin.user_stated]),
+            [MemoryCountGroup.status, MemoryCountGroup.origin],
+        )
+        assert counts.total == 2
+        # Der Haken „Abgelehnt“ bekommt seine Zahl, obwohl er ausgeschlossen ist.
+        assert counts.groups[MemoryCountGroup.status] == {
+            "active": 1,
+            "pending": 1,
+            "rejected": 1,
+        }
+        # Andere Facetten behalten den Ausschluss.
+        assert counts.groups[MemoryCountGroup.origin] == {"user_stated": 2}
+
+    _run(case)
+
+
+# Filter, fuer die Liste, Zaehler und Stapel-Auswahl dieselbe Menge meinen muessen.
+_SAME_SET_FILTERS: tuple[dict[str, Any], ...] = (
+    {"exclude_status": [MemoryStatus.rejected]},
+    {"status": [MemoryStatus.pending, MemoryStatus.active]},
+    {"status": [MemoryStatus.pending], "kind": [MemoryKind.lesson, MemoryKind.user_fact]},
+    {"kind": [MemoryKind.agent_note, MemoryKind.lesson], "exclude_status": [MemoryStatus.expired]},
+    {"origin": [MemoryOrigin.inferred, MemoryOrigin.external_content]},
+    {
+        "status": [MemoryStatus.active, MemoryStatus.rejected],
+        "exclude_status": [MemoryStatus.rejected],
+        "origin": [MemoryOrigin.user_stated, MemoryOrigin.inferred],
+    },
+)
+
+
+def test_list_counts_and_batch_filter_select_the_same_set() -> None:
+    async def case(env: Env) -> None:
+        seeds = (
+            ("A", "active", "user_fact", "user_stated"),
+            ("B", "active", "agent_note", "inferred"),
+            ("C", "pending", "user_fact", "user_stated"),
+            ("D", "pending", "lesson", "inferred"),
+            ("E", "rejected", "user_fact", "external_content"),
+            ("F", "expired", "agent_note", "user_stated"),
+            ("G", "pending", "agent_note", "external_content"),
+        )
+        for fact, status, kind, origin in seeds:
+            await env.memory(fact, status=status, kind=kind, origin=origin)
+        await env.memory("Eigenes", subject=env.editor, status="rejected")
+        await env.memory("Fremdes", subject=env.viewer, status="pending")
+        ed = env.as_editor
+
+        for raw in _SAME_SET_FILTERS:
+            filters = MemoryFilter(**raw)
+            listed = await _ids(env, ed, **raw)
+            assert listed, f"Probe ohne Treffer sagt nichts: {raw}"
+            counts = await env.service.count_workspace_memories(ed, filters)
+            assert counts.total == len(listed), raw
+            # Stapel per Filter: die Zahl der Auswahl steht in der 409 ...
+            with pytest.raises(ApiError) as exc:
+                await env.service.batch(
+                    ed,
+                    MemoryBatchRequest(
+                        action=MemoryBatchAction.confirm,
+                        filter=filters,
+                        expected_count=len(listed) + 1,
+                    ),
+                )
+            assert exc.value.reason == "memory_batch_count_mismatch", raw
+            assert exc.value.params == {"count": len(listed)}, raw
+            # ... und mit passender Zahl laeuft der Stapel ueber genau diese IDs.
+            # `confirm` aendert nur `active`-Eintraege; die uebrigen melden einen
+            # Fehler je Eintrag, die Menge der IDs bleibt dieselbe.
+            result = await env.service.batch(
+                ed,
+                MemoryBatchRequest(
+                    action=MemoryBatchAction.confirm,
+                    filter=filters,
+                    expected_count=len(listed),
+                ),
+            )
+            assert {r.id for r in result.results} == listed, raw
+
+    _run(case)
+
+
 def test_filter_validation() -> None:
+    assert MemoryFilter(status=MemoryStatus.active).status == [MemoryStatus.active]
+    assert MemoryFilter(
+        kind=[MemoryKind.lesson, MemoryKind.lesson, MemoryKind.agent_note]
+    ).kinds == [MemoryKind.lesson, MemoryKind.agent_note]
+    # Leere Liste heisst „kein Filter“.
+    assert MemoryFilter(origin=[], exclude_status=[]).model_dump(exclude_none=True) == {}
+    assert MemoryFilter.model_validate({"exclude_status": "rejected"}).excluded_statuses == [
+        MemoryStatus.rejected
+    ]
+    with pytest.raises(ValidationError):
+        MemoryFilter.model_validate({"status": ["active", "gibt-es-nicht"]})
     with pytest.raises(ValidationError, match="Zeitzone"):
         MemoryFilter(created_after=datetime(2026, 10, 1))  # noqa: DTZ001
     with pytest.raises(ValidationError):

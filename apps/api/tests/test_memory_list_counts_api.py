@@ -12,6 +12,9 @@ kommen mit `reason` zurueck. Kritische Zusicherungen, je mit Rot-Probe belegt:
   Ergebnis als ohne ihn, in Liste und Zaehlern.
 - `group_by` ist wiederholbar; `group_by=subject_user_id` nur `admin`
   (403 `insufficient_role`) und nur als Zahl je Person.
+- `status`, `kind`, `origin` und `exclude_status` sind wiederholbar
+  (Gedaechtnisverwaltung §6.2); Liste, Zaehler und Stapel per Filter meinen
+  dieselbe Menge.
 - Fremdes Nutzergedaechtnis (Owner-Entscheidung 3a): `admin` sieht es in der
   Liste weder mit Inhalt noch mit ID, auch nicht ueber `q` oder `scope=user`.
 - `viewer` sieht nur das eigene Nutzergedaechtnis, ein agent-gebundener Token
@@ -252,6 +255,66 @@ def test_counts_facetten_und_group_by(env: Env) -> None:
     assert plain.json() == {"total": 2, "groups": {}}
     # Unbekannte Gruppe: 422.
     assert env.get("/memories/counts", env.editor_h, group_by="fact").status_code == 422
+
+
+def test_mehrfachwerte_und_ausschluss_ueber_http(env: Env) -> None:
+    """Gedaechtnisverwaltung §6.2: wiederholte Parameter (ODER) und `exclude_status`."""
+    active = env.memory("Aktiv", origin="inferred")
+    pending = env.memory("Offen", status="pending", kind="agent_note")
+    rejected = env.memory("Abgelehnt", status="rejected")
+    expired = env.memory("Abgelaufen", status="expired", origin="external_content")
+    lesson = env.memory("Lernvorschlag", status="pending", kind="lesson")
+    foreign = env.memory("Fremd offen", subject=env.viewer, status="pending")
+
+    def ids(**params: Any) -> set[str]:
+        return set(_ids(env.get("/memories", env.editor_h, **params)))
+
+    assert ids(status=["active", "expired"]) == {str(active), str(expired)}
+    assert ids(kind=["agent_note", "lesson"]) == {str(pending), str(lesson)}
+    assert ids(origin=["inferred", "external_content"]) == {str(active), str(expired)}
+    # Standardansicht: alles ausser „Abgelehnt“, Lernvorschlag inklusive.
+    default = {str(active), str(pending), str(expired), str(lesson)}
+    assert ids(exclude_status="rejected") == default
+    assert ids(exclude_status=["rejected", "pending"]) == {str(active), str(expired)}
+    assert str(rejected) in ids()
+    # Fremdes Nutzergedaechtnis bleibt auch in der Mehrfachauswahl draussen.
+    assert str(foreign) not in ids(status=["pending", "active", "rejected", "expired"])
+
+    counts = env.get(
+        "/memories/counts", env.editor_h, exclude_status="rejected", group_by=["status", "kind"]
+    )
+    assert counts.status_code == 200, counts.text
+    body = counts.json()
+    assert body["total"] == len(default)
+    # Facette status ohne Auswahl und ohne Ausschluss: „Abgelehnt“ hat seine Zahl.
+    assert body["groups"]["status"] == {"active": 1, "pending": 1, "rejected": 1, "expired": 1}
+    # Facette kind behaelt den Ausschluss (Abgelehnt zaehlt nicht mit).
+    assert body["groups"]["kind"] == {"user_fact": 2, "agent_note": 1, "lesson": 1}
+
+    # Stapel per Filter: Liste im Body und Einzelwert (Bestand) meinen dieselbe
+    # Menge wie die Liste; eine abweichende Zahl ist 409 mit der Serverzahl.
+    for flt, expected in (
+        ({"exclude_status": ["rejected", "pending"]}, {str(active), str(expired)}),
+        ({"status": "rejected"}, {str(rejected)}),
+    ):
+        wrong = env.client.post(
+            f"{env.prefix}/memories/batch",
+            json={"action": "confirm", "filter": flt, "expected_count": len(expected) + 1},
+            headers=env.editor_h,
+        )
+        assert _reason(wrong, 409) == "memory_batch_count_mismatch"
+        assert wrong.json()["params"] == {"count": len(expected)}
+        ok = env.client.post(
+            f"{env.prefix}/memories/batch",
+            json={"action": "confirm", "filter": flt, "expected_count": len(expected)},
+            headers=env.editor_h,
+        )
+        assert ok.status_code == 200, ok.text
+        assert {r["id"] for r in ok.json()["results"]} == expected
+
+    # Unbekannter Wert in der Wiederholung: 422.
+    assert env.get("/memories", env.editor_h, status=["active", "kaputt"]).status_code == 422
+    assert env.get("/memories", env.editor_h, exclude_status="kaputt").status_code == 422
 
 
 def test_admin_sieht_fremdes_nutzergedaechtnis_nur_als_zahl(env: Env) -> None:

@@ -7442,7 +7442,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryStatus"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryStatus"
+                  }
                 },
                 {
                   "type": "null"
@@ -7452,13 +7455,35 @@
             }
           },
           {
+            "name": "exclude_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Status"
+            }
+          },
+          {
             "name": "kind",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryKind"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryKind"
+                  }
                 },
                 {
                   "type": "null"
@@ -7507,7 +7532,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryOrigin"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryOrigin"
+                  }
                 },
                 {
                   "type": "null"
@@ -7690,7 +7718,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryStatus"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryStatus"
+                  }
                 },
                 {
                   "type": "null"
@@ -7700,13 +7731,35 @@
             }
           },
           {
+            "name": "exclude_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Status"
+            }
+          },
+          {
             "name": "kind",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryKind"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryKind"
+                  }
                 },
                 {
                   "type": "null"
@@ -7755,7 +7808,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MemoryOrigin"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryOrigin"
+                  }
                 },
                 {
                   "type": "null"
@@ -18775,22 +18831,53 @@
           "status": {
             "anyOf": [
               {
+                "items": {
+                  "$ref": "#/components/schemas/MemoryStatus"
+                },
+                "type": "array"
+              },
+              {
                 "$ref": "#/components/schemas/MemoryStatus"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Status"
+          },
+          "exclude_status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MemoryStatus"
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/components/schemas/MemoryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclude Status"
           },
           "kind": {
             "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MemoryKind"
+                },
+                "type": "array"
+              },
               {
                 "$ref": "#/components/schemas/MemoryKind"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Kind"
           },
           "scope": {
             "anyOf": [
@@ -18817,12 +18904,19 @@
           "origin": {
             "anyOf": [
               {
+                "items": {
+                  "$ref": "#/components/schemas/MemoryOrigin"
+                },
+                "type": "array"
+              },
+              {
                 "$ref": "#/components/schemas/MemoryOrigin"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Origin"
           },
           "source": {
             "anyOf": [
@@ -18884,7 +18978,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "MemoryFilter",
-        "description": "Filter der workspace-weiten Liste, ihrer Zaehler und der Stapel-Auswahl.\n\nAlle Felder sind optional und wirken mit UND. `agent_id` trifft beim\nAgentengedaechtnis den Besitzer, beim Nutzergedaechtnis den einreichenden\nAgenten. `held` (zurueckgehalten) ist abgeleitet: `pending` und Herkunft\n`external_content`/`inferred` oder Kategorie `instruction`.\n`status=pending` ist die Warteschlange und schliesst Lernvorschlaege aus,\nausser bei `kind=lesson` (6.4.1 „Zaehler“)."
+        "description": "Filter der workspace-weiten Liste, ihrer Zaehler und der Stapel-Auswahl.\n\nAlle Felder sind optional und wirken mit UND. `agent_id` trifft beim\nAgentengedaechtnis den Besitzer, beim Nutzergedaechtnis den einreichenden\nAgenten. `held` (zurueckgehalten) ist abgeleitet: `pending` und Herkunft\n`external_content`/`inferred` oder Kategorie `instruction`.\n`status=pending` ist die Warteschlange und schliesst Lernvorschlaege aus,\nausser bei `kind=lesson` (6.4.1 „Zaehler“).\n\nMehrfachwerte (Gedaechtnisverwaltung §6.2): `status`, `kind` und `origin`\nnehmen einen Wert oder eine Liste; innerhalb eines Feldes gilt ODER.\n`exclude_status` schliesst Status aus (Standardansicht ohne `rejected`).\nDer Validator nimmt auch einen Einzelwert an und legt jedes dieser Felder\nals duplikatfreie Liste ab; eine leere Liste heisst „kein Filter“ und wird\nzu `None`. Ist `pending` unter den Status und `lesson` nicht unter den\nArten, gilt die Warteschlangen-Regel fuer den Wert `pending`."
       },
       "MemoryGuardConfig": {
         "properties": {
