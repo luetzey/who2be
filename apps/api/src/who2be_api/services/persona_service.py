@@ -361,14 +361,23 @@ class PersonaService:
         """Gedaechtnis-Sektion fuer den Laufzeit-Kontext (ADR-0044, WP-6).
 
         Abfrage-Anweisung (direktive-abhaengig, geteilte Quelle `memory_note`)
-        plus die Top-N freigegebenen Memories des aufrufenden Agenten —
-        Token-gedeckelt via `MEMORY_PERSONA_TOP_N`, klar als Daten gerahmt.
-        Die Auslieferung zaehlt ins Nutzungs-Log (`retrieval_count`).
+        plus die Top-N bestaetigten Memories des aufrufenden Agenten und des
+        Token-Besitzers — Token-gedeckelt via `MEMORY_PERSONA_TOP_N`, klar als
+        Daten gerahmt. Nur bestaetigte Eintraege (ADR-0053 M7 = a):
+        automatisch aktive, unbestaetigte erreicht der Agent nur ueber den
+        Abruf auf Anfrage. Die Auslieferung zaehlt ins Nutzungs-Log
+        (`retrieval_count`).
         """
         assert self._pool is not None and ctx.agent_id is not None
         assert ctx.tool_policy is not None
         repo = PgMemoryRepository(self._pool)
-        hits = await repo.list_active(ctx.workspace_id, ctx.agent_id, MEMORY_PERSONA_TOP_N)
+        hits = await repo.list_active(
+            ctx.workspace_id,
+            ctx.agent_id,
+            MEMORY_PERSONA_TOP_N,
+            user_id=ctx.user_id,
+            confirmed_only=True,
+        )
         lines = ["## Gedaechtnis", "", memory_prompt_block(ctx.tool_policy), ""]
         if hits:
             lines.append(

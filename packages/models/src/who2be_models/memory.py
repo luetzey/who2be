@@ -745,8 +745,11 @@ class MemoryPurgeResult(BaseModel):
 class MemoryHit(BaseModel):
     """Ein Retrieval-Treffer fuer Agenten (bewusst schmal).
 
-    Nur id (Kurzform fuer Referenzen), Fakt und Kategorie — kein `context`,
-    keine Triage-Metadaten (Injection-/Leak-Minimierung).
+    id (Kurzform fuer Referenzen), Fakt, Kategorie und die Einordnung
+    (ADR-0053 C4): `kind`, `scope` (Agenten- oder Nutzergedaechtnis) und
+    `confirmed` (von einem Menschen bestaetigt; `false` heisst automatisch
+    aktiv, aber unbestaetigt). Kein `context`, keine Triage-Metadaten, kein
+    Personenbezug (Injection-/Leak-Minimierung). `lesson` erscheint hier nie.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -754,3 +757,6 @@ class MemoryHit(BaseModel):
     id: UUID
     fact: str
     category: MemoryCategory
+    kind: MemoryKind
+    scope: MemoryScope
+    confirmed: bool

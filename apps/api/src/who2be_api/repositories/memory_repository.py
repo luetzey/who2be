@@ -7,12 +7,12 @@ Nutzergedaechtnis (`count_for_user`), `memory_id` fuer die Historie. Es gibt
 keinen Weg, ueber dieses Repository fremde Memories zu lesen oder zu
 schreiben (Leak-Test-Kritikalitaet, Kap. 11.7 des Memory-Konzepts).
 
-Gedaechtnis 2.0 (ADR-0053 3.1, Migration 0091): die heutigen Abrufpfade
-(`search_active`, `list_active`) filtern auf `status='active'` UND
-`scope='agent'`. Lernvorschlaege (`kind='lesson'`) koennen per DB-CHECK nie
-`active` sein; das Nutzergedaechtnis (`scope='user'`) erreicht diese Pfade
-erst, wenn C2a/C4 es ausdruecklich anbinden. Loeschen schreibt je Zeile eine
-inhaltsfreie `audit_log`-Zeile `memory.deleted` (Weiche M5).
+Gedaechtnis 2.0 (ADR-0053 3.1, Migration 0091): die Abrufpfade
+(`search_active`, `list_active`) liefern `status='active'` aus dem
+Agentengedaechtnis des Agenten UND dem Nutzergedaechtnis des Token-Besitzers
+(C4), nie ein fremdes Nutzergedaechtnis und nie `kind='lesson'` (zusaetzlich
+zum DB-CHECK, der `lesson` nie `active` werden laesst). Loeschen schreibt je
+Zeile eine inhaltsfreie `audit_log`-Zeile `memory.deleted` (Weiche M5).
 
 Retrieval (nur `status='active'`): drei Zweige — FTS ('simple'-tsvector,
 ADR-0037-Muster), ILIKE und pg_trgm-Similarity — plus optional ein
@@ -248,12 +248,20 @@ class MemoryRepository(Protocol):
         query: str,
         k: int,
         query_vector: Sequence[float] | None = None,
+        *,
+        user_id: UUID | None = None,
     ) -> list[MemoryHit]: ...
 
     async def set_vector(self, memory_id: UUID, vector: Sequence[float]) -> None: ...
 
     async def list_active(
-        self, workspace_id: UUID, agent_id: UUID, limit: int
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        *,
+        user_id: UUID | None = None,
+        confirmed_only: bool = False,
     ) -> list[MemoryHit]: ...
 
     async def list_for_agent(
@@ -534,6 +542,24 @@ class MemoryOwner:
         if self.agent_id is not None:
             return f"{p}scope = 'agent' AND {p}agent_id = ${param}"
         return f"{p}scope = 'user' AND {p}subject_user_id = ${param}"
+
+
+# Spalten eines Abruftreffers (`MemoryHit`): schmal, ohne context/Personenbezug.
+_HIT_COLUMNS = "id, fact, category, kind, scope, confirmed_at IS NOT NULL AS confirmed"
+
+
+def _retrieval_scope(agent_param: int, user_param: int) -> str:
+    """Abrufbare Eintraege: aktiv, nie `lesson`, eigener Agent oder eigener Nutzer.
+
+    `$1` ist immer der Workspace. Der Nutzer-Parameter darf NULL sein (dann
+    kein Nutzergedaechtnis im Abruf): `subject_user_id = NULL` ist nie wahr,
+    ein fremdes Nutzergedaechtnis ist so nie erreichbar (ADR-0053 3.1.1, C4).
+    """
+    return (
+        "workspace_id = $1 AND status = 'active' AND kind <> 'lesson' AND ("
+        f"(scope = 'agent' AND agent_id = ${agent_param}) OR "
+        f"(scope = 'user' AND subject_user_id = ${user_param}::uuid))"
+    )
 
 
 # Schnappschuss-Form der Historie (3.1.2), Schluessel siehe `_snapshot`.
@@ -874,8 +900,14 @@ class PgMemoryRepository:
         query: str,
         k: int,
         query_vector: Sequence[float] | None = None,
+        *,
+        user_id: UUID | None = None,
     ) -> list[MemoryHit]:
         """Rangsortierte aktive Memories (ADR-0044, Fusion nach ADR-0046).
+
+        Durchsucht das Agentengedaechtnis von `agent_id` und — mit `user_id` —
+        das Nutzergedaechtnis genau dieses Nutzers (ADR-0053 C4), nie ein
+        fremdes. `lesson` ist ausgeschlossen (zusaetzlich zum DB-CHECK).
 
         Vier Zweige, jeder liefert einen eigenen Rang, verschmolzen per RRF:
 
@@ -896,10 +928,10 @@ class PgMemoryRepository:
         use_vector = query_vector is not None and await self.vector_supported()
 
         # Feste Positionen: $1 workspace, $2 agent, $3 query, $4 limit,
-        # $5 Trigram-Schwelle. Der Vektor kommt nur dazu, wenn er gebraucht
-        # wird — ein gebundener, aber unreferenzierter Parameter waere fuer
-        # Postgres typlos.
-        args: list[object] = [workspace_id, agent_id, query, k, _SEARCH_SIMILARITY]
+        # $5 Trigram-Schwelle, $6 Nutzer (darf NULL sein, daher `::uuid`).
+        # Der Vektor kommt nur dazu, wenn er gebraucht wird — ein gebundener,
+        # aber unreferenzierter Parameter waere fuer Postgres typlos.
+        args: list[object] = [workspace_id, agent_id, query, k, _SEARCH_SIMILARITY, user_id]
         # „ilike" waere als CTE-Name ein reserviertes Keyword.
         branches = ["fts", "substr", "trgm"]
         vector_cte = ""
@@ -909,11 +941,11 @@ class PgMemoryRepository:
             vector_cte = (
                 ", vec AS ("
                 "  SELECT id, row_number() OVER ("
-                "    ORDER BY content_vector <=> $6::vector, importance DESC"
+                "    ORDER BY content_vector <=> $7::vector, importance DESC"
                 "  ) AS rnk"
                 "  FROM scoped"
                 "  WHERE content_vector IS NOT NULL"
-                f"    AND 1 - (content_vector <=> $6::vector) >= {_MIN_VECTOR_SIMILARITY}"
+                f"    AND 1 - (content_vector <=> $7::vector) >= {_MIN_VECTOR_SIMILARITY}"
                 ")"
             )
 
@@ -923,11 +955,10 @@ class PgMemoryRepository:
 
         sql = (
             "WITH scoped AS ("
-            "  SELECT id, fact, category, importance, search"
+            f"  SELECT {_HIT_COLUMNS}, importance, search"
             f"{', content_vector' if use_vector else ''}"
             "  FROM agent_memory"
-            "  WHERE workspace_id = $1 AND agent_id = $2 AND status = 'active'"
-            "    AND scope = 'agent'"
+            f"  WHERE {_retrieval_scope(2, 6)}"
             "), "
             "fts AS ("
             "  SELECT id, row_number() OVER ("
@@ -946,7 +977,7 @@ class PgMemoryRepository:
             "  FROM scoped WHERE similarity(fact, $3) >= $5"
             ")"
             f"{vector_cte} "
-            "SELECT s.id, s.fact, s.category "
+            "SELECT s.id, s.fact, s.category, s.kind, s.scope, s.confirmed "
             f"FROM scoped s {joins} "
             f"WHERE {matched} "
             f"ORDER BY ({score}) DESC, s.importance DESC "
@@ -955,7 +986,7 @@ class PgMemoryRepository:
 
         rows = await self._pool.fetch(sql, *args)
         hits = [MemoryHit.model_validate(dict(row)) for row in rows]
-        await self._bump_retrieval(workspace_id, agent_id, [hit.id for hit in hits])
+        await self._bump_retrieval(workspace_id, agent_id, user_id, [hit.id for hit in hits])
         return hits
 
     async def set_vector(self, memory_id: UUID, vector: Sequence[float]) -> None:
@@ -979,22 +1010,41 @@ class PgMemoryRepository:
         )
         return [(row["id"], row["fact"]) for row in rows]
 
-    async def list_active(self, workspace_id: UUID, agent_id: UUID, limit: int) -> list[MemoryHit]:
+    async def list_active(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        *,
+        user_id: UUID | None = None,
+        confirmed_only: bool = False,
+    ) -> list[MemoryHit]:
+        """Aktive Memories nach Wichtigkeit — Geltungsbereich wie `search_active`.
+
+        `confirmed_only` laesst automatisch aktive, unbestaetigte Eintraege
+        weg: der Laufzeit-Push in `get_persona` zeigt nur Bestaetigtes
+        (ADR-0053 M7 = a), der Abruf auf Anfrage liefert beides.
+        """
+        confirmed = " AND confirmed_at IS NOT NULL" if confirmed_only else ""
         rows = await self._pool.fetch(
-            "SELECT id, fact, category FROM agent_memory "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND status = 'active' "
-            "AND scope = 'agent' "
+            f"SELECT {_HIT_COLUMNS} FROM agent_memory "
+            f"WHERE {_retrieval_scope(2, 4)}{confirmed} "
             "ORDER BY importance DESC, created_at DESC LIMIT $3",
             workspace_id,
             agent_id,
             limit,
+            user_id,
         )
         hits = [MemoryHit.model_validate(dict(row)) for row in rows]
-        await self._bump_retrieval(workspace_id, agent_id, [hit.id for hit in hits])
+        await self._bump_retrieval(workspace_id, agent_id, user_id, [hit.id for hit in hits])
         return hits
 
     async def _bump_retrieval(
-        self, workspace_id: UUID, agent_id: UUID, memory_ids: list[UUID]
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        user_id: UUID | None,
+        memory_ids: list[UUID],
     ) -> None:
         # Nutzungs-Log (Transparenz, ADR-0044). Selbstlimitierend: pro Memory
         # hoechstens ein Write/Minute (Security-Review N-1 — Reads sind sonst
@@ -1005,11 +1055,12 @@ class PgMemoryRepository:
         await self._pool.execute(
             "UPDATE agent_memory "
             "SET retrieval_count = retrieval_count + 1, last_retrieved_at = now() "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[]) "
+            f"WHERE {_retrieval_scope(2, 4)} AND id = ANY($3::uuid[]) "
             "AND (last_retrieved_at IS NULL OR last_retrieved_at < now() - interval '60 seconds')",
             workspace_id,
             agent_id,
             memory_ids,
+            user_id,
         )
 
     async def list_for_agent(

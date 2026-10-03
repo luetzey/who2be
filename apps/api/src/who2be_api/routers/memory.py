@@ -89,7 +89,19 @@ Service = Annotated[MemoryService, Depends(get_memory_service)]
 # ------------------------------------------------------------------ Agent-Pfad
 
 
-@router.post("/agent-memories", status_code=201)
+@router.post(
+    "/agent-memories",
+    status_code=201,
+    responses={
+        200: {
+            "model": MemorySaveResult,
+            "description": (
+                "Wiederholung eines Lernvorschlags (`kind=lesson`): kein neuer Eintrag, "
+                "die Antwort ist der bestehende Treffer mit `merged_into` (ADR-0053 3.1.6)."
+            ),
+        }
+    },
+)
 @limiter.limit(write_limit)
 async def save_memory(
     request: Request, response: Response, data: MemoryCreate, ctx: Ctx, service: Service
