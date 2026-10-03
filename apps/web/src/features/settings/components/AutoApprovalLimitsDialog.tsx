@@ -136,7 +136,7 @@ export function AutoApprovalLimitsDialog({
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="bottom" className="h-svh rounded-t-none" data-testid="auto-approval-limits">
-          <SheetHeader className="pr-8">
+          <SheetHeader className="pr-8 text-left">
             <SheetTitle>{t('autoPolicy.limits.title')}</SheetTitle>
             <SheetDescription>{t('autoPolicy.limits.intro')}</SheetDescription>
           </SheetHeader>

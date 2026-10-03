@@ -314,6 +314,9 @@ export function MemoryApprovalSection() {
               <AttentionBanner
                 variant="destructive"
                 icon={TriangleAlert}
+                // Unter sm rutscht die Aktion in eine eigene Zeile, sonst
+                // quetscht sie den Text auf eine Wortbreite (390 px).
+                className="max-sm:[&>div:last-child]:basis-full"
                 title={t('autoPolicy.guardOff.title')}
                 description={t('autoPolicy.guardOff.description')}
                 actions={
