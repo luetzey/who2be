@@ -456,9 +456,10 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     ).toBeNull()
   })
 
-  it('kodiert die ID aus ?entry=, sodass ../x den Memory-Pfad nicht verlässt', async () => {
+  it('ruft für ../x aus ?entry= keinen Pfad außerhalb des Memory-Pfads ab', async () => {
     // `?entry=..%2F..%2Fx` kommt als `../../x` an. Roh in den Pfad gesetzt,
     // macht der Browser daraus `/v1/workspaces/x` (Client-Side Path Traversal).
+    // Der Client lehnt einen solchen Wert ohne Netzabruf als 404 ab.
     const { calls } = stubApi()
     renderPage('/w/ws-1/memory?tab=entries&entry=..%2F..%2Fx')
     const sheet = await screen.findByTestId('memory-detail-sheet')
@@ -467,9 +468,7 @@ describe('MemoryDetailSheet (C5c-1)', () => {
         'Diesen Eintrag gibt es nicht mehr oder du darfst ihn nicht sehen.',
       ),
     ).toBeInTheDocument()
-    expect(
-      calls.some((call) => call.path === '/v1/workspaces/ws-1/memories/..%2F..%2Fx'),
-    ).toBe(true)
+    expect(calls.some((call) => call.path.includes('..'))).toBe(false)
     expect(
       calls.filter((call) => !call.path.startsWith('/v1/workspaces/ws-1/')).map((c) => c.path),
     ).toEqual([])
