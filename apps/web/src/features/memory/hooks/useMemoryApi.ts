@@ -94,6 +94,24 @@ export function groupKeyOf(memory: MemoryRead): string {
   return memory.agent_id ?? memory.created_by_agent_id ?? ''
 }
 
+/** Agent-IDs, die die Warteschlange benennt (Gruppenkopf und Zeilen). */
+function referencedAgentIds(
+  rows: MemoryRead[],
+  proposals: Pick<MemoryProposalRead, 'agent_id'>[],
+): string[] {
+  const ids = new Set<string>()
+  for (const memory of rows) {
+    for (const id of [memory.agent_id, memory.created_by_agent_id]) if (id) ids.add(id)
+  }
+  for (const proposal of proposals) if (proposal.agent_id) ids.add(proposal.agent_id)
+  return [...ids]
+}
+
+// Obergrenze gezielter Einzelabrufe je Ladevorgang. Die geladene Menge
+// (50 Neue + bis zu 200 Zurueckgehaltene + Vorschlaege) nennt in der Praxis
+// nur wenige Agenten; die Grenze verhindert eine Request-Flut im Ausnahmefall.
+const AGENT_LOOKUP_LIMIT = 50
+
 function matchesQuery(proposal: ProposalWithTarget, q: string): boolean {
   if (q === '') return true
   const needle = q.toLocaleLowerCase()
@@ -127,6 +145,42 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<ApiError | Error | null>(null)
   const [nonce, setNonce] = useState(0)
+
+  // Gezielt nachgeladene Agenten, die nicht in der ersten /agents-Seite
+  // stehen (die Liste liefert hoechstens 100). Je Workspace (= `api`) ein
+  // Cache aus Promises: gleichzeitige Anfragen teilen sich einen Abruf, ein
+  // Reload fragt nicht erneut, und 403/404 wird als `null` gemerkt — die
+  // Oberflaeche faellt dann still auf „Unbekannter Agent“ zurueck.
+  const agentCache = useRef(new Map<string, Promise<Agent | null>>())
+  useEffect(() => {
+    // Neuer Workspace: Antworten des alten gelten nicht mehr.
+    agentCache.current = new Map()
+  }, [api])
+  const lookupAgents = useCallback(
+    async (ids: string[], known: Agent[]): Promise<Agent[]> => {
+      if (!canManageAgents) return []
+      const cache = agentCache.current
+      const knownIds = new Set(known.map((agent) => agent.id))
+      const missing = ids.filter((id) => !knownIds.has(id)).slice(0, AGENT_LOOKUP_LIMIT)
+      const found = await Promise.all(
+        missing.map((id) => {
+          let pending = cache.get(id)
+          if (pending === undefined) {
+            // Nur eine passende Antwort zaehlt; alles andere (403/404, leere
+            // oder fremde Antwort) heisst „unbekannt“.
+            pending = api
+              .getAgent(id)
+              .then((agent) => (agent?.id === id ? agent : null))
+              .catch(() => null)
+            cache.set(id, pending)
+          }
+          return pending
+        }),
+      )
+      return found.filter((agent): agent is Agent => agent !== null)
+    },
+    [api, canManageAgents],
+  )
 
   const baseFilter = useMemo<MemoryFilter>(() => {
     const filter: MemoryFilter = { status: 'pending' }
@@ -226,6 +280,13 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
         }
 
         if (cancelled) return
+        // Agenten, die die geladene Menge nennt, aber nicht in der ersten
+        // /agents-Seite stehen: gezielt nachladen (dedupliziert, gecacht).
+        const extraAgents = await lookupAgents(
+          referencedAgentIds([...heldRows, ...firstPage.items], proposalRows),
+          agentRows,
+        )
+        if (cancelled) return
         const counts: Record<string, number> = {}
         if (mineCount !== null) counts[MINE_GROUP] = mineCount.total
         for (const [key, value] of Object.entries(agentCount?.groups?.agent ?? {})) {
@@ -250,7 +311,7 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
         setCursor(firstPage.next_cursor)
         setGroupCounts(counts)
         setProposals(withTargets)
-        setAgents(agentRows)
+        setAgents([...agentRows, ...extraAgents])
       } catch (cause: unknown) {
         if (!cancelled) setError(toError(cause))
       } finally {
@@ -261,23 +322,25 @@ export function useApprovalQueue({ q, agentId }: QueueFilters): ApprovalQueueDat
     return () => {
       cancelled = true
     }
-  }, [api, baseFilter, canManageAgents, agentId, q, userId, nonce])
+  }, [api, baseFilter, canManageAgents, agentId, q, userId, nonce, lookupAgents])
 
   const loadMore = useCallback(() => {
     if (cursor === null || loadingMore) return
     setLoadingMore(true)
     api
       .listMemories({ ...baseFilter, held: false }, { limit: QUEUE_PAGE_SIZE, cursor })
-      .then((page) => {
+      .then(async (page) => {
+        const extraAgents = await lookupAgents(referencedAgentIds(page.items, []), agents)
         setItems((current) => [
           ...current,
           ...page.items.filter((m) => visibleToMe(m, userId) && isQueueEntry(m)),
         ])
         setCursor(page.next_cursor)
+        if (extraAgents.length > 0) setAgents((current) => [...current, ...extraAgents])
       })
       .catch((cause: unknown) => setError(toError(cause)))
       .finally(() => setLoadingMore(false))
-  }, [api, baseFilter, cursor, loadingMore, userId])
+  }, [api, baseFilter, cursor, loadingMore, userId, lookupAgents, agents])
 
   const reload = useCallback(() => setNonce((value) => value + 1), [])
 

@@ -117,6 +117,10 @@ interface StubOptions {
   myMemories?: MemoryRead[]
   agentMemories?: MemoryRead[]
   batch?: (body: Record<string, unknown>) => Response
+  // Erste /agents-Seite; Default: coder (a1) und researcher (a2).
+  agents?: { id: string; name: string }[]
+  // Antwort auf GET /agents/{id} (gezieltes Nachladen); Default 404.
+  agentLookup?: (id: string) => Response
 }
 
 interface Call {
@@ -133,6 +137,11 @@ function stubApi({
   myMemories = [],
   agentMemories = [memory({ id: 'm-old', status: 'active', fact: 'Python 3.13 ist installiert.' })],
   batch,
+  agents = [
+    { id: 'a1', name: 'coder' },
+    { id: 'a2', name: 'researcher' },
+  ],
+  agentLookup = () => jsonResponse({ detail: 'not found' }, 404),
 }: StubOptions = {}) {
   const calls: Call[] = []
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -167,11 +176,12 @@ function stubApi({
     }
     if (path.endsWith('/memory-proposals')) return jsonResponse(proposals)
     if (path.endsWith('/agents')) {
-      return jsonResponse([
-        { id: 'a1', name: 'coder', tool_policy: { memory_mode: 'manual' } },
-        { id: 'a2', name: 'researcher', tool_policy: { memory_mode: 'manual' } },
-      ])
+      return jsonResponse(
+        agents.map((agent) => ({ ...agent, tool_policy: { memory_mode: 'manual' } })),
+      )
     }
+    const single = /\/agents\/([^/]+)$/.exec(path)
+    if (single !== null) return agentLookup(decodeURIComponent(single[1]))
     return jsonResponse([])
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -368,6 +378,7 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
     expect(listCalls.length).toBeGreaterThan(0)
     for (const call of listCalls) expect(call.url).toContain('scope=user')
     expect(calls.some((c) => c.url.endsWith('/agents'))).toBe(false)
+    expect(calls.some((c) => /\/agents\/[^/]+$/.test(new URL(c.url, 'http://x').pathname))).toBe(false)
     expect(screen.queryByLabelText('Agent')).toBeNull()
   })
 
@@ -381,6 +392,128 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
     const { container } = renderPage()
     await screen.findByTestId('memory-proposal-row')
     expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+// Agenten ausserhalb der ersten /agents-Seite (hoechstens 100): nie die rohe
+// Agent-ID zeigen, fehlende Namen gezielt per GET /agents/{id} nachladen.
+describe('MemoryPage · Zur Freigabe · unbekannte Agenten (t_3cd92765)', () => {
+  const UNKNOWN = '7f3c2a10-9b4e-4d21-8c55-0e6f1a2b3c4d'
+  const UNKNOWN_2 = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+
+  /** Sichtbarer Text und alle zugaenglichen Namen/Beschreibungen. */
+  function exposedText(): string {
+    const labelled = [...document.body.querySelectorAll('[aria-label], [title], [aria-description]')]
+      .flatMap((node) => [
+        node.getAttribute('aria-label') ?? '',
+        node.getAttribute('title') ?? '',
+        node.getAttribute('aria-description') ?? '',
+      ])
+    return [document.body.textContent ?? '', ...labelled].join('\n')
+  }
+
+  function lookupCalls(calls: Call[]): string[] {
+    return calls
+      .map((c) => new URL(c.url, 'http://x').pathname)
+      .filter((path) => /\/agents\/[^/]+$/.test(path))
+  }
+
+  it('zeigt „Unbekannter Agent“ in Kopf und allen Gruppenaktionen, wenn getAgent fehlschlägt – nie die UUID', async () => {
+    const { calls } = stubApi({
+      items: [
+        memory({ id: 'u1', agent_id: UNKNOWN, created_by_agent_id: UNKNOWN, fact: 'Fremder Agent merkt sich A.' }),
+      ],
+      // 3 auf dem Server, 1 geladen: „weitere von …“ und „Nur … zeigen“ erscheinen.
+      agentCounts: { [UNKNOWN]: 3 },
+      agentLookup: () => jsonResponse({ detail: 'forbidden', reason: 'forbidden' }, 403),
+    })
+    renderPage()
+    const row = await screen.findByText('Fremder Agent merkt sich A.')
+    const section = row.closest('section')!
+    await waitFor(() => expect(lookupCalls(calls)).toEqual([`/v1/workspaces/ws-1/agents/${UNKNOWN}`]))
+
+    expect(within(section).getByRole('heading', { level: 3 })).toHaveTextContent('Unbekannter Agent (3)')
+    const approve = within(section).getByRole('button', { name: 'Alle 3 Einträge von Unbekannter Agent freigeben' })
+    expect(approve).toHaveTextContent('Alle 3 von Unbekannter Agent freigeben')
+    expect(within(section).getByText(/2 weitere von Unbekannter Agent/)).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: 'Nur Unbekannter Agent zeigen' })).toBeInTheDocument()
+
+    fireEvent.click(approve)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('heading')).toHaveTextContent('3 Einträge von Unbekannter Agent freigeben?')
+
+    expect(exposedText()).not.toContain(UNKNOWN)
+    expect(exposedText()).not.toContain(UNKNOWN.slice(0, 8))
+    // Kein Fehler-Toast fuer den stillen Rueckfall.
+    const { notify } = await import('@/lib/feedback')
+    expect(notify.error).not.toHaveBeenCalled()
+  })
+
+  it('zeigt den Namen, wenn der Agent nicht in der Liste steht, getAgent ihn aber liefert', async () => {
+    const { calls } = stubApi({
+      items: [memory({ id: 'u1', agent_id: UNKNOWN, created_by_agent_id: UNKNOWN, fact: 'Agent 101 merkt sich B.' })],
+      agentCounts: { [UNKNOWN]: 1 },
+      agentLookup: (id) =>
+        jsonResponse({ id, name: 'archivar', tool_policy: { memory_mode: 'manual' } }),
+    })
+    renderPage()
+    const row = await screen.findByText('Agent 101 merkt sich B.')
+    const section = row.closest('section')!
+    await waitFor(() =>
+      expect(within(section).getByRole('heading', { level: 3 })).toHaveTextContent('archivar (1)'),
+    )
+    expect(within(section).getByRole('button', { name: 'Alle 1 Einträge von archivar freigeben' })).toBeInTheDocument()
+    expect(exposedText()).not.toContain(UNKNOWN)
+    expect(lookupCalls(calls)).toHaveLength(1)
+  })
+
+  it('hält zwei unbekannte Agenten in zwei getrennten Gruppen und fragt jeden genau einmal an', async () => {
+    const { calls } = stubApi({
+      items: [
+        memory({ id: 'u1', agent_id: UNKNOWN, created_by_agent_id: UNKNOWN, fact: 'Erster Unbekannter.' }),
+        memory({ id: 'u2', agent_id: UNKNOWN, created_by_agent_id: UNKNOWN, fact: 'Erster Unbekannter, zweiter Eintrag.' }),
+        memory({ id: 'u3', agent_id: UNKNOWN_2, created_by_agent_id: UNKNOWN_2, fact: 'Zweiter Unbekannter.' }),
+      ],
+      agentCounts: { [UNKNOWN]: 2, [UNKNOWN_2]: 1 },
+    })
+    renderPage()
+    const first = (await screen.findByText('Erster Unbekannter.')).closest('section')!
+    const second = screen.getByText('Zweiter Unbekannter.').closest('section')!
+    expect(first).not.toBe(second)
+    expect(within(first).getByRole('heading', { level: 3 })).toHaveTextContent('Unbekannter Agent (2)')
+    expect(within(second).getByRole('heading', { level: 3 })).toHaveTextContent('Unbekannter Agent (1)')
+    expect(within(first).getByText('Erster Unbekannter, zweiter Eintrag.')).toBeInTheDocument()
+    await waitFor(() => expect(lookupCalls(calls).sort()).toEqual(
+      [`/v1/workspaces/ws-1/agents/${UNKNOWN_2}`, `/v1/workspaces/ws-1/agents/${UNKNOWN}`].sort(),
+    ))
+    expect(exposedText()).not.toContain(UNKNOWN)
+    expect(exposedText()).not.toContain(UNKNOWN_2)
+  })
+
+  it('fragt bekannte Agenten nie einzeln an und lädt nach einem Reload nicht erneut', async () => {
+    let lookups = 0
+    stubApi({
+      items: [
+        memory({ id: 'k1', fact: 'Bekannter Agent.' }),
+        memory({ id: 'u1', agent_id: UNKNOWN, created_by_agent_id: UNKNOWN, fact: 'Unbekannter Agent C.' }),
+      ],
+      agentCounts: { a1: 1, [UNKNOWN]: 1 },
+      agentLookup: () => {
+        lookups += 1
+        return jsonResponse({ detail: 'not found' }, 404)
+      },
+      batch: () => jsonResponse({ results: [{ id: 'k1', ok: true }] }),
+    })
+    renderPage()
+    await screen.findByText('Unbekannter Agent C.')
+    await waitFor(() => expect(lookups).toBe(1))
+    // Reload ueber eine Aktion (Stapel freigeben) -> gecachter 404, kein zweiter Abruf.
+    fireEvent.click(screen.getByRole('checkbox', { name: /Bekannter Agent/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auswahl freigeben (1)' }))
+    const { notify } = await import('@/lib/feedback')
+    await waitFor(() => expect(notify.success).toHaveBeenCalled())
+    await screen.findByText('Unbekannter Agent C.')
+    expect(lookups).toBe(1)
   })
 })
 

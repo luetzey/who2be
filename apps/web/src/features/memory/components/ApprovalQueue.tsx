@@ -127,7 +127,12 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
       if (group === undefined) {
         group = {
           key,
-          label: key === MINE_GROUP ? t('approval.groupMine') : (agentName(key) ?? key),
+          // Gruppiert wird weiter je Agent-ID (zwei unbekannte Agenten bleiben
+          // zwei Gruppen); angezeigt wird nie die rohe ID.
+          label:
+            key === MINE_GROUP
+              ? t('approval.groupMine')
+              : (agentName(key) ?? t('approval.unknownAgent')),
           items: [],
           proposals: [],
           total: data.groupCounts[key] ?? 0,

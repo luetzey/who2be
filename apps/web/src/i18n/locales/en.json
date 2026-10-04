@@ -3213,6 +3213,7 @@
       "applyDelete": "Apply deletion",
       "selectRow": "Select \"{{fact}}\"",
       "groupMine": "Your user memory",
+      "unknownAgent": "Unknown agent",
       "groupApproveAgent": "Approve all {{count}} from {{agent}}",
       "groupApproveAgentAria": "Approve all {{count}} entries from {{agent}}",
       "groupApproveMine": "Approve all {{count}}",

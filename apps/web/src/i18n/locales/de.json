@@ -3213,6 +3213,7 @@
       "applyDelete": "Löschung übernehmen",
       "selectRow": "„{{fact}}“ auswählen",
       "groupMine": "Dein Nutzergedächtnis",
+      "unknownAgent": "Unbekannter Agent",
       "groupApproveAgent": "Alle {{count}} von {{agent}} freigeben",
       "groupApproveAgentAria": "Alle {{count}} Einträge von {{agent}} freigeben",
       "groupApproveMine": "Alle {{count}} freigeben",
