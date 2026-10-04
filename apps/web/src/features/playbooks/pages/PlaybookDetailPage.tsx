@@ -7,14 +7,17 @@ import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
-import { LocaleBadge } from '@/components/data/LocaleBadge'
+import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
+import { StatusBadge } from '@/components/data/StatusBadge'
+import { TagList } from '@/components/data/TagList'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { EntityTestCases, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { StatusActionBar, VersionHistory } from '@/components/version'
 import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EntityDeleteButton, EntityExportButton } from '@/components/entity'
@@ -27,19 +30,18 @@ import { notify } from '@/lib/feedback'
 import { ComposedByList } from '../components/ComposedByList'
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
 import {
+  PLAYBOOK_DETAIL_TABS,
   PlaybookDetailTabs,
   playbookTabId,
   playbookTabPanelId,
   type PlaybookDetailTab,
 } from '../components/PlaybookDetailTabs'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
-import { PlaybookTypeIcon } from '../components/PlaybookTypeIcon'
 import { ReviewBanner } from '../components/ReviewBanner'
 import { SubPlaybookFlow } from '../components/SubPlaybookFlow'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
-
-const PLAYBOOK_TABS: readonly PlaybookDetailTab[] = ['edit', 'relations', 'versions', TESTS_TAB]
+import { playbookTypeMeta } from '../lib/typeMeta'
 
 // Avatar-Initialen fuer die „Verwendet in"-Liste: erste Buchstaben der
 // ersten beiden Woerter („Coach Carla" → „CC").
@@ -64,7 +66,7 @@ export function PlaybookDetailPage() {
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const { tab: activeTab, setTab: setActiveTab, diffVersion } = useVersionDeepLink(
-    PLAYBOOK_TABS,
+    PLAYBOOK_DETAIL_TABS,
     'edit',
   )
   const [dangerOpen, setDangerOpen] = useState(false)
@@ -77,6 +79,8 @@ export function PlaybookDetailPage() {
   }
 
   const activeVersion = versions.find((v) => v.status === 'active')
+  // Icon-Kachel im DetailHeader: Typ-Icon + Typ-Tinte wie in Liste/Leerzustand.
+  const typeMeta = playbookTypeMeta(playbook?.type)
   const draftVersion = versions.find((v) => v.status === 'draft')
   const reviewVersion = versions.find((v) => v.status === 'review')
   const inactiveCurrent =
@@ -132,52 +136,53 @@ export function PlaybookDetailPage() {
         <DataView loading={loading && playbook === null} error={error}>
           {playbook !== null ? (
             <Stack gap="md">
-              <header className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <PlaybookTypeIcon type={playbook.type} />
-                    <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">
-                      {playbook.name}
-                    </h1>
-                    {playbook.current_status !== undefined ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
-                        <span
-                          className="inline-block size-2 rounded-full"
-                          style={{
-                            backgroundColor: `var(--status-${playbook.current_status})`,
-                          }}
-                          aria-hidden="true"
-                        />
-                        {t(`common:status.${playbook.current_status}`)} · v
-                        {playbook.current_version}
-                      </span>
-                    ) : null}
-                    <LocaleBadge locale={playbook.locale} />
-                  </div>
-                  {playbook.content.description !== '' ? (
-                    // `wrap-anywhere`: lange URL bricht um (Mobil-Spec M1).
-                    <p className="mt-2 text-sm wrap-anywhere text-muted-foreground">
-                      {playbook.content.description}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {role === 'admin' || role === 'editor' ? (
-                    <GiveFeedbackDialog
-                      entityType="playbook"
-                      entityId={playbook.id}
-                      entityName={playbook.name}
-                      version={playbook.current_version}
-                    />
-                  ) : null}
-                  <EntityExportButton
-                    entityKind="playbook"
-                    name={playbook.name || playbook.id}
-                    onExport={(format) => api.exportPlaybook(playbook.id, format)}
-                    testIdPrefix="export-playbook"
+              <DetailHeader
+                icon={typeMeta.icon}
+                iconTone={typeMeta.tone}
+                title={playbook.name}
+                status={
+                  <StatusBadge
+                    status={playbook.current_status}
+                    pendingDraft={playbook.has_pending_draft}
+                    testId="playbook-status-badge"
                   />
-                </div>
-              </header>
+                }
+                version={playbook.current_version}
+                locale={playbook.locale}
+                tags={
+                  <TagList
+                    tags={playbook.tags}
+                    label={t('common:fields.tags')}
+                    renderTag={(tag) => (
+                      <Badge variant="secondary" className="max-w-full text-xs break-words">
+                        {tag}
+                      </Badge>
+                    )}
+                  />
+                }
+                description={playbook.content.description}
+                // Audit A13: Feedback und Export sind Sekundaeraktionen —
+                // unter md hinter „Mehr", wie bei Persona und Resource.
+                collapseActionsBelowMd
+                actions={
+                  <>
+                    {role === 'admin' || role === 'editor' ? (
+                      <GiveFeedbackDialog
+                        entityType="playbook"
+                        entityId={playbook.id}
+                        entityName={playbook.name}
+                        version={playbook.current_version}
+                      />
+                    ) : null}
+                    <EntityExportButton
+                      entityKind="playbook"
+                      name={playbook.name || playbook.id}
+                      onExport={(format) => api.exportPlaybook(playbook.id, format)}
+                      testIdPrefix="export-playbook"
+                    />
+                  </>
+                }
+              />
 
               {locked ? <ManagedNotice /> : null}
 

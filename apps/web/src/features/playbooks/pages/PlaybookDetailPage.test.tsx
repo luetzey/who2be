@@ -7,6 +7,7 @@ import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
+import { PLAYBOOK_DETAIL_TABS } from '../components/PlaybookDetailTabs'
 import { PlaybookDetailPage } from './PlaybookDetailPage'
 
 vi.mock('@/lib/feedback', () => ({
@@ -687,7 +688,10 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       }),
     )
 
-    expect(await screen.findByText('Aktiv · v1')).toBeInTheDocument()
+    // Audit A8: zwei getrennte Chips (Status, Version) statt „Aktiv · v1".
+    expect(await screen.findByTestId('playbook-status-badge')).toHaveTextContent('Aktiv')
+    expect(screen.getByTestId('detail-header-version')).toHaveTextContent('v1')
+    expect(screen.queryByText('Aktiv · v1')).not.toBeInTheDocument()
     expect(screen.queryByTestId('review-banner')).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
@@ -1109,5 +1113,84 @@ describe('PlaybookDetailPage — Pruefbericht im Versions-Tab (S11)', () => {
     )
     expect(diffs).toHaveLength(0)
     expect(reportCalls).toEqual([])
+  })
+})
+
+// Audit A8 Teil 2 (PM-Entscheidung A): Playbook nutzt den DetailHeader mit
+// festen Slots. Die Reihenfolge der Chips legt der Header fest; hier wird
+// belegt, dass die Seite ihre Werte in die Slots gibt (und keine eigene
+// Chip-Reihe mehr fuehrt). Rot-Probe: LocaleBadge im Header vor den Status
+// gezogen → der Reihenfolge-Test faellt.
+describe('PlaybookDetailPage — Kopf und Tabs (Audit A8)', () => {
+  it('rendert die Chips in der Reihenfolge Status · Version · Sprache · Tags', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({ current_status: 'active', locale: 'de', tags: ['coaching'] }),
+        versions: [pbVersion(1, 'active')],
+      }),
+    )
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Coach' })
+    const row = heading.parentElement
+    expect(row).not.toBeNull()
+    const order = Array.from(row?.children ?? []).map(
+      (el) => el.getAttribute('data-testid') ?? el.textContent,
+    )
+    expect(order).toEqual([
+      'Coach',
+      'playbook-status-badge',
+      'detail-header-version',
+      'DE',
+      'tag-list',
+    ])
+    // Zwei getrennte Chips statt „Aktiv · v1".
+    expect(screen.getByTestId('playbook-status-badge')).toHaveTextContent(/^Aktiv$/)
+    expect(screen.getByTestId('detail-header-version')).toHaveTextContent(/^v1$/)
+    expect(within(screen.getByTestId('tag-list')).getByText('coaching')).toBeInTheDocument()
+  })
+
+  it('zeigt die Typ-Kachel mit Typ-Icon und Typ-Tinte im Kopf', async () => {
+    renderPlaybookDetail(playbookHandlers({ playbook: playbookWith({ type: 'workflow' }) }))
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Coach' })
+    const header = heading.closest('header')
+    expect(header).not.toBeNull()
+    // Gleiche Tinte wie in Liste/Leerzustand (typeMeta: workflow → catalog).
+    expect(header!.querySelector('.bg-pill-catalog svg.lucide-workflow')).not.toBeNull()
+  })
+
+  // Rot-Probe: in `PlaybookDetailTabs.tsx` Prüffälle und Versionen getauscht
+  // → beide Erwartungen fallen (Trigger-Leiste und Deep-Link-Liste).
+  it('ordnet die Tabs Bearbeiten · Beziehungen · Prüffälle · Versionen mit Pencil/GitBranch', async () => {
+    renderPlaybookDetail(playbookHandlers())
+
+    const tabs = await screen.findAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Bearbeiten',
+      'Beziehungen',
+      'Prüffälle',
+      'Versionen',
+    ])
+    expect(tabs[0].querySelector('svg.lucide-pencil')).not.toBeNull()
+    expect(tabs[3].querySelector('svg.lucide-git-branch')).not.toBeNull()
+    expect(PLAYBOOK_DETAIL_TABS).toEqual(['edit', 'relations', 'tests', 'versions'])
+  })
+
+  // jsdom rendert kein CSS — Sichtbarkeit je Viewport belegt
+  // e2e/status-actions-viewport.spec.ts; hier der Vertrag (Slot + Knopf).
+  it('legt Feedback und Export unter md hinter „Mehr"', async () => {
+    renderPlaybookDetail(playbookHandlers(), { me: meWithRole('editor') })
+
+    const more = await screen.findByTestId('detail-header-more')
+    expect(more).toHaveClass('md:hidden')
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const slot = document.getElementById(more.getAttribute('aria-controls') ?? '')
+    expect(slot).toHaveClass('hidden', 'md:flex')
+    expect(slot).toContainElement(screen.getByTestId('export-playbook-trigger'))
+    expect(slot).toContainElement(screen.getByRole('button', { name: 'Feedback geben' }))
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(slot).toHaveClass('flex', 'w-full')
   })
 })

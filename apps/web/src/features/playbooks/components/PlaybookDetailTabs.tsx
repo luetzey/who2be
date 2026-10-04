@@ -21,6 +21,13 @@ const TABS: { key: PlaybookDetailTab; icon: LucideIcon; label: string }[] = [
   { key: 'versions', icon: GitBranch, label: 'detail.tabs.versions' },
 ]
 
+/**
+ * Audit A8: einzige Quelle der Tab-Reihenfolge
+ * (`Bearbeiten · Beziehungen · Prüffälle · Versionen`). Die Seite nutzt sie
+ * fuer den Deep-Link-Hook, statt eine zweite Liste zu fuehren.
+ */
+export const PLAYBOOK_DETAIL_TABS: readonly PlaybookDetailTab[] = TABS.map((tab) => tab.key)
+
 export function playbookTabPanelId(tab: PlaybookDetailTab): string {
   return `playbook-tabpanel-${tab}`
 }
