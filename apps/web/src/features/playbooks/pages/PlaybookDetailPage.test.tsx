@@ -163,9 +163,16 @@ describe('PlaybookDetailPage', () => {
     // fireEvent.change gegen ein noch leeres Default-Input und der spaeter
     // eintreffende reset ueberschreibt die Aenderung — PATCH wird nie
     // ausgeloest (CI-Flake beobachtet in PR #79, analog Persona-Test).
-    await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
-    })
+    // Eigenes Timeout nur fuer diesen Schritt: Laden + reset brauchten unter
+    // fremder CPU-Last (Load ~10-12, parallele Vitest-Laeufe) mehr als den
+    // waitFor-Default von 1 s (t_1208d66b). 5 s + 8 s unten bleiben unter dem
+    // it()-Timeout von 15 s; das globale asyncUtilTimeout bleibt unberuehrt.
+    await waitFor(
+      () => {
+        expect(screen.getByLabelText('Name')).toHaveValue('Coach')
+      },
+      { timeout: 5000 },
+    )
     // Save-Button gibt es nicht mehr.
     expect(
       screen.queryByRole('button', { name: 'Neue Version speichern' }),
