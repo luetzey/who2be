@@ -130,9 +130,16 @@ describe('PersonaDetailPage', () => {
     // gegen ein noch leeres Default-Input und der spaeter eintreffende reset
     // ueberschreibt die Aenderung — PATCH wird nie ausgeloest (CI-Flake
     // beobachtet in PR #79).
-    await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
-    })
+    // Eigenes Timeout nur fuer diesen Schritt: Laden + reset brauchten unter
+    // fremder CPU-Last mehr als den waitFor-Default von 1 s (t_1208d66b,
+    // analog PlaybookDetailPage). 5 s + 8 s unten bleiben unter dem
+    // it()-Timeout von 15 s; das globale asyncUtilTimeout bleibt unberuehrt.
+    await waitFor(
+      () => {
+        expect(screen.getByLabelText('Name')).toHaveValue('Coach')
+      },
+      { timeout: 5000 },
+    )
     expect(
       screen.queryByRole('button', { name: 'Neue Version speichern' }),
     ).not.toBeInTheDocument()
