@@ -139,7 +139,6 @@ def test_list_enriches_card_pills() -> None:
         template_name="Support-Template",
         template_version=2,
         playbook_count=3,
-        pending_memory_count=2,
         is_favorite=True,
     )
     service = AgentService(repo)  # type: ignore[arg-type]
@@ -149,7 +148,6 @@ def test_list_enriches_card_pills() -> None:
     assert by_id[_OWN_ID].template_name == "Support-Template"
     assert by_id[_OWN_ID].template_version == 2
     assert by_id[_OWN_ID].playbook_count == 3
-    assert by_id[_OWN_ID].pending_memory_count == 2
     # Der Stern kommt aus demselben Batch-Aggregat wie die Pills (#427).
     assert by_id[_OWN_ID].is_favorite is True
     # Ohne Meta-Eintrag bleibt das Read auf dem konservativen Default.
@@ -157,7 +155,6 @@ def test_list_enriches_card_pills() -> None:
     # Ohne Meta-Eintrag bleibt der fremde Agent auf den Defaults.
     assert by_id[_OTHER_ID].persona_name is None
     assert by_id[_OTHER_ID].playbook_count == 0
-    assert by_id[_OTHER_ID].pending_memory_count == 0
 
 
 def test_scope_none_blocks_with_403() -> None:
@@ -198,7 +195,6 @@ def test_agent_bound_token_gets_no_favorites() -> None:
         template_name=None,
         template_version=None,
         playbook_count=0,
-        pending_memory_count=0,
         is_favorite=True,
     )
     service = AgentService(repo)  # type: ignore[arg-type]

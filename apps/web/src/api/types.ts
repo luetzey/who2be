@@ -1093,14 +1093,13 @@ export interface Agent {
   // List-Card-Pills: nur der List-Endpoint befuellt diese denormalisierten
   // Namen/Zaehler. persona_name/template_name = null ohne Verknuepfung;
   // template_version = aktive Template-Version (null ohne aktive Version);
-  // playbook_count = Playbooks der verknuepften Persona;
-  // pending_memory_count = Gedaechtnis-Vorschlaege in der Freigabe-Schleuse
-  // (agent_memory.status='pending', ADR-0044).
+  // playbook_count = Playbooks der verknuepften Persona.
+  // Gedaechtnis-Zaehler traegt die Liste nicht (ADR-0053 6.4.1): der Pill
+  // zaehlt ueber GET /memories/counts.
   persona_name?: string | null
   template_name?: string | null
   template_version?: number | null
   playbook_count?: number
-  pending_memory_count?: number
   // Persoenlicher Favoriten-Stern des angemeldeten Users (Issue #427). Wie die
   // Pills darueber nur vom List-Endpoint befuellt; die Detail-Seite zeigt
   // keinen Stern und laesst das Feld deshalb auf `undefined`. Gesetzt/entfernt
