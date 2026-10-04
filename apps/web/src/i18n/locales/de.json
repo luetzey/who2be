@@ -3268,7 +3268,26 @@
       "alreadyDecidedBy": "Schon von {{name}} entschieden.",
       "capReachedUser": "Dein Nutzergedächtnis ist voll ({{maximum}} Einträge, abgelehnte zählen mit). Lösche alte Einträge, bevor neue dazukommen.",
       "capReachedNote": "Die Agentennotizen dieses Agenten sind voll. Lösche alte, bevor neue dazukommen.",
-      "history": "Verlauf"
+      "history": "Verlauf",
+      "decideIndividually": "Einzeln entscheiden",
+      "shortcuts": {
+        "button": "Tastatur",
+        "title": "Tastaturkürzel",
+        "description": "Die Kürzel wirken, wenn der Fokus in der Liste liegt – nicht in Suchfeld, Textfeld oder Dialog.",
+        "individually": "Zurückgehaltene Einträge und Vorschläge lassen sich nicht per Kürzel freigeben oder auswählen: Einzeln entscheiden.",
+        "enabled": "Tastaturkürzel verwenden",
+        "keys": {
+          "next": "Nächste Zeile",
+          "prev": "Vorige Zeile",
+          "select": "Auswählen (höchstens 100)",
+          "approve": "Freigeben",
+          "reject": "Ablehnen",
+          "edit": "Bearbeiten",
+          "history": "Verlauf öffnen",
+          "help": "Diese Hilfe",
+          "escape": "Aus dem Textfeld zurück zur Zeile"
+        }
+      }
     },
     "batch": {
       "done": {

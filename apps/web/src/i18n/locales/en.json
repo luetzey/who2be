@@ -3268,7 +3268,26 @@
       "alreadyDecidedBy": "Already decided by {{name}}.",
       "capReachedUser": "Your user memory is full ({{maximum}} entries, rejected ones included). Delete old entries before new ones can be added.",
       "capReachedNote": "This agent's notes are full. Delete old ones before new ones can be added.",
-      "history": "History"
+      "history": "History",
+      "decideIndividually": "Decide individually",
+      "shortcuts": {
+        "button": "Keyboard",
+        "title": "Keyboard shortcuts",
+        "description": "Shortcuts work while focus is in the list – not in the search field, a text field or a dialog.",
+        "individually": "Held-back entries and proposals can't be approved or selected by shortcut: decide individually.",
+        "enabled": "Use keyboard shortcuts",
+        "keys": {
+          "next": "Next row",
+          "prev": "Previous row",
+          "select": "Select (at most 100)",
+          "approve": "Approve",
+          "reject": "Reject",
+          "edit": "Edit",
+          "history": "Open history",
+          "help": "This help",
+          "escape": "Leave the text field, back to the row"
+        }
+      }
     },
     "batch": {
       "done": {
