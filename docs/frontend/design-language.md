@@ -264,16 +264,25 @@ auf `mobile-320`).
 
 **Kopf der Detailseiten (Audit A8, PM-Entscheidung A):** Alle versionierten
 `*DetailPage` nutzen `components/data/DetailHeader.tsx` mit festen
-Meta-Slots; die Chips stehen immer in der Reihenfolge
-`Status · Version · Sprache · Slug · Tags`. Die Seite uebergibt Werte
-(`status`, `version`, `locale`, `slug`, `tags`), die Reihenfolge legt der
-Header fest — keine eigene Chip-Reihe in der Page. Der Slug (bei Tools der
+Meta-Slots: `PersonaDetailPage`, `PlaybookDetailPage`, `ResourceDetailPage`,
+`SystemPromptDetailPage`, `ToolDetailPage`. Die Chips stehen immer in der
+Reihenfolge `Status · Version · Sprache · Slug · Tags`. Status und Version sind
+zwei getrennte Chips, kein kombiniertes „Aktiv · v1“. Die Seite
+uebergibt Werte (`status`, `version`, `locale`, `slug`, `tags`), die
+Reihenfolge legt der Header fest. Eine eigene Chip-Reihe in der Page gibt es
+nicht. Die Icon-Kachel traegt die Tinte der Entitaet. Beim Playbook ist das die
+Typ-Tinte aus `features/playbooks/lib/typeMeta.ts`, wie in Liste und
+Leerzustand. Der Slug (bei Tools der
 Alias) ist ein eigener Chip in Monospace mit `break-all` + `max-w-full`
-(#564/#566). Leere Slots entfallen. Der freie Slot `badges` steht dahinter
+(#564/#566). Leere Slots entfallen (Playbooks haben keinen Slug). Der freie
+Slot `badges` steht dahinter
 und ist nur fuer unversionierte Seiten (Feedback, Arbeitsbereich) gedacht.
 Die Tabs folgen `Bearbeiten · … · Prüffälle · Versionen` mit den Icons
-`Pencil` und `GitBranch`. Beleg: `DetailHeader.test.tsx` liest die
-Reihenfolge der Geschwister.
+`Pencil` und `GitBranch`. Die Reihenfolge steht an einer Stelle, beim Playbook
+`PLAYBOOK_DETAIL_TABS` in `PlaybookDetailTabs.tsx`. Belege:
+`DetailHeader.test.tsx` liest die Reihenfolge der Geschwister,
+`PlaybookDetailPage.test.tsx` („Kopf und Tabs (Audit A8)“) prueft dasselbe
+auf der Playbook-Seite.
 
 ## 5. Radii
 
