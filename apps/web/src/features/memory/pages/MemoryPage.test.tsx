@@ -9,11 +9,26 @@ import { SessionContext } from '@/auth/session-context'
 import { MemoryRow, wordDiff } from '@/components/memory/MemoryRow'
 import { axe } from '@/test/a11y'
 
+import { isBatchable, resolveCommand } from '../hooks/useQueueShortcuts'
 import { MemoryPage } from './MemoryPage'
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
+
+// Stapel-Obergrenze: echt 100 (geprueft im Kuerzel-Test). Fuer den Test der
+// Grenze per `x` laesst sie sich absenken, statt 100 Zeilen anzuklicken.
+const selectionLimit = vi.hoisted(() => ({ override: null as number | null, actual: 0 }))
+vi.mock('../hooks/useMemoryApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../hooks/useMemoryApi')>()
+  selectionLimit.actual = original.SELECTION_LIMIT
+  return {
+    ...original,
+    get SELECTION_LIMIT() {
+      return selectionLimit.override ?? original.SELECTION_LIMIT
+    },
+  }
+})
 
 beforeAll(() => {
   for (const method of [
@@ -620,6 +635,202 @@ describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: /Erster/ }))
     await screen.findByTestId('entries-bulk-bar')
     expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+// ------------------------------------------------- Tastaturkürzel (C5a-3)
+
+describe('MemoryPage · Zur Freigabe · Tastaturkürzel (C5a-3, Spec §5.2)', () => {
+  afterEach(() => window.localStorage.clear())
+
+  const twoRows = () =>
+    stubApi({
+      items: [memory({ id: 'm1', fact: 'Erster.' }), memory({ id: 'm2', fact: 'Zweiter.' })],
+      agentCounts: { a1: 2 },
+    })
+
+  const toggle = (fact: RegExp) => screen.getByRole('button', { name: fact })
+  const press = (key: string, target: Element = document.activeElement ?? document.body) =>
+    fireEvent.keyDown(target, { key })
+
+  it('j/k bewegen den Fokus zur nächsten bzw. vorigen Zeile', async () => {
+    twoRows()
+    renderPage()
+    const first = await screen.findByRole('button', { name: /Erster/ })
+    first.focus()
+    press('j')
+    expect(toggle(/Zweiter/)).toHaveFocus()
+    press('j')
+    expect(toggle(/Zweiter/)).toHaveFocus()
+    press('k')
+    expect(toggle(/Erster/)).toHaveFocus()
+  })
+
+  it('x wählt die Zeile aus und wieder ab', async () => {
+    twoRows()
+    renderPage()
+    ;(await screen.findByRole('button', { name: /Erster/ })).focus()
+    press('x')
+    expect(screen.getByRole('checkbox', { name: /Erster/ })).toBeChecked()
+    expect(screen.getByText('1 ausgewählt')).toBeInTheDocument()
+    press('x')
+    expect(screen.getByRole('checkbox', { name: /Erster/ })).not.toBeChecked()
+  })
+
+  it('x respektiert die Stapel-Obergrenze (100) und zeigt den Hinweis', async () => {
+    expect(selectionLimit.actual).toBe(100)
+    selectionLimit.override = 2
+    try {
+      stubApi({
+        items: [
+          memory({ id: 'm1', fact: 'Erster.' }),
+          memory({ id: 'm2', fact: 'Zweiter.' }),
+          memory({ id: 'm3', fact: 'Dritter.' }),
+        ],
+        agentCounts: { a1: 3 },
+      })
+      renderPage()
+      ;(await screen.findByRole('button', { name: /Erster/ })).focus()
+      press('x')
+      press('j')
+      press('x')
+      press('j')
+      press('x')
+      expect(screen.getByRole('checkbox', { name: /Dritter/ })).not.toBeChecked()
+      expect(screen.getByText('2 ausgewählt')).toBeInTheDocument()
+      expect(screen.getByText('Höchstens 100 auf einmal.')).toBeInTheDocument()
+    } finally {
+      selectionLimit.override = null
+    }
+  })
+
+  it('a gibt die fokussierte Zeile über triage frei', async () => {
+    const { calls } = twoRows()
+    renderPage()
+    ;(await screen.findByRole('button', { name: /Zweiter/ })).focus()
+    press('a')
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/agents/a1/memories/m2/triage'))).toBe(true),
+    )
+    const call = calls.find((c) => c.url.endsWith('/memories/m2/triage'))!
+    expect(call.body).toEqual({ action: 'approve' })
+  })
+
+  it('a und x wirken bei Zurückgehaltenen nicht und sagen „Einzeln entscheiden“ an', async () => {
+    const { notify } = await import('@/lib/feedback')
+    const { calls } = stubApi({
+      held: [memory({ id: 'h1', origin: 'external_content', fact: 'Aus README übernommen.' })],
+    })
+    renderPage()
+    const heldRow = await screen.findByTestId('memory-held-row')
+    heldRow.focus()
+    press('a')
+    press('x')
+    expect(notify.info).toHaveBeenCalledWith('Einzeln entscheiden')
+    expect(notify.info).toHaveBeenCalledTimes(2)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+    expect(screen.queryByText(/ausgewählt/)).toBeNull()
+  })
+
+  it('a übernimmt keinen Änderungsvorschlag (nur per Knopf)', async () => {
+    const { notify } = await import('@/lib/feedback')
+    const { calls } = stubApi({ proposals: [proposal()] })
+    renderPage()
+    const row = await screen.findByTestId('memory-proposal-row')
+    row.focus()
+    press('a')
+    expect(notify.info).toHaveBeenCalledWith('Einzeln entscheiden')
+    expect(calls.some((c) => c.url.endsWith('/decide'))).toBe(false)
+  })
+
+  it('a gibt nie einen Lernvorschlag frei, x wählt ihn nie aus', () => {
+    const lesson = memory({ kind: 'lesson' })
+    const row = { type: 'memory', memory: lesson, canAct: true } as const
+    expect(isBatchable(lesson)).toBe(false)
+    expect(resolveCommand('approve', row)).toBe('refuse')
+    expect(resolveCommand('select', row)).toBe('refuse')
+    expect(resolveCommand('edit', row)).toBe('ignore')
+    // Gegenprobe: ein normaler Eintrag läuft.
+    expect(resolveCommand('approve', { ...row, memory: memory({}) })).toBe('run')
+  })
+
+  it('r öffnet den Ablehnen-Dialog der Zeile', async () => {
+    twoRows()
+    renderPage()
+    ;(await screen.findByRole('button', { name: /Erster/ })).focus()
+    press('r')
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Eintrag ablehnen?')).toBeInTheDocument()
+  })
+
+  it('e klappt auf und setzt den Fokus ins Faktfeld; Esc führt zurück zur Zeile', async () => {
+    twoRows()
+    renderPage()
+    const first = await screen.findByRole('button', { name: /Erster/ })
+    first.focus()
+    press('e')
+    expect(first).toHaveAttribute('aria-expanded', 'true')
+    const field = screen.getByRole('textbox', { name: 'Fakt' })
+    expect(field).toHaveFocus()
+    press('Escape', field)
+    expect(first).toHaveFocus()
+  })
+
+  it('h öffnet den Verlauf (Detail-Sheet) der Zeile', async () => {
+    twoRows()
+    renderPage()
+    ;(await screen.findByRole('button', { name: /Erster/ })).focus()
+    press('h')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('? öffnet die Hilfe mit allen Kürzeln', async () => {
+    twoRows()
+    renderPage()
+    ;(await screen.findByRole('button', { name: /Erster/ })).focus()
+    press('?')
+    const dialog = await screen.findByRole('dialog', { name: 'Tastaturkürzel' })
+    for (const key of ['j', 'k', 'x', 'a', 'r', 'e', 'h', '?', 'Esc']) {
+      expect(within(dialog).getByText(key, { selector: 'kbd' })).toBeInTheDocument()
+    }
+    expect(within(dialog).getByText('Verlauf öffnen')).toBeInTheDocument()
+  })
+
+  it('wirkt nicht im Suchfeld und nicht im Faktfeld', async () => {
+    const { calls } = twoRows()
+    renderPage()
+    const first = await screen.findByRole('button', { name: /Erster/ })
+    const search = screen.getByRole('searchbox')
+    search.focus()
+    for (const key of ['j', 'x', 'a', 'r', '?']) press(key, search)
+    expect(search).toHaveFocus()
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(first)
+    const field = screen.getByRole('textbox', { name: 'Fakt' })
+    field.focus()
+    for (const key of ['a', 'x', 'r', 'j']) press(key, field)
+    expect(field).toHaveFocus()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByText(/ausgewählt/)).toBeNull()
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('lässt sich in der Hilfe abschalten (WCAG 2.1.4) und bleibt aus', async () => {
+    twoRows()
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Tastatur/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Tastaturkürzel' })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Tastaturkürzel verwenden' }))
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    toggle(/Erster/).focus()
+    press('x')
+    press('j')
+    expect(screen.getByRole('checkbox', { name: /Erster/ })).not.toBeChecked()
+    expect(toggle(/Erster/)).toHaveFocus()
+    expect(window.localStorage.getItem('who2be:memory-queue-shortcuts')).toBe('off')
   })
 })
 

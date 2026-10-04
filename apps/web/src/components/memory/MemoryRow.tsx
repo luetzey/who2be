@@ -28,6 +28,10 @@ import { cn } from '@/lib/utils'
 // Zeilenaktionen: Floor 32 px ab md, 40 px darunter (Spec §15 „Zielgroesse“).
 const ROW_ACTION = 'min-h-10 md:min-h-0'
 
+// Sichtbarer Fokus, wenn eine Zeile selbst per Kuerzel fokussiert wird (2.4.7).
+const QUEUE_ROW_FOCUS =
+  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset'
+
 // ---------------------------------------------------------------- HoldReason
 
 export type HoldCause = 'external' | 'instruction' | 'inferred'
@@ -95,7 +99,14 @@ export function RejectDialog({ onReject, triggerLabel, title, disabled }: Reject
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className={ROW_ACTION} disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={ROW_ACTION}
+          disabled={disabled}
+          data-row-action="reject"
+        >
           {triggerLabel}
         </Button>
       </DialogTrigger>
@@ -201,7 +212,12 @@ export function MemoryRow({
   return (
     <div
       data-testid={held ? 'memory-held-row' : 'memory-row'}
+      // Anker der Tastaturkuerzel (j/k/x/a/r/e/h, ApprovalQueue); ohne eigenen
+      // Fokus-Knopf (zurueckgehaltene Zeile) nimmt die Zeile selbst den Fokus.
+      data-queue-row={memory.id}
+      tabIndex={-1}
       className={cn(
+        QUEUE_ROW_FOCUS,
         'flex flex-col gap-3 p-4',
         held && 'rounded-lg border border-border/60 bg-card shadow-card',
       )}
@@ -257,6 +273,7 @@ export function MemoryRow({
                 disabled={busy}
                 onChange={(event) => setFact(event.target.value)}
                 className="max-h-[60svh]"
+                data-queue-edit
               />
             </div>
           ) : null}
@@ -293,6 +310,7 @@ export function MemoryRow({
                   size="sm"
                   className={ROW_ACTION}
                   disabled={busy || fact.trim() === ''}
+                  data-row-action="approve"
                   onClick={() => void approve()}
                 >
                   {t('approval.approve')}
@@ -334,7 +352,7 @@ function HistoryButton({ memory }: { memory: MemoryRead }) {
   const link = useEntryLink(memory)
   return (
     <Button asChild variant="ghost" size="sm" className={ROW_ACTION}>
-      <Link {...link} data-testid="open-history" aria-haspopup="dialog">
+      <Link {...link} data-testid="open-history" data-row-action="history" aria-haspopup="dialog">
         <History aria-hidden="true" />
         {t('approval.history')}
       </Link>
@@ -470,7 +488,12 @@ export function ProposalRow({
   }
 
   return (
-    <div data-testid="memory-proposal-row" className="flex flex-col gap-3 p-4">
+    <div
+      data-testid="memory-proposal-row"
+      data-queue-row={proposal.id}
+      tabIndex={-1}
+      className={cn(QUEUE_ROW_FOCUS, 'flex flex-col gap-3 p-4')}
+    >
       <p className="text-xs font-medium text-muted-foreground">
         {isChange ? t('approval.proposal.change') : t('approval.proposal.delete')}
         {agentName !== null ? ` · ${agentName}` : ''}

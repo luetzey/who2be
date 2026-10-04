@@ -1,5 +1,5 @@
-import { TriangleAlert } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { Keyboard, TriangleAlert } from 'lucide-react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -12,8 +12,9 @@ import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LoadingState } from '@/components/data/LoadingState'
-import { MemoryRow, ProposalRow, RejectDialog, holdCauseOf } from '@/components/memory/MemoryRow'
+import { MemoryRow, ProposalRow, RejectDialog } from '@/components/memory/MemoryRow'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogClose,
@@ -23,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
@@ -38,6 +40,13 @@ import {
   useReasonText,
   type ProposalWithTarget,
 } from '../hooks/useMemoryApi'
+import {
+  SHORTCUTS,
+  isBatchable,
+  useQueueKeyboard,
+  useShortcutsEnabled,
+  type QueueRow,
+} from '../hooks/useQueueShortcuts'
 
 interface ApprovalQueueProps {
   q: string
@@ -71,7 +80,15 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
   const wsPath = useWorkspacePath()
   const data = useApprovalQueue({ q, agentId })
   const reasonText = useReasonText()
-  const listRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
+  // Container als State, damit die Kuerzel nach dem ersten Render binden.
+  const [listNode, setListNode] = useState<HTMLDivElement | null>(null)
+  const attachList = useCallback((node: HTMLDivElement | null) => {
+    listRef.current = node
+    setListNode(node)
+  }, [])
+  const [shortcutsOn, setShortcutsOn] = useShortcutsEnabled()
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [failures, setFailures] = useState<Map<string, string>>(new Map())
@@ -149,6 +166,16 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
     [data.canManageAgents],
   )
 
+  // Zeilen der Kuerzel nach ID (Eintraege und Vorschlaege teilen den Raum).
+  const queueRows = useMemo(() => {
+    const rows = new Map<string, QueueRow>()
+    for (const memory of [...data.held, ...data.items]) {
+      rows.set(memory.id, { type: 'memory', memory, canAct: canActOn(memory) })
+    }
+    for (const entry of data.proposals) rows.set(entry.proposal.id, { type: 'proposal', canAct: true })
+    return rows
+  }, [data.held, data.items, data.proposals, canActOn])
+
   const removeFromSelection = (ids: string[]) =>
     setSelected((current) => {
       const next = new Set(current)
@@ -170,6 +197,16 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
       return next
     })
   }
+
+  // j/k/x/a/r/e/h und `?` (Spec §5.2 „Tastatur“); `x` laeuft ueber dieselbe
+  // Auswahl wie die Checkbox, inkl. Obergrenze und Hinweis.
+  useQueueKeyboard({
+    container: listNode,
+    enabled: shortcutsOn,
+    rowOf: (id) => queueRows.get(id),
+    onSelect: (memory) => toggleSelect(memory.id),
+    onHelp: () => setHelpOpen(true),
+  })
 
   const setFailure = (id: string, message: string | null) =>
     setFailures((current) => {
@@ -351,7 +388,13 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
   }
 
   return (
-    <div ref={listRef} className="flex flex-col gap-6 pb-28 md:pb-20">
+    <div ref={attachList} className="flex flex-col gap-6 pb-28 md:pb-20">
+      <ShortcutsHelp
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        enabled={shortcutsOn}
+        onEnabledChange={setShortcutsOn}
+      />
       {data.error !== null ? <ErrorAlert message={data.error.message} /> : null}
 
       {partialBanner !== null ? (
@@ -449,7 +492,7 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
                         : null
                     }
                     canAct={canActOn(memory)}
-                    selectable={holdCauseOf(memory) === null && memory.kind !== 'lesson'}
+                    selectable={isBatchable(memory)}
                     selected={selected.has(memory.id)}
                     onToggleSelect={toggleSelect}
                     failure={failures.get(memory.id) ?? null}
@@ -555,6 +598,73 @@ export function ApprovalQueue({ q, agentId, onShowAgent, onResetFilters }: Appro
         />
       ) : null}
     </div>
+  )
+}
+
+interface ShortcutsHelpProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  enabled: boolean
+  onEnabledChange: (enabled: boolean) => void
+}
+
+const KBD = 'rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs'
+
+/**
+ * „? Tastatur“ (Spec §5.1/§5.2): Knopf nur ab md (§14) und Hilfe mit allen
+ * Kuerzeln plus Schalter zum Abschalten (WCAG 2.1.4).
+ */
+function ShortcutsHelp({ open, onOpenChange, enabled, onEnabledChange }: ShortcutsHelpProps) {
+  const { t } = useTranslation('learning')
+  const toggleId = useId()
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="hidden self-end md:inline-flex"
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(true)}
+      >
+        <Keyboard aria-hidden="true" />
+        <kbd className="font-mono text-xs">?</kbd>
+        {t('approval.shortcuts.button')}
+      </Button>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('approval.shortcuts.title')}</DialogTitle>
+            <DialogDescription>{t('approval.shortcuts.description')}</DialogDescription>
+          </DialogHeader>
+          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 text-sm">
+            {SHORTCUTS.map(({ key, command }) => (
+              <div key={key} className="contents">
+                <dt>
+                  <kbd className={KBD}>{key}</kbd>
+                </dt>
+                <dd>{t(`approval.shortcuts.keys.${command}`)}</dd>
+              </div>
+            ))}
+            <div className="contents">
+              <dt>
+                <kbd className={KBD}>Esc</kbd>
+              </dt>
+              <dd>{t('approval.shortcuts.keys.escape')}</dd>
+            </div>
+          </dl>
+          <p className="text-sm text-muted-foreground">{t('approval.shortcuts.individually')}</p>
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id={toggleId}
+              checked={enabled}
+              onChange={(event) => onEnabledChange(event.target.checked)}
+            />
+            <Label htmlFor={toggleId}>{t('approval.shortcuts.enabled')}</Label>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
