@@ -176,10 +176,10 @@ describe('AgentsPage', () => {
   })
 
   it('editor: Gedächtnis-Pill zählt aus /memories/counts, Zahl 0 ergibt keinen Pill', async () => {
-    // `pending_memory_count` am Agent wird bewusst ignoriert (ADR-0053 6.4.1):
-    // die Zahl kommt allein aus dem counts-Request.
-    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 99 })
-    const zero = agent({ id: 'a2', name: 'Null Bot', pending_memory_count: 5 })
+    // Die Zahl kommt allein aus dem counts-Request; die Agentenliste traegt
+    // keinen Gedaechtnis-Zaehler (ADR-0053 6.4.1).
+    const withPending = agent({ id: 'a1', name: 'Carla Bot' })
+    const zero = agent({ id: 'a2', name: 'Null Bot' })
     const absent = agent({ id: 'a3', name: 'Ohne Memories' })
     const fetchMock = stubFetch([withPending, zero, absent], {
       total: 3,
@@ -211,7 +211,7 @@ describe('AgentsPage', () => {
   })
 
   it('viewer: kein Gedächtnis-Pill und kein counts-Request', async () => {
-    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 3 })
+    const withPending = agent({ id: 'a1', name: 'Carla Bot' })
     const fetchMock = stubFetch([withPending], { total: 3, groups: { agent: { a1: 3 } } })
 
     renderPage(meWithRole('viewer'))

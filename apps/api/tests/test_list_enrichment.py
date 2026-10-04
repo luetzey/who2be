@@ -3,9 +3,9 @@
 Deckt die vier List-Endpunkte ab, die die Web-UI fuer die Karten-Pills braucht:
 
 - `GET .../agents` → `persona_name`, `template_name`, `template_version`
-  (aktive Template-Version), `playbook_count` (Playbooks der Persona) und
-  `pending_memory_count` (Gedaechtnis-Vorschlaege in der Freigabe-Schleuse,
-  ADR-0044 — zaehlt NUR `status='pending'`).
+  (aktive Template-Version) und `playbook_count` (Playbooks der Persona).
+  Einen Gedaechtnis-Zaehler traegt die Liste nicht (ADR-0053 6.4.1, Rot-Probe
+  `test_agent_list_carries_no_memory_counter`).
 - `GET .../personas` → `playbook_count` + `agent_count`.
 - `GET .../system-prompts` → `agent_count`.
 - `GET .../resources` → `playbook_link_count` (DISTINCT Playbooks) +
@@ -24,12 +24,15 @@ Der zentrale conftest-Skip ueberspringt diese Tests ohne erreichbare DB
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from uuid import UUID
 
+import asyncpg
 import pytest
 from fastapi.testclient import TestClient
 
+from who2be_api.core.config import get_settings
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -167,56 +170,6 @@ def test_list_endpoints_expose_enrichment_counts(make_auth_headers: AuthFactory)
                 assert row["template_name"] == "Support-Template"
                 assert row["template_version"] == 1
                 assert row["playbook_count"] == 3
-                assert row["pending_memory_count"] == 0
-
-            # --- Agents: pending_memory_count (Freigabe-Schleuse) -------------
-            # Agent 1 bekommt memory_mode=suggest + Token, schlaegt 3 Fakten vor
-            # (alle pending); einer wird freigegeben (active), einer abgelehnt
-            # (rejected) — zaehlen darf nur der verbliebene pending-Eintrag.
-            upd = client.put(
-                f"{base}/agents/{g.agents[0]}",
-                json={"tool_policy": {"memory_mode": "suggest"}},
-                headers=auth,
-            )
-            assert upd.status_code == 200, upd.text
-            token = client.post(
-                f"{base}/tokens",
-                json={"name": "mem-seed", "agent_id": g.agents[0]},
-                headers=auth,
-            )
-            assert token.status_code == 201, token.text
-            mem_auth = {"Authorization": f"Bearer {token.json()['token']}"}
-            mem_ids: list[str] = []
-            for fact in (
-                "Nutzer arbeitet primaer mit Python",
-                "Nutzer hostet auf Hetzner",
-                "Nutzer bevorzugt knappe Antworten",
-            ):
-                saved = client.post(
-                    f"{base}/agent-memories",
-                    json={
-                        "fact": fact,
-                        "category": "preference",
-                        "importance": 7,
-                        "origin": "user_stated",
-                    },
-                    headers=mem_auth,
-                )
-                assert saved.status_code == 201, saved.text
-                assert saved.json()["status"] == "pending"
-                mem_ids.append(saved.json()["id"])
-            mem_base = f"{base}/agents/{g.agents[0]}/memories"
-            for mem_id, action in ((mem_ids[1], "approve"), (mem_ids[2], "reject")):
-                triaged = client.post(
-                    f"{mem_base}/{mem_id}/triage", json={"action": action}, headers=auth
-                )
-                assert triaged.status_code == 200, triaged.text
-
-            agents = client.get(f"{base}/agents", headers=auth)
-            assert agents.status_code == 200, agents.text
-            assert _row(agents.json(), g.agents[0])["pending_memory_count"] == 1
-            # Agent 2 hat keine Memories und bleibt auf 0.
-            assert _row(agents.json(), g.agents[1])["pending_memory_count"] == 0
 
             # --- Personas: playbook_count + agent_count -----------------------
             personas = client.get(f"{base}/personas", headers=auth)
@@ -243,3 +196,72 @@ def test_list_endpoints_expose_enrichment_counts(make_auth_headers: AuthFactory)
             assert srow["sub_resource_count"] == 0
     finally:
         cleanup_workspaces([owner])
+
+
+def _seed_pending_agent_memory(workspace_id: UUID, members: dict[str, UUID]) -> None:
+    """Mitgliedschaften der Rollen-User plus pending lesson und pending
+    Agentengedaechtnis (`scope='agent'`) am ersten Agenten des Workspaces."""
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            for role, user_id in members.items():
+                await conn.execute(
+                    "INSERT INTO workspace_member (workspace_id, user_id, role) "
+                    "VALUES ($1, $2, $3)",
+                    workspace_id,
+                    user_id,
+                    role,
+                )
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 ORDER BY created_at LIMIT 1",
+                workspace_id,
+            )
+            assert agent_id is not None, "Workspace-Seed hat keinen Agenten angelegt"
+            insert = (
+                "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, "
+                " status, fact, kind, scope, origin) "
+                "VALUES ($1, $2, $2, 'pending', $3, $4, 'agent', $5)"
+            )
+            await conn.execute(
+                insert, workspace_id, agent_id, "Lernvorschlag", "lesson", "inferred"
+            )
+            await conn.execute(
+                insert, workspace_id, agent_id, "Agentenfakt", "user_fact", "user_stated"
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+@pytest.mark.parametrize("role", ["viewer", "editor"])
+def test_agent_list_carries_no_memory_counter(role: str, make_auth_headers: AuthFactory) -> None:
+    """Rot-Probe ADR-0053 6.4.1: `GET /agents` traegt keinen Gedaechtnis-Zaehler.
+
+    Gegen den alten Code rot: `pending_memory_count` stand in jedem
+    Listeneintrag und zaehlte hier fuer viewer UND editor 2 (lesson
+    eingeschlossen, Agentengedaechtnis auch fuer viewer). Gezaehlt wird nur
+    noch ueber `/memories/counts` mit der Sichtbarkeitsregel `_memory_where`.
+    Fremdes Nutzergedaechtnis zu seeden macht die Probe nicht rot:
+    `scope='user'` hat per CHECK immer `agent_id IS NULL`.
+    """
+    owner = fresh_user_id()
+    member = fresh_user_id()
+    ws = setup_workspace(owner)
+    url = f"/v1/workspaces/{ws}/agents"
+    try:
+        _seed_pending_agent_memory(ws, {role: member})
+        with TestClient(app) as client:
+            resp = client.get(url, headers=make_auth_headers(member))
+            assert resp.status_code == 200, resp.text
+            items = resp.json()
+            assert items, "Agentenliste leer"
+            for item in items:
+                assert "pending_memory_count" not in item
+            assert "Lernvorschlag" not in resp.text
+            assert "Agentenfakt" not in resp.text
+    finally:
+        cleanup_workspaces([owner, member])

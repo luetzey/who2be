@@ -138,15 +138,14 @@ class AgentRead(BaseModel):
     # Detail-Sicht die Refs ohnehin einzeln aufloest. `persona_name`/
     # `template_name` sind None, solange kein Persona/Template verknuepft ist;
     # `template_version` traegt die aktive Template-Version (None ohne aktive
-    # Version). `playbook_count` zaehlt die Playbooks der verknuepften Persona;
-    # `pending_memory_count` die Gedaechtnis-Vorschlaege in der Freigabe-
-    # Schleuse (`agent_memory.status='pending'`, ADR-0044) — Grundlage fuer den
-    # Aufmerksamkeits-Pill der Agenten-Uebersicht.
+    # Version). `playbook_count` zaehlt die Playbooks der verknuepften Persona.
+    # Gedaechtnis-Zaehler traegt die Liste bewusst nicht: die Sichtbarkeit von
+    # Gedaechtnis haengt an der Rolle, gezaehlt wird nur ueber
+    # `/memories/counts` (ADR-0053 6.4.1).
     persona_name: str | None = None
     template_name: str | None = None
     template_version: int | None = None
     playbook_count: int = 0
-    pending_memory_count: int = 0
     # Persoenlicher Favoriten-Stern des ANFRAGENDEN Users (Issue #427) — pro
     # User verschieden, deshalb kein Feld auf `agent` selbst. Wie die Pills
     # oben nur vom List-Endpoint befuellt (derselbe Batch-Roundtrip); der

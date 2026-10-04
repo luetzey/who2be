@@ -14992,11 +14992,6 @@
             "title": "Playbook Count",
             "default": 0
           },
-          "pending_memory_count": {
-            "type": "integer",
-            "title": "Pending Memory Count",
-            "default": 0
-          },
           "is_favorite": {
             "type": "boolean",
             "title": "Is Favorite",

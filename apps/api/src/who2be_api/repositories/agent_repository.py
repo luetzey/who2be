@@ -28,18 +28,17 @@ class AgentListMeta:
     gejoint. `persona_name`/`template_name` sind None, solange kein Persona/
     Template verknuepft ist; `template_version` traegt die aktive Template-
     Version (None ohne aktive Version). `playbook_count` zaehlt die Playbooks
-    der verknuepften Persona (`persona_playbook`); `pending_memory_count` die
-    Gedaechtnis-Vorschlaege in der Freigabe-Schleuse (`agent_memory.status=
-    'pending'`, ADR-0044). `is_favorite` traegt den persoenlichen Stern des
-    anfragenden Users (Issue #427) — als einziges Feld hier user-abhaengig,
-    deshalb nimmt `list_meta` eine `user_id` entgegen.
+    der verknuepften Persona (`persona_playbook`). Gedaechtnis-Zaehler gehoeren
+    bewusst NICHT hierher: sie laufen ueber `/memories/counts` mit einer
+    Sichtbarkeitsregel (ADR-0053 6.4.1). `is_favorite` traegt den
+    persoenlichen Stern des anfragenden Users (Issue #427) — als einziges Feld
+    hier user-abhaengig, deshalb nimmt `list_meta` eine `user_id` entgegen.
     """
 
     persona_name: str | None
     template_name: str | None
     template_version: int | None
     playbook_count: int
-    pending_memory_count: int
     is_favorite: bool
 
 
@@ -350,7 +349,6 @@ class PgAgentRepository:
             "SELECT a.id AS agent_id, p.name AS persona_name, "
             "       t.name AS template_name, tv.version AS template_version, "
             "       COALESCE(pc.cnt, 0)::int AS playbook_count, "
-            "       COALESCE(pm.cnt, 0)::int AS pending_memory_count, "
             "       (fav.agent_id IS NOT NULL) AS is_favorite "
             "FROM agent a "
             "LEFT JOIN persona p ON p.id = a.persona_id "
@@ -361,10 +359,6 @@ class PgAgentRepository:
             "    SELECT persona_id, COUNT(*) AS cnt "
             "    FROM persona_playbook GROUP BY persona_id "
             ") pc ON pc.persona_id = a.persona_id "
-            "LEFT JOIN ( "
-            "    SELECT agent_id, COUNT(*) AS cnt "
-            "    FROM agent_memory WHERE status = 'pending' GROUP BY agent_id "
-            ") pm ON pm.agent_id = a.id "
             # `fav.workspace_id = $1` ist hier Defense-in-Depth: `a` haengt
             # ohnehin am Workspace und `agent.id` ist PK. Der Einzelspalten-FK
             # garantiert die Gleichheit aber nicht DB-seitig, und F-Phase2-02
@@ -383,7 +377,6 @@ class PgAgentRepository:
                 template_name=row["template_name"],
                 template_version=row["template_version"],
                 playbook_count=row["playbook_count"],
-                pending_memory_count=row["pending_memory_count"],
                 is_favorite=row["is_favorite"],
             )
             for row in rows
