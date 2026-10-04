@@ -495,10 +495,13 @@ describe('Query-Param-Bau', () => {
     expect(lastCall(fetchMock)[0]).toContain('/playbooks/pb1/versions/4/diff?against=3')
     await api.diffResourceVersion('r1', 5, 'active')
     expect(lastCall(fetchMock)[0]).toContain('/resources/r1/versions/5/diff?against=active')
-    await api.diffSystemPromptTemplateVersion('sp1', 6, 'a b')
-    expect(lastCall(fetchMock)[0]).toContain(
-      '/system-prompts/sp1/versions/6/diff?against=a%20b',
-    )
+    await api.diffSystemPromptTemplateVersion('sp1', 6, 'a b&c=1')
+    // Form-Kodierung wie bei allen Query-Bauten (`URLSearchParams`): das
+    // Leerzeichen wird `+`, `&`/`=` bleiben Teil des Werts.
+    const url = new URL(lastCall(fetchMock)[0])
+    expect(url.pathname).toContain('/system-prompts/sp1/versions/6/diff')
+    expect(url.searchParams.get('against')).toBe('a b&c=1')
+    expect(url.search).toBe('?against=a+b%26c%3D1')
   })
 
   it('listResourcesByTag URL-encoded den Tag', async () => {

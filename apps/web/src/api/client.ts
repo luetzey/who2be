@@ -1,6 +1,7 @@
 import i18n, { DEFAULT_LOCALE } from '@/i18n'
 
 import { config } from '../config'
+import { type ApiPath, apiPath, resolveApiPath, withQuery } from './path'
 import type {
   AccountDeletion,
   Agent,
@@ -139,7 +140,22 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+/**
+ * Zentrale Pfad-Pruefung (CSPT-Schutz, siehe `./path`): ein Pfad mit einem
+ * Wert, der kein einzelnes Segment sein kann, wird ohne Netzabruf als 404
+ * abgelehnt — er kann keine existierende Ressource bezeichnen, und Aufrufer
+ * wie das Memory-Detail zeigen dann „nicht gefunden“ statt Retry.
+ */
+function urlFor(path: ApiPath): string {
+  const resolved = resolveApiPath(path)
+  if (resolved === null) {
+    throw new ApiError(404, i18n.t('common:errors.apiError', { status: 404 }))
+  }
+  return `${config.apiBaseUrl}${resolved}`
+}
+
+async function request<T>(token: string, path: ApiPath, init?: RequestInit): Promise<T> {
+  const url = urlFor(path)
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     // Locale-Plumbing (D2-Koordination): die aktive UI-Sprache geht als
@@ -154,7 +170,6 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     headers.Authorization = `Bearer ${token}`
   }
   let response: Response
-  const url = `${config.apiBaseUrl}${path}`
   try {
     response = await fetch(url, { ...init, headers })
   } catch (cause) {
@@ -180,9 +195,10 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
 // mit `media_type=text/markdown` — kein JSON). Fehler-Handling identisch.
 async function requestText(
   token: string,
-  path: string,
+  path: ApiPath,
   init?: RequestInit,
 ): Promise<string> {
+  const url = urlFor(path)
   const headers: Record<string, string> = {
     'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
     ...(init?.headers as Record<string, string> | undefined),
@@ -191,7 +207,6 @@ async function requestText(
     headers.Authorization = `Bearer ${token}`
   }
   let response: Response
-  const url = `${config.apiBaseUrl}${path}`
   try {
     response = await fetch(url, { ...init, headers })
   } catch (cause) {
@@ -210,7 +225,8 @@ async function requestText(
 // Einheitlichkeit gilt derselbe Helper auch fuer die reinen Text-Exporte
 // (CSV/Markdown/HTML): der Aufrufer (`downloadFile`) braucht nur einen Blob,
 // egal ob binaer oder Text. Fehler-Handling identisch zu `request`.
-async function requestBlob(token: string, path: string, init?: RequestInit): Promise<Blob> {
+async function requestBlob(token: string, path: ApiPath, init?: RequestInit): Promise<Blob> {
+  const url = urlFor(path)
   const headers: Record<string, string> = {
     'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
     ...(init?.headers as Record<string, string> | undefined),
@@ -219,7 +235,6 @@ async function requestBlob(token: string, path: string, init?: RequestInit): Pro
     headers.Authorization = `Bearer ${token}`
   }
   let response: Response
-  const url = `${config.apiBaseUrl}${path}`
   try {
     response = await fetch(url, { ...init, headers })
   } catch (cause) {
@@ -237,12 +252,12 @@ async function requestBlob(token: string, path: string, init?: RequestInit): Pro
 // `markdown` den Roh-Text. Der Aufrufer laedt beides als Datei herunter.
 async function exportEntity(
   token: string,
-  ws: string,
+  ws: ApiPath,
   entity: 'personas' | 'playbooks' | 'resources' | 'external_tools',
   id: string,
   format: EntityExportFormat,
 ): Promise<EntityExport | string> {
-  const path = `${ws}/${entity}/${id}/export?format=${format}`
+  const path = withQuery(apiPath`${ws}/${entity}/${id}/export`, { format })
   if (format === 'markdown') {
     return requestText(token, path)
   }
@@ -311,7 +326,7 @@ function translateServerError(detail: string, reason: unknown, params: unknown):
 
 // Tenant-weiter Read — Workspace-Resolution beim Bootstrap, vor `createApi`.
 export function fetchMe(token: string): Promise<Me> {
-  return request<Me>(token, '/v1/me')
+  return request<Me>(token, apiPath`/v1/me`)
 }
 
 // Invitation-Annahme ist bewusst NICHT workspace-scoped: der Einladende kennt
@@ -322,7 +337,7 @@ export function acceptInvitation(
   token: string,
   invitationToken: string,
 ): Promise<InvitationAcceptResult> {
-  return request<InvitationAcceptResult>(token, '/v1/invitations/accept', {
+  return request<InvitationAcceptResult>(token, apiPath`/v1/invitations/accept`, {
     method: 'POST',
     body: JSON.stringify({ token: invitationToken }),
   })
@@ -334,7 +349,7 @@ export function acceptInvitation(
 // bestaetigte Adresse antwortet die API 403 `invitation_email_unconfirmed`
 // (bzw. `invitation_email_required`).
 export function listPendingInvitations(token: string): Promise<PendingInvitation[]> {
-  return request<PendingInvitation[]>(token, '/v1/invitations/pending')
+  return request<PendingInvitation[]>(token, apiPath`/v1/invitations/pending`)
 }
 
 // Annahme per Klick ueber die ID aus `listPendingInvitations`. Fremde oder
@@ -345,7 +360,7 @@ export function acceptPendingInvitation(
 ): Promise<InvitationAcceptResult> {
   return request<InvitationAcceptResult>(
     token,
-    `/v1/invitations/pending/${encodeURIComponent(invitationId)}/accept`,
+    apiPath`/v1/invitations/pending/${invitationId}/accept`,
     { method: 'POST' },
   )
 }
@@ -372,7 +387,7 @@ export function oauthConsent(
   token: string,
   input: OAuthConsentInput,
 ): Promise<OAuthConsentResult> {
-  return request<OAuthConsentResult>(token, '/oauth/consent', {
+  return request<OAuthConsentResult>(token, apiPath`/oauth/consent`, {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -408,7 +423,7 @@ export function oauthConsentPreview(
   token: string,
   input: OAuthConsentPreviewInput,
 ): Promise<OAuthConsentPreviewResult> {
-  return request<OAuthConsentPreviewResult>(token, '/oauth/consent/preview', {
+  return request<OAuthConsentPreviewResult>(token, apiPath`/oauth/consent/preview`, {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -805,48 +820,52 @@ export interface Api {
 }
 
 export function createApi(token: string, workspaceId: string): Api {
-  const ws = `/v1/workspaces/${workspaceId}`
+  // Jeder Wert im Pfad laeuft ueber `apiPath` (CSPT-Schutz, `./path`); die
+  // Workspace-ID ist ein Segment wie jede andere ID.
+  const ws = apiPath`/v1/workspaces/${workspaceId}`
+  // Besitzer-Pfad eines Gedaechtniseintrags: `null` = eigenes Nutzergedaechtnis.
+  const memoryBase = (agentId: string | null): ApiPath =>
+    agentId === null ? apiPath`${ws}/me/memories` : apiPath`${ws}/agents/${agentId}/memories`
   return {
     listPersonas: (filters) => {
       const params = new URLSearchParams()
       if (filters?.agent) params.set('agent', filters.agent)
       if (filters?.locale) params.set('locale', filters.locale)
-      const query = params.toString()
-      return request<Persona[]>(token, `${ws}/personas${query ? `?${query}` : ''}`)
+      return request<Persona[]>(token, withQuery(apiPath`${ws}/personas`, params))
     },
-    getPersona: (id) => request<Persona>(token, `${ws}/personas/${id}`),
+    getPersona: (id) => request<Persona>(token, apiPath`${ws}/personas/${id}`),
     createPersona: (input) =>
-      request<Persona>(token, `${ws}/personas`, {
+      request<Persona>(token, apiPath`${ws}/personas`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updatePersona: (id, input) =>
-      request<Persona>(token, `${ws}/personas/${id}`, {
+      request<Persona>(token, apiPath`${ws}/personas/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     patchPersonaDraft: (id, input) =>
-      request<Persona>(token, `${ws}/personas/${id}/draft`, {
+      request<Persona>(token, apiPath`${ws}/personas/${id}/draft`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     patchPlaybookDraft: (id, input) =>
-      request<Playbook>(token, `${ws}/playbooks/${id}/draft`, {
+      request<Playbook>(token, apiPath`${ws}/playbooks/${id}/draft`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     patchResourceDraft: (id, input) =>
-      request<Resource>(token, `${ws}/resources/${id}/draft`, {
+      request<Resource>(token, apiPath`${ws}/resources/${id}/draft`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     listPersonaVersions: (id) =>
-      request<PersonaVersion[]>(token, `${ws}/personas/${id}/versions`),
-    listPersonaTags: () => request<string[]>(token, `${ws}/personas/tags`),
+      request<PersonaVersion[]>(token, apiPath`${ws}/personas/${id}/versions`),
+    listPersonaTags: () => request<string[]>(token, apiPath`${ws}/personas/tags`),
     listPersonaPlaybooks: (id) =>
-      request<Playbook[]>(token, `${ws}/personas/${id}/playbooks`),
+      request<Playbook[]>(token, apiPath`${ws}/personas/${id}/playbooks`),
     setPersonaPlaybooks: (id, playbookIds) =>
-      request<Playbook[]>(token, `${ws}/personas/${id}/playbooks`, {
+      request<Playbook[]>(token, apiPath`${ws}/personas/${id}/playbooks`, {
         method: 'PUT',
         body: JSON.stringify({ playbook_ids: playbookIds }),
       }),
@@ -856,437 +875,422 @@ export function createApi(token: string, workspaceId: string): Api {
       if (filters?.trigger) params.set('trigger', filters.trigger)
       if (filters?.agent) params.set('agent', filters.agent)
       if (filters?.locale) params.set('locale', filters.locale)
-      const query = params.toString()
-      return request<Playbook[]>(token, `${ws}/playbooks${query ? `?${query}` : ''}`)
+      return request<Playbook[]>(token, withQuery(apiPath`${ws}/playbooks`, params))
     },
-    getPlaybook: (id) => request<Playbook>(token, `${ws}/playbooks/${id}`),
+    getPlaybook: (id) => request<Playbook>(token, apiPath`${ws}/playbooks/${id}`),
     createPlaybook: (input) =>
-      request<Playbook>(token, `${ws}/playbooks`, {
+      request<Playbook>(token, apiPath`${ws}/playbooks`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updatePlaybook: (id, input) =>
-      request<Playbook>(token, `${ws}/playbooks/${id}`, {
+      request<Playbook>(token, apiPath`${ws}/playbooks/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     listPlaybookVersions: (id) =>
-      request<PlaybookVersion[]>(token, `${ws}/playbooks/${id}/versions`),
-    listPlaybookTags: () => request<string[]>(token, `${ws}/playbooks/tags`),
+      request<PlaybookVersion[]>(token, apiPath`${ws}/playbooks/${id}/versions`),
+    listPlaybookTags: () => request<string[]>(token, apiPath`${ws}/playbooks/tags`),
     listTokens: (filters) =>
       request<Token[]>(
         token,
-        `${ws}/tokens${filters?.agentId !== undefined ? `?agent_id=${filters.agentId}` : ''}`,
+        withQuery(
+          apiPath`${ws}/tokens`,
+          filters?.agentId !== undefined ? { agent_id: filters.agentId } : {},
+        ),
       ),
     createToken: (input) =>
-      request<TokenCreated>(token, `${ws}/tokens`, {
+      request<TokenCreated>(token, apiPath`${ws}/tokens`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     renameToken: (id, input) =>
-      request<Token>(token, `${ws}/tokens/${id}`, {
+      request<Token>(token, apiPath`${ws}/tokens/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     rotateToken: (id) =>
-      request<TokenCreated>(token, `${ws}/tokens/${id}/rotate`, { method: 'POST' }),
+      request<TokenCreated>(token, apiPath`${ws}/tokens/${id}/rotate`, { method: 'POST' }),
     revokeToken: (id) =>
-      request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/tokens/${id}`, { method: 'DELETE' }),
     getDashboard: (page) =>
       request<DashboardData>(
         token,
-        `${ws}/dashboard${page && page > 1 ? `?page=${page}` : ''}`,
+        withQuery(apiPath`${ws}/dashboard`, page && page > 1 ? { page: String(page) } : {}),
       ),
     getFeedback: (type, id) =>
-      request<FeedbackSummary>(token, `${ws}/feedback/${type}/${id}`),
+      request<FeedbackSummary>(token, apiPath`${ws}/feedback/${type}/${id}`),
     getFeedbackEvents: (type, id) =>
-      request<FeedbackEvents>(token, `${ws}/feedback/${type}/${id}/events`),
+      request<FeedbackEvents>(token, apiPath`${ws}/feedback/${type}/${id}/events`),
     getFeedbackOverview: () =>
-      request<FeedbackOverview>(token, `${ws}/feedback-overview`),
+      request<FeedbackOverview>(token, apiPath`${ws}/feedback-overview`),
     getFeedbackItems: () =>
-      request<FeedbackItems>(token, `${ws}/feedback-items`),
+      request<FeedbackItems>(token, apiPath`${ws}/feedback-items`),
     getFeedbackDetail: (feedbackId) =>
-      request<FeedbackDetail>(token, `${ws}/feedback/${feedbackId}`),
+      request<FeedbackDetail>(token, apiPath`${ws}/feedback/${feedbackId}`),
     getFeedbackUnused: () =>
-      request<FeedbackUnused>(token, `${ws}/feedback-unused`),
+      request<FeedbackUnused>(token, apiPath`${ws}/feedback-unused`),
     setFeedbackResolution: (feedbackId, input) =>
-      request<AgentFeedback>(token, `${ws}/feedback/${feedbackId}/resolution`, {
+      request<AgentFeedback>(token, apiPath`${ws}/feedback/${feedbackId}/resolution`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     deleteFeedback: (feedbackId) =>
-      request<void>(token, `${ws}/feedback/${feedbackId}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/feedback/${feedbackId}`, { method: 'DELETE' }),
     submitFeedback: (input) =>
-      request<void>(token, `${ws}/feedback`, {
+      request<void>(token, apiPath`${ws}/feedback`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     submitSystemFeedback: (input) =>
-      request<void>(token, `${ws}/system-feedback`, {
+      request<void>(token, apiPath`${ws}/system-feedback`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     transitionPersonaVersion: (id, version, to, options) =>
       request<PersonaVersion>(
         token,
-        `${ws}/personas/${id}/versions/${version}/transition`,
+        apiPath`${ws}/personas/${id}/versions/${version}/transition`,
         { method: 'POST', body: transitionBody(to, options) },
       ),
     transitionPlaybookVersion: (id, version, to, options) =>
       request<PlaybookVersion>(
         token,
-        `${ws}/playbooks/${id}/versions/${version}/transition`,
+        apiPath`${ws}/playbooks/${id}/versions/${version}/transition`,
         { method: 'POST', body: transitionBody(to, options) },
       ),
     listResources: (filters) => {
       const params = new URLSearchParams()
       if (filters?.agent) params.set('agent', filters.agent)
       if (filters?.locale) params.set('locale', filters.locale)
-      const query = params.toString()
-      return request<Resource[]>(token, `${ws}/resources${query ? `?${query}` : ''}`)
+      return request<Resource[]>(token, withQuery(apiPath`${ws}/resources`, params))
     },
-    getResource: (id) => request<Resource>(token, `${ws}/resources/${id}`),
+    getResource: (id) => request<Resource>(token, apiPath`${ws}/resources/${id}`),
     createResource: (input) =>
-      request<Resource>(token, `${ws}/resources`, {
+      request<Resource>(token, apiPath`${ws}/resources`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateResource: (id, input) =>
-      request<Resource>(token, `${ws}/resources/${id}`, {
+      request<Resource>(token, apiPath`${ws}/resources/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     listResourceVersions: (id) =>
-      request<ResourceVersion[]>(token, `${ws}/resources/${id}/versions`),
+      request<ResourceVersion[]>(token, apiPath`${ws}/resources/${id}/versions`),
     transitionResourceVersion: (id, version, to, options) =>
       request<ResourceVersion>(
         token,
-        `${ws}/resources/${id}/versions/${version}/transition`,
+        apiPath`${ws}/resources/${id}/versions/${version}/transition`,
         { method: 'POST', body: transitionBody(to, options) },
       ),
     listPlaybookResourceLinks: (playbookId) =>
-      request<ResourceLink[]>(token, `${ws}/playbooks/${playbookId}/resource_links`),
+      request<ResourceLink[]>(token, apiPath`${ws}/playbooks/${playbookId}/resource_links`),
     setPlaybookResourceLinks: (playbookId, links) =>
-      request<ResourceLink[]>(token, `${ws}/playbooks/${playbookId}/resource_links`, {
+      request<ResourceLink[]>(token, apiPath`${ws}/playbooks/${playbookId}/resource_links`, {
         method: 'PUT',
         body: JSON.stringify({ links }),
       }),
     getPlaybookUsages: (id) =>
-      request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
+      request<PlaybookUsage[]>(token, apiPath`${ws}/playbooks/${id}/usages`),
     getResourceUsages: (id) =>
-      request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
+      request<ResourceUsage[]>(token, apiPath`${ws}/resources/${id}/usages`),
     deletePersona: (id) =>
-      request<void>(token, `${ws}/personas/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/personas/${id}`, { method: 'DELETE' }),
     deletePlaybook: (id) =>
-      request<void>(token, `${ws}/playbooks/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/playbooks/${id}`, { method: 'DELETE' }),
     deleteResource: (id) =>
-      request<void>(token, `${ws}/resources/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/resources/${id}`, { method: 'DELETE' }),
     exportPersona: (id, format) => exportEntity(token, ws, 'personas', id, format),
     exportPlaybook: (id, format) => exportEntity(token, ws, 'playbooks', id, format),
     exportResource: (id, format) => exportEntity(token, ws, 'resources', id, format),
     listResourceSubResources: (id) =>
-      request<SubResource[]>(token, `${ws}/resources/${id}/sub_resources`),
+      request<SubResource[]>(token, apiPath`${ws}/resources/${id}/sub_resources`),
     setResourceSubResources: (id, links) =>
-      request<SubResource[]>(token, `${ws}/resources/${id}/sub_resources`, {
+      request<SubResource[]>(token, apiPath`${ws}/resources/${id}/sub_resources`, {
         method: 'PUT',
         body: JSON.stringify({ links }),
       }),
     listResourceUsedBy: (id) =>
-      request<ResourceRef[]>(token, `${ws}/resources/${id}/used_by`),
+      request<ResourceRef[]>(token, apiPath`${ws}/resources/${id}/used_by`),
     listExternalTools: (filters) => {
       const params = new URLSearchParams()
       if (filters?.locale) params.set('locale', filters.locale)
-      const query = params.toString()
-      return request<ExternalTool[]>(token, `${ws}/external_tools${query ? `?${query}` : ''}`)
+      return request<ExternalTool[]>(token, withQuery(apiPath`${ws}/external_tools`, params))
     },
-    getExternalTool: (id) => request<ExternalTool>(token, `${ws}/external_tools/${id}`),
+    getExternalTool: (id) => request<ExternalTool>(token, apiPath`${ws}/external_tools/${id}`),
     createExternalTool: (input) =>
-      request<ExternalTool>(token, `${ws}/external_tools`, {
+      request<ExternalTool>(token, apiPath`${ws}/external_tools`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateExternalTool: (id, input) =>
-      request<ExternalTool>(token, `${ws}/external_tools/${id}`, {
+      request<ExternalTool>(token, apiPath`${ws}/external_tools/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     patchExternalToolDraft: (id, input) =>
-      request<ExternalTool>(token, `${ws}/external_tools/${id}/draft`, {
+      request<ExternalTool>(token, apiPath`${ws}/external_tools/${id}/draft`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     listExternalToolVersions: (id) =>
-      request<ExternalToolVersion[]>(token, `${ws}/external_tools/${id}/versions`),
+      request<ExternalToolVersion[]>(token, apiPath`${ws}/external_tools/${id}/versions`),
     transitionExternalToolVersion: (id, version, to, options) =>
       request<ExternalToolVersion>(
         token,
-        `${ws}/external_tools/${id}/versions/${version}/transition`,
+        apiPath`${ws}/external_tools/${id}/versions/${version}/transition`,
         { method: 'POST', body: transitionBody(to, options) },
       ),
     restoreExternalToolVersion: (id, version) =>
-      request<ExternalTool>(token, `${ws}/external_tools/${id}/versions/${version}/restore`, {
+      request<ExternalTool>(token, apiPath`${ws}/external_tools/${id}/versions/${version}/restore`, {
         method: 'POST',
       }),
     provenanceExternalToolVersion: (id, version) =>
       request<ProvenanceEntry[]>(
         token,
-        `${ws}/external_tools/${id}/versions/${version}/provenance`,
+        apiPath`${ws}/external_tools/${id}/versions/${version}/provenance`,
       ),
     deleteExternalTool: (id) =>
-      request<void>(token, `${ws}/external_tools/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/external_tools/${id}`, { method: 'DELETE' }),
     exportExternalTool: (id, format) => exportEntity(token, ws, 'external_tools', id, format),
     listPlaybookComposes: (id) =>
-      request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`),
+      request<Playbook[]>(token, apiPath`${ws}/playbooks/${id}/composes`),
     setPlaybookComposes: (id, childIds) =>
-      request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`, {
+      request<Playbook[]>(token, apiPath`${ws}/playbooks/${id}/composes`, {
         method: 'PUT',
         body: JSON.stringify({ child_ids: childIds }),
       }),
     listPlaybookComposedBy: (id) =>
-      request<PlaybookRef[]>(token, `${ws}/playbooks/${id}/composed_by`),
-    listResourceTags: () => request<string[]>(token, `${ws}/resources/tags`),
+      request<PlaybookRef[]>(token, apiPath`${ws}/playbooks/${id}/composed_by`),
+    listResourceTags: () => request<string[]>(token, apiPath`${ws}/resources/tags`),
     listResourcesByTag: (tag) => {
       const params = new URLSearchParams({ tag })
-      return request<Resource[]>(token, `${ws}/resources?${params.toString()}`)
+      return request<Resource[]>(token, withQuery(apiPath`${ws}/resources`, params))
     },
-    listMembers: () => request<Member[]>(token, `${ws}/members`),
+    listMembers: () => request<Member[]>(token, apiPath`${ws}/members`),
     updateMemberRole: (userId, input) =>
-      request<Member>(token, `${ws}/members/${userId}`, {
+      request<Member>(token, apiPath`${ws}/members/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     removeMember: (userId) =>
-      request<void>(token, `${ws}/members/${userId}`, { method: 'DELETE' }),
-    listInvitations: () => request<Invitation[]>(token, `${ws}/invitations`),
+      request<void>(token, apiPath`${ws}/members/${userId}`, { method: 'DELETE' }),
+    listInvitations: () => request<Invitation[]>(token, apiPath`${ws}/invitations`),
     createInvitation: (input) =>
-      request<Invitation>(token, `${ws}/invitations`, {
+      request<Invitation>(token, apiPath`${ws}/invitations`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     revokeInvitation: (id) =>
-      request<void>(token, `${ws}/invitations/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/invitations/${id}`, { method: 'DELETE' }),
     createOrganization: (input) =>
-      request<Organization>(token, `/v1/organizations`, {
+      request<Organization>(token, apiPath`/v1/organizations`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     listOrgWorkspaces: (orgId) =>
-      request<Workspace[]>(token, `/v1/organizations/${orgId}/workspaces`),
+      request<Workspace[]>(token, apiPath`/v1/organizations/${orgId}/workspaces`),
     createWorkspace: (orgId, input) =>
-      request<Workspace>(token, `/v1/organizations/${orgId}/workspaces`, {
+      request<Workspace>(token, apiPath`/v1/organizations/${orgId}/workspaces`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     renameWorkspace: (workspaceId, input) =>
-      request<Workspace>(token, `/v1/workspaces/${workspaceId}`, {
+      request<Workspace>(token, apiPath`/v1/workspaces/${workspaceId}`, {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
     deleteWorkspace: (workspaceId) =>
-      request<void>(token, `/v1/workspaces/${workspaceId}`, { method: 'DELETE' }),
-    deleteAccount: () => request<AccountDeletion>(token, `/v1/me`, { method: 'DELETE' }),
+      request<void>(token, apiPath`/v1/workspaces/${workspaceId}`, { method: 'DELETE' }),
+    deleteAccount: () => request<AccountDeletion>(token, apiPath`/v1/me`, { method: 'DELETE' }),
     deleteOrganization: (orgId) =>
-      request<OrganizationDeletion>(token, `/v1/organizations/${orgId}`, { method: 'DELETE' }),
-    exportMyData: () => request<GdprExport>(token, `/v1/gdpr/export`),
+      request<OrganizationDeletion>(token, apiPath`/v1/organizations/${orgId}`, { method: 'DELETE' }),
+    exportMyData: () => request<GdprExport>(token, apiPath`/v1/gdpr/export`),
     listSystemPromptTemplates: (filters) => {
       const params = new URLSearchParams()
       if (filters?.locale) params.set('locale', filters.locale)
-      const query = params.toString()
       return request<SystemPromptTemplate[]>(
         token,
-        `${ws}/system-prompts${query ? `?${query}` : ''}`,
+        withQuery(apiPath`${ws}/system-prompts`, params),
       )
     },
     getSystemPromptTemplate: (id) =>
-      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}`),
+      request<SystemPromptTemplate>(token, apiPath`${ws}/system-prompts/${id}`),
     createSystemPromptTemplate: (input) =>
-      request<SystemPromptTemplate>(token, `${ws}/system-prompts`, {
+      request<SystemPromptTemplate>(token, apiPath`${ws}/system-prompts`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateSystemPromptTemplate: (id, input) =>
-      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}`, {
+      request<SystemPromptTemplate>(token, apiPath`${ws}/system-prompts/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     listSystemPromptTemplateVersions: (id) =>
       request<SystemPromptTemplateVersion[]>(
         token,
-        `${ws}/system-prompts/${id}/versions`,
+        apiPath`${ws}/system-prompts/${id}/versions`,
       ),
     transitionSystemPromptTemplateVersion: (id, version, to, options) =>
       request<SystemPromptTemplateVersion>(
         token,
-        `${ws}/system-prompts/${id}/versions/${version}/transition`,
+        apiPath`${ws}/system-prompts/${id}/versions/${version}/transition`,
         { method: 'POST', body: transitionBody(to, options) },
       ),
     restorePersonaVersion: (id, version) =>
-      request<Persona>(token, `${ws}/personas/${id}/versions/${version}/restore`, {
+      request<Persona>(token, apiPath`${ws}/personas/${id}/versions/${version}/restore`, {
         method: 'POST',
       }),
     diffPersonaVersion: (id, version, against = 'active') =>
       request<VersionDiff>(
         token,
-        `${ws}/personas/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+        withQuery(apiPath`${ws}/personas/${id}/versions/${version}/diff`, { against }),
       ),
     provenancePersonaVersion: (id, version) =>
       request<ProvenanceEntry[]>(
         token,
-        `${ws}/personas/${id}/versions/${version}/provenance`,
+        apiPath`${ws}/personas/${id}/versions/${version}/provenance`,
       ),
     restorePlaybookVersion: (id, version) =>
-      request<Playbook>(token, `${ws}/playbooks/${id}/versions/${version}/restore`, {
+      request<Playbook>(token, apiPath`${ws}/playbooks/${id}/versions/${version}/restore`, {
         method: 'POST',
       }),
     diffPlaybookVersion: (id, version, against = 'active') =>
       request<VersionDiff>(
         token,
-        `${ws}/playbooks/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+        withQuery(apiPath`${ws}/playbooks/${id}/versions/${version}/diff`, { against }),
       ),
     provenancePlaybookVersion: (id, version) =>
       request<ProvenanceEntry[]>(
         token,
-        `${ws}/playbooks/${id}/versions/${version}/provenance`,
+        apiPath`${ws}/playbooks/${id}/versions/${version}/provenance`,
       ),
     restoreResourceVersion: (id, version) =>
-      request<Resource>(token, `${ws}/resources/${id}/versions/${version}/restore`, {
+      request<Resource>(token, apiPath`${ws}/resources/${id}/versions/${version}/restore`, {
         method: 'POST',
       }),
     diffResourceVersion: (id, version, against = 'active') =>
       request<VersionDiff>(
         token,
-        `${ws}/resources/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+        withQuery(apiPath`${ws}/resources/${id}/versions/${version}/diff`, { against }),
       ),
     provenanceResourceVersion: (id, version) =>
       request<ProvenanceEntry[]>(
         token,
-        `${ws}/resources/${id}/versions/${version}/provenance`,
+        apiPath`${ws}/resources/${id}/versions/${version}/provenance`,
       ),
     restoreSystemPromptTemplateVersion: (id, version) =>
       request<SystemPromptTemplate>(
         token,
-        `${ws}/system-prompts/${id}/versions/${version}/restore`,
+        apiPath`${ws}/system-prompts/${id}/versions/${version}/restore`,
         { method: 'POST' },
       ),
     diffSystemPromptTemplateVersion: (id, version, against = 'active') =>
       request<VersionDiff>(
         token,
-        `${ws}/system-prompts/${id}/versions/${version}/diff` +
-          `?against=${encodeURIComponent(against)}`,
+        withQuery(apiPath`${ws}/system-prompts/${id}/versions/${version}/diff`, { against }),
       ),
     provenanceSystemPromptTemplateVersion: (id, version) =>
       request<ProvenanceEntry[]>(
         token,
-        `${ws}/system-prompts/${id}/versions/${version}/provenance`,
+        apiPath`${ws}/system-prompts/${id}/versions/${version}/provenance`,
       ),
-    listAgents: () => request<Agent[]>(token, `${ws}/agents`),
-    getAgent: (id) => request<Agent>(token, `${ws}/agents/${id}`),
+    listAgents: () => request<Agent[]>(token, apiPath`${ws}/agents`),
+    getAgent: (id) => request<Agent>(token, apiPath`${ws}/agents/${id}`),
     createAgent: (input) =>
-      request<Agent>(token, `${ws}/agents`, {
+      request<Agent>(token, apiPath`${ws}/agents`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateAgent: (id, input) =>
-      request<Agent>(token, `${ws}/agents/${id}`, {
+      request<Agent>(token, apiPath`${ws}/agents/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     deleteAgent: (id) =>
-      request<void>(token, `${ws}/agents/${id}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/agents/${id}`, { method: 'DELETE' }),
     favoriteAgent: (id) =>
-      request<void>(token, `${ws}/agents/${id}/favorite`, { method: 'PUT' }),
+      request<void>(token, apiPath`${ws}/agents/${id}/favorite`, { method: 'PUT' }),
     unfavoriteAgent: (id) =>
-      request<void>(token, `${ws}/agents/${id}/favorite`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/agents/${id}/favorite`, { method: 'DELETE' }),
     copyAgent: (id, input) =>
-      request<Agent>(token, `${ws}/agents/${id}/copy`, {
+      request<Agent>(token, apiPath`${ws}/agents/${id}/copy`, {
         method: 'POST',
         body: JSON.stringify(input ?? {}),
       }),
-    listAgentMemories: (agentId, status) => {
-      const query = status !== undefined ? `?status=${status}` : ''
-      return request<MemoryRead[]>(token, `${ws}/agents/${agentId}/memories${query}`)
-    },
+    listAgentMemories: (agentId, status) =>
+      request<MemoryRead[]>(
+        token,
+        withQuery(
+          apiPath`${ws}/agents/${agentId}/memories`,
+          status !== undefined ? { status } : {},
+        ),
+      ),
     listTestCases: (filters) => {
       const params = new URLSearchParams()
       if (filters?.agent_id) params.set('agent_id', filters.agent_id)
       if (filters?.entity_type) params.set('entity_type', filters.entity_type)
       if (filters?.entity_id) params.set('entity_id', filters.entity_id)
       if (filters?.status) params.set('status', filters.status)
-      const query = params.toString()
-      return request<TestCaseRead[]>(token, `${ws}/test-cases${query ? `?${query}` : ''}`)
+      return request<TestCaseRead[]>(token, withQuery(apiPath`${ws}/test-cases`, params))
     },
-    getTestCase: (caseId) => request<TestCaseRead>(token, `${ws}/test-cases/${caseId}`),
+    getTestCase: (caseId) => request<TestCaseRead>(token, apiPath`${ws}/test-cases/${caseId}`),
     createTestCase: (input) =>
-      request<TestCaseRead>(token, `${ws}/test-cases`, {
+      request<TestCaseRead>(token, apiPath`${ws}/test-cases`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     retireTestCase: (caseId) =>
-      request<TestCaseRead>(token, `${ws}/test-cases/${caseId}/retire`, { method: 'POST' }),
+      request<TestCaseRead>(token, apiPath`${ws}/test-cases/${caseId}/retire`, { method: 'POST' }),
     getTestReport: (entityType, versionId) =>
-      request<TestReport>(token, `${ws}/versions/${entityType}/${versionId}/test-report`),
+      request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>
-      request<TestRunRead[]>(token, `${ws}/test-runs`, {
+      request<TestRunRead[]>(token, apiPath`${ws}/test-runs`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     triageAgentMemory: (agentId, memoryId, input) =>
-      request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}/triage`, {
+      request<MemoryRead>(token, apiPath`${ws}/agents/${agentId}/memories/${memoryId}/triage`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateAgentMemory: (agentId, memoryId, input) =>
-      request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}`, {
+      request<MemoryRead>(token, apiPath`${ws}/agents/${agentId}/memories/${memoryId}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     deleteAgentMemory: (agentId, memoryId) =>
-      request<void>(token, `${ws}/agents/${agentId}/memories/${memoryId}`, {
+      request<void>(token, apiPath`${ws}/agents/${agentId}/memories/${memoryId}`, {
         method: 'DELETE',
       }),
     deleteAllAgentMemories: (agentId) =>
-      request<void>(token, `${ws}/agents/${agentId}/memories`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/agents/${agentId}/memories`, { method: 'DELETE' }),
     confirmMemory: (agentId, memoryId) =>
-      request<MemoryRead>(
-        token,
-        agentId === null
-          ? `${ws}/me/memories/${memoryId}/confirm`
-          : `${ws}/agents/${agentId}/memories/${memoryId}/confirm`,
-        { method: 'POST' },
-      ),
+      request<MemoryRead>(token, apiPath`${memoryBase(agentId)}/${memoryId}/confirm`, {
+        method: 'POST',
+      }),
     reactivateMemory: (agentId, memoryId) =>
-      request<MemoryRead>(
-        token,
-        agentId === null
-          ? `${ws}/me/memories/${memoryId}/reactivate`
-          : `${ws}/agents/${agentId}/memories/${memoryId}/reactivate`,
-        { method: 'POST' },
-      ),
+      request<MemoryRead>(token, apiPath`${memoryBase(agentId)}/${memoryId}/reactivate`, {
+        method: 'POST',
+      }),
     getMemoryHistory: (agentId, memoryId) =>
-      request<MemoryEventRead[]>(
-        token,
-        agentId === null
-          ? `${ws}/me/memories/${memoryId}/history`
-          : `${ws}/agents/${agentId}/memories/${memoryId}/history`,
-      ),
+      request<MemoryEventRead[]>(token, apiPath`${memoryBase(agentId)}/${memoryId}/history`),
     rollbackMemory: (agentId, memoryId, input) =>
-      request<MemoryRead>(
-        token,
-        agentId === null
-          ? `${ws}/me/memories/${memoryId}/rollback`
-          : `${ws}/agents/${agentId}/memories/${memoryId}/rollback`,
-        { method: 'POST', body: JSON.stringify(input) },
-      ),
-    getMemoryGuard: () => request<MemoryGuardConfig>(token, `${ws}/memory-guard`),
+      request<MemoryRead>(token, apiPath`${memoryBase(agentId)}/${memoryId}/rollback`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    getMemoryGuard: () => request<MemoryGuardConfig>(token, apiPath`${ws}/memory-guard`),
     updateMemoryGuard: (config) =>
-      request<MemoryGuardConfig>(token, `${ws}/memory-guard`, {
+      request<MemoryGuardConfig>(token, apiPath`${ws}/memory-guard`, {
         method: 'PUT',
         body: JSON.stringify(config),
       }),
     getMemoryAutoPolicy: () =>
-      request<MemoryAutoPolicyRead>(token, `${ws}/memory-auto-policy`),
+      request<MemoryAutoPolicyRead>(token, apiPath`${ws}/memory-auto-policy`),
     updateMemoryAutoPolicy: (policy) =>
-      request<MemoryAutoPolicyRead>(token, `${ws}/memory-auto-policy`, {
+      request<MemoryAutoPolicyRead>(token, apiPath`${ws}/memory-auto-policy`, {
         method: 'PUT',
         body: JSON.stringify(policy),
       }),
@@ -1295,31 +1299,29 @@ export function createApi(token: string, workspaceId: string): Api {
       if (options?.cursor) params.set('cursor', options.cursor)
       if (options?.limit !== undefined) params.set('limit', String(options.limit))
       if (options?.sort) params.set('sort', options.sort)
-      const query = params.toString()
-      return request<MemoryPage>(token, `${ws}/memories${query ? `?${query}` : ''}`)
+      return request<MemoryPage>(token, withQuery(apiPath`${ws}/memories`, params))
     },
-    // `memoryId` kommt roh aus `?entry=` der URL: kodieren, damit `../x` den
-    // Pfad nicht verlaesst (Client-Side Path Traversal).
+    // `memoryId` kommt roh aus `?entry=` der URL — `apiPath` setzt ihn als ein
+    // Segment ein bzw. lehnt `../x` ab (Client-Side Path Traversal).
     getMemory: (memoryId) =>
-      request<MemoryRead>(token, `${ws}/memories/${encodeURIComponent(memoryId)}`),
+      request<MemoryRead>(token, apiPath`${ws}/memories/${memoryId}`),
     countMemories: (filter, groupBy) => {
       const params = memoryFilterParams(filter)
       for (const group of groupBy ?? []) params.append('group_by', group)
-      const query = params.toString()
-      return request<MemoryCounts>(token, `${ws}/memories/counts${query ? `?${query}` : ''}`)
+      return request<MemoryCounts>(token, withQuery(apiPath`${ws}/memories/counts`, params))
     },
     batchMemories: (input) =>
-      request<MemoryBatchResult>(token, `${ws}/memories/batch`, {
+      request<MemoryBatchResult>(token, apiPath`${ws}/memories/batch`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     previewRevokeAuto: (input) =>
-      request<MemoryRevokeAutoPreview>(token, `${ws}/memories/revoke-auto`, {
+      request<MemoryRevokeAutoPreview>(token, apiPath`${ws}/memories/revoke-auto`, {
         method: 'POST',
         body: JSON.stringify({ ...input, dry_run: true }),
       }),
     revokeAuto: (input) =>
-      request<MemoryRevokeAutoResult>(token, `${ws}/memories/revoke-auto`, {
+      request<MemoryRevokeAutoResult>(token, apiPath`${ws}/memories/revoke-auto`, {
         method: 'POST',
         body: JSON.stringify({ ...input, dry_run: false }),
       }),
@@ -1329,120 +1331,118 @@ export function createApi(token: string, workspaceId: string): Api {
       if (options?.q) params.set('q', options.q)
       if (options?.cursor) params.set('cursor', options.cursor)
       if (options?.limit !== undefined) params.set('limit', String(options.limit))
-      const query = params.toString()
-      return request<MemoryPage>(token, `${ws}/me/memories${query ? `?${query}` : ''}`)
+      return request<MemoryPage>(token, withQuery(apiPath`${ws}/me/memories`, params))
     },
     triageMyMemory: (memoryId, input) =>
-      request<MemoryRead>(token, `${ws}/me/memories/${memoryId}/triage`, {
+      request<MemoryRead>(token, apiPath`${ws}/me/memories/${memoryId}/triage`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updateMyMemory: (memoryId, input) =>
-      request<MemoryRead>(token, `${ws}/me/memories/${memoryId}`, {
+      request<MemoryRead>(token, apiPath`${ws}/me/memories/${memoryId}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     deleteMyMemory: (memoryId) =>
-      request<void>(token, `${ws}/me/memories/${memoryId}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/me/memories/${memoryId}`, { method: 'DELETE' }),
     listMemoryProposals: (filter) => {
       const params = new URLSearchParams()
       if (filter?.status) params.set('status', filter.status)
       if (filter?.agent_id) params.set('agent_id', filter.agent_id)
-      const query = params.toString()
       return request<MemoryProposalRead[]>(
         token,
-        `${ws}/memory-proposals${query ? `?${query}` : ''}`,
+        withQuery(apiPath`${ws}/memory-proposals`, params),
       )
     },
     decideMemoryProposal: (proposalId, input) =>
-      request<MemoryProposalRead>(token, `${ws}/memory-proposals/${proposalId}/decide`, {
+      request<MemoryProposalRead>(token, apiPath`${ws}/memory-proposals/${proposalId}/decide`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     duplicatePersona: (id) =>
-      request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),
+      request<Persona>(token, apiPath`${ws}/personas/${id}/duplicate`, { method: 'POST' }),
     duplicateResource: (id) =>
-      request<Resource>(token, `${ws}/resources/${id}/duplicate`, { method: 'POST' }),
+      request<Resource>(token, apiPath`${ws}/resources/${id}/duplicate`, { method: 'POST' }),
     duplicateSystemPrompt: (id) =>
-      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}/duplicate`, {
+      request<SystemPromptTemplate>(token, apiPath`${ws}/system-prompts/${id}/duplicate`, {
         method: 'POST',
       }),
-    renderAgentPrompt: (id, format) => {
-      const query = format !== undefined ? `?format=${format}` : ''
-      return request<AgentRenderResult>(
+    renderAgentPrompt: (id, format) =>
+      request<AgentRenderResult>(
         token,
-        `${ws}/agents/${id}/render${query}`,
-      )
-    },
+        withQuery(apiPath`${ws}/agents/${id}/render`, format !== undefined ? { format } : {}),
+      ),
     previewPlaceholder: (input) => {
       const params = new URLSearchParams({ kind: input.kind, target_id: input.target_id })
       if (input.persona_id !== undefined) params.set('persona_id', input.persona_id)
-      return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
+      return request<PlaceholderPreview>(
+        token,
+        withQuery(apiPath`${ws}/placeholders/preview`, params),
+      )
     },
-    listWorkAreas: () => request<WorkArea[]>(token, `${ws}/work-areas`),
+    listWorkAreas: () => request<WorkArea[]>(token, apiPath`${ws}/work-areas`),
     createWorkArea: (input) =>
-      request<WorkArea>(token, `${ws}/work-areas`, {
+      request<WorkArea>(token, apiPath`${ws}/work-areas`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     listWorkAreaGrants: (areaId) =>
-      request<WorkAreaGrant[]>(token, `${ws}/work-areas/${areaId}/grants`),
+      request<WorkAreaGrant[]>(token, apiPath`${ws}/work-areas/${areaId}/grants`),
     setWorkAreaGrant: (areaId, agentId, input) =>
-      request<WorkAreaGrant>(token, `${ws}/work-areas/${areaId}/grants/${agentId}`, {
+      request<WorkAreaGrant>(token, apiPath`${ws}/work-areas/${areaId}/grants/${agentId}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     deleteWorkAreaGrant: (areaId, agentId) =>
-      request<void>(token, `${ws}/work-areas/${areaId}/grants/${agentId}`, {
+      request<void>(token, apiPath`${ws}/work-areas/${areaId}/grants/${agentId}`, {
         method: 'DELETE',
       }),
     listWaArtifacts: (areaId) =>
-      request<WaArtifact[]>(token, `${ws}/work-areas/${areaId}/artifacts`),
+      request<WaArtifact[]>(token, apiPath`${ws}/work-areas/${areaId}/artifacts`),
     readWaArtifact: (artifactId, anchor) => {
       const params = new URLSearchParams()
       if (anchor !== undefined && anchor !== '') params.set('anchor', anchor)
-      const query = params.toString()
       return request<ArtifactMarkdown>(
         token,
-        `${ws}/wa-artifacts/${artifactId}${query ? `?${query}` : ''}`,
+        withQuery(apiPath`${ws}/wa-artifacts/${artifactId}`, params),
       )
     },
     deleteWaArtifact: (artifactId) =>
-      request<void>(token, `${ws}/wa-artifacts/${artifactId}`, { method: 'DELETE' }),
+      request<void>(token, apiPath`${ws}/wa-artifacts/${artifactId}`, { method: 'DELETE' }),
     exportWaArtifact: (artifactId, format) =>
-      requestBlob(token, `${ws}/wa-artifacts/${artifactId}/export?format=${format}`),
-    listWaTables: (areaId) => request<WaTable[]>(token, `${ws}/work-areas/${areaId}/tables`),
+      requestBlob(token, withQuery(apiPath`${ws}/wa-artifacts/${artifactId}/export`, { format })),
+    listWaTables: (areaId) => request<WaTable[]>(token, apiPath`${ws}/work-areas/${areaId}/tables`),
     describeWaTable: (tableId) =>
-      request<TableDescription>(token, `${ws}/wa-tables/${tableId}`),
+      request<TableDescription>(token, apiPath`${ws}/wa-tables/${tableId}`),
     queryWaTable: (tableId, input) =>
-      request<TableQueryResult>(token, `${ws}/wa-tables/${tableId}/query`, {
+      request<TableQueryResult>(token, apiPath`${ws}/wa-tables/${tableId}/query`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     exportWaTable: (tableId, format) =>
-      requestBlob(token, `${ws}/wa-tables/${tableId}/export?format=${format}`),
+      requestBlob(token, withQuery(apiPath`${ws}/wa-tables/${tableId}/export`, { format })),
     searchWorkArea: (filters) => {
       const params = new URLSearchParams({ q: filters.q })
       if (filters.area_id) params.set('area_id', filters.area_id)
       if (filters.limit !== undefined) params.set('limit', String(filters.limit))
-      return request<WorkAreaSearchHit[]>(token, `${ws}/workarea-search?${params.toString()}`)
+      return request<WorkAreaSearchHit[]>(token, withQuery(apiPath`${ws}/workarea-search`, params))
     },
     searchKb: (filters) => {
       const params = new URLSearchParams({ q: filters.q })
       if (filters.limit !== undefined) params.set('limit', String(filters.limit))
-      return request<KbSearchHit[]>(token, `${ws}/kb-search?${params.toString()}`)
+      return request<KbSearchHit[]>(token, withQuery(apiPath`${ws}/kb-search`, params))
     },
-    getKbNode: (nodeId) => request<KbNode>(token, `${ws}/kb/nodes/${nodeId}`),
+    getKbNode: (nodeId) => request<KbNode>(token, apiPath`${ws}/kb/nodes/${nodeId}`),
     kbNeighbors: (filters) => {
       const params = new URLSearchParams({ anchor: filters.anchor })
       // Query-Alias ist `type` (der Python-Parameter heisst `edge_type`).
       if (filters.type !== undefined) params.set('type', filters.type)
       if (filters.depth !== undefined) params.set('depth', String(filters.depth))
-      return request<KbNeighbor[]>(token, `${ws}/kb/neighbors?${params.toString()}`)
+      return request<KbNeighbor[]>(token, withQuery(apiPath`${ws}/kb/neighbors`, params))
     },
-    getEntitlement: () => request<EntitlementInfo>(token, `${ws}/billing/entitlement`),
+    getEntitlement: () => request<EntitlementInfo>(token, apiPath`${ws}/billing/entitlement`),
     createCheckout: (input) =>
-      request<CheckoutResult>(token, `${ws}/billing/checkout`, {
+      request<CheckoutResult>(token, apiPath`${ws}/billing/checkout`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
