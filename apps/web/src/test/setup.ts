@@ -1,7 +1,22 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach, beforeEach, expect } from 'vitest'
 import * as axeMatchers from 'vitest-axe/matchers'
+
+/**
+ * Wartezeit von `findBy*`/`waitFor` zentral auf 3 s statt 1 s (Testing-Library-Default).
+ *
+ * Unter lokaler Fremdlast (parallele Worktrees, Load 10–15) brauchen
+ * jsdom-Render und Mock-Antwort zusammen mehr als 1000 ms. Vier Einzelfaelle
+ * (#814, #817, #818, ResourceDetailPage S11) rissen genau diese Grenze, die
+ * Assertion selbst war nie falsch; die CI war nicht betroffen.
+ *
+ * Der Wert wirkt nur auf Warte-Schritte: ein gruener Test wird nicht
+ * langsamer, ein roter wartet hoechstens 2 s laenger. 3 s passen in das
+ * 5-s-Testtimeout des Projekts `unit`. Gezielt gesetzte `{ timeout: … }`
+ * einzelner Tests haben Vorrang und bleiben. Gehalten von `setup.test.ts`.
+ */
+configure({ asyncUtilTimeout: 3000 })
 
 // i18n-Singleton initialisieren und auf Deutsch fixieren. Der Sprachdetektor
 // wuerde in JSDOM sonst `navigator.language` (en-US) ziehen und die UI auf
