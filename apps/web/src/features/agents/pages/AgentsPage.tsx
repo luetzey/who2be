@@ -36,6 +36,7 @@ import { useAgents } from '@/hooks/useAgents'
 import { notify } from '@/lib/feedback'
 
 import { CopyPromptButton } from '../components/CopyPromptButton'
+import { usePendingAgentMemories } from '../hooks/usePendingAgentMemories'
 
 // Agent-Status-Modell (enabled/disabled + activatable) auf disjunkte Listen-
 // Kategorien mappen. Unvollstaendig hat Vorrang, damit sich Filter-Zaehler nicht
@@ -128,6 +129,9 @@ export function AgentsPage() {
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  // Offene Gedaechtnis-Freigaben je Agent aus `GET /memories/counts`
+  // (ADR-0053 6.4.1); fuer viewer leer — kein Request, kein Pill.
+  const pendingMemories = usePendingAgentMemories()
   const [creating, setCreating] = useState(false)
   const [status, setStatus] = useState<AgentFilter>('all')
   const [query, setQuery] = useState('')
@@ -404,7 +408,7 @@ export function AgentsPage() {
                                 <MetaPill icon={GitBranch} iconTone="playbook">
                                   {t('card.playbookCount', { count: agent.playbook_count ?? 0 })}
                                 </MetaPill>
-                                {(agent.pending_memory_count ?? 0) > 0 ? (
+                                {(pendingMemories[agent.id] ?? 0) > 0 ? (
                                   // Aufmerksamkeits-Pill (ADR-0044): liegt via z-10
                                   // ueber dem Stretched-Link der Karte und springt
                                   // direkt in die Gedaechtnis-Sektion des Agenten.
@@ -412,7 +416,7 @@ export function AgentsPage() {
                                     to={wsPath(`/agents/${agent.id}#memory`)}
                                     className="relative z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     aria-label={t('card.pendingMemoriesAria', {
-                                      count: agent.pending_memory_count,
+                                      count: pendingMemories[agent.id],
                                       name: agent.name,
                                     })}
                                     data-testid="pending-memories-pill"
@@ -423,7 +427,7 @@ export function AgentsPage() {
                                       className="transition-colors duration-[var(--duration-fast)] hover:bg-brand/20"
                                     >
                                       {t('card.pendingMemories', {
-                                        count: agent.pending_memory_count,
+                                        count: pendingMemories[agent.id],
                                       })}
                                     </MetaPill>
                                   </Link>

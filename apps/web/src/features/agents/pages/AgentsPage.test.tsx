@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_TOOL_POLICY, type Agent, type Me } from '@/api/types'
+import {
+  DEFAULT_TOOL_POLICY,
+  type Agent,
+  type Me,
+  type MemoryCounts,
+  type WorkspaceRole,
+} from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
@@ -43,10 +49,50 @@ function agent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-function renderPage() {
+function meWithRole(role: WorkspaceRole): Me {
+  return {
+    ...me,
+    organizations: [
+      {
+        id: 'org-1',
+        name: 'Org',
+        slug: 'org',
+        kind: 'company',
+        workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role }],
+      },
+    ],
+  }
+}
+
+// Antwortet je URL: `/memories/counts` liefert die Zaehler, alles andere die
+// Agentenliste. So laesst sich pruefen, ob ein counts-Request rausging.
+function stubFetch(list: Agent[], counts: MemoryCounts = { total: 0 }) {
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input)
+    const body = url.includes('/memories/counts') ? counts : list
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function countsCalls(fetchMock: ReturnType<typeof stubFetch>): string[] {
+  return fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((url) => url.includes('/memories/counts'))
+}
+
+function renderPage(currentMe: Me = me) {
   return render(
     <SessionContext.Provider
-      value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{
+        session,
+        me: currentMe,
+        sessionLoaded: true,
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        refreshMe: vi.fn(),
+      }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/agents']}>
@@ -129,28 +175,50 @@ describe('AgentsPage', () => {
     expect(within(huelleCard).getByText('Persona fehlt')).toBeInTheDocument()
   })
 
-  it('zeigt den klickbaren Gedächtnis-Pill nur bei offenen Vorschlägen', async () => {
-    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 3 })
-    const without = agent({ id: 'a2', name: 'Ohne Memories', pending_memory_count: 0 })
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify([withPending, without]), { status: 200 }),
-        ),
-    )
+  it('editor: Gedächtnis-Pill zählt aus /memories/counts, Zahl 0 ergibt keinen Pill', async () => {
+    // `pending_memory_count` am Agent wird bewusst ignoriert (ADR-0053 6.4.1):
+    // die Zahl kommt allein aus dem counts-Request.
+    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 99 })
+    const zero = agent({ id: 'a2', name: 'Null Bot', pending_memory_count: 5 })
+    const absent = agent({ id: 'a3', name: 'Ohne Memories' })
+    const fetchMock = stubFetch([withPending, zero, absent], {
+      total: 3,
+      groups: { agent: { a1: 3, a2: 0 } },
+    })
 
-    renderPage()
+    renderPage(meWithRole('editor'))
     await screen.findByText('Carla Bot')
 
     // Pill traegt Zaehler + Deep-Link in die Gedaechtnis-Sektion des Agenten.
-    const pill = screen.getByTestId('pending-memories-pill')
+    const pill = await screen.findByTestId('pending-memories-pill')
     expect(pill).toHaveTextContent('3 Gedächtniseinträge zur Freigabe')
     expect(pill).toHaveAttribute('href', '/w/ws-1/agents/a1#memory')
-    // Ohne offene Vorschlaege kein Pill.
-    const otherCard = screen.getByText('Ohne Memories').closest('article') as HTMLElement
-    expect(within(otherCard).queryByTestId('pending-memories-pill')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('pending-memories-pill')).toHaveLength(1)
+    // Zahl 0 und fehlender Eintrag: kein Pill.
+    for (const name of ['Null Bot', 'Ohne Memories']) {
+      const card = screen.getByText(name).closest('article') as HTMLElement
+      expect(within(card).queryByTestId('pending-memories-pill')).not.toBeInTheDocument()
+    }
+
+    // Genau ein Request fuer die ganze Liste, Filter wie vorgegeben, kein kind.
+    const calls = countsCalls(fetchMock)
+    expect(calls).toHaveLength(1)
+    const params = new URL(calls[0], 'http://x').searchParams
+    expect(params.get('status')).toBe('pending')
+    expect(params.get('scope')).toBe('agent')
+    expect(params.getAll('group_by')).toEqual(['agent'])
+    expect(params.has('kind')).toBe(false)
+  })
+
+  it('viewer: kein Gedächtnis-Pill und kein counts-Request', async () => {
+    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 3 })
+    const fetchMock = stubFetch([withPending], { total: 3, groups: { agent: { a1: 3 } } })
+
+    renderPage(meWithRole('viewer'))
+    await screen.findByText('Carla Bot')
+
+    expect(screen.queryByTestId('pending-memories-pill')).not.toBeInTheDocument()
+    expect(countsCalls(fetchMock)).toHaveLength(0)
   })
 
   it('filtert nach Status-Chip und Suche', async () => {
