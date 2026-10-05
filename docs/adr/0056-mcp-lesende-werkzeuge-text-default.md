@@ -136,13 +136,15 @@ Inhalt so:
   (`body_rendered` bzw. `system_prompt_rendered`, Platzhalter aufgelöst).
 - Resource, System-Prompt, externes Tool, Versions-Snapshots, Modus-Felder:
   über die kanonische Klartext-Serialisierung, die schon Single Source für
-  `before_text`/`after_text` ist
-  (`apps/api/src/who2be_api/services/content_text.py#blocknote_body_text`,
-  `apps/api/src/who2be_api/services/placeholders/_core.py#blocks_plain_text`).
-  Platzhalter erscheinen dort als stabile `{{kind:target_id}}`-Tokens, ohne
+  `before_text`/`after_text` ist. Sie lag bei der Entscheidung in der API
+  (`services/content_text.py`, `services/placeholders/_core.py`). Platzhalter
+  erscheinen dort als stabile `{{kind:target_id}}`-Tokens, ohne
   Datenbankzugriff. Der MCP-Prozess hat keinen DB-Zugriff und importiert
   `who2be_api` nicht. Deshalb ziehen die reinen Funktionen (ohne asyncpg) nach
-  `packages/models` um, und die API re-exportiert sie unter den alten Namen.
+  `packages/models`
+  (`packages/models/src/who2be_models/blocknote_text.py#blocknote_body_text`,
+  `packages/models/src/who2be_models/blocknote_text.py#blocks_plain_text`),
+  und die API re-exportiert sie unter den alten Namen.
   So bleibt es eine Quelle; eine Kopie im MCP wäre eine zweite.
 - `diff_versions`: `before_text`/`after_text` bleiben, `changes` behält `path`
   und `op`, die Rohwerte `before`/`after` entfallen.
