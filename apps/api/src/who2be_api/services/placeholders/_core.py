@@ -12,7 +12,6 @@ Tests es an genau einer Stelle monkeypatchen koennen.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -21,6 +20,14 @@ import asyncpg
 from pydantic import BaseModel
 
 from who2be_models import AgentToolPolicy
+
+# Blocks→Text liegt seit ADR-0056 in `who2be_models.blocknote_text`, weil auch
+# der MCP-Prozess sie braucht. Re-Export unter den alten Namen, damit Resolver
+# und Services unveraendert importieren; es bleibt eine Quelle.
+from who2be_models.blocknote_text import InlineTextFn as InlineTextFn
+from who2be_models.blocknote_text import block_plain_text as block_plain_text
+from who2be_models.blocknote_text import blocks_plain_text as blocks_plain_text
+from who2be_models.blocknote_text import text_inline_only as text_inline_only
 
 # Skills sind vorlaeufig deaktiviert ("Coming Soon", ADR-0026). Das deskriptive
 # `SkillRef`-Feld wird weder in den Agenten-Briefing-Body (`get_persona` →
@@ -86,66 +93,6 @@ class PlaceholderResolver(Protocol):
         ctx: RenderContext,
         db: asyncpg.Connection,
     ) -> ResolveResult: ...
-
-
-# Signatur eines Inline-Renderers: ein Inline-Element-Dict -> Textbeitrag.
-# Default ist `text_inline_only` (nur type='text'); die Diff-Serialisierung
-# (`services/content_text.py`) reicht eine Pill-aware Variante durch.
-InlineTextFn = Callable[[dict[str, object]], str]
-
-
-def text_inline_only(inline: dict[str, object]) -> str:
-    """Default-Inline-Renderer: nur `type='text'`-Inlines, alles andere leer."""
-    if inline.get("type") == "text":
-        return str(inline.get("text", ""))
-    return ""
-
-
-def block_plain_text(block: dict[str, object], inline_text: InlineTextFn = text_inline_only) -> str:
-    """Extrahiert Plain-Text aus einem einzelnen BlockNote-Block-Dict.
-
-    Deckt paragraph/heading/bulletListItem/numberedListItem/checkListItem ab.
-    Nested children werden rekursiv prozessiert. Inline-Content wird ueber
-    `inline_text` gerendert (Default: nur type='text') und konkateniert.
-    """
-    parts: list[str] = []
-    inline_content: list[dict[str, object]] = block.get("content", [])  # type: ignore[assignment]
-    for inline in inline_content:
-        parts.append(inline_text(inline))
-    text = "".join(parts).strip()
-
-    children: list[dict[str, object]] = block.get("children", [])  # type: ignore[assignment]
-    child_texts: list[str] = []
-    for child in children:
-        child_text = block_plain_text(child, inline_text)
-        if child_text:
-            child_texts.append(child_text)
-
-    all_parts: list[str] = []
-    if text:
-        all_parts.append(text)
-    all_parts.extend(child_texts)
-    return "\n".join(all_parts)
-
-
-def blocks_plain_text(raw: object, inline_text: InlineTextFn = text_inline_only) -> str:
-    """Rendert eine BlockNote-Block-Liste als Plain-Text (Single-Source, WP-C).
-
-    Pro Block wird `block_plain_text` angewandt, leere Blocks werden
-    uebersprungen, Ergebnisse mit Doppel-Newline verbunden. Nicht-Listen
-    (z. B. None oder ein Alt-String, der die Koerzion nicht durchlief) liefern
-    einen leeren String — so erzeugt der haeufigste Leerfall keine Zeilen.
-    """
-    if not isinstance(raw, list):
-        return ""
-    block_parts: list[str] = []
-    for block in raw:
-        if not isinstance(block, dict):
-            continue
-        text = block_plain_text(block, inline_text)
-        if text:
-            block_parts.append(text)
-    return "\n\n".join(block_parts).strip()
 
 
 def table_cell(value: str) -> str:

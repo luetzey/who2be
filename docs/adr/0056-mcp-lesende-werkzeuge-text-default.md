@@ -1,8 +1,8 @@
 # ADR-0056 — MCP: lesende Werkzeuge liefern standardmäßig lesbaren Text, Editor-JSON nur auf Wunsch
 
-- Status: **Entwurf.** Die Richtung hat der Owner entschieden (Abschnitt 2).
-  Offen ist eine Weiche zur Form der Antwort (Abschnitt 4, W1). Bis sie
-  entschieden ist, wird nicht gebaut.
+- Status: **Accepted** (2026-10-05). Die Richtung hat der Owner entschieden
+  (Abschnitt 2), die Weiche W1 zur Form der Antwort ist entschieden: Option B
+  (Abschnitt 4).
 - Datum: 2026-10-05
 - Gemessen gegen: `origin/main` @ `676fc7e0`. Code-Aussagen tragen einen
   Symbolanker (Konvention `docs/code-references.md`).
@@ -17,7 +17,7 @@
 1. Kontext und Befund
 2. Entscheidung (Owner-Wortlaut)
 3. Was festgelegt ist
-4. Offene Weiche W1: die Form der Text-Antwort
+4. Weiche W1: die Form der Text-Antwort (entschieden: B)
 5. Abwärtsverhalten und der Schreibpfad
 6. Umsetzung in Paketen
 7. Konsequenzen
@@ -98,7 +98,7 @@ Werkzeug gibt str zurück:  '# Titel\n\nHallo "Welt"'
 
 Das Leeren der Blöcke allein beseitigt also die verschachtelten
 Anführungszeichen, nicht aber `\n` und `\"` im lesbaren Feld selbst. Daraus
-folgt die offene Weiche W1.
+folgt die Weiche W1.
 
 ## 2. Entscheidung (Owner-Wortlaut)
 
@@ -159,7 +159,7 @@ Beschreibung enthält jede `text`-Antwort eine kurze Zeile, dass
 `format="full"` den Editor-Vollstand für `update_*` liefert. Begründung in
 Abschnitt 5.
 
-## 4. Offene Weiche W1: die Form der Text-Antwort
+## 4. Weiche W1: die Form der Text-Antwort (entschieden: B)
 
 Abschnitt 1.3 zeigt: solange die Antwort ein JSON-Objekt ist, bleiben `\n` und
 `\"` im lesbaren Feld. Die Frage ist, ob das reicht.
@@ -196,18 +196,25 @@ der Client, nicht wir. Tut er das, verdoppelt sich die Antwort, und das
 50.000-Zeichen-Budget aus `docs/mcp-payload-budget.md` reißt früher. Belegen
 lässt sich das für Claude Code und Claude.ai von hier aus nicht.
 
-**Empfehlung: B.** Nur B erfüllt den Owner-Wortlaut ohne Rest, und der einzige
-belegte JSON-Parser des `text`-Pfads ist eine Testprobe, die umgestellt wird.
-A wäre ein halber Schritt, der dieselbe Beschwerde wieder auslöst. C hängt an
-Clientverhalten, das wir nicht belegen können.
+**Empfehlung war B.** Nur B erfüllt den Owner-Wortlaut ohne Rest, und der
+einzige belegte JSON-Parser des `text`-Pfads ist eine Testprobe, die
+umgestellt wird. A wäre ein halber Schritt, der dieselbe Beschwerde wieder
+auslöst. C hängt an Clientverhalten, das wir nicht belegen können.
+
+**Entscheidung (2026-10-05): B.** Unter `format="text"` (Default) liefert das
+Werkzeug ein Markdown-Dokument aus Metadaten-Kopf und Inhalt, kein JSON und
+kein Escaping. `format="full"` liefert bitgleich die heutige Antwort.
+Gebrochen wird nur, wer `format="text"` als JSON parst; belegt ist das allein
+für `apps/web/e2e/review-gate.spec.ts`, die in Paket 3 auf `full` umgestellt
+wird. Die Darstellung je Werkzeug liegt in
+`apps/mcp/src/who2be_mcp/text_view.py` (Paket 1).
 
 ## 5. Abwärtsverhalten und der Schreibpfad
 
 **Aufrufer ohne `format`** bekommen nach der Umstellung `text` statt `full`.
 Das ist die Owner-Entscheidung. Explizites `format="full"` und
 `format="outline"` verhalten sich unverändert. Explizites `format="text"`
-liefert unter A dieselbe Form wie heute (ohne die Lücken aus 1.2), unter B
-Markdown.
+liefert künftig Markdown statt eines JSON-Objekts (Entscheidung B).
 
 **Das Risiko liegt beim Schreiben.** Die `update_*`-Werkzeuge haben
 PUT-Semantik: `content` ist der vollständige neue Stand
@@ -245,8 +252,7 @@ ist als Folgekarte vorgemerkt, nicht beschlossen.
 ## 6. Umsetzung in Paketen
 
 Seriell, je Paket höchstens acht Dateien, je Paket ein PR mit
-Changelog-Fragment. Die Dateilisten gelten für Option B. Unter A entfallen in
-Paket 1 der Markdown-Renderer und sein Test, unter C kommt nichts hinzu.
+Changelog-Fragment. Schnitt freigegeben am 2026-10-05.
 
 **Paket 1 — Grundlage, ohne Verhaltensänderung.** Die Klartext-Serialisierung
 zieht nach `packages/models`, dazu der Text-Renderer im MCP. Kein Werkzeug

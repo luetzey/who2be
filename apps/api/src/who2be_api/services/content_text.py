@@ -3,10 +3,11 @@
 Liefert `before_text`/`after_text` fuer die git-artige Diff-Ansicht der
 Versions-Endpunkte: pro Entity-Typ eine deterministische Serialisierung des
 Content-JSON zu lesbarem Text. Die Blocks→Text-Logik ist Single-Source in
-`placeholders._core` (`block_plain_text`/`blocks_plain_text`); dieser Modul
-setzt sie fuer die vier Content-Formen zusammen und rendert Placeholder-Pills
-als stabile `{{kind:target_id}}`-Tokens — ohne DB-Zugriff, damit derselbe
-Inhalt immer denselben Text ergibt (kein Aufloesen wie im Compose-Render).
+`who2be_models.blocknote_text` (ADR-0056; auch der MCP nutzt sie); dieses
+Modul setzt sie fuer die vier Content-Formen zusammen und rendert
+Placeholder-Pills als stabile `{{kind:target_id}}`-Tokens — ohne DB-Zugriff,
+damit derselbe Inhalt immer denselben Text ergibt (kein Aufloesen wie im
+Compose-Render).
 
 Struktur/Reihenfolge folgt dem Compose-Render der Placeholder-Resolver
 (Persona: `render_persona_profile`; Playbook/Resource/System-Prompt:
@@ -15,71 +16,12 @@ description + Body/Blocks).
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from who2be_api.services.placeholders._core import blocks_plain_text
 from who2be_api.services.placeholders.resolvers.persona import render_persona_profile
-
-
-def _inline_with_pills(inline: dict[str, object]) -> str:
-    """Inline-Renderer fuer die Diff-Serialisierung.
-
-    `type='text'` liefert den Roh-Text; Placeholder-Pills werden als stabiles
-    Token `{{kind:target_id}}` gerendert (nicht aufgeloest — kein DB-Zugriff,
-    deterministisch). Unbekannte Inline-Typen verschwinden wie im Default.
-    """
-    inline_type = inline.get("type")
-    if inline_type == "text":
-        return str(inline.get("text", ""))
-    if inline_type == "placeholder":
-        raw_props = inline.get("props")
-        props: dict[str, object] = raw_props if isinstance(raw_props, dict) else {}
-        kind = str(props.get("kind", ""))
-        target_id = str(props.get("target_id", ""))
-        return f"{{{{{kind}:{target_id}}}}}"
-    return ""
-
-
-def parse_blocknote_blocks(body: str) -> tuple[list[dict[str, Any]] | None, str]:
-    """Zerlegt einen stringifizierten BlockNote-Body in seine Block-Liste.
-
-    Akzeptiert die beiden BlockNote-JSON-Shapes (Top-Level-Array bzw.
-    `{"content": [...]}`-Wrapper, analog `render_template_body`).
-
-    Liefert `(blocks, raw)`: `blocks` ist `None`, wenn der Body kein
-    verwertbares BlockNote-Dokument ist (leer, kaputtes JSON aus Alt-Bestand,
-    Plain-Text oder Skalar-JSON) — dann traegt `raw` den getrimmten Rohwert,
-    den die Aufrufer als Klartext behandeln. Single-Source fuer alle Stellen,
-    die den Body strukturell brauchen (Diff-Serialisierung, Chunking).
-    """
-    stripped = body.strip()
-    if not stripped:
-        return None, ""
-    try:
-        parsed: Any = json.loads(stripped)
-    except json.JSONDecodeError:
-        return None, stripped
-    if isinstance(parsed, list):
-        return [b for b in parsed if isinstance(b, dict)], stripped
-    if isinstance(parsed, dict):
-        nested = parsed.get("content", [])
-        blocks = nested if isinstance(nested, list) else []
-        return [b for b in blocks if isinstance(b, dict)], stripped
-    # Skalar-JSON (Zahl/String) — als Rohtext behandeln.
-    return None, stripped
-
-
-def blocknote_body_text(body: str) -> str:
-    """Serialisiert einen stringifizierten BlockNote-Body zu Klartext.
-
-    Kein gueltiges BlockNote-Dokument (Alt-Bestand/Plain-Text) → Rohwert
-    getrimmt zurueck.
-    """
-    blocks, raw = parse_blocknote_blocks(body)
-    if blocks is None:
-        return raw
-    return blocks_plain_text(blocks, _inline_with_pills)
+from who2be_models.blocknote_text import blocknote_body_text as blocknote_body_text
+from who2be_models.blocknote_text import blocks_plain_text, placeholder_token_inline
+from who2be_models.blocknote_text import parse_blocknote_blocks as parse_blocknote_blocks
 
 
 def _join(parts: list[str]) -> str:
@@ -105,7 +47,7 @@ def playbook_content_text(content: dict[str, Any]) -> str:
 def resource_content_text(content: dict[str, Any]) -> str:
     """Resource-Version → Text: description + Block-Liste."""
     description = str(content.get("description", "")).strip()
-    body = blocks_plain_text(content.get("blocks", []), _inline_with_pills)
+    body = blocks_plain_text(content.get("blocks", []), placeholder_token_inline)
     return _join([description, body])
 
 
