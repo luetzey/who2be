@@ -51,6 +51,7 @@ from fastapi.testclient import TestClient
 from fastmcp import Client
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import db_fetchval
 from who2be_api.testing.tenant_pair import (
     ANCHOR_DENIED,
     DENIED,
@@ -201,7 +202,12 @@ MCP_PROBES: dict[str, ToolProbe] = {
     "submit_feedback": ToolProbe({"data": {**_PB_REF, "signal": "helpful"}}),
     "report_problem": ToolProbe({"data": {"category": "other", "note": "iso"}}),
     "resolve_feedback": ToolProbe({"feedback_id": "<<feedback_id>>", "resolution": "dismissed"}),
-    "save_memory": ToolProbe({"fact": "Nutzer mag Gruen"}),
+    "save_memory": ToolProbe({"fact": "Nutzer mag Gruen", "origin": "user_stated"}),
+    # Braucht einen AKTIVEN eigenen Eintrag (`_seed_active_memory`), sonst
+    # scheitert schon die Gegenprobe an `memory_not_found`.
+    "propose_memory_change": ToolProbe(
+        {"memory_id": "<<active_memory_id>>", "action": "delete", "reason": "iso"}
+    ),
     "submit_test_results": ToolProbe(
         {
             "subject_entity_type": "persona",
@@ -462,6 +468,25 @@ def isolation_env(tmp_path: Path) -> Iterator[None]:
         yield
 
 
+def _seed_active_memory(t: Tenant) -> None:
+    """Aktiver Agenten-Eintrag mit Marker, direkt in der DB.
+
+    `seed_tenant` legt den Eintrag ueber die API an; ohne eingeschaltete
+    Freigabematrix bleibt er `pending` und ist damit nicht vorschlagbar.
+    """
+    t.ids["active_memory_id"] = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
+            " fact, category, importance, kind, scope, origin, source) "
+            "VALUES ($1, $2::uuid, $2::uuid, 'active', $3, 'preference', 6, 'user_fact', "
+            "        'agent', 'user_stated', 'agent') RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            f"{t.marker} Nutzer mag Ocker",
+        )
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -472,6 +497,8 @@ def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> Non
             tenants.append(a)
             b = seed_tenant(client, "B", patched_jwt_secret)
             tenants.append(b)
+        for t in tenants:
+            _seed_active_memory(t)
         report = asyncio.run(run_isolation(a, b, ghost_of(b)))
 
         assert not report.findings, f"{len(report.findings)} Befund(e):\n" + "\n".join(

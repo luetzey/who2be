@@ -31,7 +31,6 @@ from who2be_models import (
     FeedbackSummary,
     MemoryCreate,
     MemoryHit,
-    MemoryRead,
     PersonaCreate,
     PersonaPlaybookLinkSet,
     PersonaRead,
@@ -70,6 +69,7 @@ from who2be_models import (
     WhoAmIRead,
     WorkspaceRead,
 )
+from who2be_models.memory import MemorySaveResult
 
 logger = logging.getLogger(__name__)
 
@@ -928,9 +928,10 @@ class ApiClient:
     # `tool_policy.memory_mode` (off/read_only/suggest/auto) serverseitig.
     # ------------------------------------------------------------------
 
-    async def save_memory(self, data: MemoryCreate) -> MemoryRead:
+    async def save_memory(self, data: MemoryCreate) -> MemorySaveResult:
+        # 201 neu bzw. 200 bei lesson-Wiederholung mit `merged_into` (3.1.6).
         body = await self._write("POST", f"{self._workspace_prefix}/agent-memories", data)
-        return MemoryRead.model_validate(body)
+        return MemorySaveResult.model_validate(body)
 
     async def search_memory(self, query: str, k: int) -> list[MemoryHit]:
         data = await self._get(
