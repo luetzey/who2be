@@ -1,6 +1,44 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
+_Stand: 2026-10-05 (Backlog-Aufbereitungslauf 41: alle sechs offenen PRs blockiert, drei davon grün-fähig)_
+
+## Backlog: alle sechs offenen PRs sind blockiert (2026-10-05, Aufbereitungslauf 41)
+
+**Stand:** Gemessen gegen `main` @ `54e48ee6`. `main` selbst ist eindeutig
+gruen (Run **1724**, `completed`/`success`, 13/13 Jobs). **Alle sechs offenen
+PRs haben `mergeable_state = blocked`** — der einzige Required Check
+`all-green` ist an jedem von ihnen rot. Das hat vor diesem Lauf niemand
+gemessen: die Lauf-39/40-Tabellen fuehrten die PRs nach Datei-Scope und
+nannten #686/#683/#682 „kollidiert mit nichts".
+
+**Drei davon sind grün-fähig.** #682, #683 und #686 (redis 7 → 8, je **eine**
+Zeile) scheitern ausschliesslich an einem `changelog-guard`-Lauf, dessen
+Ursache seit sieben Tagen behoben ist: der Fragment-Bestand war am 2026-09-28
+kaputt, **PR #678** (`baf4da69`) hat ihn um **04:42 UTC** repariert — die drei
+Laeufe starteten **04:28:56Z**, **04:28:58Z** und **04:29:20Z**. Heute:
+`changelog_fragments.py check` → **Exit 0, 204 Fragmente sauber**. Ein Re-Run
+genuegt; angestossen hat ihn niemand.
+
+**Drei sind echt rot:** #681 (fastmcp 3.4.7 → **4.0.9**, Major) bricht
+`python` zusaetzlich zum veralteten Guard-Lauf; #674 (`web-vite-major`) bricht
+`web`, `e2e`, `e2e-mobile` x3, `e2e-billing-cloud` und `compose-smoke`; #802
+(ADR-0053 C4b) bricht `python`. **Alle PR-Laeufe sind 2 bzw. 7 Tage alt** —
+eine Diagnose daraus ist eine Diagnose eines alten `main` (Queue-Regel 16).
+
+**Offen:** als Weiche an #442 gestellt (drei Optionen, Empfehlung: die drei
+Einzeiler re-runnen und mergen, die zwei Major-Bumps schliessen und als
+Issue neu schneiden, #802 beim Autor lassen). Ein Re-Run oder Merge an einem
+fremden PR ist nicht Teil eines Aufbereitungslaufs.
+
+**Messwerte des Laufs:** Lint **91** Warnungen / 0 Fehler (war 90) ·
+Web-Suite **248 Dateien / 1944 Tests** (war 245/1826) · Coverage in **allen
+vier** Dimensionen **gestiegen** (88,19 / **82,28** / 84,37 / 89,76) — der
+Lauf-40-Alarm „faellt in allen vier Dimensionen" hat sich einen Lauf spaeter
+umgedreht · Python-Collection **2971** · i18n-Waisen **159** · E2E **26/35**
+(erster Stillstand) · `docker info` → Exit 1. Details, Zeiger-Protokoll und
+die drei verrotteten Zeiger (darunter `vite.config.ts:49-54` → **`:81-85`**,
+verschoben durch #817) in
+`.claude/plan/2026-10-05-0015_backlog-aufbereitungslauf-41.md`.
 
 ## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
 
