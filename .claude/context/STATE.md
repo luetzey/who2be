@@ -30,6 +30,16 @@ Einzeiler re-runnen und mergen, die zwei Major-Bumps schliessen und als
 Issue neu schneiden, #802 beim Autor lassen). Ein Re-Run oder Merge an einem
 fremden PR ist nicht Teil eines Aufbereitungslaufs.
 
+**Nachtrag aus dem eigenen PR (#823):** der Lauf-PR ist Markdown-only und
+trotzdem auf `all-green` rot geworden — `e2e-mobile (mobile-iphone-13)` starb im
+Step „Compose up (build + wait healthy)" mit `stream closed because of a broken
+pipe`, **bevor ein Testkoerper lief** (setup-node, Playwright-Install und der
+E2E-Step sind `skipped`, kein Playwright-Report erzeugt). Die beiden anderen
+Mobile-Profile und alle uebrigen Jobs sind an diesem Commit gruen. **Damit ist
+ein zweiter Weg belegt, auf dem der einzige Required Check ohne Dateiaenderung
+zugeht** — bisher fuehrte #442 dafuer nur den `audit`-Job. Der Re-Run ist dieser
+Session verwehrt (`rerun_failed_jobs` → **HTTP 403**).
+
 **Messwerte des Laufs:** Lint **91** Warnungen / 0 Fehler (war 90) ·
 Web-Suite **248 Dateien / 1944 Tests** (war 245/1826) · Coverage in **allen
 vier** Dimensionen **gestiegen** (88,19 / **82,28** / 84,37 / 89,76) — der

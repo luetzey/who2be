@@ -163,6 +163,43 @@ gewechselt.
    `v2.196.0 → v2.197.0` (PR #671). Der Rest des Abschnitts ist bewusst der
    historische #499-Fall und bleibt, wie er ist.
 
+### Nachtrag — der eigene PR dieses Laufs ist in denselben Fehlermodus gelaufen
+
+**PR #823** (dieser Lauf, Markdown-only) ist auf `all-green` rot geworden, und zwar
+an genau **einem** Job: `e2e-mobile (mobile-iphone-13)`. Die Schrittliste sagt,
+wo:
+
+| Step | Ergebnis |
+|---|---|
+| Set up job · checkout · Compose env | ✅ |
+| **Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)** | ✅ |
+| **Compose up (build + wait healthy)** | 🔴 **failure** — `stream closed because of a broken pipe` |
+| setup-node · Install web deps · Install Playwright · **Run E2E** | ⏭️ **skipped** |
+
+**Der Job ist gestorben, bevor ein einziger Testkörper lief** — Node war nicht
+installiert, Playwright nicht installiert, und `Upload Playwright report` meldet
+`No files were found with the provided path: apps/web/playwright-report`. Die
+beiden anderen Mobile-Profile, `e2e`, `e2e-billing-cloud`, `compose-smoke`,
+`web`, `python`, `audit` und `changelog-guard` sind an diesem Commit **grün**.
+**Ein Markdown-Diff kann einen Docker-Build nicht brechen**, und der Step
+unmittelbar davor trägt im Repo selbst den Namen „Docker Hub bricht
+Verbindungen ab" — der Fehlermodus ist bekannt und benannt.
+
+🔴 **Damit ist ein zweiter Weg belegt, auf dem der einzige Required Check ohne
+jede Dateiänderung zugeht.** Weiche 2 führt dafür bisher nur den `audit`-Job
+(Live-CVE-Datenbank). **`compose-smoke`, `e2e`, `e2e-billing-cloud` und die drei
+`e2e-mobile`-Profile hängen alle an einem Docker-Hub-Transfer** und können aus
+demselben Grund rot werden. In der Kollisions-Liste von #442 nachgetragen.
+
+⚠️ **Der Lauf hat den Re-Run versucht und darf nicht:** `rerun_failed_jobs` auf
+Run `37247734176` → **HTTP 403, „Resource not accessible by integration"**. Eine
+Robustheits-Korrektur läge in `.github/workflows/ci.yml` — der Datei, um die
+sich bereits Weiche 2 (`audit`-Trennung) und Weiche 5 (Caddy) streiten; sie in
+einen Doku-PR zu ziehen wäre eine Ausweitung und kein Fix. **Ein Leer-Commit
+oder ein Close/Reopen, nur um CI anzustoßen, ist ausgeschlossen.** Dieser
+Nachtrag ist deshalb Inhalt, den der Lauf-Bericht ohnehin braucht — dass sein
+Push CI erneut fährt, ist Nebenwirkung und nicht Zweck.
+
 ### Eigener Messfehler dieses Laufs (Regel 49)
 
 `changelog_fragments.py check | head -20` meldete **Exit 1** — das war
