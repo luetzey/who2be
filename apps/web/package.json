@@ -61,8 +61,8 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^4.1.10",
-    "@vitest/mocker": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/mocker": "^5.0.3",
     "eslint": "^10.11.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -74,7 +74,7 @@
     "typescript-eslint": "^8.70.1",
     "vite": "^8.3.1",
     "vite-node": "^6.0.0",
-    "vitest": "^4.1.10",
+    "vitest": "^5.0.3",
     "vitest-axe": "^0.1.0"
   }
 }
