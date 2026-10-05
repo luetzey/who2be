@@ -1032,6 +1032,30 @@
     "children": []
   },
   {
+    "id": "res-conv-li-status-put-vollstand",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Full state before update_*: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "update_* has PUT semantics — content replaces the stored state completely. ALWAYS read the template in full: if the read tool offers a format parameter, use format=\"full\". The reading view (format=\"text\") carries no editor JSON; a PUT based on it empties the content.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-li-status-kurator",
     "type": "bulletListItem",
     "props": {

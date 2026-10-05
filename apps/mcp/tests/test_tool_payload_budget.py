@@ -93,6 +93,58 @@ def test_tools_list_payload_stays_under_budget() -> None:
     )
 
 
+# Der Satz, den jede PUT-Beschreibung tragen muss (ADR-0056 Abschnitt 5,
+# Schicht 2): wer die Lesefassung als Vorlage nimmt, leert beim PUT den Inhalt.
+_PUT_FULL_HINT = 'Vorlage im Vollstand lesen (`format="full"`'
+
+
+def _put_update_tools() -> dict[str, str]:
+    """`update_*`-Werkzeuge mit PUT-Semantik, abgeleitet aus dem Schema.
+
+    PUT heisst hier: `data` verlangt `content`, der neue Stand ersetzt den
+    alten vollstaendig. Teil-Updates (`update_agent`, `update_node`: weggelassen
+    = unveraendert) haben kein Pflicht-`content` und fallen heraus. Keine
+    zweite Namensliste, die veraltet.
+    """
+    tools = asyncio.run(mcp.list_tools(run_middleware=False))
+    found: dict[str, str] = {}
+    for tool in tools:
+        if not tool.name.startswith("update_"):
+            continue
+        params = tool.parameters or {}
+        data = (params.get("properties") or {}).get("data")
+        if not isinstance(data, dict):
+            continue
+        ref = data.get("$ref")
+        schema = params.get("$defs", {}).get(ref.rsplit("/", 1)[-1], {}) if ref else data
+        if "content" in (schema.get("required") or []):
+            found[tool.name] = " ".join((tool.description or "").split())
+    return found
+
+
+def test_every_put_update_tool_tells_writers_to_read_full_format() -> None:
+    """Jede PUT-Beschreibung nennt `format="full"` als Vorlage (ADR-0056 §5).
+
+    Rot-Probe ist die Ableitung selbst: die Mindestmenge stellt sicher, dass
+    der Guard die fuenf heutigen PUT-Werkzeuge wirklich findet und nicht
+    still ueber eine leere Menge laeuft.
+    """
+    put_tools = _put_update_tools()
+    assert {
+        "update_persona",
+        "update_playbook",
+        "update_resource",
+        "update_external_tool",
+        "update_system_prompt",
+    } <= set(put_tools), f"PUT-Ableitung findet zu wenig: {sorted(put_tools)}"
+
+    missing = sorted(name for name, doc in put_tools.items() if _PUT_FULL_HINT not in doc)
+    assert not missing, (
+        f'Ohne Hinweis auf `format="full"`: {missing}. Ein PUT auf Basis der '
+        "Lesefassung leert den Inhalt (ADR-0056 Abschnitt 5)."
+    )
+
+
 @pytest.mark.parametrize(
     "module_name",
     [name for _, name, _ in pkgutil.iter_modules(tools_pkg.__path__)],

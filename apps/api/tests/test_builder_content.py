@@ -212,6 +212,24 @@ def test_en_sidecars_exist_and_parse_when_present(filename: str) -> None:
     assert parsed
 
 
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_conventions_tell_writers_to_read_full_format_before_update(pack: ContentPack) -> None:
+    """Schreiber-Regel (ADR-0056 Abschnitt 5, Schicht 3) in DE und EN.
+
+    Die Lese-Werkzeuge liefern kuenftig standardmaessig eine Lesefassung ohne
+    Editor-JSON; ein PUT auf deren Grundlage leert den Inhalt. Der Builder
+    liest diese Resource vor jedem Bau, deshalb steht die Regel hier — als
+    eigener Block, damit sie ueber ihren Anker zitierbar bleibt.
+    """
+    blocks = json.loads(pack.resource.load_body(pack.locale))
+    rule = next((b for b in blocks if b["id"] == "res-conv-li-status-put-vollstand"), None)
+    assert rule is not None, f"Regelblock fehlt in {pack.locale!r}"
+    text = " ".join(_collect_block_texts(rule))
+    assert "update_*" in text
+    assert 'format="full"' in text
+    assert 'format="text"' in text
+
+
 def test_en_pack_display_texts_are_translated_not_de_literals() -> None:
     """Stichprobe: EN-Anzeigetexte sind nicht einfach die DE-Strings (echte
     Uebersetzung statt Kopie) — ausser dem bewusst untranslated Persona-Namen."""
