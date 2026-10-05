@@ -144,7 +144,7 @@ services:
   seaweedfs:
     # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
     # impliziten Image-Sprung haengen (identisch zum lokalen Stack, WP1).
-    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     # Credential-Datei s3.json: SeaweedFS erlaubt OHNE `-s3.config` anonymen
     # Zugriff auf alle S3-Operationen (Doku woertlich) — die Datei ist ein
     # Sicherheits-Gate, keine Kuer. Der lokale Stack mountet dafuer eine
