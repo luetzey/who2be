@@ -498,7 +498,10 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Builder-Policy (Default aus, fuer den Meta-Agenten an); `test_report` kommt
 # ueber den Pydantic-Default True mit. Rein policy-seitig wie v15; der Bump
 # verteilt die Capability per Sync-Zweig (8) auf Bestands-Builder.
-BUILDER_CONTENT_VERSION = 16
+# v17: Schreiber-Regel „Vollstand vor update_*" in den Agent-Bau-Konventionen
+# (ADR-0056 Abschnitt 5, Schicht 3) — DE + EN. Muss vor dem Lese-Default
+# `format="text"` verteilt sein.
+BUILDER_CONTENT_VERSION = 17
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

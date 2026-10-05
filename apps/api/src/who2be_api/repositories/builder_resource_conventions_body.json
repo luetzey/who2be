@@ -425,6 +425,16 @@
     "children": []
   },
   {
+    "id": "res-conv-li-status-put-vollstand",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Vollstand vor update_*: ", "styles": {"bold": true}},
+      {"type": "text", "text": "update_* hat PUT-Semantik — content ersetzt den gespeicherten Stand vollstaendig. Die Vorlage dafuer IMMER im Vollstand lesen: bietet das Lesewerkzeug einen format-Parameter, mit format=\"full\". Die Lesefassung (format=\"text\") enthaelt kein Editor-JSON; ein PUT auf ihrer Grundlage leert den Inhalt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-li-status-kurator",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

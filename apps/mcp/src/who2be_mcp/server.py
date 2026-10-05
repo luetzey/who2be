@@ -1203,15 +1203,16 @@ async def update_persona(persona_id: str, data: PersonaUpdate) -> PersonaRead:
     eine neue Draft an; 409, falls bereits ein Draft existiert (dann den Draft
     weiterbearbeiten und neu transitionieren).
 
+    PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
+    (`format="full"`, sofern angeboten), nie die Lesefassung.
+
     `data.content.modes` folgt demselben Schema wie bei `create_persona`
     (siehe dort fuer Feldliste + Beispiel).
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     gesetzt aendert es die Persona-Sprache auf der Identitaets-Zeile
-    (Historie behaelt die alten `locale`-Werte, unschaedlich), `None` laesst
-    die bestehende Sprache unveraendert. Kein separater `locale`-Parameter mehr
-    (fruehere Variantenwahl, ADR-0027) — Status-Invarianten sind per-entity.
-    Die aktuelle Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`.
+    (Historie behaelt die alten `locale`-Werte), `None` laesst die bestehende
+    Sprache unveraendert. Workspace-Sprache: `whoami` → `content_locale`.
     """
     client = await build_client()
     return await client.update_persona(_parse_uuid(persona_id, "Persona"), data)
@@ -1310,13 +1311,14 @@ async def update_playbook(playbook_id: str, data: PlaybookUpdate) -> PlaybookRea
     """Aktualisiert ein Playbook (versioniert; PUT auf aktiv → neue Draft, 409 bei
     bestehendem Draft).
 
+    PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
+    (`format="full"`, sofern angeboten), nie die Lesefassung.
+
     `data.content.body` folgt demselben BlockNote-Body-Format + Pill-Sync-
     Vertrag wie bei `create_playbook` (siehe dort fuer Format, Kinds + Beispiel).
 
-    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
-    `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
-    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
+    Sprachwechsel ueber `data.locale` (optional, `None` = unveraendert);
+    Workspace-Sprache: `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data)
 
@@ -1427,13 +1429,14 @@ async def update_resource(resource_id: str, data: ResourceUpdate) -> ResourceRea
     """Aktualisiert eine Resource (versioniert; PUT auf aktiv → neue Draft, 409 bei
     bestehendem Draft).
 
+    PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
+    (`format="full"`, sofern angeboten), nie die Lesefassung.
+
     `data.content.blocks` folgt demselben BlockNote-Block-Format wie bei
     `create_resource` (siehe dort fuer Feldliste + Beispiel).
 
-    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
-    `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
-    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
+    Sprachwechsel ueber `data.locale` (optional, `None` = unveraendert);
+    Workspace-Sprache: `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_resource(_parse_uuid(resource_id, "Resource"), data)
 
@@ -1516,10 +1519,11 @@ async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> Extern
     """Aktualisiert eine externe Tool-Bindung (versioniert; PUT auf aktiv → neue
     Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix.
 
-    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
-    `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
-    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
+    PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
+    (`format="full"`, sofern angeboten), nie die Lesefassung.
+
+    Sprachwechsel ueber `data.locale` (optional, `None` = unveraendert);
+    Workspace-Sprache: `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data)
 
@@ -1645,14 +1649,16 @@ async def update_system_prompt(
     ein Draft offen ist). Die aktive Version bleibt unveraendert, bis ein
     Mensch/Admin den Draft promotet.
 
+    PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
+    (`format="full"`, sofern angeboten), nie die Lesefassung.
+
     `content.body` ist ein stringifiziertes BlockNote-Dokument; Placeholder
     sind Inline-Elemente `{"type": "placeholder", "props": {"kind": ...,
-    "target_id": ..., "label": ...}}` — Format, gueltige Kinds und ein
-    Beispiel siehe `list_placeholders` und `create_system_prompt`.
+    "target_id": ..., "label": ...}}` — Format, Kinds und Beispiel siehe
+    `list_placeholders` und `create_system_prompt`.
 
-    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
-    `None` laesst die bestehende Sprache unveraendert. Die aktuelle
-    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`.
+    Sprachwechsel ueber `data.locale` (optional, `None` = unveraendert);
+    Workspace-Sprache: `whoami` → `content_locale`.
     """
     client = await build_client()
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
