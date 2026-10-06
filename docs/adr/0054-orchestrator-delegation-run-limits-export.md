@@ -1,7 +1,9 @@
 # ADR-0054 — Orchestrator: Delegationsobjekt (A2A), `run_limits`, A2A-Agent-Card und AGENTS.md-Export, Prüffall `tool_trace`
 
 - Status: **Accepted** (Owner, 2026-09-30). Alle fünf Weichen sind
-  entschieden, der Owner-Wortlaut steht in Abschnitt 2.
+  entschieden, der Owner-Wortlaut steht in Abschnitt 2. Nachtrag vom
+  2026-10-06 (Owner-Entscheidung zur Feldspezifikation O1): Weichen der
+  Spezifikation, Korrektur zu 4.1, feste Migrationsnummern — Abschnitt 8.
 - Datum: 2026-10-01
 - Gemessen gegen: `origin/main` @ `e1fbe695`. Code-Aussagen tragen einen
   Symbolanker (Konvention `docs/code-references.md`).
@@ -28,6 +30,7 @@
 5. Offene Detailfragen
 6. Konsequenzen
 7. Umsetzungsreihenfolge (Vorschlag, nach dem Cloud-Test)
+8. Nachtrag 2026-10-06: Entscheidungen zur Feldspezifikation
 
 ---
 
@@ -180,8 +183,13 @@ Die vier Owner-Felder (Ziel, Format, Grenzen, Abnahme) sind Pflicht. Die
   gilt dabei unverändert: „Agents MUST NOT treat the
   TASK_STATE_AUTH_REQUIRED state transition, by itself, as authorization for
   any particular operation.“
-- Eine Who2Be-Kennung der Vorlage (ID und Version) wandert in `Task.metadata`,
-  damit ein gemeldeter Lauf (W4) auf die Vorlage zurückführt.
+- ~~Eine Who2Be-Kennung der Vorlage (ID und Version) wandert in
+  `Task.metadata`, damit ein gemeldeter Lauf (W4) auf die Vorlage
+  zurückführt.~~ **Korrigiert durch Nachtrag 2026-10-06 (Abschnitt 8.2):**
+  Die Kennung (ID und Version) wandert in `Message.metadata` der ersten
+  Message, weil den `Task` der Server erzeugt und der Client
+  `Task.metadata` nicht setzen kann. Zweck unverändert: Ein gemeldeter Lauf
+  (W4) führt auf die Vorlage zurück.
 
 **Beziehung Agent → Agent.** Ein Delegationsobjekt verbindet genau einen
 Delegierenden mit genau einem Empfänger. Ein Agent kann mehrere
@@ -377,6 +385,10 @@ Diese Fragen entscheidet die ADR nicht. Sie gehen an die Spezifikation
 (Paket O1); was Urteil verlangt, wird dem Owner als Option mit Empfehlung
 vorgelegt.
 
+> Nachtrag 2026-10-06: Die Fragen O1.2–O1.5, O1.7, O2.1, O2.2, O3.1–O3.5
+> und O4.4 sind entschieden, siehe Abschnitt 8.1. Die übrigen regelt die
+> Spezifikation O1 ohne Owner-Weiche.
+
 **Delegationsobjekt (W1)**
 
 - O1.1 Endgültige Feldliste, Längen- und Formatgrenzen, Pflichtfelder über
@@ -478,3 +490,62 @@ höchstens acht Dateien, sonst wird es geteilt.
 
 O2, O3 und O7 können nach O1 parallel laufen, wenn die Kollisionsmatrix aus
 O1 keine gemeinsamen Dateien zeigt. O6 wartet auf den Abgleich aus O1.
+
+## 8. Nachtrag 2026-10-06: Entscheidungen zur Feldspezifikation
+
+Grundlage ist die Spezifikation O1 (Karte t_cddac4e7, Stand 2026-10-05,
+`orchestrator-spec-2026-10-05.md` mit Belegordner `-belege/`, außerhalb des
+Repos, gemessen gegen `origin/main` @ `676fc7e0`). Angaben „Spec §n“
+beziehen sich darauf; die Weichen und ihre Optionen stehen in Spec §8.
+
+Owner-Entscheidung vom 2026-10-06, übermittelt vom PM, Wortlaut: **„1. a,
+2 ja vorher, 3. ja“**. Damit sind alle vierzehn Empfehlungen aus Spec §8
+angenommen. Die Feldtabellen der Spezifikation gehen bereits von diesen
+Empfehlungen aus und gelten damit als Vorgabe für die Bau-Pakete O2–O7.
+
+### 8.1 Weichen
+
+| Weiche | Gewählt | Entscheidung | Begründung | Spec |
+|---|---|---|---|---|
+| S1 Versionierung (O1.2) | A | Das Delegationsobjekt bekommt eine eigene Versionstabelle `delegation_version` mit `draft · review · active · inactive` über das versionierte Repository, wird aber nicht in `EntityType` aufgenommen. | Freigabe nach ADR-0040 und Diff kommen wie bei den übrigen Aggregaten mit; Prüffälle hängen am Empfänger-Agenten, darum bleibt Migration 0089 unberührt. | §1.1, §8 |
+| S2 Löschen (O1.3) | A | `from_agent_id` mit `ON DELETE CASCADE`, `to_agent_id` mit `ON DELETE RESTRICT`; das Löschen eines Empfängers mit eingehenden Delegationen scheitert mit 409, Deaktivieren bleibt erlaubt. | Delegationen verschwinden nicht still, und das Agent-Delete scheitert schon heute mit 409 an Zugriffslog-Einträgen. | §1.2, §1.5 (V10), §8 |
+| S3 Zyklen (O1.4) | A | Selbstdelegation verbietet ein CHECK, transitive Zyklen prüft der Service per `WITH RECURSIVE` vor dem Insert. | `max_depth` ist eine Deklaration ohne Durchsetzung und würde einen Zyklus nicht begrenzen. | §1.5 (V3), §8 |
+| S4 Capability (O1.5) | A | Neue Capability `delegation_write` in `AgentToolPolicy`, Default aus, Teil von `is_within`. | Die Orchestrator-Vorlage hat bewusst kein `agent_write`, soll aber Delegationsentwürfe vorschlagen können, deren Aktivierung beim Menschen bleibt. | §6, §8 |
+| S5 Extension-URIs (O1.7, O3.4) | A | HTTPS-Extension-URIs nach dem Schema `https://<DOMAIN>/a2a/ext/delegation/v1` und `…/run-limits/v1`; die Basis bildet die Instanz zur Laufzeit aus ihrer konfigurierten öffentlichen Basis-URL, im Repo steht keine Domain, die Doku nutzt den Platzhalter `<DOMAIN>`. | Die A2A-Beispiele nutzen durchgehend HTTPS-URIs, und eine eingecheckte Domain verstieße gegen die Regel „Keine realen Betreiber-Hosts im Repo“ (`CLAUDE.md` § Security). | §1.4, §4.3, §8 |
+| S6 Ort von `run_limits` (O2.1) | B | Eigene JSONB-Spalte `agent.run_limits` mit eigenem Modell `AgentRunLimits`, nicht in `AgentToolPolicy`. | `AgentToolPolicy` beantwortet nur „welche MCP-Tools darf dieser Agent?“, Laufzeitgrenzen sind keine Werkzeugrechte; zudem bleibt O2 aus `tool_policy.py` heraus, das O4a braucht. | §2.1, §7.2, §8 |
+| S7 Einheit `stall_threshold` (O2.2) | A | `stall_threshold` zählt Runden ohne Fortschritt (Ganzzahl). | Owner-Wortlaut und Magentic-One meinen Runden; ein Zeit-Watchdog ist ein anderer Mechanismus. | §2.1, §8 |
+| S8 Urteil bei `tool_trace` | A | Der Server rechnet `runs_passed` und `verdict` aus den gemeldeten Traces; weicht die Meldung ab, antwortet er mit 422 `test_run_trace_verdict_mismatch`, und die Charge gilt ganz oder gar nicht. | Nur so gilt der W4-Wortlaut „Who2Be prüft Muster“, ohne Fehler der Laufzeit still zu überschreiben. | §3.1, §3.5, §8 |
+| S9 Werkzeugnamen in Mustern | A | Muster nennen nur exakte Laufzeit-Werkzeugnamen; abstrakte Aktionsklassen bleiben ein späterer Schritt. | Exakte Namen sind ohne versteckte Abbildung prüfbar, eine Alias-Tabelle wäre eine zweite zu pflegende Quelle. | §3.3, §8 |
+| S10 Herkunft des Traces (O4.4) | A | Ein Trace ist Selbstmeldung (`client_self_report`); Signatur und Übernahme aus OpenTelemetry entfallen vorerst. | Die OTel-GenAI-Konventionen stehen auf „Development“, und Who2Be hat keine Schlüsselverwaltung für Laufzeiten. | §3.5, §8 |
+| S11 Card-`version` | A | Die Card-`version` ist ein Inhalts-Hash: die ersten 12 Hex-Zeichen von SHA-256 über die JCS-kanonisierte Card ohne `version`. | Der Hash ändert sich genau dann, wenn sich die Card ändert, auch bei Playbook-Änderungen, und nicht bei Nebenfeldern des Agenten. | §4.1, §8 |
+| S12 Card-Signatur | nein | Die Card wird nicht signiert, das Feld `signatures` fehlt. | Signieren ist laut A2A nur „MAY“, und ohne Schlüsselverwaltung wäre eine Signatur ohne Wert. | §4.1, §8 |
+| S13 Skill-Quelle (O3.1) | A | A2A-`skills` stammen nur aus Triggered-Playbooks nach den Regeln aus Spec §4.2; Applied-Playbooks und Persona-`skills` sind keine Quelle. | Skills beschreiben Auffind-Semantik, Applied-Playbooks sind eingebettetes Verhalten; ein künftiges Skill-Aggregat würde zweite Quelle. | §4.2, §8 |
+| S14 Kriterium AGENTS.md-Export (O3.5) | A | Der AGENTS.md-Export wird für Agenten angeboten, deren Persona den Tag `coding` trägt, zusätzlich zu den Mindestbedingungen aus Spec §5.3. | Kein neues Schema; der Mensch steuert den Export über einen bestehenden Mechanismus. | §5.3, §8 |
+
+Die Abschnitte 4.1–4.4 und 5 bleiben im Wortlaut stehen; wo sie eine Frage
+offen nennen, gilt diese Tabelle.
+
+### 8.2 Korrektur zu Abschnitt 4.1: `Message.metadata` statt `Task.metadata`
+
+Abschnitt 4.1 sagte, die Who2Be-Kennung der Vorlage wandere in
+`Task.metadata`. Das geht nicht: Den `Task` erzeugt der Server, `Task.id` ist
+laut A2A „generated by the server for a new task“ (a2a.proto:170), der
+Client kann `Task.metadata` also nicht setzen. Richtig ist `Message.metadata`
+(bzw. `SendMessageRequest.metadata`) unter dem Extension-URI-Schlüssel der
+Delegation. Ob der Empfänger die Kennung in seinen Task übernimmt, liegt bei
+ihm. Die Stelle in 4.1 ist durchgestrichen und mit Verweis hierher markiert
+(Spec §0 Nr. 2, §1.4).
+
+### 8.3 Feste Migrationsnummern der Welle
+
+Die Spezifikation führte die Nummern nur unter Vorbehalt (Spec §7). Für diese
+Welle sind sie fest vergeben:
+
+| Nummer | Paket | Inhalt |
+|---|---|---|
+| 0097 | O2a | `run_limits` (Spalte `agent.run_limits`) |
+| 0098 | O3a | `tool_trace` (CHECK der Prüffälle erweitern, Trace am Prüflauf) |
+| 0099 | O4a | Delegation (`delegation`, `delegation_version`, RLS, Grants, FKs) |
+
+Kommt eine andere Welle mit einer Migration dazwischen, zieht sie die nächste
+freie Nummer nach 0099; diese drei Nummern bleiben reserviert.
