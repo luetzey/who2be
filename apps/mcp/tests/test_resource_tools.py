@@ -430,7 +430,7 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
     assert isinstance(result, PlaybookWithResources)
     assert len(result.linked_blocks) == 1
     assert result.linked_blocks[0].block_id == "b1"
@@ -467,7 +467,7 @@ def test_fetch_playbook_carries_locale_metadata_and_ignores_alt_client_param(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid), locale="de"))
+    result = asyncio.run(fetch_playbook(str(pid), locale="de", format="full"))
     assert isinstance(result, PlaybookWithResources)
     assert result.locale == "en"
     assert result.playbook.locale == "en"
@@ -509,7 +509,7 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
     assert isinstance(result, PlaybookWithResources)
     assert len(result.linked_blocks) == 1
     assert result.linked_blocks[0].link_scope == "resource"
@@ -564,7 +564,7 @@ def test_fetch_playbook_lazy_resource_scope_link_not_inlined(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
     assert isinstance(result, PlaybookWithResources)
     # Link bleibt als Pointer sichtbar, aber NICHT inline.
     assert len(result.linked_blocks) == 1
@@ -618,7 +618,8 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
+    assert isinstance(result, PlaybookWithResources)
     assert len(result.linked_resources) == 1
     assert resource_fetches == 1
 
@@ -652,13 +653,80 @@ def test_fetch_playbook_includes_composed_playbooks_ordered(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
     assert isinstance(result, PlaybookWithResources)
     assert len(result.composed_playbooks) == 2
     assert result.composed_playbooks[0].id == child_a_id
     assert result.composed_playbooks[1].id == child_b_id
     assert result.composed_playbooks[0].name == "Child-A"
     assert result.composed_playbooks[1].name == "Child-B"
+
+
+def test_fetch_playbook_default_is_markdown_with_children_and_inline_bodies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default `text` (ADR-0056, Option B): ein Markdown-Dokument, kein JSON.
+
+    Geschlossene Luecken: die Bodies der Sub-Playbooks und der inline
+    eingebetteten Resources stehen als Klartext im Dokument — nicht als
+    Editor-JSON und nicht nur als Pointer.
+    """
+    pid = uuid4()
+    rid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["is_composite"] = True
+    child = _playbook_payload("Child-A")
+    child["id"] = str(uuid4())
+    child["content"]["body"] = json.dumps(  # type: ignore[index]
+        [_paragraph_block("c1", "Kind-Schritt eins")], ensure_ascii=False
+    )
+    resource = _resource_payload(blocks=[_block("b1", "Inline-Inhalt")])
+    resource["id"] = str(rid)
+    link = {
+        "resource_id": str(rid),
+        "resource_name": resource["name"],
+        "block_id": None,
+        "position": 0,
+        "available": True,
+        "available_in": "active",
+        "preview": None,
+        "link_scope": "resource",
+        "embedding_mode": "inline",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[link])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[child])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(
+                200, json={"body_rendered": "Schritt 1\n\nSchritt 2", "unresolved": []}
+            )
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        if path.endswith(f"/resources/{rid}"):
+            return httpx.Response(200, json=resource)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    text = asyncio.run(fetch_playbook(str(pid)))
+
+    # Rot-Probe: liefert der Default wieder das Modell, faellt der Typ.
+    assert isinstance(text, str)
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(text)
+    assert "\\n" not in text
+    assert '"props"' not in text
+    assert text.startswith(f"# Playbook: {playbook['name']}\n")
+    assert f"- id: {pid}" in text
+    assert "## Prozedur\n\nSchritt 1\n\nSchritt 2" in text
+    assert f"### Child-A (`{child['id']}`)" in text
+    assert "Kind-Schritt eins" in text
+    assert f"### {resource['name']} (`{rid}`)" in text
+    assert "Inline-Inhalt" in text
 
 
 def test_fetch_playbook_returns_rendered_body(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -688,7 +756,7 @@ def test_fetch_playbook_returns_rendered_body(monkeypatch: pytest.MonkeyPatch) -
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_playbook(str(pid)))
+    result = asyncio.run(fetch_playbook(str(pid), format="full"))
     assert isinstance(result, PlaybookWithResources)
     assert result.body_rendered == "Schritt 1\n\nSub-Playbook-Inhalt"
 
@@ -737,8 +805,13 @@ def _rendered_text(paragraphs: int) -> str:
     )
 
 
-def _payload_chars(result: PlaybookWithResources) -> int:
-    """Groesse der Antwort so, wie sie beim Agenten ankommt (serialisiert)."""
+def _payload_chars(result: PlaybookWithResources | str) -> int:
+    """Groesse der Antwort so, wie sie beim Agenten ankommt (serialisiert).
+
+    Der Markdown-Default (ADR-0056) IST bereits der Text, der ankommt.
+    """
+    if isinstance(result, str):
+        return len(result)
     return len(result.model_dump_json())
 
 
@@ -781,7 +854,7 @@ def test_fetch_playbook_text_format_stays_under_payload_limit(
 
     monkeypatch.setattr(server, "build_client", _factory(_fat_playbook_handler(pid, playbook)))
 
-    full = asyncio.run(fetch_playbook(str(pid)))
+    full = asyncio.run(fetch_playbook(str(pid), format="full"))
     text = asyncio.run(fetch_playbook(str(pid), format="text"))
 
     full_chars = _payload_chars(full)
@@ -797,17 +870,19 @@ def test_fetch_playbook_text_format_stays_under_payload_limit(
         f"Text-Pfad {text_chars} Zeichen > Obergrenze {_TEXT_PATH_CHAR_LIMIT}."
     )
     # Der Prozedurtext kommt vollstaendig an — gekuerzt wird das Editor-JSON,
-    # nicht der Inhalt.
-    assert "Schritt 179" in text.body_rendered
+    # nicht der Inhalt. Markdown statt JSON: kein Editor-JSON im Dokument.
+    assert isinstance(text, str)
+    assert "Schritt 179" in text
+    assert '"props"' not in text
 
 
-def test_fetch_playbook_default_format_keeps_editor_json(
+def test_fetch_playbook_full_format_keeps_editor_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Additiv: ohne `format` bleibt die Antwort unveraendert vollstaendig.
+    """`format="full"` liefert das Modell mit Editor-JSON (Vorlage fuer PUT).
 
-    Bestehende Konsumenten — allen voran der Editor — brauchen das
-    BlockNote-JSON zum Rendern und duerfen die Struktur nicht verlieren.
+    Der Default ist seit ADR-0056 das Markdown-Dokument; die Metadaten, die
+    `full` traegt, stehen dort im Kopf.
     """
     pid = uuid4()
     playbook = _playbook_payload()
@@ -817,19 +892,21 @@ def test_fetch_playbook_default_format_keeps_editor_json(
 
     monkeypatch.setattr(server, "build_client", _factory(_fat_playbook_handler(pid, playbook)))
 
-    default = asyncio.run(fetch_playbook(str(pid)))
     explicit_full = asyncio.run(fetch_playbook(str(pid), format="full"))
-
-    assert default.playbook.content.body == raw_body
+    assert isinstance(explicit_full, PlaybookWithResources)
     assert explicit_full.playbook.content.body == raw_body
-    # Metadaten bleiben in BEIDEN Pfaden erhalten — nur der Editor-Body faellt weg.
+
+    # Default = Markdown: Metadaten im Kopf, kein Editor-Body.
+    default = asyncio.run(fetch_playbook(str(pid)))
     text = asyncio.run(fetch_playbook(str(pid), format="text"))
-    assert text.playbook.content.body == ""
-    assert text.playbook.name == default.playbook.name
-    assert text.playbook.content.description == default.playbook.content.description
-    assert text.playbook.tags == default.playbook.tags
-    assert text.playbook.triggers == default.playbook.triggers
-    assert text.locale == default.locale
+    assert default == text
+    assert isinstance(text, str)
+    assert text.startswith(f"# Playbook: {explicit_full.playbook.name}\n")
+    assert explicit_full.playbook.content.description in text
+    assert f"- id: {explicit_full.playbook.id}" in text
+    assert f"- locale: {explicit_full.locale}" in text
+    assert raw_body not in text
+    assert '"props"' not in text
 
 
 def test_fetch_playbook_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -974,7 +1051,7 @@ def test_fetch_playbook_block_selection_is_a_fraction_of_the_full_fetch(
     """
     pid = _sectioned_fixture(monkeypatch)
 
-    full = asyncio.run(fetch_playbook(str(pid)))
+    full = asyncio.run(fetch_playbook(str(pid), format="full"))
     one = asyncio.run(fetch_playbook(str(pid), block_ids=["h3"], format="text"))
 
     full_chars = _payload_chars(full)
@@ -990,8 +1067,9 @@ def test_fetch_playbook_block_selection_is_a_fraction_of_the_full_fetch(
         f"Blockauswahl {one_chars} Zeichen vs. Vollabruf {full_chars} — der Schnitt greift nicht."
     )
     # Und es ist der RICHTIGE Abschnitt.
-    assert "Abschnitt 3, Schritt 0" in one.body_rendered
-    assert "Abschnitt 4" not in one.body_rendered
+    assert isinstance(one, str)
+    assert "Abschnitt 3, Schritt 0" in one
+    assert "Abschnitt 4," not in one
 
 
 def test_fetch_playbook_outline_is_findable_without_full_fetch(
@@ -1002,6 +1080,7 @@ def test_fetch_playbook_outline_is_findable_without_full_fetch(
 
     outline = asyncio.run(fetch_playbook(str(pid), format="outline"))
 
+    assert isinstance(outline, PlaybookWithResources)
     assert [s.block_id for s in outline.sections][:3] == ["h0", "h1", "h2"]
     assert outline.sections[0].text == "Abschnitt 0"
     # Der Einstieg traegt KEINE Prozedur — sonst waere er kein Einstieg.
@@ -1018,7 +1097,9 @@ def test_fetch_playbook_keeps_outline_after_slicing(
 
     one = asyncio.run(fetch_playbook(str(pid), block_ids=["h3"], format="text"))
 
-    assert len(one.sections) == 12
+    # Die Gliederung im Markdown nennt alle zwoelf Anker, nicht nur den gewaehlten.
+    assert isinstance(one, str)
+    assert all(f"- Abschnitt {s} (`h{s}`)" in one for s in range(12))
 
 
 def test_fetch_playbook_selection_forwards_anchors_to_the_api(
@@ -1050,8 +1131,9 @@ def test_fetch_playbook_without_selection_is_unchanged(
     """Additiv: ohne `block_ids` bleibt der Default-Abruf der alte."""
     pid = _sectioned_fixture(monkeypatch, sections=3, paragraphs_each=2)
 
-    default = asyncio.run(fetch_playbook(str(pid)))
+    default = asyncio.run(fetch_playbook(str(pid), format="full"))
 
+    assert isinstance(default, PlaybookWithResources)
     assert default.playbook.content.body != ""
     assert "Abschnitt 0" in default.body_rendered
     assert "Abschnitt 2" in default.body_rendered
@@ -1065,5 +1147,6 @@ def test_fetch_playbook_selection_drops_editor_json_even_under_full(
 
     sliced = asyncio.run(fetch_playbook(str(pid), block_ids=["h1"], format="full"))
 
+    assert isinstance(sliced, PlaybookWithResources)
     assert sliced.playbook.content.body == ""
     assert "Abschnitt 1" in sliced.body_rendered

@@ -51,12 +51,14 @@ from who2be_mcp import tools as tools_pkg
 from who2be_mcp.client import AnyVersionRead, ApiClient
 from who2be_mcp.server import (
     _RESPONSE_FORMATS,
+    PersonaWithPlaybooks,
     fetch_agent,
     get_persona,
     list_playbooks,
     list_versions,
     mcp,
 )
+from who2be_models import AgentWithRenderedPrompt
 from who2be_models.playbook import PlaybookContent
 from who2be_models.resource import ResourceContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
@@ -177,7 +179,12 @@ def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[],
 
 
 def _chars(result: object) -> int:
-    """Groesse der Antwort so, wie sie beim Agenten ankommt (serialisiert)."""
+    """Groesse der Antwort so, wie sie beim Agenten ankommt (serialisiert).
+
+    Der Markdown-Zuschnitt (ADR-0056, Option B) IST der Text, der ankommt.
+    """
+    if isinstance(result, str):
+        return len(result)
     if isinstance(result, list):
         return len(json.dumps([json.loads(item.model_dump_json()) for item in result]))
     assert isinstance(result, BaseModel)
@@ -305,6 +312,10 @@ def _text_format_tools() -> set[str]:
     hat auch ein `format`, meint damit aber das Ausgabeformat (`json`/`markdown`/
     `csv`) und deckelt seine Antwort ueber `limit`. Ein Guard, der nur auf den
     Namen schaut, zieht diesen Fall zu Unrecht herein.
+
+    Erkannt wird ein Budget-Zuschnitt an seinem Default (`full` oder, seit
+    ADR-0056, `text`) bzw. am Enum `{full, text}` — `query_table` hat weder das
+    eine noch das andere.
     """
     tools = asyncio.run(mcp.list_tools(run_middleware=False))
     found = set()
@@ -312,7 +323,9 @@ def _text_format_tools() -> set[str]:
         schema = ((tool.parameters or {}).get("properties") or {}).get("format")
         if not isinstance(schema, dict):
             continue
-        if set(schema.get("enum") or []) == _RESPONSE_FORMATS or schema.get("default") == "full":
+        if set(schema.get("enum") or []) == _RESPONSE_FORMATS or schema.get("default") in (
+            _RESPONSE_FORMATS
+        ):
             found.add(tool.name)
     return found
 
@@ -349,6 +362,11 @@ def test_every_format_aware_tool_has_a_budget_test() -> None:
     """
     format_aware = _text_format_tools()
     assert format_aware, "Kein Werkzeug mit Budget-`format` gefunden — der Guard misst nichts."
+    # Rot-Probe der Erkennung: die umgestellten Werkzeuge (Default `text`) und
+    # die noch nicht umgestellten (Default `full`) werden beide gefunden.
+    assert {"get_persona", "fetch_agent", "list_playbooks", "fetch_playbook"} <= format_aware
+    assert "list_versions" in format_aware
+    assert "query_table" not in format_aware
 
     test_names = _budget_test_names()
     missing = {
@@ -414,21 +432,24 @@ def test_get_persona_text_format_stays_under_response_limit(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    full = asyncio.run(get_persona(str(persona_id)))
+    full = asyncio.run(get_persona(str(persona_id), format="full"))
     text = asyncio.run(get_persona(str(persona_id), format="text"))
 
     _assert_text_path_fits(full, text, "get_persona")
     # Gekuerzt wird die Editor-Struktur, nicht der Inhalt: das Profil kommt
     # vollstaendig an, und die Modi (die Logik des Agenten) bleiben erhalten.
-    assert "Abschnitt 189" in text.body_rendered
-    assert text.persona.content.modes[0].trigger == "issue veredeln"
-    assert text.persona.content.description == full.persona.content.description
+    assert isinstance(full, PersonaWithPlaybooks)
+    assert isinstance(text, str)
+    assert "Abschnitt 189" in text
+    assert "**Trigger:** issue veredeln" in text
+    assert full.persona.content.description in text
+    assert '"props"' not in text
 
 
-def test_get_persona_default_format_keeps_editor_blocks(
+def test_get_persona_default_format_is_markdown_and_full_keeps_editor_blocks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Additiv: ohne `format` bleibt die Antwort unveraendert vollstaendig."""
+    """Default ist Markdown (ADR-0056); `full` behaelt die Editor-Bloecke."""
     persona_id = uuid4()
     blocks = _fat_blocks(4)
     payload = _persona_payload(persona_id, blocks)
@@ -449,12 +470,15 @@ def test_get_persona_default_format_keeps_editor_blocks(
     explicit = asyncio.run(get_persona(str(persona_id), format="full"))
     text = asyncio.run(get_persona(str(persona_id), format="text"))
 
-    assert default.persona.content.content is not None
-    assert len(default.persona.content.content.blocks) == len(blocks)
+    assert isinstance(explicit, PersonaWithPlaybooks)
     assert explicit.persona.content.content is not None
     assert len(explicit.persona.content.content.blocks) == len(blocks)
-    assert text.persona.content.content is not None
-    assert text.persona.content.content.blocks == []
+    # Rot-Probe: liefert der Default wieder das Modell, faellt der Typ.
+    assert isinstance(default, str)
+    assert default == text
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(text)
+    assert '"blocks"' not in text
 
 
 def test_get_persona_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -481,7 +505,9 @@ def test_get_persona_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> 
 
     # Gegenprobe: derselbe Aufruf mit gueltigem Zuschnitt gelingt — der Fehler
     # unten kommt also von `format`, nicht von der gemockten API.
-    assert asyncio.run(get_persona(str(persona_id))).persona.name == "Coder"
+    valid = asyncio.run(get_persona(str(persona_id), format="full"))
+    assert isinstance(valid, PersonaWithPlaybooks)
+    assert valid.persona.name == "Coder"
     with pytest.raises(ToolError, match="Ungueltiges format"):
         asyncio.run(get_persona(str(persona_id), format="plain"))
 
@@ -516,11 +542,12 @@ def test_get_persona_text_format_empties_linked_playbook_bodies(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    full = asyncio.run(get_persona(str(persona_id)))
+    full = asyncio.run(get_persona(str(persona_id), format="full"))
     text = asyncio.run(get_persona(str(persona_id), format="text"))
 
     # Gegenprobe zur Abgrenzung: die Persona-Bloecke allein tragen die Antwort
     # NICHT ueber die Grenze — was sie reisst, sind die Playbook-Bodies.
+    assert isinstance(full, PersonaWithPlaybooks)
     persona_only = len(full.persona.model_dump_json())
     assert persona_only <= _RESPONSE_CHAR_LIMIT, (
         f"Fixture verfehlt seinen Zweck: die Persona allein ist mit {persona_only} "
@@ -528,13 +555,14 @@ def test_get_persona_text_format_empties_linked_playbook_bodies(
     )
 
     _assert_text_path_fits(full, text, "get_persona(mit Playbooks)")
-    # Der Katalog bleibt brauchbar: was die Auswahl traegt, ist vollstaendig da.
-    assert len(text.playbooks) == len(full.playbooks) == 5
-    assert [p.name for p in text.playbooks] == [p.name for p in full.playbooks]
-    assert all(p.triggers == "arbeite Task [X] ab" for p in text.playbooks)
-    assert all(p.content.description.startswith("Beschreibung von") for p in text.playbooks)
-    assert all(p.content.body == "" for p in text.playbooks)
+    # Der Katalog bleibt brauchbar: was die Auswahl traegt, ist vollstaendig da —
+    # Name, id, Trigger je Playbook; der Body nicht (den holt `fetch_playbook`).
+    assert isinstance(text, str)
+    assert len(full.playbooks) == 5
+    for playbook in full.playbooks:
+        assert f"- {playbook.name} (`{playbook.id}`) — Trigger: arbeite Task [X] ab" in text
     assert all(p.content.body == body for p in full.playbooks)
+    assert "Abschnitt 0: Profiltext" not in text
 
 
 def test_fetch_agent_text_format_stays_under_response_limit(
@@ -556,13 +584,15 @@ def test_fetch_agent_text_format_stays_under_response_limit(
         server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
     )
 
-    full = asyncio.run(fetch_agent(str(agent_id)))
+    full = asyncio.run(fetch_agent(str(agent_id), format="full"))
     text = asyncio.run(fetch_agent(str(agent_id), format="text"))
 
     _assert_text_path_fits(full, text, "fetch_agent")
     # Der Prompt — der eigentliche Zweck des Tools — bleibt unberuehrt.
-    assert text.system_prompt_rendered == full.system_prompt_rendered
-    assert text.persona.name == full.persona.name
+    assert isinstance(full, AgentWithRenderedPrompt)
+    assert isinstance(text, str)
+    assert full.system_prompt_rendered in text
+    assert f"- persona: {full.persona.name} ({full.persona.id})" in text
 
 
 def test_list_playbooks_text_format_stays_under_response_limit(
@@ -576,18 +606,23 @@ def test_list_playbooks_text_format_stays_under_response_limit(
         server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
     )
 
-    full = asyncio.run(list_playbooks())
+    full = asyncio.run(list_playbooks(format="full"))
     text = asyncio.run(list_playbooks(format="text"))
 
     _assert_text_path_fits(full, text, "list_playbooks")
-    # Was die Auswahl traegt, bleibt vollstaendig: Name, Beschreibung, Tags,
+    # Was die Auswahl traegt, bleibt vollstaendig: Name, id, Beschreibung,
     # Triggers — nur das Editor-JSON faellt weg.
-    assert len(text) == len(full) == 8
-    assert [p.name for p in text] == [p.name for p in full]
-    assert all(p.triggers == "arbeite Task [X] ab" for p in text)
-    assert all(p.content.description.startswith("Beschreibung von") for p in text)
-    assert all(p.content.body == "" for p in text)
+    assert isinstance(full, list)
+    assert isinstance(text, str)
+    assert len(full) == 8
+    assert text.startswith("# Playbooks (8)\n")
+    for playbook in full:
+        assert f"## {playbook.name}\n" in text
+        assert f"- id: {playbook.id}" in text
+        assert playbook.content.description in text
+    assert text.count("- trigger: arbeite Task [X] ab") == 8
     assert all(p.content.body == body for p in full)
+    assert '"props"' not in text
 
 
 def test_list_versions_text_format_stays_under_response_limit(

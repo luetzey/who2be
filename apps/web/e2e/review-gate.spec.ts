@@ -40,7 +40,7 @@ async function agentSees(
 ): Promise<McpPersona['persona']> {
   const result = await callMcpTool(request, agentToken, 'get_persona', {
     identifier: personaId,
-    format: 'text',
+    format: 'full',
   })
   expect(result.isError, `get_persona meldete einen Tool-Fehler: ${result.text}`).toBe(false)
   return (JSON.parse(result.text) as McpPersona).persona
