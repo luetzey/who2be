@@ -1,0 +1,57 @@
+# Gitleaks-Konfiguration fuer den CI-Job `secrets` (.github/workflows/ci.yml).
+#
+# Grundregel: es gilt der volle Standard-Regelsatz von Gitleaks. Ausnahmen
+# stehen hier nur als EXAKTE Zeichenkette eines belegten Platzhalters, nie als
+# Pfad- oder Verzeichnis-Ausnahme. Grund: eine Pfad-Ausnahme (etwa `tests/`)
+# liesse auch ein echtes Geheimnis durch, das spaeter in einer Testdatei
+# landet; eine Wert-Ausnahme deckt genau diesen einen, oeffentlich bekannten
+# Wert und sonst nichts.
+#
+# Jede Ausnahme braucht eine Begruendung mit Fundstelle. Wer hier etwas
+# ergaenzt, aendert ein Sicherheits-Gate — die Aenderung ist im PR-Diff
+# sichtbar und wird im Review gesondert geprueft.
+#
+# Kalibriert am einmaligen Voll-Scan der Historie (Gitleaks 8.30.1): jeder
+# dortige Fund war einer der unten aufgefuehrten Werte.
+
+title = "who2be"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Belegte Test-Platzhalter und Doku-Beispielwerte (exakte Werte)"
+# Ziel ist das extrahierte Geheimnis (Gitleaks-Default `regexTarget = secret`).
+regexes = [
+  # JWT-Signierschluessel der Test-Suite: conftest.py (TEST_JWT_SECRET) und
+  # die _TEST_SECRET-Konstanten der API-Integrationstests. Signiert nur
+  # Tokens gegen die Wegwerf-Datenbank der Tests, nie gegen eine echte
+  # Instanz; der Wert ist durch das Repo selbst oeffentlich.
+  '''^integration-test-jwt-secret-padding-0123456789$''',
+  # Platzhalter-Anon-Key aus .env.example (VITE_SUPABASE_ANON_KEY) und den
+  # curl-Beispielen in docs/local-smoke.md und docs/cloud-local-smoke.md.
+  # Der Name sagt es: GoTrue wertet ihn lokal nicht aus.
+  '''^dev-anon-key-not-used-by-gotrue$''',
+  # Absichtlich geheimnisfoermige Eingabe in
+  # apps/api/tests/test_memory_expiry.py — der Test prueft, dass solche
+  # Zeichenketten nicht ins Gedaechtnis gelangen.
+  '''^beispiel0123456789$''',
+  # Testpasswort in
+  # apps/web/src/features/auth/pages/SetPasswordPage.test.tsx (gemockter
+  # Supabase-Client, kein Konto dahinter).
+  '''^streng-geheim-123$''',
+]
+
+[[allowlists]]
+description = "Fehlalarme der Regel generic-api-key auf Fliesstext"
+targetRules = ["generic-api-key"]
+regexes = [
+  # Die Regel springt auf Woerter wie "key"/"api" vor einem Bindestrich-Wort
+  # an. Die folgenden Treffer sind deutsche Prosa, keine Werte:
+  #   .claude/plan/2026-10-03-1945_gedaechtnis-api-mehrfachwerte-ausschluss.md
+  '''^ADR-0053-Vertragstabelle$''',
+  #   apps/api/src/who2be_api/core/rate_limit.py (Modul-Docstring)
+  '''^SHA-256-Praefix$''',
+  #   apps/web/src/i18n/locales/de.json (Schluessel apiError)
+  '''^Who2Be-API-Fehler$''',
+]

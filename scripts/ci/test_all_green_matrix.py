@@ -85,6 +85,7 @@ class Case(NamedTuple):
     audit: str
     expected_exit: int
     changelog_guard: str = OK
+    secrets: str = OK
 
     def env(self) -> dict[str, str]:
         if len(self.gated) != len(GATED_JOBS):
@@ -105,6 +106,7 @@ class Case(NamedTuple):
                 "CODE": self.code,
                 "AUDIT_RESULT": self.audit,
                 "CHANGELOG_GUARD_RESULT": self.changelog_guard,
+                "SECRETS_RESULT": self.secrets,
             }
         )
         return env
@@ -190,6 +192,18 @@ CASES: tuple[Case, ...] = (
         OK,
         1,
         changelog_guard=SKIP,
+    ),
+    # --- `secrets` (Gitleaks) haengt ebenfalls an keinem Pfadfilter: ein
+    #     Geheimnis in Doku ist genauso oeffentlich wie eines im Code ---
+    Case("secrets rot bei Doku-PR", OK, "false", ALL_SKIP, OK, 1, secrets=RED),
+    Case(
+        "secrets uebersprungen (darf nie passieren)",
+        OK,
+        "true",
+        ALL_OK,
+        OK,
+        1,
+        secrets=SKIP,
     ),
 )
 
