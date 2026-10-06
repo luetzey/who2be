@@ -103,11 +103,21 @@ Verzeichnis starten).
 Nach dem Restart koennen Aufrufe wie folgt aussehen:
 
 - `mcp__who2be__ping()` → `"pong"`
-- `mcp__who2be__list_playbooks()` → Liste deiner Playbooks
-- `mcp__who2be__get_persona(identifier="<persona-id>")` → Persona + alle
-  verknuepften Playbooks
+- `mcp__who2be__list_playbooks()` → Katalog deiner Playbooks (Kopf und
+  Beschreibung je Eintrag)
+- `mcp__who2be__get_persona(identifier="<persona-id>")` → Persona mit Profil,
+  Modi und den verknuepften Playbooks
 - `mcp__who2be__fetch_playbook(playbook_id="<id>")` → vollstaendiger
-  Playbook-Inhalt inkl. Body, Tags, Triggers
+  Playbook-Inhalt inkl. Gliederung, Tags und Triggers
+
+Lesende Werkzeuge mit Inhalt (Persona, Playbook, Resource, System-Prompt,
+externe Tools, Versionen) antworten standardmaessig mit einem
+Markdown-Dokument: ein kurzer Kopf mit `id`, Version und Status, darunter der
+Inhalt als Klartext. Wer die Antwort als Vorlage fuer ein `update_*`-Werkzeug
+braucht oder sie maschinell verarbeitet, setzt `format="full"` und bekommt die
+strukturierte Antwort mit Editor-JSON. Details:
+[`mcp-payload-budget.md`](mcp-payload-budget.md),
+[ADR-0056](adr/0056-mcp-lesende-werkzeuge-text-default.md).
 
 ## Caveats
 

@@ -318,8 +318,8 @@ class PersonaRefResolver:
             f"Deine Persona ist **{name}** (id: `{ctx.persona_id}`). "
             f"Lade dein vollstaendiges Profil und deine Modi zu Beginn der Sitzung via "
             f'MCP-Tool `get_persona("{ctx.persona_id}")`. '
-            "Pruefe danach `content.modes`: Waehle anhand des Modus-`trigger` den "
-            "passenden Modus und wende dessen `identity_add` + `output_style_override` "
+            "Pruefe danach die Sektion `## Modi`: Waehle anhand des Modus-Triggers den "
+            "passenden Modus und wende dessen Identitaets-Ergaenzung und Output-Stil "
             "an; ohne Trigger-Match gilt der Default-Modus. "
             f'Alternativ liefert `get_persona("{ctx.persona_id}", mode="<Modus-Name>")` '
             "das Profil bereits serverseitig im gewaehlten Modus (identity_add "

@@ -43,20 +43,27 @@ Fuer einen Agenten ist dieses JSON in den meisten Faellen **doppelt bezahlt**:
 - `get_persona` und `fetch_agent` liefern den Inhalt **ohnehin** schon als
   Plain-Text in `body_rendered` bzw. `system_prompt_rendered`. Die Bloecke sind
   dieselbe Prosa ein zweites Mal, nur teurer.
-- `list_playbooks` beantwortet die Frage „welches Playbook passt?\" — das traegt
+- `list_playbooks` beantwortet die Frage „welches Playbook passt?“ — das traegt
   Name, Beschreibung, Tags und Triggers. Der Body gehoert in den gezielten
   Einzelabruf (`fetch_playbook`), nicht in jeden Katalog-Eintrag.
-- `list_versions` beantwortet „welche Versionen gibt es?\" — das traegt
+- `list_versions` beantwortet „welche Versionen gibt es?“ — das traegt
   `version`, `status`, `created_by`, `created_at`. Den Inhalt einer bestimmten
   Version liefert `get_version`.
 
-Wer die Bloecke strukturell braucht (ein Editor-Frontend etwa), bekommt sie
+Dazu kommt das Escaping: solange die Antwort ein JSON-Objekt ist, steht jedes
+lesbare Feld darin mit `\n` und `\"` (ADR-0056, Abschnitt 1.3). Wer die Bloecke
+strukturell braucht (ein Editor-Frontend, ein `update_*`-Aufruf), bekommt sie
 weiterhin — siehe `format` unten.
 
-## Inventar (Messung 2026-09-26, Live-Workspace)
+## Inventar (Messung 2026-09-26, Live-Workspace, vor ADR-0056)
 
 Gemessen wurde die serialisierte Antwort gegen echte Workspace-Daten, nicht
-geschaetzt.
+geschaetzt. Die Zahlen beschreiben die damalige Default-Antwort, also das, was
+heute `format="full"` liefert. Unter dem heutigen Default `format="text"`
+bleiben die Werkzeuge aus den Tabellen „Ueber der Grenze“ und
+„Beobachtungsposten“ mit den Fixtures der Budget-Tests unter der Grenze (siehe
+Regressionsschutz). Zwei Faelle bleiben auch dort nah an der Grenze, siehe
+„Offen“.
 
 **Ueber der Grenze:**
 
@@ -101,81 +108,90 @@ ueberschritten, bevor ein zweiter Eintrag dazukommt.
 `block_count` statt der Bloecke — 786 Zeichen fuer denselben Zweck, den
 `list_playbooks` mit 277.151 Zeichen erfuellt.
 
-## Die Loesung: `format="text"`, additiv
+## Die Loesung: `format="text"` als Default (ADR-0056)
 
-Die betroffenen Werkzeuge haben einen Parameter `format`:
+Die zwoelf lesenden Werkzeuge mit Editor-JSON haben einen Parameter `format`.
+Die Entscheidung steht in
+[`adr/0056-mcp-lesende-werkzeuge-text-default.md`](adr/0056-mcp-lesende-werkzeuge-text-default.md).
 
-- **`"full"` (Default)** — unveraenderte Antwort mit Editor-JSON. Bestehende
-  Konsumenten merken von der Aenderung nichts.
-- **`"text"`** — der Body bleibt leer, **alles andere bleibt vollstaendig**.
+- **`"text"` (Default)**: ein Markdown-Dokument statt eines JSON-Objekts. Oben
+  steht ein kurzer Kopf mit den Metadaten fuer Folgeaufrufe (`id`, Version,
+  Status, Locale, je nach Werkzeug Tags, Trigger, Gliederung), darunter der
+  Inhalt als Klartext. Kein Editor-JSON, kein Escaping. Platzhalter erscheinen
+  als `{{kind:target_id}}`.
+- **`"full"`**: die Antwort, wie sie die REST-API liefert, mit Editor-JSON.
+  Das ist die Vorlage fuer die `update_*`-Werkzeuge (PUT, `content` ersetzt den
+  Stand vollstaendig) und fuer strukturelle Verarbeitung.
+- **`"outline"`**: nur bei `fetch_playbook`, Kopf und Gliederung ohne
+  Prozedur.
 
-Bewusst **opt-in** und nicht als neuer Default: ein Konsument, der die Bloecke
-strukturell verarbeitet, soll nicht durch ein Server-Update brechen. Ein
-unbekannter Wert wird mit einem `ToolError` abgelehnt, statt still `full` zu
-liefern — ein Tippfehler soll auffallen und nicht als scheinbar erfolgreicher,
-aber zu grosser Aufruf enden.
+Jede `text`-Antwort sagt selbst, dass `update_*` die Vorlage mit
+`format="full"` braucht. Ein Schreiber, der die Lesefassung als Vorlage nimmt,
+wuerde den Inhalt beim naechsten PUT leeren. Deshalb steht der Hinweis an drei
+Stellen: in der Antwort, in den Beschreibungen der `update_*`-Werkzeuge und in
+der Builder-Resource „Agent-Bau-Konventionen“ (ADR-0056, Abschnitt 5).
 
-Was `format="text"` **nicht** wegnimmt:
+Ein unbekannter Wert wird mit einem `ToolError` abgelehnt, bevor die API
+gefragt wird. Ein Tippfehler soll auffallen, statt still einen anderen
+Zuschnitt zu liefern.
 
-| Werkzeug | leer | bleibt vollstaendig |
+Was die Lesefassung je Werkzeug traegt:
+
+| Werkzeug | Kopf | Inhalt |
 | --- | --- | --- |
-| `get_persona` | `persona.content.content.blocks` **und** `content.body` jedes verknuepften Playbooks | `body_rendered`, Beschreibung, Traits, Tags, **Modi**; je Playbook Name, Beschreibung, Tags, Triggers |
-| `fetch_playbook` | `playbook.content.body` | `body_rendered`, `linked_blocks`, `linked_resources`, `composed_playbooks` |
-| `fetch_agent` | Persona-Bloecke | `system_prompt_rendered`, Name, Locale, Template-ID |
-| `list_playbooks` | `content.body` je Eintrag | Name, Beschreibung, Tags, Triggers, Typ, `compose_children` |
-| `list_versions` | `content.body` / `.blocks` / `.usage_notes` | `version`, `status`, `locale`, `created_by`, `created_at`, Beschreibung |
+| `get_persona` | `id`, Version, Status, Locale, Tags, aktiver Modus | Beschreibung, gerendertes Profil, Traits, **Modi** (Trigger, Identitaet, Output-Stil, Anti-Patterns), Playbook-Katalog mit `id` und Trigger |
+| `fetch_agent` | `id`, Persona, Template, Locale | gerenderter System-Prompt, Modi |
+| `list_playbooks` | je Eintrag `id`, Version, Status, Typ, Tags, Trigger, Kinder | Beschreibung, kein Body |
+| `fetch_playbook` | wie `list_playbooks` | Gliederung mit `block_id`, Prozedur, Verweise, eingebettete Resources und Sub-Playbooks als Klartext |
+| `fetch_resource` | `id`, Slug, Version, Status, Locale, Tags | Beschreibung, Bloecke als Klartext, Sub-Resources |
+| `get_system_prompt` | `id`, Slug, Version, Status, Locale | Body als Klartext |
+| `list_system_prompts` | je Eintrag wie `get_system_prompt` | Beschreibung, kein Body |
+| `get_external_tool` | `id`, Alias, Version, Status, Locale | Felder, Nutzungshinweise als Klartext |
+| `list_external_tools` | je Eintrag wie `get_external_tool` | Felder, keine Nutzungshinweise |
+| `list_versions` | je Version Nummer, Status, Locale, Zeitpunkt, Autor | kein Inhalt (den liefert `get_version`) |
+| `get_version` | wie `list_versions` | Snapshot-Inhalt als Klartext |
+| `diff_versions` | Version, Vergleichsstand, identisch ja/nein | Aenderungspfade, Klartext vorher/nachher; die Rohwerte `before`/`after` entfallen |
 
-Bei `get_persona` gehoeren **beide** Haelften zum Zuschnitt: die Antwort ist
-`PersonaWithPlaybooks`, und gemessen tragen die Playbook-Bodies mehr bei als das
-Persona-Profil selbst. Wird nur das Profil geleert, reisst die Antwort ab etwa
-vier verknuepften Playbooks weiterhin — eine Persona ohne Playbooks ist beim
-Boot-Schritt der Ausnahmefall.
+Die Darstellung liegt an einer Stelle, `apps/mcp/src/who2be_mcp/text_view.py`.
+Der Klartext der Bloecke kommt aus derselben Serialisierung wie
+`before_text`/`after_text` (`who2be_models.blocknote_text`). Die Daten in der
+Datenbank und die REST-Antwort bleiben unberuehrt.
 
-Der Zuschnitt betrifft **nur die Antwort-Kopie** (`model_copy`); die Daten in
-der Datenbank und die REST-Antwort bleiben unberuehrt.
+Bei `get_persona` gehoeren Profil **und** Playbook-Katalog zum Zuschnitt:
+gemessen tragen die Playbook-Bodies mehr bei als das Persona-Profil selbst.
+Unter `text` stehen je Playbook nur Name, `id` und Trigger; den Body liefert
+`fetch_playbook`.
 
-Bei `list_versions` liefert `format="text"` seit ADR-0056 Markdown mit einem
-Kopf je Version (`version`, `status`, `locale`, Autor, Zeitpunkt) und ohne
-Inhalt. Das gilt fuer jedes Content-Modell gleich, weil der Inhalt gar nicht
-erst gerendert wird; ein frueher noetiger Feld-Zuschnitt je Modell entfaellt.
-Die uebrige Seite beschreibt noch den Stand vor ADR-0056 und wird mit deren
-Paket 5 nachgezogen.
+**Bruch gegenueber dem Stand vor ADR-0056:** Bis dahin war `full` der Default,
+und `text` lieferte bei fuenf Werkzeugen ein JSON-Objekt mit geleertem Body.
+Wer ohne `format` aufruft und JSON erwartet, setzt jetzt `format="full"`.
 
-## Offen: drei Werkzeuge mit benanntem Weg, aber ohne Zuschnitt
+## Offen: was unter `text` nah an der Grenze bleibt
 
-Diese drei reissen die Grenze gemessen und haben **noch keinen** `format`-Pfad.
-Der Weg darunter ist je Fall benannt; keiner davon ist ein Einzeiler, deshalb
-stehen sie hier statt halbfertig im Code.
+Unter `full` gelten die Messwerte aus dem Inventar unveraendert. Unter `text`
+bleiben zwei Faelle, bei denen der Inhalt selbst gross werden kann.
 
-**`list_system_prompts` (50.766)** — derselbe Listen-Fall wie `list_playbooks`,
-aber `format="text"` traegt hier **nicht**: `SystemPromptTemplateContent.body`
-ist mit `min_length=1` validiert, ein leerer Body ist schema-ungueltig. Ein
-Konsument, der die Antwort erneut validiert, bekaeme statt einer grossen Antwort
-einen Validierungsfehler — schlechter als der Ist-Zustand.
-*Weg darunter:* ein eigenes Summary-Modell nach dem Vorbild von
-`ResourceSummary` (`body_chars` statt `body`), wie `list_resources` es mit 786
-Zeichen vormacht. Das ist ein neues Modell plus Client-Anpassung plus eine
-Pruefung der Web-Konsumenten — ein eigenes Arbeitspaket.
-
-**`get_system_prompt` (50.441)** — reisst **strukturell**, nicht durch Ballast:
-der Body ist der Zweck des Aufrufs, und `max_length=50_000` liegt selbst schon
-am Antwortbudget. Es gibt hier nichts wegzulassen.
+**`get_system_prompt`** bleibt strukturell nah an der Grenze, weil der Body
+der Zweck des Aufrufs ist. `SystemPromptTemplateContent.body` ist auf 50.000
+Zeichen begrenzt. Ein BlockNote-Body schrumpft unter `text` deutlich, weil die
+Editor-Struktur entfaellt. Ein Body, der als einfacher Text gespeichert ist
+(Alt-Bestand), kommt dagegen unveraendert an und kann samt Kopf knapp ueber
+der Grenze liegen.
 *Weg darunter:* Paginierung des Bodys (Offset/Limit wie `read_file`) oder das
 Modell-Maximum auf einen Wert senken, der samt Rahmen unter 50.000 bleibt.
 Beides aendert einen bestehenden Vertrag und braucht eine Entscheidung.
 
-**`diff_versions` (52.116)** — `before_text` und `after_text` tragen denselben
-Inhalt **zweimal**, jeweils vollstaendig, auch wenn sich eine Zeile geaendert
-hat.
-*Weg darunter:* die beiden Klartext-Felder auf die geaenderten Abschnitte
-beschraenken (die `changes`-Liste weiss bereits, welche das sind) oder sie hinter
-ein `format` legen, das nur `changes` liefert. Der Diff-Konsument im Web nutzt
-`before_text`/`after_text` fuer die Zeilenansicht — das ist ein Frontend-Vertrag,
-kein reiner Server-Zuschnitt.
+**`diff_versions`** verliert unter `text` die Rohwerte, traegt den Klartext
+aber weiter **zweimal**, vorher und nachher, jeweils vollstaendig. Bei einem
+sehr langen Inhalt kann das allein die Grenze erreichen.
+*Weg darunter:* die beiden Klartext-Abschnitte auf die geaenderten Abschnitte
+beschraenken (die `changes`-Liste weiss bereits, welche das sind). Der
+Diff-Konsument im Web nutzt `before_text`/`after_text` fuer die Zeilenansicht.
+Das betrifft also einen Frontend-Vertrag und ist kein reiner Server-Zuschnitt.
 
-Gemeinsam ist den drei Faellen, dass der Zuschnitt einen **Vertrag** beruehrt
-(Schema, Modell-Limit, Frontend-Ansicht) statt nur eine Antwort-Kopie. Deshalb
-sind sie hier gemessen und benannt, aber nicht nebenbei umgebaut.
+`list_system_prompts`, frueher der dritte offene Fall, ist erledigt: die
+Lesefassung traegt je Eintrag Kopf und Beschreibung, keinen Body. Ein eigenes
+Summary-Modell ist dafuer nicht mehr noetig.
 
 ## Regressionsschutz
 
@@ -183,9 +199,10 @@ sind sie hier gemessen und benannt, aber nicht nebenbei umgebaut.
 Kataloggroesse von `tools/list` (WP10, ADR-0047) und die Antwortgroesse je
 Werkzeug.
 
-Die Antwort-Tests messen die **serialisierte** Antwort (`model_dump_json`),
-nicht Feldnamen — sie halten die Zusage „die Antwort kommt an\", nicht die
-Zusage „ein Feld heisst so\". Jeder Test fuehrt seine **Rot-Probe mit**: er
+Die Antwort-Tests messen die Antwort so, wie sie ankommt: unter `text` den
+Markdown-String, unter `full` das serialisierte Modell (`model_dump_json`).
+Sie halten die Zusage „die Antwort kommt an“, nicht die Zusage „ein Feld heisst
+so“. Jeder Test fuehrt seine **Rot-Probe mit**: er
 belegt zuerst, dass der `full`-Pfad die Grenze mit demselben Fixture
 tatsaechlich reisst, und danach, dass `text` sie haelt. Entfaellt der Zuschnitt,
 werden beide Pfade gleich gross und der Test faellt. Ohne diese erste Assertion
@@ -210,14 +227,16 @@ verschwindet. Die Antwort darauf ist ein Test, nicht ein Eintrag in einer
 Ausnahmeliste.
 
 Ein zweiter Guard, `test_system_prompt_body_cannot_be_emptied_for_a_cheap_
-response`, haelt die Begruendung des Abschnitts „Offen\" nachpruefbar: er belegt,
-dass `min_length=1` den billigen Zuschnitt dort verbietet. Wird das Limit
-gelockert, faellt er — und genau dann ist der Zuschnitt moeglich und soll
-nachgezogen werden.
+response`, haelt fest, warum `get_system_prompt` den Body als Klartext traegt
+statt ihn zu leeren: `min_length=1` verbietet einen leeren Body, und
+`max_length` liegt am Antwortbudget. Aendert sich eines der beiden Limits,
+faellt er, und der Abschnitt „Offen“ ist nachzuziehen.
 
 ## Verwandt
 
 - [`mcp-claude-code.md`](mcp-claude-code.md) — den Server anbinden
+- [`adr/0056-mcp-lesende-werkzeuge-text-default.md`](adr/0056-mcp-lesende-werkzeuge-text-default.md)
+  — warum `text` der Default ist und `full` die Vorlage fuer `update_*`
 - `apps/mcp/tests/test_tool_payload_budget.py` — haelt zusaetzlich das
   **Katalog**-Budget von `tools/list` (WP10 in
   [`adr/0047-agent-workarea-knowledge-base.md`](adr/0047-agent-workarea-knowledge-base.md)):

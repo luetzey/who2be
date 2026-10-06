@@ -138,10 +138,12 @@ _TOOLS: list[_ToolDoc] = [
         description=(
             "Laedt deine eigene Persona inkl. Profil und verknuepfter Playbooks. "
             "Ruf das einmal zu Beginn auf, wenn du deinen Kontext brauchst. "
-            "Pruefe `content.modes`: Wenn die Persona Modi enthaelt, waehle anhand "
-            "des Modus-Triggers den passenden Modus und wende dessen "
-            "`identity_add` + `output_style_override` an; ohne Trigger-Match "
-            "gilt der Default-Modus."
+            "Die Antwort ist Markdown; Modi stehen darin unter `## Modi`. Wenn die "
+            "Persona Modi enthaelt, waehle anhand des Modus-Triggers den passenden "
+            "Modus und wende dessen Identitaets-Ergaenzung und Output-Stil an "
+            '(oder lass das den Server tun: `mode="<Modus-Name>"`); ohne '
+            "Trigger-Match gilt der Default-Modus. Strukturiert (`content.modes`) "
+            'nur mit `format="full"`.'
         ),
     ),
     _ToolDoc(
@@ -198,9 +200,9 @@ _TOOLS: list[_ToolDoc] = [
         description=(
             "Vollstaendiger Body eines Playbooks (Schritte, Anweisungen). "
             "Folge den dort beschriebenen Schritten. "
-            "Ist das Playbook ein Composite (Feld `composed_playbooks` nicht leer), "
-            "enthaelt die Antwort eine nummerierte Sub-Playbook-Sequenz — "
-            "arbeite diese der Reihe nach ab; einzelne Kinder koennen via "
+            "Ist das Playbook ein Composite (Abschnitt „Sub-Playbooks“ in der "
+            "Antwort), stehen die Kinder dort in ihrer Reihenfolge — "
+            "arbeite sie der Reihe nach ab; einzelne Kinder koennen via "
             "erneutem fetch_playbook(child_id) vertieft werden."
         ),
     ),
