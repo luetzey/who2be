@@ -16,10 +16,9 @@ Org-Resolver-Objekte verifiziert.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -28,6 +27,10 @@ from who2be_api.core.config import get_settings
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.main import create_app
 from who2be_models import WorkspaceRole
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 _OPERATORS_ENV = "WHO2BE_BILLING_OVERRIDE_OPERATORS"
 
@@ -64,9 +67,9 @@ def cloud_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     get_settings.cache_clear()
 
 
-def _post(app: FastAPI, body: dict[str, object]) -> httpx.Response:
+def _post(app: FastAPI, body: dict[str, object]) -> Response:
     with TestClient(app) as client:
-        resp: httpx.Response = client.post(
+        resp: Response = client.post(
             f"/v1/workspaces/{uuid4()}/billing/override",
             json=body,
             headers={"Authorization": "Bearer w2b_dummy"},

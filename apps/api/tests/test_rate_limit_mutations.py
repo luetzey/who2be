@@ -16,13 +16,13 @@ Setup analog `test_rate_limit.py`: nur mit erreichbarer DB; ohne DB Skip.
 import asyncio
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import asyncpg
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
 
 from who2be_api.core import rate_limit, security
 from who2be_api.core.config import Settings, get_settings
@@ -33,6 +33,10 @@ from who2be_api.testing.workspace_setup import (
     fresh_user_id,
     setup_workspace,
 )
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 _TEST_LIMIT = "1/minute"
@@ -94,7 +98,7 @@ def _override_settings(monkeypatch: pytest.MonkeyPatch, limit: str) -> None:
 # `key_style="url"` pro voller Request-URL bucketet; ein wechselnder Pfad-Param
 # laege in getrennten Buckets und liefe nie ins Limit. Ziel-IDs existieren nicht
 # (404/409), das ist hier egal: der Limiter greift VOR dem Handler-Body.
-_Builder = Callable[[TestClient, str, dict[str, str], str], Response]
+_Builder = Callable[[TestClient, str, dict[str, str], str], "Response"]
 
 _MUTATIONS: list[tuple[str, _Builder]] = [
     (

@@ -6,12 +6,14 @@ Cross-Workspace-Isolation, transitiver Zyklus (A->B->C->A), Selbst-Referenz,
 Used-By-Backlinks. Skippt ohne erreichbare Datenbank.
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
-import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +23,10 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -237,7 +243,7 @@ def test_sub_resource_transitive_cycle_guard(monkeypatch: pytest.MonkeyPatch) ->
     base = f"/v1/workspaces/{ws}/resources"
 
     def _set(parent: str, child: str) -> int:
-        resp: httpx.Response = client.put(
+        resp: Response = client.put(
             f"{base}/{parent}/sub_resources",
             json={"links": [{"child_id": child, "link_scope": "resource", "position": 0}]},
             headers=auth,

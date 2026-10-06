@@ -7,12 +7,14 @@ pytest-Collection-Pattern bewusst nicht und `scripts/` liegt außerhalb der
     uv run pytest scripts/qa_run_personas_playbooks.py -v --tb=short
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
-import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -26,6 +28,10 @@ from who2be_api.testing.workspace_setup import (
     fresh_user_id,
     setup_workspace,
 )
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 _SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -575,13 +581,11 @@ def test_FT_VER_01_to_10_persona(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def _t(
         c: TestClient, pid: str, v: int, to: str, auth: dict[str, str], note: str | None = None
-    ) -> httpx.Response:
+    ) -> Response:
         body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
-        resp: httpx.Response = c.post(
-            f"{base}/{pid}/versions/{v}/transition", json=body, headers=auth
-        )
+        resp: Response = c.post(f"{base}/{pid}/versions/{v}/transition", json=body, headers=auth)
         return resp
 
     with TestClient(app) as c:
@@ -692,13 +696,11 @@ def test_FT_VER_01_to_10_playbook(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def _t(
         c: TestClient, eid: str, v: int, to: str, auth: dict[str, str], note: str | None = None
-    ) -> httpx.Response:
+    ) -> Response:
         body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
-        resp: httpx.Response = c.post(
-            f"{base}/{eid}/versions/{v}/transition", json=body, headers=auth
-        )
+        resp: Response = c.post(f"{base}/{eid}/versions/{v}/transition", json=body, headers=auth)
         return resp
 
     with TestClient(app) as c:
