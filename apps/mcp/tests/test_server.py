@@ -9,6 +9,7 @@ import httpx
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from mcp.types import TextContent
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
@@ -243,7 +244,9 @@ def test_get_persona_tool_includes_body_rendered(
 
     async def _run() -> object:
         async with Client(mcp) as client:
-            result = await client.call_tool("get_persona", {"identifier": str(persona_id)})
+            result = await client.call_tool(
+                "get_persona", {"identifier": str(persona_id), "format": "full"}
+            )
             return result.structured_content
 
     data = asyncio.run(_run())
@@ -291,7 +294,7 @@ def test_get_persona_tool_carries_locale_and_ignores_alt_client_param(
     async def _run() -> object:
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "get_persona", {"identifier": str(persona_id), "locale": "de"}
+                "get_persona", {"identifier": str(persona_id), "locale": "de", "format": "full"}
             )
             return result.structured_content
 
@@ -357,7 +360,7 @@ def test_get_persona_tool_forwards_mode_param(
     async def _run() -> object:
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "get_persona", {"identifier": str(persona_id), "mode": "sparring"}
+                "get_persona", {"identifier": str(persona_id), "mode": "sparring", "format": "full"}
             )
             return result.structured_content
 
@@ -389,7 +392,7 @@ def test_list_playbooks_tool_returns_playbooks(
 
     async def _run() -> object:
         async with Client(mcp) as client:
-            result = await client.call_tool("list_playbooks", {})
+            result = await client.call_tool("list_playbooks", {"format": "full"})
             # Ohne outputSchema liefern Listen-Ergebnisse kein structured_content —
             # der Client bekommt das JSON als Text-Content (so parst es auch Claude).
             assert result.content and result.content[0].type == "text"
@@ -398,3 +401,114 @@ def test_list_playbooks_tool_returns_playbooks(
     data = asyncio.run(_run())
     assert isinstance(data, list)
     assert len(data) == 1
+
+
+async def _call_text(name: str, arguments: dict[str, object]) -> str:
+    """Ruft ein Werkzeug ueber den MCP-Client und liefert den Text-Content."""
+    async with Client(mcp) as client:
+        result = await client.call_tool(name, arguments)
+        first = result.content[0]
+        assert isinstance(first, TextContent)
+        return first.text
+
+
+def _assert_markdown_not_json(text: str) -> None:
+    """Rot-Probe ADR-0056 (Option B): der Default ist Klartext, kein JSON."""
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(text)
+    assert "\\n" not in text
+    assert '"blocks"' not in text
+
+
+def test_get_persona_tool_default_is_markdown_with_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default `text`: Kopf, gerendertes Profil, Modus-Block, Playbook-Katalog."""
+    workspace_id = uuid4()
+    persona_id = uuid4()
+    linked = _playbook_json("Code-Task-Flow", str(workspace_id))
+    linked["triggers"] = "arbeite Task [X] ab"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/personas/{persona_id}/rendered"):
+            return httpx.Response(
+                200,
+                json={
+                    "body_rendered": "Profil-Briefing\n\nZweiter Absatz",
+                    "unresolved": [],
+                    "mode": "Refiner",
+                },
+            )
+        if path.endswith(f"/personas/{persona_id}/playbooks"):
+            return httpx.Response(200, json=[linked])
+        if path.endswith(f"/personas/{persona_id}"):
+            payload = _persona_json(str(persona_id), "QA", str(workspace_id))
+            payload["content"] = {
+                "description": "d",
+                "system_prompt": "",
+                "traits": [],
+                "modes": [
+                    {
+                        "name": "Refiner",
+                        "trigger": "issue veredeln",
+                        "is_default": False,
+                        "identity_add": "Veredelungs-Haltung",
+                        "output_style_override": "",
+                    }
+                ],
+            }
+            return httpx.Response(200, json=payload)
+        return httpx.Response(404, json={"detail": "weg"})
+
+    api_client = ApiClient(
+        "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    text = asyncio.run(
+        _call_text("get_persona", {"identifier": str(persona_id), "mode": "refiner"})
+    )
+    _assert_markdown_not_json(text)
+    assert text.startswith("# Persona: QA\n")
+    assert f"- id: {persona_id}" in text
+    assert "- aktiver Modus: Refiner" in text
+    assert "Profil-Briefing\n\nZweiter Absatz" in text
+    assert "### Refiner" in text
+    assert "**Trigger:** issue veredeln" in text
+    assert "**Identitaet ergaenzt:** Veredelungs-Haltung" in text
+    assert f"- Code-Task-Flow (`{linked['id']}`) — Trigger: arbeite Task [X] ab" in text
+    assert 'format="full"' in text
+
+
+def test_list_playbooks_tool_default_is_markdown_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default `text`: je Playbook Kopf + Beschreibung, kein Body."""
+    workspace_id = uuid4()
+    playbook = _playbook_json("PB", str(workspace_id))
+    playbook["content"] = {"description": "Beschreibung PB", "body": "GEHEIMER-BODY"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[playbook])
+
+    api_client = ApiClient(
+        "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    text = asyncio.run(_call_text("list_playbooks", {}))
+    _assert_markdown_not_json(text)
+    assert text.startswith("# Playbooks (1)\n")
+    assert "## PB" in text
+    assert f"- id: {playbook['id']}" in text
+    assert "Beschreibung PB" in text
+    assert "GEHEIMER-BODY" not in text

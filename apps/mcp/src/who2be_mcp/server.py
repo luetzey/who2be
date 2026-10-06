@@ -23,6 +23,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import BaseModel
 
+from who2be_mcp import text_view
 from who2be_mcp.client import (
     AnyUsage,
     AnyVersionRead,
@@ -253,11 +254,14 @@ class PlaybookWithResources(BaseModel):
 # Gemessen ist die Ursache in allen Faellen dieselbe: die Antwort traegt den
 # BlockNote-Editor-Body mit, der denselben Text ein zweites Mal enthaelt — bei
 # `get_persona` sind rund 95 % der Antwort Struktur (`props`, `styles`,
-# `children`, Block-IDs) statt Inhalt. Der Zuschnitt `"text"` laesst genau
-# diese Struktur weg und behaelt den Inhalt.
+# `children`, Block-IDs) statt Inhalt.
 #
-# `"full"` bleibt ueberall Default — kein bestehender Konsument (Editor, Diff)
-# verliert etwas; der Agent waehlt den guenstigen Pfad selbst.
+# ADR-0056 (Option B): `"text"` ist Default und liefert ein Markdown-Dokument
+# (`text_view`) statt eines JSON-Objekts — ohne Editor-JSON und ohne
+# JSON-Escaping. `"full"` liefert bitgleich das Modell der REST-Antwort; das
+# ist die Vorlage fuer die `update_*`-Werkzeuge (PUT). Umgestellt sind
+# `get_persona`, `fetch_agent`, `list_playbooks` und `fetch_playbook`;
+# `list_versions` folgt mit Paket 4 und behaelt bis dahin `"full"` als Default.
 _RESPONSE_FORMATS: frozenset[str] = frozenset({"full", "text"})
 
 
@@ -266,26 +270,6 @@ def _validate_response_format(value: str) -> None:
     if value not in _RESPONSE_FORMATS:
         allowed = ", ".join(sorted(_RESPONSE_FORMATS))
         raise ToolError(f"Ungueltiges format: '{value}'. Erlaubt: {allowed}.")
-
-
-def _persona_without_blocks(persona: PersonaRead) -> PersonaRead:
-    """Persona-Kopie ohne den BlockNote-Profil-Body.
-
-    Der Profiltext steht im `body_rendered` der umgebenden Antwort bzw. im
-    gerenderten System-Prompt; `content.content.blocks` ist dieselbe Prosa als
-    Editor-Struktur. Alle uebrigen Felder (Beschreibung, Tags, Modi mit ihren
-    Triggern) bleiben unveraendert — der Agent braucht sie fuer seine Logik.
-    """
-    inner = persona.content.content
-    if inner is None:
-        return persona
-    return persona.model_copy(
-        update={
-            "content": persona.content.model_copy(
-                update={"content": inner.model_copy(update={"blocks": []})}
-            )
-        }
-    )
 
 
 def _playbook_without_body(playbook: PlaybookRead) -> PlaybookRead:
@@ -337,11 +321,11 @@ def _version_without_content_body(version: AnyVersionRead) -> AnyVersionRead:
 
 # Zuschnitte der `fetch_playbook`-Antwort. Eigener Wertebereich, weil dieses
 # Werkzeug einen dritten Modus hat, den kein anderes kennt:
-# - "outline": nur Metadaten + `sections` — der Einstieg, wenn die Ankernamen
+# - "outline": nur Metadaten + Gliederung — der Einstieg, wenn die Ankernamen
 #   noch unbekannt sind. Kein Body, kein Editor-JSON.
-# - "text":    Prozedur als Plain-Text in `body_rendered`, ohne Editor-JSON.
-# - "full":    der unveraenderte Default (mit Editor-JSON) fuer strukturelle
-#              Konsumenten (Editor, Diff).
+# - "text":    Default, Markdown-Dokument (`text_view.playbook_text`), ohne
+#              Editor-JSON, auch fuer Sub-Playbooks und Inline-Resources.
+# - "full":    das Modell der REST-Antwort mit Editor-JSON (Vorlage fuer PUT).
 _PLAYBOOK_FORMATS: frozenset[str] = frozenset({"full", "text", "outline"})
 
 
@@ -488,59 +472,50 @@ async def whoami() -> WhoAmIRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
 async def get_persona(
-    identifier: str, locale: str | None = None, mode: str | None = None, format: str = "full"
-) -> PersonaWithPlaybooks:
+    identifier: str, locale: str | None = None, mode: str | None = None, format: str = "text"
+) -> PersonaWithPlaybooks | str:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
 
-    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
-
-    - `"full"` (Default): die vollstaendige Antwort inklusive
-      `persona.content.content.blocks`, dem rohen BlockNote-Editor-Profil.
-      Fuer Konsumenten, die das Profil strukturell verarbeiten (Editor, Diff).
-    - `"text"`: die Bloecke bleiben leer; das Profil steht in `body_rendered`.
-      Auch die Bodies der verknuepften Playbooks bleiben leer — sie stehen hier
-      als Katalog, ihren Inhalt liefert `fetch_playbook` fuer das EINE
-      gewaehlte Playbook. Beschreibung, Tags und `content.modes` (mit ihren
-      Triggern) sind unveraendert vorhanden, ebenso Name, Tags und Triggers
-      jedes Playbooks. Fuer Agenten der guenstigere Pfad — das Editor-JSON ist
-      dasselbe Profil ein zweites Mal.
+    `format="text"` (Default): Markdown mit Kopf (id, Version, Status, Sprache),
+    gerendertem Profil, Modi und Playbook-Katalog. Fuer `update_*` (PUT,
+    Vollstand) oder strukturelle Verarbeitung: `format="full"`.
 
     Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
     deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
     Alt-Clients:
     - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, es werden
       weiterhin nur aktive Versionen geliefert. Die tatsaechliche Sprache der
-      Persona steht im Top-Level-Feld `locale` der Antwort — nutze DAS, nicht
-      den Parameter.
+      Persona steht im Kopf (`locale`) der Antwort — nutze DAS, nicht den
+      Parameter.
     - Aufloesung per Name (`identifier` ist keine UUID): `locale` wirkt als
       optionaler Filter auf gleichnamige Personae in anderen Sprachen
       (`None` = kein Filter, alle Sprachen — der sichere Default, damit ein
       Alt-Client mit hartkodiertem `locale='de'` keine EN-Personae mehr
       versteckt).
 
-    `persona.content.modes` enthaelt ggf. die Modi einer Multi-Modus-Persona
-    (Gap 3.4). Jeder Modus traegt `name`, `trigger` (Erkennungs-Keywords),
-    `is_default` (Fallback ohne Trigger-Match), `identity_add` (Ergaenzung zur
-    Basis-Identitaet) und `output_style_override` (Output-Stil-Anpassung).
-    Fehlt das Feld oder ist es leer, ist die Persona single-mode.
+    Modi einer Multi-Modus-Persona (Gap 3.4; unter `full` in
+    `persona.content.modes`) tragen Name, `trigger` (Erkennungs-Keywords),
+    Default-Markierung (Fallback ohne Trigger-Match), `identity_add`
+    (Ergaenzung zur Basis-Identitaet) und `output_style_override`
+    (Output-Stil-Anpassung). Ohne Modi ist die Persona single-mode.
 
-    `body_rendered` traegt den fetch-time expandierten Profil-Body (Track F):
-    Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und Slash-Refs sind
-    bereits zu Plain-Text aufgeloest. Nutze diesen Text als gebrauchsfertiges
-    Persona-Briefing.
+    Das Profil (`body_rendered` unter `full`) ist fetch-time expandiert
+    (Track F): Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
+    Slash-Refs sind bereits zu Plain-Text aufgeloest. Nutze diesen Text als
+    gebrauchsfertiges Persona-Briefing.
 
-    Modus-Workflow (WP-F): lies zuerst `content.modes` (z. B. via
-    `get_persona` ohne `mode`), waehle anhand der Modus-`trigger` den passenden
+    Modus-Workflow (WP-F): lies zuerst die Modi (z. B. via `get_persona` ohne
+    `mode`), waehle anhand der Modus-`trigger` den passenden
     Modus und rufe dann `get_persona(identifier, mode="<Modus-Name>")` auf —
-    der Server haengt die Aktiver-Modus-Sektion an `body_rendered` an
+    der Server haengt die Aktiver-Modus-Sektion an das Profil an
     (`identity_add` ergaenzt die Identitaet, `output_style_override` ersetzt
     den Basis-Output-Stil, `anti_patterns` gelten zusaetzlich) und benennt den
-    angewendeten Modus im `mode`-Feld der Antwort. Der Namensvergleich ist
+    angewendeten Modus in der Antwort. Der Namensvergleich ist
     case-insensitiv; ein unbekannter Modus antwortet mit einem Fehler, der die
     verfuegbaren Modi auflistet.
 
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
-    nicht im `body_rendered`.
+    nicht im Profil.
     """
     _validate_response_format(format)
     client = await build_client()
@@ -548,17 +523,13 @@ async def get_persona(
     playbooks = await client.get_persona_playbooks(persona.id)
     body_rendered, applied_mode = await client.get_persona_rendered(persona.id, mode=mode)
     if format == "text":
-        # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort bleibt
-        # unberuehrt. Das Profil kommt vollstaendig in `body_rendered` an.
-        #
-        # Die verknuepften Playbooks werden MITGESCHNITTEN: sie stehen hier als
-        # Katalog („welche Playbooks hat diese Persona\"), und ihre Bodies sind
-        # gemessen der groessere Anteil der Antwort als das Persona-Profil
-        # selbst — eine Persona mit fuenf Playbooks reisst die Schwelle allein
-        # ueber die Bodies. Den Body des EINEN gewaehlten Playbooks holt
+        # Die verknuepften Playbooks stehen nur als Katalog (Name, id,
+        # Trigger) im Dokument: ihre Bodies sind gemessen der groessere Teil
+        # der full-Antwort. Den Body des EINEN gewaehlten Playbooks holt
         # `fetch_playbook`.
-        persona = _persona_without_blocks(persona)
-        playbooks = [_playbook_without_body(playbook) for playbook in playbooks]
+        return text_view.persona_text(
+            persona, body_rendered=body_rendered, playbooks=playbooks, mode=applied_mode
+        )
     return PersonaWithPlaybooks(
         persona=persona,
         playbooks=playbooks,
@@ -574,21 +545,13 @@ async def list_playbooks(
     tag: str | None = None,
     trigger: str | None = None,
     locale: str | None = None,
-    format: str = "full",
-) -> list[PlaybookRead]:
+    format: str = "text",
+) -> list[PlaybookRead] | str:
     """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger.
 
-    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
-
-    - `"full"` (Default): jeder Eintrag traegt seinen vollstaendigen
-      `content.body` (Editor-JSON) — fuer Konsumenten, die den Katalog
-      strukturell verarbeiten.
-    - `"text"`: `content.body` bleibt je Eintrag leer. Name, Beschreibung,
-      Tags, Triggers, Typ und `compose_children` sind unveraendert vorhanden —
-      alles, was die Auswahl „welches Playbook passt\" traegt. Den Body holt
-      dann `fetch_playbook` fuer das EINE gewaehlte Playbook. Fuer einen
-      Katalog ist das der guenstigere Pfad: die Bodies aller Playbooks
-      zusammen sind ein Vielfaches dessen, was eine Uebersicht braucht.
+    `format="text"` (Default): Markdown, je Playbook Kopf (id, Tags, Trigger,
+    Kinder) und Beschreibung, ohne Body — den holt `fetch_playbook`. Fuer
+    `update_*` (PUT, Vollstand) oder strukturelle Verarbeitung: `format="full"`.
 
     `locale` ist seit „Ein Element, eine Sprache" (Plan 2026-07-24) ein
     optionaler Sprachfilter: `None` (Default) liefert Playbooks aller Sprachen,
@@ -605,7 +568,7 @@ async def list_playbooks(
     client = await build_client()
     playbooks = await client.list_playbooks(tag, trigger, locale)
     if format == "text":
-        return [_playbook_without_body(playbook) for playbook in playbooks]
+        return text_view.playbook_list_text(playbooks)
     return playbooks
 
 
@@ -651,67 +614,44 @@ async def fetch_playbook(
     playbook_id: str,
     block_ids: list[str] | None = None,
     locale: str | None = None,
-    format: str = "full",
-) -> PlaybookWithResources:
+    format: str = "text",
+) -> PlaybookWithResources | str:
     """Laedt ein Playbook per UUID — im Regelfall NUR den Abschnitt, den du brauchst.
 
     **Der empfohlene Weg ist zweistufig und billig:**
 
-    1. `fetch_playbook(id, format="outline")` — liefert Metadaten und in
-       `sections` die Gliederung (je Eintrag `block_id`, `level`, `text`).
-       Kein Body, kein Editor-JSON: wenige hundert Zeichen.
-    2. `fetch_playbook(id, block_ids=["<block_id>", ...], format="text")` —
-       liefert in `body_rendered` genau die gewaehlten Abschnitte. Ein
-       Abschnitt ist das Heading plus alles bis zum naechsten Heading gleicher
-       Ebene; Unterabschnitte kommen mit.
+    1. `fetch_playbook(id, format="outline")` — Metadaten und in `sections`
+       die Gliederung (`block_id`, `level`, `text`), kein Body.
+    2. `fetch_playbook(id, block_ids=["<block_id>", ...])` — genau die
+       gewaehlten Abschnitte (Heading bis zum naechsten Heading gleicher
+       Ebene, Unterabschnitte inklusive).
 
-    Brauchst du wirklich die ganze Prozedur (etwa weil du ein Playbook von
-    vorn bis hinten abarbeitest), nimm `format="text"` ohne `block_ids`. Den
-    Vollabruf mit Editor-JSON (`format="full"`, der Default) brauchen nur
-    strukturelle Konsumenten wie Editor oder Diff — fuer einen Agenten ist er
-    die Ausnahme, nicht der Einstieg: er traegt dieselbe Prozedur ein zweites
-    Mal als BlockNote-JSON und macht bei grossen Playbooks den Loewenanteil
-    der Payload aus.
+    Ohne `block_ids` kommt die ganze Prozedur. Unbekannte Anker werden
+    ignoriert; eine Auswahl ohne Treffer liefert eine leere Prozedur (nicht
+    still das Volldokument). Die Gliederung bleibt stets vollstaendig.
 
-    `block_ids` waehlt Abschnitte aus `sections`. Unbekannte Anker werden
-    ignoriert; eine Auswahl ohne Treffer liefert einen leeren
-    `body_rendered` (nicht etwa still das Volldokument). Weil ein Ausschnitt
-    sich als Editor-JSON nicht sinnvoll abbilden laesst, bleibt
-    `playbook.content.body` bei gesetztem `block_ids` immer leer — auch unter
-    `format="full"`. `sections` bleibt dabei stets vollstaendig, damit du
-    nachfassen kannst, ohne neu zu inventarisieren.
+    `format="text"` (Default): Markdown mit Kopf, Gliederung, Prozedur,
+    Verweisen, eingebetteten Resources und Sub-Playbooks, alles als Klartext.
+    `"outline"`: JSON nur mit Metadaten und `sections`. Fuer `update_*` (PUT,
+    Vollstand) oder strukturelle Verarbeitung: `format="full"` (mit
+    `block_ids` bleibt `playbook.content.body` auch dort leer).
 
-    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+    `locale` ist ein Backward-Compat-Parameter (ADR-0027) und wird seit „Ein
+    Element, eine Sprache" IGNORIERT — das Playbook traegt seine Sprache
+    selbst. Es werden nur aktive Versionen geliefert.
 
-    - `"outline"`: nur Metadaten + `sections`. Kein `body_rendered`, kein
-      Editor-JSON, keine inline-Resources. Der Einstieg.
-    - `"text"`: Prozedur als Plain-Text in `body_rendered`,
-      `playbook.content.body` bleibt leer.
-    - `"full"` (Default): zusaetzlich `playbook.content.body`, das rohe
-      BlockNote-Editor-JSON.
+    Verweise sind Pointer (resource_id + block_id, Verfuegbarkeit) — kein
+    Auto-Inline fuer Block-Refs (ADR-0021). Resource-Refs mit
+    `embedding_mode='inline'` kommen als Volldokument mit; `lazy`-Links
+    (Default) und Block-Refs laedt `fetch_resource` nach.
 
-    `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
-    ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
-    IGNORIERT — das Playbook traegt seine Sprache selbst; sie steht im
-    Top-Level-Feld `locale` der Antwort. Es werden weiterhin nur aktive
-    Versionen geliefert.
+    Ein Composite (`is_composite=True`) bringt seine geordneten aktiven
+    Sub-Playbooks mit (eine Ebene, ADR-0024); tiefere Ebenen per
+    `fetch_playbook(child_id)`. Ein Composite-Agent folgt der Sequenz der
+    Reihe nach.
 
-    `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
-    block_id, Verfuegbarkeit, Section-Preview) — kein Auto-Inline fuer
-    Block-Refs (ADR-0021). Fuer `link_scope='resource'`-Eintraege mit
-    `embedding_mode='inline'` wird die Ziel-Resource zusaetzlich als
-    Volldokument in `linked_resources` ausgeliefert; `lazy`-Links (Default)
-    und Block-Refs bleiben Pointer und werden bei Bedarf ueber
-    `fetch_resource` nachgeladen.
-
-    Ist das Playbook ein Composite (`is_composite=True`), enthaelt
-    `composed_playbooks` die geordneten aktiven Sub-Playbooks (nur eine Ebene,
-    ADR-0024). Tiefere Ebenen per `fetch_playbook(child_id)` nachladen. Ein
-    Composite-Agent folgt der Sequenz in `composed_playbooks` der Reihe nach.
-
-    `body_rendered` traegt den serverseitig expandierten Playbook-Body (B5):
-    Inline-Pills werden zu Plain-Text aufgeloest. Nutze `body_rendered` statt
-    `playbook.content.body` — letzterer ist nur stringifiziertes BlockNote-JSON.
+    Die Prozedur ist serverseitig expandiert (B5): Inline-Pills sind zu
+    Plain-Text aufgeloest.
     """
     if format not in _PLAYBOOK_FORMATS:
         allowed = ", ".join(sorted(_PLAYBOOK_FORMATS))
@@ -747,6 +687,15 @@ async def fetch_playbook(
     # die leere Auswahl an — Gliederung ja, Prozedur nein.
     selection = [] if format == "outline" else block_ids
     body_rendered, sections = await client.get_playbook_rendered(parsed, block_ids=selection)
+    if format == "text":
+        return text_view.playbook_text(
+            playbook,
+            body_rendered=body_rendered,
+            sections=sections,
+            linked_blocks=linked,
+            linked_resources=resources,
+            composed_playbooks=composed,
+        )
     if format != "full" or block_ids is not None:
         # Nur die Antwort-Kopie wird beschnitten; die REST-Antwort selbst
         # bleibt unberuehrt, also verliert kein struktureller Konsument
@@ -792,16 +741,12 @@ async def list_resources(
 
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_agent")
-async def fetch_agent(agent_id: str, format: str = "full") -> AgentWithRenderedPrompt:
+async def fetch_agent(agent_id: str, format: str = "text") -> AgentWithRenderedPrompt | str:
     """Laedt einen Agent samt Persona + gerendertem Systemprompt (Placeholder bereits expandiert).
 
-    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
-
-    - `"full"` (Default): inklusive `persona.content.content.blocks`, dem
-      rohen BlockNote-Editor-Profil.
-    - `"text"`: die Bloecke bleiben leer. Der gerenderte System-Prompt traegt
-      das Profil ohnehin schon als Plain-Text — die Bloecke sind dieselbe
-      Prosa ein zweites Mal. Alle uebrigen Felder bleiben unveraendert.
+    `format="text"` (Default): Markdown mit Kopf, gerendertem System-Prompt und
+    den Modi der Persona. Fuer `update_*` (PUT, Vollstand) oder strukturelle
+    Verarbeitung: `format="full"`.
 
     Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
     (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
@@ -822,8 +767,7 @@ async def fetch_agent(agent_id: str, format: str = "full") -> AgentWithRenderedP
     client = await build_client()
     agent = await client.get_agent_rendered(parsed)
     if format == "text":
-        # Nur die Antwort-Kopie; `system_prompt_rendered` behaelt das Profil.
-        agent = agent.model_copy(update={"persona": _persona_without_blocks(agent.persona)})
+        return text_view.agent_text(agent)
     return agent
 
 

@@ -10,6 +10,7 @@ Muster aus test_server.py / test_resource_tools.py: kein pytest-asyncio,
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
@@ -17,6 +18,7 @@ import httpx
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from mcp.types import TextContent
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
@@ -90,7 +92,7 @@ def test_fetch_agent_returns_agent_with_rendered_prompt(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    result = asyncio.run(fetch_agent(str(agent_id)))
+    result = asyncio.run(fetch_agent(str(agent_id), format="full"))
 
     assert isinstance(result, AgentWithRenderedPrompt)
     assert result.id == agent_id
@@ -117,8 +119,9 @@ def test_fetch_agent_returns_locale_for_en_template(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    result = asyncio.run(fetch_agent(str(agent_id)))
+    result = asyncio.run(fetch_agent(str(agent_id), format="full"))
 
+    assert isinstance(result, AgentWithRenderedPrompt)
     assert result.locale == "en"
     assert "Respond in English." in result.system_prompt_rendered
 
@@ -137,7 +140,8 @@ def test_fetch_agent_locale_defaults_when_omitted_by_api(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    result = asyncio.run(fetch_agent(str(agent_id)))
+    result = asyncio.run(fetch_agent(str(agent_id), format="full"))
+    assert isinstance(result, AgentWithRenderedPrompt)
     assert result.locale == "de"
 
 
@@ -168,11 +172,15 @@ def test_server_exposes_fetch_agent_tool() -> None:
 
 
 def test_fetch_agent_via_mcp_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """End-to-End vom MCP-Client ueber den Tool-Dispatcher."""
+    """End-to-End vom MCP-Client: der Default kommt als Markdown-Text an.
+
+    ADR-0056 (Option B): kein JSON-Objekt, also auch kein Escaping — ein
+    Zeilenumbruch im Prompt ist ein echter Zeilenumbruch, kein `\\n`.
+    """
     agent_id = uuid4()
     tpl_id = uuid4()
     persona = _persona_payload()
-    rendered_prompt = "Fertiger Prompt ohne Placeholder."
+    rendered_prompt = 'Fertiger Prompt ohne Placeholder.\n\nZweiter Absatz mit "Zitat".'
     payload = _agent_rendered_payload(agent_id, persona, tpl_id, rendered_prompt)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -180,18 +188,18 @@ def test_fetch_agent_via_mcp_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    async def _run() -> object:
+    async def _run() -> str:
         async with Client(mcp) as client:
             result = await client.call_tool("fetch_agent", {"agent_id": str(agent_id)})
-            return result.data
+            first = result.content[0]
+            assert isinstance(first, TextContent)
+            return first.text
 
-    data = asyncio.run(_run())
-    # FastMCP serialisiert das Ergebnis — wir pruefen ob es ein dict ist
-    # (AgentWithRenderedPrompt wurde serialisiert) oder ein AgentWithRenderedPrompt.
-    if isinstance(data, dict):
-        assert data["system_prompt_rendered"] == rendered_prompt
-    elif isinstance(data, AgentWithRenderedPrompt):
-        assert data.system_prompt_rendered == rendered_prompt
-    else:
-        # Fallback: als String geparst pruefen.
-        assert rendered_prompt in str(data)
+    text = asyncio.run(_run())
+    assert text.startswith("# Agent: Carla Bot\n")
+    assert rendered_prompt in text
+    assert "\\n" not in text
+    assert '\\"' not in text
+    # Rot-Probe: liefert der Default wieder das Modell, ist der Text JSON.
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(text)
