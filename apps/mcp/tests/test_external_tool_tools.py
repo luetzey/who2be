@@ -114,7 +114,7 @@ def test_list_external_tools_returns_reads(monkeypatch: pytest.MonkeyPatch) -> N
         return httpx.Response(200, json=[payload])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_external_tools())
+    result = asyncio.run(list_external_tools(format="full"))
     assert len(result) == 1
     assert isinstance(result[0], ExternalToolRead)
     assert result[0].alias == "todo"
@@ -129,7 +129,8 @@ def test_list_external_tools_filters_by_tag_client_side(monkeypatch: pytest.Monk
         return httpx.Response(200, json=[matching, other])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_external_tools(tag="produktivitaet"))
+    result = asyncio.run(list_external_tools(tag="produktivitaet", format="full"))
+    assert isinstance(result, list)
     assert len(result) == 1
     assert result[0].alias == "todo"
 
@@ -144,7 +145,7 @@ def test_get_external_tool_resolves_uuid(monkeypatch: pytest.MonkeyPatch) -> Non
         return httpx.Response(200, json=payload)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(get_external_tool(str(tid)))
+    result = asyncio.run(get_external_tool(str(tid), format="full"))
     assert isinstance(result, ExternalToolRead)
     assert result.id == tid
 
@@ -159,7 +160,7 @@ def test_get_external_tool_resolves_alias(monkeypatch: pytest.MonkeyPatch) -> No
         return httpx.Response(200, json=[payload])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(get_external_tool("todo"))
+    result = asyncio.run(get_external_tool("todo", format="full"))
     assert isinstance(result, ExternalToolRead)
     assert result.alias == "todo"
 

@@ -260,8 +260,7 @@ class PlaybookWithResources(BaseModel):
 # (`text_view`) statt eines JSON-Objekts — ohne Editor-JSON und ohne
 # JSON-Escaping. `"full"` liefert bitgleich das Modell der REST-Antwort; das
 # ist die Vorlage fuer die `update_*`-Werkzeuge (PUT). Umgestellt sind
-# `get_persona`, `fetch_agent`, `list_playbooks` und `fetch_playbook`;
-# `list_versions` folgt mit Paket 4 und behaelt bis dahin `"full"` als Default.
+# alle zwoelf lesenden Werkzeuge mit Editor-JSON (ADR-0056, Abschnitt 1.1).
 _RESPONSE_FORMATS: frozenset[str] = frozenset({"full", "text"})
 
 
@@ -280,43 +279,6 @@ def _playbook_without_body(playbook: PlaybookRead) -> PlaybookRead:
     gezielten Einzelabruf, nicht in jeden Katalog-Eintrag.
     """
     return playbook.model_copy(update={"content": playbook.content.model_copy(update={"body": ""})})
-
-
-# Die inhaltstragenden („schweren\") Felder je Content-Modell und ihr leerer
-# Wert. Ein Versions-Snapshot traegt je nach Entitaet einen anderen Body; die
-# Historien-LISTE braucht keinen davon, weil sie die Frage „welche Versionen
-# gibt es\" beantwortet. Den Inhalt einer bestimmten Version liefert
-# `get_version`. Unbekannte Felder werden uebersprungen, damit ein neues
-# Content-Modell hier nichts bricht.
-_HEAVY_CONTENT_FIELDS: dict[str, object] = {
-    "body": "",  # PlaybookContent, SystemPromptTemplateContent
-    "blocks": [],  # ResourceContent, PersonaContent
-    "usage_notes": "",  # ExternalToolContent
-    "system_prompt": "",  # PersonaVersionContent (deprecated, aber bis 20k gross)
-}
-
-
-def _version_without_content_body(version: AnyVersionRead) -> AnyVersionRead:
-    """Versions-Snapshot ohne seinen Inhalts-Body (Metadaten bleiben).
-
-    Typ-agnostisch: jedes Content-Modell traegt seinen Body unter einem anderen
-    Namen (`body`, `blocks`, `usage_notes`). Geleert wird nur, was das jeweilige
-    Modell tatsaechlich hat; `version`, `status`, `locale`, `created_by` und
-    `created_at` bleiben unangetastet — sie sind der Zweck der Liste.
-    """
-    content = version.content
-    update = {
-        field: empty
-        for field, empty in _HEAVY_CONTENT_FIELDS.items()
-        if field in type(content).model_fields
-    }
-    if not update:
-        return version
-    inner = getattr(content, "content", None)
-    if inner is not None and "blocks" in type(inner).model_fields:
-        # PersonaVersionContent schachtelt das Profil noch eine Ebene tiefer.
-        update["content"] = inner.model_copy(update={"blocks": []})
-    return version.model_copy(update={"content": content.model_copy(update=update)})
 
 
 # Zuschnitte der `fetch_playbook`-Antwort. Eigener Wertebereich, weil dieses
@@ -803,9 +765,16 @@ async def get_agent(agent_id: str) -> AgentRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_resource")
 async def fetch_resource(
-    resource_id: str, block_ids: list[str] | None = None, locale: str | None = None
-) -> ResourceRead:
+    resource_id: str,
+    block_ids: list[str] | None = None,
+    locale: str | None = None,
+    format: str = "text",
+) -> ResourceRead | str:
     """Laedt eine Resource (per UUID) in ihrer fuer dich sichtbaren Version.
+
+    `format="text"` (Default): Markdown mit Kopf, Inhalt, Sub-Resources und
+    eingebetteten Kindern als Klartext. Fuer `update_*` (PUT, Vollstand) oder
+    strukturelle Verarbeitung: `format="full"`.
 
     Welche Version du siehst, haengt von deiner Berechtigung ab (`sees_drafts`):
     Wer die `resource_write`-Capability haelt (Mensch/Editor-Agent), bekommt die
@@ -835,6 +804,7 @@ async def fetch_resource(
     Reihenfolge) des eigenen Bodys zurueckgegeben; `sub_resources` und
     `inline_sub_resources` bleiben davon unberuehrt.
     """
+    _validate_response_format(format)
     try:
         parsed = UUID(resource_id)
     except ValueError as exc:
@@ -858,6 +828,8 @@ async def fetch_resource(
             seen.add(sub.id)
             inline_ids.append(sub.id)
     resource.inline_sub_resources = [await client.get_resource(cid) for cid in inline_ids]
+    if format == "text":
+        return text_view.resource_text(resource)
     return resource
 
 
@@ -889,8 +861,14 @@ async def list_resource_blocks(
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_system_prompts")
-async def list_system_prompts(locale: str | None = None) -> list[SystemPromptTemplateRead]:
+async def list_system_prompts(
+    locale: str | None = None, format: str = "text"
+) -> list[SystemPromptTemplateRead] | str:
     """Listet die System-Prompt-Templates des Workspace (ADR-0040).
+
+    `format="text"` (Default): Markdown, je Template Kopf und Beschreibung,
+    ohne Body. Fuer `update_*` (PUT, Vollstand) oder strukturelle
+    Verarbeitung: `format="full"`.
 
     Jedes Template ist das versionierte Aggregat hinter `agent.system_prompt_
     template_id`. Nutze das, um ein bestehendes Template fuer `create_agent`/
@@ -901,30 +879,48 @@ async def list_system_prompts(locale: str | None = None) -> list[SystemPromptTem
     optionaler Sprachfilter (`None` = alle Sprachen, Default); jedes Template
     traegt seine Sprache im `locale`-Feld.
     """
+    _validate_response_format(format)
     client = await build_client()
-    return await client.list_system_prompts(locale)
+    templates = await client.list_system_prompts(locale)
+    if format == "text":
+        return text_view.system_prompt_list_text(templates)
+    return templates
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_system_prompt")
-async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
+async def get_system_prompt(
+    template_id: str, format: str = "text"
+) -> SystemPromptTemplateRead | str:
     """Laedt ein System-Prompt-Template (Konfig + Body der sichtbaren Version).
+
+    `format="text"` (Default): Markdown mit Kopf und Body als Klartext
+    (Platzhalter als `{{kind:target_id}}`). Fuer `update_*` (PUT, Vollstand)
+    oder strukturelle Verarbeitung: `format="full"`.
 
     Der richtige Read nach `create_system_prompt`/`update_system_prompt` und vor
     dem Editieren. Versions-Historie + Diff laufen ueber `list_versions`/
     `diff_versions` mit `entity_type='system_prompt'`.
     """
+    _validate_response_format(format)
     parsed = _parse_uuid(template_id, "system_prompt")
     client = await build_client()
-    return await client.get_system_prompt(parsed)
+    template = await client.get_system_prompt(parsed)
+    if format == "text":
+        return text_view.system_prompt_text(template)
+    return template
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_external_tools")
 async def list_external_tools(
-    tag: str | None = None, locale: str | None = None
-) -> list[ExternalToolRead]:
+    tag: str | None = None, locale: str | None = None, format: str = "text"
+) -> list[ExternalToolRead] | str:
     """Katalog der externen Tool-Bindungen im Workspace (WP-3).
+
+    `format="text"` (Default): Markdown, je Bindung Kopf und Felder, ohne
+    Nutzungshinweise. Fuer `update_*` (PUT, Vollstand) oder strukturelle
+    Verarbeitung: `format="full"`.
 
     Jeder Eintrag traegt Alias (Faehigkeits-Kennung, z. B. 'todo'),
     Anzeigename, MCP-Server-Namen und die relevanten Tool-Bezeichner. `tag`
@@ -934,17 +930,26 @@ async def list_external_tools(
     `locale`-Feld. Nutze `get_external_tool(alias)`, um eine Bindung im Detail
     zu lesen.
     """
+    _validate_response_format(format)
     client = await build_client()
     tools = await client.list_external_tools(locale)
-    if tag is None:
-        return tools
-    return [t for t in tools if tag in t.content.tags]
+    if tag is not None:
+        tools = [t for t in tools if tag in t.content.tags]
+    if format == "text":
+        return text_view.external_tool_list_text(tools)
+    return tools
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_external_tool")
-async def get_external_tool(identifier: str, locale: str | None = None) -> ExternalToolRead:
+async def get_external_tool(
+    identifier: str, locale: str | None = None, format: str = "text"
+) -> ExternalToolRead | str:
     """Laedt eine externe Tool-Bindung per UUID ODER per Faehigkeits-Alias.
+
+    `format="text"` (Default): Markdown mit Kopf, Feldern und
+    Nutzungshinweisen als Klartext. Fuer `update_*` (PUT, Vollstand) oder
+    strukturelle Verarbeitung: `format="full"`.
 
     Der Alias (z. B. 'todo') ist die stabile, fuer `tool-ref`-Placeholder
     gedachte Kennung — sie ueberlebt ein Re-Binding auf ein neues Tool-Objekt.
@@ -954,8 +959,12 @@ async def get_external_tool(identifier: str, locale: str | None = None) -> Exter
     Antwort); bei Alias-Aufloesung wirkt er als optionaler Filter auf
     gleichnamige Bindungen in anderen Sprachen (`None` = kein Filter).
     """
+    _validate_response_format(format)
     client = await build_client()
-    return await client.resolve_external_tool(identifier, locale)
+    tool = await client.resolve_external_tool(identifier, locale)
+    if format == "text":
+        return text_view.external_tool_text(tool)
+    return tool
 
 
 # ---------------------------------------------------------------------------
@@ -986,25 +995,18 @@ async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyU
 @mcp.tool(output_schema=None)
 @with_tool_log("list_versions")
 async def list_versions(
-    entity_type: EntityType, entity_id: str, locale: str | None = None, format: str = "full"
-) -> list[AnyVersionRead]:
+    entity_type: EntityType, entity_id: str, locale: str | None = None, format: str = "text"
+) -> list[AnyVersionRead] | str:
     """Listet die Versions-Historie eines Persona-/Playbook-/Resource-Elements.
 
-    `format` waehlt den Zuschnitt der Antwort (additiv, Default unveraendert):
+    `format="text"` (Default): Markdown, je Version nur der Kopf (`version`,
+    `status`, `locale`, Autor, Zeitpunkt), ohne Inhalt. Den Inhalt einer
+    Version holt `get_version`, den Unterschied zweier Staende
+    `diff_versions`. Fuer `update_*` (PUT, Vollstand) oder strukturelle
+    Verarbeitung: `format="full"` (jeder Eintrag mit vollem `content`).
 
-    - `"full"` (Default): jeder Eintrag traegt seinen vollstaendigen `content`.
-    - `"text"`: der Inhalts-Body jedes Eintrags bleibt leer (`content.body` /
-      `content.blocks` / `content.usage_notes`, je Entitaet). `version`,
-      `status`, `locale`, `created_by` und `created_at` bleiben vollstaendig —
-      das ist, was die Frage „welche Versionen gibt es\" beantwortet. Den
-      Inhalt einer BESTIMMTEN Version holt dann `get_version`, den Unterschied
-      zweier Staende `diff_versions`. Bei einem Element mit langer Historie ist
-      der volle Zuschnitt die Historie mal dem Body — fast immer mehr, als die
-      Frage braucht.
-
-    Jeder Eintrag traegt `version`, `status` (draft/review/active/inactive),
-    `locale` (Historienwert — die Sprache, in der DIESE Version geschrieben
-    wurde), `content`, `created_by` und `created_at`. Reine Konsum-Tokens sehen
+    `status` ist draft/review/active/inactive, `locale` der Historienwert (die
+    Sprache, in der DIESE Version geschrieben wurde). Reine Konsum-Tokens sehen
     nur aktive Versionen; ein Token mit der passenden `*_write`-Capability
     sieht auch Draft/Review.
 
@@ -1017,16 +1019,24 @@ async def list_versions(
     client = await build_client()
     versions = await client.list_versions(entity_type, parsed, locale)
     if format == "text":
-        return [_version_without_content_body(version) for version in versions]
+        return text_view.version_list_text(entity_type, entity_id, versions)
     return versions
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_version")
 async def get_version(
-    entity_type: EntityType, entity_id: str, version: int, locale: str | None = None
-) -> AnyVersionRead:
+    entity_type: EntityType,
+    entity_id: str,
+    version: int,
+    locale: str | None = None,
+    format: str = "text",
+) -> AnyVersionRead | str:
     """Laedt einen einzelnen, unveraenderlichen Versions-Snapshot.
+
+    `format="text"` (Default): Markdown mit Kopf und Snapshot-Inhalt als
+    Klartext. Fuer `update_*` (PUT, Vollstand) oder strukturelle
+    Verarbeitung: `format="full"`.
 
     `entity_type` ∈ {persona, playbook, resource}, `version` ist die
     Versionsnummer (1-basiert). Liefert den vollstaendigen Content-Snapshot
@@ -1034,9 +1044,13 @@ async def get_version(
     `locale`-Parameter ist ein Backward-Compat-Parameter, IGNORIERT seit „Ein
     Element, eine Sprache".
     """
+    _validate_response_format(format)
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
-    return await client.get_version(entity_type, parsed, version, locale)
+    snapshot = await client.get_version(entity_type, parsed, version, locale)
+    if format == "text":
+        return text_view.version_text(entity_type, entity_id, snapshot)
+    return snapshot
 
 
 @mcp.tool(output_schema=None)
@@ -1047,8 +1061,13 @@ async def diff_versions(
     version: int,
     against: str = "active",
     locale: str | None = None,
-) -> VersionDiff:
+    format: str = "text",
+) -> VersionDiff | str:
     """Strukturierter Feld-/Block-Diff einer Version gegen einen Vergleichsstand.
+
+    `format="text"` (Default): Markdown mit Kopf, Aenderungspfaden (`op`,
+    `path`) und Klartext vorher/nachher, ohne die Rohwerte `before`/`after`.
+    Fuer strukturelle Verarbeitung: `format="full"`.
 
     `version` ist die betrachtete Version, `against` der Vergleich (Default
     `'active'` = die aktive Version; sonst eine Versionsnummer als String). Die
@@ -1062,9 +1081,13 @@ async def diff_versions(
     `entity_type='external_tool'` wird sauber abgelehnt (`ToolError`) — dafuer
     gibt es keinen REST-Diff-Endpunkt.
     """
+    _validate_response_format(format)
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
-    return await client.diff_version(entity_type, parsed, version, against, locale)
+    diff = await client.diff_version(entity_type, parsed, version, against, locale)
+    if format == "text":
+        return text_view.diff_text(entity_type, entity_id, diff)
+    return diff
 
 
 # ---------------------------------------------------------------------------

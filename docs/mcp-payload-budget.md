@@ -134,12 +134,12 @@ Boot-Schritt der Ausnahmefall.
 Der Zuschnitt betrifft **nur die Antwort-Kopie** (`model_copy`); die Daten in
 der Datenbank und die REST-Antwort bleiben unberuehrt.
 
-Bei `list_versions` ist der Zuschnitt **typ-agnostisch**: jedes Content-Modell
-traegt seinen Body unter einem anderen Namen, und geleert wird nur, was das
-jeweilige Modell wirklich hat (`_HEAVY_CONTENT_FIELDS` in
-`apps/mcp/src/who2be_mcp/server.py`). Ein neues Content-Modell bricht hier
-nichts — es wird bloss nicht zugeschnitten, bis sein Body-Feld in der Liste
-steht.
+Bei `list_versions` liefert `format="text"` seit ADR-0056 Markdown mit einem
+Kopf je Version (`version`, `status`, `locale`, Autor, Zeitpunkt) und ohne
+Inhalt. Das gilt fuer jedes Content-Modell gleich, weil der Inhalt gar nicht
+erst gerendert wird; ein frueher noetiger Feld-Zuschnitt je Modell entfaellt.
+Die uebrige Seite beschreibt noch den Stand vor ADR-0056 und wird mit deren
+Paket 5 nachgezogen.
 
 ## Offen: drei Werkzeuge mit benanntem Weg, aber ohne Zuschnitt
 
