@@ -873,8 +873,11 @@ jobs:
             echo "Scan-Bereich: ${range} ($(git rev-list --count "$range") Commits)"
             log_opts="$range"
           else
-            echo "::warning title=secrets::Keine Vergleichsbasis — fail-closed Scan der gesamten Historie."
-            log_opts="--all"
+            # Volle Historie von HEAD, NICHT `--all`: fetch-depth 0 holt alle
+            # Remote-Branches, `--all` faerbte diesen Lauf also wegen eines
+            # fremden, offenen PR-Branches rot.
+            echo "::warning title=secrets::Keine Vergleichsbasis — fail-closed Scan der gesamten Historie von HEAD."
+            log_opts="HEAD"
           fi
           # `|| rc=$?`: GitHub startet `run:` mit `bash -e`; ohne den Fang
           # endete der Step bei einem Fund, bevor die Summary geschrieben ist.
