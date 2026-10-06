@@ -129,7 +129,8 @@ def test_list_versions_playbook_returns_snapshots(monkeypatch: pytest.MonkeyPatc
         return httpx.Response(200, json=versions)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_versions("playbook", str(pid)))
+    result = asyncio.run(list_versions("playbook", str(pid), format="full"))
+    assert isinstance(result, list)
     assert len(result) == 2
     assert all(isinstance(v, PlaybookVersionRead) for v in result)
     assert [v.version for v in result] == [1, 2]
@@ -146,7 +147,7 @@ def test_list_versions_resource_dispatches_to_resource_path(
         return httpx.Response(200, json=[_resource_version()])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_versions("resource", str(rid)))
+    result = asyncio.run(list_versions("resource", str(rid), format="full"))
     assert len(result) == 1
     assert isinstance(result[0], ResourceVersionRead)
 
@@ -164,7 +165,7 @@ def test_list_versions_persona_dispatches_to_persona_path(
         return httpx.Response(200, json=[])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_versions("persona", str(pid)))
+    result = asyncio.run(list_versions("persona", str(pid), format="full"))
     assert result == []
     assert seen_path.endswith(f"/personas/{pid}/versions")
 
@@ -197,7 +198,7 @@ def test_get_version_returns_single_snapshot(monkeypatch: pytest.MonkeyPatch) ->
         return httpx.Response(200, json=_playbook_version(2, "active"))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(get_version("playbook", str(pid), 2))
+    result = asyncio.run(get_version("playbook", str(pid), 2, format="full"))
     assert isinstance(result, PlaybookVersionRead)
     assert result.version == 2
 
@@ -228,7 +229,7 @@ def test_diff_versions_returns_structured_diff(monkeypatch: pytest.MonkeyPatch) 
         return httpx.Response(200, json=diff)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(diff_versions("resource", str(rid), 2))
+    result = asyncio.run(diff_versions("resource", str(rid), 2, format="full"))
     assert isinstance(result, VersionDiff)
     assert result.identical is False
     assert len(result.changes) == 1

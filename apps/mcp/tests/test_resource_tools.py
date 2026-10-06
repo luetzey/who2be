@@ -208,12 +208,13 @@ def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    full = asyncio.run(fetch_resource(str(rid)))
+    full = asyncio.run(fetch_resource(str(rid), format="full"))
     assert isinstance(full, ResourceRead)
     assert [b.id for b in full.content.blocks] == ["b1", "b2", "b3"]
     assert full.sub_resources == []
 
-    filtered = asyncio.run(fetch_resource(str(rid), block_ids=["b3", "b1"]))
+    filtered = asyncio.run(fetch_resource(str(rid), block_ids=["b3", "b1"], format="full"))
+    assert isinstance(filtered, ResourceRead)
     assert [b.id for b in filtered.content.blocks] == ["b3", "b1"]
 
 
@@ -236,7 +237,7 @@ def test_fetch_resource_old_client_explicit_locale_still_works(
         return httpx.Response(200, json=payload)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_resource(str(rid), locale="de"))
+    result = asyncio.run(fetch_resource(str(rid), locale="de", format="full"))
     assert isinstance(result, ResourceRead)
     # Die Antwort traegt die tatsaechliche Resource-Sprache, NICHT den
     # (ignorierten) Alt-Client-Parameter.
@@ -270,7 +271,7 @@ def test_fetch_resource_attaches_direct_sub_resources(monkeypatch: pytest.Monkey
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_resource(str(rid)))
+    result = asyncio.run(fetch_resource(str(rid), format="full"))
     assert isinstance(result, ResourceRead)
     # Eigener Body bleibt inline.
     assert [b.id for b in result.content.blocks] == ["b1"]
@@ -332,7 +333,7 @@ def test_fetch_resource_inlines_inline_mode_sub_resource(
         return httpx.Response(404)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(fetch_resource(str(rid)))
+    result = asyncio.run(fetch_resource(str(rid), format="full"))
     assert isinstance(result, ResourceRead)
     # Beide Kinder bleiben in der Pointer-Tabelle.
     assert len(result.sub_resources) == 2

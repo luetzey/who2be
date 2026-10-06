@@ -48,19 +48,25 @@ from pydantic import BaseModel, ValidationError
 
 from who2be_mcp import server
 from who2be_mcp import tools as tools_pkg
-from who2be_mcp.client import AnyVersionRead, ApiClient
+from who2be_mcp.client import ApiClient
 from who2be_mcp.server import (
     _RESPONSE_FORMATS,
     PersonaWithPlaybooks,
+    diff_versions,
     fetch_agent,
+    fetch_resource,
+    get_external_tool,
     get_persona,
+    get_system_prompt,
+    get_version,
+    list_external_tools,
     list_playbooks,
+    list_system_prompts,
     list_versions,
     mcp,
 )
 from who2be_models import AgentWithRenderedPrompt
-from who2be_models.playbook import PlaybookContent
-from who2be_models.resource import ResourceContent
+from who2be_models.external_tool import ExternalToolContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
 # Baseline 2026-08-13: 71 Tools / 110_133 Bytes (utf-8, name+description+
@@ -207,20 +213,6 @@ def _assert_text_path_fits(full: object, text: object, tool: str) -> None:
     assert text_chars <= _RESPONSE_CHAR_LIMIT, (
         f"{tool}: text-Pfad {text_chars} Zeichen > Obergrenze {_RESPONSE_CHAR_LIMIT}."
     )
-
-
-def _playbook_content(version: AnyVersionRead) -> PlaybookContent:
-    """Verengt den Union-Typ auf den Playbook-Fall — mit Pruefung, nicht per Annahme."""
-    content = version.content
-    assert isinstance(content, PlaybookContent)
-    return content
-
-
-def _resource_content(version: AnyVersionRead) -> ResourceContent:
-    """Verengt den Union-Typ auf den Resource-Fall."""
-    content = version.content
-    assert isinstance(content, ResourceContent)
-    return content
 
 
 def _fat_blocks(count: int) -> list[dict[str, object]]:
@@ -382,15 +374,16 @@ def test_every_format_aware_tool_has_a_budget_test() -> None:
 
 
 def test_system_prompt_body_cannot_be_emptied_for_a_cheap_response() -> None:
-    """Belegt, WARUM `list_system_prompts`/`get_system_prompt` keinen `format` haben.
+    """Belegt, WARUM `get_system_prompt` den Body als Text traegt statt ihn zu leeren.
 
     Das Schema verlangt einen nicht-leeren Body (`min_length=1`) — der Zuschnitt
     „Body leeren\" wuerde hier eine schema-ungueltige Antwort erzeugen, also
-    einen Validierungsfehler statt einer kleineren Antwort. Der Fall braucht ein
-    eigenes Summary-Modell (`docs/mcp-payload-budget.md`, Abschnitt „Offen\").
+    einen Validierungsfehler statt einer kleineren Antwort. Der Markdown-Zuschnitt
+    (ADR-0056) umgeht das: er traegt den Body als Klartext ohne Editor-Struktur
+    (`test_get_system_prompt_text_format_stays_under_response_limit`).
 
-    Wird das Limit irgendwann gelockert, faellt dieser Test — und genau dann ist
-    der billige Zuschnitt moeglich und soll nachgezogen werden.
+    Wird das Limit irgendwann gelockert, faellt dieser Test — dann ist der
+    Docstring hier und `docs/mcp-payload-budget.md` nachzuziehen.
     """
     with pytest.raises(ValidationError):
         SystemPromptTemplateContent(description="Template", body="")
@@ -648,36 +641,40 @@ def test_list_versions_text_format_stays_under_response_limit(
         server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
     )
 
-    full = asyncio.run(list_versions("playbook", str(entity_id)))
+    full = asyncio.run(list_versions("playbook", str(entity_id), format="full"))
     text = asyncio.run(list_versions("playbook", str(entity_id), format="text"))
 
     _assert_text_path_fits(full, text, "list_versions")
-    # Die Metadaten sind der Zweck der Liste und bleiben vollstaendig.
-    assert [v.version for v in text] == [v.version for v in full]
-    assert [v.status for v in text] == [v.status for v in full]
-    assert [v.created_at for v in text] == [v.created_at for v in full]
-    assert all(_playbook_content(v).description.startswith("Stand") for v in text)
-    assert all(_playbook_content(v).body == "" for v in text)
+    # Die Metadaten sind der Zweck der Liste und bleiben vollstaendig, je
+    # Version ein Kopf; der Inhalt (den `get_version` liefert) faellt weg.
+    assert isinstance(full, list)
+    assert isinstance(text, str)
+    for version in full:
+        assert f"## Version {version.version}\n" in text
+    assert text.count("- status: inactive") == 7
+    assert text.count("- status: active") == 1
+    assert "Abschnitt 0" not in text
+    assert '"props"' not in text
 
 
-def test_list_versions_text_format_empties_resource_blocks(
+def test_list_versions_text_format_omits_persona_modes_and_profile(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Der Zuschnitt greift typ-agnostisch: Resources tragen `blocks`, nicht `body`.
+    """Persona-Historie: weder Profil-Bloecke noch Modus-Bloecke im Text.
 
-    Ohne diesen Test koennte der Zuschnitt nur den Playbook-Fall treffen und
-    fuer Resources still nichts tun — der Fall, den eine reine
-    Feldnamen-Pruefung nicht faengt.
+    Die Modus-Felder (`identity_add` usw.) sind Block-Listen und waren die
+    Luecke aus ADR-0056 Abschnitt 1.2: der fruehere `text`-Zuschnitt leerte
+    nur das Profil. Unter Markdown traegt die Liste nur Koepfe.
     """
     entity_id = uuid4()
-    blocks = _fat_blocks(60)
+    content = _persona_payload(uuid4(), _fat_blocks(60))["content"]
     payload = [
         {
             "id": str(uuid4()),
             "version": version,
             "status": "inactive",
             "locale": "de",
-            "content": {"description": f"Stand {version}", "blocks": blocks, "tags": ["doku"]},
+            "content": content,
             "created_by": str(uuid4()),
             "created_at": "2026-01-01T00:00:00Z",
         }
@@ -688,10 +685,279 @@ def test_list_versions_text_format_empties_resource_blocks(
         server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
     )
 
-    full = asyncio.run(list_versions("resource", str(entity_id)))
-    text = asyncio.run(list_versions("resource", str(entity_id), format="text"))
+    full = asyncio.run(list_versions("persona", str(entity_id), format="full"))
+    text = asyncio.run(list_versions("persona", str(entity_id), format="text"))
 
-    _assert_text_path_fits(full, text, "list_versions(resource)")
-    assert all(_resource_content(v).blocks == [] for v in text)
-    assert all(_resource_content(v).tags == ["doku"] for v in text)
-    assert all(len(_resource_content(v).blocks) == len(blocks) for v in full)
+    _assert_text_path_fits(full, text, "list_versions(persona)")
+    assert isinstance(text, str)
+    assert text.count("## Version ") == 8
+    assert "Veredelungs-Haltung" not in text
+    assert "Abschnitt 0" not in text
+    assert '"props"' not in text
+
+
+def _resource_payload(blocks: list[dict[str, object]], name: str = "Doc") -> dict[str, object]:
+    return {
+        "id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "owner_id": str(uuid4()),
+        "name": name,
+        "slug": name.lower(),
+        "current_version": 1,
+        "current_status": "active",
+        "has_pending_draft": False,
+        "locale": "de",
+        "content": {"description": "Referenz", "blocks": blocks, "tags": ["doku"]},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+def _template_payload(name: str, body: str) -> dict[str, object]:
+    return {
+        "id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "owner_id": str(uuid4()),
+        "name": name,
+        "slug": name.lower().replace(" ", "-"),
+        "current_version": 1,
+        "current_status": "active",
+        "has_pending_draft": False,
+        "locale": "de",
+        "content": {"description": f"Beschreibung von {name}", "body": body},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+def _external_tool_payload(name: str, usage_notes: str) -> dict[str, object]:
+    return {
+        "id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "owner_id": str(uuid4()),
+        "name": name,
+        "alias": name.lower(),
+        "current_version": 1,
+        "is_managed": False,
+        "current_status": "active",
+        "has_pending_draft": False,
+        "locale": "de",
+        "content": {
+            "display_name": name,
+            "mcp_server_name": f"{name} MCP",
+            "tool_names": ["add_task"],
+            "usage_notes": usage_notes,
+            "fallback_note": None,
+            "tags": [],
+        },
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+def test_fetch_resource_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Inhalt der Resource kommt als Text, ohne die Editor-Struktur."""
+    resource = _resource_payload(_fat_blocks(250))
+    resource_id = resource["id"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/sub_resources"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=resource)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    full = asyncio.run(fetch_resource(str(resource_id), format="full"))
+    text = asyncio.run(fetch_resource(str(resource_id), format="text"))
+
+    _assert_text_path_fits(full, text, "fetch_resource")
+    assert isinstance(text, str)
+    assert "Abschnitt 249: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text
+
+
+def test_get_system_prompt_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Body nahe am Maximum reisst nur als escapter JSON-String die Grenze.
+
+    Das Fixture bleibt unter `max_length` des Bodys: der Fall, den
+    `test_system_prompt_body_cannot_be_emptied_for_a_cheap_response` als
+    strukturell beschreibt, ist unter `text` loesbar, weil der Text den Body
+    ohne Editor-Struktur traegt statt ihn zu leeren.
+    """
+    template = _template_payload("Agent-Builder", _fat_blocknote_body(200))
+
+    monkeypatch.setattr(
+        server, "build_client", _factory(lambda _r: httpx.Response(200, json=template))
+    )
+
+    full = asyncio.run(get_system_prompt(str(template["id"]), format="full"))
+    text = asyncio.run(get_system_prompt(str(template["id"]), format="text"))
+
+    _assert_text_path_fits(full, text, "get_system_prompt")
+    assert isinstance(text, str)
+    assert "Abschnitt 199: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text
+
+
+def test_list_system_prompts_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Katalog traegt Kopf und Beschreibung, nicht die Bodies."""
+    body = _fat_blocknote_body(100)
+    payload = [_template_payload(f"Template {index}", body) for index in range(3)]
+
+    monkeypatch.setattr(
+        server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
+    )
+
+    full = asyncio.run(list_system_prompts(format="full"))
+    text = asyncio.run(list_system_prompts(format="text"))
+
+    _assert_text_path_fits(full, text, "list_system_prompts")
+    assert isinstance(text, str)
+    assert text.startswith("# System-Prompts (3)\n")
+    for item in payload:
+        assert f"- id: {item['id']}" in text
+    assert "Abschnitt 0" not in text
+
+
+def test_list_external_tools_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Katalog traegt Kopf und Felder, nicht die Nutzungshinweise."""
+    notes = _fat_blocknote_body(80)
+    payload = [_external_tool_payload(f"Tool{index}", notes) for index in range(4)]
+
+    monkeypatch.setattr(
+        server, "build_client", _factory(lambda _r: httpx.Response(200, json=payload))
+    )
+
+    full = asyncio.run(list_external_tools(format="full"))
+    text = asyncio.run(list_external_tools(format="text"))
+
+    _assert_text_path_fits(full, text, "list_external_tools")
+    assert isinstance(text, str)
+    assert text.startswith("# Externe Tools (4)\n")
+    assert text.count("- alias: tool") == 4
+    assert "Abschnitt 0" not in text
+
+
+def test_get_external_tool_text_format_drops_editor_json_at_max_notes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine einzelne Bindung kann die Grenze nicht reissen, also ohne Rot-Probe ueber `full`.
+
+    `usage_notes` ist auf 20.000 Zeichen begrenzt; selbst escaped bleibt die
+    `full`-Antwort darunter. Belegt wird deshalb: am Maximum kommt der Text an,
+    er traegt den Inhalt und kein Editor-JSON, und er ist kleiner als `full`.
+    """
+    max_notes = ExternalToolContent.model_fields["usage_notes"].metadata
+    limit = next(m.max_length for m in max_notes if getattr(m, "max_length", None) is not None)
+    notes = _fat_blocknote_body(80)
+    assert len(notes) <= limit, "Fixture ueber dem Feld-Maximum"
+    tool = _external_tool_payload("Todoist", notes)
+
+    monkeypatch.setattr(server, "build_client", _factory(lambda _r: httpx.Response(200, json=tool)))
+
+    full = asyncio.run(get_external_tool(str(tool["id"]), format="full"))
+    text = asyncio.run(get_external_tool(str(tool["id"]), format="text"))
+
+    assert isinstance(text, str)
+    assert _chars(text) <= _RESPONSE_CHAR_LIMIT
+    assert _chars(text) < _chars(full) / 3
+    assert "Abschnitt 79: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text
+
+
+def test_get_version_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Snapshot nahe am Body-Maximum kommt als Text an."""
+    entity_id = uuid4()
+    snapshot = {
+        "id": str(uuid4()),
+        "version": 3,
+        "status": "active",
+        "locale": "de",
+        "content": {
+            "description": "Stand 3",
+            "body": _fat_blocknote_body(200),
+            "type": "workflow",
+        },
+        "created_by": str(uuid4()),
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+
+    monkeypatch.setattr(
+        server, "build_client", _factory(lambda _r: httpx.Response(200, json=snapshot))
+    )
+
+    full = asyncio.run(get_version("playbook", str(entity_id), 3, format="full"))
+    text = asyncio.run(get_version("playbook", str(entity_id), 3, format="text"))
+
+    _assert_text_path_fits(full, text, "get_version")
+    assert isinstance(text, str)
+    assert "Abschnitt 199: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text
+
+
+def test_diff_versions_text_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Diff verliert die Rohwerte, der lesbare Vergleich bleibt."""
+    entity_id = uuid4()
+    blocks = _fat_blocks(100)
+    readable = "\n\n".join(f"Abschnitt {i}: Profiltext dieses Absatzes." for i in range(100))
+    diff = {
+        "version": 2,
+        "against": "active",
+        "against_version": 1,
+        "changes": [
+            {"path": "content.blocks", "op": "changed", "before": blocks, "after": blocks[1:]}
+        ],
+        "identical": False,
+        "before_text": readable,
+        "after_text": readable.split("\n\n", 1)[1],
+    }
+
+    monkeypatch.setattr(server, "build_client", _factory(lambda _r: httpx.Response(200, json=diff)))
+
+    full = asyncio.run(diff_versions("resource", str(entity_id), 2, format="full"))
+    text = asyncio.run(diff_versions("resource", str(entity_id), 2, format="text"))
+
+    _assert_text_path_fits(full, text, "diff_versions")
+    assert isinstance(text, str)
+    assert "- changed `content.blocks`" in text
+    assert "## Vorher\n\nAbschnitt 0: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text
+
+
+_PACKAGE_4_TOOLS: dict[str, Callable[..., object]] = {
+    "fetch_resource": lambda fmt: fetch_resource(str(uuid4()), format=fmt),
+    "get_system_prompt": lambda fmt: get_system_prompt(str(uuid4()), format=fmt),
+    "list_system_prompts": lambda fmt: list_system_prompts(format=fmt),
+    "get_external_tool": lambda fmt: get_external_tool("todo", format=fmt),
+    "list_external_tools": lambda fmt: list_external_tools(format=fmt),
+    "list_versions": lambda fmt: list_versions("playbook", str(uuid4()), format=fmt),
+    "get_version": lambda fmt: get_version("playbook", str(uuid4()), 1, format=fmt),
+    "diff_versions": lambda fmt: diff_versions("playbook", str(uuid4()), 1, format=fmt),
+}
+
+
+@pytest.mark.parametrize("tool", sorted(_PACKAGE_4_TOOLS))
+def test_package_4_tools_reject_unknown_format(tool: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Tippfehler im `format` faellt auf, bevor die API gefragt wird."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500, json={"detail": "darf nicht erreicht werden"})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="Ungueltiges format"):
+        asyncio.run(_PACKAGE_4_TOOLS[tool]("plain"))  # type: ignore[arg-type]
+    assert calls == []

@@ -95,7 +95,7 @@ def test_list_system_prompts_returns_templates(monkeypatch: pytest.MonkeyPatch) 
         return httpx.Response(200, json=[_template_payload()])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_system_prompts())
+    result = asyncio.run(list_system_prompts(format="full"))
     assert len(result) == 1
     assert isinstance(result[0], SystemPromptTemplateRead)
     assert result[0].slug == "agent-builder"
@@ -143,7 +143,7 @@ def test_get_system_prompt_returns_template(monkeypatch: pytest.MonkeyPatch) -> 
         return httpx.Response(200, json=payload)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(get_system_prompt(str(tid)))
+    result = asyncio.run(get_system_prompt(str(tid), format="full"))
     assert isinstance(result, SystemPromptTemplateRead)
     assert result.id == tid
 
@@ -165,7 +165,7 @@ def test_list_versions_supports_system_prompt_entity(monkeypatch: pytest.MonkeyP
         return httpx.Response(200, json=[_template_version(1, "active")])
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    result = asyncio.run(list_versions("system_prompt", str(tid)))
+    result = asyncio.run(list_versions("system_prompt", str(tid), format="full"))
     assert len(result) == 1
     assert isinstance(result[0], SystemPromptTemplateVersionRead)
 
