@@ -43,6 +43,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ValidationError
 
@@ -71,7 +72,9 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
 # Baseline 2026-08-13: 71 Tools / 110_133 Bytes (utf-8, name+description+
 # inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
-# nachgezogenen `list_tables`/`delete_table`), mehr nicht.
+# nachgezogenen `list_tables`/`delete_table`), mehr nicht. Seit 2026-10-06
+# misst der Test die Draht-Form (inkl. `title`/`_meta` aus fastmcp 4):
+# 86 Tools / 142_295 Bytes.
 _PAYLOAD_BUDGET_BYTES = 160_000
 _NEW_TOOL_DOC_CAP = 1_100
 
@@ -84,12 +87,19 @@ _WORKSPACE_ID = uuid4()
 
 
 async def _tools_payload_bytes() -> int:
-    tools = await mcp.list_tools(run_middleware=False)
-    payload = [
-        {"name": t.name, "description": t.description or "", "inputSchema": t.parameters}
-        for t in tools
-    ]
-    return len(json.dumps(payload, ensure_ascii=False).encode())
+    """Groesse der `tools`-Liste so, wie `tools/list` sie auf den Draht legt.
+
+    Gemessen wird ueber einen In-Memory-Client, also durch den echten
+    `tools/list`-Handler samt Middleware — nicht ueber eine selbst gebaute
+    Teilmenge der Felder. Seit fastmcp 4 traegt jedes Tool zusaetzlich `title`
+    und `_meta`; eine Messung nur ueber name/description/inputSchema sah diese
+    Felder nicht (rund 2,4 KB bei 86 Tools). Gezaehlt wird die `tools`-Liste
+    (utf-8, `ensure_ascii=False`), ohne den JSON-RPC-Umschlag.
+    """
+    async with Client(mcp) as client:
+        result = await client.list_tools_mcp()
+    tools = result.model_dump(mode="json", by_alias=True, exclude_none=True)["tools"]
+    return len(json.dumps(tools, ensure_ascii=False).encode())
 
 
 def test_tools_list_payload_stays_under_budget() -> None:
@@ -98,6 +108,33 @@ def test_tools_list_payload_stays_under_budget() -> None:
         f"tools/list-Payload {size} Bytes > Budget {_PAYLOAD_BUDGET_BYTES} — "
         "Beschreibungen kuerzen oder Tools falten (Plan-Fold-Reihenfolge), "
         "nicht das Budget anheben."
+    )
+
+
+@pytest.mark.parametrize("field", ["title", "meta"])
+def test_tools_list_payload_counts_wire_only_fields(
+    field: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rot-Probe: `title` und `_meta` zaehlen mit, obwohl sie nicht im Schema stehen.
+
+    Ein einzelnes Tool bekommt ein aufgeblaehtes Feld, das klar ueber das
+    Budget traegt. Misst `_tools_payload_bytes` wieder nur name/description/
+    inputSchema, bleibt die Groesse unveraendert und dieser Test faellt.
+    """
+    tool = asyncio.run(mcp.list_tools(run_middleware=False))[0]
+    before = asyncio.run(_tools_payload_bytes())
+    # Spielraum: ein gesetzter `title` ersetzt den abgeleiteten Default-Titel.
+    pad = "X" * (_PAYLOAD_BUDGET_BYTES - before + 1_000)
+    if field == "title":
+        monkeypatch.setattr(tool, "title", (tool.title or "") + pad)
+    else:
+        monkeypatch.setattr(tool, "meta", {**(tool.meta or {}), "probe": pad})
+
+    after = asyncio.run(_tools_payload_bytes())
+
+    assert after > _PAYLOAD_BUDGET_BYTES, (
+        f"Aufgeblaehtes `{field}` ({len(pad)} Zeichen) nicht gemessen: {before} -> {after} "
+        "Bytes. Die Messung sieht die Draht-Form von tools/list nicht."
     )
 
 

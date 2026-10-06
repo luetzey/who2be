@@ -199,6 +199,25 @@ Summary-Modell ist dafuer nicht mehr noetig.
 Kataloggroesse von `tools/list` (WP10, ADR-0047) und die Antwortgroesse je
 Werkzeug.
 
+**Katalog-Budget `tools/list`:** Grenze 160.000 Bytes. Gemessen wird die
+`tools`-Liste so, wie der Server sie auf den Draht legt: ein In-Memory-Client
+ruft `tools/list` durch den echten Handler samt Middleware auf, gezaehlt wird
+utf-8 mit `ensure_ascii=False`, ohne den JSON-RPC-Umschlag. Damit zaehlen auch
+die Felder mit, die nicht aus dem Werkzeug-Schema stammen: seit FastMCP 4
+traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
+`description` und `inputSchema` sah diese Felder nicht.
+
+| Stand | Tools | gemessen |
+| --- | --- | --- |
+| 2026-08-13, Einfuehrung (name/description/inputSchema) | 71 | 110.133 Bytes |
+| 2026-10-06, alte Messung auf FastMCP 4.0.11 | 86 | 136.764 Bytes |
+| 2026-10-06, Draht-Form auf FastMCP 4.0.11 | 86 | **142.295 Bytes** |
+
+Bis zur Grenze bleiben damit 17.705 Bytes. Die Rot-Probe
+`test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
+eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
+sieht. Misst der Test wieder nur das Schema, faellt sie.
+
 Die Antwort-Tests messen die Antwort so, wie sie ankommt: unter `text` den
 Markdown-String, unter `full` das serialisierte Modell (`model_dump_json`).
 Sie halten die Zusage „die Antwort kommt an“, nicht die Zusage „ein Feld heisst
