@@ -383,6 +383,18 @@ Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
 allowed; GPL/AGPL/LGPL and other copyleft licenses break the gate.
 Deliberate exceptions require an ADR addendum.
 
+**No credentials in any commit.** The CI job `secrets` runs Gitleaks over
+every commit of a PR — documentation included — and `all-green` fails on any
+hit. To check before pushing (Gitleaks 8.30.1, MIT):
+
+```bash
+gitleaks git . --redact --config .gitleaks.toml --log-opts="origin/main..HEAD"
+```
+
+A hit that is a real credential must be rotated first, then removed from the
+history. A hit that is a test placeholder goes into `.gitleaks.toml` as its
+exact value with a reason — never as a path exception.
+
 **Did you touch documentation, plans, issues or cards that cite code?** Then
 the code references are verified by the checker, not by hand — a run that
 re-measures pointers manually is not a DoD run:
