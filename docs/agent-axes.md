@@ -65,21 +65,29 @@ ruft:
 
 ### 2. Persona / Modi
 
-`get_persona(identifier)` gibt `PersonaRead.content.modes` zurueck.
+`get_persona(identifier)` liefert standardmaessig ein Markdown-Dokument
+(ADR-0056): Kopf, gerendertes Profil, eine Sektion `## Modi` mit Trigger,
+Identitaets-Ergaenzung, Output-Stil und Anti-Patterns je Modus, darunter der
+Playbook-Katalog. Strukturiert stehen die Modi unter `format="full"` in
+`persona.content.modes`.
 
 - Modi vorhanden: Trigger-Liste pruefen, passenden Modus waehlen;
-  `identity_add` + `output_style_override` anwenden.
-- Kein Trigger-Match: Default-Modus (Mode mit `is_default=true`) nutzen.
-- Keine Modi: Persona-Persoenlichkeit direkt aus dem Profil-Block.
+  Identitaets-Ergaenzung (`identity_add`) und Output-Stil
+  (`output_style_override`) anwenden. Alternativ wendet
+  `get_persona(identifier, mode="<Modus-Name>")` den Modus serverseitig an.
+- Kein Trigger-Match: Default-Modus (im Text mit „(Default)“ markiert, unter
+  `full` `is_default=true`) nutzen.
+- Keine Modi: Persona-Persoenlichkeit direkt aus dem Profil.
 
 ### 3. Playbook / Composite
 
 `list_triggers()` → Trigger-Match → `fetch_playbook(playbook_id)`.
 
 - Atomares Playbook: Body lesen, Schritte ausfuehren.
-- Composite-Playbook (`composed_playbooks` nicht leer): der gerenderte Body
-  enthaelt bereits eine nummerierte `## Ablauf (Sub-Playbooks)`-Sequenz;
-  der Agent folgt ihr der Reihe nach. Einzelne Kinder koennen via
+- Composite-Playbook (unter `format="full"` ist `composed_playbooks` nicht
+  leer; im Default-Text stehen die Kinder im Kopf unter `kinder` und als
+  Sektion `## Sub-Playbooks (in dieser Reihenfolge)`): der Agent folgt der
+  Sequenz der Reihe nach. Einzelne Kinder koennen via
   erneutem `fetch_playbook(child_id)` vertieft werden (eine Ebene inline,
   tiefere rekursiv nachladbar).
 

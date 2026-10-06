@@ -912,7 +912,9 @@ class TestPersonaRefResolver:
         assert "Lena Support" in result.text
         assert str(persona_id) in result.text
         assert "get_persona" in result.text
-        assert "content.modes" in result.text
+        # ADR-0056: die Default-Antwort ist Markdown, Modi stehen unter `## Modi`.
+        assert "## Modi" in result.text
+        assert "content.modes" not in result.text
         # WP-F: Hinweis auf den serverseitig angewendeten Modus-Parameter.
         assert 'mode="<Modus-Name>"' in result.text
 
@@ -1314,12 +1316,21 @@ class TestToolsOverviewResolver:
         assert "Composite" in result or "composed_playbooks" in result
 
     def test_get_persona_mentions_modi(self) -> None:
-        """get_persona-Eintrag erklaert content.modes / Modi-Auswahl (E2)."""
+        """get_persona-Eintrag zeigt, wo die Modi in der Default-Antwort stehen (ADR-0056).
+
+        Seit ADR-0056 liefert `get_persona` standardmaessig Markdown; die Modi
+        stehen dort unter `## Modi`. `content.modes` gibt es nur unter
+        `format="full"` — der Eintrag muss beides nennen, sonst sucht ein
+        Agent im Default-Text nach einem JSON-Feld, das es nicht gibt.
+        """
         resolver = ToolsOverviewResolver()
         ctx = _ctx()
         db = _make_db()
         result = _async_run(resolver.resolve("", ctx, db)).text
-        assert "content.modes" in result or "Modi" in result
+        entry = next(line for line in result.splitlines() if "get_persona(identifier)" in line)
+        assert "## Modi" in entry
+        assert 'format="full"' in entry
+        assert entry.index('format="full"') > entry.index("content.modes")
 
     def test_overview_includes_applied_vs_triggered_hint(self) -> None:
         """Overview enthaelt Hinweis: applied (immer geladen) vs. triggered (E2)."""
