@@ -878,13 +878,16 @@ jobs:
           fi
           # `|| rc=$?`: GitHub startet `run:` mit `bash -e`; ohne den Fang
           # endete der Step bei einem Fund, bevor die Summary geschrieben ist.
+          # `--exit-code 42`: Gitleaks endet sowohl bei einem Fund als auch bei
+          # einem fatalen Fehler (z. B. kaputte Konfiguration) mit 1 — gemessen
+          # mit 8.30.1. Erst der eigene Fund-Code macht beides unterscheidbar.
           rc=0
           /tmp/gitleaks git . --no-banner --redact --config .gitleaks.toml \
-            --log-opts="$log_opts" --report-format json \
+            --exit-code 42 --log-opts="$log_opts" --report-format json \
             --report-path /tmp/gitleaks.json || rc=$?
-          # rc=1 heisst Fund, rc=0 sauber. Alles andere: das Werkzeug ist
+          # rc=42 heisst Fund, rc=0 sauber. Alles andere: das Werkzeug ist
           # nicht gelaufen — rot, und zwar als Werkzeug-, nicht als Fund-Fehler.
-          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 42 ]; then
             echo "::error title=Gitleaks nicht gelaufen::rc=${rc}. Das ist KEIN Befund, sondern ein kaputter Scan — Log oben."
             exit 1
           fi
@@ -893,13 +896,13 @@ jobs:
             echo "## Secret-Scan (Gitleaks)"
             echo
             echo "Bereich: \`${log_opts}\` — Funde: **${count}**"
-            if [ "$rc" -eq 1 ]; then
+            if [ "$rc" -eq 42 ]; then
               echo; echo '```'
               jq -r '.[] | "\(.RuleID)  \(.File):\(.StartLine)  \(.Commit[0:12])"' /tmp/gitleaks.json | head -50
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$rc" -eq 1 ]; then
+          if [ "$rc" -eq 42 ]; then
             jq -r '.[] | "::error file=\(.File),line=\(.StartLine),title=Gitleaks \(.RuleID)::Moegliches Geheimnis in Commit \(.Commit[0:12]). Wert ist geschwaerzt. Echtes Geheimnis: sofort rotieren, dann aus der Historie entfernen. Platzhalter: exakten Wert begruendet in .gitleaks.toml aufnehmen."' /tmp/gitleaks.json
             exit 1
           fi
