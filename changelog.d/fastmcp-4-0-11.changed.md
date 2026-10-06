@@ -9,4 +9,6 @@
   against `httpx2` as soon as that package is installed. Six test modules had
   annotated those responses as `httpx.Response`; they now import the response
   type from the same source as the test client, only for type checking, so no
-  test gains a runtime dependency. Application code is unchanged.
+  test gains a runtime dependency. Because those modules now import `httpx2`
+  directly, it is declared in the `dev` dependency group instead of arriving
+  only transitively through FastMCP. Application code is unchanged.

@@ -3138,6 +3138,7 @@ billing = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -3159,6 +3160,7 @@ embeddings = [
 billing = [{ name = "who2be-billing", editable = "packages/billing" }]
 dev = [
     { name = "httpx", specifier = ">=0.27" },
+    { name = "httpx2", specifier = ">=2.13" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=9.1.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
