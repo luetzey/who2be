@@ -385,8 +385,8 @@ Diese Fragen entscheidet die ADR nicht. Sie gehen an die Spezifikation
 (Paket O1); was Urteil verlangt, wird dem Owner als Option mit Empfehlung
 vorgelegt.
 
-> Nachtrag 2026-10-06: Die Fragen O1.2–O1.5, O1.7, O2.1, O2.2, O3.1–O3.5
-> und O4.4 sind entschieden, siehe Abschnitt 8.1. Die übrigen regelt die
+> Nachtrag 2026-10-06: Die Fragen O1.2–O1.5, O1.7, O2.1, O2.2, O3.1, O3.4,
+> O3.5 und O4.4 sind entschieden, siehe Abschnitt 8.1. Die übrigen regelt die
 > Spezifikation O1 ohne Owner-Weiche.
 
 **Delegationsobjekt (W1)**
@@ -519,7 +519,7 @@ Empfehlungen aus und gelten damit als Vorgabe für die Bau-Pakete O2–O7.
 | S10 Herkunft des Traces (O4.4) | A | Ein Trace ist Selbstmeldung (`client_self_report`); Signatur und Übernahme aus OpenTelemetry entfallen vorerst. | Die OTel-GenAI-Konventionen stehen auf „Development“, und Who2Be hat keine Schlüsselverwaltung für Laufzeiten. | §3.5, §8 |
 | S11 Card-`version` | A | Die Card-`version` ist ein Inhalts-Hash: die ersten 12 Hex-Zeichen von SHA-256 über die JCS-kanonisierte Card ohne `version`. | Der Hash ändert sich genau dann, wenn sich die Card ändert, auch bei Playbook-Änderungen, und nicht bei Nebenfeldern des Agenten. | §4.1, §8 |
 | S12 Card-Signatur | nein | Die Card wird nicht signiert, das Feld `signatures` fehlt. | Signieren ist laut A2A nur „MAY“, und ohne Schlüsselverwaltung wäre eine Signatur ohne Wert. | §4.1, §8 |
-| S13 Skill-Quelle (O3.1) | A | A2A-`skills` stammen nur aus Triggered-Playbooks nach den Regeln aus Spec §4.2; Applied-Playbooks und Persona-`skills` sind keine Quelle. | Skills beschreiben Auffind-Semantik, Applied-Playbooks sind eingebettetes Verhalten; ein künftiges Skill-Aggregat würde zweite Quelle. | §4.2, §8 |
+| S13 Skill-Quelle (O3.1) | A | A2A-`skills` stammen nur aus Triggered-Playbooks nach den Regeln aus Spec §4.2; Applied-Playbooks und Persona-`skills` sind keine Quelle. | Skills beschreiben Auffind-Semantik, Applied-Playbooks sind eingebettetes Verhalten; ein künftiges Skill-Aggregat würde zur zweiten Quelle. | §4.2, §8 |
 | S14 Kriterium AGENTS.md-Export (O3.5) | A | Der AGENTS.md-Export wird für Agenten angeboten, deren Persona den Tag `coding` trägt, zusätzlich zu den Mindestbedingungen aus Spec §5.3. | Kein neues Schema; der Mensch steuert den Export über einen bestehenden Mechanismus. | §5.3, §8 |
 
 Die Abschnitte 4.1–4.4 und 5 bleiben im Wortlaut stehen; wo sie eine Frage
