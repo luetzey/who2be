@@ -6,12 +6,14 @@ Provenance (status_history-Kette einer Version) und Reset-auf-Draft
 Entitaeten ab. Laeuft nur mit erreichbarer Datenbank; ohne DB → Skip.
 """
 
+from __future__ import annotations
+
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
-import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +23,10 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -82,8 +88,8 @@ def _to(
     version: int,
     status: str,
     auth: dict[str, str],
-) -> httpx.Response:
-    resp: httpx.Response = client.post(
+) -> Response:
+    resp: Response = client.post(
         f"{base}/{pid}/versions/{version}/transition", json={"to": status}, headers=auth
     )
     return resp

@@ -23,19 +23,22 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 import asyncpg
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.main import app
 from who2be_api.services import workspace_quota_service
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+
+if TYPE_CHECKING:
+    # Starlette typisiert den TestClient auf httpx2; die Antwort kommt von dort.
+    from httpx2 import Response
 
 AuthFactory = Callable[[UUID], dict[str, str]]
 

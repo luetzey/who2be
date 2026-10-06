@@ -33,6 +33,8 @@ dev = [
     "pytest-cov>=5.0",
     "testcontainers[postgres]>=4.14.2",
     "httpx>=0.27",
+    # Starlette-TestClient typisiert/laeuft auf httpx2; Testmodule importieren `Response` daraus.
+    "httpx2>=2.13",
     "mypy>=1.10",
     "ruff>=0.15.17",
     # test_blobstore_bootstrap.py liest docker-compose.yml (Compose-Verdrahtung,
