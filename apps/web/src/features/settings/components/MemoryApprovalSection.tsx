@@ -1,9 +1,9 @@
-import { Eye, Info, TriangleAlert, Undo2 } from 'lucide-react'
+import { ChevronRight, Eye, Info, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import { ApiError } from '@/api/client'
+import { ApiError, type Api } from '@/api/client'
 import type {
   MemoryAutoCell,
   MemoryAutoPolicyRead,
@@ -78,6 +78,30 @@ function hasCell(cells: readonly MemoryAutoCell[], cell: MemoryAutoCell): boolea
   return cells.some((entry) => sameCell(entry, cell))
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+interface LastWeekCounts {
+  auto: number
+  confirmed: number
+}
+
+/**
+ * Kennzahl S4 (Spec §11.1, §13.9) ueber `GET /memories/counts`:
+ * n = automatisch aktiviert seit `since`; m = davon heute aktiv und bestaetigt
+ * = `status=active` − `health=unconfirmed`. Per Not-Aus zurueckgenommene
+ * Eintraege (wieder `pending`) zaehlen in n, aber nie als bestaetigt. Zwei
+ * getrennte Abfragen koennen kurz auseinanderlaufen — m bleibt daher ≥ 0.
+ */
+async function loadLastWeekCounts(api: Api, since: string): Promise<LastWeekCounts> {
+  const base = { auto: true, created_after: since } as const
+  const [all, active, unconfirmed] = await Promise.all([
+    api.countMemories(base),
+    api.countMemories({ ...base, status: 'active' }),
+    api.countMemories({ ...base, health: 'unconfirmed' }),
+  ])
+  return { auto: all.total, confirmed: Math.max(0, active.total - unconfirmed.total) }
+}
+
 function describeError(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message !== '' ? cause.message : fallback
 }
@@ -145,8 +169,9 @@ function LockedCell({ reason, tooltipLabel }: LockedCellProps) {
 }
 
 export function MemoryApprovalSection() {
-  const { t } = useTranslation('learning')
+  const { t, i18n } = useTranslation('learning')
   const api = useApi()
+  const numberFormat = new Intl.NumberFormat(i18n.language)
   const isMobile = useIsMobile()
   const wsPath = useWorkspacePath()
   const baseId = useId()
@@ -159,6 +184,25 @@ export function MemoryApprovalSection() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [pendingCell, setPendingCell] = useState<MemoryAutoCell | null>(null)
+  const [lastWeek, setLastWeek] = useState<LastWeekCounts | null>(null)
+
+  // Kennzahl getrennt von der Matrix: ein Zaehlfehler laesst nur die Zeile
+  // weg (keine toten Elemente), die Matrix bleibt bedienbar.
+  useEffect(() => {
+    let cancelled = false
+    const since = new Date(Date.now() - 7 * DAY_MS).toISOString()
+    loadLastWeekCounts(api, since).then(
+      (counts) => {
+        if (!cancelled) setLastWeek(counts)
+      },
+      () => {
+        if (!cancelled) setLastWeek(null)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [api])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -418,11 +462,32 @@ export function MemoryApprovalSection() {
               <p>{t('autoPolicy.expiry', { days: MEMORY_AUTO_EXPIRY_DAYS })}</p>
             </div>
 
-            {/* Not-Aus (Spec §11.1 S4, §8): oeffnet den Dialog auf der
-                Gedaechtnis-Seite. Steht unabhaengig davon, ob gerade eine
-                Zelle an ist — auch Freigaben von frueher lassen sich
-                zuruecknehmen. */}
-            <div>
+            {/* Wireframe S4: Kennzahl und Not-Aus stehen als zwei Zeilen
+                direkt untereinander. */}
+            <div className="flex flex-col items-start">
+              {/* Kennzahl S4 (Spec §11.1, §13.9): zeigt, ob jemand hinsieht.
+                  Link auf die unbestaetigten Eintraege. Auch bei n = 0
+                  sichtbar — die Spec kennt keine Sonderregel, „0“ ist die
+                  Aussage. */}
+              {lastWeek !== null ? (
+                <Button asChild variant="link" className="h-auto min-h-8 px-0 text-left whitespace-normal">
+                  <Link
+                    to={wsPath('/memory?tab=entries&health=unconfirmed')}
+                    data-testid="auto-approval-last-week"
+                  >
+                    {t('autoPolicy.lastWeek', {
+                      auto: numberFormat.format(lastWeek.auto),
+                      confirmed: numberFormat.format(lastWeek.confirmed),
+                    })}
+                    <ChevronRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              ) : null}
+
+              {/* Not-Aus (Spec §11.1 S4, §8): oeffnet den Dialog auf der
+                  Gedaechtnis-Seite. Steht unabhaengig davon, ob gerade eine
+                  Zelle an ist — auch Freigaben von frueher lassen sich
+                  zuruecknehmen. */}
               <Button asChild variant="link" className="h-auto min-h-8 px-0 whitespace-normal">
                 <Link to={wsPath('/memory?pullback=1')} data-testid="auto-approval-pullback-link">
                   <Undo2 aria-hidden="true" />

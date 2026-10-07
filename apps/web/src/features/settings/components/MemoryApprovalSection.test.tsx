@@ -75,12 +75,57 @@ interface StubOptions {
   guardMode?: MemoryGuardMode
   policyStatus?: number
   putStatus?: number
+  entries?: readonly FixtureEntry[]
+  countStatus?: number
 }
 
-function stubApi({ initial = policy(false), guardMode = 'standard', policyStatus = 200, putStatus = 200 }: StubOptions = {}) {
+// Fixture-Eintrag fuer den Zaehler-Fake. `auto` = hat ein Ereignis
+// `auto_activated` (C6a), unabhaengig vom heutigen Status.
+interface FixtureEntry {
+  auto: boolean
+  status: 'active' | 'pending' | 'expired' | 'rejected'
+  confirmed: boolean
+  daysAgo: number
+}
+
+const NOW = Date.now()
+const DAY = 24 * 60 * 60 * 1000
+
+// Wertet `GET /memories/counts` wie der Server aus (Filter `auto`, `status`,
+// `health=unconfirmed`, `created_after`), damit die Kennzahl gegen Fixtures
+// statt gegen fest verdrahtete Antworten geprueft wird.
+function countFixtures(entries: readonly FixtureEntry[], url: string): number {
+  const params = new URL(url, 'http://test').searchParams
+  const auto = params.get('auto')
+  const status = params.get('status')
+  const health = params.get('health')
+  const after = params.get('created_after')
+  return entries.filter((entry) => {
+    if (auto !== null && entry.auto !== (auto === 'true')) return false
+    if (status !== null && entry.status !== status) return false
+    if (health === 'unconfirmed' && !(entry.status === 'active' && !entry.confirmed)) return false
+    if (after !== null && NOW - entry.daysAgo * DAY < Date.parse(after)) return false
+    return true
+  }).length
+}
+
+function stubApi({
+  initial = policy(false),
+  guardMode = 'standard',
+  policyStatus = 200,
+  putStatus = 200,
+  entries = [],
+  countStatus = 200,
+}: StubOptions = {}) {
   const puts: unknown[] = []
+  const counts: string[] = []
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.includes('/memories/counts')) {
+      counts.push(url)
+      if (countStatus !== 200) return jsonResponse({ detail: 'kaputt' }, countStatus)
+      return jsonResponse({ total: countFixtures(entries, url) })
+    }
     if (url.includes('/memory-auto-policy')) {
       if ((init?.method ?? 'GET') === 'PUT') {
         const body = JSON.parse(init?.body as string) as { enabled_cells: unknown[] }
@@ -101,7 +146,7 @@ function stubApi({ initial = policy(false), guardMode = 'standard', policyStatus
     return jsonResponse([])
   })
   vi.stubGlobal('fetch', fetchMock)
-  return { puts, fetchMock }
+  return { puts, counts, fetchMock }
 }
 
 function renderSection() {
@@ -316,6 +361,89 @@ describe('MemoryApprovalSection (Lernschleife C6, ADR-0053 4.2/4.3)', () => {
     expect(screen.queryByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' })).toBeNull()
   })
 
+  // C6c, Spec §11.1 S4 / §13.9: Kennzahl der letzten 7 Tage aus
+  // `GET /memories/counts` mit `auto=true` (C6a).
+  describe('Kennzahl „Letzte 7 Tage“', () => {
+    async function lastWeekText(): Promise<string> {
+      const link = await screen.findByTestId('auto-approval-last-week')
+      return link.textContent ?? ''
+    }
+
+    it('zählt bei ausgeschalteter Auto-Freigabe 0, auch wenn freigegebene Einträge da sind', async () => {
+      stubApi({
+        initial: policy(false),
+        entries: [
+          // Von Hand freigegeben und bestätigt — kein `auto_activated`.
+          { auto: false, status: 'active', confirmed: true, daysAgo: 1 },
+          { auto: false, status: 'active', confirmed: true, daysAgo: 2 },
+          { auto: false, status: 'active', confirmed: false, daysAgo: 3 },
+        ],
+      })
+      renderSection()
+      expect(await lastWeekText()).toBe('Letzte 7 Tage: 0 automatisch freigegeben · 0 davon bestätigt')
+    })
+
+    it('zählt per Not-Aus Zurückgenommenes mit, aber nie als bestätigt', async () => {
+      stubApi({
+        initial: policy(true),
+        entries: [
+          { auto: true, status: 'active', confirmed: true, daysAgo: 1 },
+          { auto: true, status: 'active', confirmed: false, daysAgo: 2 },
+          // Auto aktiviert, dann per Not-Aus zurückgenommen: wieder `pending`.
+          { auto: true, status: 'pending', confirmed: false, daysAgo: 3 },
+          // Außerhalb des Zeitraums und von Hand freigegeben: zählen nicht.
+          { auto: true, status: 'active', confirmed: true, daysAgo: 9 },
+          { auto: false, status: 'active', confirmed: true, daysAgo: 1 },
+        ],
+      })
+      renderSection()
+      // n = 3; m = active (2) − unbestätigt (1) = 1. Die alte Formel
+      // n − unbestätigt hätte 2 ergeben.
+      expect(await lastWeekText()).toBe('Letzte 7 Tage: 3 automatisch freigegeben · 1 davon bestätigt')
+    })
+
+    it('fragt nur über /memories/counts mit auto=true und created_after vor 7 Tagen', async () => {
+      const { counts } = stubApi({ entries: [] })
+      renderSection()
+      await lastWeekText()
+      expect(counts).toHaveLength(3)
+      const params = counts.map((url) => new URL(url, 'http://test').searchParams)
+      for (const query of params) {
+        expect(query.get('auto')).toBe('true')
+        const since = Date.parse(query.get('created_after') ?? '')
+        expect(Math.abs(Date.now() - 7 * DAY - since)).toBeLessThan(60_000)
+      }
+      expect(params.map((query) => [query.get('status'), query.get('health')])).toEqual([
+        [null, null],
+        ['active', null],
+        [null, 'unconfirmed'],
+      ])
+    })
+
+    it('verlinkt auf die unbestätigten Einträge im aktuellen Workspace', async () => {
+      stubApi({ entries: [] })
+      renderSection()
+      const link = await screen.findByTestId('auto-approval-last-week')
+      expect(link.tagName).toBe('A')
+      expect(link).toHaveAttribute('href', '/w/ws-1/memory?tab=entries&health=unconfirmed')
+    })
+
+    it('lässt die Zeile bei einem Zählfehler weg, die Matrix bleibt', async () => {
+      stubApi({ countStatus: 500 })
+      renderSection()
+      expect(await screen.findByRole('switch')).toBeInTheDocument()
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(5))
+      expect(screen.queryByTestId('auto-approval-last-week')).toBeNull()
+    })
+
+    it('zeigt bei 403 keine Kennzahl', async () => {
+      stubApi({ policyStatus: 403, entries: [] })
+      renderSection()
+      await screen.findByText('Nur mit echter Anmeldung änderbar.')
+      expect(screen.queryByTestId('auto-approval-last-week')).toBeNull()
+    })
+  })
+
   it('zeigt kein Schloss- und kein Haken-Symbol (ADR 4.3)', async () => {
     stubApi({ initial: policy(true) })
     const { container } = renderSection()
@@ -388,6 +516,15 @@ describe('Locale-Texte der Auto-Freigabe', () => {
       )
       // Derselbe Wortlaut wie der Eintrag im Not-Aus-Menü der Gedächtnis-Seite.
       expect(autoPolicy.pullbackLink).toEqual(tree.learning.pullback.menu)
+    })
+
+    it(`führt in ${locale} die Kennzahl aus Spec §13.9 wörtlich (C6c)`, () => {
+      const autoPolicy = tree.learning.autoPolicy as Record<string, unknown>
+      expect(autoPolicy.lastWeek).toEqual(
+        locale === 'de'
+          ? 'Letzte 7 Tage: {{auto}} automatisch freigegeben · {{confirmed}} davon bestätigt'
+          : 'Last 7 days: {{auto}} approved automatically · {{confirmed}} of them confirmed',
+      )
     })
   }
 })

@@ -3047,6 +3047,7 @@
       "expiry": "Unbestätigte Einträge laufen nach {{days}} Tagen ab. Abrufe verlängern die Frist nicht.",
       "legacyAuto": "Agenten auf „Automatisch“ geben nur frei, was hier eingeschaltet ist. Solange alles aus ist, landet jeder Eintrag in „Zur Freigabe“.",
       "pullbackLink": "Automatisch Freigegebenes zurücknehmen…",
+      "lastWeek": "Letzte 7 Tage: {{auto}} automatisch freigegeben · {{confirmed}} davon bestätigt",
       "guardOff": {
         "title": "Der Memory-Wächter ist aus.",
         "description": "Automatisch freigegebene Einträge werden dann nicht auf Anweisungsmuster geprüft.",

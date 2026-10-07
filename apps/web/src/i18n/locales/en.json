@@ -3047,6 +3047,7 @@
       "expiry": "Unconfirmed entries expire after {{days}} days. Retrievals don't extend that.",
       "legacyAuto": "Agents set to \"Automatic\" only approve what is turned on here. While everything is off, every entry goes to \"Awaiting approval\".",
       "pullbackLink": "Pull back automatic approvals…",
+      "lastWeek": "Last 7 days: {{auto}} approved automatically · {{confirmed}} of them confirmed",
       "guardOff": {
         "title": "The memory guard is off.",
         "description": "Automatically approved entries are then not checked for instruction patterns.",
