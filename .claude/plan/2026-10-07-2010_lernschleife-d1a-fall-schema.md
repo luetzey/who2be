@@ -42,9 +42,11 @@ Tabellen `agent_case`, `agent_case_event`, `agent_case_element` und
   INSERT und DELETE (3.3: „Löschen erlaubt“).
 - Schilderung: `agent_id` muss gleich `agent_case.agent_id` sein. Das sichert ein
   Composite-FK auf `agent_case (workspace_id, id, agent_id)`.
-- `converted_case_id` und `source_memory_id`: Composite-FKs über
+- `converted_case_id`: Composite-FK über
   `(workspace_id, agent_id, …)`. Der Lernvorschlag und der Fall gehören damit zum selben
   Agenten. Das Löschen eines Agenten räumt beides in einer Anweisung ab.
+  `source_memory_id` ist ein weicher Verweis ohne FK. Ein zweiter FK würde einen Zyklus
+  bilden, und die Import-Reihenfolge im Org-Transfer bricht dann ab (CI-Fund).
   Zusätzlicher CHECK `converted_case_id IS NULL OR kind = 'lesson'` (ADR 3.1: „nur für
   `lesson`“); damit greift der FK immer vollständig. ON DELETE NO ACTION, weil
   SET NULL den CHECK `converted ⇔ converted_case_id` aus 0091 bräche.
