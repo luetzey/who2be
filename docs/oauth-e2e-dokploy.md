@@ -104,6 +104,11 @@ mcp-http und holt die LE-Zertifikate für die vier Hosts.
 Scheitert ein Cert: DNS (Schritt 0) oder Port 80 prüfen; Dokploy-Logs des Service
 zeigen den ACME-Fehler.
 
+**Danach die Hintergrundjobs einplanen.** `who2be-purge` (DSGVO-Purge) und
+`who2be-memory-expire` (Verfall unbestätigten Gedächtnisses) startet der Stack
+nicht von selbst. Beide laufen als Dokploy-Schedule im Dienst `api`:
+[`cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy einplanen](cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen).
+
 ## 6. OAuth-Verdrahtung verifizieren
 
 Drei curl-Checks (Details + erwartete Ausgaben in
