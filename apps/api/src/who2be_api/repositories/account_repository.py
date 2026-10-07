@@ -230,6 +230,10 @@ class PgAccountPurgeRepository:
             `agent_memory.confirmed_by` und `agent_memory_event.actor_id`
             (nur `actor_kind = 'human'`) auf den Sentinel, ebenso
             `agent_memory_proposal.decided_by` (0096).
+          * Faelle (0100): `agent_case.reporter_user_id`,
+            `agent_case_event.actor_id` (nur `actor_kind = 'human'`) und
+            `agent_case_element.assigned_by` (nur `assigned_by_kind = 'human'`)
+            auf den Sentinel — der Fall bleibt als Inhalt des Workspace stehen.
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -333,6 +337,34 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
+            # Faelle (ADR-0053 3.3, Migration 0100). Sie haengen per CASCADE an
+            # `workspace`/`agent` und fallen mit der Personal-Org oben; in
+            # FREMDEN Workspaces ueberleben sie den Account. Anonymisiert, nicht
+            # geloescht: ein Fall handelt vom Verhalten eines Agenten, nicht
+            # von der meldenden Person, und gehoert dem Workspace (Muster
+            # `test_run.reported_by_user_id`). NULL ginge fuer
+            # `reporter_user_id` nicht: der CHECK
+            # `agent_case_human_reporter_check` (Weiche F2, kein anonymer
+            # Kanal) verlangt bei `reporter_kind = 'human'` eine ID — der
+            # Sentinel erfuellt ihn. Event-Akteur und Zuordnender nur bei
+            # Menschen: bei Agenten steht dort eine Agent-ID, keine Person.
+            cr_result = await self._conn.execute(
+                "UPDATE agent_case SET reporter_user_id = $2 WHERE reporter_user_id = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            ce_result = await self._conn.execute(
+                "UPDATE agent_case_event SET actor_id = $2 "
+                "WHERE actor_id = $1 AND actor_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            ca_result = await self._conn.execute(
+                "UPDATE agent_case_element SET assigned_by = $2 "
+                "WHERE assigned_by = $1 AND assigned_by_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
         return (
             _count(sh_result)
             + _count(al_result)
@@ -343,6 +375,9 @@ class PgAccountPurgeRepository:
             + _count(mc_result)
             + _count(me_result)
             + _count(mp_result)
+            + _count(cr_result)
+            + _count(ce_result)
+            + _count(ca_result)
         )
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:

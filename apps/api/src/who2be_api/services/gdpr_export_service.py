@@ -74,6 +74,15 @@ _AGENT_MEMORY_WITHHELD_NOTE = (
 )
 
 
+# Hinweis im Export-Manifest, wenn `cases` wegen der Rolle nur die eigenen
+# Meldungen enthaelt (ADR-0053 3.3, Rechte).
+_CASES_OWN_ONLY_NOTE = (
+    "Alle Faelle dieses Workspace sind ab der Rolle editor sichtbar (wie in der "
+    "Oberflaeche). Enthalten sind deshalb nur die Faelle, die du selbst gemeldet "
+    "hast, jeweils mit Verlauf, Zuordnung und Schilderung."
+)
+
+
 def _can_read_agent_memory(role: str) -> bool:
     """Gleiche Grenze wie `MemoryService.list_memories` (`require_role` editor).
 
@@ -85,6 +94,39 @@ def _can_read_agent_memory(role: str) -> bool:
     except ValueError:
         return False
     return role_satisfies(actual, WorkspaceRole.editor)
+
+
+def _can_read_all_cases(role: str) -> bool:
+    """ADR-0053 3.3 (Rechte): alle Faelle lesen ab `editor`, darunter nur die
+    selbst gemeldeten. Dieselbe Rollengrenze wie das Agentengedaechtnis, aber
+    eine eigene Funktion, damit beide Regeln getrennt nachziehbar bleiben."""
+    return _can_read_agent_memory(role)
+
+
+def _with_case_children(
+    cases: list[asyncpg.Record],
+    events: list[asyncpg.Record],
+    elements: list[asyncpg.Record],
+    statements: list[asyncpg.Record],
+) -> list[dict[str, Any]]:
+    """Faelle mit Verlauf (`events`), Zuordnung (`elements`) und Schilderungen
+    (`statements`) je Fall, jeweils aelteste zuerst. Kinder fremder Faelle
+    fallen heraus, auch wenn sie geladen worden waeren."""
+    grouped: dict[str, dict[Any, list[dict[str, Any]]]] = {
+        "events": {},
+        "elements": {},
+        "statements": {},
+    }
+    for key, rows in (("events", events), ("elements", elements), ("statements", statements)):
+        for row in rows:
+            grouped[key].setdefault(row["case_id"], []).append(_clean(row))
+    result: list[dict[str, Any]] = []
+    for row in cases:
+        item = _clean(row)
+        for key, by_case in grouped.items():
+            item[key] = by_case.get(row["id"], [])
+        result.append(item)
+    return result
 
 
 # KB-Zusatztabellen ohne generierte Spalten — `SELECT *` ist hier sicher.
@@ -354,6 +396,8 @@ class GdprExportService:
                 "SELECT * FROM test_run WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
                 workspace_id,
             )
+            all_cases_visible = _can_read_all_cases(role)
+            cases = await self._export_cases(workspace_id, user_id, all_cases=all_cases_visible)
         return {
             "id": str(workspace_id),
             "name": name,
@@ -372,6 +416,11 @@ class GdprExportService:
                     if agent_memory_visible
                     else {"included": False, "reason": _AGENT_MEMORY_WITHHELD_NOTE}
                 ),
+                "cases": (
+                    {"included": True, "scope": "workspace"}
+                    if all_cases_visible
+                    else {"included": True, "scope": "own_reports", "reason": _CASES_OWN_ONLY_NOTE}
+                ),
             },
             "work_areas": work_areas,
             "wa_blobs": {"note": _BLOB_EXPORT_NOTE, "items": blobs},
@@ -381,7 +430,59 @@ class GdprExportService:
             "agent_favorites": [_clean(row) for row in favorites],
             "test_cases": [_clean(row) for row in test_cases],
             "test_runs": [_clean(row) for row in test_runs],
+            "cases": cases,
         }
+
+    async def _export_cases(
+        self, workspace_id: UUID, user_id: UUID, *, all_cases: bool
+    ) -> list[dict[str, Any]]:
+        """Faelle (ADR-0053 3.3, Migration 0100) mit Verlauf, Zuordnung und
+        Schilderungen.
+
+        Sichtregel wie in der Oberflaeche (3.3, Rechte; Lehre aus #764: der
+        Export ist kein Seiteneingang): ab `editor` alle Faelle des Workspace,
+        darunter nur die selbst gemeldeten (`reporter_user_id` = der
+        exportierende Mensch). Freitext (`situation`, `behavior`, `impact`,
+        `expected_behavior`, `note`, Schilderung) kann Personenbezug tragen.
+        Die Kind-Tabellen werden nur fuer die exportierten Faelle GELADEN,
+        nicht workspace-weit (Muster `agent_memory_event`).
+        """
+        if all_cases:
+            case_rows = await self._pool.fetch(
+                "SELECT * FROM agent_case WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
+        else:
+            case_rows = await self._pool.fetch(
+                "SELECT * FROM agent_case WHERE workspace_id = $1 AND reporter_user_id = $2 "
+                "ORDER BY created_at ASC, id ASC",
+                workspace_id,
+                user_id,
+            )
+        case_ids = [row["id"] for row in case_rows]
+        if not case_ids:
+            return []
+        events = await self._pool.fetch(
+            "SELECT * FROM agent_case_event WHERE workspace_id = $1 AND case_id = ANY($2::uuid[]) "
+            "ORDER BY case_id ASC, created_at ASC, id ASC",
+            workspace_id,
+            case_ids,
+        )
+        elements = await self._pool.fetch(
+            "SELECT * FROM agent_case_element "
+            "WHERE workspace_id = $1 AND case_id = ANY($2::uuid[]) "
+            "ORDER BY case_id ASC, created_at ASC, id ASC",
+            workspace_id,
+            case_ids,
+        )
+        statements = await self._pool.fetch(
+            "SELECT * FROM agent_case_statement "
+            "WHERE workspace_id = $1 AND case_id = ANY($2::uuid[]) "
+            "ORDER BY case_id ASC, created_at ASC, id ASC",
+            workspace_id,
+            case_ids,
+        )
+        return _with_case_children(case_rows, events, elements, statements)
 
     async def _export_work_areas(self, workspace_id: UUID) -> list[dict[str, Any]]:
         """WorkAreas mit ihren Artifacts (ADR-0047).
