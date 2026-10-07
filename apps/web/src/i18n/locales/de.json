@@ -2993,6 +2993,14 @@
         "unknownModel": "Modell unbekannt"
       },
       "unknownUser": "unbekannt",
+      "reporter": {
+        "client": "Gemeldet von {{name}}",
+        "clientWithModel": "Gemeldet von {{name}} · {{model}}",
+        "human": "Bewertet von {{name}}",
+        "unknownAgent": "Unbekannter Agent",
+        "unknown": "Melder unbekannt",
+        "unknownWithModel": "Melder unbekannt · {{model}}"
+      },
       "detail": {
         "input": "Eingabe",
         "expected": "Erwartetes Verhalten",

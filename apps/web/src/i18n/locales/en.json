@@ -2993,6 +2993,14 @@
         "unknownModel": "model unknown"
       },
       "unknownUser": "unknown",
+      "reporter": {
+        "client": "Reported by {{name}}",
+        "clientWithModel": "Reported by {{name}} · {{model}}",
+        "human": "Rated by {{name}}",
+        "unknownAgent": "Unknown agent",
+        "unknown": "Reporter unknown",
+        "unknownWithModel": "Reporter unknown · {{model}}"
+      },
       "detail": {
         "input": "Input",
         "expected": "Expected behaviour",
