@@ -417,3 +417,115 @@ def test_einzelabruf_sichtbarkeit_wie_liste(env: Env) -> None:
     # Agent-gebundener Token: 403 wie die Liste; ungueltige ID: 422.
     assert _reason(get(agent_mem, env.agent_h), 403) == "missing_capability"
     assert get("keine-uuid", env.admin_h).status_code == 422
+
+
+# ------------------------------------------- Filter auto (t_d05acdff)
+
+
+def _auto_event(ws: UUID, memory_id: UUID, agent: UUID) -> None:
+    """Haengt das Ereignis `auto_activated` an (wie die Freigabematrix)."""
+    db_execute(
+        "INSERT INTO agent_memory_event (workspace_id, memory_id, event, actor_kind, "
+        " agent_id, after) VALUES ($1, $2, 'auto_activated', 'system', $3, '{}'::jsonb)",
+        ws,
+        memory_id,
+        agent,
+    )
+
+
+def test_filter_auto_nur_automatisch_aktivierte(env: Env, make_auth_headers: AuthFactory) -> None:
+    """`auto=true` = Ereignis `auto_activated`, nicht „aktiv und unbestaetigt“.
+
+    S4-Kennzahl (Spec §13.9): n = `auto=true`, m = n − `auto=true&health=unconfirmed`.
+    Rot-Probe: Ein aus der Warteschlange freigegebener Eintrag zaehlt NICHT,
+    ein unbestaetigter Eintrag ohne Ereignis (Import) auch nicht; Eintraege
+    eines anderen Workspace und fremdes Nutzergedaechtnis bleiben draussen.
+    """
+    auto_open = env.memory("Auto, unbestaetigt", confirmed=False)
+    _auto_event(env.ws, auto_open, env.agent)
+    auto_confirmed = env.memory("Auto, bestaetigt")
+    _auto_event(env.ws, auto_confirmed, env.agent)
+    # Not-Aus zurueckgenommen: wieder pending, war aber automatisch freigegeben.
+    auto_revoked = env.memory("Auto, zurueckgenommen", status="pending")
+    _auto_event(env.ws, auto_revoked, env.agent)
+    # Von Hand aus der Warteschlange freigegeben (echter Triage-Weg).
+    queued = env.memory("Aus der Warteschlange", status="pending")
+    approve = env.client.post(
+        f"{env.prefix}/agents/{env.agent}/memories/{queued}/triage",
+        json={"action": "approve"},
+        headers=env.editor_h,
+    )
+    assert approve.status_code == 200, approve.text
+    assert approve.json()["status"] == "active"
+    # Aktiv und unbestaetigt, aber ohne `auto_activated` (z. B. Import).
+    imported = env.memory("Import, unbestaetigt", source="import", confirmed=False)
+    # Fremdes Nutzergedaechtnis mit Ereignis: auch fuer admin unsichtbar (3a).
+    foreign = env.memory("Fremd auto", subject=env.editor, confirmed=False)
+    _auto_event(env.ws, foreign, env.agent)
+
+    # Anderer Workspace mit automatisch aktiviertem Eintrag.
+    other_owner = fresh_user_id()
+    other_ws = setup_workspace(other_owner)
+    try:
+        other_agent, _ = agent_token(
+            env.client,
+            f"/v1/workspaces/{other_ws}",
+            "C6a-Fremd",
+            {"memory_mode": "auto"},
+            make_auth_headers(other_owner),
+        )
+        other_mem: UUID = db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
+            " fact, category, importance, kind, scope, origin, source) "
+            "VALUES ($1, $2, $2, 'active', 'Fremder Workspace', 'preference', 6, "
+            "        'user_fact', 'agent', 'user_stated', 'agent') RETURNING id",
+            other_ws,
+            UUID(other_agent),
+        )
+        _auto_event(other_ws, other_mem, UUID(other_agent))
+
+        def ids(headers: dict[str, str], **params: Any) -> set[str]:
+            return set(_ids(env.get("/memories", headers, **params)))
+
+        def total(headers: dict[str, str], **params: Any) -> int:
+            res = env.get("/memories/counts", headers, **params)
+            assert res.status_code == 200, res.text
+            count: int = res.json()["total"]
+            return count
+
+        autos = {str(auto_open), str(auto_confirmed), str(auto_revoked)}
+        assert ids(env.admin_h, auto="true") == autos
+        assert ids(env.admin_h, auto="false") == {str(queued), str(imported)}
+        assert total(env.admin_h, auto="true") == 3
+        assert total(env.admin_h, auto="false") == 2
+        # Der Nachbar „health=unconfirmed“ ist kein Ersatz: er nimmt den Import mit.
+        assert ids(env.admin_h, health="unconfirmed") == {str(auto_open), str(imported)}
+
+        # S4: n und m im 7-Tage-Fenster. Achtung fuer C6c: die Kartenformel
+        # m = n − unconfirmed zaehlt den zurueckgenommenen (pending) Eintrag
+        # als „bestaetigt“; mit `status=active` als Basis stimmt m.
+        week = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+        n = total(env.admin_h, auto="true", created_after=week)
+        active = total(env.admin_h, auto="true", status="active", created_after=week)
+        open_ = total(env.admin_h, auto="true", health="unconfirmed", created_after=week)
+        assert (n, n - open_, active - open_) == (3, 2, 1)
+
+        # Die Person selbst sieht ihren automatisch aktivierten Eintrag.
+        assert str(foreign) in ids(env.editor_h, auto="true")
+        assert str(foreign) not in ids(env.admin_h, auto="true")
+        # viewer: nur das eigene Nutzergedaechtnis, hier keins.
+        assert total(env.viewer_h, auto="true") == 0
+
+        # Stapel per Filter meint dieselbe Menge (409 nennt die Serverzahl).
+        wrong = env.client.post(
+            f"{env.prefix}/memories/batch",
+            json={"action": "confirm", "filter": {"auto": True}, "expected_count": 99},
+            headers=env.admin_h,
+        )
+        assert _reason(wrong, 409) == "memory_batch_count_mismatch"
+        assert wrong.json()["params"] == {"count": 3}
+
+        # Ungueltiger Wert: 422.
+        assert env.get("/memories/counts", env.admin_h, auto="vielleicht").status_code == 422
+    finally:
+        cleanup_workspaces([other_owner])

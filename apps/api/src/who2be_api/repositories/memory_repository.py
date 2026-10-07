@@ -1917,6 +1917,18 @@ _HELD_SQL = (
     "AND (m.origin IN ('external_content', 'inferred') OR m.category = 'instruction')"
 )
 
+# Automatisch aktiviert (S4-Kennzahl, Spec §13.9): es gibt ein Ereignis
+# `auto_activated` zu diesem Eintrag — wie die Not-Aus-Auswahl
+# (`_REVOKE_WHERE`), aber ohne Zeitraum und ohne Statusbedingung. Ein von
+# Hand freigegebener Eintrag (`approved`) zaehlt nicht. Das Ereignis haengt
+# ueber `(workspace_id, memory_id)` am Eintrag (FK), die Workspace-Bedingung
+# ist zusaetzlich ausgeschrieben.
+_AUTO_SQL = (
+    "EXISTS (SELECT 1 FROM agent_memory_event e "
+    "WHERE e.workspace_id = m.workspace_id AND e.memory_id = m.id "
+    "AND e.event = 'auto_activated')"
+)
+
 # Der Agent eines Eintrags: beim Agentengedaechtnis der Besitzer, beim
 # Nutzergedaechtnis (`agent_id IS NULL`, 3.1.1) der einreichende Agent.
 _AGENT_SQL = "COALESCE(m.agent_id, m.created_by_agent_id)"
@@ -2021,6 +2033,8 @@ def _memory_where(
         where.add(_HEALTH_SQL[filters.health])
     if filters.held is not None:
         where.add(_HELD_SQL if filters.held else f"NOT ({_HELD_SQL})")
+    if filters.auto is not None:
+        where.add(_AUTO_SQL if filters.auto else f"NOT ({_AUTO_SQL})")
     if filters.created_after is not None:
         where.add(f"m.created_at >= {where.bind(filters.created_after)}::timestamptz")
     return where

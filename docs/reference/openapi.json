@@ -7593,6 +7593,22 @@
             }
           },
           {
+            "name": "auto",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auto"
+            }
+          },
+          {
             "name": "q",
             "in": "query",
             "required": false,
@@ -7866,6 +7882,22 @@
                 }
               ],
               "title": "Held"
+            }
+          },
+          {
+            "name": "auto",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auto"
             }
           },
           {
@@ -18995,6 +19027,17 @@
               }
             ],
             "title": "Held"
+          },
+          "auto": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto"
           },
           "q": {
             "anyOf": [

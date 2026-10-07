@@ -653,6 +653,11 @@ class MemoryFilter(BaseModel):
     source: MemorySource | None = None
     health: MemoryHealth | None = None
     held: bool | None = None
+    # `auto=true`: nur Eintraege mit Ereignis `auto_activated` (die
+    # Freigabematrix hat sie automatisch aktiviert), unabhaengig vom heutigen
+    # Status; `auto=false`: nur Eintraege ohne dieses Ereignis. Grundlage der
+    # S4-Kennzahl („{n} automatisch freigegeben · {m} davon bestaetigt“).
+    auto: bool | None = None
     q: str | None = Field(default=None, min_length=1, max_length=MEMORY_LIST_QUERY_MAX_LENGTH)
     created_after: datetime | None = None
 

@@ -308,6 +308,7 @@ def memory_filter(
     source: Annotated[MemorySource | None, Query()] = None,
     health: Annotated[MemoryHealth | None, Query()] = None,
     held: Annotated[bool | None, Query()] = None,
+    auto: Annotated[bool | None, Query()] = None,
     q: Annotated[str | None, Query(min_length=1, max_length=MEMORY_LIST_QUERY_MAX_LENGTH)] = None,
     created_after: Annotated[AwareDatetime | None, Query()] = None,
 ) -> MemoryFilter:
@@ -329,6 +330,7 @@ def memory_filter(
         source=source,
         health=health,
         held=held,
+        auto=auto,
         q=q,
         created_after=created_after,
     )
