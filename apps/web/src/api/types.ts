@@ -793,6 +793,8 @@ export interface MemoryFilter {
   source?: MemorySource
   health?: MemoryHealth
   held?: boolean
+  // Nur Eintraege mit Ereignis `auto_activated` (true) bzw. ohne (false).
+  auto?: boolean
   q?: string
   created_after?: string
 }
