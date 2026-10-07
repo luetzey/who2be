@@ -47,19 +47,24 @@
 -- - `source_feedback_id`: Alt-Feedback, aus dem ein Mensch den Fall
 --   uebernommen hat (Weiche F1 = a, 5.2: das Alt-Feedback bleibt unveraendert).
 --   ON DELETE SET NULL, denn Alt-Feedback ist hart loeschbar (0058).
--- - `source_memory_id` und die Gegenrichtung `agent_memory.converted_case_id`
---   (0091 hat den FK bewusst offen gelassen): beide als Composite-FK ueber
---   `(workspace_id, agent_id, …)`. Lernvorschlag und Fall gehoeren damit
---   zwingend zu DEMSELBEN Agenten (ein Lernvorschlag ist die Lehre eines
---   Agenten ueber sich selbst, 3.1.6), und das Loeschen des Agenten raeumt
---   beide in einer Anweisung ab. `converted_case_id` ist ON DELETE NO ACTION:
---   SET NULL bräche den CHECK `converted <=> converted_case_id` aus 0091. Einen
+-- - `agent_memory.converted_case_id` (0091 hat den FK bewusst offen gelassen):
+--   Composite-FK ueber `(workspace_id, agent_id, …)`. Lernvorschlag und Fall
+--   gehoeren damit zwingend zu DEMSELBEN Agenten (ein Lernvorschlag ist die
+--   Lehre eines Agenten ueber sich selbst, 3.1.6), und das Loeschen des
+--   Agenten raeumt beide in einer Anweisung ab. ON DELETE NO ACTION:
+--   SET NULL braeche den CHECK `converted <=> converted_case_id` aus 0091. Einen
 --   Fall, aus dem ein Lernvorschlag wurde, loescht man daher erst, nachdem der
 --   Vorschlag umgestellt ist (Service, D2). Neuer CHECK
 --   `converted_case_id IS NULL OR kind = 'lesson'` (3.1: „nur fuer lesson“);
 --   weil `lesson` nie `scope='user'` ist, ist `agent_id` dann gesetzt und der
 --   FK greift immer vollstaendig (MATCH SIMPLE prueft sonst nicht).
 --   Bestand: kein Schreibpfad setzt bisher `converted_case_id` (nur Tests).
+-- - `source_memory_id` ist die Gegenrichtung derselben Beziehung und bewusst
+--   OHNE FK (weicher Verweis, Muster `agent_feedback.entity_id`): ein zweiter
+--   FK schloesse den Kreis agent_case <-> agent_memory, und der Org-Transfer
+--   (`core/org_transfer.py`) braucht eine zyklenfreie Import-Reihenfolge.
+--   Massgeblich und durchgesetzt ist `converted_case_id`; ein verwaister
+--   Verweis traegt keinen Inhalt (Leser behandeln ihn als „Quelle geloescht“).
 --
 -- Rueckweg (5.2, als eigene Vorwaerts-Migration — Migrationen sind
 -- unveraenderlich): Faelle mit `source_feedback_id` bleiben als Export
@@ -67,8 +72,8 @@
 -- und `converted_case_id` auf NULL; FK `agent_memory_converted_case_fkey` und
 -- CHECK `agent_memory_converted_lesson_check` droppen; die vier Tabellen
 -- droppen (Statement, Element, Event, Fall). `agent_feedback` und
--- `feedback_resolution` bleiben unberuehrt. Die zusaetzlichen UNIQUE-Ziele
--- auf `agent_memory`/`agent_feedback` koennen bleiben.
+-- `feedback_resolution` bleiben unberuehrt. Das zusaetzliche UNIQUE-Ziel
+-- auf `agent_feedback` kann bleiben.
 --
 -- Idempotenz: CREATE via IF NOT EXISTS; Constraints auf Bestandstabellen via
 -- pg_constraint-Guard bzw. DROP IF EXISTS + ADD; Policy via DROP IF EXISTS +
@@ -85,15 +90,6 @@ BEGIN
     ) THEN
         ALTER TABLE agent_feedback
             ADD CONSTRAINT agent_feedback_workspace_id_id_key UNIQUE (workspace_id, id);
-    END IF;
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conrelid = (current_schema() || '.agent_memory')::regclass
-          AND conname = 'agent_memory_workspace_agent_id_key'
-    ) THEN
-        ALTER TABLE agent_memory
-            ADD CONSTRAINT agent_memory_workspace_agent_id_key
-            UNIQUE (workspace_id, agent_id, id);
     END IF;
 END
 $$;
@@ -140,11 +136,7 @@ CREATE TABLE IF NOT EXISTS agent_case (
         REFERENCES agent (workspace_id, id) ON DELETE SET NULL (reporter_agent_id),
     CONSTRAINT agent_case_source_feedback_fkey
         FOREIGN KEY (workspace_id, source_feedback_id)
-        REFERENCES agent_feedback (workspace_id, id) ON DELETE SET NULL (source_feedback_id),
-    CONSTRAINT agent_case_source_memory_fkey
-        FOREIGN KEY (workspace_id, agent_id, source_memory_id)
-        REFERENCES agent_memory (workspace_id, agent_id, id)
-        ON DELETE SET NULL (source_memory_id)
+        REFERENCES agent_feedback (workspace_id, id) ON DELETE SET NULL (source_feedback_id)
 );
 
 -- Liste je Workspace und je Agent, neueste zuerst (Keyset auf created_at, id).
@@ -156,7 +148,8 @@ CREATE INDEX IF NOT EXISTS agent_case_agent_created_idx
 CREATE INDEX IF NOT EXISTS agent_case_reporter_user_idx
     ON agent_case (workspace_id, reporter_user_id)
     WHERE reporter_user_id IS NOT NULL;
--- FK-Indizes fuer ON DELETE SET NULL.
+-- FK-Indizes fuer ON DELETE SET NULL; `source_memory_id` fuer die Rueckfrage
+-- „welcher Fall kam aus diesem Lernvorschlag“.
 CREATE INDEX IF NOT EXISTS agent_case_reporter_agent_idx
     ON agent_case (reporter_agent_id) WHERE reporter_agent_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS agent_case_source_feedback_idx

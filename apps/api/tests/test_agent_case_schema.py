@@ -598,12 +598,12 @@ def test_sources_are_nulled_and_cases_follow_agent() -> None:
             source_feedback_id=feedback,
             source_memory_id=lesson,
         )
-        # Ein Lernvorschlag eines ANDEREN Agenten ist keine Quelle dieses Falls.
+        # `source_memory_id` ist ein weicher Verweis (kein FK, sonst Zyklus mit
+        # converted_case_id im Org-Transfer): er ueberlebt das Loeschen der Quelle.
         other_lesson = await _insert_lesson(env.owner, s.ws_a, s.agent_a2)
-        with pytest.raises(asyncpg.ForeignKeyViolationError):
-            await _insert_case(env.owner, s.ws_a, s.agent_a, source_memory_id=other_lesson)
+        await _insert_case(env.owner, s.ws_a, s.agent_a, source_memory_id=other_lesson)
 
-        # Quellen weg -> nur die Verweise werden genullt, der Fall bleibt.
+        # Quellen weg -> FK-Verweise werden genullt, der Fall bleibt.
         await env.owner.execute("DELETE FROM agent_feedback WHERE id = $1", feedback)
         await env.owner.execute("DELETE FROM agent_memory WHERE id = $1", lesson)
         await env.owner.execute("DELETE FROM agent WHERE id = $1", s.agent_a2)
@@ -616,7 +616,7 @@ def test_sources_are_nulled_and_cases_follow_agent() -> None:
         assert row["agent_id"] == s.agent_a
         assert row["reporter_agent_id"] is None
         assert row["source_feedback_id"] is None
-        assert row["source_memory_id"] is None
+        assert row["source_memory_id"] == lesson
 
         # Betroffener Agent weg -> Fall geht mit (ADR 3.3: ON DELETE CASCADE).
         await env.owner.execute("DELETE FROM agent WHERE id = $1", s.agent_a)
