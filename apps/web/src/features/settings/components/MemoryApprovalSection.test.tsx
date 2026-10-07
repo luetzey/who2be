@@ -262,6 +262,60 @@ describe('MemoryApprovalSection (Lernschleife C6, ADR-0053 4.2/4.3)', () => {
     expect(within(disclosure).queryByRole('checkbox')).toBeNull()
   })
 
+  // C6b, Spec §11.1 S4a / ADR-0053 6.4.1: Der Satz steht, seit der Not-Aus
+  // im Web ausgeliefert ist — im Dialog und in der dauerhaften Liste.
+  const PULLBACK_ALL = 'Du kannst alles automatisch Freigegebene auf einmal zurücknehmen.'
+
+  it('nennt die Rücknahme auf einmal in der dauerhaften Liste', async () => {
+    stubApi()
+    renderSection()
+    await screen.findByRole('switch')
+    const disclosure = screen.getByTestId('auto-approval-limits-disclosure')
+    expect(within(disclosure).getByText(PULLBACK_ALL)).toBeInTheDocument()
+  })
+
+  it('nennt die Rücknahme auf einmal im Dialog vor der Bestätigung', async () => {
+    stubApi()
+    renderSection()
+    fireEvent.click(await screen.findByRole('switch'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(PULLBACK_ALL)).toBeInTheDocument()
+  })
+
+  it('nennt die Rücknahme auf einmal auch im Bottom-Sheet unter md', async () => {
+    viewport.mobile = true
+    stubApi()
+    renderSection()
+    fireEvent.click(await screen.findByRole('switch'))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(PULLBACK_ALL)).toBeInTheDocument()
+  })
+
+  // C6b, Spec §11.1 S4: Link „Automatisch Freigegebenes zurücknehmen…“ auf
+  // den Not-Aus-Dialog der Gedächtnis-Seite.
+  it('verlinkt den Not-Aus auf /memory?pullback=1 im aktuellen Workspace', async () => {
+    stubApi()
+    renderSection()
+    await screen.findByRole('switch')
+    const link = screen.getByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' })
+    expect(link).toHaveAttribute('href', '/w/ws-1/memory?pullback=1')
+  })
+
+  it('zeigt den Not-Aus-Link auch, wenn gerade keine Zelle schaltbar ist', async () => {
+    stubApi({ initial: { enabled_cells: [], switchable_cells: [] } })
+    renderSection()
+    expect(
+      await screen.findByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' }),
+    ).toHaveAttribute('href', '/w/ws-1/memory?pullback=1')
+  })
+
+  it('zeigt bei 403 auch keinen Not-Aus-Link', async () => {
+    stubApi({ policyStatus: 403 })
+    renderSection()
+    await screen.findByText('Nur mit echter Anmeldung änderbar.')
+    expect(screen.queryByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' })).toBeNull()
+  })
+
   it('zeigt kein Schloss- und kein Haken-Symbol (ADR 4.3)', async () => {
     stubApi({ initial: policy(true) })
     const { container } = renderSection()
@@ -322,6 +376,18 @@ describe('Locale-Texte der Auto-Freigabe', () => {
         expect(limits[key]).toEqual({ title: expect.any(String), body: expect.any(String) })
       }
       expect(AUTO_APPROVAL_LIMIT_KEYS).toHaveLength(8)
+    })
+
+    it(`führt in ${locale} den Satz zur Rücknahme auf einmal und den Not-Aus-Link (C6b)`, () => {
+      const autoPolicy = tree.learning.autoPolicy as Record<string, unknown>
+      const limits = autoPolicy.limits as Record<string, unknown>
+      expect(limits.pullbackAll).toEqual(
+        locale === 'de'
+          ? 'Du kannst alles automatisch Freigegebene auf einmal zurücknehmen.'
+          : 'You can pull back everything approved automatically in one go.',
+      )
+      // Derselbe Wortlaut wie der Eintrag im Not-Aus-Menü der Gedächtnis-Seite.
+      expect(autoPolicy.pullbackLink).toEqual(tree.learning.pullback.menu)
     })
   }
 })

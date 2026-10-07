@@ -3046,6 +3046,7 @@
       "humanChannel": "Was ein Mensch selbst einträgt, gilt sofort als bestätigt.",
       "expiry": "Unbestätigte Einträge laufen nach {{days}} Tagen ab. Abrufe verlängern die Frist nicht.",
       "legacyAuto": "Agenten auf „Automatisch“ geben nur frei, was hier eingeschaltet ist. Solange alles aus ist, landet jeder Eintrag in „Zur Freigabe“.",
+      "pullbackLink": "Automatisch Freigegebenes zurücknehmen…",
       "guardOff": {
         "title": "Der Memory-Wächter ist aus.",
         "description": "Automatisch freigegebene Einträge werden dann nicht auf Anweisungsmuster geprüft.",
@@ -3093,6 +3094,7 @@
           "body": "Was der Agent bis dahin getan hat, bleibt getan."
         },
         "stillHappens": "Was weiterhin passiert: Der Wächter prüft jeden Eintrag, solange er eingeschaltet ist. Die Herkunft wird festgehalten. Jeder Schritt steht im Verlauf. Unbestätigte Einträge laufen nach {{days}} Tagen ab.",
+        "pullbackAll": "Du kannst alles automatisch Freigegebene auf einmal zurücknehmen.",
         "checkbox": "Ich habe gelesen, was automatische Freigabe nicht abfängt.",
         "confirm": "Automatisch freigeben",
         "confirmHint": "Bitte zuerst bestätigen, dass du die Liste gelesen hast."

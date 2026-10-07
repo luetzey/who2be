@@ -3046,6 +3046,7 @@
       "humanChannel": "Anything a person enters themselves counts as confirmed right away.",
       "expiry": "Unconfirmed entries expire after {{days}} days. Retrievals don't extend that.",
       "legacyAuto": "Agents set to \"Automatic\" only approve what is turned on here. While everything is off, every entry goes to \"Awaiting approval\".",
+      "pullbackLink": "Pull back automatic approvals…",
       "guardOff": {
         "title": "The memory guard is off.",
         "description": "Automatically approved entries are then not checked for instruction patterns.",
@@ -3093,6 +3094,7 @@
           "body": "What the agent did until then stays done."
         },
         "stillHappens": "What still happens: the filter checks every entry while it is turned on. The source is recorded. Every step is in the history. Unconfirmed entries expire after {{days}} days.",
+        "pullbackAll": "You can pull back everything approved automatically in one go.",
         "checkbox": "I've read what automatic approval doesn't catch.",
         "confirm": "Approve automatically",
         "confirmHint": "Please confirm first that you have read the list."
