@@ -1,4 +1,4 @@
-import { Eye, Info, TriangleAlert } from 'lucide-react'
+import { Eye, Info, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -12,6 +12,7 @@ import type {
   MemoryOrigin,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LoadingState } from '@/components/data/LoadingState'
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils'
 import {
   AutoApprovalLimitsDialog,
   AutoApprovalLimitsList,
+  AutoApprovalStillHappens,
   MEMORY_AUTO_EXPIRY_DAYS,
 } from './AutoApprovalLimitsDialog'
 
@@ -146,6 +148,7 @@ export function MemoryApprovalSection() {
   const { t } = useTranslation('learning')
   const api = useApi()
   const isMobile = useIsMobile()
+  const wsPath = useWorkspacePath()
   const baseId = useId()
 
   const [policy, setPolicy] = useState<MemoryAutoPolicyRead | null>(null)
@@ -415,6 +418,19 @@ export function MemoryApprovalSection() {
               <p>{t('autoPolicy.expiry', { days: MEMORY_AUTO_EXPIRY_DAYS })}</p>
             </div>
 
+            {/* Not-Aus (Spec §11.1 S4, §8): oeffnet den Dialog auf der
+                Gedaechtnis-Seite. Steht unabhaengig davon, ob gerade eine
+                Zelle an ist — auch Freigaben von frueher lassen sich
+                zuruecknehmen. */}
+            <div>
+              <Button asChild variant="link" className="h-auto min-h-8 px-0 whitespace-normal">
+                <Link to={wsPath('/memory?pullback=1')} data-testid="auto-approval-pullback-link">
+                  <Undo2 aria-hidden="true" />
+                  {t('autoPolicy.pullbackLink')}
+                </Link>
+              </Button>
+            </div>
+
             {/* Dauerhafte Fassung der Liste aus S4a, ohne Checkbox. */}
             <details className="group rounded-md border p-3" data-testid="auto-approval-limits-disclosure">
               <summary className="flex min-h-8 cursor-pointer items-center gap-2 text-sm font-medium">
@@ -423,9 +439,7 @@ export function MemoryApprovalSection() {
               </summary>
               <div className="mt-3 flex flex-col gap-3">
                 <AutoApprovalLimitsList />
-                <p className="text-sm text-muted-foreground">
-                  {t('autoPolicy.limits.stillHappens', { days: MEMORY_AUTO_EXPIRY_DAYS })}
-                </p>
+                <AutoApprovalStillHappens />
               </div>
             </details>
 

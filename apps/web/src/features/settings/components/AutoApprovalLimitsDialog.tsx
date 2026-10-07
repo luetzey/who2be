@@ -59,6 +59,19 @@ export function AutoApprovalLimitsList({ className }: { className?: string }) {
   )
 }
 
+// „Was weiterhin passiert“ samt Ruecknahme-Satz — eine Fassung fuer Dialog und
+// dauerhafte Liste. Der Satz verspricht den Not-Aus und steht erst, seit
+// dessen Web-Teil ausgeliefert ist (ADR-0053 6.4.1, Owner 3.b).
+export function AutoApprovalStillHappens() {
+  const { t } = useTranslation('learning')
+  return (
+    <div className="space-y-1 text-sm text-muted-foreground" data-testid="auto-approval-still-happens">
+      <p>{t('autoPolicy.limits.stillHappens', { days: MEMORY_AUTO_EXPIRY_DAYS })}</p>
+      <p>{t('autoPolicy.limits.pullbackAll')}</p>
+    </div>
+  )
+}
+
 interface AutoApprovalLimitsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -90,9 +103,7 @@ export function AutoApprovalLimitsDialog({
     // Nur dieser Teil scrollt; Kopf und Buttonzeile bleiben sichtbar.
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain">
       <AutoApprovalLimitsList />
-      <p className="text-sm text-muted-foreground">
-        {t('autoPolicy.limits.stillHappens', { days: MEMORY_AUTO_EXPIRY_DAYS })}
-      </p>
+      <AutoApprovalStillHappens />
       <div className="flex items-start gap-3">
         <Checkbox
           id={checkboxId}

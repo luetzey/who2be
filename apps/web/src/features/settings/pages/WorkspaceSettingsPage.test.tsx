@@ -215,6 +215,18 @@ describe('WorkspaceSettingsPage', () => {
     expect(urls.some((url) => url.includes('/memory-auto-policy'))).toBe(false)
   })
 
+  it('zeigt den Not-Aus-Link aus S4 nur Admins (C6b)', async () => {
+    // Mit vollständigen Stubs: Würde der Abschnitt für editor gerendert, hätte
+    // er nach dem Laden einen Link. Deshalb erst die Fetches abwarten.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => memorySettingsResponse(String(input)) ?? jsonResponse([])),
+    )
+    renderPage('editor', 2)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.queryByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' })).toBeNull()
+  })
+
   it('setzt die Auto-Freigabe für Admins direkt über den Memory-Wächter (C6)', async () => {
     vi.stubGlobal(
       'fetch',
@@ -222,6 +234,10 @@ describe('WorkspaceSettingsPage', () => {
     )
     const { container } = renderPage('admin', 2)
     await screen.findByRole('switch')
+    expect(screen.getByRole('link', { name: 'Automatisch Freigegebenes zurücknehmen…' })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/\/memory\?pullback=1$/),
+    )
     const approval = container.querySelector('#memory-approval')
     const guard = container.querySelector('#memory-guard')
     expect(approval).not.toBeNull()
