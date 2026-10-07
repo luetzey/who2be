@@ -14,7 +14,8 @@ beruehrt, schreibt sein Event in DERSELBEN Transaktion:
 - `add_statement`: Schilderung + `statement`.
 - `delete_case`: Hard-Delete samt Verlauf (CASCADE) und eine inhaltsfreie
   `audit_log`-Zeile `case.deleted` in EINER Anweisung (PM-Entscheidung Q6,
-  Muster `memory.deleted`, Weiche G3/M5).
+  Muster `memory.deleted`, Weiche G3/M5); ein in den Fall umgewandelter
+  Lernvorschlag faellt mit (Begruendung an der Methode).
 
 Was das Repository bewusst NICHT tut:
 
@@ -42,6 +43,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.memory_repository import MEMORY_DELETED_AUDIT_ACTION
 from who2be_models import (
     CASE_STATUS_EVENTS,
     CaseActorKind,
@@ -521,15 +523,32 @@ class PgCaseRepository:
     async def delete_case(self, workspace_id: UUID, case_id: UUID, actor_id: UUID | None) -> bool:
         """Hard-Delete samt Verlauf, Zuordnung und Schilderungen (Q6).
 
-        Loeschen und inhaltsfreie `audit_log`-Zeile in EINER Anweisung. Ist
-        aus dem Fall ein Lernvorschlag geworden
-        (`agent_memory.converted_case_id`), weist der FK das Loeschen ab
-        (`asyncpg.ForeignKeyViolationError`), siehe Migration 0100.
+        Loeschen und inhaltsfreie `audit_log`-Zeile in EINER Anweisung.
+
+        Ist aus einem Lernvorschlag dieser Fall geworden
+        (`agent_memory.converted_case_id`, FK ON DELETE NO ACTION, Migration
+        0100), faellt der Lernvorschlag in derselben Anweisung mit, samt
+        Historie per Cascade und je Zeile einer inhaltsfreien Spur
+        `memory.deleted` (Weiche M5). Warum mitloeschen statt
+        `converted_case_id` auf NULL: der CHECK `converted <=>
+        converted_case_id` (0091) verlangte dann einen neuen Status, und
+        weder `rejected` (eine Ablehnung, die es nie gab) noch `pending`
+        (zurueck in die Triage) stimmt. Ausserdem ist der Lernvorschlag die
+        Quelle des Fall-Inhalts; bliebe er stehen, bliebe genau der Inhalt,
+        den „Loeschen samt Verlauf“ entfernen soll. Der NO-ACTION-FK wird erst
+        am Ende der Anweisung geprueft, beide Loeschungen sind dann durch.
         """
         result: str = await self._pool.execute(
-            "WITH deleted AS ("
+            "WITH lessons AS ("
+            "  DELETE FROM agent_memory WHERE workspace_id = $1 AND converted_case_id = $2 "
+            "  RETURNING id, workspace_id"
+            "), deleted AS ("
             "  DELETE FROM agent_case WHERE workspace_id = $1 AND id = $2 "
             "  RETURNING id, workspace_id"
+            "), lesson_audit AS ("
+            "  INSERT INTO audit_log (workspace_id, actor_id, action, target) "
+            f"  SELECT workspace_id, $3::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text "
+            "  FROM lessons"
             ") "
             "INSERT INTO audit_log (workspace_id, actor_id, action, target) "
             f"SELECT workspace_id, $3::uuid, '{CASE_DELETED_AUDIT_ACTION}', id::text FROM deleted",
