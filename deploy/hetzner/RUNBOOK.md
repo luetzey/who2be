@@ -20,7 +20,7 @@ Aktive Sektionen:
 - [Provisioning-Nachweise](#provisioning-nachweise) — Protokoll fuer SSH-Zustand und Host-Update-Automatik (W8/S4)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
-- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) — Host-Crons fuer DSGVO-Purge und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **einmalig eintragen**, sonst laeuft keiner der Jobs
+- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) — Host-Crons fuer DSGVO-Purge und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **einmalig eintragen**, sonst laeuft keiner der Jobs (Dokploy: [Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen))
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
@@ -2058,6 +2058,11 @@ comm -13 /tmp/ws-live.txt /tmp/ws-dirs.txt   # -> nach Pruefung loeschen
 ---
 
 ## Retention-Cron (`who2be-purge`)
+
+> **Instanz auf Dokploy?** Dort gibt es keine Host-Crontab. Beide Jobs
+> (`who2be-purge` und `who2be-memory-expire`) plant Dokploy als Compose-Job im
+> Dienst `api` ein: [`docs/cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen).
+> Dieser Abschnitt gilt fuer den Hetzner-Stack aus `deploy/hetzner/who2be/`.
 
 Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach der
 30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
