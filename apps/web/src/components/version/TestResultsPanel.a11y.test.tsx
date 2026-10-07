@@ -131,8 +131,8 @@ function stubFetch(handlers: Record<string, Handler>) {
   return fetchMock
 }
 
-function wrap(element: React.ReactNode) {
-  return render(
+function tree(element: React.ReactNode) {
+  return (
     <SessionContext.Provider
       value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
@@ -143,8 +143,12 @@ function wrap(element: React.ReactNode) {
           </Routes>
         </MemoryRouter>
       </AuthTokenProvider>
-    </SessionContext.Provider>,
+    </SessionContext.Provider>
   )
+}
+
+function wrap(element: React.ReactNode) {
+  return render(tree(element))
 }
 
 function renderPanel(props: Partial<Parameters<typeof TestResultsPanel>[0]> = {}) {
@@ -398,6 +402,126 @@ describe('TestResultsPanel', () => {
     expect(
       await screen.findByText('Dafür fehlen dir die Rechte (ab Rolle Editor).'),
     ).toBeInTheDocument()
+  })
+
+  it('nennt je Ergebnis den Melder mit Modell, ohne Namen „Unbekannter Agent“, nie eine UUID', async () => {
+    const KNOWN = '99999999-aaaa-bbbb-cccc-000000000001'
+    const GONE = '99999999-aaaa-bbbb-cccc-000000000002'
+    const agentCalls: string[] = []
+    stubFetch({
+      [`GET ${REPORT_PATH}`]: () =>
+        json(
+          report([
+            // Melder ist betroffener Agent: Name direkt aus dem Bericht.
+            entry('pass', { id: 'c1', title: 'A' }, run()),
+            // Melder steht nicht im Bericht: Name per Einzelabruf.
+            entry('pass', { id: 'c2', title: 'B' }, run({ reported_by_agent_id: KNOWN })),
+            // Einzelabruf scheitert (404): Fallback, keine UUID.
+            entry(
+              'pass',
+              { id: 'c3', title: 'C' },
+              run({ reported_by_agent_id: GONE, model_provider: null, model_name: null }),
+            ),
+            // Token ohne Agentbindung: weder Agent noch Person.
+            entry('pass', { id: 'c4', title: 'D' }, run({ reported_by_agent_id: null })),
+          ]),
+        ),
+      [`GET ${WS}/agents/${KNOWN}`]: () => {
+        agentCalls.push(KNOWN)
+        return json({ id: KNOWN, name: 'nachtwache' })
+      },
+      [`GET ${WS}/agents/${GONE}`]: () => {
+        agentCalls.push(GONE)
+        return json({ detail: 'nope' }, 404)
+      },
+    })
+    renderPanel()
+
+    await screen.findAllByTestId('test-result-row')
+    await waitFor(() =>
+      expect(screen.getAllByTestId('test-result-reporter').map((el) => el.textContent)).toEqual([
+        'Gemeldet von coder · anthropic / claude',
+        'Gemeldet von nachtwache · anthropic / claude',
+        'Gemeldet von Unbekannter Agent',
+        'Melder unbekannt · anthropic / claude',
+      ]),
+    )
+    expect(agentCalls.sort()).toEqual([KNOWN, GONE].sort())
+    const text = screen.getByTestId('test-results-panel').textContent ?? ''
+    expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/)
+    expect(text).not.toContain('99999999')
+  })
+
+  it('nennt bei menschlicher Bewertung die Person', async () => {
+    stubFetch({
+      [`GET ${REPORT_PATH}`]: () =>
+        json(
+          report([
+            entry(
+              'fail',
+              { check_kind: 'human_rule', check_pattern: null },
+              run({
+                runs_total: 1,
+                runs_passed: 0,
+                verdict: 'fail',
+                attestation: 'human_rating',
+                model_provider: null,
+                model_name: null,
+                reported_by_agent_id: null,
+                reported_by_user_id: 'u9',
+              }),
+            ),
+          ]),
+        ),
+      [`GET ${WS}/members`]: () =>
+        json([{ user_id: 'u9', email: 'ada@example.org', role: 'editor', joined_at: '2026-01-01T00:00:00Z' }]),
+    })
+    renderPanel()
+
+    expect(await screen.findByText('Bewertet von ada@example.org')).toBeInTheDocument()
+  })
+
+  it('eine spaete Antwort nach dem Unmount setzt keinen State und warnt nicht', async () => {
+    const errorSpy = vi.spyOn(console, 'error')
+    const warnSpy = vi.spyOn(console, 'warn')
+    let respond: ((response: Response) => void) | null = null
+    stubFetch({
+      [`GET ${REPORT_PATH}`]: () => new Promise<Response>((resolve) => (respond = resolve)),
+    })
+    const { unmount } = renderPanel()
+    await waitFor(() => expect(respond).not.toBeNull())
+    unmount()
+    respond!(json(report([entry('pass', {}, run())])))
+    // Mikrotasks abarbeiten lassen: die Antwort kommt an, nachdem das Panel weg ist.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
+  it('beim Versionswechsel ueberschreibt die spaete Antwort der alten Version nicht die neue', async () => {
+    const errorSpy = vi.spyOn(console, 'error')
+    const OTHER = '66666666-7777-8888-9999-000000000000'
+    let respondOld: ((response: Response) => void) | null = null
+    stubFetch({
+      [`GET ${REPORT_PATH}`]: () => new Promise<Response>((resolve) => (respondOld = resolve)),
+      [`GET ${WS}/versions/playbook/${OTHER}/test-report`]: () =>
+        json(report([entry('pass', { title: 'Neue Version' }, run())])),
+    })
+    const props = { entityType: 'playbook' as const, version: 7, testCasesSearch: '?tab=tests' }
+    const { rerender } = wrap(<TestResultsPanel {...props} versionId={VERSION_ID} />)
+    await waitFor(() => expect(respondOld).not.toBeNull())
+    rerender(tree(<TestResultsPanel {...props} version={8} versionId={OTHER} />))
+    expect(await screen.findByText('Neue Version')).toBeInTheDocument()
+
+    respondOld!(json(report([entry('fail', { title: 'Alte Version' }, run({ runs_passed: 0, verdict: 'fail' }))])))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.queryByText('Alte Version')).toBeNull()
+    expect(screen.getByText('Neue Version')).toBeInTheDocument()
+    // Kein State-Update ausserhalb von act(): die alte Antwort wurde verworfen.
+    expect(errorSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 
   it('hat keine axe-Verstoesse (aufgeklappt, mit Bewertung)', async () => {

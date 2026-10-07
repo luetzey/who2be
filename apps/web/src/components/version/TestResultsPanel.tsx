@@ -19,6 +19,7 @@ import type {
   TestReport,
   TestReportAgentGroup,
   TestReportEntry,
+  TestRunRead,
   TestVerdict,
   VersionedEntityType,
 } from '@/api/types'
@@ -147,15 +148,29 @@ export function TestResultsPanel({
   const [loading, setLoading] = useState(!isViewer)
   const [error, setError] = useState<LoadError | null>(null)
   const [members, setMembers] = useState<Member[]>([])
+  // Agentnamen fuer Melder, die nicht als betroffener Agent im Bericht stehen.
+  // `null` = nicht aufloesbar (403/404) -> „Unbekannter Agent“, nie die UUID.
+  const [lookedUpAgents, setLookedUpAgents] = useState<ReadonlyMap<string, string | null>>(
+    () => new Map(),
+  )
 
+  // `getTestReport` nimmt kein AbortSignal an. Jeder Abruf merkt sich daher
+  // seine Generation; der Effekt-Cleanup (Unmount, Versionswechsel) zaehlt
+  // sie hoch, und eine spaete Antwort einer alten Generation setzt keinen
+  // State mehr — auch nicht die eines `reload()`.
+  const generation = useRef(0)
   const fetchReport = useCallback(() => {
+    const current = generation.current
+    const isCurrent = () => current === generation.current
     api
       .getTestReport(entityType, versionId)
       .then((data) => {
+        if (!isCurrent()) return
         setReport(data)
         setError(null)
       })
       .catch((cause: unknown) => {
+        if (!isCurrent()) return
         if (cause instanceof ApiError && cause.status === 403) {
           setError({ kind: 'forbidden' })
         } else {
@@ -165,11 +180,16 @@ export function TestResultsPanel({
           })
         }
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (isCurrent()) setLoading(false)
+      })
   }, [api, entityType, versionId, t])
 
   useEffect(() => {
     if (!isViewer) fetchReport()
+    return () => {
+      generation.current += 1
+    }
   }, [fetchReport, isViewer])
 
   const reload = useCallback(() => {
@@ -227,6 +247,68 @@ export function TestResultsPanel({
       return member?.email || userId.slice(0, 8)
     },
     [members, t],
+  )
+
+  // Melder-Agenten: die meisten stehen als betroffener Agent im Bericht.
+  // Fehlende einzeln nachschlagen (wie #822); scheitert das, „Unbekannter
+  // Agent“ — nie die UUID.
+  const reportAgentNames = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const group of report?.agents ?? []) {
+      if (group.agent_name) names.set(group.agent_id, group.agent_name)
+    }
+    return names
+  }, [report])
+  const missingReporterIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const group of report?.agents ?? []) {
+      for (const entry of group.entries) {
+        const agentId = entry.result?.reported_by_agent_id
+        if (agentId && !reportAgentNames.has(agentId)) ids.add(agentId)
+      }
+    }
+    return [...ids].sort().join(',')
+  }, [report, reportAgentNames])
+  useEffect(() => {
+    if (missingReporterIds === '') return
+    let cancelled = false
+    const ids = missingReporterIds.split(',')
+    void Promise.all(
+      ids.map((id) =>
+        api
+          .getAgent(id)
+          .then((agent) => (agent?.id === id && agent.name ? agent.name : null))
+          .catch(() => null),
+      ),
+    ).then((names) => {
+      if (cancelled) return
+      setLookedUpAgents((prev) => {
+        const next = new Map(prev)
+        ids.forEach((id, index) => next.set(id, names[index]))
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api, missingReporterIds])
+
+  // Melder eines Ergebnisses: Agentname bzw. Person, `null` = keiner bekannt
+  // (Token ohne Agentbindung).
+  const reporterLabel = useCallback(
+    (result: TestRunRead): string | null => {
+      if (result.reported_by_agent_id !== null) {
+        const agentId = result.reported_by_agent_id
+        return (
+          reportAgentNames.get(agentId) ??
+          lookedUpAgents.get(agentId) ??
+          t('testResults.reporter.unknownAgent')
+        )
+      }
+      if (result.reported_by_user_id !== null) return userLabel(result.reported_by_user_id)
+      return null
+    },
+    [reportAgentNames, lookedUpAgents, userLabel, t],
   )
 
   const rate = async (entry: TestReportEntry, verdict: TestVerdict) => {
@@ -311,6 +393,7 @@ export function TestResultsPanel({
             canRate={canRate}
             formatTime={(iso) => dateTime.format(new Date(iso))}
             userLabel={userLabel}
+            reporterLabel={reporterLabel}
             onRate={rate}
           />
         ))}
@@ -427,10 +510,11 @@ interface AgentGroupProps {
   canRate: boolean
   formatTime: (iso: string) => string
   userLabel: (userId: string | null) => string
+  reporterLabel: (result: TestRunRead) => string | null
   onRate: (entry: TestReportEntry, verdict: TestVerdict) => Promise<void>
 }
 
-function AgentGroup({ group, canRate, formatTime, userLabel, onRate }: AgentGroupProps) {
+function AgentGroup({ group, canRate, formatTime, userLabel, reporterLabel, onRate }: AgentGroupProps) {
   const { t } = useTranslation('learning')
   const [showPassed, setShowPassed] = useState(false)
   const sorted = useMemo(
@@ -467,6 +551,7 @@ function AgentGroup({ group, canRate, formatTime, userLabel, onRate }: AgentGrou
               canRate={canRate}
               formatTime={formatTime}
               userLabel={userLabel}
+              reporterLabel={reporterLabel}
               onRate={onRate}
             />
           ))}
@@ -496,10 +581,11 @@ interface ResultRowProps {
   canRate: boolean
   formatTime: (iso: string) => string
   userLabel: (userId: string | null) => string
+  reporterLabel: (result: TestRunRead) => string | null
   onRate: (entry: TestReportEntry, verdict: TestVerdict) => Promise<void>
 }
 
-function ResultRow({ entry, canRate, formatTime, userLabel, onRate }: ResultRowProps) {
+function ResultRow({ entry, canRate, formatTime, userLabel, reporterLabel, onRate }: ResultRowProps) {
   const { t } = useTranslation('learning')
   const detailsId = useId()
   const [open, setOpen] = useState(false)
@@ -524,7 +610,10 @@ function ResultRow({ entry, canRate, formatTime, userLabel, onRate }: ResultRowP
   }
 
   let attestation: string | null = null
+  // Kopfzeile: wer hat gemeldet (Agent bzw. Person), mit welchem Modell.
+  let reporter: string | null = null
   if (result !== null) {
+    const model = [result.model_provider, result.model_name].filter(Boolean).join(' / ')
     attestation =
       result.attestation === 'human_rating'
         ? t('testResults.attestation.human', {
@@ -532,11 +621,21 @@ function ResultRow({ entry, canRate, formatTime, userLabel, onRate }: ResultRowP
             time: formatTime(result.created_at),
           })
         : t('testResults.attestation.client', {
-            model:
-              [result.model_provider, result.model_name].filter(Boolean).join(' / ') ||
-              t('testResults.attestation.unknownModel'),
+            model: model || t('testResults.attestation.unknownModel'),
             time: formatTime(result.created_at),
           })
+    const name = reporterLabel(result)
+    if (name === null) {
+      reporter = model
+        ? t('testResults.reporter.unknownWithModel', { model })
+        : t('testResults.reporter.unknown')
+    } else if (result.attestation === 'human_rating') {
+      reporter = t('testResults.reporter.human', { name })
+    } else {
+      reporter = model
+        ? t('testResults.reporter.clientWithModel', { name, model })
+        : t('testResults.reporter.client', { name })
+    }
   }
 
   return (
@@ -557,6 +656,11 @@ function ResultRow({ entry, canRate, formatTime, userLabel, onRate }: ResultRowP
             {runs !== null ? ` · ${runs}` : ''}
             {entry.direct ? ` · ${t('testResults.direct')}` : ''}
           </span>
+          {reporter !== null ? (
+            <span className="block text-xs break-words text-muted-foreground" data-testid="test-result-reporter">
+              {reporter}
+            </span>
+          ) : null}
         </span>
         <ChevronRight
           className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')}
