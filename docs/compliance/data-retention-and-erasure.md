@@ -489,5 +489,6 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
   Nutzergedaechtnis, Verfall, Historie `agent_memory_event` (§4c).
 - `apps/api/src/who2be_api/migrations/0100_agent_case.sql` — Faelle mit
   Verlauf, Zuordnung und Schilderung (§4d);
-  `repositories/case_repository.py#delete_case` — Einzel-Loeschung.
+  `apps/api/src/who2be_api/repositories/case_repository.py#delete_case` —
+  Einzel-Loeschung.
 - ADR-0047/0048/0049 — WorkArea+KB, Blob-Storage, Tabellen-Store.
