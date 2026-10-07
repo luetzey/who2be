@@ -390,9 +390,17 @@ def test_lesson_merge_keeps_status_and_user_fact_duplicate(make_auth_headers: Au
                 assert res.status_code == 201, res.text
                 ids[status_name] = res.json()["id"]
             _sql("UPDATE agent_memory SET status = 'rejected' WHERE id = $1", UUID(ids["rejected"]))
+            # Seit 0100 verlangt `converted_case_id` einen echten Fall desselben
+            # Agenten (FK); er entsteht hier in derselben Anweisung.
             _sql(
+                "WITH c AS ("
+                "  INSERT INTO agent_case (workspace_id, agent_id, reporter_kind, "
+                "   reporter_agent_id, situation, behavior, expected_behavior) "
+                "  SELECT workspace_id, agent_id, 'agent', agent_id, 's', 'b', 'e' "
+                "  FROM agent_memory WHERE id = $1 RETURNING id"
+                ") "
                 "UPDATE agent_memory SET status = 'converted', "
-                "converted_case_id = gen_random_uuid() WHERE id = $1",
+                "converted_case_id = (SELECT id FROM c) WHERE id = $1",
                 UUID(ids["converted"]),
             )
 

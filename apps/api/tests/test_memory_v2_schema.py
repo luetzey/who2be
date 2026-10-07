@@ -194,6 +194,18 @@ async def _insert_event(
     return event_id
 
 
+async def _insert_case(conn: asyncpg.Connection, workspace_id: UUID, agent_id: UUID) -> UUID:
+    """Ein Fall als Ziel fuer `converted_case_id` (FK seit Migration 0100)."""
+    case_id: UUID = await conn.fetchval(
+        "INSERT INTO agent_case (workspace_id, agent_id, reporter_kind, reporter_agent_id, "
+        " situation, behavior, expected_behavior) "
+        "VALUES ($1, $2, 'agent', $2, 's', 'b', 'e') RETURNING id",
+        workspace_id,
+        agent_id,
+    )
+    return case_id
+
+
 # --- Invarianten (3.1) ---------------------------------------------------------
 
 
@@ -213,7 +225,7 @@ def test_lesson_can_never_be_active() -> None:
             s.agent_a,
             kind="lesson",
             status="converted",
-            converted_case_id=uuid4(),
+            converted_case_id=await _insert_case(env.app, s.ws_a, s.agent_a),
             fact="L3",
         )
         # Nie aktiv — weder beim Anlegen noch per Statuswechsel.
@@ -276,20 +288,22 @@ def test_converted_iff_case_id() -> None:
     async def body(env: _Env) -> None:
         s = env.seed
         await env.as_tenant(s.ws_a)
+        case_id = await _insert_case(env.app, s.ws_a, s.agent_a)
         with pytest.raises(asyncpg.CheckViolationError):  # converted ohne Fall
             await _insert_memory(env.app, s.ws_a, s.agent_a, kind="lesson", status="converted")
         with pytest.raises(asyncpg.CheckViolationError):  # Fall ohne converted
             await _insert_memory(
-                env.app, s.ws_a, s.agent_a, kind="lesson", converted_case_id=uuid4()
+                env.app, s.ws_a, s.agent_a, kind="lesson", converted_case_id=case_id
             )
-        # Kein FK bis D1: ein beliebiger Fall-Verweis ist zulaessig.
+        # Seit 0100 mit FK auf `agent_case`; die FK-Proben stehen in
+        # `test_agent_case_schema.py`.
         await _insert_memory(
             env.app,
             s.ws_a,
             s.agent_a,
             kind="lesson",
             status="converted",
-            converted_case_id=uuid4(),
+            converted_case_id=case_id,
         )
 
     _with_env(body)
