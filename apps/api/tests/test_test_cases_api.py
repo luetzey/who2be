@@ -644,3 +644,73 @@ def test_rights_for_agent_tokens(world) -> None:  # type: ignore[no-untyped-def]
         headers=silent_auth,
     )
     assert silent_run.status_code == 403
+
+
+def _report_case(client: TestClient, base: str, auth: dict[str, str], agent_id: str) -> str:
+    res = client.post(
+        f"{base}/cases",
+        json={
+            "agent_id": agent_id,
+            "situation": "Situation",
+            "behavior": "Verhalten",
+            "expected_behavior": "Erwartet",
+        },
+        headers=auth,
+    )
+    assert res.status_code == 201, res.text
+    return str(res.json()["id"])
+
+
+@pytest.mark.integration
+def test_list_filters_by_origin_case(world) -> None:  # type: ignore[no-untyped-def]
+    """`GET /test-cases?origin_case_id=` (D6-API2): die Pruefaelle eines Falls."""
+    client, _ws, _owner, auth, base = world
+    agent = _agent(client, base, auth, "A")
+    case_a = _report_case(client, base, auth, agent)
+    case_b = _report_case(client, base, auth, agent)
+    from_a = _create_case(client, base, auth, _case_body(agent, "Aus A", origin_case_id=case_a))
+    from_a_2 = _create_case(client, base, auth, _case_body(agent, "Aus A 2", origin_case_id=case_a))
+    from_b = _create_case(client, base, auth, _case_body(agent, "Aus B", origin_case_id=case_b))
+    plain = _create_case(client, base, auth, _case_body(agent, "Ohne Fall"))
+
+    def ids(params: dict[str, str]) -> list[str]:
+        res = client.get(f"{base}/test-cases", params=params, headers=auth)
+        assert res.status_code == 200, res.text
+        return [c["id"] for c in res.json()]
+
+    unfiltered = ids({})
+    assert unfiltered == [from_a["id"], from_a_2["id"], from_b["id"], plain["id"]]
+    by_a = ids({"origin_case_id": case_a})
+    assert by_a == [from_a["id"], from_a_2["id"]]
+    assert by_a != unfiltered
+    assert ids({"origin_case_id": case_b}) == [from_b["id"]]
+    assert ids({"origin_case_id": str(uuid4())}) == []
+
+    # Kombinierbar: ein abgeloester Pruefall faellt mit status=active heraus.
+    client.post(f"{base}/test-cases/{from_a_2['id']}/retire", headers=auth)
+    assert ids({"origin_case_id": case_a, "status": "active"}) == [from_a["id"]]
+    assert ids({"origin_case_id": case_a, "agent_id": str(uuid4())}) == []
+
+    # Isolationsprobe: Fall und Pruefall eines fremden Workspace bleiben dort.
+    stranger = fresh_user_id()
+    foreign_ws = setup_workspace(stranger)
+    try:
+        foreign_base = f"/v1/workspaces/{foreign_ws}"
+        foreign_auth = _auth(stranger)
+        foreign_agent = _agent(client, foreign_base, foreign_auth, "Fremd")
+        foreign_case = _report_case(client, foreign_base, foreign_auth, foreign_agent)
+        foreign_test = _create_case(
+            client,
+            foreign_base,
+            foreign_auth,
+            _case_body(foreign_agent, "Fremder Pruefall", origin_case_id=foreign_case),
+        )
+        seen_there = client.get(
+            f"{foreign_base}/test-cases",
+            params={"origin_case_id": foreign_case},
+            headers=foreign_auth,
+        ).json()
+        assert [c["id"] for c in seen_there] == [foreign_test["id"]]
+        assert ids({"origin_case_id": foreign_case}) == []
+    finally:
+        cleanup_workspaces([stranger])

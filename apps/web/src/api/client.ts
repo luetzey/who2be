@@ -1291,6 +1291,7 @@ export function createApi(token: string, workspaceId: string): Api {
       if (filters?.entity_type) params.set('entity_type', filters.entity_type)
       if (filters?.entity_id) params.set('entity_id', filters.entity_id)
       if (filters?.status) params.set('status', filters.status)
+      if (filters?.origin_case_id) params.set('origin_case_id', filters.origin_case_id)
       return request<TestCaseRead[]>(token, withQuery(apiPath`${ws}/test-cases`, params))
     },
     getTestCase: (caseId) => request<TestCaseRead>(token, apiPath`${ws}/test-cases/${caseId}`),

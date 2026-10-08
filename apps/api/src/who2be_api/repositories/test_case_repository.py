@@ -189,6 +189,7 @@ class TestCaseRepository(Protocol):
         entity_type: EntityType | None = None,
         entity_id: UUID | None = None,
         status: TestCaseStatus | None = None,
+        origin_case_id: UUID | None = None,
     ) -> list[TestCaseRead]: ...
 
     async def list_active_for_element(
@@ -292,8 +293,11 @@ class PgTestCaseRepository:
         entity_type: EntityType | None = None,
         entity_id: UUID | None = None,
         status: TestCaseStatus | None = None,
+        origin_case_id: UUID | None = None,
     ) -> list[TestCaseRead]:
         # Feste Parameter-Positionen, NULL = Filter aus — kein dynamisches SQL.
+        # `origin_case_id` hat keinen FK; `workspace_id = $1` haelt den Filter
+        # im eigenen Workspace, eine fremde Fall-ID liefert schlicht nichts.
         rows = await self._pool.fetch(
             f"SELECT {_CASE_COLUMNS} FROM test_case "
             "WHERE workspace_id = $1 "
@@ -301,12 +305,14 @@ class PgTestCaseRepository:
             "  AND ($3::text IS NULL OR entity_type = $3) "
             "  AND ($4::uuid IS NULL OR entity_id = $4) "
             "  AND ($5::text IS NULL OR status = $5) "
+            "  AND ($6::uuid IS NULL OR origin_case_id = $6) "
             "ORDER BY created_at ASC, id ASC",
             workspace_id,
             agent_id,
             entity_type,
             entity_id,
             status.value if status is not None else None,
+            origin_case_id,
         )
         return [_case(row) for row in rows]
 

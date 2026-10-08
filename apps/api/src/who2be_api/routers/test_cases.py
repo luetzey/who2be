@@ -53,13 +53,16 @@ async def list_test_cases(
     entity_type: EntityType | None = None,
     entity_id: UUID | None = None,
     status_filter: Annotated[TestCaseStatus | None, Query(alias="status")] = None,
+    origin_case_id: UUID | None = None,
 ) -> list[TestCaseRead]:
+    # `origin_case_id`: die aus einem Fall abgeleiteten Pruefaelle (D6-API2).
     return await service.list_cases(
         ctx,
         agent_id=agent_id,
         entity_type=entity_type,
         entity_id=entity_id,
         status_filter=status_filter,
+        origin_case_id=origin_case_id,
     )
 
 
