@@ -115,6 +115,13 @@ SELECT EXISTS (
 
 _vector_supported: bool | None = None
 
+# Muster-Kandidat (ADR-0053 3.7): offener Lernvorschlag im Agentengedaechtnis.
+# `scope='agent'` steht zusaetzlich zum DB-CHECK da: das Nutzergedaechtnis
+# fliesst nie in Muster ein. Feste Zeichenkette, `alias` nur aus dieser Datei.
+_LESSON_CANDIDATE_SQL = (
+    "{alias}.kind = 'lesson' AND {alias}.status = 'pending' AND {alias}.scope = 'agent'"
+)
+
 _READ_COLUMNS = (
     "id, agent_id, status, fact, context, category, importance, source, "
     "triage_note, retrieval_count, last_retrieved_at, created_at, updated_at, "
@@ -241,6 +248,10 @@ class MemoryRepository(Protocol):
     async def merge_lesson(
         self, workspace_id: UUID, agent_id: UUID, memory_id: UUID
     ) -> MemoryRead | None: ...
+
+    async def lesson_pattern_signals(
+        self, workspace_id: UUID, agent_id: UUID | None = None
+    ) -> LessonPatternSignals: ...
 
     async def search_active(
         self,
@@ -451,6 +462,33 @@ class MemoryRepository(Protocol):
     async def purge_user_memories(
         self, workspace_id: UUID, subject_user_id: UUID, actor_id: UUID
     ) -> int: ...
+
+
+@dataclass(frozen=True)
+class LessonCandidate:
+    """Offener Lernvorschlag als Muster-Kandidat (ADR-0053 3.7).
+
+    `last_seen`: juengste Wiederholung (Event `merged`, 3.1.6), sonst die Anlage.
+    """
+
+    id: UUID
+    agent_id: UUID
+    occurrence_count: int
+    created_at: datetime
+    last_seen: datetime
+
+
+@dataclass(frozen=True)
+class LessonPatternSignals:
+    """Rohsignale der Lernvorschlags-Muster: Kandidaten plus aehnliche Paare.
+
+    Das Clustern (Zusammenhangskomponenten) und die Schwelle n macht der
+    Service (`pattern_service`); das Repository liefert nur, was die
+    Datenbank deterministisch beantworten kann.
+    """
+
+    candidates: list[LessonCandidate]
+    similar_pairs: list[tuple[UUID, UUID]]
 
 
 @dataclass(frozen=True)
@@ -886,6 +924,70 @@ class PgMemoryRepository:
                 snapshot,
             )
         return merged
+
+    async def lesson_pattern_signals(
+        self, workspace_id: UUID, agent_id: UUID | None = None
+    ) -> LessonPatternSignals:
+        """Kandidaten und aehnliche Paare fuer die Lernvorschlags-Muster (3.7).
+
+        Kandidaten: `kind='lesson'`, `status='pending'`, `scope='agent'` —
+        `rejected`/`converted` zaehlen nicht (3.7 „pending“), das
+        Nutzergedaechtnis nie (`scope='agent'` zusaetzlich zum DB-CHECK, der
+        `lesson` ohnehin an `scope='agent'` bindet).
+
+        Paare: zwei Kandidaten DESSELBEN Agenten, die die Pruefung der
+        Dublettenerkennung bestehen (`_find_similar_where`): Trigram
+        `>= MEMORY_DEDUP_SIMILARITY`, und — wenn die Vektorspalte existiert und
+        beide Vektoren gesetzt sind — zusaetzlich Cosinus `>=
+        _DEDUP_VECTOR_SIMILARITY`. `(a, b)` mit `a < b`, sortiert.
+        `agent_id=None`: alle Agenten des Workspace.
+        """
+        async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):
+            rows = await conn.fetch(
+                "SELECT m.id, m.agent_id, m.occurrence_count, m.created_at, "
+                "       COALESCE((SELECT max(e.created_at) FROM agent_memory_event e "
+                "                 WHERE e.workspace_id = m.workspace_id AND e.memory_id = m.id "
+                "                   AND e.event = 'merged'), m.created_at) AS last_seen "
+                "FROM agent_memory m "
+                "WHERE m.workspace_id = $1 AND ($2::uuid IS NULL OR m.agent_id = $2) "
+                f"  AND {_LESSON_CANDIDATE_SQL.format(alias='m')} "
+                "ORDER BY m.agent_id, m.created_at, m.id",
+                workspace_id,
+                agent_id,
+            )
+            vector_branch = ""
+            if await self.vector_supported():
+                vector_branch = (
+                    " OR (a.content_vector IS NOT NULL AND b.content_vector IS NOT NULL "
+                    "     AND 1 - (a.content_vector <=> b.content_vector) >= "
+                    f"{_DEDUP_VECTOR_SIMILARITY})"
+                )
+            pairs = await conn.fetch(
+                "SELECT a.id AS a_id, b.id AS b_id "
+                "FROM agent_memory a JOIN agent_memory b "
+                "  ON b.workspace_id = a.workspace_id AND b.agent_id = a.agent_id AND a.id < b.id "
+                "WHERE a.workspace_id = $1 AND ($2::uuid IS NULL OR a.agent_id = $2) "
+                f"  AND {_LESSON_CANDIDATE_SQL.format(alias='a')} "
+                f"  AND {_LESSON_CANDIDATE_SQL.format(alias='b')} "
+                f"  AND (similarity(a.fact, b.fact) >= $3{vector_branch}) "
+                "ORDER BY a.id, b.id",
+                workspace_id,
+                agent_id,
+                MEMORY_DEDUP_SIMILARITY,
+            )
+        return LessonPatternSignals(
+            candidates=[
+                LessonCandidate(
+                    id=r["id"],
+                    agent_id=r["agent_id"],
+                    occurrence_count=r["occurrence_count"],
+                    created_at=r["created_at"],
+                    last_seen=r["last_seen"],
+                )
+                for r in rows
+            ],
+            similar_pairs=[(r["a_id"], r["b_id"]) for r in pairs],
+        )
 
     async def vector_supported(self) -> bool:
         """True, wenn `agent_memory.content_vector` existiert (gecacht)."""
