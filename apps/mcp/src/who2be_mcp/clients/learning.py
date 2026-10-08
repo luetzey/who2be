@@ -130,19 +130,26 @@ async def submit_case_statement(
 
 
 async def list_cases(
-    client: ApiClient, agent_id: UUID | None = None, status: CaseStatus | None = None
+    client: ApiClient,
+    agent_id: UUID | None = None,
+    status: CaseStatus | list[CaseStatus] | None = None,
 ) -> list[CaseRead]:
     """`GET .../cases?agent_id=&status=` — erste Seite, neueste zuerst.
 
-    Die Sichtbarkeit entscheidet der Server: ohne `case_triage` nur Faelle
-    ueber den eigenen Agenten, ein fremder `agent_id` endet in 403
+    `status` geht als wiederholter Query-Parameter raus
+    (`?status=open&status=reopened`), wie `GET /cases` ihn seit D6-API1 liest;
+    ein Einzelwert bleibt ein einzelner Parameter, eine leere Liste filtert
+    nicht. Die Sichtbarkeit entscheidet der Server: ohne `case_triage` nur
+    Faelle ueber den eigenen Agenten, ein fremder `agent_id` endet in 403
     `missing_capability`.
     """
-    params: dict[str, str] = {}
+    params: dict[str, str | list[str]] = {}
     if agent_id is not None:
         params["agent_id"] = str(agent_id)
-    if status is not None:
-        params["status"] = CaseStatus(status).value
+    statuses = [status] if isinstance(status, str) else (status or [])
+    if statuses:
+        # Reihenfolge erhalten, Dubletten raus — die API filtert per IN.
+        params["status"] = list(dict.fromkeys(CaseStatus(s).value for s in statuses))
     payload = await client._get(f"{client._workspace_prefix}/cases", params=params or None)
     return [CaseRead.model_validate(item) for item in payload]
 
