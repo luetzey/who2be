@@ -348,13 +348,17 @@ async def submit_case_statement(
 
 @with_tool_log("list_cases")
 async def list_cases(
-    agent_id: str | None = None, status: CaseStatus | None = None, format: str = "text"
+    agent_id: str | None = None,
+    status: CaseStatus | list[CaseStatus] | None = None,
+    format: str = "text",
 ) -> list[CaseRead] | str:
     """Listet Faelle, neueste zuerst (bis 50).
 
     Ohne `agent_id` alle Faelle, die du sehen darfst, mit `agent_id` die ueber
-    diesen Agenten; `status` filtert (open, triaged, in_progress, addressed,
-    verified, dismissed, reopened). Fuer `case_triage`.
+    diesen Agenten; `status` filtert, ein Wert oder eine Liste (ODER), z. B.
+    ["open", "triaged", "in_progress", "reopened"] fuer alle offenen. Werte:
+    open, triaged, in_progress, addressed, verified, dismissed, reopened.
+    Fuer `case_triage`.
 
     `format="text"` (Default): Markdown, Felder gekuerzt. Volltext und
     strukturelle Verarbeitung: `format="full"`.

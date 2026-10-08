@@ -111,6 +111,13 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- The MCP tool `list_cases` now takes `status` as a single value **or a list**,
+  matching `GET /cases`. A list goes out as a repeated query parameter
+  (`?status=open&status=triaged&…`), so all open cases of a pattern
+  (`open`, `triaged`, `in_progress`, `reopened`) come back in one call instead
+  of one call per status. A single value works as before; an empty list
+  applies no status filter.
+
 - All three Compose stacks now pin `supabase/gotrue:v2.196.0` instead of
   `v2.158.1`, and WebAuthn is available as a second factor on the server side.
 

@@ -824,6 +824,71 @@ def test_list_cases_passes_filters_and_full_returns_models(
     assert isinstance(result[0], CaseRead)
 
 
+def test_list_cases_status_list_goes_out_as_repeated_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liste → `?status=open&status=triaged&...` (wie GET /cases seit D6-API1)."""
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["status"] = request.url.params.get_list("status")
+        seen["query"] = request.url.query.decode()
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    statuses = [CaseStatus.open, CaseStatus.triaged, CaseStatus.in_progress, CaseStatus.reopened]
+    asyncio.run(list_cases(status=[*statuses, CaseStatus.open]))
+    assert seen["status"] == ["open", "triaged", "in_progress", "reopened"]
+    assert seen["query"] == "status=open&status=triaged&status=in_progress&status=reopened"
+
+
+def test_list_cases_single_status_stays_single_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["query"] = request.url.query.decode()
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_cases(status=CaseStatus.reopened))
+    assert seen["query"] == "status=reopened"
+
+
+def test_list_cases_empty_status_list_does_not_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["query"] = request.url.query.decode()
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_cases(status=[]))
+    assert seen["query"] == ""
+
+
+def test_list_cases_schema_accepts_value_and_list_over_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Draht-Ebene: das Werkzeug-Schema nimmt Einzelwert UND Liste an."""
+    seen: list[list[str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params.get_list("status"))
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    async def run() -> None:
+        async with Client(server.mcp) as client:
+            await client.call_tool("list_cases", {"status": "open"})
+            await client.call_tool("list_cases", {"status": ["open", "reopened"]})
+            with pytest.raises(ToolError):
+                await client.call_tool("list_cases", {"status": ["open", "erfunden"]})
+
+    asyncio.run(run())
+    assert seen == [["open"], ["open", "reopened"]]
+
+
 def test_list_cases_without_filters_sends_no_params(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, Any] = {}
 

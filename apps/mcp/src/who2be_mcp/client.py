@@ -6,7 +6,8 @@ uebersetzt.
 """
 
 import logging
-from typing import Any, Literal
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, TypeAlias
 from uuid import UUID
 
 import httpx
@@ -74,6 +75,10 @@ from who2be_models.memory import MemorySaveResult
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10.0
+
+# Query-Parameter fuer `_get`: eine Liste geht als wiederholter Parameter raus
+# (`?status=open&status=reopened`), so wie FastAPI `list[...]`-Query liest.
+QueryParams: TypeAlias = Mapping[str, str | Sequence[str]]
 
 
 def problem_message(response: httpx.Response, fallback: str) -> str:
@@ -191,7 +196,7 @@ class ApiClient:
         method: str,
         path: str,
         *,
-        params: dict[str, str] | None = None,
+        params: QueryParams | None = None,
         json: Any = None,
     ) -> httpx.Response:
         try:
@@ -239,7 +244,7 @@ class ApiClient:
                 problem_message(response, f"Who2Be-API-Fehler ({response.status_code}).")
             )
 
-    async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
+    async def _get(self, path: str, params: QueryParams | None = None) -> Any:
         response = await self._request("GET", path, params=params)
         return response.json()
 
