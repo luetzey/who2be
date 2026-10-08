@@ -330,6 +330,9 @@ _PROBLEM_TITLES: dict[str, str] = {
     "case_transition_forbidden": "Statuswechsel des Falls nicht erlaubt",
     "case_transition_human_only": "Statuswechsel ist Menschen vorbehalten",
     "case_statement_not_subject": "Schilderung nur vom betroffenen Agenten",
+    # Lernschleife Phase D — Umwandeln/Uebernehmen (ADR-0053 6.4/6.5, D2c):
+    "memory_not_convertible": "Eintrag laesst sich nicht in einen Fall umwandeln",
+    "feedback_not_promotable": "Feedback laesst sich nicht in einen Fall uebernehmen",
 }
 
 

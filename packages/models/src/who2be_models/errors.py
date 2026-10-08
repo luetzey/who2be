@@ -202,6 +202,11 @@ ProblemReason = Literal[
     "case_transition_forbidden",
     "case_transition_human_only",  # 403 — Agent-Token will addressed/verified/dismissed setzen
     "case_statement_not_subject",  # 403 — Schilderung nicht vom betroffenen Agenten
+    # Lernschleife Phase D — Umwandeln/Uebernehmen (ADR-0053 6.4/6.5, Paket D2c):
+    # 409 — nur `lesson` mit `status='pending'` wird ein Fall (params: kind, status)
+    "memory_not_convertible",
+    # 409 — nur offenes Alt-Feedback wird ein Fall (params: resolution)
+    "feedback_not_promotable",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -1,8 +1,8 @@
 """Faelle: melden, lesen, Uebergaenge, Zuordnung, Schilderung, Loeschen.
 
 ADR-0053 Abschnitt 3.3 (Zustaende, Uebergaenge, Rechte), 6.1 und 6.5;
-Lernschleife Phase D, Paket D2a. Nur die Service-Schicht — Router und
-OpenAPI kommen mit D2b, Umwandeln/Uebernehmen mit D2c, MCP mit D4.
+Lernschleife Phase D, Pakete D2a und D2c-1. Nur die Service-Schicht — Router
+und OpenAPI kommen mit D2b bzw. D2c-2, MCP mit D4.
 
 Rechte (3.3, Tabelle „Rechte“; Weiche F2 = a):
 
@@ -19,6 +19,8 @@ Rechte (3.3, Tabelle „Rechte“; Weiche F2 = a):
   `case_triage`.
 - **Schilderung:** nur der betroffene Agent (`agent_id` des Falls).
 - **Loeschen:** Mensch ab `editor` (PM-Entscheidung Q6); Agent-Tokens nie.
+- **Umwandeln/Uebernehmen** (convert 6.4, promote 6.5): Mensch ab `editor`;
+  Agent-Tokens nie.
 
 Agent-Tokens — auch der Builder — setzen nie `addressed`, `verified` oder
 `dismissed` (F-W7, „Partei, nicht Richter“). Das prueft `is_agent_bound`,
@@ -54,7 +56,11 @@ from who2be_api.core.security import (
     require_write_rate,
     role_satisfies,
 )
-from who2be_api.repositories.case_repository import CaseRepository
+from who2be_api.repositories.case_repository import (
+    CaseRepository,
+    NotConvertible,
+    NotPromotable,
+)
 from who2be_models import (
     AgentCapability,
     CaseActorKind,
@@ -75,7 +81,7 @@ from who2be_models import (
     ProblemReason,
     WorkspaceRole,
 )
-from who2be_models.case import CASE_NOTE_MAX_LENGTH
+from who2be_models.case import CASE_NOTE_MAX_LENGTH, CaseConvertRequest
 
 # Erlaubte Kanten nach 3.3 (Zustandsdiagramm). `in_progress` und `verified`
 # stehen drin, sind in D2 aber gesperrt (`_PHASE_E_TARGETS`).
@@ -494,6 +500,93 @@ class CaseService:
         if statement is None:
             raise _case_not_found()
         return statement
+
+    # --- Umwandeln / Uebernehmen (D2c) -----------------------------------
+
+    @staticmethod
+    def _require_human_editor(ctx: WorkspaceContext, action: str) -> None:
+        """convert/promote: Mensch ab `editor`; Agent-Tokens nie (Muster `_require_human`).
+
+        Ueber `is_agent_bound`, bewusst KEINE Capability: aus einem
+        Lernvorschlag oder Alt-Feedback einen Fall zu machen, ist Kuration —
+        ein Agent wuerde sonst ueber die Einordnung seines eigenen Verhaltens
+        entscheiden („Partei, nicht Richter“).
+        """
+        if is_agent_bound(ctx):
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="missing_capability",
+                actionable_by="none",
+                detail=f"{action} ist Menschen ab der Rolle 'editor' vorbehalten.",
+            )
+        require_role(ctx, WorkspaceRole.editor)
+
+    async def convert_lesson(
+        self,
+        ctx: WorkspaceContext,
+        agent_id: UUID,
+        memory_id: UUID,
+        data: CaseConvertRequest,
+    ) -> CaseRead:
+        """`POST /agents/{agent_id}/memories/{id}/convert` (6.4): `lesson` -> Fall.
+
+        Nur `lesson` mit `status='pending'`. Eine spaetere Wiederholung
+        derselben Lektion trifft den `converted`-Eintrag und laesst ihn
+        `converted` (3.1.6, `merge_lesson`); ein zweites convert endet mit
+        `memory_not_convertible`.
+        """
+        self._require_human_editor(ctx, "Einen Lernvorschlag in einen Fall umwandeln")
+        if not await self._repo.agent_exists(ctx.workspace_id, agent_id):
+            raise _agent_not_found()
+        result = await self._repo.convert_lesson(
+            ctx.workspace_id, agent_id, memory_id, data, actor_id=ctx.user_id
+        )
+        if result is None:
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Memory nicht gefunden.",
+                reason="memory_not_found",
+            )
+        if isinstance(result, NotConvertible):
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nur ein offener Lernvorschlag (lesson, pending) wird ein Fall.",
+                reason="memory_not_convertible",
+                params={"kind": result.kind.value, "status": result.status.value},
+            )
+        return result
+
+    async def promote_feedback(
+        self, ctx: WorkspaceContext, feedback_id: UUID, data: CaseCreate
+    ) -> CaseRead:
+        """`POST /feedback/{feedback_id}/promote` (6.5, 5.2): Alt-Feedback -> Fall.
+
+        Einzeln durch einen Menschen (Owner F1 = a, kein Massen-Umbau). Nur
+        offenes Feedback; das Alt-Feedback bekommt `addressed` mit Verweis.
+        Ein Alt-Feedback betrifft ein Element, nicht zwingend einen Agenten —
+        den Agenten des Falls nennt deshalb der Mensch (`data.agent_id`).
+        """
+        self._require_human_editor(ctx, "Ein Feedback in einen Fall uebernehmen")
+        if not await self._repo.agent_exists(ctx.workspace_id, data.agent_id):
+            raise _agent_not_found()
+        result = await self._repo.promote_feedback(
+            ctx.workspace_id, feedback_id, data, actor_id=ctx.user_id
+        )
+        if result is None:
+            # Gleicher Grund wie `FeedbackService` fuer ein unbekanntes Feedback.
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Element nicht gefunden.",
+                reason="feedback_element_not_found",
+            )
+        if isinstance(result, NotPromotable):
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nur ein offenes Feedback (noch nicht triagiert) wird ein Fall.",
+                reason="feedback_not_promotable",
+                params={"resolution": result.resolution},
+            )
+        return result
 
     # --- Loeschen ----------------------------------------------------------
 

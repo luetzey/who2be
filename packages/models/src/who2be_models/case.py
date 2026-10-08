@@ -168,6 +168,31 @@ class CaseCreate(BaseModel):
     )
 
 
+class CaseConvertRequest(BaseModel):
+    """Eingabe fuer „Lernvorschlag -> Fall“ (`convert`, ADR-0053 6.4).
+
+    Die Fall-Felder aus `CaseCreate` ohne `agent_id`: der Agent kommt aus dem
+    Lernvorschlag (ein Lernvorschlag ist die Lehre eines Agenten ueber sich
+    selbst, 3.1.6; der Composite-FK aus 0100 verlangt denselben Agenten).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    situation: str = Field(min_length=1, max_length=CASE_SITUATION_MAX_LENGTH)
+    behavior: str = Field(min_length=1, max_length=CASE_BEHAVIOR_MAX_LENGTH)
+    impact: str | None = Field(default=None, min_length=1, max_length=CASE_IMPACT_MAX_LENGTH)
+    expected_behavior: str = Field(min_length=1, max_length=CASE_EXPECTED_MAX_LENGTH)
+    severity: CaseSeverity = CaseSeverity.medium
+    signal: FeedbackSignal | None = None
+    source_ref: str | None = Field(
+        default=None, min_length=1, max_length=CASE_SOURCE_REF_MAX_LENGTH
+    )
+
+    def for_agent(self, agent_id: UUID) -> CaseCreate:
+        """Dieselben Felder als `CaseCreate` fuer den Agenten des Lernvorschlags."""
+        return CaseCreate(agent_id=agent_id, **self.model_dump())
+
+
 class CaseRead(BaseModel):
     """Ein Fall mit abgeleitetem Status."""
 

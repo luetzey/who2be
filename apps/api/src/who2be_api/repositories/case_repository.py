@@ -8,6 +8,10 @@ Der Status eines Falls ist keine Spalte: er ist das juengste Status-Event
 beruehrt, schreibt sein Event in DERSELBEN Transaktion:
 
 - `create_case`: Fall + `reported`.
+- `convert_lesson`: Lernvorschlag -> Fall (6.4): Fall + `reported`,
+  Eintrag `converted` mit `converted_case_id`, Gedaechtnis-Event `converted`.
+- `promote_feedback`: Alt-Feedback -> Fall (6.5, 5.2): Fall + `reported`,
+  Triage-Ereignis `addressed` mit Verweis `case:<id>` am Alt-Feedback.
 - `append_event`: ein Status-Event.
 - `append_transition`: ein Status-Event unter der Fall-Sperre, nur wenn der
   vom Service gepruefte Ausgangsstatus (und bei `triaged` die Zuordnung)
@@ -40,13 +44,23 @@ transaktionsgebundene Advisory-Sperre je Fall.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
-from who2be_api.repositories.memory_repository import MEMORY_DELETED_AUDIT_ACTION
+# `_READ_COLUMNS` und `_insert_human_event` bewusst aus dem Gedaechtnis-
+# Repository: EINE Quelle fuer Spaltenliste und Event-Form (3.1.2), damit
+# `converted` nicht anders aussieht als `approved`/`rejected`.
+from who2be_api.repositories.memory_repository import (
+    _READ_COLUMNS as _MEMORY_COLUMNS,
+)
+from who2be_api.repositories.memory_repository import (
+    MEMORY_DELETED_AUDIT_ACTION,
+    _insert_human_event,
+)
 from who2be_models import (
     CASE_STATUS_EVENTS,
     CaseActorKind,
@@ -65,9 +79,36 @@ from who2be_models import (
     CaseStatus,
     CaseTarget,
     EntityType,
+    FeedbackResolution,
+    MemoryEventKind,
+    MemoryKind,
+    MemoryRead,
+    MemoryStatus,
 )
+from who2be_models.case import CaseConvertRequest
 
 CASE_DELETED_AUDIT_ACTION = "case.deleted"
+
+# Verweis im `note` des Triage-Ereignisses, wenn ein Alt-Feedback in einen
+# Fall uebernommen wurde (ADR-0053 5.2): `case:<uuid>`, sprachneutral und
+# maschinenlesbar.
+PROMOTED_NOTE_PREFIX = "case:"
+
+
+@dataclass(frozen=True)
+class NotConvertible:
+    """Eintrag existiert, ist aber kein offener Lernvorschlag (convert -> 409)."""
+
+    kind: MemoryKind
+    status: MemoryStatus
+
+
+@dataclass(frozen=True)
+class NotPromotable:
+    """Alt-Feedback existiert, ist aber schon triagiert (promote -> 409)."""
+
+    resolution: str
+
 
 # Zuordnungsziel -> Tabelle (fest, nie aus Eingaben). `tool_policy` und
 # `model_limit` haben keine `entity_id` und fehlen deshalb.
@@ -187,6 +228,25 @@ class CaseRepository(Protocol):
 
     async def get_case(self, workspace_id: UUID, case_id: UUID) -> CaseRead | None: ...
 
+    async def convert_lesson(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        memory_id: UUID,
+        data: CaseConvertRequest,
+        *,
+        actor_id: UUID,
+    ) -> CaseRead | NotConvertible | None: ...
+
+    async def promote_feedback(
+        self,
+        workspace_id: UUID,
+        feedback_id: UUID,
+        data: CaseCreate,
+        *,
+        actor_id: UUID,
+    ) -> CaseRead | NotPromotable | None: ...
+
     async def get_detail(self, workspace_id: UUID, case_id: UUID) -> CaseDetail | None: ...
 
     async def list_cases(
@@ -282,45 +342,134 @@ class PgCaseRepository:
         source_memory_id: UUID | None = None,
     ) -> CaseRead:
         """Legt Fall und `reported`-Event atomar an (Status `open`)."""
-        actor_kind, actor_id = _reporter_actor(reporter_kind, reporter_user_id, reporter_agent_id)
         async with self._pool.acquire() as conn, conn.transaction():
-            case_id: UUID = await conn.fetchval(
-                "INSERT INTO agent_case "
-                "(workspace_id, agent_id, reporter_kind, reporter_user_id, reporter_agent_id, "
-                " situation, behavior, impact, expected_behavior, severity, signal, source_ref, "
-                " source_feedback_id, source_memory_id) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) "
-                "RETURNING id",
-                workspace_id,
-                data.agent_id,
-                reporter_kind.value,
-                reporter_user_id,
-                reporter_agent_id,
-                data.situation,
-                data.behavior,
-                data.impact,
-                data.expected_behavior,
-                data.severity.value,
-                data.signal.value if data.signal is not None else None,
-                data.source_ref,
-                source_feedback_id,
-                source_memory_id,
-            )
-            await _insert_event(
+            return await _create_case_in(
                 conn,
                 workspace_id,
-                case_id,
-                CaseEventKind.reported,
-                actor_kind,
-                actor_id,
+                data,
+                reporter_kind=reporter_kind,
+                reporter_user_id=reporter_user_id,
+                reporter_agent_id=reporter_agent_id,
+                source_feedback_id=source_feedback_id,
+                source_memory_id=source_memory_id,
             )
-            row = await conn.fetchrow(
-                f"SELECT * FROM {_CASES_WITH_STATUS} WHERE workspace_id = $1 AND id = $2",
+
+    async def convert_lesson(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        memory_id: UUID,
+        data: CaseConvertRequest,
+        *,
+        actor_id: UUID,
+    ) -> CaseRead | NotConvertible | None:
+        """Lernvorschlag -> Fall (ADR-0053 6.4), alles in EINER Transaktion.
+
+        Liest den Eintrag besitzer-gebunden `FOR UPDATE`; nur `lesson` mit
+        `status='pending'` wird umgewandelt. Dann: Fall mit
+        `source_memory_id` + `reported` (Melder = der umwandelnde Mensch),
+        Eintrag auf `converted` mit `converted_case_id` (CHECK aus 0091), und
+        das Gedaechtnis-Event `converted` (3.1.2, Mensch, `before`/`after`).
+        Bricht ein Schritt ab, bleibt nichts davon stehen.
+
+        None: kein Eintrag dieses Agenten. `NotConvertible`: Eintrag da, aber
+        kein offener Lernvorschlag (der Service antwortet 409).
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            before_row = await conn.fetchrow(
+                f"SELECT {_MEMORY_COLUMNS} FROM agent_memory "
+                "WHERE workspace_id = $1 AND agent_id = $2 AND id = $3 FOR UPDATE",
                 workspace_id,
-                case_id,
+                agent_id,
+                memory_id,
             )
-        assert row is not None  # in derselben Transaktion angelegt
-        return _case(row)
+            if before_row is None:
+                return None
+            before = MemoryRead.model_validate(dict(before_row))
+            if before.kind is not MemoryKind.lesson or before.status is not MemoryStatus.pending:
+                return NotConvertible(kind=before.kind, status=before.status)
+            case = await _create_case_in(
+                conn,
+                workspace_id,
+                data.for_agent(agent_id),
+                reporter_kind=CaseReporterKind.human,
+                reporter_user_id=actor_id,
+                reporter_agent_id=None,
+                source_memory_id=memory_id,
+            )
+            after_row = await conn.fetchrow(
+                "UPDATE agent_memory SET status = 'converted', converted_case_id = $3, "
+                "updated_at = now() "
+                f"WHERE workspace_id = $1 AND id = $2 RETURNING {_MEMORY_COLUMNS}",
+                workspace_id,
+                memory_id,
+                case.id,
+            )
+            assert after_row is not None  # Zeile ist gesperrt
+            after = MemoryRead.model_validate(dict(after_row))
+            await _insert_human_event(
+                conn, workspace_id, before, MemoryEventKind.converted, actor_id, None, after
+            )
+        return case
+
+    async def promote_feedback(
+        self,
+        workspace_id: UUID,
+        feedback_id: UUID,
+        data: CaseCreate,
+        *,
+        actor_id: UUID,
+    ) -> CaseRead | NotPromotable | None:
+        """Alt-Feedback -> Fall (ADR-0053 6.5, 5.2), alles in EINER Transaktion.
+
+        Nur ein offenes Feedback (kein Triage-Ereignis) wird uebernommen. Dann:
+        Fall mit `source_feedback_id` + `reported` (Melder = der Mensch, der
+        uebernimmt) und ein Triage-Ereignis `addressed` am Alt-Feedback mit dem
+        Verweis `case:<id>` im `note`. Das Alt-Feedback selbst bleibt
+        unveraendert (append-only, 0053/0054).
+
+        Serialisiert ueber eine Advisory-Sperre je Feedback: `who2be_app` hat
+        auf `agent_feedback` kein UPDATE und damit kein `FOR UPDATE`. So kann
+        dasselbe Feedback nicht zweimal uebernommen werden.
+
+        None: kein Feedback in diesem Workspace. `NotPromotable`: schon
+        triagiert (der Service antwortet 409).
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+                f"feedback:{feedback_id}",
+            )
+            found = await conn.fetchrow(
+                "SELECT (SELECT r.resolution FROM feedback_resolution r "
+                "   WHERE r.workspace_id = f.workspace_id AND r.feedback_id = f.id "
+                "   ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS resolution "
+                "FROM agent_feedback f WHERE f.workspace_id = $1 AND f.id = $2",
+                workspace_id,
+                feedback_id,
+            )
+            if found is None:
+                return None
+            if found["resolution"] is not None:
+                return NotPromotable(resolution=found["resolution"])
+            case = await _create_case_in(
+                conn,
+                workspace_id,
+                data,
+                reporter_kind=CaseReporterKind.human,
+                reporter_user_id=actor_id,
+                reporter_agent_id=None,
+                source_feedback_id=feedback_id,
+            )
+            await _insert_resolution(
+                conn,
+                workspace_id,
+                feedback_id,
+                actor_id,
+                FeedbackResolution.addressed,
+                f"{PROMOTED_NOTE_PREFIX}{case.id}",
+            )
+        return case
 
     async def get_case(self, workspace_id: UUID, case_id: UUID) -> CaseRead | None:
         row = await self._pool.fetchrow(
@@ -704,6 +853,71 @@ class PgCaseRepository:
 async def _lock_case(conn: asyncpg.Connection, case_id: UUID) -> None:
     """Transaktionsgebundene Sperre je Fall (Zuordnung und Uebergaenge)."""
     await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))", case_id)
+
+
+async def _create_case_in(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    data: CaseCreate,
+    *,
+    reporter_kind: CaseReporterKind,
+    reporter_user_id: UUID | None,
+    reporter_agent_id: UUID | None,
+    source_feedback_id: UUID | None = None,
+    source_memory_id: UUID | None = None,
+) -> CaseRead:
+    """Fall + `reported`-Event in der Transaktion von `conn` (Melden, convert, promote)."""
+    actor_kind, actor_id = _reporter_actor(reporter_kind, reporter_user_id, reporter_agent_id)
+    case_id: UUID = await conn.fetchval(
+        "INSERT INTO agent_case "
+        "(workspace_id, agent_id, reporter_kind, reporter_user_id, reporter_agent_id, "
+        " situation, behavior, impact, expected_behavior, severity, signal, source_ref, "
+        " source_feedback_id, source_memory_id) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) "
+        "RETURNING id",
+        workspace_id,
+        data.agent_id,
+        reporter_kind.value,
+        reporter_user_id,
+        reporter_agent_id,
+        data.situation,
+        data.behavior,
+        data.impact,
+        data.expected_behavior,
+        data.severity.value,
+        data.signal.value if data.signal is not None else None,
+        data.source_ref,
+        source_feedback_id,
+        source_memory_id,
+    )
+    await _insert_event(conn, workspace_id, case_id, CaseEventKind.reported, actor_kind, actor_id)
+    row = await conn.fetchrow(
+        f"SELECT * FROM {_CASES_WITH_STATUS} WHERE workspace_id = $1 AND id = $2",
+        workspace_id,
+        case_id,
+    )
+    assert row is not None  # in derselben Transaktion angelegt
+    return _case(row)
+
+
+async def _insert_resolution(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    feedback_id: UUID,
+    actor_id: UUID,
+    resolution: FeedbackResolution,
+    note: str,
+) -> None:
+    """Triage-Ereignis am Alt-Feedback (append-only, Migration 0054)."""
+    await conn.execute(
+        "INSERT INTO feedback_resolution (workspace_id, feedback_id, actor_id, resolution, note) "
+        "VALUES ($1, $2, $3, $4, $5)",
+        workspace_id,
+        feedback_id,
+        actor_id,
+        resolution.value,
+        note,
+    )
 
 
 async def _case_exists(conn: asyncpg.Connection, workspace_id: UUID, case_id: UUID) -> bool:
