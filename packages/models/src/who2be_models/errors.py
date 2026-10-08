@@ -196,6 +196,12 @@ ProblemReason = Literal[
     # Beide 409 tragen den Pruefbericht in `params` (Zaehler flach, Bericht unter `report`).
     "test_results_incomplete",  # 409 — ohne Bestaetigung trotz roter/fehlender Ergebnisse
     "test_override_reason_required",  # 409 — bestaetigt, aber `override_reason` fehlt/leer
+    # Lernschleife Phase D — Faelle (ADR-0053 6.1/6.5, Paket D2a):
+    "case_not_found",  # 404 — Fall unbekannt oder fuer den Aufrufer nicht lesbar
+    # 409 — Uebergang nach 3.3 nicht erlaubt oder Pflichtfeld fehlt (params: from, to[, missing])
+    "case_transition_forbidden",
+    "case_transition_human_only",  # 403 — Agent-Token will addressed/verified/dismissed setzen
+    "case_statement_not_subject",  # 403 — Schilderung nicht vom betroffenen Agenten
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

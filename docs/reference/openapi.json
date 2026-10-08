@@ -15551,7 +15551,11 @@
               "test_subject_version_not_found",
               "test_run_verdict_inconsistent",
               "test_results_incomplete",
-              "test_override_reason_required"
+              "test_override_reason_required",
+              "case_not_found",
+              "case_transition_forbidden",
+              "case_transition_human_only",
+              "case_statement_not_subject"
             ],
             "title": "Reason"
           },
