@@ -231,6 +231,87 @@ def test_list_filters_each_narrow_the_result(world: _World) -> None:
     assert counts.json()["open"] == 1 and counts.json()["triaged"] == 1
 
 
+def _reopen(w: _World, case_id: str, playbook: str) -> None:
+    """open -> triaged -> addressed -> reopened ueber die echten Uebergaenge."""
+    versions = w.client.get(f"{w.base}/playbooks/{playbook}/versions", headers=w.auth)
+    assert versions.status_code == 200, versions.text
+    version_id = versions.json()[0]["id"]
+    assert (
+        w.put_elements(case_id, [{"target": "playbook", "entity_id": playbook}]).status_code == 200
+    )
+    steps: list[dict[str, Any]] = [
+        {"to": "triaged"},
+        {"to": "addressed", "version_entity_type": "playbook", "version_id": version_id},
+        {"to": "reopened", "note": "wieder aufgetreten"},
+    ]
+    for step in steps:
+        res = w.transition(case_id, step)
+        assert res.status_code == 200, res.text
+    assert (
+        w.client.get(f"{w.base}/cases/{case_id}", headers=w.auth).json()["case"]["status"]
+        == "reopened"
+    )
+
+
+def test_status_filter_accepts_several_values(world: _World) -> None:
+    """Chip "Offen" der Fall-Liste (Phase D) = open + reopened, serverseitig gefiltert.
+
+    Drei Status im Bestand (open, triaged, reopened): der Mehrfachfilter
+    liefert genau open und reopened, also weder alles noch nur einen Wert.
+    """
+    w = world
+    agent_id, _ = w.agent("A")
+    playbook = w.playbook("PB")
+    opened = w.report(w.auth, _case_body(agent_id, "offen"))["id"]
+    triaged = w.report(w.auth, _case_body(agent_id, "triagiert"))["id"]
+    reopened = w.report(w.auth, _case_body(agent_id, "wieder offen"))["id"]
+    assert w.put_elements(triaged, [{"target": "model_limit"}]).status_code == 200
+    assert w.transition(triaged, {"to": "triaged"}).status_code == 200
+    _reopen(w, reopened, playbook)
+
+    unfiltered = set(w.ids(w.auth))
+    assert unfiltered == {opened, triaged, reopened}
+    both = w.ids(w.auth, status=["open", "reopened"])
+    assert set(both) == {opened, reopened}
+    assert len(both) == 2
+    assert set(both) != unfiltered
+    # Einzelwert wirkt wie bisher (MCP `list_cases` sendet genau einen).
+    assert w.ids(w.auth, status="open") == [opened]
+    assert w.ids(w.auth, status="reopened") == [reopened]
+    assert set(both) != {opened}
+    # Ein ungueltiger Wert in der Liste ist 422, kein stilles Ignorieren.
+    bad = w.client.get(f"{w.base}/cases", params={"status": ["open", "bogus"]}, headers=w.auth)
+    assert bad.status_code == 422
+
+
+def test_status_filter_with_several_values_paginates(world: _World) -> None:
+    """Keyset-Cursor ueber die Seitengrenze mit Mehrfachfilter; triaged bleibt aussen vor."""
+    w = world
+    agent_id, _ = w.agent("A")
+    playbook = w.playbook("PB")
+    reopened = w.report(w.auth, _case_body(agent_id, "wieder offen"))["id"]
+    _reopen(w, reopened, playbook)
+    triaged = w.report(w.auth, _case_body(agent_id, "triagiert"))["id"]
+    assert w.put_elements(triaged, [{"target": "model_limit"}]).status_code == 200
+    assert w.transition(triaged, {"to": "triaged"}).status_code == 200
+    opened = [w.report(w.auth, _case_body(agent_id, f"offen {i}"))["id"] for i in range(2)]
+    wanted = {reopened, *opened}
+
+    params: dict[str, Any] = {"status": ["open", "reopened"], "limit": 2}
+    first = w.client.get(f"{w.base}/cases", params=params, headers=w.auth)
+    assert first.status_code == 200, first.text
+    assert len(first.json()) == 2
+    cursor = first.headers.get("X-Next-Cursor")
+    assert cursor
+    second = w.client.get(f"{w.base}/cases", params={**params, "cursor": cursor}, headers=w.auth)
+    assert second.status_code == 200, second.text
+    assert "X-Next-Cursor" not in second.headers
+    seen = [c["id"] for c in first.json()] + [c["id"] for c in second.json()]
+    assert len(seen) == len(set(seen)) == 3
+    assert set(seen) == wanted
+    assert triaged not in seen
+
+
 def test_keyset_pagination_via_header(world: _World) -> None:
     w = world
     agent_id, _ = w.agent("A")

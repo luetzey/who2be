@@ -331,7 +331,7 @@ class CaseService:
         ctx: WorkspaceContext,
         *,
         agent_id: UUID | None = None,
-        status_filter: CaseStatus | None = None,
+        status_filter: Sequence[CaseStatus] | None = None,
         target: CaseTarget | None = None,
         limit: int = 50,
         cursor: tuple[datetime, UUID] | None = None,
