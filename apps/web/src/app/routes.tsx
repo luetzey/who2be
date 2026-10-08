@@ -159,6 +159,12 @@ const ReportProblemPage = lazy(() =>
     default: mod.ReportProblemPage,
   })),
 )
+// Delta-Spec S6 „390 px“ (D6c′): Vollbild-Variante von „Fall melden“.
+const ReportCasePage = lazy(() =>
+  import('@/features/feedback/pages/FeedbackComposePages').then((mod) => ({
+    default: mod.ReportCasePage,
+  })),
+)
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
@@ -376,7 +382,9 @@ export function RouterRoot() {
                   element={<FeedbackItemDetailPage />}
                 />
                 {/* Literal `cases`-Segment (D6c), wie `item` vor
-                    `:entityType/:entityId`. */}
+                    `:entityType/:entityId`; `new` (D6c′, Melden-Seite unter
+                    `md`) vor `:caseId`. */}
+                <Route path="/w/:workspaceId/feedback/cases/new" element={<ReportCasePage />} />
                 <Route
                   path="/w/:workspaceId/feedback/cases/:caseId"
                   element={<CaseDetailPage />}

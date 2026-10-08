@@ -5,6 +5,7 @@ import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from '
 
 import type { FeedbackTarget } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { ReportCaseFlow, type ReportCaseState } from '@/components/cases/ReportCaseForm'
 import {
   GiveFeedbackForm,
   type FeedbackComposeState,
@@ -19,7 +20,8 @@ import { ReportProblemForm } from '../components/ReportProblemDialog'
 import { DETAIL_SEGMENT } from '../lib/entityMeta'
 
 // Mobil-Spec W4=b (R-P3): „Feedback geben“ und „Problem melden“ unterhalb
-// `md` als eigene Vollbildseite statt Dialog. Ab `md` oeffnen die Ausloeser
+// `md` als eigene Vollbildseite statt Dialog; „Fall melden“ ebenso (Delta-Spec
+// S6 „390 px“, D6c′). Ab `md` oeffnen die Ausloeser
 // weiter den Dialog; die Routen selbst funktionieren auf jeder Breite
 // (Deep-Link, Drehen des Geraets).
 //
@@ -146,5 +148,57 @@ export function ReportProblemPage() {
         }
       />
     </ComposeShell>
+  )
+}
+
+// Knopfleiste der Melden-Seite unten fixiert (Delta-Spec S6 „390 px“): bleibt
+// beim Scrollen durch lange Felder erreichbar; Abstand fuer die Home-Leiste.
+function StickyFooter({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-testid="report-case-footer"
+      className="sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t bg-background pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end"
+    >
+      {children}
+    </div>
+  )
+}
+
+/**
+ * Vollbildseite „Fall melden“ (`/feedback/cases/new?agent=<id>`, Delta-Spec
+ * S6 „390 px“, D6c′). Ausloeser ist `ReportCaseDialog` unter `md`. Kommt der
+ * Name des Agenten ueber den Navigations-State, ist er fest (Einstieg
+ * Agent-Detail); bei einem Deep-Link ist `?agent=` nur eine Vorauswahl.
+ * Zurueck, Abbrechen und Erfolg verlassen die Seite wie die anderen
+ * Vollbildseiten; ohne Herkunft geht es zur Fall-Liste.
+ */
+export function ReportCasePage() {
+  const { t } = useTranslation('feedback')
+  const wsPath = useWorkspacePath()
+  const location = useLocation()
+  const [params] = useSearchParams()
+  const agentId = params.get('agent') ?? undefined
+  const agentName = (location.state as ReportCaseState | null)?.agentName
+  const leave = useLeave(wsPath('/feedback?tab=cases'))
+  const fixed =
+    agentId !== undefined && agentName !== undefined ? { id: agentId, name: agentName } : undefined
+
+  return (
+    <ReportCaseFlow
+      agent={fixed}
+      presetAgentId={fixed === undefined ? agentId : undefined}
+      onClose={leave}
+      Footer={StickyFooter}
+      frame={({ body, discard, requestClose }) => (
+        <ComposeShell
+          title={t('cases.report.title')}
+          description={t('cases.report.intro')}
+          onLeave={requestClose}
+        >
+          {body}
+          {discard}
+        </ComposeShell>
+      )}
+    />
   )
 }
