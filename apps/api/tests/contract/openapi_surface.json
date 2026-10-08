@@ -241,6 +241,46 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/cases",
+    "operationId": "list_cases_v1_workspaces__workspace_id__cases_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/cases",
+    "operationId": "report_case_v1_workspaces__workspace_id__cases_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/cases/counts",
+    "operationId": "count_cases_v1_workspaces__workspace_id__cases_counts_get"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/cases/{case_id}",
+    "operationId": "delete_case_v1_workspaces__workspace_id__cases__case_id__delete"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/cases/{case_id}",
+    "operationId": "get_case_v1_workspaces__workspace_id__cases__case_id__get"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/cases/{case_id}/elements",
+    "operationId": "replace_case_elements_v1_workspaces__workspace_id__cases__case_id__elements_put"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/cases/{case_id}/statement",
+    "operationId": "add_case_statement_v1_workspaces__workspace_id__cases__case_id__statement_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/cases/{case_id}/transition",
+    "operationId": "transition_case_v1_workspaces__workspace_id__cases__case_id__transition_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/dashboard",
     "operationId": "get_dashboard_v1_workspaces__workspace_id__dashboard_get"
   },

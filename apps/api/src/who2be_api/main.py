@@ -43,6 +43,7 @@ from who2be_api.licensing.edition import is_cloud, is_onprem
 from who2be_api.repositories.workspace_repository import sync_managed_builder_content
 from who2be_api.routers import (
     agents,
+    cases,
     dashboard,
     entitlement,
     external_tools,
@@ -511,6 +512,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
     # Pruefaelle/Prueflaeufe (ADR-0053 6.2, Lernschleife B2).
     app.include_router(test_cases.router, prefix=_WORKSPACE_PREFIX)
+    # Faelle (ADR-0053 6.5, Lernschleife D2b).
+    app.include_router(cases.router, prefix=_WORKSPACE_PREFIX)
     # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
     # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
     # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der

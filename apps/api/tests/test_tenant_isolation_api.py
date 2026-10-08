@@ -389,6 +389,35 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/versions/{{entity_type}}/{{version_id}}/test-report": Probe(
         path={"entity_type": "persona"}
     ),
+    # --- Faelle (ADR-0053 6.5, D2b) ----------------------------------------
+    # `case_id` ist im Bestand der Pruefall; der Fall heisst `agent_case_id`
+    # und entsteht in `_case_extras` (ueber den betroffenen Mandanten-Agenten).
+    f"POST {_WS}/cases": Probe(
+        body={
+            "agent_id": "<<agent_id>>",
+            "situation": "iso",
+            "behavior": "x",
+            "expected_behavior": "x",
+        }
+    ),
+    f"GET {_WS}/cases": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
+    f"GET {_WS}/cases/counts": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
+    f"GET {_WS}/cases/{{case_id}}": Probe(path={"case_id": "agent_case_id"}),
+    f"DELETE {_WS}/cases/{{case_id}}": Probe(path={"case_id": "agent_case_id"}),
+    f"POST {_WS}/cases/{{case_id}}/transition": Probe(
+        body={"to": "dismissed", "note": "iso"}, path={"case_id": "agent_case_id"}
+    ),
+    # Mischform: eigener Fall, fremdes Playbook -> 404 wie ein unbekanntes.
+    f"PUT {_WS}/cases/{{case_id}}/elements": Probe(
+        body={"elements": [{"target": "playbook", "entity_id": "<<playbook_id>>"}]},
+        path={"case_id": "agent_case_id"},
+    ),
+    # Nur der betroffene Agent schildert; der Fall ist ueber den Mandanten-Agenten.
+    f"POST {_WS}/cases/{{case_id}}/statement": Probe(
+        body={"followed_instruction": "iso", "missing_information": "", "conflict": ""},
+        path={"case_id": "agent_case_id"},
+        agent=True,
+    ),
     # --- Platzhalter / Suche -----------------------------------------------
     f"GET {_WS}/placeholders": Probe(),
     f"GET {_WS}/placeholders/preview": Probe(
@@ -612,7 +641,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "persona_id", "playbook_id", "resource_id", "tool_id", "template_id", "agent_id",
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
-        "own_invitation_id", "user_memory_id", "proposal_id",
+        "own_invitation_id", "user_memory_id", "proposal_id", "agent_case_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -825,6 +854,30 @@ def _memory_extras(ghost: Tenant, *tenants: Tenant) -> None:
         ghost.ids[key] = str(uuid4())
 
 
+def _case_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
+    """Ein Fall je Mandant (ADR-0053 3.3), gemeldet vom Menschen ueber den Agenten.
+
+    Ueber `POST /cases` statt direkt in die DB, damit der `reported`-Eintrag
+    im Verlauf so entsteht wie im Betrieb. Lage und Verhalten tragen den
+    Marker; der Agent ist der Mandanten-Agent, damit dessen Token die
+    Schilderung abgeben darf (Gegenprobe).
+    """
+    for t in tenants:
+        res = client.post(
+            f"/v1/workspaces/{t.workspace_id}/cases",
+            json={
+                "agent_id": t.ids["agent_id"],
+                "situation": f"{t.marker} Lage",
+                "behavior": f"{t.marker} Verhalten",
+                "expected_behavior": "x",
+            },
+            headers=t.human,
+        )
+        assert res.status_code == 201, res.text
+        t.ids["agent_case_id"] = res.json()["id"]
+    ghost.ids["agent_case_id"] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -914,6 +967,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
     _confirm_accounts(a, b)
     _own_invitations(ghost, a, b)
     _memory_extras(ghost, a, b)
+    _case_extras(client, ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():

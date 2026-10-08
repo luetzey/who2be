@@ -159,6 +159,21 @@
       "reason": "Statuswechsel an einem bestehenden Memory (approve/reject), legt nichts Neues an."
     },
     {
+      "path": "/cases",
+      "name": "report_case",
+      "reason": "Faelle zaehlen in keinem Plan-Kontingent (wie Feedback, aus dem sie hervorgehen); Agenten brauchen feedback_write und laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
+      "path": "/cases/{case_id}/statement",
+      "name": "add_case_statement",
+      "reason": "Append-only-Schilderung zu einem bestehenden Fall, nur durch den betroffenen Agenten; gebremst durch das Agent-Schreiblimit und write_limit."
+    },
+    {
+      "path": "/cases/{case_id}/transition",
+      "name": "transition_case",
+      "reason": "Statuswechsel eines bestehenden Falls (ein Event), legt kein neues Objekt an."
+    },
+    {
       "path": "/external_tools/{tool_id}/versions/{version}/restore",
       "name": "restore_external_tool_version",
       "reason": "Legt eine neue VERSION einer bestehenden Entity an, keine neue Entity; Versionen zaehlen in keinem Kontingent."
