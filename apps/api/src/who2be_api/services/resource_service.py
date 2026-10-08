@@ -21,6 +21,7 @@ from who2be_api.core.security import (
     require_write_rate,
     require_write_tags,
 )
+from who2be_api.repositories.feedback_repository import record_server_usage
 from who2be_api.repositories.playbook_resource_link_repository import (
     _heading_level,
     block_plain_text,
@@ -284,6 +285,27 @@ class ResourceService:
         )
         if resource is None:
             raise _not_found()
+        return resource
+
+    async def retrieve(self, ctx: WorkspaceContext, resource_id: UUID) -> ResourceRead:
+        """Resource-Abruf von aussen (`GET /resources/{id}`, MCP `fetch_resource`).
+
+        Wie `get`, zeichnet aber die Auslieferung serverseitig als Nutzung auf
+        (ADR-0053 3.4): nach dem Lesen, nur fuer agent-gebundene Aufrufer,
+        best-effort. Bewusst eine eigene Methode — `get` lesen auch interne
+        Pfade (`duplicate`, `list_blocks`, Tag-Pruefung beim Update,
+        WorkArea-Promote); die sind keine Nutzung durch einen Agenten.
+        """
+        resource = await self.get(ctx, resource_id)
+        await record_server_usage(
+            self._pool,
+            ctx.workspace_id,
+            ctx.agent_id,
+            ctx.user_id,
+            entity_type="resource",
+            entity_id=resource.id,
+            version=resource.current_version,
+        )
         return resource
 
     async def list_blocks(
