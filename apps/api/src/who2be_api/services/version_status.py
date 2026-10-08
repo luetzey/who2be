@@ -693,7 +693,7 @@ class VersionStatusService:
                     )
 
             # Review-Ersetzung (Karte t_6ee15ca8): hoechstens EINE Review pro
-            # Entity (Partial-Unique-Index aus 0011). Liegt schon eine andere
+            # Entity (per-entity Partial-Unique-Index, Migration 0069). Liegt schon eine andere
             # Version in `review`, wird sie beim Einreichen der neuen ersetzt
             # (`inactive`) — analog zur Active-Promotion oben. Ohne diesen
             # Schritt verklemmt ein offener Draft neben einer offenen Review:
