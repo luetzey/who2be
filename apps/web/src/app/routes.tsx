@@ -142,6 +142,12 @@ const FeedbackItemDetailPage = lazy(() =>
     default: mod.FeedbackItemDetailPage,
   })),
 )
+// ADR-0053 D6c: Fall-Detail (lesend, Loeschen ab editor).
+const CaseDetailPage = lazy(() =>
+  import('@/features/feedback/pages/CaseDetailPage').then((mod) => ({
+    default: mod.CaseDetailPage,
+  })),
+)
 // Mobil-Spec W4=b: Vollbild-Varianten von „Feedback geben“/„Problem melden“.
 const GiveFeedbackPage = lazy(() =>
   import('@/features/feedback/pages/FeedbackComposePages').then((mod) => ({
@@ -368,6 +374,12 @@ export function RouterRoot() {
                 <Route
                   path="/w/:workspaceId/feedback/item/:feedbackId"
                   element={<FeedbackItemDetailPage />}
+                />
+                {/* Literal `cases`-Segment (D6c), wie `item` vor
+                    `:entityType/:entityId`. */}
+                <Route
+                  path="/w/:workspaceId/feedback/cases/:caseId"
+                  element={<CaseDetailPage />}
                 />
                 {/* Mobil-Spec W4=b: Vollbildseiten unter `md` (Ausloeser in
                     GiveFeedbackDialog/ReportProblemDialog). `give` hat drei

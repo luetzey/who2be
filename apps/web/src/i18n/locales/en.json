@@ -2481,7 +2481,9 @@
         "emptyViewerDescription": "If an agent should do something differently, report it here. You'll see what comes of it.",
         "emptyFiltered": "No case matches these filters.",
         "loadError": "Cases couldn't be loaded.",
-        "loadMore": "Load more"
+        "loadMore": "Load more",
+        "emptyOpenViewerDescription": "Every case you reported has been triaged, addressed or dismissed.",
+        "showAll": "Show all my cases"
       },
       "status": {
         "open": "Open",
@@ -2513,6 +2515,59 @@
         "tool_policy": "Tool permissions",
         "memory": "Memory",
         "model_limit": "Model limit"
+      },
+      "detail": {
+        "title": "Case · {{agent}}",
+        "reported": "reported on {{date}}",
+        "back": "Cases",
+        "actions": "Case actions",
+        "copyId": "Copy ID",
+        "idCopied": "ID copied.",
+        "contentAria": "Case content",
+        "immutable": "A case keeps the content it was reported with. Additions appear in the history.",
+        "block": {
+          "situation": "Situation",
+          "behavior": "What it did",
+          "expected": "Expected",
+          "impact": "Impact"
+        },
+        "statement": {
+          "title": "The agent's account",
+          "badge": "Self-report, not a judgement",
+          "followed": "Followed",
+          "missing": "Missing",
+          "conflict": "Conflict"
+        },
+        "assignment": {
+          "title": "Assignment",
+          "none": "Not assigned to a building block yet."
+        },
+        "notFound": "This case doesn't exist (anymore).",
+        "toList": "Back to cases"
+      },
+      "history": {
+        "title": "History",
+        "event": {
+          "reported": "Reported",
+          "triaged": "Triaged",
+          "addressed": "Addressed with {{element}} v{{version}}",
+          "dismissed": "Dismissed: {{note}}",
+          "reopened": "Reopened: {{note}}",
+          "element_assigned": "Assigned: {{element}}",
+          "element_unassigned": "Assignment removed: {{element}}",
+          "statement": "Agent's account received",
+          "unknown": "Change"
+        }
+      },
+      "delete": {
+        "action": "Delete case…",
+        "title": "Delete case?",
+        "body": "The case is permanently deleted together with its content, history, assignment and the agent's account. Only a log entry without content remains, recording that it was deleted. This can't be undone.",
+        "lesson": "The learning suggestion this case came from is deleted as well.",
+        "testCases": "Test cases created from this case are kept.",
+        "confirm": "Delete permanently",
+        "success": "Case deleted.",
+        "error": "The case couldn't be deleted."
       }
     }
   },

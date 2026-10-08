@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { Agent, CaseCounts, CaseRead, CaseStatus, CaseTarget } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ReportCaseDialog } from '@/components/cases/ReportCaseForm'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
@@ -99,7 +100,7 @@ function messageOf(cause: unknown): string {
  * Zaehler zusammenpassen (Delta-Spec S7). Eine Generation verwirft spaete
  * Antworten nach einem Filterwechsel.
  */
-function useCaseList(query: CaseQuery): CaseListData {
+function useCaseList(query: CaseQuery, enabled: boolean): CaseListData {
   const api = useApi()
   const [items, setItems] = useState<CaseRead[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -122,6 +123,9 @@ function useCaseList(query: CaseQuery): CaseListData {
   )
 
   useEffect(() => {
+    // Erst laden, wenn die Rolle bekannt ist: sonst liefe ein erster Abruf mit
+    // den viewer-Filtern und gleich danach ein zweiter (D6b-Review, Nit d).
+    if (!enabled) return
     const current = ++generation.current
     let cancelled = false
     setLoading(true)
@@ -154,7 +158,7 @@ function useCaseList(query: CaseQuery): CaseListData {
     return () => {
       cancelled = true
     }
-  }, [api, filters, nonce])
+  }, [api, filters, nonce, enabled])
 
   // Agenten fuer Titel und Facette (`GET /agents`, ab viewer). Scheitert der
   // Abruf, bleibt die Liste nutzbar: Titel fallen auf „Unbekannter Agent“.
@@ -234,7 +238,7 @@ function StatusLabel({ status }: { status: CaseStatus }) {
   )
 }
 
-function CaseRow({ item, agents }: { item: CaseRead; agents: Agent[] }) {
+function CaseRow({ item, agents, linkQuery }: { item: CaseRead; agents: Agent[]; linkQuery: string }) {
   const { t } = useTranslation(['feedback', 'learning'])
   const wsPath = useWorkspacePath()
   const agentName = (id: string | null) => agents.find((agent) => agent.id === id)?.name
@@ -259,7 +263,7 @@ function CaseRow({ item, agents }: { item: CaseRead; agents: Agent[] }) {
       icon={Bot}
       iconTone="catalog"
       title={title}
-      href={wsPath(`/feedback/cases/${item.id}`)}
+      href={wsPath(`/feedback/cases/${item.id}${linkQuery}`)}
       status={<StatusLabel status={item.status} />}
       meta={
         <>
@@ -315,6 +319,9 @@ interface CaseListProps {
 export function CaseList({ viewer }: CaseListProps) {
   const { t } = useTranslation(['feedback', 'data', 'common'])
   const [params, setParams] = useSearchParams()
+  // `viewer` ist auch waehrend des Ladens der Rolle `true`. Erst mit bekannter
+  // Rolle laden und rendern (D6b-Review, Nit d).
+  const roleKnown = useCurrentWorkspaceRole() !== null
 
   const rawStatus = params.get('status')
   const status: StatusChip = isStatusChip(rawStatus) ? rawStatus : DEFAULT_STATUS
@@ -323,7 +330,18 @@ export function CaseList({ viewer }: CaseListProps) {
   const target: CaseTarget | '' = !viewer && isTarget(rawTarget) ? rawTarget : ''
   const query = useMemo(() => ({ status, agent, target }), [status, agent, target])
 
-  const data = useCaseList(query)
+  const data = useCaseList(query, roleKnown)
+
+  // Die Filter reisen am Zeilen-Link mit, damit „Fälle“ im Detail auf genau
+  // diese Liste zurueckfuehrt (Delta-Spec S8).
+  const linkQuery = useMemo(() => {
+    const carried = new URLSearchParams()
+    if (status !== DEFAULT_STATUS) carried.set('status', status)
+    if (agent !== '') carried.set('agent', agent)
+    if (target !== '') carried.set('target', target)
+    const text = carried.toString()
+    return text === '' ? '' : `?${text}`
+  }, [status, agent, target])
 
   const setParam = (key: string, value: string) =>
     setParams(
@@ -410,6 +428,19 @@ export function CaseList({ viewer }: CaseListProps) {
           action={<ReportCaseDialog variant="brand" />}
         />
       )
+    } else if (viewer) {
+      // viewer mit eigenen Faellen, aber keinem offenen (D6b-Review, Nit c).
+      empty = (
+        <EmptyState
+          title={t('feedback:cases.list.emptyOpenTitle')}
+          description={t('feedback:cases.list.emptyOpenViewerDescription')}
+          action={
+            <Button type="button" variant="outline" onClick={() => setParam('status', 'all')}>
+              {t('feedback:cases.list.showAll')}
+            </Button>
+          }
+        />
+      )
     } else {
       empty = (
         <EmptyState
@@ -419,6 +450,8 @@ export function CaseList({ viewer }: CaseListProps) {
       )
     }
   }
+
+  if (!roleKnown) return <CaseSkeletons />
 
   return (
     <div className="flex flex-col gap-4">
@@ -455,7 +488,7 @@ export function CaseList({ viewer }: CaseListProps) {
           <ul className="flex flex-col gap-3">
             {data.items.map((item) => (
               <li key={item.id}>
-                <CaseRow item={item} agents={data.agents} />
+                <CaseRow item={item} agents={data.agents} linkQuery={linkQuery} />
               </li>
             ))}
           </ul>

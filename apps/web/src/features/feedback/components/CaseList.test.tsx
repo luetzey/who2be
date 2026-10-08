@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Agent, CaseCounts, CaseRead } from '@/api/types'
+import type { Agent, CaseCounts, CaseRead, WorkspaceRole } from '@/api/types'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
@@ -19,6 +19,11 @@ vi.mock('@/api/useApi', () => {
   const api = { listCases, countCases, listAgents }
   return { useApi: () => api }
 })
+
+let role: WorkspaceRole | null = 'editor'
+vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
+  useCurrentWorkspaceRole: () => role,
+}))
 
 const agents = [
   { id: 'a1', name: 'coder' },
@@ -68,6 +73,7 @@ function SearchProbe() {
 const currentSearch = () => screen.getByTestId('search').textContent
 
 function renderList(viewer: boolean, search = '') {
+  role = viewer ? 'viewer' : 'editor'
   return renderInRoutes(
     <>
       <CaseList viewer={viewer} />
@@ -283,6 +289,43 @@ describe('CaseList', () => {
     renderList(false)
     expect(await screen.findByText('Zahlen gerade nicht verfügbar.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Offen$/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('gibt die Filter der Liste am Zeilen-Link an das Fall-Detail weiter', async () => {
+    renderList(false, '?status=triaged&agent=a1&target=playbook')
+
+    const link = await screen.findByRole('link', { name: 'coder' })
+    expect(link).toHaveAttribute(
+      'href',
+      '/w/ws-1/feedback/cases/case-1?status=triaged&agent=a1&target=playbook',
+    )
+  })
+
+  it('Leerzustand viewer mit Faellen, aber ohne offene: eigener Satz und „Alle meine Fälle anzeigen“', async () => {
+    listCases.mockResolvedValue({ items: [], next_cursor: null })
+    countCases.mockResolvedValue(counts({ open: 0, reopened: 0, triaged: 1, addressed: 0 }))
+    renderList(true)
+
+    expect(
+      await screen.findByText(
+        'Alle Fälle, die du gemeldet hast, sind eingeordnet, umgesetzt oder verworfen.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/du, ein Kollege oder ein Agent/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Alle meine Fälle anzeigen' }))
+    await waitFor(() => expect(currentSearch()).toBe('?status=all'))
+  })
+
+  it('laedt und rendert erst, wenn die Rolle bekannt ist', () => {
+    role = null
+    renderInRoutes(<CaseList viewer />, {
+      path: '/w/:workspaceId/feedback',
+      initialEntries: ['/w/ws-1/feedback'],
+    })
+    // Rolle unbekannt: kein Abruf mit viewer-Filtern, kein viewer-Leertext.
+    expect(listCases).not.toHaveBeenCalled()
+    expect(countCases).not.toHaveBeenCalled()
+    expect(screen.getAllByTestId('case-skeleton')).toHaveLength(3)
   })
 })
 
