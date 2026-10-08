@@ -2312,9 +2312,13 @@
       "showLess": "Show less",
       "showAll": "Show all {{count}}",
       "tabs": {
-        "inbox": "Inbox",
+        "cases": "Cases",
+        "myCases": "My cases",
+        "signals": "Building blocks",
         "curation": "Curation"
-      }
+      },
+      "tabsAria": "Feedback sections",
+      "signalsDescription": "Notes from agents and members on individual building blocks: outdated, incorrect, unclear or helpful. Report an agent's behaviour as a case."
     },
     "tiles": {
       "mostUsed": "Most used",
@@ -2467,6 +2471,48 @@
         "error": {
           "agentGone": "This agent no longer exists. Pick another one."
         }
+      },
+      "list": {
+        "description": "Concrete situations where an agent should have acted differently. A case can become a test case.",
+        "descriptionViewer": "Cases you reported and what came of them.",
+        "emptyOpenTitle": "No open cases",
+        "emptyOpenDescription": "Cases come in when someone – you, a colleague or an agent – reports a concrete situation.",
+        "emptyViewerTitle": "You haven't reported a case yet",
+        "emptyViewerDescription": "If an agent should do something differently, report it here. You'll see what comes of it.",
+        "emptyFiltered": "No case matches these filters.",
+        "loadError": "Cases couldn't be loaded.",
+        "loadMore": "Load more"
+      },
+      "status": {
+        "open": "Open",
+        "reopened": "Reopened",
+        "triaged": "Triaged",
+        "addressed": "Addressed → {{element}} v{{version}}",
+        "addressedShort": "Addressed",
+        "dismissed": "Dismissed",
+        "in_progress": "In progress",
+        "verified": "Verified"
+      },
+      "row": {
+        "expected": "Expected: {{text}}",
+        "situation": "Situation: {{text}}",
+        "selfReported": "(self-reported)",
+        "fromPattern": "from a pattern",
+        "builder": "Builder"
+      },
+      "filter": {
+        "target": "Assigned to",
+        "allTargets": "All building blocks"
+      },
+      "target": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "external_tool": "Tool",
+        "system_prompt_template": "System prompt",
+        "tool_policy": "Tool permissions",
+        "memory": "Memory",
+        "model_limit": "Model limit"
       }
     }
   },

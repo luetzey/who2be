@@ -1,10 +1,12 @@
-import { ChevronRight, Inbox, ThumbsUp, TriangleAlert } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ChevronRight, Inbox, MessageSquareWarning, ThumbsUp, TriangleAlert } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import type { FeedbackOverviewItem } from '@/api/types'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { ReportCaseDialog } from '@/components/cases/ReportCaseForm'
 import { DataView } from '@/components/data/DataView'
 import { EntityIcon } from '@/components/data'
 import { Container } from '@/components/layout/Container'
@@ -15,11 +17,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useFeedbackOverview } from '@/hooks/useFeedback'
 import { cn } from '@/lib/utils'
 
+import { CaseList } from '../components/CaseList'
 import { FeedbackInbox } from '../components/FeedbackInbox'
 import { ReportProblemDialog } from '../components/ReportProblemDialog'
 import { entityMeta } from '../lib/entityMeta'
 
 type SortMode = 'care' | 'usage' | 'activity'
+
+// Hub-Tabs (Delta-Spec Phase D §0). „Muster“ folgt mit D6g, „Gespraeche“ mit E5.
+type HubTab = 'cases' | 'signals' | 'curation'
+const EDITOR_TABS: readonly HubTab[] = ['cases', 'signals', 'curation']
+const DEFAULT_TAB: HubTab = 'cases'
 
 const MAX_COLLAPSED = 8
 
@@ -27,11 +35,14 @@ function lastActivityValue(item: FeedbackOverviewItem): number {
   return item.last_activity_at !== null ? new Date(item.last_activity_at).getTime() : 0
 }
 
-export function FeedbackOverviewPage() {
+/**
+ * Kuration: Aggregat pro Element. Eigene Komponente, damit nur editor+ die
+ * Uebersicht laedt — viewer sehen den Tab nicht.
+ */
+function CurationPanel({ reloadNonce }: { reloadNonce: number }) {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const { overview, loading, error, reload } = useFeedbackOverview()
-  const [reloadNonce, setReloadNonce] = useState(0)
   const [sort, setSort] = useState<SortMode>('care')
   const [careOnly, setCareOnly] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -53,11 +64,10 @@ export function FeedbackOverviewPage() {
 
   const visible = showAll ? sorted : sorted.slice(0, MAX_COLLAPSED)
 
-  // Nach „Problem melden" beide Sichten auffrischen (Uebersicht + Posteingang).
-  const onReported = () => {
-    reload()
-    setReloadNonce((n) => n + 1)
-  }
+  // Nach „Problem melden“ auffrischen; den Erst-Render laedt der Hook selbst.
+  useEffect(() => {
+    if (reloadNonce > 0) reload()
+  }, [reloadNonce, reload])
 
   const sortModes: { key: SortMode; label: string }[] = [
     { key: 'care', label: t('overview.sortCare') },
@@ -66,195 +76,274 @@ export function FeedbackOverviewPage() {
   ]
 
   return (
+    <section className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">{t('overview.curationDescription')}</p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          {t('overview.sort')}
+        </span>
+        <span className="inline-flex gap-0.5 rounded-lg bg-muted p-1">
+          {sortModes.map((mode) => (
+            <Button
+              key={mode.key}
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={sort === mode.key}
+              onClick={() => setSort(mode.key)}
+              className={cn(
+                'h-8 rounded-md px-3 text-xs font-medium',
+                sort === mode.key
+                  ? 'bg-card text-foreground shadow-card'
+                  : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
+              )}
+            >
+              {mode.label}
+            </Button>
+          ))}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-pressed={careOnly}
+          onClick={() => {
+            setCareOnly((v) => !v)
+            setShowAll(false)
+          }}
+          className={cn(
+            'ml-auto',
+            careOnly &&
+              'border-destructive/40 bg-destructive/10 text-destructive hover:text-destructive',
+          )}
+        >
+          <TriangleAlert />
+          {t('overview.careOnly')}
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <DataView
+            loading={loading && overview === null}
+            error={error}
+            empty={!loading && sorted.length === 0}
+            emptyTitle={careOnly ? t('overview.careEmpty') : t('overview.empty')}
+          >
+            {sorted.length > 0 ? (
+              <>
+                <ul className="flex flex-col divide-y">
+                  {visible.map((item) => {
+                    const meta = entityMeta(item.entity_type)
+                    const signalTotal = item.helpful_count + item.negative_count
+                    const helpfulPct =
+                      signalTotal > 0 ? (item.helpful_count / signalTotal) * 100 : 0
+                    const negativePct = signalTotal > 0 ? 100 - helpfulPct : 0
+                    return (
+                      <li key={`${item.entity_type}-${item.entity_id}`} className="relative">
+                        {/* Unterhalb der Mobile-Schwelle `md` stapeln die drei
+                            Spalten: 208 + 120 + 96 px feste Anteile plus Gaps
+                            passen auf 320 px nicht nebeneinander (§4.4). */}
+                        <div
+                          className={cn(
+                            'flex flex-col gap-2 border-l-2 py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40 md:flex-row md:items-center md:gap-4',
+                            item.negative_count >= 3
+                              ? 'border-l-destructive'
+                              : item.negative_count > 0
+                                ? 'border-l-brand'
+                                : 'border-l-transparent',
+                          )}
+                        >
+                          <span className="flex w-full min-w-0 items-center gap-2.5 md:w-52 md:flex-none">
+                            <EntityIcon icon={meta.icon} tone={meta.tone} size="sm" />
+                            <span className="min-w-0">
+                              <Link
+                                to={wsPath(`/feedback/${item.entity_type}/${item.entity_id}`)}
+                                state={{ name: item.name }}
+                                className="block truncate rounded-sm font-medium text-foreground after:absolute after:inset-0 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                              >
+                                {item.name}
+                              </Link>
+                              <span className="block text-xs text-muted-foreground">
+                                {t(`overview.type.${item.entity_type}`)} ·{' '}
+                                {t('tiles.usageUnit', { count: item.usage_count })}
+                              </span>
+                            </span>
+                          </span>
+                          {/* md:min-w-[7.5rem]: funktionale Mindestbreite, damit der
+                              Signal-Balken auch bei schmalen Viewports lesbar bleibt —
+                              die Spacing-Skala kennt diesen Wert nicht (§4.1). Gilt nur
+                              oberhalb der Mobile-Schwelle; im gestapelten Phone-Fall
+                              nimmt die Spalte ohnehin die volle Breite. */}
+                          <span className="flex w-full flex-col gap-1.5 md:min-w-[7.5rem] md:flex-1">
+                            <span className="flex h-1.5 overflow-hidden rounded-full bg-muted">
+                              <span className="bg-brand" style={{ width: `${helpfulPct}%` }} />
+                              <span
+                                className="bg-destructive"
+                                style={{ width: `${negativePct}%` }}
+                              />
+                            </span>
+                            <span className="flex gap-3 text-xs text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <ThumbsUp className="size-4" aria-hidden="true" />
+                                {t('overview.helpfulShort', { count: item.helpful_count })}
+                              </span>
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1',
+                                  item.negative_count > 0
+                                    ? 'text-destructive'
+                                    : 'text-muted-foreground',
+                                )}
+                              >
+                                <TriangleAlert className="size-4" aria-hidden="true" />
+                                {t('overview.negativeShort', { count: item.negative_count })}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="text-xs text-muted-foreground md:w-24 md:flex-none md:text-right">
+                            {item.last_activity_at !== null
+                              ? new Date(item.last_activity_at).toLocaleDateString()
+                              : '—'}
+                          </span>
+                          {/* Rein dekorativer Affordanz-Pfeil — im gestapelten
+                              Phone-Fall wuerde er als eigene Zeile stehen. */}
+                          <ChevronRight
+                            className="hidden size-4 flex-none text-muted-foreground/60 md:block"
+                            aria-hidden="true"
+                          />
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+                {sorted.length > MAX_COLLAPSED ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    onClick={() => setShowAll((v) => !v)}
+                    className="w-full rounded-none border-t text-xs font-medium"
+                  >
+                    {showAll
+                      ? t('overview.showLess')
+                      : t('overview.showAll', { count: sorted.length })}
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </DataView>
+        </CardContent>
+      </Card>
+    </section>
+  )
+}
+
+/**
+ * Feedback-Hub (ADR-0053 D6b). `?tab=` ist die Quelle des aktiven Tabs und
+ * wechselt per `replace`. Default ist „Fälle“; unbekannte oder fuer die Rolle
+ * nicht erlaubte Tabs fallen still per `replace` auf `cases` zurueck. viewer
+ * sehen nur „Meine Fälle“ ohne Tab-Leiste (Q10). „Bausteine“ ist der
+ * bisherige Posteingang (`FeedbackInbox`, unveraendert, ADR 5.2).
+ */
+export function FeedbackOverviewPage() {
+  const { t } = useTranslation('feedback')
+  const role = useCurrentWorkspaceRole()
+  const canTriage = role !== null && role !== 'viewer'
+  const [params, setParams] = useSearchParams()
+  const [reloadNonce, setReloadNonce] = useState(0)
+
+  const requested = params.get('tab')
+  const allowed: readonly HubTab[] = canTriage ? EDITOR_TABS : [DEFAULT_TAB]
+  const tab: HubTab = allowed.find((value) => value === requested) ?? DEFAULT_TAB
+
+  // Unbekanntes oder nicht erlaubtes `tab` still korrigieren. Solange die
+  // Rolle laedt, bleibt ein Editor-Tab stehen — sonst verlöre ein Deep-Link
+  // beim ersten Rendern seinen Tab (Muster MemoryPage).
+  useEffect(() => {
+    if (requested === null || requested === tab) return
+    if (role === null && (EDITOR_TABS as readonly string[]).includes(requested)) return
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.set('tab', DEFAULT_TAB)
+        return next
+      },
+      { replace: true },
+    )
+  }, [requested, tab, role, setParams])
+
+  // Tabwechsel: nur `tab` bleibt (Filter gelten je Tab), kein History-Eintrag.
+  const switchTab = (value: string) =>
+    setParams(new URLSearchParams({ tab: value }), { replace: true })
+
+  // Nach „Problem melden“ Bausteine und Kuration auffrischen.
+  const onReported = () => setReloadNonce((n) => n + 1)
+
+  const casesPanel = (
+    <section className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        {canTriage ? t('cases.list.description') : t('cases.list.descriptionViewer')}
+      </p>
+      <CaseList viewer={!canTriage} />
+    </section>
+  )
+
+  return (
     <Container>
       <PageHeader
         title={t('overview.title')}
         description={t('overview.description')}
-        actions={<ReportProblemDialog onReported={onReported} />}
+        actions={
+          <>
+            <ReportProblemDialog onReported={onReported} />
+            {/* Unter `sm` volle Breite (Delta-Spec S7, 390 px). */}
+            <div className="w-full sm:w-auto [&>button]:w-full">
+              <ReportCaseDialog variant="brand" />
+            </div>
+          </>
+        }
       />
 
-      {/* Posteingang (Einzel-Feedbacks) und Kuration (Aggregat pro Element)
-          liegen in Tabs — pro Ansicht nur eine Liste, deutlich uebersichtlicher. */}
       <div className="mt-6">
-        <Tabs defaultValue="inbox">
-          <TabsList>
-            <TabsTrigger value="inbox">
-              <Inbox className="size-4" aria-hidden="true" />
-              {t('overview.tabs.inbox')}
-            </TabsTrigger>
-            <TabsTrigger value="curation">
-              <TriangleAlert className="size-4" aria-hidden="true" />
-              {t('overview.tabs.curation')}
-            </TabsTrigger>
-          </TabsList>
+        {canTriage ? (
+          <Tabs value={tab} onValueChange={switchTab}>
+            <TabsList aria-label={t('overview.tabsAria')}>
+              <TabsTrigger value="cases">
+                <MessageSquareWarning className="size-4" aria-hidden="true" />
+                {t('overview.tabs.cases')}
+              </TabsTrigger>
+              <TabsTrigger value="signals">
+                <Inbox className="size-4" aria-hidden="true" />
+                {t('overview.tabs.signals')}
+              </TabsTrigger>
+              <TabsTrigger value="curation">
+                <TriangleAlert className="size-4" aria-hidden="true" />
+                {t('overview.tabs.curation')}
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="inbox" className="mt-6">
-            <FeedbackInbox reloadNonce={reloadNonce} />
-          </TabsContent>
+            <TabsContent value="cases" className="mt-6">
+              {casesPanel}
+            </TabsContent>
 
-          <TabsContent value="curation" className="mt-6">
-            <section className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">{t('overview.curationDescription')}</p>
+            <TabsContent value="signals" className="mt-6">
+              <section className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">{t('overview.signalsDescription')}</p>
+                <FeedbackInbox reloadNonce={reloadNonce} />
+              </section>
+            </TabsContent>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {t('overview.sort')}
-                </span>
-                <span className="inline-flex gap-0.5 rounded-lg bg-muted p-1">
-                  {sortModes.map((mode) => (
-                    <Button
-                      key={mode.key}
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-pressed={sort === mode.key}
-                      onClick={() => setSort(mode.key)}
-                      className={cn(
-                        'h-8 rounded-md px-3 text-xs font-medium',
-                        sort === mode.key
-                          ? 'bg-card text-foreground shadow-card'
-                          : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
-                      )}
-                    >
-                      {mode.label}
-                    </Button>
-                  ))}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-pressed={careOnly}
-                  onClick={() => {
-                    setCareOnly((v) => !v)
-                    setShowAll(false)
-                  }}
-                  className={cn(
-                    'ml-auto',
-                    careOnly &&
-                      'border-destructive/40 bg-destructive/10 text-destructive hover:text-destructive',
-                  )}
-                >
-                  <TriangleAlert />
-                  {t('overview.careOnly')}
-                </Button>
-              </div>
-
-              <Card>
-                <CardContent className="p-0">
-                  <DataView
-                    loading={loading && overview === null}
-                    error={error}
-                    empty={!loading && sorted.length === 0}
-                    emptyTitle={careOnly ? t('overview.careEmpty') : t('overview.empty')}
-                  >
-                    {sorted.length > 0 ? (
-                      <>
-                        <ul className="flex flex-col divide-y">
-                          {visible.map((item) => {
-                            const meta = entityMeta(item.entity_type)
-                            const signalTotal = item.helpful_count + item.negative_count
-                            const helpfulPct =
-                              signalTotal > 0 ? (item.helpful_count / signalTotal) * 100 : 0
-                            const negativePct = signalTotal > 0 ? 100 - helpfulPct : 0
-                            return (
-                              <li key={`${item.entity_type}-${item.entity_id}`} className="relative">
-                                {/* Unterhalb der Mobile-Schwelle `md` stapeln die drei
-                                    Spalten: 208 + 120 + 96 px feste Anteile plus Gaps
-                                    passen auf 320 px nicht nebeneinander (§4.4). */}
-                                <div
-                                  className={cn(
-                                    'flex flex-col gap-2 border-l-2 py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40 md:flex-row md:items-center md:gap-4',
-                                    item.negative_count >= 3
-                                      ? 'border-l-destructive'
-                                      : item.negative_count > 0
-                                        ? 'border-l-brand'
-                                        : 'border-l-transparent',
-                                  )}
-                                >
-                                  <span className="flex w-full min-w-0 items-center gap-2.5 md:w-52 md:flex-none">
-                                    <EntityIcon icon={meta.icon} tone={meta.tone} size="sm" />
-                                    <span className="min-w-0">
-                                      <Link
-                                        to={wsPath(`/feedback/${item.entity_type}/${item.entity_id}`)}
-                                        state={{ name: item.name }}
-                                        className="block truncate rounded-sm font-medium text-foreground after:absolute after:inset-0 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                      >
-                                        {item.name}
-                                      </Link>
-                                      <span className="block text-xs text-muted-foreground">
-                                        {t(`overview.type.${item.entity_type}`)} ·{' '}
-                                        {t('tiles.usageUnit', { count: item.usage_count })}
-                                      </span>
-                                    </span>
-                                  </span>
-                                  {/* md:min-w-[7.5rem]: funktionale Mindestbreite, damit der
-                                      Signal-Balken auch bei schmalen Viewports lesbar bleibt —
-                                      die Spacing-Skala kennt diesen Wert nicht (§4.1). Gilt nur
-                                      oberhalb der Mobile-Schwelle; im gestapelten Phone-Fall
-                                      nimmt die Spalte ohnehin die volle Breite. */}
-                                  <span className="flex w-full flex-col gap-1.5 md:min-w-[7.5rem] md:flex-1">
-                                    <span className="flex h-1.5 overflow-hidden rounded-full bg-muted">
-                                      <span className="bg-brand" style={{ width: `${helpfulPct}%` }} />
-                                      <span
-                                        className="bg-destructive"
-                                        style={{ width: `${negativePct}%` }}
-                                      />
-                                    </span>
-                                    <span className="flex gap-3 text-xs text-muted-foreground">
-                                      <span className="inline-flex items-center gap-1">
-                                        <ThumbsUp className="size-4" aria-hidden="true" />
-                                        {t('overview.helpfulShort', { count: item.helpful_count })}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          'inline-flex items-center gap-1',
-                                          item.negative_count > 0
-                                            ? 'text-destructive'
-                                            : 'text-muted-foreground',
-                                        )}
-                                      >
-                                        <TriangleAlert className="size-4" aria-hidden="true" />
-                                        {t('overview.negativeShort', { count: item.negative_count })}
-                                      </span>
-                                    </span>
-                                  </span>
-                                  <span className="text-xs text-muted-foreground md:w-24 md:flex-none md:text-right">
-                                    {item.last_activity_at !== null
-                                      ? new Date(item.last_activity_at).toLocaleDateString()
-                                      : '—'}
-                                  </span>
-                                  {/* Rein dekorativer Affordanz-Pfeil — im gestapelten
-                                      Phone-Fall wuerde er als eigene Zeile stehen. */}
-                                  <ChevronRight
-                                    className="hidden size-4 flex-none text-muted-foreground/60 md:block"
-                                    aria-hidden="true"
-                                  />
-                                </div>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                        {sorted.length > MAX_COLLAPSED ? (
-                          <Button
-                            type="button"
-                            variant="link"
-                            onClick={() => setShowAll((v) => !v)}
-                            className="w-full rounded-none border-t text-xs font-medium"
-                          >
-                            {showAll
-                              ? t('overview.showLess')
-                              : t('overview.showAll', { count: sorted.length })}
-                          </Button>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </DataView>
-                </CardContent>
-              </Card>
-            </section>
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="curation" className="mt-6">
+              <CurationPanel reloadNonce={reloadNonce} />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <>
+            <h2 className="mb-4 text-lg font-semibold">{t('overview.tabs.myCases')}</h2>
+            {casesPanel}
+          </>
+        )}
       </div>
     </Container>
   )
