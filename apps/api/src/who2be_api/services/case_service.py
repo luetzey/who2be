@@ -224,6 +224,23 @@ def _triage_without_policy() -> ApiGateError:
     )
 
 
+def require_triage_right(ctx: WorkspaceContext) -> None:
+    """Triagieren, Zuordnen und Muster lesen: Mensch ab `editor`, Agent mit `case_triage`.
+
+    Eine Quelle fuer `CaseService` und `PatternService` (6.5: `GET /patterns`
+    hat dieselbe Rolle/Capability wie die Triage).
+    """
+    if is_agent_bound(ctx):
+        # `require_capability` ist ohne Policy ein No-Op. Ein agent-gebundener
+        # Token ohne geladene Policy (Race mit Agent-Delete, siehe
+        # `is_agent_bound`) darf deshalb ausdruecklich nicht triagieren.
+        if ctx.tool_policy is None:
+            raise _triage_without_policy()
+        require_capability(ctx, AgentCapability.case_triage)
+    else:
+        require_role(ctx, WorkspaceRole.editor)
+
+
 def _actor(ctx: WorkspaceContext) -> tuple[CaseActorKind, UUID]:
     """Akteur eines Events bzw. Urheber einer Zuordnung aus dem Aufrufweg."""
     if is_agent_bound(ctx) and ctx.agent_id is not None:
@@ -348,15 +365,7 @@ class CaseService:
     # --- Uebergaenge -------------------------------------------------------
 
     def _require_triage_right(self, ctx: WorkspaceContext) -> None:
-        if is_agent_bound(ctx):
-            # `require_capability` ist ohne Policy ein No-Op. Ein agent-gebundener
-            # Token ohne geladene Policy (Race mit Agent-Delete, siehe
-            # `is_agent_bound`) darf deshalb ausdruecklich nicht triagieren.
-            if ctx.tool_policy is None:
-                raise _triage_without_policy()
-            require_capability(ctx, AgentCapability.case_triage)
-        else:
-            require_role(ctx, WorkspaceRole.editor)
+        require_triage_right(ctx)
 
     async def transition(
         self, ctx: WorkspaceContext, case_id: UUID, req: CaseTransitionRequest

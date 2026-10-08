@@ -43,7 +43,7 @@ transaktionsgebundene Advisory-Sperre je Fall.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -86,6 +86,7 @@ from who2be_models import (
     MemoryStatus,
 )
 from who2be_models.case import CaseConvertRequest
+from who2be_models.pattern import Pattern, PatternElement, PatternSource
 
 CASE_DELETED_AUDIT_ACTION = "case.deleted"
 
@@ -322,6 +323,16 @@ class CaseRepository(Protocol):
     async def delete_case(
         self, workspace_id: UUID, case_id: UUID, actor_id: UUID | None
     ) -> bool: ...
+
+    async def case_patterns(
+        self,
+        workspace_id: UUID,
+        *,
+        agent_id: UUID | None,
+        statuses: Collection[CaseStatus],
+        window_days: int,
+        min_count: int,
+    ) -> list[Pattern]: ...
 
 
 class PgCaseRepository:
@@ -848,6 +859,57 @@ class PgCaseRepository:
             actor_id,
         )
         return result.endswith(" 1")
+
+    async def case_patterns(
+        self,
+        workspace_id: UUID,
+        *,
+        agent_id: UUID | None,
+        statuses: Collection[CaseStatus],
+        window_days: int,
+        min_count: int,
+    ) -> list[Pattern]:
+        """Fall-Muster (ADR-0053 3.7): gleicher Agent, gleiche Zuordnung.
+
+        Gezaehlt werden Faelle im Status `statuses`, angelegt innerhalb der
+        letzten `window_days` Tage; je `(agent_id, target, entity_id)` eine
+        Gruppe, ab `min_count` Faellen ein Muster. Ein Fall mit zwei
+        Zuordnungen zaehlt fuer beide (n:m, 3.3); eine Zuordnung kommt je
+        Fall hoechstens einmal vor (Unique-Index 0100), `count(*)` zaehlt
+        also Faelle. `entity_id` NULL (`tool_policy`/`model_limit`) gruppiert
+        wie ein Wert. Schwelle, Fenster und Statusmenge kommen vom Service.
+        """
+        rows = await self._pool.fetch(
+            "SELECT x.agent_id, el.target, el.entity_id, COUNT(*)::int AS n, "
+            "       array_agg(x.id ORDER BY x.id) AS ids, "
+            "       min(x.created_at) AS first_seen, max(x.created_at) AS last_seen "
+            f"FROM {_CASES_WITH_STATUS} "
+            "JOIN agent_case_element el ON el.workspace_id = x.workspace_id AND el.case_id = x.id "
+            "WHERE x.workspace_id = $1 "
+            "  AND ($2::uuid IS NULL OR x.agent_id = $2) "
+            "  AND x.status = ANY($3::text[]) "
+            "  AND x.created_at >= now() - make_interval(days => $4) "
+            "GROUP BY x.agent_id, el.target, el.entity_id "
+            "HAVING COUNT(*) >= $5 "
+            "ORDER BY x.agent_id, el.target, el.entity_id NULLS FIRST",
+            workspace_id,
+            agent_id,
+            sorted(s.value for s in statuses),
+            window_days,
+            min_count,
+        )
+        return [
+            Pattern(
+                source=PatternSource.case,
+                agent_id=r["agent_id"],
+                element=PatternElement(target=CaseTarget(r["target"]), entity_id=r["entity_id"]),
+                count=r["n"],
+                evidence_ids=list(r["ids"]),
+                first_seen=r["first_seen"],
+                last_seen=r["last_seen"],
+            )
+            for r in rows
+        ]
 
 
 async def _lock_case(conn: asyncpg.Connection, case_id: UUID) -> None:
