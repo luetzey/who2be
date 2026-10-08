@@ -9836,6 +9836,71 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/patterns": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "List Patterns",
+        "operationId": "list_patterns_v1_workspaces__workspace_id__patterns_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatternList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -21941,6 +22006,125 @@
         ],
         "title": "OrganizationRead",
         "description": "Organization-Metadaten."
+      },
+      "Pattern": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/PatternSource"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "element": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PatternElement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Count"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          },
+          "first_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "agent_id",
+          "count",
+          "evidence_ids",
+          "first_seen",
+          "last_seen"
+        ],
+        "title": "Pattern",
+        "description": "Ein berechnetes Muster.\n\n- `element`: nur bei `source='case'` — die gemeinsame Zuordnung.\n- `evidence_ids`: die Belege — Fall-IDs bzw. die IDs der Lernvorschlaege\n  im Cluster, aufsteigend sortiert.\n- `count`: bei Faellen die Zahl der Faelle, bei Lernvorschlaegen die Summe\n  von `occurrence_count` im Cluster.\n- `first_seen`/`last_seen`: Zeitraum der Belege (Lernvorschlag: Anlage\n  bis juengste Wiederholung)."
+      },
+      "PatternElement": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/CaseTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "title": "PatternElement",
+        "description": "Element-Zuordnung eines Fall-Musters; `entity_id` leer bei `tool_policy`/`model_limit`."
+      },
+      "PatternList": {
+        "properties": {
+          "threshold": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Threshold"
+          },
+          "window_days": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Window Days"
+          },
+          "patterns": {
+            "items": {
+              "$ref": "#/components/schemas/Pattern"
+            },
+            "type": "array",
+            "title": "Patterns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "threshold",
+          "window_days",
+          "patterns"
+        ],
+        "title": "PatternList",
+        "description": "Antwort von `GET /patterns` (ADR-0053 6.5, D5b).\n\n`threshold` und `window_days` liefert der Server mit (PM-Entscheidung Q8),\ndamit die Oberflaeche die Schwelle anzeigt statt sie fest zu kodieren.\nOhne Paginierung: die Sicht ist berechnet und klein."
+      },
+      "PatternSource": {
+        "type": "string",
+        "enum": [
+          "lesson",
+          "case"
+        ],
+        "title": "PatternSource",
+        "description": "Quelle eines Musters (3.7)."
       },
       "PendingInvitationRead": {
         "properties": {

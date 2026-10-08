@@ -2,7 +2,7 @@
 
 ADR-0053 6.5 (Phase D, Paket D2b). Rechte, Sichtbarkeit und Uebergaenge
 entscheidet `CaseService` (D2a); der Router reicht nur durch. Mount unter
-`/v1/workspaces/{ws_id}`. Nicht hier: Muster (D5b).
+`/v1/workspaces/{ws_id}`.
 
 Paket D2c-2: die zwei Wege, auf denen aus Bestehendem ein Fall wird —
 `POST /agents/{agent_id}/memories/{memory_id}/convert` (Lernvorschlag, 6.4)
@@ -13,6 +13,12 @@ einen `CaseRead` liefern (PM-Schnitt 2026-10-08).
 Liste nach Repo-Konvention als Keyset-Seite: `list[CaseRead]`, der Cursor der
 naechsten Seite im Header `X-Next-Cursor` (`core/pagination.py`). Zaehler je
 Status unter `/cases/counts` (PM-Entscheidung Q1), Loeschen ab `editor` (Q6).
+
+Paket D5b: `GET /patterns?agent_id` (6.5) steht ebenfalls hier, wie ADR-0053
+Anhang A.2 es fuer D5 vorsieht. Muster sind eine berechnete Sicht ueber Faelle
+und Lernvorschlaege ohne eigenes Aggregat; ein eigener Router fuer eine
+einzige lesende Route waere eine zweite Mount-Stelle in `main.py` ohne Gewinn.
+Recht und Berechnung entscheidet `PatternService` (D5a).
 """
 
 from typing import Annotated
@@ -27,7 +33,9 @@ from who2be_api.core.pagination import MAX_LIMIT, PageCursor
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.case_repository import PgCaseRepository
+from who2be_api.repositories.memory_repository import PgMemoryRepository
 from who2be_api.services.case_service import CaseService, CaseTransitionRequest
+from who2be_api.services.pattern_service import PatternService
 from who2be_models import (
     CaseCreate,
     CaseDetail,
@@ -41,6 +49,7 @@ from who2be_models import (
     encode_cursor,
 )
 from who2be_models.case import CaseConvertRequest
+from who2be_models.pattern import PATTERN_CASE_WINDOW_DAYS, PATTERN_MIN_COUNT, PatternList
 
 router = APIRouter(tags=["cases"])
 
@@ -64,8 +73,15 @@ def get_case_service(
     return CaseService(PgCaseRepository(pool))
 
 
+def get_pattern_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> PatternService:
+    return PatternService(PgCaseRepository(pool), PgMemoryRepository(pool))
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[CaseService, Depends(get_case_service)]
+Patterns = Annotated[PatternService, Depends(get_pattern_service)]
 
 
 @router.post("/cases", status_code=status.HTTP_201_CREATED)
@@ -173,3 +189,16 @@ async def promote_feedback_to_case(
     # Den Agenten nennt der Mensch (ein Alt-Feedback betrifft ein Element).
     # Nur Mensch ab editor; erneut -> 409 feedback_not_promotable.
     return await service.promote_feedback(ctx, feedback_id, data)
+
+
+# --- Muster (D5b) -----------------------------------------------------------
+
+
+@router.get("/patterns")
+async def list_patterns(ctx: Ctx, service: Patterns, agent_id: UUID | None = None) -> PatternList:
+    # editor bzw. case_triage (6.5), sonst 403 aus dem Service. Schwelle und
+    # Zeitfenster gehen mit (Q8), damit die UI sie nicht fest kodiert.
+    patterns = await service.list_patterns(ctx, agent_id=agent_id)
+    return PatternList(
+        threshold=PATTERN_MIN_COUNT, window_days=PATTERN_CASE_WINDOW_DAYS, patterns=patterns
+    )
