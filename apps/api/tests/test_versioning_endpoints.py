@@ -292,3 +292,83 @@ def test_persona_and_template_restore(monkeypatch: pytest.MonkeyPatch) -> None:
             assert tdiff["identical"] is True
     finally:
         cleanup_workspaces([owner])
+
+
+def _stuck_body(kind: str, text: str) -> dict[str, object]:
+    """Gueltiger (promote-faehiger) Create/PUT-Body je versioniertem Typ."""
+    if kind == "playbooks":
+        return _playbook_body(text, text)
+    if kind == "system-prompts":
+        return {"name": "Tpl", "content": {"description": "", "body": text}}
+    blocks = [
+        {
+            "id": "b1",
+            "type": "paragraph",
+            "content": [{"type": "text", "text": text, "styles": {}}],
+        }
+    ]
+    if kind == "personas":
+        return {
+            "name": "QA",
+            "content": {"description": text, "content": {"description": text, "blocks": blocks}},
+        }
+    return {"name": "Doc", "content": {"description": text, "blocks": blocks}}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("kind", ["playbooks", "personas", "resources", "system-prompts"])
+def test_review_plus_new_draft_does_not_deadlock(
+    kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Karte t_6ee15ca8: v1 in Review, PUT legt v2 an, v2 wird Draft.
+
+    Vorher blockierten sich die Partial-Unique-Indizes aus 0011 gegenseitig:
+    v2 draft→review → 409 (Review-Slot belegt), v1 review→draft → 409
+    (Draft-Slot belegt). Jetzt ersetzt das Einreichen von v2 die offene
+    Review v1 (→ inactive) — auch fuer bereits verklemmte Bestandsdaten.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/{kind}"
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(base, json=_stuck_body(kind, "v1"), headers=auth)
+            assert created.status_code == 201, created.text
+            eid = created.json()["id"]
+            assert _to(client, base, eid, 1, "review", auth).status_code == 200
+
+            # PUT bei offener Review: v2 entsteht (Bestandsverhalten: inactive).
+            put = client.put(f"{base}/{eid}", json=_stuck_body(kind, "v2"), headers=auth)
+            assert put.status_code == 200, put.text
+            assert put.json()["current_version"] == 2
+            assert _to(client, base, eid, 2, "draft", auth).status_code == 200
+
+            # Der vormals verklemmte Schritt: v2 einreichen.
+            submit = _to(client, base, eid, 2, "review", auth)
+            assert submit.status_code == 200, submit.text
+            assert submit.json()["status"] == "review"
+
+            versions = {
+                v["version"]: v["status"]
+                for v in client.get(f"{base}/{eid}/versions", headers=auth).json()
+            }
+            assert versions == {1: "inactive", 2: "review"}
+
+            # Herkunft von v1 nennt die Ersetzung; v1 bleibt wiederherstellbar.
+            prov = client.get(f"{base}/{eid}/versions/1/provenance", headers=auth).json()
+            assert any(
+                e["from_status"] == "review"
+                and e["to_status"] == "inactive"
+                and "v2" in (e["note"] or "")
+                for e in prov
+            ), prov
+            # v2 laesst sich aktivieren, der Lebenszyklus laeuft weiter.
+            assert _to(client, base, eid, 2, "active", auth).status_code == 200
+    finally:
+        cleanup_workspaces([owner])

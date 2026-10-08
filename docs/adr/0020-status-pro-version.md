@@ -113,6 +113,10 @@ Body `{to: "review" | "active" | "inactive", note?: string}`. Service:
    Invariante.
 4. Beim `active`-Switch: alte Active-Version → `inactive`,
    `persona.current_version` zieht auf die neue Active-Version nach.
+   Analog beim `review`-Switch (Nachtrag 2026-10, Karte t_6ee15ca8): eine
+   andere offene Review-Version derselben Entity → `inactive` (mit eigenem
+   `status_history`-Eintrag). Sonst blockieren sich ein offener Draft und
+   eine offene Review gegenseitig ueber `*_draft_uniq`/`*_review_uniq`.
 5. INSERT in `status_history` (entity_type, entity_id, from_status,
    to_status, changed_by, note). Status-Wechsel bumpt **keine**
    Version — der Inhalt ist unveraendert.

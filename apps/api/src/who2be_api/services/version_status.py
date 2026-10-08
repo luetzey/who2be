@@ -8,7 +8,10 @@ Die State-Machine lebt hier als kanonische API-Sicht (Plan §2.1.C):
 
 Verbotene Uebergaenge → 409. Promotion auf `active` setzt eine bereits
 aktive Version derselben Entity atomar auf `inactive` (Plan: "Active-
-Promotion setzt vorher aktive Version auf inactive"). `status_history` wird
+Promotion setzt vorher aktive Version auf inactive"). Ebenso ersetzt das
+Einreichen (`→ review`) eine andere offene Review-Version derselben Entity
+(→ `inactive`), damit Draft und Review sich nicht gegenseitig blockieren
+(Karte t_6ee15ca8). `status_history` wird
 in derselben Transaktion geschrieben — sowohl fuer den eigentlichen
 Wechsel als auch fuer das implizite Inactivieren der bisherigen
 Active-Version.
@@ -687,6 +690,36 @@ class VersionStatusService:
                         ctx.user_id,
                         note=(f"Auto-inactiviert durch Promotion von v{version} auf 'active'."),
                         version=prev_active_version,
+                    )
+
+            # Review-Ersetzung (Karte t_6ee15ca8): hoechstens EINE Review pro
+            # Entity (per-entity Partial-Unique-Index, Migration 0069). Liegt schon eine andere
+            # Version in `review`, wird sie beim Einreichen der neuen ersetzt
+            # (`inactive`) — analog zur Active-Promotion oben. Ohne diesen
+            # Schritt verklemmt ein offener Draft neben einer offenen Review:
+            # draft→review scheitert am Review-Index, review→draft am Draft-
+            # Index. Die ersetzte Version bleibt per `inactive → draft`
+            # wiederherstellbar; die Herkunft haelt den Grund fest.
+            if to_status == VersionStatus.review:
+                replaced_reviews = await conn.fetch(
+                    f"UPDATE {version_tbl} SET status = 'inactive' "
+                    f"WHERE {fk_col} = $1 AND status = 'review' "
+                    "AND NOT (version = $2 AND locale = $3) "
+                    "RETURNING version",
+                    entity_id,
+                    version,
+                    target_locale,
+                )
+                for replaced in replaced_reviews:
+                    await self._history.record(
+                        conn,
+                        entity_type,
+                        entity_id,
+                        VersionStatus.review,
+                        VersionStatus.inactive,
+                        ctx.user_id,
+                        note=(f"Review ersetzt durch Einreichen von v{version}."),
+                        version=replaced["version"],
                     )
 
             try:
