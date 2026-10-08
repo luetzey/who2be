@@ -98,7 +98,9 @@ async def list_cases(
     response: Response,
     cursor: PageCursor,
     agent_id: UUID | None = None,
-    status_filter: Annotated[CaseStatus | None, Query(alias="status")] = None,
+    # Einer oder mehrere (`?status=open&status=reopened`): der Chip "Offen"
+    # filtert serverseitig, damit Seite und Zaehler zusammenpassen.
+    status_filter: Annotated[list[CaseStatus] | None, Query(alias="status")] = None,
     target: CaseTarget | None = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = CASE_LIST_LIMIT_DEFAULT,
 ) -> list[CaseRead]:

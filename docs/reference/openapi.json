@@ -9220,7 +9220,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/CaseStatus"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseStatus"
+                  }
                 },
                 {
                   "type": "null"

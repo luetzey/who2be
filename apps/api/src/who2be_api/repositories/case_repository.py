@@ -255,7 +255,7 @@ class CaseRepository(Protocol):
         workspace_id: UUID,
         *,
         agent_id: UUID | None = None,
-        status: CaseStatus | None = None,
+        status: CaseStatus | Sequence[CaseStatus] | None = None,
         target: CaseTarget | None = None,
         reporter_user_id: UUID | None = None,
         limit: int = 50,
@@ -530,7 +530,7 @@ class PgCaseRepository:
         workspace_id: UUID,
         *,
         agent_id: UUID | None = None,
-        status: CaseStatus | None = None,
+        status: CaseStatus | Sequence[CaseStatus] | None = None,
         target: CaseTarget | None = None,
         reporter_user_id: UUID | None = None,
         limit: int = 50,
@@ -538,15 +538,19 @@ class PgCaseRepository:
     ) -> list[CaseRead]:
         """Eine Seite, neueste zuerst, Keyset auf `(created_at, id)` (Q1).
 
+        `status`: ein Status oder mehrere (`= ANY`); leer oder None = Filter aus.
         `target`: Faelle mit mindestens einer Zuordnung dieses Ziels.
         `reporter_user_id`: „eigene gemeldete Faelle“ (viewer, 3.3).
         Feste Parameter-Positionen, NULL = Filter aus — kein dynamisches SQL.
         """
+        # `CaseStatus` ist ein StrEnum und damit selbst iterierbar: zuerst pruefen.
+        picked = [status] if isinstance(status, CaseStatus) else list(status or ())
+        statuses = [s.value for s in picked] or None
         rows = await self._pool.fetch(
             f"SELECT * FROM {_CASES_WITH_STATUS} "
             "WHERE x.workspace_id = $1 "
             "  AND ($2::uuid IS NULL OR x.agent_id = $2) "
-            "  AND ($3::text IS NULL OR x.status = $3) "
+            "  AND ($3::text[] IS NULL OR x.status = ANY($3::text[])) "
             "  AND ($4::text IS NULL OR EXISTS ("
             "        SELECT 1 FROM agent_case_element el "
             "        WHERE el.workspace_id = x.workspace_id AND el.case_id = x.id "
@@ -556,7 +560,7 @@ class PgCaseRepository:
             "ORDER BY x.created_at DESC, x.id DESC LIMIT $8",
             workspace_id,
             agent_id,
-            status.value if status is not None else None,
+            statuses,
             target.value if target is not None else None,
             reporter_user_id,
             cursor[0] if cursor is not None else None,
