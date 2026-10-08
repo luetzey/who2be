@@ -1,10 +1,11 @@
 import type { Session } from '@supabase/supabase-js'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createApi } from '@/api/client'
-import type { CaseRead, Me } from '@/api/types'
+import type { Agent, CaseRead, Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { toast } from '@/components/ui/sonner'
@@ -70,7 +71,7 @@ function stubFetch(handlers: Record<string, Handler>) {
   return fetchMock
 }
 
-function renderDialog() {
+function renderDialog(element: ReactElement = <ReportCaseDialog agent={agent} />) {
   return render(
     <SessionContext.Provider
       value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
@@ -78,11 +79,12 @@ function renderDialog() {
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/agents/a1']}>
           <Routes>
-            <Route path="/w/:workspaceId/agents/:id" element={<ReportCaseDialog agent={agent} />} />
+            <Route path="/w/:workspaceId/agents/:id" element={element} />
             <Route
               path="/w/:workspaceId/feedback/cases/:caseId"
               element={<p data-testid="case-target">Fall-Ziel</p>}
             />
+            <Route path="/w/:workspaceId/agents" element={<p data-testid="agents-target">Agents</p>} />
           </Routes>
         </MemoryRouter>
       </AuthTokenProvider>
@@ -181,6 +183,35 @@ describe('ReportCaseDialog', () => {
     expect(await within(dialog).findByText('Höchstens 4000 Zeichen.')).toBeInTheDocument()
     expect(screen.getByLabelText(/Was war die Lage\?/)).toHaveFocus()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('„Getan“ hat die Grenze 4000: 4000 Zeichen gehen durch, 4001 nicht (LIMITS.behavior)', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const fetchMock = stubFetch({
+      [`POST ${WS}/cases`]: (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json(caseRead(), 201)
+      },
+    })
+    renderDialog()
+    const dialog = await openDialog()
+    fillRequired()
+
+    // Zaehler ab 80 % von 4000 = 3200, nicht erst ab 6400 (alte Spec: 8000).
+    fill(/Was hat der Agent getan\?/, 'b'.repeat(3_200))
+    expect(within(dialog).getByText('3200 / 4000')).toBeInTheDocument()
+
+    fill(/Was hat der Agent getan\?/, 'b'.repeat(4_001))
+    fireEvent.click(submitButton(dialog))
+    expect(await within(dialog).findByText('Höchstens 4000 Zeichen.')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Was hat der Agent getan\?/)).toHaveFocus()
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fill(/Was hat der Agent getan\?/, 'b'.repeat(4_000))
+    expect(within(dialog).queryByText('Höchstens 4000 Zeichen.')).toBeNull()
+    fireEvent.click(submitButton(dialog))
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(String(bodies[0].behavior)).toHaveLength(4_000)
   })
 
   it('öffnet „Mehr angeben“, wenn der Link zu lang ist (Grenze 500)', async () => {
@@ -375,6 +406,144 @@ describe('ReportCaseDialog', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mehr angeben' }))
     fireEvent.click(submitButton(dialog))
     await within(dialog).findAllByText('Pflichtfeld.')
+
+    expect(await axe(document.body)).toHaveNoViolations()
+  }, 15_000)
+})
+
+function agentRow(id: string, name: string): Agent {
+  return {
+    id,
+    workspace_id: 'ws-1',
+    owner_id: 'u1',
+    name,
+    description: '',
+    persona_id: null,
+    system_prompt_template_id: null,
+    status: 'enabled',
+    tool_policy: {},
+    persona_active: true,
+    activatable: true,
+  } as unknown as Agent
+}
+
+describe('ReportCaseDialog ohne festen Agenten (D6b0)', () => {
+  const agents = [agentRow('a1', 'coder'), agentRow('a2', 'reviewer')]
+
+  it('Ausloeser: Default-Variante outline, Hub-Variante brand', () => {
+    const { unmount } = renderDialog()
+    expect(screen.getByRole('button', { name: 'Fall melden' })).toHaveClass('border-input')
+    expect(screen.getByRole('button', { name: 'Fall melden' })).not.toHaveClass('bg-brand')
+    unmount()
+
+    renderDialog(<ReportCaseDialog variant="brand" />)
+    expect(screen.getByRole('button', { name: 'Fall melden' })).toHaveClass('bg-brand')
+  })
+
+  it('mit festem Agenten: Lesewert, kein Select und kein GET /agents', async () => {
+    const fetchMock = stubFetch({})
+    renderDialog()
+    const dialog = await openDialog()
+    expect(within(dialog).queryByRole('combobox', { name: /Agent/ })).toBeNull()
+    expect(within(dialog).getByText('coder')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('lädt die Agenten über GET /agents und sendet den gewählten', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    stubFetch({
+      [`GET ${WS}/agents`]: () => json(agents),
+      [`POST ${WS}/cases`]: (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json(caseRead({ agent_id: 'a2' }), 201)
+      },
+    })
+    renderDialog(<ReportCaseDialog variant="brand" />)
+    const dialog = await openDialog()
+
+    const select = await within(dialog).findByRole('combobox', { name: /Agent/ })
+    expect(select).toHaveValue('')
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Agent wählen …',
+      'coder',
+      'reviewer',
+    ])
+    fireEvent.change(select, { target: { value: 'a2' } })
+    fillRequired()
+    fireEvent.click(submitButton(dialog))
+
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0].agent_id).toBe('a2')
+  })
+
+  it('Pflicht „Agent“: ohne Auswahl Fehler, Fokus auf dem Select, kein POST', async () => {
+    const fetchMock = stubFetch({ [`GET ${WS}/agents`]: () => json(agents) })
+    renderDialog(<ReportCaseDialog />)
+    const dialog = await openDialog()
+    const select = await within(dialog).findByRole('combobox', { name: /Agent/ })
+    fillRequired()
+
+    fireEvent.click(submitButton(dialog))
+
+    await waitFor(() => expect(select).toHaveFocus())
+    expect(select).toHaveAttribute('aria-invalid', 'true')
+    expect(select).toHaveAccessibleDescription('Bitte einen Agenten wählen.')
+    expect(fetchMock).toHaveBeenCalledTimes(1) // nur GET /agents
+
+    // Danach live: mit Auswahl verschwindet der Fehler.
+    fireEvent.change(select, { target: { value: 'a1' } })
+    expect(select).not.toHaveAttribute('aria-invalid')
+    expect(within(dialog).queryByText('Bitte einen Agenten wählen.')).toBeNull()
+  })
+
+  it('Auswahl allein zählt als Eingabe: Abbrechen fragt „Eingaben verwerfen?“', async () => {
+    stubFetch({ [`GET ${WS}/agents`]: () => json(agents) })
+    renderDialog(<ReportCaseDialog />)
+    const dialog = await openDialog()
+    fireEvent.change(await within(dialog).findByRole('combobox', { name: /Agent/ }), {
+      target: { value: 'a1' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }))
+    expect(await screen.findByTestId('report-case-discard')).toBeInTheDocument()
+  })
+
+  it('Leerzustand: ohne Agenten kein Formular, Hinweis noAgents mit Link zu den Agents', async () => {
+    stubFetch({ [`GET ${WS}/agents`]: () => json([]) })
+    renderDialog(<ReportCaseDialog />)
+    const dialog = await openDialog()
+
+    expect(
+      await within(dialog).findByText(
+        'Noch kein Agent im Workspace. Ein Fall gehört immer zu einem Agenten.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Fall melden' })).toBeNull()
+    expect(screen.queryByLabelText(/Was war die Lage\?/)).toBeNull()
+    fireEvent.click(within(dialog).getByRole('link', { name: 'Zu den Agents' }))
+    expect(await screen.findByTestId('agents-target')).toBeInTheDocument()
+  })
+
+  it('Ladefehler bei GET /agents: ErrorAlert statt Formular', async () => {
+    stubFetch({
+      [`GET ${WS}/agents`]: () =>
+        new Response(JSON.stringify({ detail: 'Kein Zugriff.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+    renderDialog(<ReportCaseDialog />)
+    const dialog = await openDialog()
+    expect(await within(dialog).findByTestId('error-alert')).toHaveTextContent('Kein Zugriff.')
+    expect(screen.queryByLabelText(/Was war die Lage\?/)).toBeNull()
+  })
+
+  it('a11y: keine axe-Violations mit Agent-Select im Fehlerzustand', async () => {
+    stubFetch({ [`GET ${WS}/agents`]: () => json(agents) })
+    renderDialog(<ReportCaseDialog variant="brand" />)
+    const dialog = await openDialog()
+    await within(dialog).findByRole('combobox', { name: /Agent/ })
+    fireEvent.click(submitButton(dialog))
+    await within(dialog).findByText('Bitte einen Agenten wählen.')
 
     expect(await axe(document.body)).toHaveNoViolations()
   }, 15_000)

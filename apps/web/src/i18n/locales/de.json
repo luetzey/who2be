@@ -2433,6 +2433,10 @@
         "discardKeep": "Weiter bearbeiten",
         "discardConfirm": "Verwerfen",
         "agent": "Agent",
+        "agentPlaceholder": "Agent wählen …",
+        "agentsLoading": "Agenten werden geladen …",
+        "noAgents": "Noch kein Agent im Workspace. Ein Fall gehört immer zu einem Agenten.",
+        "toAgents": "Zu den Agents",
         "situation": "Was war die Lage?",
         "situationHelp": "Was hast du gefragt oder was sollte der Agent tun?",
         "behavior": "Was hat der Agent getan?",
@@ -2457,7 +2461,8 @@
         "counter": "{{length}} / {{max}}",
         "validation": {
           "required": "Pflichtfeld.",
-          "tooLong": "Höchstens {{max}} Zeichen."
+          "tooLong": "Höchstens {{max}} Zeichen.",
+          "agentRequired": "Bitte einen Agenten wählen."
         },
         "error": {
           "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen."
