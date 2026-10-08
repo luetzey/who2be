@@ -75,3 +75,18 @@ class Pattern(BaseModel):
     evidence_ids: list[UUID]
     first_seen: datetime
     last_seen: datetime
+
+
+class PatternList(BaseModel):
+    """Antwort von `GET /patterns` (ADR-0053 6.5, D5b).
+
+    `threshold` und `window_days` liefert der Server mit (PM-Entscheidung Q8),
+    damit die Oberflaeche die Schwelle anzeigt statt sie fest zu kodieren.
+    Ohne Paginierung: die Sicht ist berechnet und klein.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    threshold: int = Field(ge=1)
+    window_days: int = Field(ge=1)
+    patterns: list[Pattern]

@@ -402,6 +402,8 @@ PROBES: dict[str, Probe] = {
     ),
     f"GET {_WS}/cases": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
     f"GET {_WS}/cases/counts": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
+    # Muster (D5b): berechnete Liste, `agent_id` filtert nur.
+    f"GET {_WS}/patterns": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
     f"GET {_WS}/cases/{{case_id}}": Probe(path={"case_id": "agent_case_id"}),
     f"DELETE {_WS}/cases/{{case_id}}": Probe(path={"case_id": "agent_case_id"}),
     f"POST {_WS}/cases/{{case_id}}/transition": Probe(
