@@ -12,11 +12,14 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastmcp.exceptions import ToolError
+from pydantic import ValidationError
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
 from who2be_mcp.server import (
+    UsageReport,
     get_feedback,
+    mcp,
     record_usage,
     report_problem,
     resolve_feedback,
@@ -28,7 +31,6 @@ from who2be_models import (
     FeedbackResolution,
     FeedbackSummary,
     SystemFeedbackCreate,
-    UsageEventCreate,
     UsageEventRead,
 )
 
@@ -65,7 +67,7 @@ def test_record_usage_posts_event(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    data = UsageEventCreate.model_validate(
+    data = UsageReport.model_validate(
         {"entity_type": "playbook", "entity_id": str(pid), "version": 2, "outcome": "applied"}
     )
     result = asyncio.run(record_usage(data))
@@ -260,6 +262,23 @@ def test_record_usage_propagates_404_as_toolerror(monkeypatch: pytest.MonkeyPatc
         return httpx.Response(404, json={"detail": "Element nicht gefunden."})
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    data = UsageEventCreate.model_validate({"entity_type": "playbook", "entity_id": str(uuid4())})
+    data = UsageReport.model_validate(
+        {"entity_type": "playbook", "entity_id": str(uuid4()), "outcome": "applied"}
+    )
     with pytest.raises(ToolError):
         asyncio.run(record_usage(data))
+
+
+def test_record_usage_requires_outcome() -> None:
+    """`outcome` ist ueber MCP Pflicht (ADR-0053 6.5) — im Modell UND im inputSchema.
+
+    Rot-Probe: faellt das Pflichtfeld weg (`data: UsageEventCreate`), validiert
+    die Eingabe ohne `outcome` wieder, und `required` verliert den Eintrag.
+    """
+    with pytest.raises(ValidationError, match="outcome"):
+        UsageReport.model_validate({"entity_type": "playbook", "entity_id": str(uuid4())})
+    tool = asyncio.run(mcp.get_tool("record_usage"))
+    assert tool is not None
+    defs = tool.parameters.get("$defs", {})
+    report = next(d for d in defs.values() if "outcome" in d.get("properties", {}))
+    assert "outcome" in report.get("required", [])

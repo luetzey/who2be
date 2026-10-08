@@ -198,7 +198,7 @@ MCP_PROBES: dict[str, ToolProbe] = {
     ),
     "copy_agent": ToolProbe({"agent_id": "<<agent_id>>"}),
     # --- Lernen ----------------------------------------------------------------
-    "record_usage": ToolProbe({"data": _PB_REF}),
+    "record_usage": ToolProbe({"data": {**_PB_REF, "outcome": "applied"}}),
     "submit_feedback": ToolProbe({"data": {**_PB_REF, "signal": "helpful"}}),
     "report_problem": ToolProbe({"data": {"category": "other", "note": "iso"}}),
     "resolve_feedback": ToolProbe({"feedback_id": "<<feedback_id>>", "resolution": "dismissed"}),
@@ -220,6 +220,32 @@ MCP_PROBES: dict[str, ToolProbe] = {
                     "verdict": "pass",
                 }
             ],
+        }
+    ),
+    # Faelle (D4). `agent_case_id` ist ein Fall ueber den EIGENEN Agenten
+    # (`_seed_case`), sonst scheitert die Gegenprobe der Schilderung an
+    # `case_statement_not_subject` statt an der Mandantengrenze.
+    "report_case": ToolProbe(
+        {
+            "situation": "iso",
+            "behavior": "iso",
+            "expected_behavior": "iso",
+            "subject_agent_id": "<<agent_id>>",
+        }
+    ),
+    "submit_case_statement": ToolProbe(
+        {
+            "case_id": "<<agent_case_id>>",
+            "followed_instruction": "iso",
+            "missing_information": "",
+            "conflict": "",
+        }
+    ),
+    "list_cases": ToolProbe({"agent_id": "<<agent_id>>"}, filters=True),
+    "assign_case_elements": ToolProbe(
+        {
+            "case_id": "<<agent_case_id>>",
+            "elements": [{"target": "playbook", "entity_id": "<<playbook_id>>"}],
         }
     ),
     # --- Arbeitsbereich ----------------------------------------------------------
@@ -487,6 +513,24 @@ def _seed_active_memory(t: Tenant) -> None:
     )
 
 
+def _seed_case(t: Tenant) -> None:
+    """Offener Fall ueber den eigenen Agenten, mit Marker, direkt in der DB.
+
+    `seed_tenant` kennt (noch) keine Faelle; ein Fall ueber den Agenten des
+    Tokens braucht die Schilderungs-Gegenprobe (nur der Betroffene schildert).
+    """
+    t.ids["agent_case_id"] = str(
+        db_fetchval(
+            "INSERT INTO agent_case (workspace_id, agent_id, reporter_kind, reporter_agent_id, "
+            " situation, behavior, expected_behavior) "
+            "VALUES ($1, $2::uuid, 'agent', $2::uuid, $3, 'iso', 'iso') RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            f"{t.marker} Fall",
+        )
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -499,6 +543,7 @@ def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> Non
             tenants.append(b)
         for t in tenants:
             _seed_active_memory(t)
+            _seed_case(t)
         report = asyncio.run(run_isolation(a, b, ghost_of(b)))
 
         assert not report.findings, f"{len(report.findings)} Befund(e):\n" + "\n".join(

@@ -252,10 +252,31 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # prueft die Gegenrichtung gegen den Server, und
     # `test_doc_tool_count.py` haelt README/ROADMAP an dieselbe Zahl.
     # Seit B3 (ADR-0053) + 2 Lernschleifen-Tools aus `tools/learning.py`,
-    # seit C4b + `propose_memory_change` (ebenda).
-    assert len(MCP_TOOL_REQUIREMENTS) == 86
+    # seit C4b + `propose_memory_change` (ebenda), seit D4 + 4 Fall-Tools
+    # (`report_case`, `submit_case_statement`, `list_cases`,
+    # `assign_case_elements`, ebenda).
+    assert len(MCP_TOOL_REQUIREMENTS) == 90
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
+
+
+def test_case_tools_requirements() -> None:
+    """D4 (ADR-0053 6.5/6.7): wer welches Fall-Werkzeug in `tools/list` sieht.
+
+    Lesen und Zuordnen nur mit `case_triage`; Melden hinter `feedback_write`;
+    Schildern ohne Capability — die API laesst nur den betroffenen Agenten zu.
+    """
+    triage_only = {AgentCapability.case_triage}
+    for name in ("list_cases", "assign_case_elements"):
+        req = MCP_TOOL_REQUIREMENTS[name]
+        assert set(req.capabilities) == triage_only, name
+        assert req.read_domain is None and req.memory is None and not req.always
+    assert set(MCP_TOOL_REQUIREMENTS["report_case"].capabilities) == {
+        AgentCapability.feedback_write
+    }
+    statement = MCP_TOOL_REQUIREMENTS["submit_case_statement"]
+    assert statement.capabilities == () and statement.read_domain is None
+    assert not statement.always
 
 
 def test_workarea_and_kb_domains_always_visible() -> None:
