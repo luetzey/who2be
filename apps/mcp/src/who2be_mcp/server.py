@@ -95,6 +95,7 @@ from who2be_models import (
     TriggerOverview,
     UsageEventCreate,
     UsageEventRead,
+    UsageOutcome,
     VersionDiff,
     VersionStatus,
     VersionTransitionRequest,
@@ -1665,15 +1666,30 @@ async def transition_system_prompt(
 # ---------------------------------------------------------------------------
 
 
+class UsageReport(UsageEventCreate):
+    """Eingabe von `record_usage` ueber MCP: `outcome` ist Pflicht (ADR-0053 6.5).
+
+    Die REST-Form (`UsageEventCreate`) bleibt optional: ADR-0053 3.4 plant eine
+    serverseitige Nutzungsaufzeichnung ohne Ergebnis (Paket D3, hier noch nicht
+    umgesetzt). Ein Agent dagegen meldet immer, WIE die Nutzung ausging — das
+    Ergebnis ist der Teil, den nur er kennt. Pflicht im Schema statt
+    Laufzeit-Pruefung: so steht es im inputSchema unter `required`, und ein
+    Modell sieht es vor dem Aufruf.
+    """
+
+    outcome: UsageOutcome
+
+
 @mcp.tool(output_schema=None)
 @with_tool_log("record_usage")
-async def record_usage(data: UsageEventCreate) -> UsageEventRead:
+async def record_usage(data: UsageReport) -> UsageEventRead:
     """Meldet, dass du ein Element genutzt hast (append-only Telemetrie).
 
     `entity_type` ∈ {persona, playbook, resource}, `entity_id` das genutzte
-    Element, optional `version` und `outcome` ∈ {applied, skipped, error}. Nutze
-    das nach jedem Einsatz eines Playbooks/einer Resource — die Aggregate
-    speisen die Kurations-Sicht (welche Inhalte wirklich helfen).
+    Element, optional `version`, PFLICHT `outcome` ∈ {applied, skipped, error}:
+    angewandt, bewusst verworfen oder fehlgeschlagen — das Ergebnis kennst nur
+    du. Nutze das nach jedem Einsatz eines Playbooks/einer Resource — die
+    Aggregate speisen die Kurations-Sicht (welche Inhalte wirklich helfen).
     """
     client = await build_client()
     return await client.record_usage(data)

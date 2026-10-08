@@ -620,6 +620,40 @@ _TOOLS: list[_ToolDoc] = [
             "melden, bewerten tut ein Mensch. Aktiviert nie etwas."
         ),
     ),
+    # --- Faelle (ADR-0053 6.5, D4). Drei Eintraege, drei Gates: Melden hinter
+    #     `feedback_write`, Schildern ohne Capability (die API laesst nur den
+    #     betroffenen Agenten zu), Lesen + Zuordnen nur mit `case_triage`.
+    _ToolDoc(
+        signature=(
+            "report_case(situation, behavior, expected_behavior, impact?, severity?, "
+            "signal?, source_ref?, subject_agent_id?)"
+        ),
+        tool_names=("report_case",),
+        description=(
+            "Meldet einen Fall: ein Agent hat sich in einer Situation falsch "
+            "verhalten. Ohne `subject_agent_id` ueber dich selbst. Ein Fall "
+            "aendert nie selbst etwas — ein Mensch triagiert ihn."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "submit_case_statement(case_id, followed_instruction, missing_information, conflict)"
+        ),
+        tool_names=("submit_case_statement",),
+        description=(
+            "Deine Schilderung zu einem Fall, in dem es um dich geht: welcher "
+            "Anweisung du gefolgt bist, was dir fehlte, was sich widersprach. "
+            "Beschreiben, nicht urteilen."
+        ),
+    ),
+    _ToolDoc(
+        signature="list_cases(agent_id?, status?) / assign_case_elements(case_id, elements)",
+        tool_names=("list_cases", "assign_case_elements"),
+        description=(
+            "Faelle triagieren: lesen (neueste zuerst) und den Elementen zuordnen, "
+            "an denen sie liegen. Die Zuordnung ersetzt die bisherige vollstaendig."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks

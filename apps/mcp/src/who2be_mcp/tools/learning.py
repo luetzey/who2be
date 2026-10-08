@@ -13,6 +13,12 @@ Gedaechtnis (C4b): `propose_memory_change` legt nur einen Vorschlag an, den
 ein Mensch entscheidet; welche Eintraege ein Agent vorschlagen darf, prueft
 die API (`memory_not_found` fuer alles Fremde). Die Rahmung der Abruf-Treffer
 (`frame_hits`) lebt hier als eine Quelle fuer `search_memory`/`list_memories`.
+
+Faelle (D4, ADR-0053 6.5): `report_case` braucht `feedback_write`,
+`submit_case_statement` nur der betroffene Agent, `list_cases` und
+`assign_case_elements` sind fuer `case_triage` (Sichtbarkeit in
+`tool_requirements`). Die Rechte prueft auch hier allein die API; die
+Werkzeuge haengen an die Problem-Antwort nur einen Korrektur-Hinweis.
 """
 
 from __future__ import annotations
@@ -25,9 +31,24 @@ from pydantic import ValidationError
 
 from who2be_mcp.client import ApiClient
 from who2be_mcp.clients import learning as learning_api
-from who2be_mcp.clients.learning import TestRunBatch
+from who2be_mcp.clients.learning import CaseElementsBody, TestRunBatch
 from who2be_mcp.core_logging import with_tool_log
-from who2be_models import EntityType, MemoryHit, TestCaseRead, TestRunCreate, TestRunRead
+from who2be_models import (
+    CaseCreate,
+    CaseElementInput,
+    CaseElementRead,
+    CaseRead,
+    CaseSeverity,
+    CaseStatementCreate,
+    CaseStatementRead,
+    CaseStatus,
+    EntityType,
+    FeedbackSignal,
+    MemoryHit,
+    TestCaseRead,
+    TestRunCreate,
+    TestRunRead,
+)
 from who2be_models.memory import MemoryProposalAction, MemoryProposalCreate, MemoryProposalRead
 
 # Zusatz zur Server-Meldung, damit der Agent weiss, wie er korrigiert.
@@ -179,7 +200,204 @@ async def propose_memory_change(
     return await learning_api.propose_memory_change(client, data)
 
 
+# --- Faelle (ADR-0053 6.5, D4) ---------------------------------------------------
+
+# Zusatz je Problem-Grund: die Server-Meldung bleibt vorn, der Hinweis sagt,
+# was der Agent jetzt tun kann. Nur Gruende, bei denen er etwas tun kann.
+_CASE_HINTS: dict[str, str] = {
+    "agent_not_found": (
+        " Korrigieren: `subject_agent_id` muss ein Agent dieses Workspace sein "
+        "(`list_agents`); ohne den Parameter meldest du ueber dich selbst."
+    ),
+    "case_statement_not_subject": (
+        " Schildern darf nur der Agent, um den es im Fall geht. Siehst du ein "
+        "eigenes Fehlverhalten, melde es per `report_case`."
+    ),
+}
+
+# Feldkuerzung der Lesefassung von `list_cases`: die Liste dient dem Ueberblick
+# (bis zu 50 Faelle je Seite), den Volltext liefert `format="full"`.
+_CASE_FIELD_PREVIEW = 120
+
+
+def _with_case_hint(exc: ToolError) -> ToolError:
+    """Haengt den Korrektur-Hinweis zum `reason` der Problem-Antwort an."""
+    message = str(exc)
+    for reason, hint in _CASE_HINTS.items():
+        if f"reason={reason}" in message:
+            return ToolError(f"{message}{hint}")
+    return exc
+
+
+def _preview(value: str) -> str:
+    flat = " ".join(value.split())
+    if len(flat) <= _CASE_FIELD_PREVIEW:
+        return flat
+    return flat[: _CASE_FIELD_PREVIEW - 1].rstrip() + "…"
+
+
+def cases_text(cases: list[CaseRead]) -> str:
+    """Lesefassung von `list_cases` (ADR-0056, Option B): Markdown je Fall.
+
+    Kopf mit dem, was ein Folgeaufruf braucht (`id`, Agent, Status), darunter
+    die Pflichtfelder gekuerzt. Kein JSON, kein Escaping.
+    """
+    if not cases:
+        return "# Faelle (0)\n\nKeine Faelle gefunden."
+    parts = [
+        f"# Faelle ({len(cases)})",
+        '> Felder gekuerzt. Volltext und Melder: `format="full"`.',
+    ]
+    for case in cases:
+        lines = [
+            f"## {case.status.value} · {case.severity.value} · {case.id}",
+            f"- agent_id: {case.agent_id}",
+            f"- gemeldet: {case.created_at.isoformat()} ({case.reporter_kind.value})",
+        ]
+        if case.signal is not None:
+            lines.append(f"- signal: {case.signal.value}")
+        lines.append(f"- Situation: {_preview(case.situation)}")
+        lines.append(f"- Verhalten: {_preview(case.behavior)}")
+        lines.append(f"- Erwartet: {_preview(case.expected_behavior)}")
+        if case.impact is not None:
+            lines.append(f"- Folge: {_preview(case.impact)}")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
+
+
+@with_tool_log("report_case")
+async def report_case(
+    situation: str,
+    behavior: str,
+    expected_behavior: str,
+    impact: str | None = None,
+    severity: CaseSeverity = CaseSeverity.medium,
+    signal: FeedbackSignal | None = None,
+    source_ref: str | None = None,
+    subject_agent_id: str | None = None,
+) -> CaseRead:
+    """Meldet einen Fall: ein Agent hat sich in einer Situation falsch verhalten.
+
+    Pflicht: `situation` (was war los), `behavior` (was der Agent tat),
+    `expected_behavior` (was richtig gewesen waere). Optional `impact` (Folge),
+    `severity` (low|medium|high), `signal`, `source_ref` (Fundstelle).
+
+    Ohne `subject_agent_id` meldest du einen Fall ueber DICH SELBST; mit ihm
+    ueber einen anderen Agenten dieses Workspace. Braucht `feedback_write`.
+    Ein Fall aendert nie selbst etwas: ein Mensch triagiert ihn.
+    """
+    agent_id = None if subject_agent_id is None else _parse_uuid(subject_agent_id, "Agent")
+    client = await _client()
+    if agent_id is None:
+        # Ohne Angabe: der eigene Agent, aufgeloest wie `whoami` — der Server
+        # kennt keinen Default fuer `agent_id` (CaseCreate, Pflichtfeld).
+        agent_id = (await client.whoami()).agent_id
+        if agent_id is None:
+            raise ToolError(
+                "Dein Token ist an keinen Agenten gebunden — `subject_agent_id` angeben."
+            )
+    try:
+        data = CaseCreate(
+            agent_id=agent_id,
+            situation=situation,
+            behavior=behavior,
+            expected_behavior=expected_behavior,
+            impact=impact,
+            severity=severity,
+            signal=signal,
+            source_ref=source_ref,
+        )
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    try:
+        return await learning_api.report_case(client, data)
+    except ToolError as exc:
+        raise _with_case_hint(exc) from exc
+
+
+@with_tool_log("submit_case_statement")
+async def submit_case_statement(
+    case_id: str, followed_instruction: str, missing_information: str, conflict: str
+) -> CaseStatementRead:
+    """Gibt deine Schilderung zu einem Fall ab, in dem es um DICH geht.
+
+    Drei Felder (je max. 2000 Zeichen, leer erlaubt): `followed_instruction`
+    (welcher Anweisung du gefolgt bist), `missing_information` (was dir
+    fehlte), `conflict` (welche Vorgaben sich widersprachen). Keine
+    Selbstbewertung — beschreibe, nicht urteile.
+
+    Nur der betroffene Agent darf schildern (sonst
+    `case_statement_not_subject`). Eine neue Schilderung ersetzt die alte in
+    der Anzeige, die alte bleibt erhalten.
+    """
+    parsed = _parse_uuid(case_id, "Fall")
+    try:
+        data = CaseStatementCreate(
+            followed_instruction=followed_instruction,
+            missing_information=missing_information,
+            conflict=conflict,
+        )
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    client = await _client()
+    try:
+        return await learning_api.submit_case_statement(client, parsed, data)
+    except ToolError as exc:
+        raise _with_case_hint(exc) from exc
+
+
+@with_tool_log("list_cases")
+async def list_cases(
+    agent_id: str | None = None, status: CaseStatus | None = None, format: str = "text"
+) -> list[CaseRead] | str:
+    """Listet Faelle, neueste zuerst (bis 50).
+
+    Ohne `agent_id` alle Faelle, die du sehen darfst, mit `agent_id` die ueber
+    diesen Agenten; `status` filtert (open, triaged, in_progress, addressed,
+    verified, dismissed, reopened). Fuer `case_triage`.
+
+    `format="text"` (Default): Markdown, Felder gekuerzt. Volltext und
+    strukturelle Verarbeitung: `format="full"`.
+    """
+    from who2be_mcp.server import _validate_response_format
+
+    _validate_response_format(format)
+    parsed = None if agent_id is None else _parse_uuid(agent_id, "Agent")
+    client = await _client()
+    cases = await learning_api.list_cases(client, agent_id=parsed, status=status)
+    return cases_text(cases) if format == "text" else cases
+
+
+@with_tool_log("assign_case_elements")
+async def assign_case_elements(
+    case_id: str, elements: list[CaseElementInput]
+) -> list[CaseElementRead]:
+    """Ordnet einem Fall die Elemente zu, an denen er liegt (Replace).
+
+    Je Eintrag `target` (persona, playbook, resource, external_tool,
+    system_prompt_template, memory — dann `entity_id` Pflicht — oder
+    tool_policy, model_limit ohne `entity_id`). Die Liste ERSETZT die bisherige
+    Zuordnung vollstaendig; `[]` leert sie. Braucht `case_triage`.
+    Antwort: die neue Zuordnung.
+    """
+    parsed = _parse_uuid(case_id, "Fall")
+    try:
+        data = CaseElementsBody(elements=elements)
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    client = await _client()
+    return await learning_api.assign_case_elements(client, parsed, data)
+
+
 def register(mcp: FastMCP) -> None:
     """Registriert die Lernschleifen-Tools (`output_schema=None`, Payload-Budget)."""
-    for fn in (list_test_cases, submit_test_results, propose_memory_change):
+    for fn in (
+        list_test_cases,
+        submit_test_results,
+        propose_memory_change,
+        report_case,
+        submit_case_statement,
+        list_cases,
+        assign_case_elements,
+    ):
         mcp.tool(output_schema=None)(fn)

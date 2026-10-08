@@ -122,6 +122,16 @@ _TEST_REPORT = ToolRequirement(capabilities=(AgentCapability.test_report,))
 _TEST_CASE_READ = ToolRequirement(
     capabilities=(AgentCapability.test_report, AgentCapability.case_triage)
 )
+# Faelle (ADR-0053 6.5/6.7, Paket D4): Melden wie Feedback hinter
+# `feedback_write`. Schildern haengt an keiner Capability und keinem
+# Read-Scope (keine Achse gesetzt = immer gelistet): die API laesst nur den
+# betroffenen Agenten zu (`case_statement_not_subject`), und jeder Agent kann
+# der betroffene sein — ein Capability-Gate wuerde ihm die Gegenstimme nehmen,
+# die 3.3 ihm gibt. `always` bleibt Ping/Introspektion vorbehalten. Lesen und
+# Zuordnen nur mit `case_triage`: 6.7 begrenzt beide auf diese Agenten in
+# `tools/list`.
+_CASE_STATEMENT = ToolRequirement()
+_CASE_TRIAGE = ToolRequirement(capabilities=(AgentCapability.case_triage,))
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -268,6 +278,11 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     # --- Lernschleife (ADR-0053, B3) — `tools/learning.py` ---
     "list_test_cases": _TEST_CASE_READ,
     "submit_test_results": _TEST_REPORT,
+    # --- Faelle (ADR-0053 6.5, D4) — `tools/learning.py` ---
+    "report_case": _FEEDBACK_WRITE,
+    "submit_case_statement": _CASE_STATEMENT,
+    "list_cases": _CASE_TRIAGE,
+    "assign_case_elements": _CASE_TRIAGE,
 }
 
 

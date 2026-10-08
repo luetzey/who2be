@@ -5,7 +5,8 @@ Entscheidung 3.2): paket-internes Friend-Modul des `ApiClient`, nutzt dessen
 `_get`/`_write` und damit dieselbe Fehler-Uebersetzung in `ToolError`
 (`problem_message`: `detail` + `reason`).
 
-Pfade: Router `test_cases.py` und `memory.py` unter `/v1/workspaces/{ws_id}`.
+Pfade: Router `test_cases.py`, `memory.py` und `cases.py` unter
+`/v1/workspaces/{ws_id}`.
 """
 
 from __future__ import annotations
@@ -16,7 +17,19 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from who2be_mcp.client import ApiClient
-from who2be_models import EntityType, TestCaseRead, TestRunCreate, TestRunRead
+from who2be_models import (
+    CaseCreate,
+    CaseElementInput,
+    CaseElementRead,
+    CaseRead,
+    CaseStatementCreate,
+    CaseStatementRead,
+    CaseStatus,
+    EntityType,
+    TestCaseRead,
+    TestRunCreate,
+    TestRunRead,
+)
 from who2be_models.memory import MemoryProposalCreate, MemoryProposalRead
 
 
@@ -82,3 +95,63 @@ async def propose_memory_change(
         "POST", f"{client._workspace_prefix}/agent-memory-proposals", data
     )
     return MemoryProposalRead.model_validate(payload)
+
+
+# --- Faelle (ADR-0053 6.5, D4) ---------------------------------------------------
+
+
+class CaseElementsBody(BaseModel):
+    """Body von `PUT /cases/{id}/elements` aus Sicht des MCP-Clients.
+
+    Spiegelt `CaseElementsReplace` des Routers (Replace-Semantik). Die
+    Obergrenze je Aufruf prueft der Server, nicht dieses Modell — eine zweite
+    Kopie der Zahl wuerde nur auseinanderlaufen.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    elements: list[CaseElementInput]
+
+
+async def report_case(client: ApiClient, data: CaseCreate) -> CaseRead:
+    """`POST .../cases` — Melder setzt der Server aus dem Token."""
+    payload = await client._write("POST", f"{client._workspace_prefix}/cases", data)
+    return CaseRead.model_validate(payload)
+
+
+async def submit_case_statement(
+    client: ApiClient, case_id: UUID, data: CaseStatementCreate
+) -> CaseStatementRead:
+    """`POST .../cases/{id}/statement` — nur der betroffene Agent (sonst 403)."""
+    payload = await client._write(
+        "POST", f"{client._workspace_prefix}/cases/{case_id}/statement", data
+    )
+    return CaseStatementRead.model_validate(payload)
+
+
+async def list_cases(
+    client: ApiClient, agent_id: UUID | None = None, status: CaseStatus | None = None
+) -> list[CaseRead]:
+    """`GET .../cases?agent_id=&status=` — erste Seite, neueste zuerst.
+
+    Die Sichtbarkeit entscheidet der Server: ohne `case_triage` nur Faelle
+    ueber den eigenen Agenten, ein fremder `agent_id` endet in 403
+    `missing_capability`.
+    """
+    params: dict[str, str] = {}
+    if agent_id is not None:
+        params["agent_id"] = str(agent_id)
+    if status is not None:
+        params["status"] = CaseStatus(status).value
+    payload = await client._get(f"{client._workspace_prefix}/cases", params=params or None)
+    return [CaseRead.model_validate(item) for item in payload]
+
+
+async def assign_case_elements(
+    client: ApiClient, case_id: UUID, data: CaseElementsBody
+) -> list[CaseElementRead]:
+    """`PUT .../cases/{id}/elements` — ersetzt die Zuordnung vollstaendig."""
+    payload = await client._write(
+        "PUT", f"{client._workspace_prefix}/cases/{case_id}/elements", data
+    )
+    return [CaseElementRead.model_validate(item) for item in payload]
