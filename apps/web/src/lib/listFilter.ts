@@ -28,6 +28,55 @@ export function isStatusFilterValue(value: string): value is StatusFilterValue {
   return (STATUS_FILTER_VALUES as readonly string[]).includes(value)
 }
 
+// --- Generische Filterleiste (Filter-Standard F0, E1/E3) ---------------------
+// Listen ausserhalb des Versionsstatus (Faelle, Gedaechtnis) liefern ihre
+// Status-Chips und Facetten fertig uebersetzt; die Leiste rendert nur.
+
+/** Ein Status-Chip (Einfachauswahl). `count: null` = keine Zahl anzeigen. */
+export interface StatusChipOption {
+  value: string
+  label: string
+  count: number | null
+  /** Status-Token fuer den Punkt: `active` → `var(--status-active)`. */
+  token?: string
+  /** Sammel-Chip mit Hinweis-Icon und Brand-Variante (z. B. „Braucht Aufmerksamkeit“). */
+  accent?: boolean
+  /** Bleibt auch bei 0 stehen (Standardwert der Liste). */
+  keepWhenZero?: boolean
+}
+
+/** Ein Wert einer Facette. `count` nur bei echten Zahlen fuer genau diese Auswahl. */
+export interface FacetOption {
+  value: string
+  label: string
+  count?: number
+  /** Hinweis unter dem Select, solange dieser Wert gewaehlt ist. */
+  hint?: string
+}
+
+/** Eine generische Facette (natives Select, Einfachauswahl, '' = „Alle …“). */
+export interface FacetSpec {
+  key: string
+  label: string
+  allLabel: string
+  options: FacetOption[]
+  value: string
+  onChange: (value: string) => void
+}
+
+/**
+ * Chip-Regel: ein Chip mit 0 entfaellt, ausser er ist gewaehlt oder als
+ * Standardwert markiert. Unbekannte Zahl (`null`) blendet nie aus.
+ */
+export function visibleStatusChips(
+  options: readonly StatusChipOption[],
+  selected: string,
+): StatusChipOption[] {
+  return options.filter(
+    (option) => option.count !== 0 || option.value === selected || option.keepWhenZero === true,
+  )
+}
+
 // Minimal-Sicht auf ein Listen-Item, die fuer den Status-Filter reicht.
 export interface StatusLike {
   status: VersionStatus | undefined

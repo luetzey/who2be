@@ -319,7 +319,18 @@
       "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status.",
       "moreFilters": "Filters",
       "moreFiltersCount": "Filters ({{count}})",
-      "clearSearch": "Clear search"
+      "clearSearch": "Clear search",
+      "activeFilters": "Active filters",
+      "chip": "{{label}}: {{value}}",
+      "chipRemove": "Remove filter \"{{label}}: {{value}}\"",
+      "sheetTitle": "Filters",
+      "sheetDescription": "Filters apply right away.",
+      "showResults_one": "Show {{formatted}} result",
+      "showResults_other": "Show {{formatted}} results",
+      "done": "Done",
+      "countsUnavailable": "Counts unavailable right now.",
+      "sortLabel": "Sort",
+      "optionCount": "{{label}} ({{formatted}})"
     }
   },
   "version": {
