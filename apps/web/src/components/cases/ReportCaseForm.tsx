@@ -1,15 +1,16 @@
-import { ChevronRight, Info, LoaderCircle, MessageSquareWarning } from 'lucide-react'
+import { ChevronRight, Info, LoaderCircle, MessageSquareWarning, Users } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
-import type { CaseCreate, CaseSeverity, FeedbackSignal } from '@/api/types'
+import type { Agent, CaseCreate, CaseSeverity, FeedbackSignal } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
-import { Button } from '@/components/ui/button'
+import { Button, type ButtonProps } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ReadOnlyField } from '@/components/ui/read-only-field'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Select } from '@/components/ui/select'
 import { toast } from '@/components/ui/sonner'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -48,13 +50,19 @@ type TextField = keyof typeof LIMITS
 const FIELD_ORDER: readonly TextField[] = ['situation', 'behavior', 'expected', 'impact', 'sourceRef']
 const REQUIRED: ReadonlySet<TextField> = new Set(['situation', 'behavior', 'expected'])
 
+// `agent` kann nur fehlen, wenn der Dialog ohne festen Agenten offen ist (D6b0);
+// es steht in der Lesefolge vor allen Textfeldern.
+type FieldKey = TextField | 'agent'
+
 type Values = Record<TextField, string> & {
+  agentId: string
   signal: FeedbackSignal | null
   severity: CaseSeverity
 }
-type Errors = Partial<Record<TextField, string>>
+type Errors = Partial<Record<FieldKey, string>>
 
 const EMPTY: Values = {
+  agentId: '',
   situation: '',
   behavior: '',
   expected: '',
@@ -64,9 +72,10 @@ const EMPTY: Values = {
   severity: 'medium',
 }
 
-function isDirty(values: Values): boolean {
+function isDirty(values: Values, fixedAgent: boolean): boolean {
   return (
     FIELD_ORDER.some((key) => values[key].trim() !== '') ||
+    (!fixedAgent && values.agentId !== '') ||
     values.signal !== null ||
     values.severity !== EMPTY.severity
   )
@@ -79,8 +88,13 @@ function problemReason(cause: unknown): string | null {
 }
 
 interface ReportCaseDialogProps {
-  /** Fester Agent (Einstieg Agent-Detail, D6a). */
-  agent: { id: string; name: string }
+  /**
+   * Fester Agent (Einstieg Agent-Detail, D6a): Lesewert statt Auswahl. Ohne
+   * ihn waehlt man den Agenten im Dialog (`GET /agents`, Einstieg Hub, D6b).
+   */
+  agent?: { id: string; name: string }
+  /** Variante des Ausloesers: Agent-Detail `outline` (Default), Hub `brand`. */
+  variant?: ButtonProps['variant']
 }
 
 /**
@@ -91,12 +105,12 @@ interface ReportCaseDialogProps {
  * Unter `md` oeffnet der Ausloeser bis D6c ebenfalls diesen Dialog (unter `sm`
  * im Vollbild); die eigene Melden-Seite kommt mit D6c.
  */
-export function ReportCaseDialog({ agent }: ReportCaseDialogProps) {
+export function ReportCaseDialog({ agent, variant = 'outline' }: ReportCaseDialogProps) {
   const { t } = useTranslation('feedback')
   const [open, setOpen] = useState(false)
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+      <Button type="button" variant={variant} onClick={() => setOpen(true)}>
         <MessageSquareWarning aria-hidden="true" />
         {t('cases.report.title')}
       </Button>
@@ -105,15 +119,43 @@ export function ReportCaseDialog({ agent }: ReportCaseDialogProps) {
   )
 }
 
-function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: () => void }) {
+/** Waehlbare Agenten (`GET /agents`, ab viewer); laedt nur ohne festen Agenten. */
+function useAgentChoices(enabled: boolean) {
+  const api = useApi()
+  const [agents, setAgents] = useState<Agent[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!enabled) return
+    let alive = true
+    api
+      .listAgents()
+      .then((list) => {
+        if (alive) setAgents(list)
+      })
+      .catch((cause: unknown) => {
+        if (alive) setError(cause instanceof Error ? cause.message : String(cause))
+      })
+    return () => {
+      alive = false
+    }
+  }, [api, enabled])
+  return { agents, error }
+}
+
+function ReportCaseModal({
+  agent,
+  onClose,
+}: Pick<ReportCaseDialogProps, 'agent'> & { onClose: () => void }) {
   const { t } = useTranslation('feedback')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const formId = useId()
+  const fixedAgent = agent !== undefined
+  const choices = useAgentChoices(!fixedAgent)
 
-  const [values, setValues] = useState<Values>(EMPTY)
+  const [values, setValues] = useState<Values>({ ...EMPTY, agentId: agent?.id ?? '' })
   const [errors, setErrors] = useState<Errors>({})
   const [submitted, setSubmitted] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -123,7 +165,7 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
   // Sperre gegen doppeltes Absenden, auch bevor React `busy` gerendert hat.
   const inFlight = useRef(false)
   // Erstes Fehlerfeld; ein neues Objekt je Absenden fokussiert erneut.
-  const [focusTarget, setFocusTarget] = useState<{ key: TextField } | null>(null)
+  const [focusTarget, setFocusTarget] = useState<{ key: FieldKey } | null>(null)
 
   const idOf = (key: string) => `${formId}-${key}`
 
@@ -133,6 +175,7 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
 
   const validate = (next: Values): Errors => {
     const found: Errors = {}
+    if (next.agentId === '') found.agent = t('cases.report.validation.agentRequired')
     for (const key of FIELD_ORDER) {
       const text = next[key].trim()
       if (REQUIRED.has(key) && text === '') {
@@ -153,7 +196,7 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
 
   const requestClose = () => {
     if (busy) return
-    if (isDirty(values)) setConfirmDiscard(true)
+    if (isDirty(values, fixedAgent)) setConfirmDiscard(true)
     else onClose()
   }
 
@@ -162,7 +205,8 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
     setSubmitted(true)
     const found = validate(values)
     setErrors(found)
-    const first = FIELD_ORDER.find((key) => found[key] !== undefined)
+    const first: FieldKey | undefined =
+      found.agent !== undefined ? 'agent' : FIELD_ORDER.find((key) => found[key] !== undefined)
     if (first !== undefined) {
       if (first === 'sourceRef') setMoreOpen(true)
       // Nach dem Rendern fokussieren: „Mehr angeben“ klappt ggf. erst auf.
@@ -171,7 +215,7 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
     }
     const optional = (text: string) => (text.trim() === '' ? undefined : text.trim())
     const payload: CaseCreate = {
-      agent_id: agent.id,
+      agent_id: values.agentId,
       situation: values.situation.trim(),
       behavior: values.behavior.trim(),
       expected_behavior: values.expected.trim(),
@@ -267,141 +311,202 @@ function ReportCaseModal({ agent, onClose }: ReportCaseDialogProps & { onClose: 
     )
   }
 
+  // Agent waehlbar (Einstieg ohne festen Agenten): natives Select wie im
+  // `TestCaseForm`, Pflichtfeld nach F1 a.
+  const agentSelect = (list: readonly Agent[]) => (
+    <div className="flex min-w-0 flex-col gap-1">
+      <Label htmlFor={idOf('agent')}>
+        {t('cases.report.agent')}
+        <span aria-hidden="true"> *</span>
+      </Label>
+      <Select
+        id={idOf('agent')}
+        value={values.agentId}
+        aria-required
+        aria-invalid={errors.agent ? true : undefined}
+        aria-describedby={errors.agent ? idOf('agent-error') : undefined}
+        className="h-11 sm:h-10"
+        onChange={(event) => set('agentId', event.target.value)}
+      >
+        <option value="">{t('cases.report.agentPlaceholder')}</option>
+        {list.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.name}
+          </option>
+        ))}
+      </Select>
+      {errors.agent ? (
+        <p id={idOf('agent-error')} className="text-xs text-destructive">
+          {errors.agent}
+        </p>
+      ) : null}
+    </div>
+  )
+
   const kindLabel = (kind: FeedbackSignal) =>
     kind === 'helpful' ? t('cases.report.kind.helpful') : t(`signal.${kind}`)
 
-  return (
-      <Dialog open onOpenChange={(next) => (next ? undefined : requestClose())}>
-        <DialogContent
-          // Unter `sm` Vollbild (wie `TestCaseForm`), ab `sm` zentriert, max-w-lg.
-          className="h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-lg"
-          data-testid="report-case-dialog"
+  // Ohne festen Agenten: erst laden, dann ggf. Leerzustand statt Formular (Spec S6).
+  const loadingAgents = !fixedAgent && choices.agents === null && choices.error === null
+  const noAgents = !fixedAgent && choices.agents !== null && choices.agents.length === 0
+
+  const form = (
+    <form
+      className="flex min-w-0 flex-col gap-4"
+      noValidate
+      aria-busy={busy || undefined}
+      onSubmit={(event) => {
+        event.preventDefault()
+        void onSubmit()
+      }}
+    >
+      {fixedAgent ? (
+        // Agent fest (Einstieg Agent-Detail): Lesewert statt Auswahl.
+        <ReadOnlyField label={t('cases.report.agent')} value={agent.name} />
+      ) : (
+        agentSelect(choices.agents ?? [])
+      )}
+
+      {textField('situation', t('cases.report.situation'), t('cases.report.situationHelp'), 3)}
+      {textField('behavior', t('cases.report.behavior'), t('cases.report.behaviorHelp'), 4)}
+      {textField(
+        'expected',
+        keep ? t('cases.report.expectedKeep') : t('cases.report.expected'),
+        t('cases.report.expectedHelp'),
+        3,
+      )}
+      {textField('impact', t('cases.report.impact'), t('cases.report.impactHelp'), 2)}
+
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="text-sm font-medium" id={idOf('kind-label')}>
+          {t('cases.report.kind.label')}
+        </span>
+        <div role="group" aria-labelledby={idOf('kind-label')} className="flex flex-wrap gap-2">
+          {KINDS.map((kind) => (
+            <Button
+              key={kind}
+              type="button"
+              size="sm"
+              variant={values.signal === kind ? 'default' : 'outline'}
+              aria-pressed={values.signal === kind}
+              className="h-11 rounded-full sm:h-9"
+              onClick={() => set('signal', values.signal === kind ? null : kind)}
+            >
+              {kindLabel(kind)}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 w-fit px-2 sm:h-9"
+          aria-expanded={moreOpen}
+          aria-controls={idOf('more')}
+          onClick={() => setMoreOpen((prev) => !prev)}
         >
-          <DialogHeader>
-            <DialogTitle>{t('cases.report.title')}</DialogTitle>
-            <DialogDescription>{t('cases.report.intro')}</DialogDescription>
-          </DialogHeader>
-          <form
-            className="flex min-w-0 flex-col gap-4"
-            noValidate
-            aria-busy={busy || undefined}
-            onSubmit={(event) => {
-              event.preventDefault()
-              void onSubmit()
-            }}
-          >
-            {/* Agent fest (Einstieg Agent-Detail): Lesewert statt Auswahl. */}
-            <ReadOnlyField label={t('cases.report.agent')} value={agent.name} />
-
-            {textField(
-              'situation',
-              t('cases.report.situation'),
-              t('cases.report.situationHelp'),
-              3,
-            )}
-            {textField('behavior', t('cases.report.behavior'), t('cases.report.behaviorHelp'), 4)}
-            {textField(
-              'expected',
-              keep ? t('cases.report.expectedKeep') : t('cases.report.expected'),
-              t('cases.report.expectedHelp'),
-              3,
-            )}
-            {textField('impact', t('cases.report.impact'), t('cases.report.impactHelp'), 2)}
-
-            <div className="flex min-w-0 flex-col gap-2">
-              <span className="text-sm font-medium" id={idOf('kind-label')}>
-                {t('cases.report.kind.label')}
-              </span>
-              <div role="group" aria-labelledby={idOf('kind-label')} className="flex flex-wrap gap-2">
-                {KINDS.map((kind) => (
-                  <Button
-                    key={kind}
-                    type="button"
-                    size="sm"
-                    variant={values.signal === kind ? 'default' : 'outline'}
-                    aria-pressed={values.signal === kind}
-                    className="h-11 rounded-full sm:h-9"
-                    onClick={() => set('signal', values.signal === kind ? null : kind)}
-                  >
-                    {kindLabel(kind)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex min-w-0 flex-col gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-11 w-fit px-2 sm:h-9"
-                aria-expanded={moreOpen}
-                aria-controls={idOf('more')}
-                onClick={() => setMoreOpen((prev) => !prev)}
-              >
-                <ChevronRight
-                  aria-hidden="true"
-                  className={cn('transition-transform', moreOpen && 'rotate-90')}
-                />
-                {t('cases.report.more')}
-              </Button>
-              <div id={idOf('more')} hidden={!moreOpen} className="flex min-w-0 flex-col gap-4">
-                <fieldset className="flex min-w-0 flex-col gap-2">
-                  <legend className="mb-2 text-sm font-medium">
-                    {t('cases.report.severity.label')}
-                  </legend>
-                  <RadioGroup
-                    value={values.severity}
-                    onValueChange={(next) => set('severity', next as CaseSeverity)}
-                    className="flex flex-wrap gap-4"
-                  >
-                    {SEVERITIES.map((severity) => (
-                      <div key={severity} className="flex items-center gap-2">
-                        <RadioGroupItem value={severity} id={idOf(`severity-${severity}`)} />
-                        <Label htmlFor={idOf(`severity-${severity}`)} className="font-normal">
-                          {t(`cases.report.severity.${severity}`)}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </fieldset>
-                {textField(
-                  'sourceRef',
-                  t('cases.report.sourceRef'),
-                  t('cases.report.sourceRefHelp'),
-                  1,
-                  false,
-                )}
-              </div>
-            </div>
-
-            <p className="flex gap-2 text-xs text-muted-foreground">
-              <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-              <span>{t('cases.report.privacy')}</span>
-            </p>
-
-            {sendError !== null ? <ErrorAlert message={sendError} /> : null}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" disabled={busy} onClick={requestClose}>
-                {t('common:actions.cancel')}
-              </Button>
-              <Button type="submit" variant="brand" disabled={busy} aria-busy={busy || undefined}>
-                {busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-                {t('cases.report.submit')}
-              </Button>
-            </DialogFooter>
-          </form>
-          {/* Verschachtelt, damit Radix die Rueckfrage als innere Ebene fuehrt. */}
-          <DiscardDialog
-            open={confirmDiscard}
-            onKeep={() => setConfirmDiscard(false)}
-            onDiscard={() => {
-              setConfirmDiscard(false)
-              onClose()
-            }}
+          <ChevronRight
+            aria-hidden="true"
+            className={cn('transition-transform', moreOpen && 'rotate-90')}
           />
-        </DialogContent>
-      </Dialog>
+          {t('cases.report.more')}
+        </Button>
+        <div id={idOf('more')} hidden={!moreOpen} className="flex min-w-0 flex-col gap-4">
+          <fieldset className="flex min-w-0 flex-col gap-2">
+            <legend className="mb-2 text-sm font-medium">{t('cases.report.severity.label')}</legend>
+            <RadioGroup
+              value={values.severity}
+              onValueChange={(next) => set('severity', next as CaseSeverity)}
+              className="flex flex-wrap gap-4"
+            >
+              {SEVERITIES.map((severity) => (
+                <div key={severity} className="flex items-center gap-2">
+                  <RadioGroupItem value={severity} id={idOf(`severity-${severity}`)} />
+                  <Label htmlFor={idOf(`severity-${severity}`)} className="font-normal">
+                    {t(`cases.report.severity.${severity}`)}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </fieldset>
+          {textField(
+            'sourceRef',
+            t('cases.report.sourceRef'),
+            t('cases.report.sourceRefHelp'),
+            1,
+            false,
+          )}
+        </div>
+      </div>
+
+      <p className="flex gap-2 text-xs text-muted-foreground">
+        <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <span>{t('cases.report.privacy')}</span>
+      </p>
+
+      {sendError !== null ? <ErrorAlert message={sendError} /> : null}
+
+      <DialogFooter>
+        <Button type="button" variant="outline" disabled={busy} onClick={requestClose}>
+          {t('common:actions.cancel')}
+        </Button>
+        <Button type="submit" variant="brand" disabled={busy} aria-busy={busy || undefined}>
+          {busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
+          {t('cases.report.submit')}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+
+  let body = form
+  if (choices.error !== null) {
+    body = <ErrorAlert message={choices.error} />
+  } else if (loadingAgents) {
+    body = (
+      <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+        {t('cases.report.agentsLoading')}
+      </p>
+    )
+  } else if (noAgents) {
+    body = (
+      <EmptyState
+        icon={Users}
+        title={t('cases.report.noAgents')}
+        action={
+          <Button asChild variant="outline" className="h-11 sm:h-10">
+            <Link to={wsPath('/agents')}>{t('cases.report.toAgents')}</Link>
+          </Button>
+        }
+      />
+    )
+  }
+
+  return (
+    <Dialog open onOpenChange={(next) => (next ? undefined : requestClose())}>
+      <DialogContent
+        // Unter `sm` Vollbild (wie `TestCaseForm`), ab `sm` zentriert, max-w-lg.
+        className="h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-lg"
+        data-testid="report-case-dialog"
+      >
+        <DialogHeader>
+          <DialogTitle>{t('cases.report.title')}</DialogTitle>
+          <DialogDescription>{t('cases.report.intro')}</DialogDescription>
+        </DialogHeader>
+        {body}
+        {/* Verschachtelt, damit Radix die Rueckfrage als innere Ebene fuehrt. */}
+        <DiscardDialog
+          open={confirmDiscard}
+          onKeep={() => setConfirmDiscard(false)}
+          onDiscard={() => {
+            setConfirmDiscard(false)
+            onClose()
+          }}
+        />
+      </DialogContent>
+    </Dialog>
   )
 }
 

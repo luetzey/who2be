@@ -2433,6 +2433,10 @@
         "discardKeep": "Keep editing",
         "discardConfirm": "Discard",
         "agent": "Agent",
+        "agentPlaceholder": "Choose an agent …",
+        "agentsLoading": "Loading agents …",
+        "noAgents": "No agent in this workspace yet. A case always belongs to an agent.",
+        "toAgents": "Go to Agents",
         "situation": "What was the situation?",
         "situationHelp": "What did you ask, or what was the agent supposed to do?",
         "behavior": "What did the agent do?",
@@ -2457,7 +2461,8 @@
         "counter": "{{length}} / {{max}}",
         "validation": {
           "required": "Required.",
-          "tooLong": "At most {{max}} characters."
+          "tooLong": "At most {{max}} characters.",
+          "agentRequired": "Please choose an agent."
         },
         "error": {
           "agentGone": "This agent no longer exists. Pick another one."
