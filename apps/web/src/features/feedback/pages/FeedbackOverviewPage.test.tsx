@@ -1,62 +1,152 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { FeedbackOverview } from '@/api/types'
+import type { FeedbackOverview, WorkspaceRole } from '@/api/types'
 import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackItems } = vi.hoisted(() => ({
-  getFeedbackOverview: vi.fn(),
-  getFeedbackItems: vi.fn(),
-}))
+const { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents } = vi.hoisted(
+  () => ({
+    getFeedbackOverview: vi.fn(),
+    getFeedbackItems: vi.fn(),
+    listCases: vi.fn(),
+    countCases: vi.fn(),
+    listAgents: vi.fn(),
+  }),
+)
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
 // feuert der `useEffect(load,[load])` des Hooks in einer Schleife.
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackItems }
+  const api = { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents }
   return { useApi: () => api }
 })
+
+let role: WorkspaceRole | null = 'editor'
+vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
+  useCurrentWorkspaceRole: () => role,
+}))
 
 const EMPTY_ITEMS = {
   items: [],
   counts: { open: 0, in_progress: 0, addressed: 0, dismissed: 0 },
 }
 
-beforeEach(() => {
-  // Der Posteingang (FeedbackInbox) laedt eigenstaendig; in den Page-Tests
-  // pruefen wir den Ueberblick-Teil, daher der Posteingang hier leer.
-  getFeedbackItems.mockResolvedValue(EMPTY_ITEMS)
-})
-
-function renderPage() {
-  return renderInRoutes(<FeedbackOverviewPage />, {
-    path: '/w/:workspaceId/feedback',
-    initialEntries: ['/w/ws-1/feedback'],
-  })
+const OVERVIEW: FeedbackOverview = {
+  items: [
+    {
+      entity_type: 'playbook',
+      entity_id: 'pb1',
+      name: 'Onboarding',
+      usage_count: 12,
+      feedback_count: 3,
+      negative_count: 2,
+      helpful_count: 1,
+      last_activity_at: '2026-06-20T10:00:00Z',
+    },
+  ],
 }
 
-describe('FeedbackOverviewPage', () => {
-  it('listet Elemente mit Kennzahlen und verlinkt auf die Detailseite', async () => {
-    const overview: FeedbackOverview = {
-      items: [
-        {
-          entity_type: 'playbook',
-          entity_id: 'pb1',
-          name: 'Onboarding',
-          usage_count: 12,
-          feedback_count: 3,
-          negative_count: 2,
-          helpful_count: 1,
-          last_activity_at: '2026-06-20T10:00:00Z',
-        },
-      ],
-    }
-    getFeedbackOverview.mockResolvedValue(overview)
+beforeEach(() => {
+  role = 'editor'
+  getFeedbackOverview.mockReset()
+  getFeedbackItems.mockReset()
+  listCases.mockReset()
+  countCases.mockReset()
+  listAgents.mockReset()
+  // Bausteine (FeedbackInbox) und Faelle laden eigenstaendig; leer reicht hier.
+  getFeedbackItems.mockResolvedValue(EMPTY_ITEMS)
+  getFeedbackOverview.mockResolvedValue(OVERVIEW)
+  listCases.mockResolvedValue({ items: [], next_cursor: null })
+  countCases.mockResolvedValue({
+    open: 0,
+    reopened: 0,
+    triaged: 0,
+    in_progress: 0,
+    addressed: 0,
+    verified: 0,
+    dismissed: 0,
+  })
+  listAgents.mockResolvedValue([])
+})
+
+function SearchProbe() {
+  return <output data-testid="search">{useLocation().search}</output>
+}
+
+const currentSearch = () => screen.getByTestId('search').textContent
+
+function renderPage(search = '') {
+  return renderInRoutes(
+    <>
+      <FeedbackOverviewPage />
+      <SearchProbe />
+    </>,
+    { path: '/w/:workspaceId/feedback', initialEntries: [`/w/ws-1/feedback${search}`] },
+  )
+}
+
+describe('FeedbackOverviewPage — Hub-Tabs', () => {
+  it('oeffnet standardmaessig „Fälle“ mit drei Tabs fuer editor', async () => {
     renderPage()
 
-    // Die Kurations-Aggregat-Liste liegt jetzt im „Kuration"-Tab.
-    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Fälle', 'Bausteine', 'Kuration'])
+    expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tablist', { name: 'Bereiche des Feedbacks' })).toBeInTheDocument()
+    expect(await screen.findByText('Keine offenen Fälle')).toBeInTheDocument()
+    // Kuration laedt erst, wenn der Tab offen ist.
+    expect(getFeedbackOverview).not.toHaveBeenCalled()
+  })
+
+  it('schreibt den Tab in die URL und verwirft dabei Filter des alten Tabs', async () => {
+    renderPage('?tab=cases&status=triaged')
+    await waitFor(() => expect(listCases).toHaveBeenCalled())
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Bausteine/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Bausteine/ }))
+    await waitFor(() => expect(currentSearch()).toBe('?tab=signals'))
+    expect(screen.getByRole('tab', { name: /Bausteine/ })).toHaveAttribute('aria-selected', 'true')
+    expect(getFeedbackItems).toHaveBeenCalled()
+  })
+
+  it('oeffnet einen Deep-Link auf „Kuration“ direkt', async () => {
+    renderPage('?tab=curation')
+    expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Kuration/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('korrigiert einen unbekannten Tab still auf „Fälle“', async () => {
+    renderPage('?tab=quatsch')
+    await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
+    expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('zeigt viewer nur „Meine Fälle“ ohne Tab-Leiste und ohne Kuration', async () => {
+    role = 'viewer'
+    renderPage('?tab=curation')
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Meine Fälle' })).toBeInTheDocument()
+    expect(await screen.findByText('Du hast noch keinen Fall gemeldet')).toBeInTheDocument()
+    await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
+    expect(getFeedbackOverview).not.toHaveBeenCalled()
+    expect(getFeedbackItems).not.toHaveBeenCalled()
+  })
+
+  it('bietet „Fall melden“ und „Problem melden“ im Seitenkopf', () => {
+    renderPage()
+    expect(screen.getAllByRole('button', { name: 'Fall melden' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Problem melden/ })).toBeInTheDocument()
+  })
+})
+
+describe('FeedbackOverviewPage — Kuration', () => {
+  it('listet Elemente mit Kennzahlen und verlinkt auf die Detailseite', async () => {
+    renderPage('?tab=curation')
+
     const link = await screen.findByRole('link', { name: 'Onboarding' })
     expect(link).toHaveAttribute('href', '/w/ws-1/feedback/playbook/pb1')
     expect(screen.getByText(/12 Nutzungen/)).toBeInTheDocument()
@@ -66,9 +156,8 @@ describe('FeedbackOverviewPage', () => {
 
   it('zeigt einen Empty-State, wenn kein Feedback vorliegt', async () => {
     getFeedbackOverview.mockResolvedValue({ items: [] } satisfies FeedbackOverview)
-    renderPage()
+    renderPage('?tab=curation')
 
-    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
     await waitFor(() =>
       expect(screen.getByText('Noch kein Feedback in diesem Workspace.')).toBeInTheDocument(),
     )
@@ -80,24 +169,8 @@ describe('FeedbackOverviewPage', () => {
   // unterhalb der Mobile-Schwelle `md` stapeln, die Breiten gelten nur
   // darueber. Weiche 2: `min-w-[7.5rem]` wird praefixiert, nicht entfernt.
   it('stapelt die Kurations-Zeile unterhalb md, statt drei feste Breiten zu erzwingen', async () => {
-    const overview: FeedbackOverview = {
-      items: [
-        {
-          entity_type: 'playbook',
-          entity_id: 'pb1',
-          name: 'Onboarding',
-          usage_count: 12,
-          feedback_count: 3,
-          negative_count: 2,
-          helpful_count: 1,
-          last_activity_at: '2026-06-20T10:00:00Z',
-        },
-      ],
-    }
-    getFeedbackOverview.mockResolvedValue(overview)
-    renderPage()
+    renderPage('?tab=curation')
 
-    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
     const link = await screen.findByRole('link', { name: 'Onboarding' })
 
     // Die Zeile selbst: Phone-Fall ist die Spalte, `md:` schaltet die Reihe an.

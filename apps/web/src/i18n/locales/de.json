@@ -2312,9 +2312,13 @@
       "showLess": "Weniger anzeigen",
       "showAll": "Alle {{count}} anzeigen",
       "tabs": {
-        "inbox": "Posteingang",
+        "cases": "Fälle",
+        "myCases": "Meine Fälle",
+        "signals": "Bausteine",
         "curation": "Kuration"
-      }
+      },
+      "tabsAria": "Bereiche des Feedbacks",
+      "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Verhalten eines Agenten meldest du als Fall."
     },
     "tiles": {
       "mostUsed": "Meistgenutzt",
@@ -2467,6 +2471,48 @@
         "error": {
           "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen."
         }
+      },
+      "list": {
+        "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einem Fall kann ein Prüffall werden.",
+        "descriptionViewer": "Fälle, die du gemeldet hast, und was daraus geworden ist.",
+        "emptyOpenTitle": "Keine offenen Fälle",
+        "emptyOpenDescription": "Fälle entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
+        "emptyViewerTitle": "Du hast noch keinen Fall gemeldet",
+        "emptyViewerDescription": "Wenn ein Agent etwas anders machen soll, melde es hier. Du siehst dann, was daraus wird.",
+        "emptyFiltered": "Kein Fall passt zu diesen Filtern.",
+        "loadError": "Fälle konnten nicht geladen werden.",
+        "loadMore": "Weitere laden"
+      },
+      "status": {
+        "open": "Offen",
+        "reopened": "Wieder offen",
+        "triaged": "Eingeordnet",
+        "addressed": "Umgesetzt → {{element}} v{{version}}",
+        "addressedShort": "Umgesetzt",
+        "dismissed": "Verworfen",
+        "in_progress": "In Arbeit",
+        "verified": "Bestätigt"
+      },
+      "row": {
+        "expected": "Erwartet: {{text}}",
+        "situation": "Lage: {{text}}",
+        "selfReported": "(selbst gemeldet)",
+        "fromPattern": "aus Muster",
+        "builder": "Builder"
+      },
+      "filter": {
+        "target": "Zugeordnet zu",
+        "allTargets": "Alle Bausteine"
+      },
+      "target": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "external_tool": "Werkzeug",
+        "system_prompt_template": "System-Prompt",
+        "tool_policy": "Werkzeugrechte",
+        "memory": "Gedächtnis",
+        "model_limit": "Modellgrenze"
       }
     }
   },
