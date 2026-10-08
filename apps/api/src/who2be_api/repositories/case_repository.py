@@ -9,6 +9,9 @@ beruehrt, schreibt sein Event in DERSELBEN Transaktion:
 
 - `create_case`: Fall + `reported`.
 - `append_event`: ein Status-Event.
+- `append_transition`: ein Status-Event unter der Fall-Sperre, nur wenn der
+  vom Service gepruefte Ausgangsstatus (und bei `triaged` die Zuordnung)
+  noch gilt (D2, gegen Check-then-act).
 - `set_elements`: Replace-Semantik; je hinzugekommenem Element
   `element_assigned`, je entferntem `element_unassigned`.
 - `add_statement`: Schilderung + `statement`.
@@ -61,9 +64,35 @@ from who2be_models import (
     CaseStatementRead,
     CaseStatus,
     CaseTarget,
+    EntityType,
 )
 
 CASE_DELETED_AUDIT_ACTION = "case.deleted"
+
+# Zuordnungsziel -> Tabelle (fest, nie aus Eingaben). `tool_policy` und
+# `model_limit` haben keine `entity_id` und fehlen deshalb.
+_TARGET_TABLES: dict[CaseTarget, str] = {
+    CaseTarget.persona: "persona",
+    CaseTarget.playbook: "playbook",
+    CaseTarget.resource: "resource",
+    CaseTarget.external_tool: "external_tool",
+    CaseTarget.system_prompt_template: "system_prompt_template",
+    CaseTarget.memory: "agent_memory",
+}
+
+# Versionsart -> (Identitaetstabelle, Versionstabelle, FK-Spalte), Muster
+# `test_case_repository._ENTITY_TABLES`.
+_VERSION_TABLES: dict[str, tuple[str, str, str]] = {
+    "persona": ("persona", "persona_version", "persona_id"),
+    "playbook": ("playbook", "playbook_version", "playbook_id"),
+    "resource": ("resource", "resource_version", "resource_id"),
+    "system_prompt_template": (
+        "system_prompt_template",
+        "system_prompt_template_version",
+        "template_id",
+    ),
+    "external_tool": ("external_tool", "external_tool_version", "external_tool_id"),
+}
 
 _STATUS_EVENT_VALUES = ", ".join(f"'{event.value}'" for event in CASE_STATUS_EVENTS)
 
@@ -190,6 +219,18 @@ class CaseRepository(Protocol):
         actor_id: UUID | None,
     ) -> CaseEventRead | None: ...
 
+    async def append_transition(
+        self,
+        workspace_id: UUID,
+        case_id: UUID,
+        data: CaseEventCreate,
+        *,
+        expected_status: CaseStatus,
+        require_element: bool,
+        actor_kind: CaseActorKind,
+        actor_id: UUID | None,
+    ) -> CaseEventRead | None: ...
+
     async def set_elements(
         self,
         workspace_id: UUID,
@@ -199,6 +240,16 @@ class CaseRepository(Protocol):
         assigned_by_kind: CaseAssignedByKind,
         assigned_by: UUID,
     ) -> list[CaseElementRead] | None: ...
+
+    async def agent_exists(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
+
+    async def element_exists(
+        self, workspace_id: UUID, target: CaseTarget, entity_id: UUID
+    ) -> bool: ...
+
+    async def version_exists(
+        self, workspace_id: UUID, entity_type: EntityType, version_id: UUID
+    ) -> bool: ...
 
     async def add_statement(
         self,
@@ -403,6 +454,99 @@ class PgCaseRepository:
                 measure_id=data.measure_id,
             )
 
+    async def append_transition(
+        self,
+        workspace_id: UUID,
+        case_id: UUID,
+        data: CaseEventCreate,
+        *,
+        expected_status: CaseStatus,
+        require_element: bool,
+        actor_kind: CaseActorKind,
+        actor_id: UUID | None,
+    ) -> CaseEventRead | None:
+        """Status-Event nur, wenn der Fall noch im erwarteten Zustand ist (D2).
+
+        Der Service prueft Kante und Pflichtfelder vorab; hier wird dieselbe
+        Bedingung unter der Fall-Sperre (wie `set_elements`) noch einmal
+        geprueft und erst dann geschrieben. So koennen zwei gleichzeitige
+        Uebergaenge nicht beide von demselben Ausgangsstatus ausgehen, und ein
+        paralleles Leeren der Zuordnung kann ein `triaged` ohne Element nicht
+        mehr unterlaufen. `require_element`: mindestens eine Zuordnung.
+
+        None, wenn der Fall fehlt oder der Stand abweicht; der Aufrufer liest
+        dann neu und meldet den passenden Fehler.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            if not await _case_exists(conn, workspace_id, case_id):
+                return None
+            await _lock_case(conn, case_id)
+            current = await conn.fetchval(
+                f"SELECT {_STATUS_SQL} FROM agent_case c WHERE c.workspace_id = $1 AND c.id = $2",
+                workspace_id,
+                case_id,
+            )
+            if current != expected_status.value:
+                return None
+            if require_element:
+                has_element = await conn.fetchval(
+                    "SELECT 1 FROM agent_case_element WHERE workspace_id = $1 AND case_id = $2 "
+                    "LIMIT 1",
+                    workspace_id,
+                    case_id,
+                )
+                if has_element is None:
+                    return None
+            return await _insert_event(
+                conn,
+                workspace_id,
+                case_id,
+                data.event,
+                actor_kind,
+                actor_id,
+                note=data.note,
+                version_entity_type=data.version_entity_type,
+                version_id=data.version_id,
+                measure_id=data.measure_id,
+            )
+
+    async def agent_exists(self, workspace_id: UUID, agent_id: UUID) -> bool:
+        found = await self._pool.fetchval(
+            "SELECT 1 FROM agent WHERE workspace_id = $1 AND id = $2", workspace_id, agent_id
+        )
+        return found is not None
+
+    async def element_exists(self, workspace_id: UUID, target: CaseTarget, entity_id: UUID) -> bool:
+        """Gehoert das Zuordnungsziel zu diesem Workspace?
+
+        Nur fuer Ziele mit `entity_id` (nicht `tool_policy`/`model_limit`).
+        Tabellenname aus einer festen Abbildung, nie aus Eingaben.
+        """
+        table = _TARGET_TABLES[target]
+        found = await self._pool.fetchval(
+            f"SELECT 1 FROM {table} WHERE workspace_id = $1 AND id = $2",
+            workspace_id,
+            entity_id,
+        )
+        return found is not None
+
+    async def version_exists(
+        self, workspace_id: UUID, entity_type: EntityType, version_id: UUID
+    ) -> bool:
+        """Gehoert die Version zu einem Element dieses Workspace (`addressed`, F-W6)?
+
+        Ueber die Identitaetstabelle geprueft, Muster
+        `PgTestCaseRepository.version_entity_id`.
+        """
+        table, version_table, fk = _VERSION_TABLES[entity_type]
+        found = await self._pool.fetchval(
+            f"SELECT 1 FROM {version_table} v JOIN {table} e ON e.id = v.{fk} "
+            "WHERE v.id = $2 AND e.workspace_id = $1",
+            workspace_id,
+            version_id,
+        )
+        return found is not None
+
     async def set_elements(
         self,
         workspace_id: UUID,
@@ -424,9 +568,7 @@ class PgCaseRepository:
         async with self._pool.acquire() as conn, conn.transaction():
             if not await _case_exists(conn, workspace_id, case_id):
                 return None
-            await conn.execute(
-                "SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))", case_id
-            )
+            await _lock_case(conn, case_id)
             current = await conn.fetch(
                 f"SELECT {_ELEMENT_COLUMNS} FROM agent_case_element "
                 "WHERE workspace_id = $1 AND case_id = $2 ORDER BY created_at ASC, id ASC",
@@ -557,6 +699,11 @@ class PgCaseRepository:
             actor_id,
         )
         return result.endswith(" 1")
+
+
+async def _lock_case(conn: asyncpg.Connection, case_id: UUID) -> None:
+    """Transaktionsgebundene Sperre je Fall (Zuordnung und Uebergaenge)."""
+    await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))", case_id)
 
 
 async def _case_exists(conn: asyncpg.Connection, workspace_id: UUID, case_id: UUID) -> bool:

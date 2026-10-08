@@ -324,6 +324,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Lernschleife Phase B — Aktivierung mit Pruefbericht (ADR-0053 6.3, B5a):
     "test_results_incomplete": "Pruefbericht nicht bestaetigt",
     "test_override_reason_required": "Grund fuer die Aktivierung fehlt",
+    # Lernschleife Phase D — Faelle (ADR-0053 6.1/6.5, D2a):
+    "case_not_found": "Fall nicht gefunden",
+    "case_transition_forbidden": "Statuswechsel des Falls nicht erlaubt",
+    "case_transition_human_only": "Statuswechsel ist Menschen vorbehalten",
+    "case_statement_not_subject": "Schilderung nur vom betroffenen Agenten",
 }
 
 
