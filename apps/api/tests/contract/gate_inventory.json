@@ -144,6 +144,11 @@
       "reason": "Statuswechsel an einem bestehenden Memory (bestaetigen, Verfall aufheben), legt nichts Neues an."
     },
     {
+      "path": "/agents/{agent_id}/memories/{memory_id}/convert",
+      "name": "convert_memory_to_case",
+      "reason": "Wandelt einen bestehenden Lernvorschlag in einen Fall um (je Eintrag hoechstens einmal, sonst 409); Faelle zaehlen in keinem Plan-Kontingent, nur Menschen ab editor, gebremst durch write_limit."
+    },
+    {
       "path": "/agents/{agent_id}/memories/{memory_id}/reactivate",
       "name": "reactivate_agent_memory",
       "reason": "Statuswechsel expired -> active an einem bestehenden Memory, legt nichts Neues an."
@@ -187,6 +192,11 @@
       "path": "/feedback",
       "name": "submit_feedback",
       "reason": "Qualitatives Feedback zu einem Element; zaehlt in keinem Kontingent, und ein Deckel darauf wuerde den Rueckmeldeweg verschliessen."
+    },
+    {
+      "path": "/feedback/{feedback_id}/promote",
+      "name": "promote_feedback_to_case",
+      "reason": "Uebernimmt ein bestehendes Alt-Feedback in einen Fall (je Feedback hoechstens einmal, sonst 409); Faelle zaehlen in keinem Plan-Kontingent, nur Menschen ab editor, gebremst durch write_limit."
     },
     {
       "path": "/feedback/{feedback_id}/resolution",
