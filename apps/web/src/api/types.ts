@@ -1819,3 +1819,154 @@ export interface TestReport {
   counts: TestReportCounts
   agents: TestReportAgentGroup[]
 }
+
+// --- Faelle (ADR-0053 3.3/6.5, Lernschleife Phase D) -----------------------
+// Spiegel von `who2be_models.case`. Der Inhalt eines Falls ist nach dem
+// Anlegen unveraenderlich; Status, Zuordnung und Schilderungen kommen als
+// Events dazu. Melden und Einordnen sind getrennt (Q2): `CaseCreate` nimmt
+// keine Zuordnung an.
+
+// Vollstaendig wie im Modell. Phase D setzt `in_progress`/`verified` nicht,
+// die UI zeigt dafuer keine Aktion; der Typ fuehrt sie trotzdem.
+export type CaseStatus =
+  | 'open'
+  | 'triaged'
+  | 'in_progress'
+  | 'addressed'
+  | 'verified'
+  | 'reopened'
+  | 'dismissed'
+export type CaseSeverity = 'low' | 'medium' | 'high'
+export type CaseReporterKind = 'human' | 'agent' | 'builder' | 'pattern'
+export type CaseActorKind = 'human' | 'agent' | 'system'
+export type CaseAssignedByKind = 'human' | 'agent'
+export type CaseEventKind =
+  | 'reported'
+  | 'triaged'
+  | 'in_progress'
+  | 'addressed'
+  | 'verified'
+  | 'reopened'
+  | 'dismissed'
+  | 'element_assigned'
+  | 'element_unassigned'
+  | 'statement'
+// Ziel einer Zuordnung. `tool_policy` und `model_limit` tragen keine `entity_id`.
+export type CaseTarget =
+  | 'persona'
+  | 'playbook'
+  | 'resource'
+  | 'external_tool'
+  | 'system_prompt_template'
+  | 'tool_policy'
+  | 'memory'
+  | 'model_limit'
+
+export interface CaseRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  reporter_kind: CaseReporterKind
+  reporter_user_id: string | null
+  reporter_agent_id: string | null
+  situation: string
+  behavior: string
+  impact: string | null
+  expected_behavior: string
+  severity: CaseSeverity
+  signal: FeedbackSignal | null
+  source_ref: string | null
+  source_feedback_id: string | null
+  source_memory_id: string | null
+  status: CaseStatus
+  created_at: string
+}
+
+// `POST /cases`. Laengen-Deckel wie `CaseCreate`: situation/behavior 4000,
+// expected_behavior/impact 2000, source_ref 500; optionale Felder nie leer.
+export interface CaseCreate {
+  agent_id: string
+  situation: string
+  behavior: string
+  impact?: string | null
+  expected_behavior: string
+  severity?: CaseSeverity
+  signal?: FeedbackSignal | null
+  source_ref?: string | null
+}
+
+export interface CaseEvent {
+  id: string
+  case_id: string
+  event: CaseEventKind
+  actor_kind: CaseActorKind
+  actor_id: string | null
+  note: string | null
+  version_entity_type: VersionedEntityType | null
+  version_id: string | null
+  measure_id: string | null
+  element_target: CaseTarget | null
+  element_entity_id: string | null
+  created_at: string
+}
+
+// Eine Zuordnung im Request von `PUT /cases/{id}/elements` (Replace).
+export interface CaseElementInput {
+  target: CaseTarget
+  entity_id?: string | null
+}
+
+export interface CaseElement {
+  id: string
+  case_id: string
+  target: CaseTarget
+  entity_id: string | null
+  assigned_by_kind: CaseAssignedByKind
+  assigned_by: string
+  created_at: string
+}
+
+// Schilderung des betroffenen Agenten (append-only, die neueste gilt).
+export interface CaseStatement {
+  id: string
+  case_id: string
+  agent_id: string
+  followed_instruction: string
+  missing_information: string
+  conflict: string
+  created_at: string
+}
+
+export interface CaseDetail {
+  case: CaseRead
+  events: CaseEvent[]
+  elements: CaseElement[]
+  statements: CaseStatement[]
+}
+
+// `POST /cases/{id}/transition`: Zielstatus plus Pflichtfelder je Ziel.
+// `version_entity_type`/`version_id` nur gemeinsam.
+export interface CaseTransitionInput {
+  to: CaseStatus
+  note?: string | null
+  measure_id?: string | null
+  version_entity_type?: VersionedEntityType | null
+  version_id?: string | null
+}
+
+// Filter fuer `GET /cases`. `status` als Liste setzt je Wert einen
+// Query-Parameter (`?status=open&status=reopened`).
+export interface CaseFilters {
+  agent_id?: string
+  status?: CaseStatus | readonly CaseStatus[]
+  target?: CaseTarget
+}
+
+// Eine Seite der Fall-Liste; `next_cursor` stammt aus dem Header `X-Next-Cursor`.
+export interface CasePage {
+  items: CaseRead[]
+  next_cursor: string | null
+}
+
+// `GET /cases/counts`: Zaehler je Status (auch 0).
+export type CaseCounts = Record<CaseStatus, number>
