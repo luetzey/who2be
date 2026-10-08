@@ -2481,7 +2481,9 @@
         "emptyViewerDescription": "Wenn ein Agent etwas anders machen soll, melde es hier. Du siehst dann, was daraus wird.",
         "emptyFiltered": "Kein Fall passt zu diesen Filtern.",
         "loadError": "Fälle konnten nicht geladen werden.",
-        "loadMore": "Weitere laden"
+        "loadMore": "Weitere laden",
+        "emptyOpenViewerDescription": "Alle Fälle, die du gemeldet hast, sind eingeordnet, umgesetzt oder verworfen.",
+        "showAll": "Alle meine Fälle anzeigen"
       },
       "status": {
         "open": "Offen",
@@ -2513,6 +2515,59 @@
         "tool_policy": "Werkzeugrechte",
         "memory": "Gedächtnis",
         "model_limit": "Modellgrenze"
+      },
+      "detail": {
+        "title": "Fall · {{agent}}",
+        "reported": "gemeldet am {{date}}",
+        "back": "Fälle",
+        "actions": "Aktionen zum Fall",
+        "copyId": "ID kopieren",
+        "idCopied": "ID kopiert.",
+        "contentAria": "Inhalt des Falls",
+        "immutable": "Der Inhalt eines Falls bleibt, wie er gemeldet wurde. Ergänzungen stehen im Verlauf.",
+        "block": {
+          "situation": "Lage",
+          "behavior": "Getan",
+          "expected": "Erwartet",
+          "impact": "Folge"
+        },
+        "statement": {
+          "title": "Schilderung des Agenten",
+          "badge": "Selbstauskunft, keine Bewertung",
+          "followed": "Befolgt",
+          "missing": "Fehlte",
+          "conflict": "Widerspruch"
+        },
+        "assignment": {
+          "title": "Zuordnung",
+          "none": "Noch keinem Baustein zugeordnet."
+        },
+        "notFound": "Diesen Fall gibt es nicht (mehr).",
+        "toList": "Zu den Fällen"
+      },
+      "history": {
+        "title": "Verlauf",
+        "event": {
+          "reported": "Gemeldet",
+          "triaged": "Eingeordnet",
+          "addressed": "Umgesetzt mit {{element}} v{{version}}",
+          "dismissed": "Verworfen: {{note}}",
+          "reopened": "Wieder geöffnet: {{note}}",
+          "element_assigned": "Zugeordnet: {{element}}",
+          "element_unassigned": "Zuordnung entfernt: {{element}}",
+          "statement": "Schilderung des Agenten eingegangen",
+          "unknown": "Änderung"
+        }
+      },
+      "delete": {
+        "action": "Fall löschen…",
+        "title": "Fall löschen?",
+        "body": "Der Fall wird mit Inhalt, Verlauf, Zuordnung und der Schilderung des Agenten endgültig gelöscht. Zurück bleibt nur ein Protokolleintrag ohne Inhalt, der festhält, dass gelöscht wurde. Das lässt sich nicht rückgängig machen.",
+        "lesson": "Der Lernvorschlag, aus dem dieser Fall entstanden ist, wird mitgelöscht.",
+        "testCases": "Prüffälle, die aus diesem Fall angelegt wurden, bleiben erhalten.",
+        "confirm": "Endgültig löschen",
+        "success": "Fall gelöscht.",
+        "error": "Der Fall konnte nicht gelöscht werden."
       }
     }
   },
