@@ -206,6 +206,18 @@ def _delete_forbidden_for_agents() -> ApiGateError:
     )
 
 
+def _triage_without_policy() -> ApiGateError:
+    return ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="missing_capability",
+        actionable_by="human",
+        detail=(
+            "Fuer diesen Agenten ist keine Tool-Policy geladen; ohne 'case_triage' "
+            "kein Einordnen und kein Zuordnen."
+        ),
+    )
+
+
 def _actor(ctx: WorkspaceContext) -> tuple[CaseActorKind, UUID]:
     """Akteur eines Events bzw. Urheber einer Zuordnung aus dem Aufrufweg."""
     if is_agent_bound(ctx) and ctx.agent_id is not None:
@@ -331,6 +343,11 @@ class CaseService:
 
     def _require_triage_right(self, ctx: WorkspaceContext) -> None:
         if is_agent_bound(ctx):
+            # `require_capability` ist ohne Policy ein No-Op. Ein agent-gebundener
+            # Token ohne geladene Policy (Race mit Agent-Delete, siehe
+            # `is_agent_bound`) darf deshalb ausdruecklich nicht triagieren.
+            if ctx.tool_policy is None:
+                raise _triage_without_policy()
             require_capability(ctx, AgentCapability.case_triage)
         else:
             require_role(ctx, WorkspaceRole.editor)

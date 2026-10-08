@@ -9117,6 +9117,579 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/cases": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Report Case",
+        "operationId": "report_case_v1_workspaces__workspace_id__cases_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "List Cases",
+        "operationId": "list_cases_v1_workspaces__workspace_id__cases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseTarget"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseRead"
+                  },
+                  "title": "Response List Cases V1 Workspaces  Workspace Id  Cases Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cases/counts": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Count Cases",
+        "operationId": "count_cases_v1_workspaces__workspace_id__cases_counts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "propertyNames": {
+                    "$ref": "#/components/schemas/CaseStatus"
+                  },
+                  "title": "Response Count Cases V1 Workspaces  Workspace Id  Cases Counts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Get Case",
+        "operationId": "get_case_v1_workspaces__workspace_id__cases__case_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Delete Case",
+        "operationId": "delete_case_v1_workspaces__workspace_id__cases__case_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cases/{case_id}/transition": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Transition Case",
+        "operationId": "transition_case_v1_workspaces__workspace_id__cases__case_id__transition_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseTransitionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cases/{case_id}/elements": {
+      "put": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Replace Case Elements",
+        "operationId": "replace_case_elements_v1_workspaces__workspace_id__cases__case_id__elements_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseElementsReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseElementRead"
+                  },
+                  "title": "Response Replace Case Elements V1 Workspaces  Workspace Id  Cases  Case Id  Elements Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cases/{case_id}/statement": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Add Case Statement",
+        "operationId": "add_case_statement_v1_workspaces__workspace_id__cases__case_id__statement_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseStatementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseStatementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -15967,6 +16540,726 @@
           "client_id"
         ],
         "title": "Body_token_oauth_token_post"
+      },
+      "CaseActorKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "system"
+        ],
+        "title": "CaseActorKind",
+        "description": "Wer ein Event ausgeloest hat. `system` z. B. fuer `addressed` bei Aktivierung (F3)."
+      },
+      "CaseAssignedByKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent"
+        ],
+        "title": "CaseAssignedByKind",
+        "description": "Wer eine Zuordnung gesetzt hat (Mensch oder Builder mit `case_triage`)."
+      },
+      "CaseCreate": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "situation": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Situation"
+          },
+          "behavior": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Behavior"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Behavior"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CaseSeverity",
+            "default": "medium"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id",
+          "situation",
+          "behavior",
+          "expected_behavior"
+        ],
+        "title": "CaseCreate",
+        "description": "Eingabe fuer einen neuen Fall.\n\nMelder (`reporter_*`) und Herkunft (`source_feedback_id`,\n`source_memory_id`) setzt der Server aus dem Aufrufweg; sie sind deshalb\nnicht Teil dieses Modells. Keine Zuordnung (Q2)."
+      },
+      "CaseDetail": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseRead"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/CaseEventRead"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "elements": {
+            "items": {
+              "$ref": "#/components/schemas/CaseElementRead"
+            },
+            "type": "array",
+            "title": "Elements"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/CaseStatementRead"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case",
+          "events",
+          "elements",
+          "statements"
+        ],
+        "title": "CaseDetail",
+        "description": "Fall mit Verlauf, Zuordnungen und Schilderungen (fuer `GET /cases/{id}`, D2)."
+      },
+      "CaseElementInput": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/CaseTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "title": "CaseElementInput",
+        "description": "Eine Zuordnung im Request (Replace-Semantik von `PUT /cases/{id}/elements`)."
+      },
+      "CaseElementRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CaseTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "assigned_by_kind": {
+            "$ref": "#/components/schemas/CaseAssignedByKind"
+          },
+          "assigned_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Assigned By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "target",
+          "entity_id",
+          "assigned_by_kind",
+          "assigned_by",
+          "created_at"
+        ],
+        "title": "CaseElementRead",
+        "description": "Eine gespeicherte Zuordnung."
+      },
+      "CaseElementsReplace": {
+        "properties": {
+          "elements": {
+            "items": {
+              "$ref": "#/components/schemas/CaseElementInput"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Elements"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "elements"
+        ],
+        "title": "CaseElementsReplace",
+        "description": "`PUT /cases/{id}/elements`: die vollstaendige neue Zuordnung (Replace)."
+      },
+      "CaseEventKind": {
+        "type": "string",
+        "enum": [
+          "reported",
+          "triaged",
+          "in_progress",
+          "addressed",
+          "verified",
+          "reopened",
+          "dismissed",
+          "element_assigned",
+          "element_unassigned",
+          "statement"
+        ],
+        "title": "CaseEventKind",
+        "description": "Ereignisse im Verlauf eines Falls.\n\nDie Status-Events tragen den Namen des Zielstatus; `reported` ist das\nAnlege-Event (Status `open`). Die drei uebrigen aendern den Status nicht."
+      },
+      "CaseEventRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "event": {
+            "$ref": "#/components/schemas/CaseEventKind"
+          },
+          "actor_kind": {
+            "$ref": "#/components/schemas/CaseActorKind"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "version_entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "measure_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Id"
+          },
+          "element_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "element_entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Element Entity Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "event",
+          "actor_kind",
+          "actor_id",
+          "note",
+          "version_entity_type",
+          "version_id",
+          "measure_id",
+          "element_target",
+          "element_entity_id",
+          "created_at"
+        ],
+        "title": "CaseEventRead",
+        "description": "Ein Event aus dem Verlauf (append-only)."
+      },
+      "CaseRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "reporter_kind": {
+            "$ref": "#/components/schemas/CaseReporterKind"
+          },
+          "reporter_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter User Id"
+          },
+          "reporter_agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Agent Id"
+          },
+          "situation": {
+            "type": "string",
+            "title": "Situation"
+          },
+          "behavior": {
+            "type": "string",
+            "title": "Behavior"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "title": "Expected Behavior"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CaseSeverity"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "source_feedback_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Feedback Id"
+          },
+          "source_memory_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Memory Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "reporter_kind",
+          "reporter_user_id",
+          "reporter_agent_id",
+          "situation",
+          "behavior",
+          "impact",
+          "expected_behavior",
+          "severity",
+          "signal",
+          "source_ref",
+          "source_feedback_id",
+          "source_memory_id",
+          "status",
+          "created_at"
+        ],
+        "title": "CaseRead",
+        "description": "Ein Fall mit abgeleitetem Status."
+      },
+      "CaseReporterKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "builder",
+          "pattern"
+        ],
+        "title": "CaseReporterKind",
+        "description": "Wer den Fall gemeldet hat (3.3)."
+      },
+      "CaseSeverity": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "CaseSeverity",
+        "description": "Schwere eines Falls, Default `medium`."
+      },
+      "CaseStatementCreate": {
+        "properties": {
+          "followed_instruction": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Followed Instruction"
+          },
+          "missing_information": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Missing Information"
+          },
+          "conflict": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Conflict"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "followed_instruction",
+          "missing_information",
+          "conflict"
+        ],
+        "title": "CaseStatementCreate",
+        "description": "Schilderung des betroffenen Agenten, ohne Selbstnote (3.3)."
+      },
+      "CaseStatementRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "followed_instruction": {
+            "type": "string",
+            "title": "Followed Instruction"
+          },
+          "missing_information": {
+            "type": "string",
+            "title": "Missing Information"
+          },
+          "conflict": {
+            "type": "string",
+            "title": "Conflict"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "agent_id",
+          "followed_instruction",
+          "missing_information",
+          "conflict",
+          "created_at"
+        ],
+        "title": "CaseStatementRead",
+        "description": "Eine gespeicherte Schilderung."
+      },
+      "CaseStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "triaged",
+          "in_progress",
+          "addressed",
+          "verified",
+          "reopened",
+          "dismissed"
+        ],
+        "title": "CaseStatus",
+        "description": "Abgeleiteter Status eines Falls (3.3, Zustandsdiagramm)."
+      },
+      "CaseTarget": {
+        "type": "string",
+        "enum": [
+          "persona",
+          "playbook",
+          "resource",
+          "external_tool",
+          "system_prompt_template",
+          "tool_policy",
+          "memory",
+          "model_limit"
+        ],
+        "title": "CaseTarget",
+        "description": "Ziel einer Zuordnung (3.3)."
+      },
+      "CaseTransitionRequest": {
+        "properties": {
+          "to": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "measure_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Id"
+          },
+          "version_entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "to"
+        ],
+        "title": "CaseTransitionRequest",
+        "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` ist Teil des Vertrags (6.5), wird in D2 aber abgewiesen —\nMassnahmen gibt es erst mit Phase E."
       },
       "CategoryRuleRead": {
         "properties": {
