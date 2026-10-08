@@ -1,18 +1,19 @@
 import { ChevronRight, Inbox, MessageSquareWarning, ThumbsUp, TriangleAlert } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import type { FeedbackOverviewItem } from '@/api/types'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { ReportCaseDialog } from '@/components/cases/ReportCaseForm'
+import { CasesChangedProvider, ReportCaseDialog } from '@/components/cases/ReportCaseForm'
 import { DataView } from '@/components/data/DataView'
 import { EntityIcon } from '@/components/data'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useFeedbackOverview } from '@/hooks/useFeedback'
 import { cn } from '@/lib/utils'
@@ -279,72 +280,95 @@ export function FeedbackOverviewPage() {
 
   // Nach „Problem melden“ Bausteine und Kuration auffrischen.
   const onReported = () => setReloadNonce((n) => n + 1)
+  // Nach „Fall melden“ im Dialog die Fall-Liste neu laden (D6b-Review Nit b):
+  // ein neuer `key` haengt sie frisch ein, Filter bleiben in der URL. Die
+  // Melden-Seite unter `md` fuehrt zurueck, dort laedt die Liste ohnehin neu.
+  const [casesNonce, setCasesNonce] = useState(0)
+  const onCaseReported = useCallback(() => setCasesNonce((n) => n + 1), [])
 
   const casesPanel = (
     <section className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         {canTriage ? t('cases.list.description') : t('cases.list.descriptionViewer')}
       </p>
-      <CaseList viewer={!canTriage} />
+      <CaseList key={casesNonce} viewer={!canTriage} />
     </section>
   )
 
+  // Solange die Rolle laedt, weder die viewer- noch die editor-Variante
+  // zeigen: sonst blitzt „Meine Fälle“ samt viewer-Beschreibung auf (D6b-
+  // Review Nit d, Seitenkopf). Der Kopf bleibt mit Titel und Aktionen stehen.
+  let content
+  if (role === null) {
+    content = (
+      <div className="flex flex-col gap-4" data-testid="feedback-hub-loading">
+        <Skeleton className="h-10 w-72 max-w-full" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+      </div>
+    )
+  } else if (canTriage) {
+    content = (
+      <Tabs value={tab} onValueChange={switchTab}>
+        <TabsList aria-label={t('overview.tabsAria')}>
+          <TabsTrigger value="cases">
+            <MessageSquareWarning className="size-4" aria-hidden="true" />
+            {t('overview.tabs.cases')}
+          </TabsTrigger>
+          <TabsTrigger value="signals">
+            <Inbox className="size-4" aria-hidden="true" />
+            {t('overview.tabs.signals')}
+          </TabsTrigger>
+          <TabsTrigger value="curation">
+            <TriangleAlert className="size-4" aria-hidden="true" />
+            {t('overview.tabs.curation')}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="cases" className="mt-6">
+          {casesPanel}
+        </TabsContent>
+
+        <TabsContent value="signals" className="mt-6">
+          <section className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">{t('overview.signalsDescription')}</p>
+            <FeedbackInbox reloadNonce={reloadNonce} />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="curation" className="mt-6">
+          <CurationPanel reloadNonce={reloadNonce} />
+        </TabsContent>
+      </Tabs>
+    )
+  } else {
+    content = (
+      <>
+        <h2 className="mb-4 text-lg font-semibold">{t('overview.tabs.myCases')}</h2>
+        {casesPanel}
+      </>
+    )
+  }
+
   return (
     <Container>
-      <PageHeader
-        title={t('overview.title')}
-        description={t('overview.description')}
-        actions={
-          <>
-            <ReportProblemDialog onReported={onReported} />
-            {/* Unter `sm` volle Breite (Delta-Spec S7, 390 px). */}
-            <div className="w-full sm:w-auto [&>button]:w-full">
-              <ReportCaseDialog variant="brand" />
-            </div>
-          </>
-        }
-      />
+      <CasesChangedProvider onChanged={onCaseReported}>
+        <PageHeader
+          title={t('overview.title')}
+          description={t('overview.description')}
+          actions={
+            <>
+              <ReportProblemDialog onReported={onReported} />
+              {/* Unter `sm` volle Breite (Delta-Spec S7, 390 px); unter `md`
+                  ist der Ausloeser ein Link auf die Melden-Seite. */}
+              <div className="w-full sm:w-auto [&>a]:w-full [&>button]:w-full">
+                <ReportCaseDialog variant="brand" />
+              </div>
+            </>
+          }
+        />
 
-      <div className="mt-6">
-        {canTriage ? (
-          <Tabs value={tab} onValueChange={switchTab}>
-            <TabsList aria-label={t('overview.tabsAria')}>
-              <TabsTrigger value="cases">
-                <MessageSquareWarning className="size-4" aria-hidden="true" />
-                {t('overview.tabs.cases')}
-              </TabsTrigger>
-              <TabsTrigger value="signals">
-                <Inbox className="size-4" aria-hidden="true" />
-                {t('overview.tabs.signals')}
-              </TabsTrigger>
-              <TabsTrigger value="curation">
-                <TriangleAlert className="size-4" aria-hidden="true" />
-                {t('overview.tabs.curation')}
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="cases" className="mt-6">
-              {casesPanel}
-            </TabsContent>
-
-            <TabsContent value="signals" className="mt-6">
-              <section className="flex flex-col gap-4">
-                <p className="text-sm text-muted-foreground">{t('overview.signalsDescription')}</p>
-                <FeedbackInbox reloadNonce={reloadNonce} />
-              </section>
-            </TabsContent>
-
-            <TabsContent value="curation" className="mt-6">
-              <CurationPanel reloadNonce={reloadNonce} />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <>
-            <h2 className="mb-4 text-lg font-semibold">{t('overview.tabs.myCases')}</h2>
-            {casesPanel}
-          </>
-        )}
-      </div>
+        <div className="mt-6">{content}</div>
+      </CasesChangedProvider>
     </Container>
   )
 }

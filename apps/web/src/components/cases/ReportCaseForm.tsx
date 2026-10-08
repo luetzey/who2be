@@ -1,7 +1,16 @@
 import { ChevronRight, Info, LoaderCircle, MessageSquareWarning, Users } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
 import type { Agent, CaseCreate, CaseSeverity, FeedbackSignal } from '@/api/types'
@@ -26,6 +35,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
 import { toast } from '@/components/ui/sonner'
 import { Textarea } from '@/components/ui/textarea'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 
 // Laengen-Deckel aus `who2be_models.case` (CHECKs der Migration 0100, ADR-0053
@@ -72,10 +82,10 @@ const EMPTY: Values = {
   severity: 'medium',
 }
 
-function isDirty(values: Values, fixedAgent: boolean): boolean {
+function isDirty(values: Values, baselineAgentId: string): boolean {
   return (
     FIELD_ORDER.some((key) => values[key].trim() !== '') ||
-    (!fixedAgent && values.agentId !== '') ||
+    values.agentId !== baselineAgentId ||
     values.signal !== null ||
     values.severity !== EMPTY.severity
   )
@@ -85,6 +95,31 @@ function problemReason(cause: unknown): string | null {
   if (!(cause instanceof ApiError)) return null
   const body = cause.body as { reason?: unknown } | null
   return typeof body?.reason === 'string' ? body.reason : null
+}
+
+// Benachrichtigung „ein Fall wurde gemeldet“ fuer die umgebende Seite (Hub:
+// Fall-Liste neu laden, D6b-Review Nit b). Ohne Provider passiert nichts.
+const CasesChangedContext = createContext<(() => void) | null>(null)
+
+/** Stellt den Ausloesern darunter einen Callback nach erfolgreichem Melden bereit. */
+export function CasesChangedProvider({
+  onChanged,
+  children,
+}: {
+  onChanged: () => void
+  children: ReactNode
+}) {
+  return <CasesChangedContext.Provider value={onChanged}>{children}</CasesChangedContext.Provider>
+}
+
+/**
+ * Navigations-State der Melden-Seite (wie `FeedbackComposeState`): `from` ist
+ * die Ausgangsseite inkl. Query, `agentName` macht den Agenten aus `?agent=`
+ * zum festen Lesewert. Beides fehlt bei einem Deep-Link.
+ */
+export interface ReportCaseState {
+  from?: string
+  agentName?: string
 }
 
 interface ReportCaseDialogProps {
@@ -102,19 +137,65 @@ interface ReportCaseDialogProps {
  * viewer; der Server prueft das Recht. Melden und Einordnen sind getrennt
  * (Q2), deshalb fragt der Dialog nicht nach einer vermuteten Ursache.
  *
- * Unter `md` oeffnet der Ausloeser bis D6c ebenfalls diesen Dialog (unter `sm`
- * im Vollbild); die eigene Melden-Seite kommt mit D6c.
+ * Unter `md` fuehrt der Ausloeser stattdessen auf die eigene Seite
+ * `/feedback/cases/new` (Delta-Spec S6 „390 px“, D6c′); ab `md` bleibt der
+ * Dialog.
  */
 export function ReportCaseDialog({ agent, variant = 'outline' }: ReportCaseDialogProps) {
   const { t } = useTranslation('feedback')
+  const isMobile = useIsMobile()
+  const wsPath = useWorkspacePath()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
+  const label = (
+    <>
+      <MessageSquareWarning aria-hidden="true" />
+      {t('cases.report.title')}
+    </>
+  )
+  if (isMobile) {
+    const state: ReportCaseState = {
+      from: `${location.pathname}${location.search}`,
+      agentName: agent?.name,
+    }
+    const query = agent === undefined ? '' : `?agent=${encodeURIComponent(agent.id)}`
+    return (
+      <Button asChild variant={variant}>
+        <Link to={wsPath(`/feedback/cases/new${query}`)} state={state}>
+          {label}
+        </Link>
+      </Button>
+    )
+  }
   return (
     <>
       <Button type="button" variant={variant} onClick={() => setOpen(true)}>
-        <MessageSquareWarning aria-hidden="true" />
-        {t('cases.report.title')}
+        {label}
       </Button>
-      {open ? <ReportCaseModal agent={agent} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <ReportCaseFlow
+          agent={agent}
+          onClose={() => setOpen(false)}
+          Footer={DialogFooter}
+          frame={({ body, discard, requestClose }) => (
+            <Dialog open onOpenChange={(next) => (next ? undefined : requestClose())}>
+              <DialogContent
+                // Unter `sm` Vollbild (wie `TestCaseForm`), ab `sm` zentriert, max-w-lg.
+                className="h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-lg"
+                data-testid="report-case-dialog"
+              >
+                <DialogHeader>
+                  <DialogTitle>{t('cases.report.title')}</DialogTitle>
+                  <DialogDescription>{t('cases.report.intro')}</DialogDescription>
+                </DialogHeader>
+                {body}
+                {/* Verschachtelt, damit Radix die Rueckfrage als innere Ebene fuehrt. */}
+                {discard}
+              </DialogContent>
+            </Dialog>
+          )}
+        />
+      ) : null}
     </>
   )
 }
@@ -142,20 +223,67 @@ function useAgentChoices(enabled: boolean) {
   return { agents, error }
 }
 
-function ReportCaseModal({
+/** Teile, die der Rahmen (Dialog oder Seite) anordnet. */
+export interface ReportCaseFrameParts {
+  /** Formular bzw. Lade-, Fehler- oder Leerzustand. */
+  body: ReactNode
+  /** Rueckfrage „Eingaben verwerfen?“ (eigener Dialog). */
+  discard: ReactNode
+  /** Schliessen mit Rueckfrage bei Eingaben; gesperrt, solange gesendet wird. */
+  requestClose: () => void
+}
+
+export interface ReportCaseFlowProps {
+  /** Fester Agent: Lesewert statt Auswahl. */
+  agent?: { id: string; name: string }
+  /**
+   * Vorauswahl ohne festen Namen (Deep-Link `?agent=`): steht in der Auswahl,
+   * solange der Agent in `GET /agents` vorkommt, sonst bleibt sie leer.
+   */
+  presetAgentId?: string
+  /** Verlassen ohne Melden (Abbrechen, Verwerfen) und nach Erfolg. */
+  onClose: () => void
+  /** Fusszeilen-Container (Dialog: `DialogFooter`, Seite: fixierte Leiste). */
+  Footer: ComponentType<{ children: ReactNode }>
+  frame: (parts: ReportCaseFrameParts) => ReactNode
+}
+
+/**
+ * Formular „Fall melden“ ohne eigenen Rahmen — geteilt von Dialog und
+ * Vollbildseite (`ReportCasePage`). Zustand, Validierung, Absenden und die
+ * Verwerfen-Rueckfrage leben hier, damit beide Wege gleich melden.
+ */
+export function ReportCaseFlow({
   agent,
+  presetAgentId,
   onClose,
-}: Pick<ReportCaseDialogProps, 'agent'> & { onClose: () => void }) {
+  Footer,
+  frame,
+}: ReportCaseFlowProps) {
   const { t } = useTranslation('feedback')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
+  const casesChanged = useContext(CasesChangedContext)
   const formId = useId()
   const fixedAgent = agent !== undefined
   const choices = useAgentChoices(!fixedAgent)
 
   const [values, setValues] = useState<Values>({ ...EMPTY, agentId: agent?.id ?? '' })
+
+  // Vorauswahl aus `?agent=` (Deep-Link ohne Namen) erst, wenn die Auswahl
+  // geladen ist, und nur, wenn der Agent darin steht — sonst stuende eine ID
+  // im Formular, die die Auswahl nicht zeigt (geloescht oder nicht lesbar).
+  const [baselineAgentId, setBaselineAgentId] = useState(values.agentId)
+  const [presetChecked, setPresetChecked] = useState(fixedAgent || presetAgentId === undefined)
+  if (!presetChecked && choices.agents !== null) {
+    setPresetChecked(true)
+    if (choices.agents.some((choice) => choice.id === presetAgentId) && values.agentId === '') {
+      setValues({ ...values, agentId: presetAgentId ?? '' })
+      setBaselineAgentId(presetAgentId ?? '')
+    }
+  }
   const [errors, setErrors] = useState<Errors>({})
   const [submitted, setSubmitted] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -196,7 +324,7 @@ function ReportCaseModal({
 
   const requestClose = () => {
     if (busy) return
-    if (isDirty(values, fixedAgent)) setConfirmDiscard(true)
+    if (isDirty(values, baselineAgentId)) setConfirmDiscard(true)
     else onClose()
   }
 
@@ -238,6 +366,7 @@ function ReportCaseModal({
           },
         },
       )
+      casesChanged?.()
       onClose()
     } catch (cause: unknown) {
       setSendError(
@@ -448,7 +577,7 @@ function ReportCaseModal({
 
       {sendError !== null ? <ErrorAlert message={sendError} /> : null}
 
-      <DialogFooter>
+      <Footer>
         <Button type="button" variant="outline" disabled={busy} onClick={requestClose}>
           {t('common:actions.cancel')}
         </Button>
@@ -456,7 +585,7 @@ function ReportCaseModal({
           {busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
           {t('cases.report.submit')}
         </Button>
-      </DialogFooter>
+      </Footer>
     </form>
   )
 
@@ -484,30 +613,20 @@ function ReportCaseModal({
     )
   }
 
-  return (
-    <Dialog open onOpenChange={(next) => (next ? undefined : requestClose())}>
-      <DialogContent
-        // Unter `sm` Vollbild (wie `TestCaseForm`), ab `sm` zentriert, max-w-lg.
-        className="h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-lg"
-        data-testid="report-case-dialog"
-      >
-        <DialogHeader>
-          <DialogTitle>{t('cases.report.title')}</DialogTitle>
-          <DialogDescription>{t('cases.report.intro')}</DialogDescription>
-        </DialogHeader>
-        {body}
-        {/* Verschachtelt, damit Radix die Rueckfrage als innere Ebene fuehrt. */}
-        <DiscardDialog
-          open={confirmDiscard}
-          onKeep={() => setConfirmDiscard(false)}
-          onDiscard={() => {
-            setConfirmDiscard(false)
-            onClose()
-          }}
-        />
-      </DialogContent>
-    </Dialog>
-  )
+  return frame({
+    body,
+    requestClose,
+    discard: (
+      <DiscardDialog
+        open={confirmDiscard}
+        onKeep={() => setConfirmDiscard(false)}
+        onDiscard={() => {
+          setConfirmDiscard(false)
+          onClose()
+        }}
+      />
+    ),
+  })
 }
 
 /** Rueckfrage „Eingaben verwerfen?“; ein Entwurf wird nie gespeichert (Spec S6). */

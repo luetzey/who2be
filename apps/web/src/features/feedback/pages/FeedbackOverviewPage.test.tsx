@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,20 +7,33 @@ import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents } = vi.hoisted(
-  () => ({
-    getFeedbackOverview: vi.fn(),
-    getFeedbackItems: vi.fn(),
-    listCases: vi.fn(),
-    countCases: vi.fn(),
-    listAgents: vi.fn(),
-  }),
-)
+const {
+  getFeedbackOverview,
+  getFeedbackItems,
+  listCases,
+  countCases,
+  listAgents,
+  createCase,
+} = vi.hoisted(() => ({
+  getFeedbackOverview: vi.fn(),
+  getFeedbackItems: vi.fn(),
+  listCases: vi.fn(),
+  countCases: vi.fn(),
+  listAgents: vi.fn(),
+  createCase: vi.fn(),
+}))
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
 // feuert der `useEffect(load,[load])` des Hooks in einer Schleife.
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents }
+  const api = {
+    getFeedbackOverview,
+    getFeedbackItems,
+    listCases,
+    countCases,
+    listAgents,
+    createCase,
+  }
   return { useApi: () => api }
 })
 
@@ -140,6 +153,47 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     renderPage()
     expect(screen.getAllByRole('button', { name: 'Fall melden' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Problem melden/ })).toBeInTheDocument()
+  })
+
+  // D6b-Review Nit d (Seitenkopf): solange die Rolle laedt, weder „Meine
+  // Fälle“ noch die viewer-Beschreibung zeigen und keine Faelle abrufen.
+  it('zeigt waehrend die Rolle laedt nur Kopf und Platzhalter, ohne viewer-Variante', () => {
+    role = null
+    renderPage()
+    expect(screen.getByRole('heading', { level: 1, name: 'Feedback' })).toBeInTheDocument()
+    expect(screen.getByTestId('feedback-hub-loading')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Meine Fälle' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(listCases).not.toHaveBeenCalled()
+  })
+
+  // D6b-Review Nit b: nach „Fall melden“ im Dialog laedt die Fall-Liste neu.
+  it('laedt die Fall-Liste nach erfolgreichem „Fall melden“ neu, Filter bleiben', async () => {
+    listAgents.mockResolvedValue([{ id: 'a1', name: 'coder' }])
+    createCase.mockResolvedValue({ id: 'case-9' })
+    renderPage('?tab=cases&status=all')
+    await waitFor(() => expect(listCases).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fall melden' })[0])
+    const dialog = await screen.findByTestId('report-case-dialog')
+    fireEvent.change(await within(dialog).findByRole('combobox', { name: /Agent/ }), {
+      target: { value: 'a1' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/Was war die Lage\?/), {
+      target: { value: 'Lage' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/Was hat der Agent getan\?/), {
+      target: { value: 'Getan' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/Was hättest du erwartet\?/), {
+      target: { value: 'Erwartet' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall melden' }))
+
+    await waitFor(() => expect(createCase).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(listCases).toHaveBeenCalledTimes(2))
+    expect(listCases.mock.calls[1][0]).toEqual(listCases.mock.calls[0][0])
+    expect(currentSearch()).toBe('?tab=cases&status=all')
   })
 })
 
