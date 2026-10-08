@@ -114,7 +114,8 @@ async def list_resource_tags(ctx: Ctx, service: Service) -> list[str]:
 
 @router.get("/{resource_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_resource(resource_id: UUID, ctx: Ctx, service: Service) -> ResourceRead:
-    return await service.get(ctx, resource_id)
+    # `retrieve` statt `get`: der Abruf zaehlt als Nutzung (ADR-0053 3.4).
+    return await service.retrieve(ctx, resource_id)
 
 
 @router.post(

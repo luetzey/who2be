@@ -29,6 +29,7 @@ from who2be_api.core.security import (
     require_write_rate,
     require_write_tags,
 )
+from who2be_api.repositories.feedback_repository import record_server_usage
 from who2be_api.repositories.memory_repository import PgMemoryRepository
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.usage_repository import UsageRepository
@@ -351,11 +352,24 @@ class PersonaService:
                 f"{body_rendered}\n\n{memory_section}" if body_rendered else memory_section
             )
 
-        return PersonaRenderResponse(
+        response = PersonaRenderResponse(
             body_rendered=body_rendered,
             unresolved=unresolved,
             mode=active_mode.name if active_mode is not None else None,
         )
+        # Serverseitige Nutzungsaufzeichnung (ADR-0053 3.4): nach dem Render,
+        # nur fuer agent-gebundene Aufrufer, best-effort — ein Schreibfehler
+        # laesst den Abruf nie scheitern.
+        await record_server_usage(
+            self._pool,
+            ctx.workspace_id,
+            ctx.agent_id,
+            ctx.user_id,
+            entity_type="persona",
+            entity_id=persona.id,
+            version=persona.current_version,
+        )
+        return response
 
     async def _memory_runtime_section(self, ctx: WorkspaceContext) -> str:
         """Gedaechtnis-Sektion fuer den Laufzeit-Kontext (ADR-0044, WP-6).

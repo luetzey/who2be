@@ -29,6 +29,7 @@ from who2be_api.core.security import (
     require_write_rate,
     require_write_tags,
 )
+from who2be_api.repositories.feedback_repository import record_server_usage
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.playbook_resource_link_repository import (
     _heading_level,
@@ -300,11 +301,24 @@ class PlaybookService:
                 render_ctx,
                 conn,
             )
-        return PlaybookRenderResponse(
+        response = PlaybookRenderResponse(
             body_rendered=body_rendered,
             unresolved=unresolved,
             sections=sections,
         )
+        # Serverseitige Nutzungsaufzeichnung (ADR-0053 3.4): nach dem Render,
+        # nur fuer agent-gebundene Aufrufer, best-effort. Auch ein Abschnitts-
+        # Abruf (`block_ids`) ist eine Auslieferung dieser Version.
+        await record_server_usage(
+            self._pool,
+            ctx.workspace_id,
+            ctx.agent_id,
+            ctx.user_id,
+            entity_type="playbook",
+            entity_id=playbook.id,
+            version=playbook.current_version,
+        )
+        return response
 
     async def _sync_body_pills(
         self, ctx: WorkspaceContext, playbook_id: UUID, content: PlaybookContent

@@ -19,6 +19,7 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.repositories import feedback_repository
 from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 from who2be_models import WorkspaceRole
@@ -217,7 +218,9 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             summary = client.get(f"{fbase}/feedback/playbook/{pid}", headers=auth)
             assert summary.status_code == 200, summary.text
             body = summary.json()
-            assert body["usage_count"] == 2
+            # ADR-0053 3.4: `record_usage` meldet nur Ergebnisse; Nutzungen
+            # zaehlt allein die Server-Aufzeichnung (hier: keine Auslieferung).
+            assert body["usage_count"] == 0
             assert body["by_outcome"] == {"applied": 1, "skipped": 1}
             assert body["by_signal"] == {"outdated": 1}
             assert body["recent_notes"] == ["bitte aktualisieren"]
@@ -283,20 +286,21 @@ def test_flywheel_records_usage_feedback_and_summarizes(
                 == 404
             )
 
-            # Workspace-Uebersicht: ein Element mit 2 Usages + 1 negativem Signal.
+            # Workspace-Uebersicht: ein Element mit 2 Ergebnisberichten (keine
+            # Server-Nutzung) + 1 negativem Signal.
             overview = client.get(f"{fbase}/feedback-overview", headers=auth)
             assert overview.status_code == 200, overview.text
             items = overview.json()["items"]
             row = next(i for i in items if i["entity_id"] == pid)
             assert row["name"] == "PB"
-            assert row["usage_count"] == 2
+            assert row["usage_count"] == 0
             assert row["feedback_count"] == 1
             assert row["negative_count"] == 1
             assert row["helpful_count"] == 0
             assert row["last_activity_at"] is not None
 
-            # --- Ungenutzt-Sicht: aktive Version, aber kein Usage/Feedback. ---
-            # PB (oben) ist Draft + hat Usage → erscheint NICHT als ungenutzt.
+            # --- Ungenutzt-Sicht: aktive Version, aber weder ausgeliefert noch bewertet. ---
+            # PB (oben) ist Draft + hat Feedback → erscheint NICHT als ungenutzt.
             # PB2 promoten wir auf active und lassen es unberuehrt → es erscheint.
             pid2 = client.post(pbase, json=_playbook_body("PB2"), headers=auth).json()["id"]
             for to in ("review", "active"):
@@ -313,12 +317,18 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             assert pid2 in unused_ids, "Aktives, ungenutztes Element fehlt in der Stale-Sicht."
             assert pid not in unused_ids, "Element mit Usage darf nicht als ungenutzt gelten."
 
-            # Sobald PB2 genutzt wird, faellt es aus der Ungenutzt-Sicht.
+            # Ein Ergebnisbericht allein ist keine Nutzung (ADR-0053 3.4) …
             client.post(
                 f"{fbase}/usage-events",
                 json={"entity_type": "playbook", "entity_id": pid2, "outcome": "applied"},
                 headers=auth,
             )
+            unused_report = client.get(f"{fbase}/feedback-unused", headers=auth)
+            assert pid2 in {i["entity_id"] for i in unused_report.json()["items"]}
+            # … erst die Auslieferung an einen Agenten nimmt PB2 aus der Sicht.
+            _, agent_headers = agent_token(client, fbase, "leser", {"playbook_read": "all"}, auth)
+            fetched = client.get(f"{pbase}/{pid2}/rendered", headers=agent_headers)
+            assert fetched.status_code == 200, fetched.text
             unused2 = client.get(f"{fbase}/feedback-unused", headers=auth)
             assert pid2 not in {i["entity_id"] for i in unused2.json()["items"]}
 
@@ -589,7 +599,9 @@ def test_flywheel_accepts_external_tool_entity(monkeypatch: pytest.MonkeyPatch) 
             assert summary.status_code == 200, summary.text
             body = summary.json()
             assert body["entity_type"] == "external_tool"
-            assert body["usage_count"] == 1
+            # Nur ein Ergebnisbericht, keine Server-Auslieferung (ADR-0053 3.4).
+            assert body["usage_count"] == 0
+            assert body["by_outcome"] == {"applied": 1}
             assert body["by_signal"] == {"helpful": 1}
 
             # Zentraler Posteingang: der Tool-Name loest ueber den neuen
@@ -603,7 +615,8 @@ def test_flywheel_accepts_external_tool_entity(monkeypatch: pytest.MonkeyPatch) 
             overview = client.get(f"{fbase}/feedback-overview", headers=auth).json()
             row = next(i for i in overview["items"] if i["entity_id"] == tid)
             assert row["name"] == "Todoist"
-            assert row["usage_count"] == 1
+            assert row["usage_count"] == 0
+            assert row["feedback_count"] == 1
 
             # Unbekanntes external_tool -> 404 (kein Enumerieren).
             unknown = "00000000-0000-0000-0000-000000000000"
@@ -661,3 +674,251 @@ def test_submit_feedback_requires_editor(monkeypatch: pytest.MonkeyPatch) -> Non
             assert allowed.json()["signal"] == "helpful"
     finally:
         cleanup_workspaces([owner, viewer, editor])
+
+
+# --------------------------------------------------------------------------
+# D3 — Serverseitige Nutzungsaufzeichnung (ADR-0053 3.4, Migration 0101)
+# --------------------------------------------------------------------------
+
+# Leserechte fuer die drei Abrufpfade; Inhalte sind `active`, ein Agent ohne
+# Schreibrecht sieht nur die aktive Version.
+_READER_POLICY: dict[str, object] = {"playbook_read": "all", "resource_read": "all"}
+
+
+def _db_fetch(sql: str, *args: object) -> list[asyncpg.Record]:
+    async def _run() -> list[asyncpg.Record]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            return list(await conn.fetch(sql, *args))
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
+def _server_rows(entity_id: str) -> list[asyncpg.Record]:
+    return _db_fetch(
+        "SELECT agent_id, entity_type, version, outcome FROM usage_event "
+        "WHERE entity_id = $1 AND source = 'server' ORDER BY created_at",
+        UUID(entity_id),
+    )
+
+
+def _activate(client: TestClient, base: str, auth: dict[str, str]) -> None:
+    for to in ("review", "active"):
+        tr = client.post(f"{base}/versions/1/transition", json={"to": to}, headers=auth)
+        assert tr.status_code == 200, tr.text
+
+
+class _Elements:
+    """Je eine aktive Persona, ein Playbook und eine Resource (Version 1)."""
+
+    def __init__(self, client: TestClient, ws: UUID, auth: dict[str, str]) -> None:
+        base = f"/v1/workspaces/{ws}"
+        self.persona = client.post(
+            f"{base}/personas",
+            json={
+                "name": "P-D3",
+                "content": {
+                    "description": "d",
+                    "content": {
+                        "blocks": [
+                            {
+                                "id": "b1",
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": "Profil.", "styles": {}}],
+                            }
+                        ]
+                    },
+                },
+            },
+            headers=auth,
+        ).json()["id"]
+        self.playbook = client.post(
+            f"{base}/playbooks", json=_playbook_body("PB-D3"), headers=auth
+        ).json()["id"]
+        self.resource = client.post(
+            f"{base}/resources",
+            json={
+                "name": "R-D3",
+                "content": {
+                    "description": "d",
+                    "blocks": [
+                        {
+                            "id": "r1",
+                            "type": "heading",
+                            "props": {"level": 2},
+                            "content": [{"type": "text", "text": "Abschnitt", "styles": {}}],
+                        }
+                    ],
+                    "tags": [],
+                },
+            },
+            headers=auth,
+        ).json()["id"]
+        _activate(client, f"{base}/personas/{self.persona}", auth)
+        _activate(client, f"{base}/playbooks/{self.playbook}", auth)
+        _activate(client, f"{base}/resources/{self.resource}", auth)
+        # (entity_type, Element-ID, Abruf-URL) — die drei Schreibstellen.
+        self.fetches = [
+            ("persona", self.persona, f"{base}/personas/{self.persona}/rendered"),
+            ("playbook", self.playbook, f"{base}/playbooks/{self.playbook}/rendered"),
+            ("resource", self.resource, f"{base}/resources/{self.resource}"),
+        ]
+
+
+@pytest.mark.integration
+def test_agent_fetch_records_exactly_one_server_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Je Abruf durch ein Agent-Token genau eine Zeile `source='server'` mit
+    Agent, ausgelieferter Version und `outcome=NULL`; ein Mensch erzeugt keine;
+    interne Lesepfade (Anker-Liste) zaehlen nicht."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    prefix = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            elements = _Elements(client, ws, auth)
+            agent_id, agent_headers = agent_token(client, prefix, "leser", _READER_POLICY, auth)
+
+            # Mensch: Abruf gelingt, aber keine Nutzungszeile.
+            for _, entity_id, url in elements.fetches:
+                assert client.get(url, headers=auth).status_code == 200
+                assert _server_rows(entity_id) == []
+
+            # Agent: genau eine Zeile je Abruf.
+            for entity_type, entity_id, url in elements.fetches:
+                r = client.get(url, headers=agent_headers)
+                assert r.status_code == 200, r.text
+                rows = _server_rows(entity_id)
+                assert len(rows) == 1, (entity_type, rows)
+                assert rows[0]["agent_id"] == UUID(agent_id)
+                assert rows[0]["entity_type"] == entity_type
+                assert rows[0]["version"] == 1
+                assert rows[0]["outcome"] is None
+
+            # Jede Auslieferung eine Zeile (Owner-Weiche N2 = a): zweiter Abruf.
+            again = client.get(elements.fetches[0][2], headers=agent_headers)
+            assert again.status_code == 200
+            assert len(_server_rows(elements.persona)) == 2
+
+            # Interner Lesepfad ist kein Abruf: Anker-Liste der Resource.
+            blocks = client.get(
+                f"{prefix}/resources/{elements.resource}/blocks", headers=agent_headers
+            )
+            assert blocks.status_code == 200, blocks.text
+            assert len(_server_rows(elements.resource)) == 1
+
+            # Die Selbstauskunft traegt weiter `agent_report`.
+            client.post(
+                f"{prefix}/usage-events",
+                json={
+                    "entity_type": "playbook",
+                    "entity_id": elements.playbook,
+                    "outcome": "applied",
+                },
+                headers=agent_headers,
+            )
+            sources = _db_fetch(
+                "SELECT source, COUNT(*)::int AS n FROM usage_event "
+                "WHERE entity_id = $1 GROUP BY source ORDER BY source",
+                UUID(elements.playbook),
+            )
+            assert [(s["source"], s["n"]) for s in sources] == [
+                ("agent_report", 1),
+                ("server", 1),
+            ]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_server_usage_write_failure_never_breaks_the_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Best-effort: scheitert die Aufzeichnung, liefert der Abruf trotzdem 200
+    — und der Verlust ist im Prozess-Zaehler sichtbar."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    prefix = f"/v1/workspaces/{ws}"
+
+    async def _broken(*args: object, **kwargs: object) -> None:
+        raise asyncpg.PostgresError("usage_event nicht beschreibbar")
+
+    try:
+        with TestClient(app) as client:
+            elements = _Elements(client, ws, auth)
+            _, agent_headers = agent_token(client, prefix, "leser", _READER_POLICY, auth)
+            feedback_repository.reset_failed_usage_writes()
+            monkeypatch.setattr(feedback_repository, "_insert_server_usage", _broken)
+
+            for entity_type, entity_id, url in elements.fetches:
+                r = client.get(url, headers=agent_headers)
+                assert r.status_code == 200, (entity_type, r.text)
+                assert _server_rows(entity_id) == []
+            assert feedback_repository.failed_usage_writes() == 3
+    finally:
+        feedback_repository.reset_failed_usage_writes()
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_aggregates_count_usage_and_outcomes_by_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`summarize`/`overview` zaehlen Nutzungen nur aus `server`, Ergebnisse
+    nur aus `agent_report` (ADR-0053 3.4) — Fixture mit beiden Quellen."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    prefix = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            elements = _Elements(client, ws, auth)
+            _, agent_headers = agent_token(client, prefix, "leser", _READER_POLICY, auth)
+            pid = elements.playbook
+            url = f"{prefix}/playbooks/{pid}/rendered"
+            # Drei Auslieferungen (server) …
+            for _ in range(3):
+                assert client.get(url, headers=agent_headers).status_code == 200
+            # … und zwei Ergebnisberichte (agent_report).
+            for outcome in ("applied", "error"):
+                r = client.post(
+                    f"{prefix}/usage-events",
+                    json={"entity_type": "playbook", "entity_id": pid, "outcome": outcome},
+                    headers=agent_headers,
+                )
+                assert r.status_code == 201, r.text
+
+            summary = client.get(f"{prefix}/feedback/playbook/{pid}", headers=auth).json()
+            assert summary["usage_count"] == 3
+            assert summary["by_outcome"] == {"applied": 1, "error": 1}
+
+            overview = client.get(f"{prefix}/feedback-overview", headers=auth).json()
+            row = next(i for i in overview["items"] if i["entity_id"] == pid)
+            assert row["usage_count"] == 3
+
+            # Ungenutzt-Sicht: das ausgelieferte Playbook nicht, die nur von
+            # Menschen gelesene Resource schon.
+            client.get(f"{prefix}/resources/{elements.resource}", headers=auth)
+            unused = client.get(f"{prefix}/feedback-unused", headers=auth).json()
+            unused_ids = {i["entity_id"] for i in unused["items"]}
+            assert pid not in unused_ids
+            assert elements.resource in unused_ids
+    finally:
+        cleanup_workspaces([owner])

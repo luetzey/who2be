@@ -3,9 +3,16 @@
 `PgFeedbackRepository` schreibt Nutzungs-Ereignisse + Feedback (nur INSERT) und
 liefert das Kurations-Aggregat (`FeedbackSummary`). Alle Queries scopen explizit
 auf `workspace_id` (Defense-in-Depth zusaetzlich zur RLS).
+
+Herkunft einer Nutzung (ADR-0053 3.4, Migration 0101): `usage_event.source` ist
+`server` fuer die serverseitige Aufzeichnung eines Abrufs
+(`record_server_usage`) und `agent_report` fuer die Selbstauskunft ueber
+`record_usage`. Nutzungen zaehlen nur `server`, Ergebnisse (`outcome`) nur
+`agent_report` — sonst zaehlte jede Nutzung doppelt.
 """
 
-from typing import Protocol
+import logging
+from typing import Literal, Protocol
 from uuid import UUID
 
 import asyncpg
@@ -22,6 +29,90 @@ from who2be_models import (
     FeedbackUnusedItem,
     UsageEventRead,
 )
+
+logger = logging.getLogger(__name__)
+
+# Elemente, deren Abruf der Server aufzeichnet (Schreibstellen in den Services).
+ServerUsageEntity = Literal["persona", "playbook", "resource"]
+
+# Prozess-Zaehler verschluckter Nutzungs-Schreibfehler (Muster
+# `services/access_log.failed_log_writes`): best-effort heisst nicht lautlos.
+_failed_usage_writes = 0
+
+
+def failed_usage_writes() -> int:
+    """Wie viele serverseitige Nutzungs-Zeilen dieser Prozess verloren hat."""
+    return _failed_usage_writes
+
+
+def reset_failed_usage_writes() -> None:
+    """Setzt den Zaehler zurueck — fuer Test-Isolation."""
+    global _failed_usage_writes
+    _failed_usage_writes = 0
+
+
+async def _insert_server_usage(
+    pool: asyncpg.Pool,
+    workspace_id: UUID,
+    agent_id: UUID,
+    actor_id: UUID,
+    entity_type: ServerUsageEntity,
+    entity_id: UUID,
+    version: int,
+) -> None:
+    await pool.execute(
+        "INSERT INTO usage_event "
+        "(workspace_id, agent_id, actor_id, entity_type, entity_id, version, outcome, source) "
+        "VALUES ($1, $2, $3, $4, $5, $6, NULL, 'server')",
+        workspace_id,
+        agent_id,
+        actor_id,
+        entity_type,
+        entity_id,
+        version,
+    )
+
+
+async def record_server_usage(
+    pool: asyncpg.Pool | None,
+    workspace_id: UUID,
+    agent_id: UUID | None,
+    actor_id: UUID,
+    *,
+    entity_type: ServerUsageEntity,
+    entity_id: UUID,
+    version: int,
+) -> None:
+    """Zeichnet einen Abruf serverseitig auf — No-op fuer Menschen, best-effort.
+
+    ADR-0053 3.4, Muster `services/access_log.log_access`:
+
+    - Nur agent-gebundene Aufrufer (``agent_id is None`` ⇒ No-op); ein Mensch
+      im Editor ist keine Nutzung durch einen Agenten.
+    - Laeuft NACH der Fachoperation auf dem Pool und darf den Abruf NIE
+      scheitern lassen: jede Exception wird gefangen, gewarnt und in
+      `failed_usage_writes()` gezaehlt.
+    - Eine Zeile je Auslieferung (Owner-Weiche N2 = a), ``outcome = NULL``,
+      ``source = 'server'``; ``version`` ist die ausgelieferte Version.
+    """
+    if agent_id is None or pool is None:
+        return
+    try:
+        await _insert_server_usage(
+            pool, workspace_id, agent_id, actor_id, entity_type, entity_id, version
+        )
+    except Exception:  # noqa: BLE001 — bewusst breit: Aufzeichnung bricht NIE den Abruf
+        global _failed_usage_writes
+        _failed_usage_writes += 1
+        logger.warning(
+            "usage_event (source=server) fehlgeschlagen (agent=%s, %s:%s v%s) — "
+            "Abruf laeuft weiter",
+            agent_id,
+            entity_type,
+            entity_id,
+            version,
+            exc_info=True,
+        )
 
 
 class FeedbackRepository(Protocol):
@@ -135,9 +226,11 @@ class PgFeedbackRepository:
         outcome: str | None,
     ) -> UsageEventRead:
         row = await self._pool.fetchrow(
+            # Selbstauskunft ueber `record_usage`: traegt das Ergebnis, zaehlt
+            # aber nicht als Nutzung (die zeichnet der Server auf, 0101).
             "INSERT INTO usage_event "
-            "(workspace_id, agent_id, actor_id, entity_type, entity_id, version, outcome) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+            "(workspace_id, agent_id, actor_id, entity_type, entity_id, version, outcome, source) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, 'agent_report') "
             "RETURNING id, entity_type, entity_id, version, outcome, agent_id, created_at",
             workspace_id,
             agent_id,
@@ -181,9 +274,12 @@ class PgFeedbackRepository:
     async def summarize(
         self, workspace_id: UUID, entity_type: str, entity_id: UUID
     ) -> FeedbackSummary:
+        # Nutzungen nur aus der Server-Aufzeichnung, Ergebnisse nur aus der
+        # Selbstauskunft (ADR-0053 3.4) — beides zusammen zaehlte doppelt.
         usage_count = await self._pool.fetchval(
             "SELECT COUNT(*)::int FROM usage_event "
-            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3",
+            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+            "AND source = 'server'",
             workspace_id,
             entity_type,
             entity_id,
@@ -191,6 +287,7 @@ class PgFeedbackRepository:
         outcome_rows = await self._pool.fetch(
             "SELECT outcome, COUNT(*)::int AS n FROM usage_event "
             "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+            "AND source = 'agent_report' "
             "AND outcome IS NOT NULL GROUP BY outcome",
             workspace_id,
             entity_type,
@@ -275,9 +372,12 @@ class PgFeedbackRepository:
         # FULL OUTER JOIN, damit auch Elemente mit nur Usage ODER nur Feedback
         # erscheinen. Der Namens-JOIN auf die drei Ziel-Tabellen filtert
         # implizit geloeschte Elemente (name NULL) heraus.
+        # `usage_count` zaehlt nur die Server-Aufzeichnung (ADR-0053 3.4); die
+        # juengste Aktivitaet nimmt jede Zeile, auch einen Ergebnisbericht.
         rows = await self._pool.fetch(
             "WITH usage_agg AS ("
-            "  SELECT entity_type, entity_id, COUNT(*)::int AS usage_count, "
+            "  SELECT entity_type, entity_id, "
+            "         COUNT(*) FILTER (WHERE source = 'server')::int AS usage_count, "
             "         MAX(created_at) AS last_usage "
             "  FROM usage_event WHERE workspace_id = $1 "
             "  GROUP BY entity_type, entity_id"
@@ -324,6 +424,10 @@ class PgFeedbackRepository:
         # kein einziges Usage-/Feedback-Ereignis. Pro Entitaetstyp dieselbe Logik,
         # via UNION ALL zusammengefuehrt. Der NOT-EXISTS-Doppelfilter haelt die
         # Stale-Definition streng (weder genutzt noch bewertet).
+        # „Genutzt“ heisst ab D3 (ADR-0053 3.4): vom Server ausgeliefert
+        # (`source = 'server'`) — dieselbe Definition wie `usage_count` in
+        # `summarize`/`overview`. Ein Ergebnisbericht ohne Auslieferung ist
+        # keine Nutzung; Bestandszeilen vor 0101 liegen auf `agent_report`.
         rows = await self._pool.fetch(
             "SELECT entity_type, entity_id, name FROM ("
             "  SELECT 'persona' AS entity_type, p.id AS entity_id, p.name AS name "
@@ -348,7 +452,7 @@ class PgFeedbackRepository:
             ") AS active_elements "
             "WHERE NOT EXISTS (SELECT 1 FROM usage_event u "
             "    WHERE u.workspace_id = $1 AND u.entity_type = active_elements.entity_type "
-            "      AND u.entity_id = active_elements.entity_id) "
+            "      AND u.entity_id = active_elements.entity_id AND u.source = 'server') "
             "  AND NOT EXISTS (SELECT 1 FROM agent_feedback f "
             "    WHERE f.workspace_id = $1 AND f.entity_type = active_elements.entity_type "
             "      AND f.entity_id = active_elements.entity_id) "
