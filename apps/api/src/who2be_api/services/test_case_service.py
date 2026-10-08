@@ -297,6 +297,7 @@ class TestCaseService:
         entity_type: EntityType | None,
         entity_id: UUID | None,
         status_filter: TestCaseStatus | None,
+        origin_case_id: UUID | None,
     ) -> list[TestCaseRead]:
         self._require_reader(ctx)
         if not self._sees_all_agents(ctx):
@@ -311,6 +312,7 @@ class TestCaseService:
             entity_type=entity_type,
             entity_id=entity_id,
             status=status_filter,
+            origin_case_id=origin_case_id,
         )
 
     async def get_case(self, ctx: WorkspaceContext, case_id: UUID) -> TestCaseRead:

@@ -1734,6 +1734,8 @@ export interface TestCaseFilters {
   entity_type?: VersionedEntityType
   entity_id?: string
   status?: TestCaseStatus
+  // D6-API2: die aus einem Fall abgeleiteten Pruefaelle.
+  origin_case_id?: string
 }
 
 // --- Lernschleife B5: Prueflaeufe und Pruefbericht (ADR-0053 3.2, 6.2) -------
