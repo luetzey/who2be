@@ -50,8 +50,24 @@ Anhang A.2 (Zeile D3), Owner-Weichen N1 = a, N2 = a.
 6. `apps/api/src/who2be_api/routers/resources.py` (W1: `retrieve`)
 7. `apps/api/tests/test_feedback.py` (Bestandstest an neue Zaehlung + neue Tests)
 8. `changelog.d/t-f7f33984-usage-event-source.changed.md`
+9. `apps/api/tests/test_render_scope_propagation.py` — **ueber Budget (+1)**,
+   erst beim vollen Testlauf sichtbar: die Attrappen von Persona/Playbook
+   tragen kein `id`/`current_version`, die `render` jetzt fuer die
+   Aufzeichnung liest. Zwei Felder je Attrappe, kein Verhaltenswechsel.
 
 Nicht im Diff: `docs/reference/openapi.json` (Antwortformen unveraendert).
+
+## Verifikation
+
+- Mutationsproben gegen `test_feedback.py` (je einzeln, danach zurueckgesetzt):
+  source-Filter `summarize.usage_count` → 3 rot; FILTER in `overview` → 3 rot;
+  source-Filter in `unused` → 1 rot; best-effort-Fang (`except KeyError`) →
+  1 rot; Mensch-Sperre → 2 rot; Router zurueck auf `get` → 2 rot.
+  Source-Filter auf `by_outcome` → gruen: aequivalenter Mutant, Server-Zeilen
+  tragen immer `outcome = NULL`, `outcome IS NOT NULL` schliesst sie bereits
+  aus. Der Filter bleibt als Klarstellung der Regel im SQL.
+- `test_org_transfer.py` schlaegt gegen die geteilte Dev-DB fehl (dort ist eine
+  Migration eines fremden Zweigs eingetragen); gegen eine frische DB gruen.
 
 ## Schritte
 

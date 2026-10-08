@@ -92,7 +92,9 @@ def _persona_service(captured: list[RenderContext], monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(mod, "render_template_body", _capture)
     svc = mod.PersonaService(cast(Any, object()), pool=_pool())
     persona = SimpleNamespace(
-        id=uuid4(), content=SimpleNamespace(content=None, skills=[], modes=[])
+        id=uuid4(),
+        current_version=1,
+        content=SimpleNamespace(content=None, skills=[], modes=[]),
     )
 
     async def _get(*_a: object, **_k: object) -> Any:
@@ -131,7 +133,8 @@ def _playbook_service(captured: list[RenderContext], monkeypatch: pytest.MonkeyP
     svc = mod.PlaybookService(
         cast(Any, object()), _pool(), cast(Any, object()), cast(Any, object())
     )
-    playbook = SimpleNamespace(content=SimpleNamespace(body="[]"))
+    # `id`/`current_version` liest render fuer die Nutzungsaufzeichnung (D3).
+    playbook = SimpleNamespace(id=uuid4(), current_version=1, content=SimpleNamespace(body="[]"))
 
     async def _get(*_a: object, **_k: object) -> Any:
         return playbook
