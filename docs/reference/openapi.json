@@ -16128,7 +16128,9 @@
               "case_not_found",
               "case_transition_forbidden",
               "case_transition_human_only",
-              "case_statement_not_subject"
+              "case_statement_not_subject",
+              "memory_not_convertible",
+              "feedback_not_promotable"
             ],
             "title": "Reason"
           },
