@@ -9690,6 +9690,152 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/convert": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Convert Memory To Case",
+        "operationId": "convert_memory_to_case_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__convert_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "memory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Memory Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseConvertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/feedback/{feedback_id}/promote": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Promote Feedback To Case",
+        "operationId": "promote_feedback_to_case_v1_workspaces__workspace_id__feedback__feedback_id__promote_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feedback Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -16561,6 +16707,77 @@
         ],
         "title": "CaseAssignedByKind",
         "description": "Wer eine Zuordnung gesetzt hat (Mensch oder Builder mit `case_triage`)."
+      },
+      "CaseConvertRequest": {
+        "properties": {
+          "situation": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Situation"
+          },
+          "behavior": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Behavior"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Behavior"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CaseSeverity",
+            "default": "medium"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "situation",
+          "behavior",
+          "expected_behavior"
+        ],
+        "title": "CaseConvertRequest",
+        "description": "Eingabe fuer „Lernvorschlag -> Fall“ (`convert`, ADR-0053 6.4).\n\nDie Fall-Felder aus `CaseCreate` ohne `agent_id`: der Agent kommt aus dem\nLernvorschlag (ein Lernvorschlag ist die Lehre eines Agenten ueber sich\nselbst, 3.1.6; der Composite-FK aus 0100 verlangt denselben Agenten)."
       },
       "CaseCreate": {
         "properties": {

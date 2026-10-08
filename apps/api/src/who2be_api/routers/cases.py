@@ -2,8 +2,13 @@
 
 ADR-0053 6.5 (Phase D, Paket D2b). Rechte, Sichtbarkeit und Uebergaenge
 entscheidet `CaseService` (D2a); der Router reicht nur durch. Mount unter
-`/v1/workspaces/{ws_id}`. Nicht hier: Alt-Feedback uebernehmen (D2c) und
-Muster (D5b).
+`/v1/workspaces/{ws_id}`. Nicht hier: Muster (D5b).
+
+Paket D2c-2: die zwei Wege, auf denen aus Bestehendem ein Fall wird —
+`POST /agents/{agent_id}/memories/{memory_id}/convert` (Lernvorschlag, 6.4)
+und `POST /feedback/{feedback_id}/promote` (Alt-Feedback, 6.5). Beide stehen
+hier statt in `memory.py`/`feedback.py`, weil sie nur `CaseService` rufen und
+einen `CaseRead` liefern (PM-Schnitt 2026-10-08).
 
 Liste nach Repo-Konvention als Keyset-Seite: `list[CaseRead]`, der Cursor der
 naechsten Seite im Header `X-Next-Cursor` (`core/pagination.py`). Zaehler je
@@ -35,6 +40,7 @@ from who2be_models import (
     CaseTarget,
     encode_cursor,
 )
+from who2be_models.case import CaseConvertRequest
 
 router = APIRouter(tags=["cases"])
 
@@ -139,3 +145,31 @@ async def add_case_statement(
     request: Request, case_id: UUID, data: CaseStatementCreate, ctx: Ctx, service: Service
 ) -> CaseStatementRead:
     return await service.add_statement(ctx, case_id, data)
+
+
+# --- Umwandeln / Uebernehmen (D2c-2) ---------------------------------------
+
+
+@router.post("/agents/{agent_id}/memories/{memory_id}/convert", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def convert_memory_to_case(
+    request: Request,
+    agent_id: UUID,
+    memory_id: UUID,
+    data: CaseConvertRequest,
+    ctx: Ctx,
+    service: Service,
+) -> CaseRead:
+    # Body ohne agent_id: der Agent kommt aus dem Lernvorschlag (PM-Weiche 1).
+    # Nur Mensch ab editor; zweites convert -> 409 memory_not_convertible.
+    return await service.convert_lesson(ctx, agent_id, memory_id, data)
+
+
+@router.post("/feedback/{feedback_id}/promote", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def promote_feedback_to_case(
+    request: Request, feedback_id: UUID, data: CaseCreate, ctx: Ctx, service: Service
+) -> CaseRead:
+    # Den Agenten nennt der Mensch (ein Alt-Feedback betrifft ein Element).
+    # Nur Mensch ab editor; erneut -> 409 feedback_not_promotable.
+    return await service.promote_feedback(ctx, feedback_id, data)

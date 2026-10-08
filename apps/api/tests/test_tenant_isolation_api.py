@@ -418,6 +418,21 @@ PROBES: dict[str, Probe] = {
         path={"case_id": "agent_case_id"},
         agent=True,
     ),
+    # --- Umwandeln / Uebernehmen (ADR-0053 6.4/6.5, D2c-2) ------------------
+    # Seed-`memory_id` ist ein user_fact: die Gegenprobe als B endet fachlich
+    # mit 409 memory_not_convertible — nach dem Lookup, also bestanden.
+    f"POST {_WS}/agents/{{agent_id}}/memories/{{memory_id}}/convert": Probe(
+        body={"situation": "iso", "behavior": "x", "expected_behavior": "x"}
+    ),
+    # Mischform: eigenes Feedback, fremder Agent im Body -> 404 wie unbekannt.
+    f"POST {_WS}/feedback/{{feedback_id}}/promote": Probe(
+        body={
+            "agent_id": "<<agent_id>>",
+            "situation": "iso",
+            "behavior": "x",
+            "expected_behavior": "x",
+        }
+    ),
     # --- Platzhalter / Suche -----------------------------------------------
     f"GET {_WS}/placeholders": Probe(),
     f"GET {_WS}/placeholders/preview": Probe(
