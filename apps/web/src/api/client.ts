@@ -13,6 +13,15 @@ import type {
   AgentUpdateInput,
   ArtifactExportFormat,
   ArtifactMarkdown,
+  CaseCounts,
+  CaseCreate,
+  CaseDetail,
+  CaseElement,
+  CaseElementInput,
+  CaseFilters,
+  CasePage,
+  CaseRead,
+  CaseTransitionInput,
   CheckoutInput,
   CheckoutResult,
   DashboardData,
@@ -246,6 +255,42 @@ async function requestBlob(token: string, path: ApiPath, init?: RequestInit): Pr
     throw new ApiError(response.status, message, body)
   }
   return response.blob()
+}
+
+// Wie `request`, liefert aber neben dem JSON-Body den Cursor der naechsten
+// Seite aus dem Response-Header `X-Next-Cursor` (Keyset-Seite nach
+// `core/pagination.py`; der Header steht in CORS `expose_headers`). Fehlt
+// er, ist das die letzte Seite. Fehler-Handling identisch zu `request`.
+async function requestPage<T>(
+  token: string,
+  path: ApiPath,
+  init?: RequestInit,
+): Promise<{ items: T[]; next_cursor: string | null }> {
+  const url = urlFor(path)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (token !== '') {
+    headers.Authorization = `Bearer ${token}`
+  }
+  let response: Response
+  try {
+    response = await fetch(url, { ...init, headers })
+  } catch (cause) {
+    console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
+    throw new ApiError(0, i18n.t('common:errors.apiUnreachable'))
+  }
+  if (!response.ok) {
+    const { message, body } = await readErrorBody(response)
+    throw new ApiError(response.status, message, body)
+  }
+  const cursor = response.headers.get('X-Next-Cursor')
+  return {
+    items: (await response.json()) as T[],
+    next_cursor: cursor === null || cursor === '' ? null : cursor,
+  }
 }
 
 // Einzel-Element-Export (Plan 2026-06-05). `json` liefert ein geparstes Objekt,
@@ -678,6 +723,19 @@ export interface Api {
   getTestCase: (caseId: string) => Promise<TestCaseRead>
   createTestCase: (input: TestCaseCreateInput) => Promise<TestCaseRead>
   retireTestCase: (caseId: string) => Promise<TestCaseRead>
+  // ADR-0053 6.5 — Faelle (Lernschleife D). Melden ab viewer, ohne Zuordnung
+  // (Q2). Die Liste ist eine Keyset-Seite: `next_cursor` aus `X-Next-Cursor`.
+  // viewer sehen nur eigene Faelle; Loeschen ab editor (Q6).
+  createCase: (input: CaseCreate) => Promise<CaseRead>
+  listCases: (
+    filters?: CaseFilters,
+    options?: { cursor?: string; limit?: number },
+  ) => Promise<CasePage>
+  countCases: (agentId?: string) => Promise<CaseCounts>
+  getCase: (caseId: string) => Promise<CaseDetail>
+  deleteCase: (caseId: string) => Promise<void>
+  transitionCase: (caseId: string, input: CaseTransitionInput) => Promise<CaseRead>
+  putCaseElements: (caseId: string, elements: CaseElementInput[]) => Promise<CaseElement[]>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -1243,6 +1301,39 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     retireTestCase: (caseId) =>
       request<TestCaseRead>(token, apiPath`${ws}/test-cases/${caseId}/retire`, { method: 'POST' }),
+    createCase: (input) =>
+      request<CaseRead>(token, apiPath`${ws}/cases`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listCases: (filters, options) => {
+      const params = new URLSearchParams()
+      if (filters?.agent_id) params.set('agent_id', filters.agent_id)
+      const statuses = filters?.status === undefined ? [] : [filters.status].flat()
+      for (const value of statuses) params.append('status', value)
+      if (filters?.target) params.set('target', filters.target)
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      return requestPage<CaseRead>(token, withQuery(apiPath`${ws}/cases`, params))
+    },
+    countCases: (agentId) => {
+      const params = new URLSearchParams()
+      if (agentId) params.set('agent_id', agentId)
+      return request<CaseCounts>(token, withQuery(apiPath`${ws}/cases/counts`, params))
+    },
+    getCase: (caseId) => request<CaseDetail>(token, apiPath`${ws}/cases/${caseId}`),
+    deleteCase: (caseId) =>
+      request<void>(token, apiPath`${ws}/cases/${caseId}`, { method: 'DELETE' }),
+    transitionCase: (caseId, input) =>
+      request<CaseRead>(token, apiPath`${ws}/cases/${caseId}/transition`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    putCaseElements: (caseId, elements) =>
+      request<CaseElement[]>(token, apiPath`${ws}/cases/${caseId}/elements`, {
+        method: 'PUT',
+        body: JSON.stringify({ elements }),
+      }),
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>

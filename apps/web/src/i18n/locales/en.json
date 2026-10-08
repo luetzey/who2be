@@ -2406,6 +2406,52 @@
         "actorHuman": "Human",
         "actorSystem": "System"
       }
+    },
+    "cases": {
+      "report": {
+        "title": "Report a case",
+        "intro": "Describe one concrete situation. It can later become a test case that checks every new version of the agent.",
+        "privacy": "Don't paste passwords or customer data. Cases never go into a prompt, but they can be stored as a test-case example.",
+        "more": "Add details",
+        "submit": "Report case",
+        "success": "Case reported. You'll find it under Cases.",
+        "successViewer": "Case reported. You can follow it under \"My cases\".",
+        "successView": "View",
+        "discardTitle": "Discard your input?",
+        "discardBody": "What you entered is not saved.",
+        "discardKeep": "Keep editing",
+        "discardConfirm": "Discard",
+        "agent": "Agent",
+        "situation": "What was the situation?",
+        "situationHelp": "What did you ask, or what was the agent supposed to do?",
+        "behavior": "What did the agent do?",
+        "behaviorHelp": "Describe it or paste an excerpt of the reply.",
+        "expected": "What did you expect?",
+        "expectedKeep": "What should stay this way?",
+        "expectedHelp": "As specific as you can – this becomes the yardstick for the test case.",
+        "impact": "What was the impact?",
+        "impactHelp": "Helps triage, e.g. \"had to rewrite everything\".",
+        "kind": {
+          "label": "Kind",
+          "helpful": "Went well – keep it"
+        },
+        "severity": {
+          "label": "How much does it get in the way?",
+          "low": "Minor",
+          "medium": "Annoying",
+          "high": "Blocking"
+        },
+        "sourceRef": "Link to the run or result",
+        "sourceRefHelp": "For example the address of an artifact in the work area.",
+        "counter": "{{length}} / {{max}}",
+        "validation": {
+          "required": "Required.",
+          "tooLong": "At most {{max}} characters."
+        },
+        "error": {
+          "agentGone": "This agent no longer exists. Pick another one."
+        }
+      }
     }
   },
   "tools": {

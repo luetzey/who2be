@@ -6,6 +6,7 @@ import { Navigate, useParams } from 'react-router-dom'
 import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { ReportCaseDialog } from '@/components/cases/ReportCaseForm'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
@@ -93,6 +94,8 @@ export function AgentDetailPage() {
                         disabled={agent.status !== 'enabled'}
                       />
                       <DuplicateAgentButton agent={agent} />
+                      {/* Lernschleife D6a (Delta-Spec S6): ab viewer, Agent fest. */}
+                      <ReportCaseDialog agent={{ id: agent.id, name: agent.name }} />
                       {locked ? null : <DeleteAgentButton agent={agent} />}
                     </>
                   }

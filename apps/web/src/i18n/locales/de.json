@@ -2406,6 +2406,52 @@
         "actorHuman": "Mensch",
         "actorSystem": "System"
       }
+    },
+    "cases": {
+      "report": {
+        "title": "Fall melden",
+        "intro": "Beschreibe eine konkrete Situation. Daraus kann später ein Prüffall werden, der jede neue Version des Agenten testet.",
+        "privacy": "Keine Passwörter oder Kundendaten einfügen. Fälle fließen nie in einen Prompt, können aber als Prüffall-Beispiel gespeichert werden.",
+        "more": "Mehr angeben",
+        "submit": "Fall melden",
+        "success": "Fall gemeldet. Du findest ihn unter Fälle.",
+        "successViewer": "Fall gemeldet. Du siehst den Stand unter „Meine Fälle“.",
+        "successView": "Ansehen",
+        "discardTitle": "Eingaben verwerfen?",
+        "discardBody": "Was du eingegeben hast, wird nicht gespeichert.",
+        "discardKeep": "Weiter bearbeiten",
+        "discardConfirm": "Verwerfen",
+        "agent": "Agent",
+        "situation": "Was war die Lage?",
+        "situationHelp": "Was hast du gefragt oder was sollte der Agent tun?",
+        "behavior": "Was hat der Agent getan?",
+        "behaviorHelp": "Beschreibe es oder füge einen Ausschnitt der Antwort ein.",
+        "expected": "Was hättest du erwartet?",
+        "expectedKeep": "Was soll so bleiben?",
+        "expectedHelp": "So konkret wie möglich – das wird der Maßstab für den Prüffall.",
+        "impact": "Was war die Folge?",
+        "impactHelp": "Hilft beim Einordnen, z. B. „musste alles neu schreiben“.",
+        "kind": {
+          "label": "Art",
+          "helpful": "Lief gut – so lassen"
+        },
+        "severity": {
+          "label": "Wie sehr stört es?",
+          "low": "Kleinigkeit",
+          "medium": "Stört",
+          "high": "Blockiert"
+        },
+        "sourceRef": "Link zum Lauf oder Ergebnis",
+        "sourceRefHelp": "Zum Beispiel die Adresse eines Artefakts im Arbeitsbereich.",
+        "counter": "{{length}} / {{max}}",
+        "validation": {
+          "required": "Pflichtfeld.",
+          "tooLong": "Höchstens {{max}} Zeichen."
+        },
+        "error": {
+          "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen."
+        }
+      }
     }
   },
   "tools": {
