@@ -36,6 +36,14 @@ Schritt 8 „Install Playwright browser" seit `19:49:00Z`. **Kein Job in
 `yaml.safe_load` für alle zwölf bestätigt —, also gilt die
 360-Minuten-Voreinstellung.
 
+**Gegenprobe, nachträglich gemessen (00:41 UTC):** der eigene PR dieses Laufs
+(**#851**) ist auf seinem Branch vollständig durchgelaufen — `all-green` **16/16**,
+gate-aktuell (mit `secrets`). Die Gruppe `ci-CI-851` ist eine andere als
+`ci-CI-refs/heads/main`: **nur `main` ist blockiert, PR-Läufe sind es nicht.**
+Damit ist die Diagnose von zwei Seiten belegt — und die eine Vorhersage dieses
+Laufs, die daneben lag (die erste Fassung der Wellen-Zeile H in #442 nahm an,
+auch ein PR-Lauf stelle sich hinter den Hänger), ist in #442 korrigiert.
+
 **Und die Pointe:** `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`
 (`ci.yml:14`) ist auf `main` **false**, damit jeder Commit einen eigenen Spruch
 bekommt. GitHub hält pro Gruppe einen **laufenden** und einen **wartenden**
