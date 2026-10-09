@@ -2665,7 +2665,7 @@
     "patterns": {
       "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
       "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
-      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Fälle eingeordnet sind.",
+      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Fälle umgesetzt oder verworfen sind. Einordnen allein reicht nicht. Ein Fall-Muster verschwindet auch, wenn das Zeitfenster ohne neue Fälle abläuft.",
       "kind": {
         "lesson": {
           "title": "Dieselbe Korrektur {{count}}×",

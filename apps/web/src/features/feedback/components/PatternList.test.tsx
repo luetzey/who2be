@@ -149,6 +149,11 @@ describe('PatternList — Liste', () => {
     ).toBeInTheDocument()
     // Schwelle aus der Antwort, nicht fest kodiert (Q8).
     expect(screen.getByText(/ab 3 Treffern erscheint hier ein Muster/)).toBeInTheDocument()
+    // Hinweis folgt dem Server (ADR-0053 3.7): eingeordnete Faelle zaehlen weiter.
+    expect(
+      screen.getByText(/sobald der Lernvorschlag entschieden ist oder die Fälle umgesetzt oder verworfen sind/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Fälle eingeordnet sind/)).not.toBeInTheDocument()
     // Kein Zustand: weder Status noch Verwerfen.
     expect(screen.queryByRole('button', { name: /Verwerfen/ })).not.toBeInTheDocument()
   })

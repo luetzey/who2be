@@ -2665,7 +2665,7 @@
     "patterns": {
       "description": "What keeps coming back. The server counts similar learning suggestions and cases; from {{threshold}} matches a pattern shows up here. Nothing is interpreted.",
       "descriptionNoThreshold": "What keeps coming back. The server counts similar learning suggestions and cases; from a fixed number of similar entries a pattern shows up here. Nothing is interpreted.",
-      "vanishHint": "A pattern disappears once the learning suggestion is decided or the cases are triaged.",
+      "vanishHint": "A pattern disappears once the learning suggestion is decided or the cases are addressed or dismissed. Triaging alone isn't enough. A case pattern also disappears when its time window passes without new cases.",
       "kind": {
         "lesson": {
           "title": "Same correction {{count}}×",
