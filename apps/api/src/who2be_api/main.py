@@ -9,6 +9,7 @@ Routen-Layout nach Phase 2:
   `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
+import asyncio
 import importlib
 import logging
 import os
@@ -347,14 +348,30 @@ class Health(BaseModel):
     worker: WorkerHealth
 
 
+#: Zeitgrenze fuer das Health-Feld `worker` (Pool-Acquire + Abfrage zusammen).
+#: Deutlich unter dem Container-Healthcheck-Timeout (5 s), damit ein reines
+#: Info-Feld den API-Dienst nie unhealthy macht.
+WORKER_HEALTH_TIMEOUT_S = 1.5
+
+
+async def _read_worker_health() -> WorkerHealth:
+    async with database.pool.acquire() as conn:
+        return await worker_health(conn)
+
+
 async def _worker_health() -> WorkerHealth:
-    """Health-Feld `worker`; jede DB-Stoerung ergibt `unknown` statt eines 500."""
+    """Health-Feld `worker`; jede DB-Stoerung ergibt `unknown` statt eines 500.
+
+    Acquire und Abfrage laufen unter `WORKER_HEALTH_TIMEOUT_S`: ein Lock auf
+    `worker_heartbeat` oder ein erschoepfter Pool liefert `unknown`, statt den
+    Endpunkt haengen zu lassen (`TimeoutError` ist ein `OSError`). Ein
+    schliessender Pool (`asyncpg.InterfaceError`) ergibt ebenfalls `unknown`.
+    """
     if not database.is_connected:
         return "unknown"
     try:
-        async with database.pool.acquire() as conn:
-            return await worker_health(conn)
-    except (asyncpg.PostgresError, OSError):
+        return await asyncio.wait_for(_read_worker_health(), timeout=WORKER_HEALTH_TIMEOUT_S)
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError):
         return "unknown"
 
 
