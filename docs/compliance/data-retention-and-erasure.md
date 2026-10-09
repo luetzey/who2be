@@ -345,10 +345,10 @@ tragen `agent_case.reporter_user_id`, `agent_case_event.actor_id` (bei
 `impact`, `expected_behavior`, `note`, Schilderung) koennen Nutzerinhalte
 zitieren.
 
-**Fristen:** ADR-0053 setzt fuer Faelle **keine** eigene Frist. Ein Fall
-bleibt, bis ein Mensch ihn loescht oder sein Agent bzw. Workspace geloescht
-wird. Das ist eine gesetzte Annahme dieses Pakets, keine Herleitung aus dem
-ADR; zu ueberpruefen, sobald Phase F Zahlen zum Bestand liefert.
+**Fristen:** Owner-Entscheidung 2026-10-08: keine eigene Frist. Ein Fall
+bleibt, bis ein Mensch (ab `editor`) ihn loescht oder sein Agent bzw.
+Workspace geloescht wird; beim Account-Purge wird der Melder anonymisiert
+(s. Loeschpfade). Zu ueberpruefen, sobald Phase F Zahlen zum Bestand liefert.
 
 **Loeschpfade:**
 
@@ -447,7 +447,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
 | Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
-| Faelle (`agent_case` + Verlauf, Zuordnung, Schilderung, 0100) | bis Loeschung durch einen Menschen (ab `editor`) bzw. Agent-/Workspace-Purge; keine eigene Frist (gesetzte Annahme) | Einzel-Loeschung: Hard-Delete samt Verlauf + `case.deleted` ohne Inhalt, umgewandelter Lernvorschlag faellt mit; Org-/Workspace-Purge: **CASCADE**; Account-Purge: `reporter_user_id`, menschliche `actor_id` und `assigned_by` **anonymisiert** (Sentinel), s. §4d |
+| Faelle (`agent_case` + Verlauf, Zuordnung, Schilderung, 0100) | bis Loeschung durch einen Menschen (ab `editor`) bzw. Agent-/Workspace-Purge; Owner-Entscheidung 2026-10-08: keine eigene Frist | Einzel-Loeschung: Hard-Delete samt Verlauf + `case.deleted` ohne Inhalt, umgewandelter Lernvorschlag faellt mit; Org-/Workspace-Purge: **CASCADE**; Account-Purge: `reporter_user_id`, menschliche `actor_id` und `assigned_by` **anonymisiert** (Sentinel), s. §4d |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
