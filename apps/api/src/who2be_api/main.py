@@ -80,6 +80,7 @@ from who2be_api.routers import (
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
+from who2be_api.worker.store import WorkerHealth, worker_health
 from who2be_models import ApiErrorBody, ApiProblem
 
 logger = logging.getLogger(__name__)
@@ -340,6 +341,21 @@ class Health(BaseModel):
     status: str
     version: str
     db: str
+    #: Dead-Man-Signal des Workers (ADR-0057 §7): `ok`, `stale` (juengster
+    #: Heartbeat aelter als 5 min) oder `unknown` (kein Heartbeat bzw. keine
+    #: Datenbank). Nur Information — `status` bleibt davon unberuehrt.
+    worker: WorkerHealth
+
+
+async def _worker_health() -> WorkerHealth:
+    """Health-Feld `worker`; jede DB-Stoerung ergibt `unknown` statt eines 500."""
+    if not database.is_connected:
+        return "unknown"
+    try:
+        async with database.pool.acquire() as conn:
+            return await worker_health(conn)
+    except (asyncpg.PostgresError, OSError):
+        return "unknown"
 
 
 def _on_rate_limit(request: Request, exc: Exception) -> Response:
@@ -560,7 +576,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:
         db_status = "ok" if await database.ping() else "unavailable"
-        return Health(status="ok", version=__version__, db=db_status)
+        return Health(status="ok", version=__version__, db=db_status, worker=await _worker_health())
 
     return app
 

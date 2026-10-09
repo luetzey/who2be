@@ -358,6 +358,26 @@ async def worker_seen_at(conn: asyncpg.Connection, worker_id: str | None = None)
     return seen
 
 
+#: Health-Feld `worker` (ADR-0057 §7): `unknown` = keine Heartbeat-Zeile.
+WorkerHealth = Literal["ok", "stale", "unknown"]
+
+
+def classify_worker_seen(seen: datetime | None, now: datetime | None = None) -> WorkerHealth:
+    """`ok`, wenn der juengste Heartbeat hoechstens `WORKER_STALE_AFTER` alt ist,
+    sonst `stale`; ohne Heartbeat `unknown`."""
+    if seen is None:
+        return "unknown"
+    return "stale" if _now(now) - seen > WORKER_STALE_AFTER else "ok"
+
+
+async def worker_health(conn: asyncpg.Connection, now: datetime | None = None) -> WorkerHealth:
+    """Health-Feld `worker` aus dem juengsten Heartbeat aller Worker.
+
+    Laeuft auch auf der App-Rolle `who2be_app` (Lese-Grant, Migration 0102).
+    """
+    return classify_worker_seen(await worker_seen_at(conn), now)
+
+
 # --- Advisory-Lock ------------------------------------------------------------
 
 _LOCK_ID_SQL = "hashtextextended($1::text || $2::text, 0)"
