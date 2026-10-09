@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import type { Me, MemoryEventRead, MemoryRead, WorkspaceRole } from '@/api/types'
+import type { CaseRead, Me, MemoryEventRead, MemoryRead, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { MemoryList } from '@/components/memory/MemoryList'
@@ -142,11 +142,49 @@ function notFound(): Response {
   return jsonResponse({ detail: 'Memory nicht gefunden.', reason: 'memory_not_found' }, 404)
 }
 
+// Antwort von `POST .../convert` (CaseRead, D2c).
+const CREATED_CASE: CaseRead = {
+  id: 'case-9',
+  workspace_id: 'ws-1',
+  agent_id: 'a1',
+  reporter_kind: 'human',
+  reporter_user_id: 'u1',
+  reporter_agent_id: null,
+  situation: 'Release-Notes schreiben.',
+  behavior: 'Hat ohne Tests gepusht.',
+  impact: null,
+  expected_behavior: 'Vor dem Push lokal testen.',
+  severity: 'medium',
+  signal: null,
+  source_ref: null,
+  source_feedback_id: null,
+  source_memory_id: 'm1',
+  status: 'open',
+  created_at: '2026-10-09T10:00:00Z',
+}
+
+function lesson(overrides: Partial<MemoryRead> = {}): MemoryRead {
+  return memory({
+    kind: 'lesson',
+    status: 'pending',
+    fact: 'Vor dem Push lokal testen.',
+    occurrence_count: 3,
+    confirmed_at: null,
+    ...overrides,
+  })
+}
+
 function stubApi({
   items = [memory()],
   history = HISTORY,
   detail,
-}: { items?: MemoryRead[]; history?: MemoryEventRead[] | Response; detail?: DetailStub } = {}) {
+  convert,
+}: {
+  items?: MemoryRead[]
+  history?: MemoryEventRead[] | Response
+  detail?: DetailStub
+  convert?: Response
+} = {}) {
   const calls: Call[] = []
   let detailAttempts = 0
   vi.stubGlobal(
@@ -158,6 +196,7 @@ function stubApi({
       const body = init?.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : null
       calls.push({ method, path, body })
       if (method === 'DELETE') return new Response(null, { status: 204 })
+      if (path.endsWith('/convert')) return convert ?? jsonResponse(CREATED_CASE, 201)
       if (path.endsWith('/history')) {
         return history instanceof Response ? history : jsonResponse(history)
       }
@@ -222,8 +261,8 @@ function Providers({ role = 'editor', children }: { role?: WorkspaceRole; childr
 const ENTRY = '/w/ws-1/memory?tab=entries&entry=m1'
 const DETAIL_PATH = '/v1/workspaces/ws-1/memories/m1'
 
-async function openSheet(entry = ENTRY) {
-  renderPage(entry)
+async function openSheet(entry = ENTRY, role: WorkspaceRole = 'editor') {
+  renderPage(entry, role)
   const sheet = await screen.findByTestId('memory-detail-sheet')
   await within(sheet).findByTestId('detail-fact')
   return sheet
@@ -542,5 +581,161 @@ describe('MemoryDetailSheet (C5c-1)', () => {
     const sheet = await openSheet()
     await within(sheet).findAllByTestId('history-item')
     expect(await axe(sheet)).toHaveNoViolations()
+  })
+})
+
+// D6e (Delta-Spec „Gedaechtnis-Anschluss“, S6): „Fall daraus machen“ nur bei
+// Lernvorschlag + pending + ab editor, vor „Ablehnen“; das Sheet bleibt nach
+// dem Anlegen offen und zeigt „Zu Fall geworden“ mit Link „Zum Fall“.
+describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
+  const CONVERT = 'Fall daraus machen'
+
+  function fillCase() {
+    const dialog = screen.getByTestId('report-case-dialog')
+    fireEvent.change(within(dialog).getByLabelText(/Was war die Lage\?/), {
+      target: { value: 'Release-Notes schreiben.' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/Was hat der Agent getan\?/), {
+      target: { value: 'Hat ohne Tests gepusht.' },
+    })
+    return dialog
+  }
+
+  it.each([['editor'], ['admin']] as const)(
+    '%s sieht „Fall daraus machen“ als default-Aktion vor „Ablehnen“',
+    async (role) => {
+      stubApi({ items: [lesson()] })
+      const sheet = await openSheet(ENTRY, role)
+      const actions = within(sheet).getByTestId('detail-actions')
+      const buttons = within(actions).getAllByRole('button')
+      const convert = within(actions).getByRole('button', { name: CONVERT })
+      const reject = within(actions).getByRole('button', { name: 'Ablehnen' })
+      expect(buttons.indexOf(convert)).toBeLessThan(buttons.indexOf(reject))
+      // `default` statt `brand`/`outline` (Spec: „Die Aktion steht als `default`“).
+      expect(convert.className).toContain('bg-primary')
+      expect(reject.className).not.toContain('bg-primary')
+    },
+  )
+
+  it('viewer sieht die Aktion nicht', async () => {
+    stubApi({ items: [lesson()] })
+    const sheet = await openSheet(ENTRY, 'viewer')
+    expect(within(sheet).queryByRole('button', { name: CONVERT })).toBeNull()
+  })
+
+  it.each([
+    ['Lernvorschlag abgelehnt', lesson({ status: 'rejected' })],
+    ['Lernvorschlag schon Fall', lesson({ status: 'converted', converted_case_id: 'case-1' })],
+    ['Lernvorschlag abgelaufen', lesson({ status: 'expired' })],
+    ['Notiz pending', memory({ status: 'pending', kind: 'agent_note' })],
+    ['Nutzerfakt pending', memory({ status: 'pending', kind: 'user_fact' })],
+  ])('keine Aktion bei %s', async (_label, item) => {
+    stubApi({ items: [item] })
+    const sheet = await openSheet()
+    expect(within(sheet).queryByRole('button', { name: CONVERT })).toBeNull()
+  })
+
+  it('öffnet das Formular mit Zitat und leeren Feldern, Knopf „Fall anlegen“', async () => {
+    stubApi({ items: [lesson()] })
+    const sheet = await openSheet()
+    fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
+    const dialog = await screen.findByTestId('report-case-dialog')
+    const origin = within(dialog).getByTestId('report-case-origin')
+    expect(within(origin).getByRole('heading', { name: 'Ausgangspunkt' })).toBeInTheDocument()
+    const quote = origin.querySelector('blockquote')
+    expect(quote).toHaveTextContent('Vor dem Push lokal testen.')
+    expect(origin).toHaveTextContent('Lernvorschlag von researcher, 3× vorgeschlagen')
+    expect(within(origin).getByText(/2026|1\.10\./, { selector: 'time' })).toHaveAttribute(
+      'datetime',
+      '2026-10-01T09:12:00Z',
+    )
+    expect(within(dialog).getByLabelText(/Was hättest du erwartet\?/)).toHaveValue('')
+    expect(within(dialog).getByLabelText(/Was war die Lage\?/)).toHaveValue('')
+    expect(within(dialog).getByRole('button', { name: 'Fall anlegen' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Fall melden' })).toBeNull()
+  })
+
+  it('legt den Fall über convert an; das Sheet bleibt offen mit „Zu Fall geworden“ und „Zum Fall“', async () => {
+    const { calls } = stubApi({ items: [lesson()] })
+    const sheet = await openSheet()
+    fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
+    await screen.findByTestId('report-case-dialog')
+    const dialog = fillCase()
+    fireEvent.click(within(dialog).getByRole('button', { name: /In „Erwartet“ übernehmen/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+
+    const link = await within(sheet).findByTestId('detail-to-case')
+    expect(link).toHaveTextContent('Zum Fall')
+    expect(link).toHaveAttribute('href', '/w/ws-1/feedback/cases/case-9')
+    await waitFor(() => expect(link).toHaveFocus())
+    expect(screen.queryByTestId('report-case-dialog')).toBeNull()
+    expect(screen.getByTestId('memory-detail-sheet')).toBeInTheDocument()
+    expect(within(sheet).getByText('Zu Fall geworden')).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: CONVERT })).toBeNull()
+    expect(within(sheet).queryByRole('button', { name: 'Ablehnen' })).toBeNull()
+
+    const post = calls.find((call) => call.path.endsWith('/convert'))
+    expect(post?.method).toBe('POST')
+    expect(post?.path).toBe('/v1/workspaces/ws-1/agents/a1/memories/m1/convert')
+    // Body = Fall-Felder ohne `agent_id` (CaseConvertRequest, extra=forbid).
+    expect(post?.body).toEqual({
+      situation: 'Release-Notes schreiben.',
+      behavior: 'Hat ohne Tests gepusht.',
+      expected_behavior: 'Vor dem Push lokal testen.',
+      severity: 'medium',
+    })
+    // Verlauf neu geladen (convert-Ereignis).
+    expect(calls.filter((call) => call.path.endsWith('/history')).length).toBeGreaterThan(1)
+  })
+
+  it('memory_not_convertible: Spec-Text im Formular, Eingaben bleiben, Sheet unverändert', async () => {
+    stubApi({
+      items: [lesson()],
+      convert: jsonResponse(
+        { detail: 'Eintrag laesst sich nicht in einen Fall umwandeln', reason: 'memory_not_convertible' },
+        409,
+      ),
+    })
+    const sheet = await openSheet()
+    fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
+    await screen.findByTestId('report-case-dialog')
+    const dialog = fillCase()
+    fireEvent.change(within(dialog).getByLabelText(/Was hättest du erwartet\?/), {
+      target: { value: 'Lokal testen.' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    expect(
+      await within(dialog).findByText(
+        'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Was war die Lage\?/)).toHaveValue(
+      'Release-Notes schreiben.',
+    )
+    expect(within(sheet).queryByTestId('detail-to-case')).toBeNull()
+  })
+
+  it('zeigt „Zum Fall“ bei einem schon umgewandelten Lernvorschlag', async () => {
+    stubApi({ items: [lesson({ status: 'converted', converted_case_id: 'case-1' })] })
+    const sheet = await openSheet()
+    expect(within(sheet).getByTestId('detail-to-case')).toHaveAttribute(
+      'href',
+      '/w/ws-1/feedback/cases/case-1',
+    )
+  })
+
+  it('a11y: keine axe-Violations im Sheet mit Aktion', async () => {
+    stubApi({ items: [lesson()] })
+    const sheet = await openSheet()
+    await within(sheet).findAllByTestId('history-item')
+    expect(await axe(sheet)).toHaveNoViolations()
+  })
+
+  it('a11y: keine axe-Violations im Formular mit Zitat', async () => {
+    stubApi({ items: [lesson()] })
+    const sheet = await openSheet()
+    fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
+    const dialog = await screen.findByTestId('report-case-dialog')
+    expect(await axe(dialog)).toHaveNoViolations()
   })
 })

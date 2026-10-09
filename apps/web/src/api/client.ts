@@ -736,6 +736,15 @@ export interface Api {
   deleteCase: (caseId: string) => Promise<void>
   transitionCase: (caseId: string, input: CaseTransitionInput) => Promise<CaseRead>
   putCaseElements: (caseId: string, elements: CaseElementInput[]) => Promise<CaseElement[]>
+  // ADR-0053 6.4/6.5 (D2c) — Lernvorschlag bzw. Alt-Feedback wird Fall, ab
+  // editor. convert ohne `agent_id` (der Agent kommt aus dem Lernvorschlag);
+  // ein zweites Mal -> 409 `memory_not_convertible` / `feedback_not_promotable`.
+  convertMemory: (
+    agentId: string,
+    memoryId: string,
+    input: Omit<CaseCreate, 'agent_id'>,
+  ) => Promise<CaseRead>
+  promoteFeedback: (feedbackId: string, input: CaseCreate) => Promise<CaseRead>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -1334,6 +1343,16 @@ export function createApi(token: string, workspaceId: string): Api {
       request<CaseElement[]>(token, apiPath`${ws}/cases/${caseId}/elements`, {
         method: 'PUT',
         body: JSON.stringify({ elements }),
+      }),
+    convertMemory: (agentId, memoryId, input) =>
+      request<CaseRead>(token, apiPath`${ws}/agents/${agentId}/memories/${memoryId}/convert`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    promoteFeedback: (feedbackId, input) =>
+      request<CaseRead>(token, apiPath`${ws}/feedback/${feedbackId}/promote`, {
+        method: 'POST',
+        body: JSON.stringify(input),
       }),
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
