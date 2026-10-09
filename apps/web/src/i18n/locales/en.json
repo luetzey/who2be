@@ -618,12 +618,7 @@
       "error": "Copy failed."
     },
     "filter": {
-      "all": "All",
-      "statusGroup": "Filter by status",
-      "searchLabel": "Search",
       "searchPlaceholder": "Search agents…",
-      "reset": "Reset filters",
-      "emptyTitle": "No matches",
       "emptyDescription": "No agent matches the filter and search."
     },
     "memory": {
