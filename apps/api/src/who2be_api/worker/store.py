@@ -25,7 +25,7 @@ beides zusaetzlich per CHECK.
 
 Die `jsonb`-Spalte wird als Text gebunden und gelesen (`$n::text::jsonb`,
 `result::text`), damit die Funktionen mit und ohne den jsonb-Codec aus
-`core/db.py#init_connection` gleich arbeiten.
+`apps/api/src/who2be_api/core/db.py#init_connection` gleich arbeiten.
 """
 
 from __future__ import annotations

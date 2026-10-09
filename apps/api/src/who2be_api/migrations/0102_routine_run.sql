@@ -33,7 +33,7 @@
 -- INSERT, UPDATE oder DELETE fuer die Laufzeitrolle.
 --
 -- Org-Transfer: beide Tabellen sind instanzweit und stehen in
--- `core/org_transfer.py#GLOBAL_TABLES` (nie Teil eines Org-Archivs).
+-- `apps/api/src/who2be_api/core/org_transfer.py#GLOBAL_TABLES` (nie Teil eines Org-Archivs).
 --
 -- Rueckweg (als eigene Vorwaerts-Migration): beide Tabellen droppen. Kein
 -- anderes Objekt verweist auf sie.

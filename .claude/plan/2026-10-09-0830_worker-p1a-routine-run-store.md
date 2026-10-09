@@ -23,7 +23,7 @@ Kanban-Karte t_49b81525. Grundlage: ADR-0057 §5/§6, PM-W1 (0102), PM-W4
    claim_slot, finish_run, touch_run, record_worker_heartbeat,
    mark_abandoned, last_run/last_success/latest_runs, Advisory-Lock
    (try/unlock + Kontextmanager auf eigener Verbindung).
-3. Waechter: `core/org_transfer.py#GLOBAL_TABLES` um beide Tabellen
+3. Waechter: `apps/api/src/who2be_api/core/org_transfer.py#GLOBAL_TABLES` um beide Tabellen
    erweitern — `_classify` ist fail-closed fuer Tabellen ohne
    Mandantenspalte und wuerde sonst jeden Org-Export abbrechen. Der
    RLS-Coverage-Guard erfasst nur Tabellen mit `workspace_id`/`org_id`,
