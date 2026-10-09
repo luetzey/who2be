@@ -32,6 +32,9 @@ import asyncpg
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.logging import configure_logging
+
+# Meldet die Routinen in `REGISTRY` an (ADR-0057 P2).
+from who2be_api.worker import routines as _routines  # noqa: F401
 from who2be_api.worker.registry import REGISTRY, Registry
 from who2be_api.worker.runner import Runner
 from who2be_api.worker.schedule import ScheduleError, effective_table, format_table
