@@ -354,6 +354,70 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     expect(api.putCaseElements).not.toHaveBeenCalled()
   })
 
+  describe('zweistufiges Zuordnen: zweiter Aufruf scheitert', () => {
+    async function assignAndFail(error: unknown) {
+      // Erster Laden: ohne Zuordnung; nach dem Neuladen ist sie gespeichert.
+      api.getCase.mockResolvedValueOnce({ ...caseDetail({ status: 'open' }), elements: [] })
+      api.getCase.mockResolvedValue({ ...caseDetail({ status: 'open' }), elements: [playbookElement] })
+      api.transitionCase.mockRejectedValue(error)
+      renderPage()
+
+      fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Zuordnen…' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Fall zuordnen' })
+      fireEvent.click(await within(dialog).findByLabelText('Release'))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Zuordnung speichern' }))
+
+      await waitFor(() =>
+        expect(api.putCaseElements).toHaveBeenCalledWith('case-1', [{ target: 'playbook', entity_id: 'pb1' }]),
+      )
+      await waitFor(() => expect(api.transitionCase).toHaveBeenCalledWith('case-1', { to: 'triaged' }))
+      return dialog
+    }
+
+    async function expectSavedAndReloadedOnce(dialog: HTMLElement) {
+      // Dialog bleibt offen, Seite laedt genau einmal neu, die Zuordnung ist sichtbar.
+      await waitFor(() => expect(api.getCase).toHaveBeenCalledTimes(2))
+      expect(dialog).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: 'Fall zuordnen' })).toBe(dialog)
+      await waitFor(() =>
+        expect(within(screen.getByTestId('case-assignment')).getByText('Playbook: Release')).toBeInTheDocument(),
+      )
+      expect(notifyError).not.toHaveBeenCalled()
+      // Kein zweites Neuladen hinterher.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(api.getCase).toHaveBeenCalledTimes(2)
+    }
+
+    it('case_transition_forbidden: Spec-Text im Dialog, Zuordnung bleibt', async () => {
+      const dialog = await assignAndFail(
+        new ApiError(409, 'Conflict', { reason: 'case_transition_forbidden', params: {} }),
+      )
+      expect(
+        await within(dialog).findByText(
+          'Dieser Schritt passt nicht zum aktuellen Stand. Die Seite wurde neu geladen.',
+        ),
+      ).toBeInTheDocument()
+      await expectSavedAndReloadedOnce(dialog)
+    })
+
+    it('case_transition_forbidden mit missing=element: Pflicht-Hinweis im Dialog', async () => {
+      const dialog = await assignAndFail(
+        new ApiError(409, 'Conflict', {
+          reason: 'case_transition_forbidden',
+          params: { missing: 'element' },
+        }),
+      )
+      expect(await within(dialog).findByText(/mindestens einem Baustein/)).toBeInTheDocument()
+      await expectSavedAndReloadedOnce(dialog)
+    })
+
+    it('anderer Fehler: Meldung im Dialog, Zuordnung bleibt', async () => {
+      const dialog = await assignAndFail(new Error('Netz weg'))
+      expect(await within(dialog).findByText('Netz weg')).toBeInTheDocument()
+      await expectSavedAndReloadedOnce(dialog)
+    })
+  })
+
   it('open mit Zuordnung: „Als eingeordnet markieren“ wechselt direkt und fokussiert den Status', async () => {
     api.getCase.mockResolvedValueOnce(caseDetail({ status: 'open' }))
     api.getCase.mockResolvedValue(caseDetail({ status: 'triaged' }))

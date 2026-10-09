@@ -839,9 +839,10 @@ export function CaseActions({
     const { reason, params } = problemOf(cause)
     if (reason === 'case_transition_forbidden') {
       if (params.missing === 'element') return t('feedback:cases.assign.required')
-      onChanged(false)
       const message = t('feedback:cases.error.transitionForbidden')
+      // Ein offener Dialog laedt selbst neu (AssignPanel), sonst hier.
       if (keepDialog) return message
+      onChanged(false)
       notify.error(message)
       return null
     }
