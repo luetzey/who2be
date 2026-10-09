@@ -54,4 +54,8 @@ regexes = [
   '''^SHA-256-Praefix$''',
   #   apps/web/src/i18n/locales/de.json (Schluessel apiError)
   '''^Who2Be-API-Fehler$''',
+  # Praefix des Advisory-Lock-Namens je Routine (ADR-0057 §5), kein Wert mit
+  # Geheimnis. Fund im Commit be9d1107, apps/api/src/who2be_api/worker/store.py
+  # (damals LOCK_KEY_PREFIX; die Regel sprang auf "KEY" an).
+  '''^who2be\.routine\.$''',
 ]
