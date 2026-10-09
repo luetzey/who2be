@@ -406,6 +406,72 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
   })
 })
 
+// Filter-Standard M3 (§3.1): Suche + genau eine Facette (Agent, nur editor+)
+// in der ListFilterBar; eine Facette steht auch unter `md` inline.
+describe('MemoryPage · Zur Freigabe · Filterleiste (Filter-Standard M3)', () => {
+  it('setzt den Agenten in die URL, zeigt den Chip und setzt per „Filter zurücksetzen“ zurück', async () => {
+    const { calls } = stubApi({ items: [memory({ id: 'm1' })], agentCounts: { a1: 1 } })
+    renderPage()
+    const select = await screen.findByLabelText('Agent')
+    await within(select).findByRole('option', { name: 'researcher' })
+    expect(within(select).getAllByRole('option')[0]).toHaveTextContent('Alle Agenten')
+    expect(screen.queryByRole('button', { name: 'Filter zurücksetzen' })).toBeNull()
+
+    fireEvent.change(select, { target: { value: 'a2' } })
+    const chips = await screen.findByRole('list', { name: 'Aktive Filter' })
+    expect(
+      within(chips).getByRole('button', { name: 'Agent-Filter entfernen (researcher)' }),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(calls.some((c) => /\/memories\?/.test(c.url) && c.url.includes('agent_id=a2'))).toBe(
+        true,
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }))
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Aktive Filter' })).toBeNull())
+    expect(screen.getByLabelText('Agent')).toHaveValue('')
+  })
+
+  it('zählt die Suche als aktiv: „Filter zurücksetzen“ leert sie, ohne Chip', async () => {
+    stubApi()
+    renderPage()
+    const search = await screen.findByLabelText('Suche')
+    expect(search).toHaveAttribute('placeholder', 'In Vorschlägen suchen…')
+    fireEvent.change(search, { target: { value: 'Podman' } })
+    expect(screen.queryByRole('list', { name: 'Aktive Filter' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }))
+    expect(search).toHaveValue('')
+  })
+
+  it('lässt unter md die eine Facette inline – kein „Filter“-Knopf, kein Sheet', async () => {
+    viewport.mobile = true
+    stubApi()
+    renderPage()
+    const select = await screen.findByLabelText('Agent')
+    expect(select).toBeVisible()
+    expect(screen.queryByTestId('list-filter-facets-toggle')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Filter( \(|$)/ })).toBeNull()
+  })
+
+  it('zeigt Viewern nur die Suche, auch unter md', async () => {
+    viewport.mobile = true
+    stubApi()
+    renderPage('viewer')
+    expect(await screen.findByLabelText('Suche')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Agent')).toBeNull()
+    expect(screen.queryByTestId('list-filter-facets-toggle')).toBeNull()
+  })
+
+  it('hat keine axe-Violations mit gesetztem Agent-Filter (mobil)', async () => {
+    viewport.mobile = true
+    stubApi({ items: [memory({ id: 'm1' })], agentCounts: { a1: 1 } })
+    const { container } = renderPage('editor', '/w/ws-1/memory?tab=approval&agent=a1&q=CI')
+    await screen.findByRole('list', { name: 'Aktive Filter' })
+    expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
 // Agenten ausserhalb der ersten /agents-Seite (hoechstens 100): nie die rohe
 // Agent-ID zeigen, fehlende Namen gezielt per GET /agents/{id} nachladen.
 describe('MemoryPage · Zur Freigabe · unbekannte Agenten (t_3cd92765)', () => {
@@ -1050,7 +1116,7 @@ describe('MemoryPage · Zur Freigabe · Tastaturkürzel (C5a-3, Spec §5.2)', ()
     const { calls } = twoRows()
     renderPage()
     const first = await screen.findByRole('button', { name: /Erster/ })
-    const search = screen.getByRole('searchbox')
+    const search = screen.getByLabelText('Suche')
     search.focus()
     for (const key of ['j', 'x', 'a', 'r', '?']) press(key, search)
     expect(search).toHaveFocus()
