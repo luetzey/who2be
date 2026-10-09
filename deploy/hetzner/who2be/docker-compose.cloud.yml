@@ -100,6 +100,20 @@ services:
       redis:
         condition: service_healthy
 
+  # Hintergrund-Routinen (ADR-0057 §3): derselbe who2be-api-cloud-Registry-
+  # Build wie `api`/`migrate`, `build:` nur fuer den Notfall-Handbuild (s. o.).
+  # Bewusst OHNE APP_DATABASE_URL: der Worker laeuft wie der bisherige
+  # Cron-Purge ueber die Owner-Verbindung (DATABASE_URL aus der Basis).
+  worker:
+    image: ghcr.io/luetzey/who2be-api-cloud:${API_IMAGE_TAG:-latest}
+    build:
+      target: runtime-cloud
+    environment:
+      WHO2BE_EDITION: cloud
+      # Account-Purge loescht den GoTrue-User per Admin-API (best-effort,
+      # `integrations/gotrue_admin.py`). Ohne Key bleibt der Auth-User stehen.
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+
   # Cloud-Web-Bundle: VITE_* wirkt zur Compile-Zeit (Vite) — das On-Prem-Image
   # aus GHCR hat die Billing-UI tree-geshaked (ADR-0029) und es gibt kein
   # `web-cloud`-Image in der Build-Matrix. pull_policy=build erzwingt deshalb

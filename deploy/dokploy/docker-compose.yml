@@ -357,6 +357,52 @@ services:
       retries: 3
       start_period: 10s
 
+  # Hintergrund-Routinen (ADR-0057 §3): Purge, Gedaechtnis-Verfall,
+  # Protokoll-Aufbewahrung. Derselbe Build wie `api`, nur ein anderer Befehl;
+  # ersetzt die Dokploy-Schedules, sobald er laeuft (ADR-0057 §8). Umgebung wie
+  # die bisherigen Purge-Laeufe im api-Container: Owner-Verbindung,
+  # BlobStore, Tabellen-Store-Volume, GoTrue-Adresse (der Service-Key kommt
+  # im Cloud-Overlay dazu). Kein Traefik, kein Port: der Worker hat keine
+  # oeffentliche Flaeche.
+  # GENAU EIN Worker, NICHT REPLIZIEREN (ADR-0057 §10): solange der
+  # Tabellen-Store-Sweep im Worker liegt, gilt die Betriebsgrenze aus
+  # ADR-0049 auch hier. Drift-Test: apps/api/tests/test_single_writer_guard.py.
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["who2be-worker"]
+    environment:
+      DATABASE_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      SUPABASE_URL: https://supabase.${DOMAIN}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      WHO2BE_EDITION: onprem
+      WHO2BE_BLOBSTORE_ENDPOINT: seaweedfs:8333
+      WHO2BE_BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be}
+      WHO2BE_BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY}
+      WHO2BE_BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
+      WHO2BE_BLOBSTORE_SECURE: "false"
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
+    volumes:
+      - tablestore-data:/data/tablestore
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      blobstore-bootstrap:
+        condition: service_completed_successfully
+    networks: [who2be]
+    restart: unless-stopped
+    # Die erste Stopp-Anforderung laesst die laufende Routine bis zu ihrem
+    # Timeout enden (Purge: 1 h); kuerzer, und Docker braeche sie per SIGKILL ab.
+    stop_grace_period: 65m
+    healthcheck:
+      # Eigener Heartbeat in der DB juenger als 2 min (PM-W4).
+      test: ["CMD", "who2be-worker", "check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   web:
     build:
       context: ../..

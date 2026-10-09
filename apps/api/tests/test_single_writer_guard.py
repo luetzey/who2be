@@ -17,6 +17,10 @@ Drei Schutzschichten, alle hier geprueft:
    `api`-Container laeuft, statt sich auf das Recreate-Verhalten einer
    bestimmten Compose-Version zu verlassen.
 
+Seit ADR-0057 (§10) gilt (2) und (3) auch fuer den Dienst `worker`: der
+Purge-Sweep im Worker fasst Tabellen-Store-Dateien an, also genau ein Worker,
+in jeder Compose, die `api` ausliefert, mit demselben Image wie `api`.
+
 Zu (3): der Recreate-Pfad von Compose erzeugt den neuen Container, stoppt DANN
 den alten und startet erst danach (`recreateContainer` in
 `pkg/compose/convergence.go`, identisch in v2.20 bis v2.39) — ein Overlap
@@ -35,15 +39,20 @@ from __future__ import annotations
 
 import re
 import subprocess
+from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 
 from who2be_api.main import (
     MultiWorkerNotSupportedError,
     _configured_worker_count,
     _guard_single_writer_process,
 )
+from who2be_api.worker.registry import REGISTRY
+from who2be_api.worker.routines import PURGE
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEPLOY_SCRIPT = _REPO_ROOT / "deploy" / "hetzner" / "scripts" / "deploy.sh"
@@ -225,6 +234,179 @@ def test_dockerfile_startet_ohne_worker_flag() -> None:
     assert "--workers" not in dockerfile, dockerfile
 
 
+# --- Dienst `worker` (ADR-0057 §3/§10) -----------------------------------------
+
+# Jede Deploy-Kombination, die `api` ausliefert: Basis plus die Overlays, mit
+# denen sie laut Kopfkommentar gestartet wird. Die Liste ist von Hand, damit
+# die Merge-Reihenfolge stimmt; `test_jede_api_compose_steckt_in_einem_stack`
+# haelt sie gegen die abgeleitete Dateiliste vollstaendig.
+_STACKS: dict[str, tuple[str, ...]] = {
+    "lokal": ("docker-compose.yml",),
+    "lokal-cloud": ("docker-compose.yml", "docker-compose.cloud.yml"),
+    "lokal-cloud-e2e": (
+        "docker-compose.yml",
+        "docker-compose.cloud.yml",
+        "docker-compose.e2e-cloud.yml",
+    ),
+    "lokal-images": ("docker-compose.yml", "docker-compose.images.yml"),
+    "dokploy": ("deploy/dokploy/docker-compose.yml",),
+    "dokploy-cloud": (
+        "deploy/dokploy/docker-compose.yml",
+        "deploy/dokploy/docker-compose.cloud.yml",
+    ),
+    "hetzner": ("deploy/hetzner/who2be/docker-compose.yml",),
+    "hetzner-cloud": (
+        "deploy/hetzner/who2be/docker-compose.yml",
+        "deploy/hetzner/who2be/docker-compose.cloud.yml",
+    ),
+    "hetzner-local": (
+        "deploy/hetzner/who2be/docker-compose.yml",
+        "deploy/hetzner/who2be/docker-compose.local.yml",
+    ),
+}
+_BASE_COMPOSES = sorted({files[0] for files in _STACKS.values()})
+
+
+class _ComposeLoader(yaml.SafeLoader):
+    """Compose-Dateien tragen Merge-Tags (`!override`), die SafeLoader ablehnt."""
+
+
+def _untagged(loader: yaml.Loader, suffix: str, node: yaml.Node) -> Any:
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    assert isinstance(node, yaml.ScalarNode)
+    return loader.construct_scalar(node)
+
+
+_ComposeLoader.add_multi_constructor("!", _untagged)
+
+
+def _services(relpath: str) -> dict[str, dict[str, Any]]:
+    data = yaml.load((_REPO_ROOT / relpath).read_text(encoding="utf-8"), Loader=_ComposeLoader)
+    return data.get("services") or {}
+
+
+def _merged_service(files: tuple[str, ...], name: str) -> dict[str, Any]:
+    """Grobe Compose-Merge-Regel: Mappings je Schluessel mergen, sonst ersetzen.
+
+    Reicht fuer die Felder, die hier zaehlen (`image`, `build`, `environment`,
+    `pull_policy`); Listen wie `volumes` stehen nur in den Basis-Dateien.
+    """
+    merged: dict[str, Any] = {}
+    for relpath in files:
+        for key, value in (_services(relpath).get(name) or {}).items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = {**merged[key], **value}
+            else:
+                merged[key] = value
+    return merged
+
+
+def _duration(value: str) -> timedelta:
+    """Compose-Dauer wie `65m`, `1h30m`, `90s`."""
+    units = {"h": "hours", "m": "minutes", "s": "seconds"}
+    parts = re.findall(r"(\d+)([hms])", value)
+    assert parts and "".join(n + u for n, u in parts) == value, value
+    return timedelta(**{units[u]: int(n) for n, u in parts})
+
+
+def test_jede_api_compose_steckt_in_einem_stack() -> None:
+    """Kein Overlay mit `api` bleibt ungeprueft — die Stack-Liste ist vollstaendig."""
+    in_stacks = {f for files in _STACKS.values() for f in files}
+    with_api = {_compose_id(path) for path in _COMPOSE_FILES}
+    assert with_api <= in_stacks, f"Compose mit `api` ohne Stack: {sorted(with_api - in_stacks)}"
+
+
+@pytest.mark.parametrize("relpath", _BASE_COMPOSES)
+# effect-exempt: Konfigurations-Drift, haelt die Compose-Dateien gegen ADR-0057 §3
+def test_basis_compose_definiert_genau_einen_worker(relpath: str) -> None:
+    """`worker` steht in jeder Basis-Compose, und zwar genau einmal.
+
+    Gezaehlt im Text, nicht im YAML-Modell: ein doppelter Schluessel wuerde vom
+    Parser still auf den letzten reduziert.
+    """
+    text = (_REPO_ROOT / relpath).read_text(encoding="utf-8")
+    assert len(re.findall(r"^  worker:\s*$", text, re.M)) == 1, (
+        f"{relpath}: Dienst `worker` fehlt oder steht mehrfach (ADR-0057 §3)."
+    )
+
+
+@pytest.mark.parametrize("stack", sorted(_STACKS), ids=str)
+# effect-exempt: Konfigurations-Drift, haelt die Stacks gegen ADR-0057 §10
+def test_worker_ist_nicht_skalierbar(stack: str) -> None:
+    """Kein `replicas`, kein `scale`, kein `deploy` am Worker — genau einer (§10)."""
+    worker = _merged_service(_STACKS[stack], "worker")
+    for key in ("deploy", "scale", "replicas"):
+        assert key not in worker, f"{stack}: worker traegt `{key}` (ADR-0057 §10)."
+
+
+@pytest.mark.parametrize("stack", sorted(_STACKS), ids=str)
+def test_worker_nutzt_dasselbe_image_wie_api(stack: str) -> None:
+    """Kein zweites Image, kein zweiter Build (ADR-0057 §3).
+
+    Verglichen wird das zusammengefuehrte Ergebnis je Stack: ein Overlay, das
+    `api` auf das Cloud-Image stellt und `worker` vergisst, liesse den Worker
+    still auf dem On-Prem-Artefakt laufen.
+    """
+    files = _STACKS[stack]
+    api, worker = _merged_service(files, "api"), _merged_service(files, "worker")
+    for key in ("image", "build", "pull_policy"):
+        assert worker.get(key) == api.get(key), (
+            f"{stack}: worker.{key}={worker.get(key)!r}, api.{key}={api.get(key)!r}"
+        )
+
+
+@pytest.mark.parametrize("stack", sorted(_STACKS), ids=str)
+# effect-exempt: Konfigurations-Drift, worker-Env gegen api-Env je Stack
+def test_worker_erbt_die_edition_von_api(stack: str) -> None:
+    """Edition und GoTrue-Service-Key wie bei `api` — der Purge braucht beide."""
+    files = _STACKS[stack]
+    api_env = _merged_service(files, "api").get("environment") or {}
+    worker_env = _merged_service(files, "worker").get("environment") or {}
+    for key in ("WHO2BE_EDITION", "SUPABASE_SERVICE_KEY"):
+        assert worker_env.get(key) == api_env.get(key), (
+            f"{stack}: worker {key}={worker_env.get(key)!r}, api {key}={api_env.get(key)!r}"
+        )
+
+
+@pytest.mark.parametrize("relpath", _BASE_COMPOSES)
+def test_worker_dienst_ist_vollstaendig(relpath: str) -> None:
+    """Befehl, Healthcheck, Neustart, Abhaengigkeit, Volume und Stopp-Fenster."""
+    services = _services(relpath)
+    worker, api = services["worker"], services["api"]
+    assert worker["command"] == ["who2be-worker"]
+    assert worker["healthcheck"]["test"] == ["CMD", "who2be-worker", "check"]
+    assert worker["restart"] == "unless-stopped"
+    assert worker["depends_on"]["migrate"] == {"condition": "service_completed_successfully"}
+    # Tabellen-Store wie `api`: dasselbe Volume am selben Pfad.
+    assert (
+        worker["environment"]["WHO2BE_TABLESTORE_DIR"]
+        == api["environment"]["WHO2BE_TABLESTORE_DIR"]
+    )
+    tablestore_mounts = [v for v in api["volumes"] if str(v).startswith("tablestore-data:")]
+    assert tablestore_mounts and all(m in worker["volumes"] for m in tablestore_mounts)
+    # Owner-Verbindung wie die bisherigen Purge-Laeufe, keine RLS-Rolle.
+    assert worker["environment"]["DATABASE_URL"] == api["environment"]["DATABASE_URL"]
+    assert "APP_DATABASE_URL" not in worker["environment"]
+    # Docker darf eine laufende Routine beim Stopp nicht vor ihrem Timeout killen.
+    purge_timeout = REGISTRY.get(PURGE).timeout
+    longest = max(r.timeout for r in REGISTRY)
+    assert longest == purge_timeout
+    assert _duration(str(worker["stop_grace_period"])) >= longest, (
+        f"{relpath}: stop_grace_period kuerzer als der laengste Routinen-Timeout {longest}."
+    )
+
+
+def test_hetzner_worker_ist_gehaertet() -> None:
+    """Haertung wie `api` (test_compose_hardening prueft alle Dienste generisch)."""
+    worker = _services("deploy/hetzner/who2be/docker-compose.yml")["worker"]
+    assert worker["security_opt"] == ["no-new-privileges:true"]
+    assert worker["logging"]["driver"] == "json-file"
+    assert worker["mem_limit"]
+
+
 # --- Deploy-Assertion --------------------------------------------------------
 
 
@@ -238,7 +420,7 @@ def _deploy_script_code() -> str:
 
 
 def test_deploy_skript_prueft_die_container_anzahl() -> None:
-    """`deploy.sh` misst nach dem `up`, dass genau EIN api-Container laeuft.
+    """`deploy.sh` misst nach dem `up`, dass genau EIN api- und EIN worker-Container laeuft.
 
     Die Messung prueft den Endzustand, nicht das Recreate-Fenster: sie laeuft
     nach `--wait`, eine transiente Ueberlappung waere zum Messzeitpunkt vorbei.
@@ -250,11 +432,28 @@ def test_deploy_skript_prueft_die_container_anzahl() -> None:
     still weg, wenn jemand sie beim Aufraeumen entfernt. Deshalb dieser Test.
     """
     code = _deploy_script_code()
-    assert "ps --status running --quiet api" in code, (
-        "deploy.sh prueft nach dem `up` nicht mehr, wie viele api-Container "
+    assert 'ps --status running --quiet "$service"' in code, (
+        "deploy.sh prueft nach dem `up` nicht mehr, wie viele Container "
         "laufen — damit ist die Betriebsgrenze (ADR-0049) unbeobachtet."
     )
+    for service in ("api", "worker"):
+        assert re.search(rf"^assert_single_running {service}$", code, re.M), (
+            f"deploy.sh prueft die Anzahl laufender {service}-Container nicht "
+            "(ADR-0049, ADR-0057 §10)."
+        )
     assert "exit 3" in code, "Die Pruefung muss den Deploy abbrechen, nicht nur warnen."
+
+
+# effect-exempt: Konfigurations-Drift im Deploy-Skript, Pull-Aufruf braucht Registry
+def test_deploy_skript_zieht_das_worker_image() -> None:
+    """Der Vorab-Pull nennt `worker` — sonst liefe er auf dem alten SHA weiter.
+
+    `up` holte ein fehlendes Image zwar selbst, aber ein VORHANDENES altes Tag
+    nicht; der Worker bliebe still auf dem vorigen Stand stehen.
+    """
+    pulls = re.findall(r'^\s*"\$\{COMPOSE\[@\]\}" pull (.+)$', _deploy_script_code(), re.M)
+    plain = [line for line in pulls if "PROFILE_PULL" not in line]
+    assert plain and all("worker" in line.split() for line in plain), plain
 
 
 def test_deploy_skript_skaliert_nicht() -> None:
@@ -266,24 +465,22 @@ def test_deploy_skript_skaliert_nicht() -> None:
 def _extract_container_count_check() -> str:
     """Den Messblock aus `deploy.sh` ausschneiden, damit er testbar laeuft.
 
-    Von `echo "==> Betriebsgrenze pruefen` bis zum Ende des zweiten `fi` — das
-    ist genau der Block, der zaehlt und abbricht. Schneidet die Struktur
-    kuenftig anders, schlaegt die Extraktion fehl statt lautlos das Falsche zu
-    pruefen.
+    Von `echo "==> Betriebsgrenze pruefen` bis zum letzten Aufruf
+    `assert_single_running worker` — das ist genau der Block, der zaehlt und
+    abbricht. Schneidet die Struktur kuenftig anders, schlaegt die Extraktion
+    fehl statt lautlos das Falsche zu pruefen.
     """
     lines = _DEPLOY_SCRIPT.read_text(encoding="utf-8").splitlines()
     start = next(
         i for i, line in enumerate(lines) if line.startswith('echo "==> Betriebsgrenze pruefen')
     )
-    seen_fi = 0
     for end, line in enumerate(lines[start:], start=start):
-        if line == "fi":
-            seen_fi += 1
-            if seen_fi == 2:
-                return "\n".join(lines[start : end + 1])
+        if line == "assert_single_running worker":
+            return "\n".join(lines[start : end + 1])
     raise AssertionError("Messblock in deploy.sh nicht auffindbar (Struktur geaendert?)")
 
 
+@pytest.mark.parametrize("service", ["api", "worker"])
 @pytest.mark.parametrize(
     ("running_containers", "stderr_lines", "expected_exit"),
     [
@@ -296,6 +493,7 @@ def _extract_container_count_check() -> str:
 )
 def test_deploy_zaehlt_nur_container_ids_kein_stderr(
     tmp_path: Path,
+    service: str,
     running_containers: int,
     stderr_lines: int,
     expected_exit: int,
@@ -310,15 +508,19 @@ def test_deploy_zaehlt_nur_container_ids_kein_stderr(
     (nicht gesetzte Variablen im `--env-file`-Pfad), deshalb wird das hier
     ausfuehrbar geprueft und nicht nur als Textform behauptet.
 
+    Je Fall weicht genau ein Dienst ab (`service`); der andere laeuft einmal.
+    So faellt auch auf, wenn die Pruefung des zweiten Dienstes fehlt.
+
     Kein Docker-Daemon noetig: `docker compose` wird durch ein Stub-Skript
     ersetzt, das Rauschen auf stderr und IDs auf stdout schreibt.
     """
     stub = tmp_path / "compose-stub"
     warn = 'WARN[0000] The "SUPABASE_URL" variable is not set. Defaulting to a blank string.'
+    ids = "".join(f'echo "9f1c0aa7b3de{i}"\n' for i in range(running_containers))
     stub.write_text(
         "#!/usr/bin/env bash\n"
         + "".join(f"echo {warn!r} >&2\n" for _ in range(stderr_lines))
-        + "".join(f'echo "9f1c0aa7b3de{i}"\n' for i in range(running_containers)),
+        + f'if [ "${{!#}}" = "{service}" ]; then\n:\n{ids}else\necho "4e2d11aa90c1"\nfi\n',
         encoding="utf-8",
     )
     stub.chmod(0o755)
@@ -340,7 +542,7 @@ def test_deploy_zaehlt_nur_container_ids_kein_stderr(
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
     if expected_exit != 0:
-        assert f"{running_containers} laufende api-Container" in result.stderr, (
+        assert f"{running_containers} laufende {service}-Container" in result.stderr, (
             "Die Fehlermeldung nennt nicht die tatsaechliche Container-Anzahl — "
             f"gezaehlt wurde offenbar etwas anderes als IDs:\n{result.stderr}"
         )
