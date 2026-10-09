@@ -28,8 +28,6 @@ from datetime import UTC, datetime
 
 import asyncpg
 
-from who2be_api.core.config import get_settings
-
 # Schnappschuss wie `memory_repository._snapshot` (3.1.2): nie `context` oder
 # `triage_note`.
 _SNAPSHOT = (
@@ -84,20 +82,21 @@ async def expire_unconfirmed_memories(
     return len(rows)
 
 
-async def _run() -> int:
-    try:
-        conn = await asyncpg.connect(get_settings().database_url)
-    except (asyncpg.PostgresError, OSError) as exc:
-        raise SystemExit(f"Datenbank nicht erreichbar: {exc}") from exc
-    try:
-        return await expire_unconfirmed_memories(conn)
-    finally:
-        await conn.close()
-
-
 def cli() -> None:
-    """Console-Entrypoint fuer `who2be-memory-expire` (Cron)."""
-    count = asyncio.run(_run())
+    """Console-Entrypoint fuer `who2be-memory-expire` (manueller Ausloeser, Notfallweg).
+
+    Laeuft seit ADR-0057 §8 ueber den Worker-Store (`trigger='cli'`) und
+    nimmt denselben Advisory-Lock wie die Worker-Routine `memory-expire`. Ist
+    er belegt, endet der Aufruf mit Hinweis und Exit 0.
+    """
+    # Spaeter Import: `worker.routines` importiert dieses Modul.
+    from who2be_api.worker.routines import MEMORY_EXPIRE, run_as_cli, skipped_message
+
+    run = asyncio.run(run_as_cli(MEMORY_EXPIRE))
+    if run.outcome.status == "skipped" or run.counters is None:
+        print(skipped_message(MEMORY_EXPIRE))
+        return
+    count = run.counters["expired"]
     print(f"Gedaechtnis: {count} unbestaetigte(r) Eintrag/Eintraege abgelaufen.")
 
 

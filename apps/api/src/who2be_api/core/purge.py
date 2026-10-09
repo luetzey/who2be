@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -39,11 +39,9 @@ from who2be_api.blobstore import (
     build_blob_store,
     workspace_prefix,
 )
-from who2be_api.core.config import get_settings
 from who2be_api.integrations.gotrue_admin import delete_auth_user
 from who2be_api.repositories.account_repository import (
     AccountPurgeRepository,
-    PgAccountPurgeRepository,
 )
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.tablestore import TableStore
@@ -516,21 +514,51 @@ async def run_retention_sweeps(
     )
 
 
-async def _run() -> PurgeResult:
-    try:
-        conn = await asyncpg.connect(get_settings().database_url)
-    except (asyncpg.PostgresError, OSError) as exc:
-        raise SystemExit(f"Datenbank nicht erreichbar: {exc}") from exc
-    try:
-        result = await purge_expired(PgAccountPurgeRepository(conn))
-        return await run_retention_sweeps(conn, result)
-    finally:
-        await conn.close()
+def purge_counters(result: PurgeResult) -> dict[str, int]:
+    """Das Purge-Ergebnis als reine Zaehler (Worker-Protokoll, ADR-0057 §4).
+
+    `blobstore_skipped` wird zu 0/1: `routine_run.result` traegt nur Zahlen.
+    """
+    counters = asdict(result)
+    counters["blobstore_skipped"] = int(result.blobstore_skipped)
+    return counters
+
+
+def _from_counters(counters: dict[str, int]) -> PurgeResult:
+    """Umkehrung von `purge_counters` fuer die CLI-Ausgabe."""
+    values = dict(counters)
+    blobstore_skipped = bool(values.pop("blobstore_skipped", 0))
+    return PurgeResult(**values, blobstore_skipped=blobstore_skipped)
+
+
+async def _run() -> PurgeResult | None:
+    """CLI-Lauf `purge` ueber den Worker-Store (Owner-Verbindung `DATABASE_URL`).
+
+    `None`, wenn der Lauf `skipped` endete (Lock belegt).
+    """
+    # Spaeter Import: `worker.routines` importiert dieses Modul.
+    from who2be_api.worker.routines import PURGE, run_as_cli
+
+    run = await run_as_cli(PURGE)
+    if run.outcome.status == "skipped" or run.counters is None:
+        return None
+    return _from_counters(run.counters)
 
 
 def cli() -> None:
-    """Console-Entrypoint fuer `who2be-purge` (Cron)."""
+    """Console-Entrypoint fuer `who2be-purge` (manueller Ausloeser, Notfallweg).
+
+    Laeuft seit ADR-0057 §8 ueber den Worker-Store: Lauf `trigger='cli'` im
+    Protokoll, derselbe Advisory-Lock wie die Worker-Routine `purge`. Haelt
+    gerade ein anderer Lauf den Lock, endet der Aufruf mit Hinweis und Exit 0.
+    Die Ausgabe darunter ist unveraendert; Doku und Betreiber verlassen sich darauf.
+    """
+    from who2be_api.worker.routines import PURGE, skipped_message
+
     result = asyncio.run(_run())
+    if result is None:
+        print(skipped_message(PURGE))
+        return
     blob_note = " (kein BlobStore konfiguriert)" if result.blobstore_skipped else ""
     dir_note = (
         f", {result.unknown_store_dirs} unbekannte(s) Store-Verzeichnis(se) gemeldet"

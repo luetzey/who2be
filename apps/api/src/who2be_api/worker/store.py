@@ -36,7 +36,7 @@ import socket
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -52,6 +52,12 @@ WORKER_HEALTHCHECK_MAX_AGE = timedelta(minutes=2)
 WORKER_STALE_AFTER = timedelta(minutes=5)
 #: `running`-Laeufe mit aelterem `heartbeat_at` gelten als abgebrochen.
 RUN_ABANDONED_AFTER = timedelta(minutes=5)
+
+#: `routine_run`-Zeilen, die aelter sind, raeumt `routine-run-retention` ab (§6).
+ROUTINE_RUN_RETENTION = timedelta(days=90)
+#: Fenster, in dem `external_schedules` nach CLI-Laeufen sucht (§8 Schritt 2).
+#: Eine Woche: alte Notfall-Laeufe sollen nicht dauerhaft warnen.
+EXTERNAL_SCHEDULE_LOOKBACK = timedelta(days=7)
 
 #: `error_class` abgebrochener Laeufe.
 ABANDONED_ERROR_CLASS = "Abandoned"
@@ -269,6 +275,54 @@ async def latest_successes(conn: asyncpg.Connection) -> dict[str, RoutineRun]:
         "ORDER BY routine, finished_at DESC, id DESC"
     )
     return {row["routine"]: _to_run(row) for row in rows}
+
+
+_EXTERNAL_SCHEDULES_SQL = """
+WITH days AS (
+    SELECT DISTINCT routine, (started_at AT TIME ZONE 'UTC')::date AS day
+    FROM routine_run
+    WHERE trigger = 'cli' AND started_at >= $1::timestamptz - $2::interval
+)
+SELECT d.routine, max(d.day) AS last_day
+FROM days d
+JOIN days p ON p.routine = d.routine AND p.day = d.day - 1
+GROUP BY d.routine
+ORDER BY d.routine
+"""
+
+
+async def external_schedules(
+    conn: asyncpg.Connection,
+    *,
+    now: datetime | None = None,
+    lookback: timedelta = EXTERNAL_SCHEDULE_LOOKBACK,
+) -> dict[str, date]:
+    """Routinen mit `cli`-Laeufen an mindestens zwei aufeinanderfolgenden
+    UTC-Tagen innerhalb von `lookback` (ADR-0057 §8 Schritt 2).
+
+    Das ist das Zeichen fuer einen noch laufenden Host-Cron oder
+    Dokploy-Schedule neben dem Worker. Gezaehlt wird jeder Status, auch
+    `skipped`: ein uebersprungener CLI-Lauf belegt den Zeitplan ebenso.
+    Liefert Routine → juengster Tag eines solchen Paares. Der Worker loggt
+    daraus eine WARN-Zeile, der Betreiber-Endpunkt (P4b) nutzt dieselbe Abfrage.
+    """
+    rows = await conn.fetch(_EXTERNAL_SCHEDULES_SQL, _now(now), lookback)
+    return {row["routine"]: row["last_day"] for row in rows}
+
+
+async def delete_runs_before(conn: asyncpg.Connection, cutoff: datetime) -> int:
+    """Loescht `routine_run`-Zeilen mit `started_at` vor `cutoff`; liefert die Anzahl.
+
+    `running`-Zeilen bleiben stehen: ein laufender Lauf gehoert dem Abandoned-
+    Pfad, nicht der Aufbewahrung.
+    """
+    if cutoff.tzinfo is None:
+        raise ValueError("cutoff muss zeitzonenbehaftet sein (UTC).")
+    rows = await conn.fetch(
+        "DELETE FROM routine_run WHERE started_at < $1 AND status <> 'running' RETURNING id",
+        cutoff,
+    )
+    return len(rows)
 
 
 # --- Worker-Heartbeat ---------------------------------------------------------

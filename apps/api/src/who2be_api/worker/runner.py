@@ -128,11 +128,15 @@ class Runner:
         tick_interval: timedelta = TICK_INTERVAL,
         run_heartbeat_interval: timedelta = RUN_HEARTBEAT_INTERVAL,
         version: str = __version__,
+        worker_heartbeat: bool = True,
     ) -> None:
         self.registry = registry
         self.dsn = dsn or get_settings().database_url
         self.worker_id = worker_id or store.default_worker_id()
         self.version = version
+        # CLI-Laeufe (`routines.run_as_cli`) sind kein Worker und melden deshalb
+        # keinen `worker_heartbeat`; der Lauf-Heartbeat bleibt.
+        self._worker_heartbeat = worker_heartbeat
         self._env = env
         self._clock = clock
         self._tick_interval = tick_interval
@@ -270,13 +274,15 @@ class Runner:
             "Routine %s: letzter Erfolg vor dem faelligen Slot, einmal nachholen.", routine.name
         )
         # Bevorzugt den verpassten Slot selbst. Ist er schon belegt, laeuft er
-        # entweder gerade (anderer Worker) oder ist fehlgeschlagen bzw.
-        # abgebrochen; nur im zweiten Fall traegt der Nachhol-Lauf den
-        # Startzeitpunkt — sonst liefe ein Slot doppelt.
+        # entweder gerade (anderer Worker) oder ist fehlgeschlagen, abgebrochen
+        # bzw. uebersprungen (Lock war belegt); nur im zweiten Fall traegt der
+        # Nachhol-Lauf den Startzeitpunkt — sonst liefe ein Slot doppelt.
+        # `skipped` zaehlt mit: der Lauf, der den Lock hielt, kann selbst
+        # gescheitert sein, und der letzte Erfolg liegt ja vor dem Slot.
         outcome = await self.execute(conn, routine, latest, "schedule")
         if outcome is None:
             previous = await store.last_run(conn, routine.name)
-            if previous is not None and previous.status == "failed":
+            if previous is not None and previous.status in ("failed", "skipped"):
                 outcome = await self.execute(conn, routine, now, "schedule", dodge=True)
         return outcome
 
@@ -412,8 +418,9 @@ class Runner:
             now = self._clock()
             try:
                 await store.touch_run(conn, run_id, now=now)
-                await store.record_worker_heartbeat(
-                    conn, worker_id=self.worker_id, version=self.version, now=now
-                )
+                if self._worker_heartbeat:
+                    await store.record_worker_heartbeat(
+                        conn, worker_id=self.worker_id, version=self.version, now=now
+                    )
             except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as exc:
                 logger.warning("Lauf-Heartbeat fehlgeschlagen (%s).", type(exc).__name__)
