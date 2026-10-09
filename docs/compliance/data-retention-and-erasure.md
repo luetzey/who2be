@@ -72,6 +72,9 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | `agent_case` (Migration 0100, ADR-0053) | `reporter_user_id` (NULL scheidet aus: der CHECK `agent_case_human_reporter_check` verlangt bei `reporter_kind = 'human'` eine ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_case_event` (Migration 0100, ADR-0053) | `actor_id` — **nur** bei `actor_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_case_element` (Migration 0100, ADR-0053) | `assigned_by` — **nur** bei `assigned_by_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `feedback_session` (Migration 0103, ADR-0053) | `submitted_by` — **nur** bei `submitted_by_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `feedback_session` (Migration 0103, ADR-0053) | `participants[].id` — **nur** bei `kind = 'human'`; ebenso `dissent[].participant_id` bei `participant_kind = 'human'` (Rolle, Text und Reihenfolge bleiben) | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `measure_event` (Migration 0103, ADR-0053) | `actor_id` — **nur** bei `actor_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_memory` mit `scope='user'` (Migration 0091) | ganze Zeile (`subject_user_id`-gebunden) | beim Account-Purge in allen Workspaces **geloescht** + je Zeile `audit_log` `memory.deleted` ohne Inhalt, s. §4c |
 | `workspace_invitation` | `email` (Klartext) | Bereinigung bei `accepted_at IS NOT NULL OR expires_at < now()` (`cleanup_expired_invitations`) |
 | `oauth_authorization_code` (Migration 0049) | ganze Zeile (`user_id`-gebunden) | beim Account-Purge **geloescht** (Codes sind nach Konto-Loeschung wertlos); zusaetzlich laufender Cleanup abgelaufener/konsumierter Codes (`cleanup_expired_oauth`) |
@@ -392,6 +395,67 @@ Alle Pfade sind belegt in `apps/api/tests/test_case_compliance.py`.
 
 ---
 
+## 4e · Gespraechsprotokolle und Massnahmen (`feedback_session`, `feedback_session_case`, `measure`, `measure_case`, `measure_event`)
+
+Ein Gespraechsprotokoll (ADR-0053 §3.5, Migration 0103) haelt das Ergebnis
+eines Feedback-Gespraechs ueber **einen** Agenten fest: Teilnehmer,
+Zusammenfassung, Entscheidungen, abweichende Meinungen, Nachschau-Termin und
+die besprochenen Faelle (`feedback_session_case`). Eine Massnahme (§3.6)
+gehoert zu genau einem Protokoll, deckt Faelle ab (`measure_case`), hat immer
+einen Pruefall und einen Verlauf (`measure_event`). Alle fuenf Tabellen sind
+fuer die App-Rolle unveraenderlich (nur `SELECT`/`INSERT`); eine Korrektur ist
+ein neues Protokoll mit `supersedes_id`.
+
+Personenbezug tragen `feedback_session.submitted_by` (bei
+`submitted_by_kind = 'human'`), die Eintraege in `participants` (bei
+`kind = 'human'`) und `dissent` (bei `participant_kind = 'human'`) sowie
+`measure_event.actor_id` (bei `actor_kind = 'human'`). Die Freitexte
+(`summary`, `decisions`, `dissent`, `change_summary`, `success_criterion`,
+`counterposition`, `note`) koennen Nutzerinhalte zitieren.
+
+**Fristen:** PM-Entscheidung PM-6 vom 2026-10-09: Protokolle und Massnahmen
+werden aufbewahrt wie Faelle (Owner-Entscheidung 2026-10-08, §4d), also
+**ohne** eigene Frist.
+
+**Loeschpfade:**
+
+- **Loeschen eines Falls** (§4d): nimmt per FK-Cascade nur die
+  Verknuepfungen `feedback_session_case` und `measure_case` mit. Protokoll
+  und Massnahme bleiben stehen.
+- **Kein Einzel-Loeschen:** kein API-Pfad loescht ein Protokoll oder eine
+  Massnahme (unveraenderlich, ADR-0053 §3.5).
+- **Agent-Delete und Org-/Workspace-Purge:** alle fuenf Tabellen haengen per
+  FK-Cascade am Agenten und am Workspace; `purge_organization` raeumt sie mit
+  der Organization ab.
+- **Account-Purge** (`purge_account_data`): in fremden Workspaces ueberleben
+  Protokolle und Massnahmen den Account. Die Personenverweise werden dort auf
+  den Sentinel gesetzt (§2): `submitted_by`, die ID jedes menschlichen
+  Eintrags in `participants` und `dissent` und `measure_event.actor_id`.
+  Eintraege von Agenten bleiben unberuehrt, ebenso Rolle, Text und
+  Reihenfolge der Listen. `dissent` gehoert dazu, weil dort dieselbe Person
+  als `participant_id` steht; ohne diesen Schritt liefe die Anonymisierung der
+  Teilnehmerliste ins Leere. Anonymisiert, nicht geloescht, aus demselben
+  Grund wie bei Faellen: das Protokoll handelt vom Verhalten eines Agenten
+  und gehoert dem Workspace. Die Freitexte bleiben stehen.
+
+**Auskunft:** der GDPR-Export liefert je Workspace `feedback_sessions`,
+jedes Protokoll mit `case_ids` und `measures`, jede Massnahme mit `case_ids`
+und `events`. Die Sichtregel folgt der Oberflaeche (ADR-0053 §6.6:
+`GET /feedback-sessions` ab `editor`): ab `editor` alle Protokolle des
+Workspace, darunter **nur die, an denen die Person beteiligt ist**:
+eingereicht, als Mensch in `participants` oder `dissent` genannt, oder als
+Mensch Akteur eines Events an einer Massnahme des Protokolls.
+`export_manifest.feedback_sessions.scope` sagt, welche Regel galt
+(`workspace` oder `own_participation`). Faelle-Verknuepfungen, Massnahmen und
+Verlauf werden nur fuer die exportierten Protokolle gelesen.
+
+Export und Account-Purge sind belegt in
+`apps/api/tests/test_feedback_session_compliance.py`, das Loeschen eines Falls
+sowie Agent- und Workspace-Purge in
+`apps/api/tests/test_feedback_session_schema.py`.
+
+---
+
 ## 5 · Server-Logs / Zugriffsdaten
 
 Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
@@ -456,6 +520,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
 | Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
 | Faelle (`agent_case` + Verlauf, Zuordnung, Schilderung, 0100) | bis Loeschung durch einen Menschen (ab `editor`) bzw. Agent-/Workspace-Purge; Owner-Entscheidung 2026-10-08: keine eigene Frist | Einzel-Loeschung: Hard-Delete samt Verlauf + `case.deleted` ohne Inhalt, umgewandelter Lernvorschlag faellt mit; Org-/Workspace-Purge: **CASCADE**; Account-Purge: `reporter_user_id`, menschliche `actor_id` und `assigned_by` **anonymisiert** (Sentinel), s. §4d |
+| Gespraechsprotokolle + Massnahmen (`feedback_session`, `measure` + Faelle und Verlauf, 0103) | ohne eigene Frist wie Faelle (PM-6); kein Einzel-Loeschen (unveraenderlich) | Fall-Loeschung: nur die Verknuepfungen per **CASCADE**; Agent-/Org-/Workspace-Purge: **CASCADE**; Account-Purge: `submitted_by` (nur `human`), menschliche IDs in `participants`/`dissent` und menschliche `actor_id` **anonymisiert** (Sentinel), s. §4e |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
@@ -503,4 +568,6 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
   Verlauf, Zuordnung und Schilderung (§4d);
   `apps/api/src/who2be_api/repositories/case_repository.py#delete_case` —
   Einzel-Loeschung.
+- `apps/api/src/who2be_api/migrations/0103_feedback_session_measure.sql` —
+  Gespraechsprotokolle und Massnahmen (§4e).
 - ADR-0047/0048/0049 — WorkArea+KB, Blob-Storage, Tabellen-Store.
