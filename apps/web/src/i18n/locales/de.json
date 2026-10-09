@@ -2397,6 +2397,10 @@
       "eventsShow": "Ausklappen",
       "eventsEmpty": "Keine Einzel-Ereignisse."
     },
+    "item": {
+      "promote": "In Fall übernehmen",
+      "promoteHelp": "Wenn es eigentlich um das Verhalten eines Agenten geht: Daraus wird ein Fall, dieses Feedback gilt dann als umgesetzt."
+    },
     "itemDetail": {
       "description": "Alle Details zu dieser Rückmeldung — Bezug, Signal, Status und Verlauf.",
       "openElement": "Element öffnen",

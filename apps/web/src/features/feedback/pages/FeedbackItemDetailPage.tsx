@@ -1,11 +1,13 @@
-import { Bot, ExternalLink, History, User } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ArrowRight, Bot, ExternalLink, History, User } from 'lucide-react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 
-import type { FeedbackResolution, FeedbackTarget } from '@/api/types'
+import type { CaseRead, FeedbackResolution, FeedbackTarget } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CaseFromOriginDialog } from '@/components/cases/ReportCaseForm'
 import { DetailHeader } from '@/components/data'
 import { DataView } from '@/components/data/DataView'
 import { DeleteFeedbackButton } from '@/components/feedback/DeleteFeedbackButton'
@@ -71,7 +73,17 @@ export function FeedbackItemDetailPage() {
   const api = useApi()
   const { feedbackId } = useParams<{ feedbackId: string }>()
 
+  const role = useCurrentWorkspaceRole()
   const { detail, loading, error, reload } = useFeedbackDetail(feedbackId)
+  const [promotedCaseId, setPromotedCaseId] = useState<string | null>(null)
+  // Fokus auf „Zum Fall“ nur direkt nach dem Anlegen, nicht beim Laden.
+  const focusCaseLink = useRef(false)
+  const caseLinkRef = useCallback((el: HTMLAnchorElement | null) => {
+    if (el !== null && focusCaseLink.current) {
+      focusCaseLink.current = false
+      el.focus()
+    }
+  }, [])
 
   if (feedbackId === undefined) {
     return <Navigate to={wsPath('/feedback')} replace />
@@ -91,6 +103,14 @@ export function FeedbackItemDetailPage() {
     navigate(wsPath('/feedback'))
   }
 
+  // Nach „In Fall übernehmen“: Fall-ID aus der Antwort, Verlauf neu laden
+  // (der Server schreibt dort `addressed` mit Verweis), Fokus auf „Zum Fall“.
+  const onPromoted = (created: CaseRead) => {
+    setPromotedCaseId(created.id)
+    focusCaseLink.current = true
+    reload()
+  }
+
   // Ableitungen erst berechnen, wenn das Detail geladen ist.
   const isSystem = detail?.entity_type === 'system'
   const meta = detail !== null ? entityMeta(detail.entity_type) : entityMeta('system')
@@ -107,6 +127,15 @@ export function FeedbackItemDetailPage() {
       ? wsPath(`/${DETAIL_SEGMENT[detail.entity_type as FeedbackTarget]}/${detail.entity_id}`)
       : null
   const currentStatus: FeedbackResolution | 'open' = detail?.resolution ?? 'open'
+  // „In Fall übernehmen“ (Delta-Spec D6f): ab editor, nie fuer ziellose
+  // System-Meldungen (`report_problem` bleibt). Nur ohne Triage-Ereignis: der
+  // Server lehnt jedes triagierte Feedback mit 409 `feedback_not_promotable` ab
+  // (case_repository.promote_feedback), also auch `in_progress`.
+  const canPromote =
+    detail !== null &&
+    (role === 'editor' || role === 'admin') &&
+    !isSystem &&
+    detail.resolution === null
   const title =
     detail !== null ? t('itemDetail.title', { signal: signalLabel, name: detail.name }) : ''
 
@@ -234,8 +263,42 @@ export function FeedbackItemDetailPage() {
                     value={detail.resolution}
                     onChange={(r) => void onResolution(r)}
                   />
+                  {canPromote ? (
+                    <CaseFromOriginDialog
+                      presetAgentId={detail.agent_id ?? undefined}
+                      origin={{
+                        kind: 'feedback',
+                        feedbackId: detail.id,
+                        element: detail.name,
+                        text:
+                          detail.note !== null && detail.note.trim() !== ''
+                            ? detail.note
+                            : signalLabel,
+                        date: detail.created_at,
+                      }}
+                      label={t('item.promote')}
+                      variant="outline"
+                      className="h-11 sm:h-9"
+                      onCreated={onPromoted}
+                    />
+                  ) : null}
+                  {promotedCaseId !== null ? (
+                    <Button asChild variant="outline" className="h-11 sm:h-9">
+                      <Link
+                        ref={caseLinkRef}
+                        to={wsPath(`/feedback/cases/${promotedCaseId}`)}
+                        data-testid="item-to-case"
+                      >
+                        {t('learning:entries.action.toCase')}
+                        <ArrowRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">{t('itemDetail.statusHint')}</p>
+                {canPromote ? (
+                  <p className="text-xs text-muted-foreground">{t('item.promoteHelp')}</p>
+                ) : null}
               </CardContent>
             </Card>
 

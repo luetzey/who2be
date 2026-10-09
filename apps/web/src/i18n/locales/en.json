@@ -2397,6 +2397,10 @@
       "eventsShow": "Expand",
       "eventsEmpty": "No individual events."
     },
+    "item": {
+      "promote": "Turn into a case",
+      "promoteHelp": "If this is really about an agent's behaviour: it becomes a case and this feedback counts as addressed."
+    },
     "itemDetail": {
       "description": "Every detail about this feedback — reference, signal, status and history.",
       "openElement": "Open element",
