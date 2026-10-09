@@ -2273,16 +2273,16 @@
         "type": "Typ",
         "allSignals": "Alle Signale",
         "allTypes": "Alle Typen",
-        "statusGroup": "Nach Status filtern"
+        "searchPlaceholder": "Nach Element suchen…"
       },
       "status": {
         "open": "Offen",
         "in_progress": "In Arbeit",
         "addressed": "Erledigt",
-        "dismissed": "Ignoriert",
-        "all": "Alle"
+        "dismissed": "Ignoriert"
       },
-      "empty": "Keine Feedbacks für diese Auswahl.",
+      "emptyOpenTitle": "Kein offenes Feedback",
+      "emptyOpenDescription": "Alle Rückmeldungen sind eingeordnet. Neue erscheinen hier, sobald ein Agent oder ein Mensch Feedback gibt.",
       "openElement": "Element öffnen"
     },
     "overview": {

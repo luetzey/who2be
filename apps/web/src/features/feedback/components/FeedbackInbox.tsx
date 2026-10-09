@@ -1,6 +1,7 @@
-import { Bot, User } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Bot, Search, User } from 'lucide-react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 
 import type {
   FeedbackEntityType,
@@ -10,15 +11,14 @@ import type {
 } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
 import { useFeedbackItems } from '@/hooks/useFeedback'
-import { cn } from '@/lib/utils'
+import type { FacetSpec, StatusChipOption } from '@/lib/listFilter'
 
 import { entityMeta } from '../lib/entityMeta'
 
@@ -27,8 +27,19 @@ const NEGATIVE: readonly string[] = ['outdated', 'incorrect', 'unclear']
 // Typ-Filter inkl. 'system' (zielloses Plattform-/MCP-Feedback).
 const TYPES: readonly FeedbackEntityType[] = ['persona', 'playbook', 'resource', 'system']
 
-// Status-Filter: 'open' = noch nicht triagiert (resolution null).
+// Status-Filter: 'open' = noch nicht triagiert (resolution null). Reihenfolge
+// = Chip-Reihenfolge (Lebenszyklus); Standard ist „Offen“.
 type StatusFilter = 'open' | FeedbackResolution | 'all'
+const STATUS_VALUES: readonly StatusFilter[] = [
+  'all',
+  'open',
+  'in_progress',
+  'addressed',
+  'dismissed',
+]
+const DEFAULT_STATUS: StatusFilter = 'open'
+// URL-Parameter dieser Liste; `tab` gehoert der Seite und bleibt stehen.
+const FILTER_KEYS = ['status', 'signal', 'type', 'q'] as const
 
 // Resolution → Status-Token (gleiche Farbsprache wie StatusBadge/§2.4).
 const RESOLUTION_TOKEN: Record<'open' | FeedbackResolution, string> = {
@@ -42,6 +53,18 @@ function matchesStatus(item: FeedbackItem, status: StatusFilter): boolean {
   if (status === 'all') return true
   if (status === 'open') return item.resolution === null
   return item.resolution === status
+}
+
+function isStatusFilter(value: string | null): value is StatusFilter {
+  return value !== null && (STATUS_VALUES as readonly string[]).includes(value)
+}
+
+function isSignal(value: string | null): value is FeedbackSignal {
+  return value !== null && (SIGNALS as readonly string[]).includes(value)
+}
+
+function isType(value: string | null): value is FeedbackEntityType {
+  return value !== null && (TYPES as readonly string[]).includes(value)
 }
 
 // Kompaktes Status-Pill (Punkt + Label) fuer den aktuellen Triage-Stand eines
@@ -61,44 +84,6 @@ function ResolutionBadge({ resolution }: { resolution: FeedbackResolution | null
   )
 }
 
-// Segmentierter Status-Chip — gleiche Optik wie ListFilterBar/AgentsPage.
-function StatusChip({
-  label,
-  count,
-  token,
-  selected,
-  onClick,
-}: {
-  label: string
-  count: number
-  token?: string
-  selected: boolean
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant={selected ? 'default' : 'outline'}
-      aria-pressed={selected}
-      onClick={onClick}
-      className="h-8 gap-1.5 rounded-full"
-    >
-      {token ? (
-        <span
-          className="inline-block size-2 rounded-full"
-          style={{ backgroundColor: `var(--status-${token})` }}
-          aria-hidden="true"
-        />
-      ) : null}
-      <span>{label}</span>
-      <span className={cn('tabular-nums', selected ? 'opacity-90' : 'text-muted-foreground')}>
-        {count}
-      </span>
-    </Button>
-  )
-}
-
 interface FeedbackInboxProps {
   /** Wird hochgezaehlt, wenn extern (Problem melden) ein Reload noetig ist. */
   reloadNonce?: number
@@ -110,14 +95,53 @@ interface FeedbackInboxProps {
  * Status). Der eigentliche Feedback-Inhalt + Triage/Loeschen liegen in der
  * Einzel-Feedback-Detailseite (`/feedback/item/:id`), die die Karte oeffnet.
  * Editor-gated; die Page rendert das nur fuer editor+.
+ *
+ * Filter nach Filter-Standard (G1) ueber die gemeinsame `ListFilterBar`:
+ * Status-Chips, Suche nach Elementname, Facetten Signal und Typ. Die API
+ * liefert den (gekappten) Posteingang ohne Paginierung auf einmal, deshalb
+ * filtert die Seite clientseitig. Die Chip-Zahlen rechnet sie ueber die nach
+ * Suche und Facetten eingegrenzte Menge — die Zahl zeigt, was ein Klick ergaebe.
  */
 export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
-  const { t } = useTranslation('feedback')
+  const { t } = useTranslation(['feedback', 'data'])
   const wsPath = useWorkspacePath()
   const { data, loading, error, reload } = useFeedbackItems()
-  const [status, setStatus] = useState<StatusFilter>('open')
-  const [signal, setSignal] = useState<FeedbackSignal | 'all'>('all')
-  const [type, setType] = useState<FeedbackEntityType | 'all'>('all')
+
+  // Filter-Standard §2.1 Punkt 9: jeder Filterwert steht in der URL (neben
+  // `tab`), per `replace` geschrieben; der Standard „Offen“ fehlt darin.
+  const [params, setParams] = useSearchParams()
+  const rawStatus = params.get('status')
+  const status: StatusFilter = isStatusFilter(rawStatus) ? rawStatus : DEFAULT_STATUS
+  const rawSignal = params.get('signal')
+  const signal: FeedbackSignal | '' = isSignal(rawSignal) ? rawSignal : ''
+  const rawType = params.get('type')
+  const type: FeedbackEntityType | '' = isType(rawType) ? rawType : ''
+  const query = params.get('q') ?? ''
+
+  const setParam = useCallback(
+    (key: string, value: string) => {
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          if (value === '' || (key === 'status' && value === DEFAULT_STATUS)) next.delete(key)
+          else next.set(key, value)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+  const reset = useCallback(() => {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        for (const key of FILTER_KEYS) next.delete(key)
+        return next
+      },
+      { replace: true },
+    )
+  }, [setParams])
 
   // Externer Reload-Trigger (z. B. nach „Problem melden" im PageHeader) — der
   // Erst-Render laedt bereits ueber den Hook, daher hier ueberspringen.
@@ -130,112 +154,110 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
     reload()
   }, [reloadNonce, reload])
 
-  const counts = data?.counts
-  const items = (data?.items ?? []).filter(
+  const all = data?.items ?? []
+  const needle = query.trim().toLocaleLowerCase()
+  // Basismenge fuer die Chip-Zahlen: Suche und Facetten, aber nicht Status.
+  const base = all.filter(
     (i) =>
-      matchesStatus(i, status) &&
-      (signal === 'all' || i.signal === signal) &&
-      (type === 'all' || i.entity_type === type),
+      (signal === '' || i.signal === signal) &&
+      (type === '' || i.entity_type === type) &&
+      (needle === '' || i.name.toLocaleLowerCase().includes(needle)),
   )
+  const items = base.filter((i) => matchesStatus(i, status))
 
-  const total =
-    (counts?.open ?? 0) +
-    (counts?.in_progress ?? 0) +
-    (counts?.addressed ?? 0) +
-    (counts?.dismissed ?? 0)
+  const active = status !== DEFAULT_STATUS || signal !== '' || type !== '' || query !== ''
 
-  const statusChips: { key: StatusFilter; label: string; count: number; token?: string }[] = [
-    { key: 'all', label: t('inbox.status.all'), count: total },
-    { key: 'open', label: t('inbox.status.open'), count: counts?.open ?? 0, token: 'draft' },
+  // Generische Status-Chips (E1). 0er-Chips entfallen, ausser „Alle“ und der
+  // Standard „Offen“; den gewaehlten Chip haelt die Leiste selbst.
+  const statusOptions: StatusChipOption[] = STATUS_VALUES.map((value) => ({
+    value,
+    label: value === 'all' ? t('data:filter.all') : t(`feedback:inbox.status.${value}`),
+    count: base.filter((i) => matchesStatus(i, value)).length,
+    token: value === 'all' ? undefined : RESOLUTION_TOKEN[value],
+    keepWhenZero: value === 'all' || value === DEFAULT_STATUS,
+  }))
+
+  // Reihenfolge §2.1 Punkt 3: fachliche Facetten der Liste (kein Agent, kein
+  // Tag, keine Sprache — der Posteingang kennt sie nicht).
+  const facets: FacetSpec[] = [
     {
-      key: 'in_progress',
-      label: t('inbox.status.in_progress'),
-      count: counts?.in_progress ?? 0,
-      token: 'review',
+      key: 'signal',
+      label: t('feedback:inbox.filter.signal'),
+      allLabel: t('feedback:inbox.filter.allSignals'),
+      options: SIGNALS.map((value) => ({ value, label: t(`feedback:signal.${value}`) })),
+      value: signal,
+      onChange: (value) => setParam('signal', value),
     },
     {
-      key: 'addressed',
-      label: t('inbox.status.addressed'),
-      count: counts?.addressed ?? 0,
-      token: 'active',
-    },
-    {
-      key: 'dismissed',
-      label: t('inbox.status.dismissed'),
-      count: counts?.dismissed ?? 0,
-      token: 'inactive',
+      key: 'type',
+      label: t('feedback:inbox.filter.type'),
+      allLabel: t('feedback:inbox.filter.allTypes'),
+      options: TYPES.map((value) => ({ value, label: t(`feedback:overview.type.${value}`) })),
+      value: type,
+      onChange: (value) => setParam('type', value),
     },
   ]
 
+  // Keine Daten ueberhaupt: eigener Leerzustand, die Leiste entfaellt
+  // (Filter-Standard §2.3). Waehrend des Ladens und bei Fehlern bleibt sie.
+  const nothingAtAll = data !== null && all.length === 0 && !active
+
+  let empty = null
+  if (data !== null && items.length === 0) {
+    if (nothingAtAll) {
+      empty = <EmptyState title={t('feedback:overview.empty')} />
+    } else if (active) {
+      empty = (
+        <EmptyState
+          icon={Search}
+          title={t('data:filter.emptyFilteredTitle')}
+          description={t('data:filter.emptyFilteredDescription')}
+          action={
+            <Button type="button" variant="outline" onClick={reset}>
+              {t('data:filter.reset')}
+            </Button>
+          }
+        />
+      )
+    } else {
+      // Standard „Offen“ ohne Treffer: „Alles erledigt“, kein Zuruecksetzen.
+      empty = (
+        <EmptyState
+          title={t('feedback:inbox.emptyOpenTitle')}
+          description={t('feedback:inbox.emptyOpenDescription')}
+        />
+      )
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter-Karte: Status-Chips + Signal-/Typ-Selects (wie die anderen Uebersichten). */}
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <div
-            className="flex flex-wrap items-center gap-2"
-            role="group"
-            aria-label={t('inbox.filter.statusGroup')}
-          >
-            {statusChips.map((chip) => (
-              <StatusChip
-                key={chip.key}
-                label={chip.label}
-                count={chip.count}
-                token={chip.token}
-                selected={status === chip.key}
-                onClick={() => setStatus(chip.key)}
-              />
-            ))}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Label className="flex flex-col items-start gap-1 text-sm font-normal">
-              <span className="text-muted-foreground">{t('inbox.filter.signal')}</span>
-              <Select
-                value={signal}
-                onChange={(e) => setSignal(e.target.value as FeedbackSignal | 'all')}
-              >
-                <option value="all">{t('inbox.filter.allSignals')}</option>
-                {SIGNALS.map((s) => (
-                  <option key={s} value={s}>
-                    {t(`signal.${s}`)}
-                  </option>
-                ))}
-              </Select>
-            </Label>
-            <Label className="flex flex-col items-start gap-1 text-sm font-normal">
-              <span className="text-muted-foreground">{t('inbox.filter.type')}</span>
-              <Select
-                value={type}
-                onChange={(e) => setType(e.target.value as FeedbackEntityType | 'all')}
-              >
-                <option value="all">{t('inbox.filter.allTypes')}</option>
-                {TYPES.map((ty) => (
-                  <option key={ty} value={ty}>
-                    {t(`overview.type.${ty}`)}
-                  </option>
-                ))}
-              </Select>
-            </Label>
-          </div>
-        </CardContent>
-      </Card>
+      {nothingAtAll ? null : (
+        <ListFilterBar
+          idPrefix="feedback-inbox"
+          statusOptions={statusOptions}
+          status={status}
+          onStatusChange={(value) => setParam('status', value)}
+          query={query}
+          onQueryChange={(value) => setParam('q', value)}
+          searchPlaceholder={t('feedback:inbox.filter.searchPlaceholder')}
+          facets={facets}
+          active={active}
+          onReset={reset}
+          resultCount={data === null ? null : items.length}
+        />
+      )}
 
       {/* Liste: pro Feedback eine kompakte Karte → Detailansicht. */}
-      <DataView
-        loading={loading && data === null}
-        error={error}
-        empty={!loading && items.length === 0}
-        emptyTitle={t('inbox.empty')}
-      >
-        {items.length > 0 ? (
+      <DataView loading={loading && data === null} error={error}>
+        {empty ?? (
           <div className="flex flex-col gap-3">
             {items.map((item) => {
               const meta = entityMeta(item.entity_type)
               const isSystem = item.entity_type === 'system'
               const signalLabel = isSystem
-                ? t(`systemCategory.${item.signal}`)
-                : t(`signal.${item.signal}`)
+                ? t(`feedback:systemCategory.${item.signal}`)
+                : t(`feedback:signal.${item.signal}`)
               const SourceIcon = item.agent_id !== null ? Bot : User
               return (
                 <EntityCard
@@ -257,17 +279,17 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
                   meta={
                     <>
                       <MetaPill icon={SourceIcon}>
-                        {item.agent_id !== null ? t('panel.agent') : t('panel.human')} ·{' '}
+                        {item.agent_id !== null ? t('feedback:panel.agent') : t('feedback:panel.human')} ·{' '}
                         {new Date(item.created_at).toLocaleDateString()}
                       </MetaPill>
-                      <MetaPill>{t(`overview.type.${item.entity_type}`)}</MetaPill>
+                      <MetaPill>{t(`feedback:overview.type.${item.entity_type}`)}</MetaPill>
                     </>
                   }
                 />
               )
             })}
           </div>
-        ) : null}
+        )}
       </DataView>
     </div>
   )

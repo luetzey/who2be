@@ -2273,16 +2273,16 @@
         "type": "Type",
         "allSignals": "All signals",
         "allTypes": "All types",
-        "statusGroup": "Filter by status"
+        "searchPlaceholder": "Search by element…"
       },
       "status": {
         "open": "Open",
         "in_progress": "In progress",
         "addressed": "Done",
-        "dismissed": "Dismissed",
-        "all": "All"
+        "dismissed": "Dismissed"
       },
-      "empty": "No feedback for this selection.",
+      "emptyOpenTitle": "No open feedback",
+      "emptyOpenDescription": "All feedback has been triaged. New items appear here as soon as an agent or a person leaves feedback.",
       "openElement": "Open element"
     },
     "overview": {
