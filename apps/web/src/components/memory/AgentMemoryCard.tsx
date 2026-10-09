@@ -1,5 +1,5 @@
 import { Brain, MoreHorizontal, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
@@ -9,8 +9,9 @@ import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MemoryDetailSheet } from '@/components/memory/MemoryDetailSheet'
-import { ActiveFilterChips, FilterSheetButton } from '@/components/memory/MemoryFacets'
+import { useMemoryFilterBar } from '@/components/memory/MemoryFacets'
 import { MemoryList } from '@/components/memory/MemoryList'
 import type { MemoryEntryState } from '@/components/memory/MemoryRow'
 import { Button } from '@/components/ui/button'
@@ -30,9 +31,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { notify } from '@/lib/feedback'
 
@@ -131,8 +129,6 @@ export function AgentMemoryCard({ agent }: { agent: Agent }) {
 function AgentMemoryCardContent({ agent }: { agent: Agent }) {
   const { t, i18n } = useTranslation('agents')
   const wsPath = useWorkspacePath()
-  const searchId = useId()
-  const sortId = useId()
   const [facets, setFacets] = useState<FacetFilters>(NO_FILTERS)
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebouncedValue(query.trim())
@@ -169,8 +165,22 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
     setFacets((current) => ({ ...current, [facet]: value }))
   }, [])
 
+  const bar = useMemoryFilterBar({
+    filters,
+    counts: data.counts,
+    countsError: data.countsError,
+    agents: data.agents,
+    hideAgent: true,
+    onChange: setFacet,
+  })
+  // Sortierung ist Anzeige, kein Filter (§2.1 Punkt 6).
+  const active =
+    query.trim() !== '' ||
+    ENTRY_FACETS.some((facet) => facet !== 'agent' && filters[facet] !== '')
+
   const resetFilters = () => {
-    setFacets(NO_FILTERS)
+    // Sortierung ist Anzeige und bleibt stehen (§2.1 Punkt 6, wie /memory).
+    setFacets((current) => ({ ...NO_FILTERS, sort: current.sort }))
     setQuery('')
   }
 
@@ -284,59 +294,33 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
 
         {memoryOff && !hasEntries ? null : (
           <>
-            <div className="flex flex-col gap-3 md:flex-row md:items-end">
-              <p
-                className="text-sm break-words text-muted-foreground md:self-center md:pt-5"
-                data-testid="memory-fixed-agent"
-              >
-                {t('memory.fixedAgent', { agent: agent.name })}
-              </p>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <Label htmlFor={searchId}>{t('learning:approval.search')}</Label>
-                <Input
-                  id={searchId}
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('learning:entries.searchPlaceholderPlain')}
-                />
-              </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <FilterSheetButton
-                  filters={filters}
-                  counts={data.counts}
-                  countsError={data.countsError}
-                  agents={data.agents}
-                  hideAgent
-                  alwaysVisible
-                  onChange={setFacet}
-                  total={data.counts?.total ?? null}
-                  onReset={resetFilters}
-                />
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor={sortId}>{t('learning:entries.sort.label')}</Label>
-                  <Select
-                    id={sortId}
-                    value={facets.sort}
-                    className="min-h-11 md:min-h-10"
-                    onChange={(event) =>
-                      setFacets((current) => ({
-                        ...current,
-                        sort: event.target.value === 'oldest' ? 'oldest' : 'newest',
-                      }))
-                    }
-                  >
-                    <option value="newest">{t('learning:entries.sort.newest')}</option>
-                    <option value="oldest">{t('learning:entries.sort.oldest')}</option>
-                  </Select>
-                </div>
-              </div>
-            </div>
-            <ActiveFilterChips
-              filters={filters}
-              agents={data.agents}
-              hideAgent
-              onChange={setFacet}
+            <p className="text-sm break-words text-muted-foreground" data-testid="memory-fixed-agent">
+              {t('memory.fixedAgent', { agent: agent.name })}
+            </p>
+            {/* Filter-Standard §3.1: dieselbe Leiste wie /memory „Einträge“,
+                ohne Card (steht schon in einer) und ohne Agent-Facette. */}
+            <ListFilterBar
+              idPrefix="agent-memory"
+              bare
+              {...bar}
+              query={query}
+              onQueryChange={setQuery}
+              searchPlaceholder={t('learning:entries.searchPlaceholderPlain')}
+              active={active}
+              onReset={resetFilters}
+              sortOptions={[
+                { value: '', label: t('learning:entries.sort.newest') },
+                { value: 'oldest', label: t('learning:entries.sort.oldest') },
+              ]}
+              sort={facets.sort === 'oldest' ? 'oldest' : ''}
+              onSortChange={(value) =>
+                setFacets((current) => ({
+                  ...current,
+                  sort: value === 'oldest' ? 'oldest' : 'newest',
+                }))
+              }
+              countsUnavailable={data.countsError}
+              resultCount={data.counts?.total ?? null}
             />
             <MemoryList
               data={data}
