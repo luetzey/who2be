@@ -618,12 +618,7 @@
       "error": "Kopieren fehlgeschlagen."
     },
     "filter": {
-      "all": "Alle",
-      "statusGroup": "Nach Status filtern",
-      "searchLabel": "Suche",
       "searchPlaceholder": "Agents durchsuchen…",
-      "reset": "Filter zurücksetzen",
-      "emptyTitle": "Keine Treffer",
       "emptyDescription": "Kein Agent passt zu Filter und Suche."
     },
     "memory": {

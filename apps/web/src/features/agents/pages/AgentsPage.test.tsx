@@ -82,7 +82,7 @@ function countsCalls(fetchMock: ReturnType<typeof stubFetch>): string[] {
     .filter((url) => url.includes('/memories/counts'))
 }
 
-function renderPage(currentMe: Me = me) {
+function renderPage(currentMe: Me = me, initialEntry = '/w/ws-1/agents') {
   return render(
     <SessionContext.Provider
       value={{
@@ -95,7 +95,7 @@ function renderPage(currentMe: Me = me) {
       }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/agents']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
             <Route
@@ -250,6 +250,44 @@ describe('AgentsPage', () => {
     fireEvent.change(screen.getByLabelText('Suche'), { target: { value: 'carla' } })
     expect(screen.getByText('Carla Bot')).toBeInTheDocument()
     expect(screen.queryByText('Leere Hülle')).not.toBeInTheDocument()
+  })
+
+  it('blendet Status-Chips mit 0 aus, ausser „Alle“ (Filter-Standard §2.1)', async () => {
+    stubFetch([agent()])
+    renderPage()
+    await screen.findByText('Carla Bot')
+
+    const group = screen.getByRole('group', { name: 'Nach Status filtern' })
+    expect(within(group).getByRole('button', { name: 'Alle 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(group).getByRole('button', { name: 'Aktiv 1' })).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: /Deaktiviert/ })).not.toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: /Unvollständig/ })).not.toBeInTheDocument()
+  })
+
+  it('liest Status und Suche aus der URL und bietet im Leerzustand Zuruecksetzen', async () => {
+    stubFetch([agent(), agent({ id: 'a2', name: 'Zweiter Bot', status: 'disabled' })])
+    renderPage(me, '/w/ws-1/agents?status=disabled&q=carla')
+
+    // Status „Deaktiviert“ + Suche „carla“ → keine Treffer.
+    expect(await screen.findByText('Keine Treffer')).toBeInTheDocument()
+    expect(screen.getByLabelText('Suche')).toHaveValue('carla')
+    expect(screen.getByRole('button', { name: 'Deaktiviert 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    // Zwei Knoepfe „Filter zurücksetzen“: Leiste (ghost) und Leerzustand (outline).
+    const resets = screen.getAllByRole('button', { name: 'Filter zurücksetzen' })
+    expect(resets).toHaveLength(2)
+    fireEvent.click(resets[1])
+
+    expect(await screen.findByText('Carla Bot')).toBeInTheDocument()
+    expect(screen.getByText('Zweiter Bot')).toBeInTheDocument()
+    expect(screen.getByLabelText('Suche')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Alle 2' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('zeigt den Empty-State, wenn keine Agents existieren', async () => {
