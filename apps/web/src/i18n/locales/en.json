@@ -3487,10 +3487,7 @@
       "alreadyDecided": "This proposal has already been decided."
     },
     "approval": {
-      "search": "Search",
       "searchPlaceholder": "Search suggestions…",
-      "agentFilter": "Agent",
-      "allAgents": "All agents",
       "heldBackTitle": "Held back – review one by one",
       "hold": {
         "external": "From a web page, file or tool (per agent)",

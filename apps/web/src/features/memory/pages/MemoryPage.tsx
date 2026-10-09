@@ -1,5 +1,5 @@
 import { MoreHorizontal, Undo2 } from 'lucide-react'
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
@@ -18,9 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAgents } from '@/hooks/useAgents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -50,7 +47,6 @@ export function MemoryPage() {
   const role = useCurrentWorkspaceRole()
   const canManageAgents = role !== null && role !== 'viewer'
   const [params, setParams] = useSearchParams()
-  const searchId = useId()
   const [countNonce, setCountNonce] = useState(0)
 
   const requested = params.get('tab')
@@ -186,27 +182,28 @@ export function MemoryPage() {
     <PullBackDialog open={pullbackOpen} onClose={() => setPullback(false)} onDone={entryChanged} />
   ) : null
 
-  const search = (placeholder: string) => (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <Label htmlFor={searchId}>{t('approval.search')}</Label>
-      <Input
-        id={searchId}
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={placeholder}
-      />
-    </div>
-  )
+  // Filter-Standard §3.1 (M3): Suche + genau eine Facette (Agent, nur editor+)
+  // in der Leiste — eine Facette steht auch mobil inline, ohne Sheet.
+  const approvalAgent = canManageAgents ? (params.get('agent') ?? '') : ''
+  const approvalBar = {
+    query,
+    onQueryChange: setQuery,
+    searchPlaceholder: t('approval.searchPlaceholder'),
+    active: query.trim() !== '' || approvalAgent !== '',
+    onReset: resetFilters,
+  }
 
   const approval = (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end">
-        {search(t('approval.searchPlaceholder'))}
-        {canManageAgents ? (
-          <AgentFilter value={params.get('agent') ?? ''} onChange={(id) => setParam('agent', id)} />
-        ) : null}
-      </div>
+      {canManageAgents ? (
+        <ApprovalFilterBar
+          {...approvalBar}
+          agent={approvalAgent}
+          onAgentChange={(id) => setParam('agent', id)}
+        />
+      ) : (
+        <ListFilterBar idPrefix="memory-approval" {...approvalBar} />
+      )}
       <ApprovalQueue
         key={listNonce}
         q={params.get('q') ?? ''}
@@ -373,21 +370,27 @@ function EntriesTab({
   )
 }
 
-function AgentFilter({ value, onChange }: { value: string; onChange: (id: string) => void }) {
-  const { t } = useTranslation('learning')
+interface ApprovalFilterBarProps {
+  query: string
+  onQueryChange: (value: string) => void
+  searchPlaceholder: string
+  active: boolean
+  onReset: () => void
+  agent: string
+  onAgentChange: (id: string) => void
+}
+
+/**
+ * Leiste „Zur Freigabe“ fuer editor+: Suche und Agent-Facette. Eigene
+ * Komponente, damit die Agentenliste nur fuer diese Rolle geladen wird.
+ */
+function ApprovalFilterBar(props: ApprovalFilterBarProps) {
   const { agents } = useAgents()
-  const selectId = useId()
   return (
-    <div className="flex flex-col gap-1 md:w-64">
-      <Label htmlFor={selectId}>{t('approval.agentFilter')}</Label>
-      <Select id={selectId} value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">{t('approval.allAgents')}</option>
-        {agents.map((agent) => (
-          <option key={agent.id} value={agent.id}>
-            {agent.name}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <ListFilterBar
+      idPrefix="memory-approval"
+      {...props}
+      agents={agents.map((entry) => ({ id: entry.id, name: entry.name }))}
+    />
   )
 }
