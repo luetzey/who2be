@@ -36,8 +36,18 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
      `org_entitlement`, `mcp_usage`, Agent-Telemetrie `usage_event` und
      `agent_feedback` samt `feedback_resolution` (FK auf `workspace` seit
      Migration 0104; vorher blieben die Zeilen verwaist zurueck, 0104 hat den
+     Bestand bereinigt), Knowledge Base `kb_node`/`kb_edge`/`kb_edge_evidence`/
+     `kb_conflict` und die Inhaltspassagen `content_chunk` (FK auf `workspace`
+     seit Migration 0105; vorher blieben auch sie verwaist zurueck, 0105 hat den
      Bestand bereinigt). Dieselbe CASCADE greift bei der Workspace-Loeschung
      (`DELETE /v1/workspaces/{id}`).
+   - **Nicht** mit dem Workspace faellt `audit_log`: die Tabelle hat keinen FK
+     auf `workspace`/`organization` und ist append-only (ADR-0031). Nach
+     Workspace-Loeschung und Org-Purge bleiben ihre Zeilen samt `actor_id`,
+     `target` und `detail` stehen; beim Account-Purge wird nur `actor_id`
+     anonymisiert (§2). Wie damit zu verfahren ist, ist offen (Owner-Weiche,
+     Karte t_a0ce24ba); das Ist-Verhalten haelt
+     `tests/test_kb_chunk_workspace_erasure.py` fest.
    - **Konten:** loescht `api_token`, `org_member`, `workspace_member`, die
      persoenliche Organisation des Nutzers und ruft die **GoTrue-Admin-API** zum
      Loeschen von `auth.users` (E-Mail/Auth-Daten). Erst nach bestaetigtem
@@ -163,7 +173,8 @@ Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
 | Blob-**Objekte** (Binaerinhalte) | SeaweedFS/S3, selbst gehostet (`blobs/{workspace_id}/{sha256}`) | nicht vom DB-CASCADE erfasst → `cleanup_orphan_blobs` | s. „Blob-Sweep" |
 | `wa_table` / `wa_category_rule` / `wa_source_convention` (Katalog) | Postgres | CASCADE ueber `work_area` | — |
 | Tabellen-**Zeilen** | SQLite-Datei je Area (`WHO2BE_TABLESTORE_DIR/{workspace_id}/{area_id}.sqlite`) | nicht vom DB-CASCADE erfasst → `cleanup_deleted_area_stores` bzw. Betreiber-Schritt | s. „SQLite-Dateien" |
-| `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_node_source_area` / `kb_conflict` | Postgres | `kb_node_source_area` CASCADE ueber `work_area`; die KB-Kerntabellen tragen **keinen** FK auf `workspace` und sind beim Workspace-Purge explizit zu loeschen | — |
+| `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_conflict` | Postgres | CASCADE ueber `workspace` (Migration 0105; vorher kein FK, die Bestands-Waisen hat 0105 entfernt) | — |
+| `kb_node_source_area` | Postgres | CASCADE ueber `kb_node` und `work_area` | — |
 | `agent_access_log` | Postgres | **explizites DELETE** im Purge (s. u.) | — |
 
 ### Retention-Semantik von `retention_days`
@@ -507,14 +518,15 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 |---|---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
-| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel) |
+| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel); `audit_log` ueberlebt Org-/Workspace-Purge ganz (kein FK, Owner-Weiche offen, s. §1) |
 | `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
 | Blob-Katalog + Objekte (`wa_blob`, SeaweedFS/S3) | bis unreferenziert + 24 h | `cleanup_orphan_blobs` (Zeile → Objekt; Objekt-Sweep nur mit Storage-Zeitstempel) |
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
-| Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
+| Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Org-/Workspace-Purge: **CASCADE** (0105) |
+| Inhaltspassagen (`content_chunk`, 0070) | abgeleitet aus der aktiven Version, bis Loeschung von Element bzw. Workspace | Element: Neuaufbau bzw. Waisen-Ernte (`core/chunk_backfill.py`); Org-/Workspace-Purge: **CASCADE** (0105) |
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
@@ -544,6 +556,9 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
   `usage_event`/`agent_feedback` (append-only, `actor_id`);
   `0104_telemetry_workspace_fk.sql` — FK auf `workspace` mit CASCADE,
   Bestands-Waisen bereinigt.
+- `apps/api/src/who2be_api/migrations/0105_kb_chunk_workspace_fk.sql` —
+  `kb_node`/`kb_edge`/`kb_edge_evidence`/`kb_conflict`/`content_chunk`: FK auf
+  `workspace` mit CASCADE, Bestands-Waisen bereinigt.
 - `deploy/hetzner/scripts/backup.sh` — Backup-Retention.
 - ADR-0031 — Append-only/Anonymisierung/Aufbewahrungs-Abwaegung.
 
