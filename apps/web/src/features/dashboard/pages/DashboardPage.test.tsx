@@ -43,6 +43,22 @@ function jsonFetch(payload: unknown, status = 200) {
     .mockResolvedValue(new Response(JSON.stringify(payload), { status }))
 }
 
+function meWithRole(role: WorkspaceRole): Me {
+  return {
+    user_id: 'u1',
+    default_workspace_id: 'ws-1',
+    organizations: [
+      {
+        id: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        kind: 'company',
+        workspaces: [{ id: 'ws-1', name: 'Marketing', slug: 'marketing', role }],
+      },
+    ],
+  }
+}
+
 describe('DashboardPage', () => {
   it('rendert KPIs, Attention-Band, Activity-Eintraege und Status-Bars', async () => {
     vi.stubGlobal('fetch', jsonFetch(sampleData))
@@ -401,22 +417,6 @@ describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => 
     },
   }
 
-  function meWithRole(role: WorkspaceRole): Me {
-    return {
-      user_id: 'u1',
-      default_workspace_id: 'ws-1',
-      organizations: [
-        {
-          id: 'org-1',
-          name: 'Acme',
-          slug: 'acme',
-          kind: 'company',
-          workspaces: [{ id: 'ws-1', name: 'Marketing', slug: 'marketing', role }],
-        },
-      ],
-    }
-  }
-
   function memoryFetch({
     pending,
     proposals = 0,
@@ -439,6 +439,11 @@ describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => 
           Array.from({ length: proposals }, (_, i) => ({ id: `p${i}`, status: 'pending' })),
         )
       }
+      // D6h: editor+ fragen zusaetzlich Muster und Fall-Zaehler an; leer.
+      if (url.pathname.endsWith('/patterns')) {
+        return json({ threshold: 3, window_days: 30, patterns: [] })
+      }
+      if (url.pathname.endsWith('/cases/counts')) return json({ open: 0, reopened: 0 })
       return json({ detail: 'nope' }, 500)
     })
   }
@@ -525,6 +530,200 @@ describe('DashboardPage — Banner „Einträge zur Freigabe“ (C5a-2)', () => 
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
     expect(screen.queryByText(/zur Freigabe/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
+  })
+})
+
+// Lernschleife D6h (Delta-Spec „Dashboard“, Spec §10): „{{count}} Muster“ aus
+// `GET /patterns` und „{{count}} offene Fälle“ (open + reopened) aus
+// `GET /cases/counts`, nur fuer editor+. viewer fragen nichts davon an.
+describe('DashboardPage — Muster und offene Fälle (D6h)', () => {
+  const quiet: DashboardData = {
+    kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0 },
+    activity: [],
+    status_distribution: {
+      persona: { draft: 0, review: 0, active: 1, inactive: 0 },
+      playbook: { draft: 0, review: 0, active: 1, inactive: 0 },
+    },
+  }
+
+  const pattern = (i: number) => ({
+    source: 'lesson',
+    agent_id: 'a1',
+    element: null,
+    count: 3,
+    evidence_ids: [`m${i}`],
+    first_seen: '2026-10-01T00:00:00Z',
+    last_seen: '2026-10-08T00:00:00Z',
+  })
+
+  const counts = (open: number, reopened: number) => ({
+    open,
+    triaged: 4,
+    in_progress: 0,
+    addressed: 2,
+    verified: 0,
+    reopened,
+    dismissed: 1,
+  })
+
+  function triageFetch({
+    patterns = 0,
+    open = 0,
+    reopened = 0,
+    failPatterns = false,
+    failCounts = false,
+  }: {
+    patterns?: number
+    open?: number
+    reopened?: number
+    failPatterns?: boolean
+    failCounts?: boolean
+  }) {
+    return vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x')
+      const json = (body: unknown, status = 200) =>
+        Promise.resolve(new Response(JSON.stringify(body), { status }))
+      if (url.pathname.endsWith('/dashboard')) return json(quiet)
+      if (url.pathname.endsWith('/memories/counts')) return json({ total: 0 })
+      if (url.pathname.endsWith('/memory-proposals')) return json([])
+      if (url.pathname.endsWith('/patterns')) {
+        if (failPatterns) return json({ detail: 'boom' }, 500)
+        return json({
+          threshold: 3,
+          window_days: 30,
+          patterns: Array.from({ length: patterns }, (_, i) => pattern(i)),
+        })
+      }
+      if (url.pathname.endsWith('/cases/counts')) {
+        return failCounts ? json({ detail: 'boom' }, 500) : json(counts(open, reopened))
+      }
+      return json({ detail: 'nope' }, 500)
+    })
+  }
+
+  // Alle Aufrufe gegen Muster und Faelle (Liste wie Zaehler).
+  function triageUrls(fetchMock: ReturnType<typeof vi.fn>): URL[] {
+    return fetchMock.mock.calls
+      .map(([input]) => new URL(String(input), 'http://x'))
+      .filter((url) => /\/(patterns|cases)(\/|$)/.test(url.pathname))
+  }
+
+  function renderAs(role: WorkspaceRole) {
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+      me: meWithRole(role),
+    })
+  }
+
+  async function settle() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+  }
+
+  it.each(['editor', 'admin'] as const)(
+    '%s: zeigt beide Einträge mit Aktion und Ziel',
+    async (role) => {
+      const fetchMock = triageFetch({ patterns: 2, open: 3, reopened: 2 })
+      vi.stubGlobal('fetch', fetchMock)
+      renderAs(role)
+
+      expect(await screen.findByText('2 Muster')).toBeInTheDocument()
+      expect(screen.getByText('Lernvorschläge oder Fälle, die sich wiederholen.')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /Ansehen/ })).toHaveAttribute(
+        'href',
+        '/w/ws-1/feedback?tab=patterns',
+      )
+      // open + reopened, nicht triaged/addressed/dismissed.
+      expect(await screen.findByText('5 offene Fälle')).toBeInTheDocument()
+      expect(
+        screen.getByText('Gemeldete Situationen, die noch niemand eingeordnet hat.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /Einordnen/ })).toHaveAttribute(
+        'href',
+        '/w/ws-1/feedback?tab=cases',
+      )
+      expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
+      // Gezaehlt wird ueber den Zaehler-Endpunkt; die Fall-Liste wird nie geladen.
+      const paths = triageUrls(fetchMock).map((url) => url.pathname)
+      expect(paths.filter((p) => p.endsWith('/cases/counts'))).toHaveLength(1)
+      expect(paths.filter((p) => p.endsWith('/patterns'))).toHaveLength(1)
+      expect(paths.some((p) => p.endsWith('/cases'))).toBe(false)
+    },
+  )
+
+  it('Singular: „1 Muster“ und „1 offener Fall“', async () => {
+    vi.stubGlobal('fetch', triageFetch({ patterns: 1, open: 0, reopened: 1 }))
+    renderAs('editor')
+
+    expect(await screen.findByText('1 Muster')).toBeInTheDocument()
+    expect(await screen.findByText('1 offener Fall')).toBeInTheDocument()
+  })
+
+  it('editor ohne Daten: keine Einträge, „Alles erledigt“', async () => {
+    const fetchMock = triageFetch({})
+    vi.stubGlobal('fetch', fetchMock)
+    renderAs('editor')
+
+    expect(await screen.findByText('Alles erledigt')).toBeInTheDocument()
+    expect(triageUrls(fetchMock)).toHaveLength(2)
+    expect(screen.queryByText(/Muster$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/offene[rn]? F(a|ä)ll/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Ansehen|Einordnen/ })).not.toBeInTheDocument()
+  })
+
+  it('viewer: keine Aufrufe gegen Muster oder Fälle, keine Einträge', async () => {
+    const fetchMock = triageFetch({ patterns: 2, open: 3 })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAs('viewer')
+
+    // Das restliche Band laedt (Gedaechtnis-Zaehler mit 0) ...
+    expect(await screen.findByText('Alles erledigt')).toBeInTheDocument()
+    await settle()
+    // ... aber Muster und Faelle werden nie angefragt.
+    expect(fetchMock).toHaveBeenCalled()
+    expect(triageUrls(fetchMock)).toHaveLength(0)
+    expect(screen.queryByText('2 Muster')).not.toBeInTheDocument()
+    expect(screen.queryByText(/offene Fälle/)).not.toBeInTheDocument()
+  })
+
+  it('Rolle unbekannt: keine Aufrufe gegen Muster oder Fälle', async () => {
+    const fetchMock = triageFetch({ patterns: 2, open: 3 })
+    vi.stubGlobal('fetch', fetchMock)
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+    })
+
+    expect(await screen.findByText('Letzte Aktivitäten')).toBeInTheDocument()
+    await settle()
+    expect(triageUrls(fetchMock)).toHaveLength(0)
+  })
+
+  it('Muster-Fehler: Fall-Eintrag und restliches Dashboard bleiben stehen', async () => {
+    vi.stubGlobal('fetch', triageFetch({ failPatterns: true, open: 2 }))
+    renderAs('editor')
+
+    expect(await screen.findByText('2 offene Fälle')).toBeInTheDocument()
+    await settle()
+    expect(screen.queryByRole('link', { name: /Ansehen/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Kennzahlen' })).toBeInTheDocument()
+    expect(screen.getByText('Letzte Aktivitäten')).toBeInTheDocument()
+    // Eine unbelegte Zahl behauptet kein „Alles erledigt“.
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
+  })
+
+  it('Zähler-Fehler: Muster-Eintrag und restliches Dashboard bleiben stehen', async () => {
+    vi.stubGlobal('fetch', triageFetch({ patterns: 3, failCounts: true }))
+    renderAs('editor')
+
+    expect(await screen.findByText('3 Muster')).toBeInTheDocument()
+    await settle()
+    expect(screen.queryByRole('link', { name: /Einordnen/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Kennzahlen' })).toBeInTheDocument()
+    expect(screen.getByText('Letzte Aktivitäten')).toBeInTheDocument()
     expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
   })
 })

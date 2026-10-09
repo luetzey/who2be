@@ -8,14 +8,19 @@ import {
   ClipboardCheck,
   FileText,
   LayoutDashboard,
+  MessageSquareWarning,
   Plus,
+  Repeat,
   ScrollText,
   UserPlus,
   Users,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
+import type { Api } from '@/api/client'
+import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data'
@@ -40,6 +45,48 @@ import { useReviewTargets } from '../hooks/useReviewTargets'
 const EYEBROW = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 const LEGEND_STATUSES = ['draft', 'review', 'active', 'inactive'] as const
 
+/**
+ * Eine Zahl fuer das Aufmerksamkeits-Band, die nur fuer editor+ geladen wird
+ * (Lernschleife D6h). `enabled=false` (viewer, Rolle unbekannt) loest keinen
+ * Aufruf aus. `null`, solange die Zahl laedt, nicht ladbar ist oder nicht
+ * angefragt wird — dann zeigt das Band keinen Eintrag. Jede Zahl hat ihren
+ * eigenen Effekt: scheitert ein Aufruf, bleibt der andere Eintrag stehen.
+ */
+function useEditorCount(enabled: boolean, load: (api: Api) => Promise<number>): number | null {
+  const api = useApi()
+  // Ergebnis samt Anfrage-Schluessel, wie `useApprovalCount`: eine Zahl aus
+  // einem anderen Workspace gilt nicht.
+  const [result, setResult] = useState<{ api: Api; total: number | null } | null>(null)
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    load(api)
+      .then((total) => {
+        if (!cancelled) setResult({ api, total })
+      })
+      .catch(() => {
+        if (!cancelled) setResult({ api, total: null })
+      })
+    return () => {
+      cancelled = true
+    }
+    // `load` ist eine modulweite Funktion und damit stabil.
+  }, [api, enabled, load])
+
+  if (!enabled || result === null || result.api !== api) return null
+  return result.total
+}
+
+// Muster haben keinen Neu-Status (ADR 3.7): gezaehlt wird die ganze Liste.
+const loadPatternCount = (api: Api) =>
+  api.listPatterns().then((list) => list.patterns.length)
+
+// Offene Faelle = `open` + `reopened` aus dem Zaehler-Endpunkt (Q1); die
+// Fall-Liste wird zum Zaehlen nie geladen.
+const loadOpenCaseCount = (api: Api) =>
+  api.countCases().then((counts) => (counts.open ?? 0) + (counts.reopened ?? 0))
+
 export function DashboardPage() {
   const { t } = useTranslation('dashboard')
   const role = useCurrentWorkspaceRole()
@@ -55,7 +102,16 @@ export function DashboardPage() {
   // zeigt keinen Banner und kein „Alles erledigt“.
   const pendingMemories = useApprovalCount()
   const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
-  const allClear = pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0
+  // Lernschleife D6h: Muster und offene Faelle nur fuer editor+ (wie die
+  // Hub-Tabs). viewer und eine noch unbekannte Rolle fragen nichts an.
+  const canTriage = role !== null && role !== 'viewer'
+  const patternCount = useEditorCount(canTriage, loadPatternCount)
+  const openCaseCount = useEditorCount(canTriage, loadOpenCaseCount)
+  // Fuer editor+ behauptet „Alles erledigt“ erst etwas, wenn beide Zahlen
+  // belegt 0 sind; fuer viewer zaehlen die Eintraege nicht.
+  const triageClear = !canTriage || (patternCount === 0 && openCaseCount === 0)
+  const allClear =
+    pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0 && triageClear
   const reviewTargets = useReviewTargets(pendingReviews, data?.status_distribution)
   const activeResources =
     data?.kpis.active_resources ?? data?.status_distribution.resource?.active ?? 0
@@ -139,6 +195,38 @@ export function DashboardPage() {
                         <Button asChild variant="outline" size="sm">
                           <Link to={wsPath('/memory?tab=approval')}>
                             {t('attention.memories.action')}
+                            <ArrowRight />
+                          </Link>
+                        </Button>
+                      }
+                    />
+                  ) : null}
+                  {patternCount !== null && patternCount > 0 ? (
+                    <AttentionBanner
+                      variant="brand"
+                      icon={Repeat}
+                      title={t('attention.patterns.title', { count: patternCount })}
+                      description={t('attention.patterns.description')}
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={wsPath('/feedback?tab=patterns')}>
+                            {t('attention.patterns.action')}
+                            <ArrowRight />
+                          </Link>
+                        </Button>
+                      }
+                    />
+                  ) : null}
+                  {openCaseCount !== null && openCaseCount > 0 ? (
+                    <AttentionBanner
+                      variant="brand"
+                      icon={MessageSquareWarning}
+                      title={t('attention.cases.title', { count: openCaseCount })}
+                      description={t('attention.cases.description')}
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={wsPath('/feedback?tab=cases')}>
+                            {t('attention.cases.action')}
                             <ArrowRight />
                           </Link>
                         </Button>

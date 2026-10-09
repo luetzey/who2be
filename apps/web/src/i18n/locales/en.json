@@ -883,6 +883,18 @@
         "description": "Approve or reject the memory suggestions from your agents.",
         "action": "Review"
       },
+      "patterns": {
+        "title_one": "1 pattern",
+        "title_other": "{{count}} patterns",
+        "description": "Learning suggestions or cases that keep coming back.",
+        "action": "View"
+      },
+      "cases": {
+        "title_one": "1 open case",
+        "title_other": "{{count}} open cases",
+        "description": "Reported situations nobody has triaged yet.",
+        "action": "Triage"
+      },
       "systemPrompts": {
         "title_one": "1 system prompt is awaiting review",
         "title_other": "{{count}} system prompts are awaiting review",
