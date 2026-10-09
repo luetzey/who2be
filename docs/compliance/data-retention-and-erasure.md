@@ -29,7 +29,7 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
 2. **30-Tage-Grace:** Karenzzeit (Schutz vor versehentlicher Loeschung). Der
    `purge_after`-Zeitpunkt ist idempotent (mehrfacher Loeschwunsch behaelt den
    fruehesten Termin).
-3. **Hard-Purge (`who2be-purge`, Cron):** `purge_expired()` laeuft als **Owner**
+3. **Hard-Purge (Worker-Routine `purge`, taeglich 03:30 UTC; CLI `who2be-purge` als Notfallweg):** `purge_expired()` laeuft als **Owner**
    (RLS-Bypass) und entfernt alles, dessen `purge_after <= now()`:
    - **Organisationen:** `DELETE FROM organization …` — per `ON DELETE CASCADE`
      atomar inkl. Workspaces → Personas/Playbooks/Resources/Agents (+ Versionen),
@@ -140,7 +140,8 @@ inkrementeller Snapshots ist nicht praktikabel.
 
 Der Agenten-Arbeitsbereich (ADR-0047/0048/0049) haelt Daten in **vier
 Speichern** statt nur in Postgres — Loeschung heisst hier deshalb: alle vier
-Wege gehen. Der `who2be-purge`-Lauf deckt sie ab (`core/purge.py`,
+Wege gehen. Der Purge-Lauf (Worker-Routine `purge` bzw. CLI `who2be-purge`)
+deckt sie ab (`core/purge.py`,
 Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
 
 | Objekt | Speicher | Loeschung beim Org-/Account-Purge | Laufende Retention |
@@ -297,7 +298,7 @@ dem des Workspace.
 
 | Was | Frist | Wirkung |
 |---|---|---|
-| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung (Freigabe in der Triage) setzt `confirmed_at` und `expires_at = NULL`. Lernvorschlaege (`kind = 'lesson'`) verfallen nicht. Verfallsjob: `who2be-memory-expire`, taeglich per Cron (`deploy/hetzner/RUNBOOK.md`), je Eintrag ein Historien-Ereignis `expired` |
+| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung (Freigabe in der Triage) setzt `confirmed_at` und `expires_at = NULL`. Lernvorschlaege (`kind = 'lesson'`) verfallen nicht. Verfallsjob: Worker-Routine `memory-expire`, taeglich 03:45 UTC (`deploy/hetzner/RUNBOOK.md` §Hintergrund-Routinen; CLI `who2be-memory-expire` als Notfallweg), je Eintrag ein Historien-Ereignis `expired` |
 | bestaetigte Eintraege | bis zur Loeschung durch einen Menschen oder Purge | — |
 | Historie | so lange wie ihr Eintrag | faellt per FK-Cascade mit |
 
@@ -458,6 +459,8 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 - `apps/api/src/who2be_api/core/purge.py` — `purge_expired()`, `PurgeResult`,
   CLI-Entrypoint `who2be-purge`.
+- `apps/api/src/who2be_api/worker/routines.py` — Routinen `purge` und
+  `memory-expire` (Zeitplan, Laufprotokoll `routine_run`, ADR-0057).
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
   (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.

@@ -284,17 +284,21 @@ Reihenfolge** und **wo die Reihenfolge nicht verhandelbar ist**.
       Scheitert das Zertifikat, ist es fast immer DNS (Phase 0 Punkt 2) oder
       Port 80 in der Firewall — nichts an der Anwendung.
 
-- [ ] **10b · Hintergrundjobs einplanen: `who2be-purge` und
-      `who2be-memory-expire`.**
-      *Wer: du · Dauer: 15 min, plus ein Blick ins Log am Folgetag · Danach
-      anders: der DSGVO-Purge laeuft, und unbestaetigte Gedaechtnis-Eintraege
-      verfallen nach 30 Tagen, wie die Oberflaeche es zusagt.*
-      Keinen der beiden Jobs startet der Stack von selbst. Hetzner-Box mit
-      Host-Crontab: RUNBOOK-Checkliste „Erste Inbetriebnahme" Schritt 7b.
-      Instanz auf Dokploy:
-      [Hintergrundjobs auf Dokploy einplanen](#hintergrundjobs-auf-dokploy-einplanen)
-      unten. Abgehakt ist der Punkt erst, wenn je Job ein erfolgreicher Lauf
-      mit seiner Ergebniszeile im Log steht — eingetragen allein reicht nicht.
+- [ ] **10b · Hintergrund-Routinen: Worker healthy, erster Lauf sichtbar.**
+      *Wer: du · Dauer: 5 min, plus ein Blick ins Protokoll nach dem ersten
+      Lauf · Danach anders: belegt ist, dass der DSGVO-Purge laeuft und
+      unbestaetigte Gedaechtnis-Eintraege nach 30 Tagen verfallen, wie die
+      Oberflaeche es zusagt.*
+      Einzuplanen ist nichts mehr: `who2be-purge` und
+      `who2be-memory-expire` laufen als Routinen `purge` und `memory-expire`
+      im Compose-Dienst `worker`, der mit dem Stack startet (ADR-0057). Beim
+      ersten Start holt er beide einmal nach, danach laufen sie taeglich um
+      03:30 bzw. 03:45 UTC. Pruefen, Hetzner-Box: RUNBOOK-Checkliste „Erste
+      Inbetriebnahme" Schritt 7b. Instanz auf Dokploy:
+      [Hintergrundjobs auf Dokploy](#hintergrundjobs-auf-dokploy)
+      unten. Abgehakt ist der Punkt erst, wenn der Container `worker` healthy
+      ist und je Routine ein `succeeded`-Lauf im Log bzw. in `routine_run`
+      steht — der laufende Dienst allein reicht nicht.
 
 - [ ] **11 · Zum ersten Mal anmelden.** `https://app.<DOMAIN>` → „Mit Google
       anmelden" bzw. GitHub.
@@ -424,124 +428,106 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
 
 ---
 
-## Hintergrundjobs auf Dokploy einplanen
+## Hintergrundjobs auf Dokploy
 
-Gehoert zu Schritt 10b. Zwei Jobs muessen taeglich laufen. Auf der
-Hetzner-Box traegst du sie in die Host-Crontab ein, siehe RUNBOOK
-[Retention-Cron (`who2be-purge`)](../deploy/hetzner/RUNBOOK.md#retention-cron-who2be-purge)
-und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](../deploy/hetzner/RUNBOOK.md#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire).
-Eine Instanz aus `deploy/dokploy/docker-compose.yml` (mit oder ohne
-Cloud-Overlay) hat keine solche Crontab. Dort plant Dokploy die Jobs selbst
-ein. Der Abschnitt steht in diesem Dokument, weil die Einplanung ein Schritt
-der Inbetriebnahme ist und es fuer den Dokploy-Weg kein eigenes Runbook gibt;
+Gehoert zu Schritt 10b. Der DSGVO-Purge und der Verfall unbestaetigten
+Gedaechtnisses laufen als Routinen `purge` und `memory-expire` im
+Compose-Dienst `worker` (ADR-0057). Eine Instanz aus
+`deploy/dokploy/docker-compose.yml` (mit oder ohne Cloud-Overlay) bringt ihn
+mit; er erscheint mit dem naechsten Deploy in der Dienstliste, ohne
+UI-Schritt. **Ein Dokploy-Schedule wird nicht mehr angelegt.** Betrieb,
+Zeitplaene, Overrides und Notfallweg stehen im RUNBOOK unter
+[Hintergrund-Routinen (Worker)](../deploy/hetzner/RUNBOOK.md#hintergrund-routinen-worker);
+dieser Abschnitt nennt nur, was auf Dokploy anders ist.
 [`oauth-e2e-dokploy.md`](oauth-e2e-dokploy.md) verweist hierher.
 
-| Job | Was er tut | Ergebniszeile |
+| Routine | Zeitplan (UTC) | Was sie tut |
 |---|---|---|
-| `who2be-purge` | DSGVO-Hard-Purge nach der 30-Tage-Grace, dazu die WorkArea-/KB-Sweeps (abgelaufene Artifacts, verwaiste Blobs, geloeschte Area-Stores) | `Purge: …` und `Retention: …` |
-| `who2be-memory-expire` | setzt unbestaetigte Gedaechtnis-Eintraege nach Ablauf der 30-Tage-Frist auf `expired` (ADR-0053 3.1.3), loescht nichts | `Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.` |
+| `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace, dazu die WorkArea-/KB-Sweeps (abgelaufene Artifacts, verwaiste Blobs, geloeschte Area-Stores) |
+| `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Ablauf der 30-Tage-Frist auf `expired` (ADR-0053 3.1.3), loescht nichts |
+| `routine-run-retention` | `15 4 * * *` | loescht das eigene Laufprotokoll nach 90 Tagen |
 
-Beide Jobs sind idempotent. Ein ausgefallener Lauf wird vom naechsten
-nachgeholt, es verfaellt dann nur spaeter.
+Alle Routinen sind idempotent. Beim ersten Start holt der Worker Purge und
+Verfall einmal nach; danach gelten die Zeiten der Tabelle.
 
-### Wie Dokploy den Job ausfuehrt
+### Schedules loeschen, falls angelegt
 
-Belegt aus der Dokploy-Doku
-[Schedule Jobs](https://docs.dokploy.com/docs/core/schedule-jobs) und dem
-Quelltext (Stand v0.30.6, Commit
-[`5be17d3`](https://github.com/Dokploy/dokploy/blob/5be17d3dd01d9489521cde2eca7d997b14c54653/packages/server/src/utils/schedules/utils.ts)):
+Instanzen, die vor dem Worker in Betrieb gingen, haben im Dienst `api` noch
+je einen Schedule `who2be-purge` und `who2be-memory-expire` (Tab
+**Schedules**). Sie schaden nicht: laeuft gerade der Worker-Lauf derselben
+Routine, endet der Schedule-Lauf mit der Meldung `Routine … uebersprungen`,
+sonst ist er ein No-op. Gebraucht werden sie aber nicht mehr.
 
-- Ein **Compose Job** fuehrt einen Befehl **im laufenden Container** eines
-  Compose-Dienstes aus, intern per
-  `docker exec <container> <shell> -c "<befehl>"`. Es startet also kein
-  frischer Container wie bei `docker compose run` auf der Hetzner-Box.
-- Der Zielcontainer muss laufen. Sonst schreibt Dokploy
-  `Container not found for service '…' of compose '…'` ins Log, und der Lauf
-  gilt als fehlgeschlagen.
-- Dokploy findet den Container ueber den Compose-Projektnamen. Die Doku
-  verlangt deshalb, `COMPOSE_PROJECT_NAME` **nicht** zu aendern.
-- Zeitzone: ist im Formular keine gesetzt, rechnet Dokploy in UTC.
-- Gilt fuer selbst betriebenes Dokploy. In Dokploys eigenem Cloud-Angebot
-  weist der Quelltext Container-Jobs auf dem lokalen Server mit
-  `This feature is not available in the cloud version.` ab; dort laufen sie
-  nur auf einem angebundenen Remote-Server.
-- Jeder Lauf erzeugt einen eigenen Log-Eintrag. Ein Exit-Code ungleich 0
-  markiert den Lauf als fehlgeschlagen (`❌ Command failed`), ein
-  erfolgreicher endet mit `✅ Command executed successfully`.
+1. Erst die [Pruefung unten](#worker-pruefen-ohne-dokploy-ui) machen: Worker
+   healthy, je Routine ein `succeeded`-Lauf.
+2. Im Compose-Service, Tab **Schedules**, beide Eintraege loeschen. Ihre
+   Log-Historie geht damit verloren; das Laufprotokoll des Workers steht in
+   `routine_run`.
 
-Als Dienst nimmst du `api`. Er bringt alles mit, was beide Jobs brauchen:
-`DATABASE_URL` mit der Owner-Rolle (RLS-Bypass; das Cloud-Overlay ergaenzt nur
-`APP_DATABASE_URL` und laesst `DATABASE_URL` stehen), die
-`WHO2BE_BLOBSTORE_*`-Werte und das Volume `tablestore-data` unter
-`WHO2BE_TABLESTORE_DIR`. Die Befehle liegen im Image auf dem `PATH`
-(`apps/api/pyproject.toml`, Abschnitt `[project.scripts]`).
+Wer es vergisst, bekommt eine Erinnerung: laeuft eine Routine an zwei
+aufeinanderfolgenden Tagen per CLI, schreibt der Worker taeglich
+`Externer Zeitplan erkannt: Routine …` ins Log.
 
-### Einrichten
+### Worker pruefen (ohne Dokploy-UI)
 
-Im Compose-Service: Tab **Schedules** → **Add Schedule**. Je Job ein Eintrag:
+Auf dem Host. Laufen dort mehrere Compose-Projekte mit Diensten `worker` bzw.
+`db`, liefert der Filter mehrere Container — dann zusaetzlich nach
+`label=com.docker.compose.project=<name>` filtern.
 
-| Feld im Formular | `who2be-purge` | `who2be-memory-expire` |
+```bash
+W="$(docker ps -q --filter label=com.docker.compose.service=worker)"
+DB="$(docker ps -q --filter label=com.docker.compose.service=db)"
+
+# 1) Gesund? Healthcheck = `who2be-worker check` (Heartbeat juenger als 2 min).
+docker inspect -f '{{.State.Health.Status}}' "$W"
+# → healthy
+
+# 2) Wirksame Zeitplaene:
+docker exec "$W" who2be-worker list
+# → purge, memory-expire, routine-run-retention, alle "on"
+
+# 3) Erste Laeufe im Protokoll:
+docker exec -i "$DB" psql -U supabase_admin -d postgres -c \
+  "SELECT routine, trigger, status, started_at, result
+     FROM routine_run ORDER BY started_at DESC LIMIT 10"
+# → je Routine mindestens ein Lauf mit status = succeeded
+```
+
+In der Dokploy-Oberflaeche zeigt der Dienst `worker` dieselben Informationen
+unter **Logs**: beim Start die Zeile `… Effektive Zeitplaene (UTC):` mit der
+Tabelle, je Lauf `Routine <name>, Slot …: succeeded {…}`.
+
+Optional, fuer den Verfall in der Datenbank:
+
+```bash
+docker exec -i "$DB" psql -U supabase_admin -d postgres -tAc \
+  "SELECT count(*) FROM agent_memory_event WHERE event = 'expired' AND actor_kind = 'system'"
+```
+
+Die Zahl waechst nur, wenn wirklich etwas faellig war.
+
+Was auf ein Problem zeigt, Dokploy-spezifisch (alle weiteren Meldungen: RUNBOOK
+[Worker pruefen](../deploy/hetzner/RUNBOOK.md#worker-pruefen)):
+
+| Befund | Bedeutung | Abhilfe |
 |---|---|---|
-| Service Name | `api` | `api` |
-| Task Name | `who2be-purge` | `who2be-memory-expire` |
-| Schedule (Custom) | `30 3 * * *` | `45 3 * * *` |
-| Timezone | `UTC` | `UTC` |
-| Shell Type | `sh` | `sh` |
-| Command | `who2be-purge` | `who2be-memory-expire` |
-| Enabled | an | an |
+| Dienst `worker` fehlt in der Dienstliste | Deploy noch auf einem Stand vor dem Worker | neu deployen |
+| `worker` ist `unhealthy` | kein Heartbeat seit 2 min, meist `db` nicht erreichbar oder `DATABASE_URL` falsch | Logs des Dienstes `worker` lesen, Dienst `db` pruefen |
+| `(kein BlobStore konfiguriert)` bzw. `blobstore_skipped: 1` im Purge-Ergebnis | `WHO2BE_BLOBSTORE_*` fehlt im Worker | Environment pruefen; sonst bleiben Objekte liegen |
 
-Die Zeiten sind dieselben wie in der Hetzner-Crontab (03:30 bzw. 03:45; das
-Backup laeuft dort um 03:15). Eine Ueberschneidung mit einem Backup ist laut
-RUNBOOK unbedenklich, die Reihenfolge ist Bequemlichkeit. Die Zeitzone setzt
-du trotzdem ausdruecklich auf `UTC`, damit niemand raten muss, wenn er den
-Eintrag spaeter liest.
+### Manueller Lauf
 
-### Verifikation nach dem ersten Lauf
+Statt eines Schedules: `docker exec "$W" who2be-worker run-once purge` (bzw.
+`memory-expire`). Laeuft die Routine gerade, endet der Aufruf als `skipped`.
+Den Notfallweg ohne laufenden Worker beschreibt das RUNBOOK unter
+[Manueller Lauf und Notfallweg](../deploy/hetzner/RUNBOOK.md#manueller-lauf-und-notfallweg);
+auf Dokploy laeuft `who2be-purge` bzw. `who2be-memory-expire` dafuer per
+`docker exec` im Container des Dienstes `api`.
 
-1. **Sofort-Probe statt bis 03:30 warten:** in der Zeile des Eintrags
-   **Run Manual Schedule** (Play-Symbol) klicken. Erwartet: die Meldung
-   `Schedule run successfully`.
-2. **Log lesen:** das Listen-Symbol in derselben Zeile oeffnet die Laeufe des
-   Eintrags samt Log. Erwartet beim Purge die beiden Zeilen
-   `Purge: …` und `Retention: …`, beim Verfall
-   `Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.` — jeweils
-   gefolgt von `✅ Command executed successfully`. `N` darf 0 sein.
-3. **Am Folgetag** dasselbe Log noch einmal ansehen: es muss ein Lauf von
-   03:30 bzw. 03:45 UTC dabei sein. Fehlt er, laeuft der Zeitplan nicht.
-4. **Optional, fuer den Verfall in der Datenbank:** auf dem Host
-
-   ```bash
-   docker exec -i "$(docker ps -q --filter label=com.docker.compose.service=db)" \
-     psql -U supabase_admin -d postgres -tAc \
-     "SELECT count(*) FROM agent_memory_event WHERE event = 'expired' AND actor_kind = 'system'"
-   ```
-
-   Die Zahl waechst nur, wenn wirklich etwas faellig war. Laufen auf dem Host
-   mehrere Compose-Projekte mit einem Dienst `db`, liefert der Filter mehrere
-   Container — dann zusaetzlich nach `label=com.docker.compose.project=<name>`
-   filtern.
-
-Was im Log auf ein Problem zeigt:
-
-| Logzeile | Bedeutung | Abhilfe |
-|---|---|---|
-| `Container not found for service 'api' …` | `api` lief zum Zeitpunkt nicht, oder der Projektname hat sich geaendert | Dienst starten bzw. `COMPOSE_PROJECT_NAME` zuruecknehmen, dann manuell nachholen |
-| `Datenbank nicht erreichbar: …` | `db` nicht erreichbar oder `DATABASE_URL` falsch | Dienst `db` und Environment pruefen |
-| `(kein BlobStore konfiguriert)` in der Purge-Zeile | `WHO2BE_BLOBSTORE_*` fehlt im Container | Environment pruefen; sonst bleiben Objekte liegen |
-| weitere Purge-Meldungen | siehe RUNBOOK-Tabelle unter [Retention-Cron](../deploy/hetzner/RUNBOOK.md#retention-cron-who2be-purge) | dort |
-
-### Rueckweg
-
-- **Anhalten:** im Eintrag **Enabled** ausschalten und speichern. Der Eintrag
-  bleibt mit seiner Log-Historie stehen und laesst sich wieder einschalten.
-- **Entfernen:** den Eintrag loeschen. Danach laeuft nichts mehr.
-- Was ein Lauf schon getan hat, nimmt keiner der beiden Wege zurueck. Der
-  Verfall loescht nichts, abgelaufene Eintraege bleiben mit Status `expired`
-  und Ereignis in der Datenbank. Der Purge loescht endgueltig — aber nur, was
-  die 30-Tage-Grace bereits hinter sich hat.
-- Wer anhaelt, verliert die Zusagen: der DSGVO-Purge bleibt aus, und
-  unbestaetigte Eintraege verfallen nicht mehr. Anhalten ist fuer die
-  Fehlersuche gedacht, nicht als Dauerzustand.
+Anhalten geht ueber den Dienst `worker` (Stop in der Oberflaeche); der
+naechste Deploy startet ihn wieder. Wer anhaelt, setzt die Zusagen aus: kein
+DSGVO-Purge, kein Verfall. Was ein Lauf schon getan hat, nimmt das Anhalten
+nicht zurueck.
 
 ---
 
