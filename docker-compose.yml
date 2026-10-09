@@ -215,6 +215,39 @@ services:
       timeout: 5s
       retries: 10
 
+  # Hintergrund-Routinen (ADR-0057 §3): Purge, Gedaechtnis-Verfall,
+  # Protokoll-Aufbewahrung. Dasselbe Artefakt wie `api` (`build: *api-build`),
+  # nur ein anderer Befehl. Owner-Verbindung `DATABASE_URL` wie die bisherigen
+  # Purge-Laeufe; Tabellen-Store-Volume wie `api`, weil der Purge-Sweep
+  # geloeschte Area-Dateien nach 24 h Karenz entfernt.
+  # GENAU EIN Worker: kein `replicas`, kein `--scale` (ADR-0057 §10, Drift-Test
+  # apps/api/tests/test_single_writer_guard.py).
+  worker:
+    build: *api-build
+    command: ["who2be-worker"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
+      WHO2BE_EDITION: ${WHO2BE_EDITION:-onprem}
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
+    volumes:
+      - tablestore-data:/data/tablestore
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      blobstore-bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # Erste Stopp-Anforderung laesst die laufende Routine bis zu ihrem Timeout
+    # enden (Purge: 1 h). Ein kuerzeres Fenster liesse Docker sie per SIGKILL
+    # abbrechen.
+    stop_grace_period: 65m
+    healthcheck:
+      # Eigener Heartbeat in der DB juenger als 2 min (PM-W4).
+      test: ["CMD", "who2be-worker", "check"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   web:
     build:
       context: .

@@ -151,3 +151,15 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # Hintergrund-Routinen (ADR-0057 §3). Das Basis-Compose baut den Worker aus
+  # demselben Anchor wie `api` (`API_BUILD_TARGET`), hier kommt nur die
+  # Cloud-Umgebung dazu, die der Purge braucht. Bewusst OHNE
+  # APP_DATABASE_URL: der Worker laeuft wie die bisherigen Purge-Laeufe ueber
+  # die Owner-Verbindung (DATABASE_URL aus der Basis).
+  worker:
+    environment:
+      WHO2BE_EDITION: cloud
+      # Account-Purge loescht den GoTrue-User per Admin-API (best-effort,
+      # `integrations/gotrue_admin.py`). Ohne Key bleibt der Auth-User stehen.
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}

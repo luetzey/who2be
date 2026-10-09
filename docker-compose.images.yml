@@ -30,6 +30,12 @@ services:
     image: ghcr.io/luetzey/who2be-mcp:${WHO2BE_IMAGE_TAG:-latest}
     pull_policy: always
 
+  # Hintergrund-Routinen (ADR-0057 §3): dasselbe Image wie `api` — ohne diesen
+  # Eintrag baute Compose den Worker trotz Overlay lokal.
+  worker:
+    image: ghcr.io/luetzey/who2be-api:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always
+
   # Selbes Image wie `api`/`migrate` (docker-compose.yml: `build: *api-build`
   # ohne eigenes `image:`) — ohne diesen Eintrag wuerde der Bootstrap-One-Shot
   # trotz Overlay lokal gebaut statt gezogen (Nebenbefund WP2/#529: hatte vor

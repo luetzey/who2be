@@ -23,8 +23,9 @@
 #   3. Profile bestimmen (siehe unten) und in die Compose-Aufrufe geben.
 #   4. docker compose pull (Cloud: api+migrate aus GHCR, web weiterhin lokal
 #      gebaut) und up -d --wait.
-#   5. Betriebsgrenze pruefen: genau EIN laufender api-Container (ADR-0049,
-#      siehe die Begruendung an der Pruefung selbst) — sonst Abbruch mit 3.
+#   5. Betriebsgrenze pruefen: genau EIN laufender api- und worker-Container
+#      (ADR-0049, ADR-0057 §10; Begruendung an der Pruefung selbst) — sonst
+#      Abbruch mit 3.
 #   6. Status ausgeben.
 #
 # Profile (WHO2BE_COMPOSE_PROFILES, kommagetrennt):
@@ -198,11 +199,11 @@ if [ "$EDITION" = "cloud" ]; then
     # `pull_policy: build` im Overlay — der Pull-Versuch dafuer wird von
     # Compose uebersprungen/faellt weich auf den lokalen Build zurueck, der
     # anschliessende `up` baut es wie gewohnt.
-    echo "==> Pulling api, migrate, web (cloud)"
-    "${COMPOSE[@]}" pull api migrate web
+    echo "==> Pulling api, migrate, web, worker (cloud)"
+    "${COMPOSE[@]}" pull api migrate web worker
 else
     echo "==> Pulling images"
-    "${COMPOSE[@]}" pull api web migrate
+    "${COMPOSE[@]}" pull api web migrate worker
 fi
 
 # Profil-Services getrennt und NICHT fatal: darunter koennen Services ohne
@@ -254,34 +255,47 @@ echo "==> Restart stack"
 # zum Messzeitpunkt vorbei. Was sie zuverlaessig faengt, sind DAUERHAFTE
 # Zweitinstanzen: ein verwaister Container aus einem frueheren Bringup, eine von
 # Hand gestartete zweite Instanz, ein nicht gestarteter api-Container.
-echo "==> Betriebsgrenze pruefen: genau ein laufender api-Container"
+echo "==> Betriebsgrenze pruefen: genau ein laufender api- und worker-Container"
+# Dieselbe Grenze gilt fuer `worker` (ADR-0057 §10): der Purge-Sweep im Worker
+# fasst Tabellen-Store-Dateien an, und genau ein Worker ist die Zusage, unter
+# der das sicher ist. Ein zweiter, von Hand gestarteter Worker waere zwar dank
+# Slot-Claim kein doppelter Lauf, wohl aber ein zweiter Prozess auf demselben
+# Volume — und dieselbe Klasse stiller Abweichung wie bei api.
+#
 # stderr NICHT in dieselbe Variable wie die gezaehlten IDs: `--quiet` garantiert
 # nur, dass STDOUT ausschliesslich Container-IDs enthaelt. Compose schreibt
 # Hinweise (etwa zu nicht gesetzten Variablen) auf stderr — landeten sie in
-# $API_IDS, wuerde jede solche Zeile unten als "Container" mitgezaehlt und die
-# Pruefung meldete etwas anderes, als sie messen soll. Also getrennt: stdout wird
-# gezaehlt, stderr dient nur der Diagnose im Fehlerpfad (der Exit-Code des
-# Aufrufs unterscheidet weiterhin "Aufruf fehlgeschlagen" von "0 Container").
-API_PS_ERR="$(mktemp)"
-trap 'rm -f "$API_PS_ERR"' EXIT
-if ! API_IDS="$("${COMPOSE[@]}" ps --status running --quiet api 2>"$API_PS_ERR")"; then
-    echo "FEHLER: 'compose ps api' ist selbst fehlgeschlagen — die Zahl der" >&2
-    echo "laufenden api-Container ist damit UNBEKANNT, nicht 0. Abbruch statt" >&2
-    echo "Durchwinken. Ausgabe:" >&2
-    cat "$API_PS_ERR" >&2
-    if [ -n "$API_IDS" ]; then printf '%s\n' "$API_IDS" >&2; fi
-    echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
-    exit 3
-fi
-API_RUNNING="$(printf '%s\n' "$API_IDS" | grep -c . || true)"
-if [ "$API_RUNNING" != "1" ]; then
-    echo "FEHLER: ${API_RUNNING} laufende api-Container — erwartet: genau 1." >&2
-    echo "Der Tabellen-Store (ADR-0049) vertraegt genau einen Schreib-Prozess je" >&2
-    echo "Area-Datei; mehrere Container fuehren zu stiller Datenkorruption." >&2
-    echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
-    "${COMPOSE[@]}" ps api >&2 || true
-    exit 3
-fi
+# der gezaehlten Variable, wuerde jede solche Zeile unten als "Container"
+# mitgezaehlt und die Pruefung meldete etwas anderes, als sie messen soll. Also
+# getrennt: stdout wird gezaehlt, stderr dient nur der Diagnose im Fehlerpfad
+# (der Exit-Code des Aufrufs unterscheidet weiterhin "Aufruf fehlgeschlagen"
+# von "0 Container").
+PS_ERR="$(mktemp)"
+trap 'rm -f "$PS_ERR"' EXIT
+assert_single_running() {
+    local service="$1" ids running
+    if ! ids="$("${COMPOSE[@]}" ps --status running --quiet "$service" 2>"$PS_ERR")"; then
+        echo "FEHLER: 'compose ps ${service}' ist selbst fehlgeschlagen — die Zahl der" >&2
+        echo "laufenden ${service}-Container ist damit UNBEKANNT, nicht 0. Abbruch statt" >&2
+        echo "Durchwinken. Ausgabe:" >&2
+        cat "$PS_ERR" >&2
+        if [ -n "$ids" ]; then printf '%s\n' "$ids" >&2; fi
+        echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
+        exit 3
+    fi
+    running="$(printf '%s\n' "$ids" | grep -c . || true)"
+    if [ "$running" != "1" ]; then
+        echo "FEHLER: ${running} laufende ${service}-Container — erwartet: genau 1." >&2
+        echo "Der Tabellen-Store (ADR-0049) vertraegt genau einen Schreib-Prozess je" >&2
+        echo "Area-Datei; mehrere Container fuehren zu stiller Datenkorruption." >&2
+        echo "Fuer worker gilt dieselbe Grenze (ADR-0057 §10)." >&2
+        echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
+        "${COMPOSE[@]}" ps "$service" >&2 || true
+        exit 3
+    fi
+}
+assert_single_running api
+assert_single_running worker
 
 echo "==> Status"
 "${COMPOSE[@]}" ps
