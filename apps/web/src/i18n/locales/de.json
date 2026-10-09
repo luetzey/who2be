@@ -883,6 +883,18 @@
         "description": "Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab.",
         "action": "Freigeben"
       },
+      "patterns": {
+        "title_one": "1 Muster",
+        "title_other": "{{count}} Muster",
+        "description": "Lernvorschläge oder Fälle, die sich wiederholen.",
+        "action": "Ansehen"
+      },
+      "cases": {
+        "title_one": "1 offener Fall",
+        "title_other": "{{count}} offene Fälle",
+        "description": "Gemeldete Situationen, die noch niemand eingeordnet hat.",
+        "action": "Einordnen"
+      },
       "systemPrompts": {
         "title_one": "1 System-Prompt liegt zur Review",
         "title_other": "{{count}} System-Prompts liegen zur Review",
