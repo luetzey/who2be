@@ -2315,7 +2315,8 @@
         "cases": "Fälle",
         "myCases": "Meine Fälle",
         "signals": "Bausteine",
-        "curation": "Kuration"
+        "curation": "Kuration",
+        "patterns": "Muster"
       },
       "tabsAria": "Bereiche des Feedbacks",
       "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Verhalten eines Agenten meldest du als Fall."
@@ -2648,6 +2649,42 @@
         "success": "Fall gelöscht.",
         "error": "Der Fall konnte nicht gelöscht werden."
       }
+    },
+    "patterns": {
+      "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
+      "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
+      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Fälle eingeordnet sind.",
+      "kind": {
+        "lesson": {
+          "title": "Dieselbe Korrektur {{count}}×",
+          "text": "Ein Lernvorschlag von {{agent}} kam {{count}}-mal mit ähnlichem Wortlaut."
+        },
+        "case": {
+          "title": "Ähnliche Fälle {{count}}×",
+          "text": "{{count}} offene Fälle zu {{agent}}, alle zugeordnet zu {{element}}, in {{days}} Tagen."
+        }
+      },
+      "detail": {
+        "why": "Warum ist das ein Muster?",
+        "evidence": "Belege",
+        "showAll": "Alle {{count}} Belege anzeigen",
+        "deleted": "Gelöschter Eintrag"
+      },
+      "action": {
+        "createCase": "Fall anlegen",
+        "viewCases": "Fälle ansehen"
+      },
+      "builder": {
+        "label": "Oder vom Builder formulieren lassen – im Client einfügen:",
+        "copy": "Kopieren",
+        "promptLesson": "Formuliere aus dem Lernvorschlag {{id}} von {{agent}} einen Fall mit Lage, Getan und Erwartet.",
+        "promptCase": "Fasse die offenen Fälle {{ids}} zu {{agent}} zusammen und schlage eine Änderung an {{element}} vor."
+      },
+      "emptyTitle": "Noch keine Muster",
+      "emptyDescription": "Sobald sich Lernvorschläge oder Fälle ähneln, zählt der Server sie hier zusammen. Ab {{threshold}} Treffern erscheint ein Muster.",
+      "emptyNoData": "Muster brauchen Lernvorschläge oder Fälle. Es gibt noch keine.",
+      "loadError": "Muster konnten nicht berechnet werden.",
+      "gone": "Dieses Muster gilt nicht mehr."
     }
   },
   "tools": {

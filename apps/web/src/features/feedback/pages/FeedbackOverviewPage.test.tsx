@@ -14,6 +14,8 @@ const {
   countCases,
   listAgents,
   createCase,
+  listPatterns,
+  countMemories,
 } = vi.hoisted(() => ({
   getFeedbackOverview: vi.fn(),
   getFeedbackItems: vi.fn(),
@@ -21,6 +23,8 @@ const {
   countCases: vi.fn(),
   listAgents: vi.fn(),
   createCase: vi.fn(),
+  listPatterns: vi.fn(),
+  countMemories: vi.fn(),
 }))
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
@@ -33,6 +37,8 @@ vi.mock('@/api/useApi', () => {
     countCases,
     listAgents,
     createCase,
+    listPatterns,
+    countMemories,
   }
   return { useApi: () => api }
 })
@@ -83,6 +89,10 @@ beforeEach(() => {
     dismissed: 0,
   })
   listAgents.mockResolvedValue([])
+  listPatterns.mockReset()
+  listPatterns.mockResolvedValue({ threshold: 3, window_days: 30, patterns: [] })
+  countMemories.mockReset()
+  countMemories.mockResolvedValue({ total: 2 })
 })
 
 function SearchProbe() {
@@ -102,11 +112,11 @@ function renderPage(search = '') {
 }
 
 describe('FeedbackOverviewPage — Hub-Tabs', () => {
-  it('oeffnet standardmaessig „Fälle“ mit drei Tabs fuer editor', async () => {
+  it('oeffnet standardmaessig „Fälle“ mit vier Tabs fuer editor', async () => {
     renderPage()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Fälle', 'Bausteine', 'Kuration'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Fälle', 'Muster', 'Bausteine', 'Kuration'])
     expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tablist', { name: 'Bereiche des Feedbacks' })).toBeInTheDocument()
     expect(await screen.findByText('Keine offenen Fälle')).toBeInTheDocument()
@@ -147,6 +157,21 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
     expect(getFeedbackOverview).not.toHaveBeenCalled()
     expect(getFeedbackItems).not.toHaveBeenCalled()
+  })
+
+  it('leitet viewer von `?tab=patterns` still auf „Meine Fälle“ um', async () => {
+    role = 'viewer'
+    renderPage('?tab=patterns')
+    expect(screen.queryByRole('tab', { name: /Muster/ })).not.toBeInTheDocument()
+    await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
+    expect(listPatterns).not.toHaveBeenCalled()
+  })
+
+  it('oeffnet den Muster-Tab per Deep-Link und laedt die Muster', async () => {
+    renderPage('?tab=patterns')
+    expect(screen.getByRole('tab', { name: /Muster/ })).toHaveAttribute('aria-selected', 'true')
+    await waitFor(() => expect(listPatterns).toHaveBeenCalledWith(undefined))
+    expect(await screen.findByText('Noch keine Muster')).toBeInTheDocument()
   })
 
   it('bietet „Fall melden“ und „Problem melden“ im Seitenkopf', () => {
