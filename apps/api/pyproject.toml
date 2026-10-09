@@ -51,6 +51,7 @@ who2be-purge = "who2be_api.core.purge:cli"
 who2be-memory-expire = "who2be_api.core.memory_expiry:cli"
 who2be-org-transfer = "who2be_api.core.org_transfer:cli"
 who2be-license = "who2be_api.core.license_cli:cli"
+who2be-worker = "who2be_api.worker.cli:cli"
 
 [tool.uv.sources]
 who2be-models = { workspace = true }
