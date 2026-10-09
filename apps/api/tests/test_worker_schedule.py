@@ -284,6 +284,19 @@ def test_defaults_read_process_environment(monkeypatch: pytest.MonkeyPatch) -> N
     assert row.enabled is False
 
 
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_overrides_count_as_unset(blank: str) -> None:
+    """Compose reicht `${VAR:-}` durch: ohne `.env`-Eintrag kommt ein Leerstring an."""
+    env = {
+        "WHO2BE_ROUTINE_PURGE_SCHEDULE": blank,
+        "WHO2BE_ROUTINE_PURGE_ENABLED": blank,
+        "WHO2BE_WORKER_ENABLED": blank,
+    }
+    (row,) = effective_table(_registry("purge"), env=env)
+    assert (row.schedule.expr, row.enabled, row.source) == ("30 3 * * *", True, "code")
+    assert worker_enabled(env) is True
+
+
 def test_unknown_overrides_are_listed() -> None:
     env = {
         "WHO2BE_ROUTINE_PURGE_SCHEDULE": "@daily",

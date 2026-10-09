@@ -72,6 +72,21 @@ def test_worker_list_contains_every_routine_from_routines_module(
         assert schedule in listed[name]
 
 
+def test_worker_list_shows_env_source_for_override(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Akzeptanz P3b: gesetzter Override ⇒ SOURCE=env, leerer ⇒ Code-Zeitplan."""
+    monkeypatch.setenv("WHO2BE_ROUTINE_PURGE_SCHEDULE", "0 4 * * *")
+    monkeypatch.setenv("WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE", "")
+    monkeypatch.setenv("WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED", "")
+    assert cli.main(["list"]) == 0
+    rows = {line.split()[0]: line.split() for line in capsys.readouterr().out.splitlines()[1:]}
+    assert rows["purge"][-1] == "env"
+    assert "0 4 * * *" in " ".join(rows["purge"])
+    assert rows["memory-expire"][-1] == "code"
+    assert _EXPECTED["memory-expire"] in " ".join(rows["memory-expire"])
+
+
 def test_routine_attributes_match_adr() -> None:
     p = REGISTRY.get("purge")
     assert (p.timeout, p.catch_up, p.touches_tablestore) == (timedelta(hours=1), True, True)
