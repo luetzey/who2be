@@ -80,9 +80,17 @@ FORMAT_NAME = "who2be-org-transfer"
 FORMAT_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 
-#: Instanzweite Tabellen ohne Mandant — nie Teil einer Org.
+#: Instanzweite Tabellen ohne Mandant — nie Teil einer Org. `routine_run` und
+#: `worker_heartbeat` sind das Laufprotokoll des Workers (Migration 0102).
 GLOBAL_TABLES = frozenset(
-    {"schema_migrations", "oauth_client", "processed_webhook_event", "account_deletion"}
+    {
+        "schema_migrations",
+        "oauth_client",
+        "processed_webhook_event",
+        "account_deletion",
+        "routine_run",
+        "worker_heartbeat",
+    }
 )
 #: Zugangsdaten (Token-Hashes, OAuth-Codes, offene Einladungen) — nie im
 #: Archiv (Owner-Entscheidung W3 = A). Ein Archiv geht bei der Rueckgabe an
