@@ -50,7 +50,19 @@ interface TestCaseFormProps {
    * Transaktion). Bezug (Agent/Element) uebernimmt die neue Fassung.
    */
   supersedes?: TestCaseRead | null
+  /**
+   * Vorbelegung ohne `supersedes` (Lernschleife D6d, „Prüffall daraus
+   * anlegen“ im Fall-Detail): Eingabe, Erwartung und Herkunftsfall. Agent
+   * und Bezug kommen wie sonst ueber `agentId`/`entity`.
+   */
+  prefill?: TestCasePrefill
   onSaved: (created: TestCaseRead) => void
+}
+
+export interface TestCasePrefill {
+  input: string
+  expected: string
+  originCaseId: string
 }
 
 interface Values {
@@ -66,11 +78,12 @@ type Errors = Partial<Record<keyof Values, string>>
 
 function initialValues(props: TestCaseFormProps): Values {
   const base = props.supersedes
+  const prefill = base ? undefined : props.prefill
   return {
     agentId: base?.agent_id ?? props.agentId ?? '',
     title: base?.title ?? '',
-    input: base?.input ?? '',
-    expected: base?.expected_behavior ?? '',
+    input: base?.input ?? prefill?.input ?? '',
+    expected: base?.expected_behavior ?? prefill?.expected ?? '',
     checkKind: base?.check_kind ?? 'human_rule',
     pattern: base?.check_pattern ?? '',
   }
@@ -103,7 +116,7 @@ export function TestCaseForm(props: TestCaseFormProps) {
 }
 
 function TestCaseFormBody(props: TestCaseFormProps) {
-  const { onOpenChange, agentId, agents, entity, supersedes, onSaved } = props
+  const { onOpenChange, agentId, agents, entity, supersedes, prefill, onSaved } = props
   const { t } = useTranslation('learning')
   const api = useApi()
   const formId = useId()
@@ -157,7 +170,7 @@ function TestCaseFormBody(props: TestCaseFormProps) {
       expected_behavior: values.expected.trim(),
       check_kind: values.checkKind,
       check_pattern: needsPattern ? values.pattern.trim() : null,
-      origin_case_id: supersedes?.origin_case_id ?? null,
+      origin_case_id: supersedes ? supersedes.origin_case_id : (prefill?.originCaseId ?? null),
       origin_measure_id: supersedes?.origin_measure_id ?? null,
       supersedes_id: supersedes?.id ?? null,
     }

@@ -2542,8 +2542,74 @@
           "title": "Zuordnung",
           "none": "Noch keinem Baustein zugeordnet."
         },
+        "linked": {
+          "title": "Verknüpft",
+          "testCase": "Prüffall: {{title}}",
+          "lesson": "Aus Lernvorschlag",
+          "feedback": "Aus altem Feedback",
+          "sourceRef": "Link zum Lauf"
+        },
+        "next": "Nächster Schritt",
+        "moreActions": "Weitere Aktionen",
         "notFound": "Diesen Fall gibt es nicht (mehr).",
         "toList": "Zu den Fällen"
+      },
+      "action": {
+        "assign": "Zuordnen…",
+        "changeAssignment": "Zuordnung ändern…",
+        "triage": "Als eingeordnet markieren",
+        "createTestCase": "Prüffall daraus anlegen",
+        "address": "Als umgesetzt markieren…",
+        "addressUnavailable": "Umgesetzt braucht eine Version eines zugeordneten Bausteins.",
+        "toVersion": "Zur Version",
+        "dismiss": "Verwerfen…",
+        "reopen": "Wieder öffnen…"
+      },
+      "assign": {
+        "title": "Fall zuordnen",
+        "intro": "Woran liegt es? Wähle die Bausteine, die geändert werden müssten. Mehrfachauswahl möglich.",
+        "group": {
+          "persona": "Persona",
+          "playbook": "Playbooks",
+          "resource": "Resources",
+          "external_tool": "Werkzeuge",
+          "system_prompt_template": "System-Prompt"
+        },
+        "tool_policy": "Werkzeugrechte des Agenten",
+        "memory": "Gedächtnis",
+        "model_limit": "Modellgrenze – keine Änderung sinnvoll",
+        "model_limitHelp": "Das Modell kann es nicht besser, egal was wir ändern. Danach kannst du den Fall verwerfen.",
+        "alsoTriage": "Danach als eingeordnet markieren",
+        "required": "Ordne den Fall mindestens einem Baustein zu oder wähle „Modellgrenze“.",
+        "save": "Zuordnung speichern"
+      },
+      "address": {
+        "title": "Als umgesetzt markieren",
+        "intro": "In welcher Version ist die Änderung? Der Fall verweist danach auf diese Version.",
+        "element": "Baustein",
+        "version": "Version",
+        "activeTag": "aktiv",
+        "choose": "Bitte wählen …",
+        "note": "Notiz (optional)",
+        "submit": "Als umgesetzt markieren"
+      },
+      "dismiss": {
+        "title": "Fall verwerfen",
+        "reason": "Warum wird nichts geändert?",
+        "reasonHelp": "Mindestens 10 Zeichen. Die meldende Person sieht die Begründung.",
+        "modelLimitDefault": "Modellgrenze – keine Änderung sinnvoll.",
+        "submit": "Verwerfen"
+      },
+      "reopen": {
+        "title": "Fall wieder öffnen",
+        "reason": "Warum wird der Fall wieder geöffnet?",
+        "submit": "Wieder öffnen"
+      },
+      "reason": {
+        "tooShort": "Bitte mindestens {{min}} Zeichen angeben."
+      },
+      "error": {
+        "transitionForbidden": "Dieser Schritt passt nicht zum aktuellen Stand. Die Seite wurde neu geladen."
       },
       "history": {
         "title": "Verlauf",
