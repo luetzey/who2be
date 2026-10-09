@@ -531,15 +531,41 @@ def _from_counters(counters: dict[str, int]) -> PurgeResult:
     return PurgeResult(**values, blobstore_skipped=blobstore_skipped)
 
 
-def _format(result: PurgeResult) -> str:
-    """Die Ausgabe von `who2be-purge` — Doku und Betreiber verlassen sich darauf."""
+async def _run() -> PurgeResult | None:
+    """CLI-Lauf `purge` ueber den Worker-Store (Owner-Verbindung `DATABASE_URL`).
+
+    `None`, wenn der Lauf `skipped` endete (Lock belegt).
+    """
+    # Spaeter Import: `worker.routines` importiert dieses Modul.
+    from who2be_api.worker.routines import PURGE, run_as_cli
+
+    run = await run_as_cli(PURGE)
+    if run.outcome.status == "skipped" or run.counters is None:
+        return None
+    return _from_counters(run.counters)
+
+
+def cli() -> None:
+    """Console-Entrypoint fuer `who2be-purge` (manueller Ausloeser, Notfallweg).
+
+    Laeuft seit ADR-0057 §8 ueber den Worker-Store: Lauf `trigger='cli'` im
+    Protokoll, derselbe Advisory-Lock wie die Worker-Routine `purge`. Haelt
+    gerade ein anderer Lauf den Lock, endet der Aufruf mit Hinweis und Exit 0.
+    Die Ausgabe darunter ist unveraendert; Doku und Betreiber verlassen sich darauf.
+    """
+    from who2be_api.worker.routines import PURGE, skipped_message
+
+    result = asyncio.run(_run())
+    if result is None:
+        print(skipped_message(PURGE))
+        return
     blob_note = " (kein BlobStore konfiguriert)" if result.blobstore_skipped else ""
     dir_note = (
         f", {result.unknown_store_dirs} unbekannte(s) Store-Verzeichnis(se) gemeldet"
         if result.unknown_store_dirs
         else ""
     )
-    return (
+    print(
         f"Purge: {result.organizations} Org(s), {result.accounts} Account(s) "
         f"geloescht; {result.anonymized_audit_rows} Audit-Zeile(n) anonymisiert, "
         f"{result.cleaned_invitations} Invitation(s) bereinigt, "
@@ -549,23 +575,6 @@ def _format(result: PurgeResult) -> str:
         f"Objekt(e) verwaist{blob_note}, "
         f"{result.deleted_area_stores} Area-Store(s) entfernt{dir_note}."
     )
-
-
-def cli() -> None:
-    """Console-Entrypoint fuer `who2be-purge` (manueller Ausloeser, Notfallweg).
-
-    Laeuft seit ADR-0057 §8 ueber den Worker-Store: Lauf `trigger='cli'` im
-    Protokoll, derselbe Advisory-Lock wie die Worker-Routine `purge`. Haelt
-    gerade ein anderer Lauf den Lock, endet der Aufruf mit Hinweis und Exit 0.
-    """
-    # Spaeter Import: `worker.routines` importiert dieses Modul.
-    from who2be_api.worker.routines import PURGE, run_as_cli, skipped_message
-
-    run = asyncio.run(run_as_cli(PURGE))
-    if run.outcome.status == "skipped" or run.counters is None:
-        print(skipped_message(PURGE))
-        return
-    print(_format(_from_counters(run.counters)))
 
 
 if __name__ == "__main__":
