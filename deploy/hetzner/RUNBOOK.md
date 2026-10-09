@@ -2171,11 +2171,16 @@ Unterstrich: `WHO2BE_ROUTINE_PURGE_SCHEDULE`,
 `WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED`.
 
 > **Wirkt nur, wenn die Variable im Container ankommt.** Die Stacks nutzen
-> kein `env_file`, und die Compose-Dateien reichen diese Variablen heute
-> **nicht** an `worker` durch. Ein Eintrag allein in `deploy/hetzner/.env`
-> (bzw. in den Dokploy-Variablen) bleibt deshalb wirkungslos. Belegen statt
-> annehmen: nach der Aenderung muss `who2be-worker list` in der Spalte
-> `SOURCE` `env` zeigen.
+> kein `env_file`; jede Compose-Datei mit `worker` reicht deshalb
+> `WHO2BE_WORKER_ENABLED` und je registrierter Routine `…_SCHEDULE` und
+> `…_ENABLED` einzeln durch, leer vorbelegt. Gesetzt wird der Wert in
+> `deploy/hetzner/.env` (Hetzner), in den Dokploy-Umgebungsvariablen bzw. in
+> der `.env` neben `docker-compose.yml` (lokal); danach
+> `$COMPOSE up -d worker`. Ein leerer Wert gilt als nicht gesetzt, es bleibt
+> der Code-Zeitplan. Belegen statt annehmen: `$COMPOSE exec worker
+> who2be-worker list` muss in der Spalte `SOURCE` `env` zeigen. Eine neue
+> Routine braucht neue Zeilen in allen Compose-Dateien, sonst ist der
+> Drift-Test (`apps/api/tests/test_single_writer_guard.py`) rot.
 
 Kurzfristig anhalten, etwa fuer eine Fehlersuche: `$COMPOSE stop worker`. Der
 naechste Deploy startet ihn wieder (und `deploy.sh` verlangt genau einen
