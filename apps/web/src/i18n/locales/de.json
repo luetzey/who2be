@@ -3641,16 +3641,6 @@
       "searchPlaceholderPlain": "In Einträgen suchen…",
       "resultCount_one": "{{formatted}} Eintrag",
       "resultCount_other": "{{formatted}} Einträge",
-      "filterButton": "Filter ({{count}})",
-      "filterTitle": "Filter",
-      "filterDescription": "Filter wirken sofort.",
-      "showResults_one": "{{formatted}} Eintrag zeigen",
-      "showResults_other": "{{formatted}} Einträge zeigen",
-      "showResultsPlain": "Einträge zeigen",
-      "resetFilters": "Filter zurücksetzen",
-      "removeFilter": "Filter „{{label}}“ entfernen",
-      "activeFilters": "Aktive Filter",
-      "countsUnavailable": "Zahlen gerade nicht verfügbar.",
       "facet": {
         "all": "Alle",
         "agent": "Agent",
@@ -3674,7 +3664,6 @@
         "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden."
       },
       "sort": {
-        "label": "Sortierung",
         "newest": "Neueste zuerst",
         "oldest": "Älteste zuerst"
       },

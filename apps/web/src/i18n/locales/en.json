@@ -3641,16 +3641,6 @@
       "searchPlaceholderPlain": "Search entries…",
       "resultCount_one": "{{formatted}} entry",
       "resultCount_other": "{{formatted}} entries",
-      "filterButton": "Filters ({{count}})",
-      "filterTitle": "Filters",
-      "filterDescription": "Filters apply right away.",
-      "showResults_one": "Show {{formatted}} entry",
-      "showResults_other": "Show {{formatted}} entries",
-      "showResultsPlain": "Show entries",
-      "resetFilters": "Reset filters",
-      "removeFilter": "Remove filter \"{{label}}\"",
-      "activeFilters": "Active filters",
-      "countsUnavailable": "Counts currently unavailable.",
       "facet": {
         "all": "All",
         "agent": "Agent",
@@ -3674,7 +3664,6 @@
         "lesson": "Learning suggestions never go into a prompt. They're counted and can become a new version through a case, a test case and your approval."
       },
       "sort": {
-        "label": "Sort",
         "newest": "Newest first",
         "oldest": "Oldest first"
       },

@@ -23,6 +23,14 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+// Filter-Sheet unter `md`: jsdom kennt keine Breakpoints, `useIsMobile` ist
+// gemockt (Standard: Desktop), `useMediaQuery` bleibt echt.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/useMediaQuery')>()),
+  useIsMobile: () => viewport.mobile,
+}))
+
 beforeAll(() => {
   for (const method of [
     'hasPointerCapture',
@@ -187,6 +195,7 @@ function renderCard(loaded: Agent = agent(), role: WorkspaceRole = 'editor', ent
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.clearAllMocks()
+  viewport.mobile = false
 })
 
 describe('AgentMemoryCard (C5b-2, Spec §6.6)', () => {
@@ -204,13 +213,16 @@ describe('AgentMemoryCard (C5b-2, Spec §6.6)', () => {
     // Kein Aufruf der Legacy-Liste `/agents/{id}/memories`.
     expect(calls.some((c) => /\/agents\/a1\/memories$/.test(c.url.pathname))).toBe(false)
 
-    // Fester Agent als Text ohne ✕, keine Agent-Facette im Filter-Sheet.
+    // Fester Agent als Text ohne ✕; die Leiste (Filter-Standard §3.1) hat
+    // ab `md` die Selects im Raster — ohne Agent-Facette und ohne Knopf.
     expect(screen.getByTestId('memory-fixed-agent')).toHaveTextContent('Agent: coder')
     expect(screen.queryByRole('button', { name: /Filter „Agent/ })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Filter (0)' }))
-    const sheet = await screen.findByRole('dialog')
-    expect(within(sheet).getByRole('group', { name: 'Art' })).toBeInTheDocument()
-    expect(within(sheet).queryByRole('group', { name: 'Agent' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Art' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Zustand' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Sortierung' })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Agent' })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Nach Status filtern' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Filter \(0\)$/ })).not.toBeInTheDocument()
 
     // Die Zeile verlinkt nicht auf die Seite, auf der sie steht.
     const row = screen.getAllByTestId('entry-row')[0]
@@ -233,6 +245,73 @@ describe('AgentMemoryCard (C5b-2, Spec §6.6)', () => {
         '/w/ws-1/memory?tab=entries&agent=a1&kind=agent_note',
       )
     })
+  })
+
+  it('Facette als Select: Chip „Art: …“, Zurücksetzen leert Facette und Suche, Sortierung bleibt', async () => {
+    const { calls } = stubApi()
+    renderCard()
+    await screen.findByText('CI läuft auf Podman.')
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sortierung' }), {
+      target: { value: 'oldest' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Art' }), {
+      target: { value: 'agent_note' },
+    })
+    const chips = await screen.findByRole('list', { name: 'Aktive Filter' })
+    expect(within(chips).getByRole('button', { name: 'Filter „Art: Agentennotiz“ entfernen' }))
+      .toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) =>
+            c.url.pathname.endsWith('/memories') && c.url.searchParams.get('kind') === 'agent_note',
+        ),
+      ).toBe(true),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('list', { name: 'Aktive Filter' })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole('combobox', { name: 'Art' })).toHaveValue('')
+    // Anzeige ist kein Filter: die Sortierung bleibt beim Zurücksetzen stehen.
+    expect(screen.getByRole('combobox', { name: 'Sortierung' })).toHaveValue('oldest')
+  })
+
+  it('unter md: „Filter“ ohne Zahl öffnet das Sheet von unten, ohne Agent-Facette', async () => {
+    viewport.mobile = true
+    stubApi({ total: 3 })
+    renderCard()
+    await screen.findByText('CI läuft auf Podman.')
+
+    expect(screen.queryByRole('combobox', { name: 'Art' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
+    const sheet = await screen.findByTestId('list-filter-sheet')
+    expect(within(sheet).getByRole('combobox', { name: 'Art' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('combobox', { name: 'Sortierung' })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('combobox', { name: 'Agent' })).not.toBeInTheDocument()
+
+    fireEvent.change(within(sheet).getByRole('combobox', { name: 'Art' }), {
+      target: { value: 'lesson' },
+    })
+    // Fuß „n Treffer zeigen“ schließt nur; der Fokus geht zurück auf „Filter (n)“.
+    fireEvent.click(await within(sheet).findByRole('button', { name: '3 Treffer zeigen' }))
+    await waitFor(() => expect(screen.queryByTestId('list-filter-sheet')).toBeNull())
+    const toggle = screen.getByRole('button', { name: 'Filter (1)' })
+    await waitFor(() => expect(toggle).toHaveFocus())
+    expect(screen.getByRole('button', { name: 'Filter „Art: Lernvorschlag“ entfernen' }))
+      .toBeInTheDocument()
+  })
+
+  it('hat mit offenem Filter-Sheet keine axe-Verstöße', async () => {
+    viewport.mobile = true
+    stubApi()
+    const { baseElement } = renderCard()
+    await screen.findByTestId('entry-row')
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
+    await screen.findByTestId('list-filter-sheet')
+    expect(await axe(baseElement)).toHaveNoViolations()
   })
 
   it('zeigt den Freigabe-Hinweis nur mit offenen Einträgen und verlinkt in die Warteschlange', async () => {
