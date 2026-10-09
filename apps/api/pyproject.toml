@@ -12,6 +12,9 @@ dependencies = [
     # WorkArea-Ingest (ADR-0048, Pipeline B): HTML-Extraktion serverseitig,
     # bevor irgendetwas persistiert wird (HTML ist nie Quellformat).
     "beautifulsoup4>=4.12",
+    # Worker-Zeitplaene (ADR-0057 §4): Cron-Ausdruecke der Routinen-Registry.
+    # MIT-Lizenz; einzige neue Abhaengigkeit der Worker-Welle (Owner W1).
+    "croniter>=6.0",
     "cryptography>=44",
     "httpx>=0.28",
     # Pluggable Rate-Limit-Storage (Plan CL2): `limits` liefert die Moving-Window-
