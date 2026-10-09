@@ -1174,8 +1174,15 @@ test('C5b-1: /memory „Einträge“ ohne Seiten-Scroll – Facetten, lange Zeil
   expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
   await expectNoHorizontalScroll(page, 'memory?tab=entries (Stapelleiste offen)')
 
-  // Unter lg: Facetten im Sheet; das Sheet passt in den Viewport.
-  const filterButton = page.getByRole('button', { name: /^(Filter|Filters) \(/ })
+  // Unter md: Facetten im Sheet (Filter-Standard §2.2); das Sheet passt in
+  // den Viewport, und sein Panel scrollt nicht seitlich. Ab md gibt es keinen
+  // Knopf — die Selects stehen im Raster der Leiste.
+  const filterButton = page.getByRole('button', { name: /^(Filter|Filters)( \(|$)/ })
+  if (viewportWidth < 768) {
+    await expect(filterButton).toBeVisible()
+  } else {
+    await expect(filterButton).toBeHidden()
+  }
   if (await filterButton.isVisible()) {
     await filterButton.click()
     const sheet = page.getByRole('dialog')
@@ -1193,6 +1200,10 @@ test('C5b-1: /memory „Einträge“ ohne Seiten-Scroll – Facetten, lange Zeil
       expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(viewportWidth + 1)
       expect(sheetBox!.y + sheetBox!.height).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1)
     }).toPass({ timeout: 5_000 })
+    const panel = await page
+      .getByTestId('list-filter-sheet-panel')
+      .evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+    expect(panel.scroll, 'Filter-Sheet-Panel scrollt seitlich').toBeLessThanOrEqual(panel.client)
     await expectNoHorizontalScroll(page, 'memory?tab=entries (Filter-Sheet)')
   }
 })

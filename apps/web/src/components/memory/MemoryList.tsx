@@ -554,11 +554,12 @@ export function MemoryList({
 
       {data.items.length === 0 ? (
         filtered ? (
+          // Filter-Standard §2.3: einheitlich „Keine Treffer“ + Zuruecksetzen.
           <EmptyState
-            title={t('entries.noMatch')}
+            title={t('data:filter.emptyFilteredTitle')}
             action={
               <Button type="button" variant="outline" onClick={onResetFilters}>
-                {t('entries.resetFilters')}
+                {t('data:filter.reset')}
               </Button>
             }
           />
