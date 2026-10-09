@@ -56,7 +56,7 @@ RUN_ABANDONED_AFTER = timedelta(minutes=5)
 #: `error_class` abgebrochener Laeufe.
 ABANDONED_ERROR_CLASS = "Abandoned"
 #: Praefix des Advisory-Lock-Schluessels; CLIs nehmen denselben Lock (§8).
-LOCK_KEY_PREFIX = "who2be.routine."
+LOCK_NAME_PREFIX = "who2be.routine."
 
 RunTrigger = Literal["schedule", "cli", "manual"]
 RunStatus = Literal["running", "succeeded", "failed", "skipped"]
@@ -306,13 +306,13 @@ async def worker_seen_at(conn: asyncpg.Connection, worker_id: str | None = None)
 
 # --- Advisory-Lock ------------------------------------------------------------
 
-_LOCK_KEY_SQL = "hashtextextended($1::text || $2::text, 0)"
+_LOCK_ID_SQL = "hashtextextended($1::text || $2::text, 0)"
 
 
 async def try_advisory_lock(conn: asyncpg.Connection, routine: str) -> bool:
     """`pg_try_advisory_lock` (Session-Lock) fuer die Routine; nicht blockierend."""
     acquired: bool = await conn.fetchval(
-        f"SELECT pg_try_advisory_lock({_LOCK_KEY_SQL})", LOCK_KEY_PREFIX, routine
+        f"SELECT pg_try_advisory_lock({_LOCK_ID_SQL})", LOCK_NAME_PREFIX, routine
     )
     return acquired
 
@@ -320,7 +320,7 @@ async def try_advisory_lock(conn: asyncpg.Connection, routine: str) -> bool:
 async def release_advisory_lock(conn: asyncpg.Connection, routine: str) -> bool:
     """Gibt den Session-Lock frei. `False`, wenn diese Session ihn nicht hielt."""
     released: bool = await conn.fetchval(
-        f"SELECT pg_advisory_unlock({_LOCK_KEY_SQL})", LOCK_KEY_PREFIX, routine
+        f"SELECT pg_advisory_unlock({_LOCK_ID_SQL})", LOCK_NAME_PREFIX, routine
     )
     return released
 
