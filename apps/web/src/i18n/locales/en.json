@@ -2676,6 +2676,7 @@
       },
       "builder": {
         "label": "Or let the Builder phrase it – paste into your client:",
+        "copy": "Copy",
         "promptLesson": "Turn learning suggestion {{id}} from {{agent}} into a case with situation, behaviour and expectation.",
         "promptCase": "Summarise the open cases {{ids}} for {{agent}} and propose a change to {{element}}."
       },

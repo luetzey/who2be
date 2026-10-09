@@ -2676,6 +2676,7 @@
       },
       "builder": {
         "label": "Oder vom Builder formulieren lassen – im Client einfügen:",
+        "copy": "Kopieren",
         "promptLesson": "Formuliere aus dem Lernvorschlag {{id}} von {{agent}} einen Fall mit Lage, Getan und Erwartet.",
         "promptCase": "Fasse die offenen Fälle {{ids}} zu {{agent}} zusammen und schlage eine Änderung an {{element}} vor."
       },

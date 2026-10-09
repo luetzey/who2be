@@ -290,5 +290,16 @@ describe('PatternList — Sheet', () => {
     const sheet = await screen.findByTestId('pattern-sheet')
     await within(sheet).findByRole('link', { name: 'Erwartet c1' })
     expect(await axe(document.body)).toHaveNoViolations()
-  })
+  }, 15_000)
+})
+
+// Tab „Muster“: eigener axe-Lauf fuer die Liste (PM 2026-10-09: das
+// a11y-`it()` steht hier, nicht in `FeedbackOverviewPage.a11y.test.tsx`).
+// 15 s wie das a11y-Projekt (`vite.config.ts`), axe in jsdom ist CPU-gebunden.
+describe('PatternList (a11y)', () => {
+  it('hat in der Liste keine axe-Verstoesse', async () => {
+    const { container } = renderList()
+    await within(await screen.findByTestId('pattern-list')).findByText(/Code-Task-Flow/)
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
 })

@@ -431,7 +431,7 @@ function BuilderCopy({ prompt }: { prompt: string }) {
         }}
       >
         <Copy aria-hidden="true" />
-        {t('common:actions.copy')}
+        {t('feedback:patterns.builder.copy')}
       </Button>
     </div>
   )
