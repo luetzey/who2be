@@ -2542,8 +2542,74 @@
           "title": "Assignment",
           "none": "Not assigned to a building block yet."
         },
+        "linked": {
+          "title": "Linked",
+          "testCase": "Test case: {{title}}",
+          "lesson": "From learning suggestion",
+          "feedback": "From old feedback",
+          "sourceRef": "Link to the run"
+        },
+        "next": "Next step",
+        "moreActions": "More actions",
         "notFound": "This case doesn't exist (anymore).",
         "toList": "Back to cases"
+      },
+      "action": {
+        "assign": "Assign…",
+        "changeAssignment": "Change assignment…",
+        "triage": "Mark as triaged",
+        "createTestCase": "Create test case from this",
+        "address": "Mark as addressed…",
+        "addressUnavailable": "Addressed needs a version of an assigned building block.",
+        "toVersion": "Go to version",
+        "dismiss": "Dismiss…",
+        "reopen": "Reopen…"
+      },
+      "assign": {
+        "title": "Assign case",
+        "intro": "What is it down to? Pick the building blocks that would need to change. You can pick several.",
+        "group": {
+          "persona": "Persona",
+          "playbook": "Playbooks",
+          "resource": "Resources",
+          "external_tool": "Tools",
+          "system_prompt_template": "System prompt"
+        },
+        "tool_policy": "The agent's tool permissions",
+        "memory": "Memory",
+        "model_limit": "Model limit – no change makes sense",
+        "model_limitHelp": "The model can't do better, whatever we change. You can dismiss the case afterwards.",
+        "alsoTriage": "Mark as triaged afterwards",
+        "required": "Assign the case to at least one building block or choose \"Model limit\".",
+        "save": "Save assignment"
+      },
+      "address": {
+        "title": "Mark as addressed",
+        "intro": "Which version contains the change? The case will then point to that version.",
+        "element": "Building block",
+        "version": "Version",
+        "activeTag": "active",
+        "choose": "Please choose …",
+        "note": "Note (optional)",
+        "submit": "Mark as addressed"
+      },
+      "dismiss": {
+        "title": "Dismiss case",
+        "reason": "Why is nothing being changed?",
+        "reasonHelp": "At least 10 characters. The person who reported it sees the reason.",
+        "modelLimitDefault": "Model limit – no change makes sense.",
+        "submit": "Dismiss"
+      },
+      "reopen": {
+        "title": "Reopen case",
+        "reason": "Why is the case being reopened?",
+        "submit": "Reopen"
+      },
+      "reason": {
+        "tooShort": "Please enter at least {{min}} characters."
+      },
+      "error": {
+        "transitionForbidden": "This step doesn't fit the current state. The page has been reloaded."
       },
       "history": {
         "title": "History",

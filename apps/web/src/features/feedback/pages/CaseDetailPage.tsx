@@ -1,5 +1,5 @@
-import { Bot, Copy, MessageSquareWarning, MoreHorizontal, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { Bot, Copy, ExternalLink, MessageSquareWarning, MoreHorizontal, Trash2 } from 'lucide-react'
+import { type Ref, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -11,12 +11,14 @@ import type {
   CaseEventKind,
   CaseStatus,
   CaseTarget,
+  TestCaseRead,
   VersionedEntityType,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useSession } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CaseActions } from '@/components/cases/CaseActions'
 import { DetailHeader } from '@/components/data'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -301,7 +303,52 @@ function useCaseDetail(caseId: string | undefined): CaseDetailData {
   return { detail, agents, names, versions, loading, notFound, error, reload }
 }
 
-function StatusLabel({ status, addressedTo }: { status: CaseStatus; addressedTo: ResolvedVersion | null }) {
+/**
+ * Pruefaelle aus diesem Fall (`GET /test-cases?origin_case_id=`, Q5/D6-API2).
+ * Nur editor (Spec S8: „Verknüpft“ ist editor-Sicht); `undefined` laedt nichts.
+ */
+function useLinkedTestCases(caseId: string | undefined) {
+  const api = useApi()
+  const [testCases, setTestCases] = useState<TestCaseRead[] | null>(null)
+  const [nonce, setNonce] = useState(0)
+  useEffect(() => {
+    if (caseId === undefined) return
+    let cancelled = false
+    api.listTestCases({ origin_case_id: caseId }).then(
+      (list) => {
+        if (!cancelled) setTestCases(list)
+      },
+      () => {
+        if (!cancelled) setTestCases([])
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [api, caseId, nonce])
+  const reload = useCallback(() => setNonce((value) => value + 1), [])
+  return { testCases, reload }
+}
+
+/** `source_ref` nur als Link, wenn es eine http(s)-Adresse ist (Spec S8). */
+function safeHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+function StatusLabel({
+  status,
+  addressedTo,
+  statusRef,
+}: {
+  status: CaseStatus
+  addressedTo: ResolvedVersion | null
+  statusRef?: Ref<HTMLSpanElement>
+}) {
   const { t } = useTranslation('feedback')
   const token = STATUS_TOKEN[status]
   const label =
@@ -311,8 +358,13 @@ function StatusLabel({ status, addressedTo }: { status: CaseStatus; addressedTo:
         : t('cases.status.addressedShort')
       : t(`cases.status.${status}`)
   return (
+    // Nach einem Uebergang landet der Fokus hier, `aria-live` meldet den
+    // neuen Status (Spec Barrierefreiheit).
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+      ref={statusRef}
+      tabIndex={-1}
+      aria-live="polite"
+      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       data-testid="case-status"
     >
       {token ? (
@@ -373,8 +425,9 @@ function DeleteCaseDialog({
     setBusy(true)
     try {
       await onConfirm()
-    } catch (cause: unknown) {
-      notify.error(cause instanceof Error ? cause.message : t('feedback:cases.delete.error'))
+    } catch {
+      // Review-Nit N2 (D6c): eigener Text statt der rohen Server-Meldung.
+      notify.error(t('feedback:cases.delete.error'))
       setBusy(false)
     }
   }
@@ -407,6 +460,91 @@ function DeleteCaseDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * „Verknüpft“ (Spec S8, nur editor): Pruefaelle aus diesem Fall, die Quelle
+ * (Lernvorschlag → Memory-Sheet, Alt-Feedback → Feedback-Detail) und der
+ * Link zum Lauf. `source_ref` wird nur bei http(s) ein Link, sonst Text.
+ */
+function LinkedSection({
+  testCases,
+  sourceMemoryId,
+  sourceFeedbackId,
+  sourceRef,
+  agentId,
+}: {
+  testCases: TestCaseRead[] | null
+  sourceMemoryId: string | null
+  sourceFeedbackId: string | null
+  sourceRef: string | null
+  agentId: string
+}) {
+  const { t } = useTranslation('feedback')
+  const wsPath = useWorkspacePath()
+  const refUrl = sourceRef !== null ? safeHttpUrl(sourceRef) : null
+  const rows = (testCases ?? []).length + (sourceMemoryId ? 1 : 0) + (sourceFeedbackId ? 1 : 0) + (sourceRef ? 1 : 0)
+  if (rows === 0) return null
+  const link = 'font-medium break-words text-brand hover:underline'
+  return (
+    <Card data-testid="case-linked">
+      <CardHeader>
+        <CardTitle>{t('cases.detail.linked.title')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="flex flex-col gap-2 text-sm">
+          {(testCases ?? []).map((testCase) => (
+            <li key={testCase.id} className="min-w-0">
+              <Link to={wsPath(`/agents/${agentId}#tests`)} className={link}>
+                {t('cases.detail.linked.testCase', { title: testCase.title })}
+              </Link>
+            </li>
+          ))}
+          {sourceMemoryId ? (
+            <li className="min-w-0">
+              <Link
+                to={wsPath(`/memory?entry=${encodeURIComponent(sourceMemoryId)}`)}
+                className={link}
+              >
+                {t('cases.detail.linked.lesson')}
+              </Link>
+            </li>
+          ) : null}
+          {sourceFeedbackId ? (
+            <li className="min-w-0">
+              <Link
+                to={wsPath(`/feedback/item/${encodeURIComponent(sourceFeedbackId)}`)}
+                className={link}
+              >
+                {t('cases.detail.linked.feedback')}
+              </Link>
+            </li>
+          ) : null}
+          {sourceRef ? (
+            <li className="flex min-w-0 flex-col gap-0.5" data-testid="case-source-ref">
+              <span className="text-xs text-muted-foreground">{t('cases.detail.linked.sourceRef')}</span>
+              {refUrl !== null ? (
+                // RR7-`Link` erkennt absolute URLs und rendert sie als normalen
+                // externen Link (Lint verbietet rohes <a>).
+                <Link
+                  to={refUrl}
+                  reloadDocument
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(link, 'inline-flex items-center gap-1 wrap-anywhere')}
+                >
+                  {sourceRef}
+                  <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+                </Link>
+              ) : (
+                <span className="wrap-anywhere">{sourceRef}</span>
+              )}
+            </li>
+          ) : null}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -447,6 +585,22 @@ export function CaseDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const historyId = useId()
+  const statusRef = useRef<HTMLSpanElement>(null)
+  const focusStatus = useRef(false)
+  const linked = useLinkedTestCases(isEditor ? caseId : undefined)
+
+  // Nach einem Uebergang: Fokus auf das Status-Wort, sobald der neue Stand da ist.
+  const detailForFocus = data.detail
+  useEffect(() => {
+    if (!focusStatus.current || data.loading || detailForFocus === null) return
+    focusStatus.current = false
+    statusRef.current?.focus()
+  }, [detailForFocus, data.loading])
+
+  const onChanged = (transitioned: boolean) => {
+    if (transitioned) focusStatus.current = true
+    data.reload()
+  }
 
   // Rueckweg auf die Liste mit den Filtern, mit denen man gekommen ist.
   const backHref = useMemo(() => {
@@ -584,7 +738,9 @@ export function CaseDetailPage() {
           title={t('feedback:cases.detail.title', { agent: agentName })}
           backHref={backHref}
           backLabel={t('feedback:cases.detail.back')}
-          status={<StatusLabel status={item.status} addressedTo={addressedTo} />}
+          status={
+            <StatusLabel status={item.status} addressedTo={addressedTo} statusRef={statusRef} />
+          }
           description={t('feedback:cases.detail.reported', { date: reportedOn })}
           actions={
             <DropdownMenu>
@@ -618,6 +774,18 @@ export function CaseDetailPage() {
             </DropdownMenu>
           }
         />
+
+        {isEditor && linked.testCases !== null ? (
+          <CaseActions
+            detail={detail}
+            agent={data.agents.find((agent) => agent.id === item.agent_id) ?? null}
+            names={data.names}
+            addressedPath={addressedTo?.path ?? null}
+            hasTestCase={linked.testCases.length > 0}
+            onChanged={onChanged}
+            onTestCaseCreated={linked.reload}
+          />
+        ) : null}
 
         <section className="flex flex-col gap-3" aria-label={t('feedback:cases.detail.contentAria')}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -683,6 +851,16 @@ export function CaseDetailPage() {
               )}
             </CardContent>
           </Card>
+        ) : null}
+
+        {isEditor ? (
+          <LinkedSection
+            testCases={linked.testCases}
+            sourceMemoryId={item.source_memory_id}
+            sourceFeedbackId={item.source_feedback_id}
+            sourceRef={item.source_ref}
+            agentId={item.agent_id}
+          />
         ) : null}
 
         <Card>
