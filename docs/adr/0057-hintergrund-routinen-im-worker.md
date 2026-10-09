@@ -130,10 +130,16 @@ Runner, Store und CLI (Vorlage §4.2). Die Routine-Funktionen selbst bleiben in
 **Registry im Code.** Routinen melden sich per Decorator an:
 
 ```python
-@routine("purge", schedule="30 3 * * *", timeout=timedelta(hours=1),
-         catch_up=True, touches_tablestore=True)
+@routine(
+    "purge",
+    schedule="30 3 * * *",
+    timeout=timedelta(hours=1),
+    catch_up=True,
+    touches_tablestore=True,
+)
 async def purge(ctx: RoutineContext) -> dict[str, int]:
-    ...  # ruft die bestehende Logik mit now=ctx.slot, liefert nur Zaehler
+    # ruft die bestehende Logik mit now=ctx.slot, liefert nur Zaehler
+    ...
 ```
 
 - Ein Name ist eindeutig; ein doppelter Name ist ein Startfehler.
