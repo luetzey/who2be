@@ -11,7 +11,7 @@ import { SessionContext } from '@/auth/session-context'
 import { toast } from '@/components/ui/sonner'
 import { axe } from '@/test/a11y'
 
-import { ReportCaseDialog } from './ReportCaseForm'
+import { CaseFromOriginDialog, ReportCaseDialog, type ReportCaseOrigin } from './ReportCaseForm'
 
 vi.mock('@/components/ui/sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -630,4 +630,230 @@ describe('Fall-Client (createApi)', () => {
       `PUT ${WS}/cases/case-1/elements`,
     ])
   })
+
+  it('convertMemory und promoteFeedback treffen die Pfade aus cases.py (D2c)', async () => {
+    const calls: { path: string; body: unknown }[] = []
+    const record: Handler = (url, init) => {
+      calls.push({ path: `${init?.method} ${url.pathname}`, body: JSON.parse(String(init?.body)) })
+      return json(caseRead(), 201)
+    }
+    stubFetch({
+      [`POST ${WS}/agents/a1/memories/m1/convert`]: record,
+      [`POST ${WS}/feedback/f1/promote`]: record,
+    })
+    const api = createApi('jwt', 'ws-1')
+    const fields = { situation: 'L', behavior: 'G', expected_behavior: 'E' }
+
+    await api.convertMemory('a1', 'm1', fields)
+    await api.promoteFeedback('f1', { agent_id: 'a2', ...fields })
+
+    expect(calls).toEqual([
+      { path: `POST ${WS}/agents/a1/memories/m1/convert`, body: fields },
+      { path: `POST ${WS}/feedback/f1/promote`, body: { agent_id: 'a2', ...fields } },
+    ])
+  })
+})
+
+// D6e: Modus „Ausgangspunkt“ (Delta-Spec S6, „Zitat statt Vorbelegung der
+// Felder“) mit den Varianten lesson, feedback und pattern und dem passenden
+// Absendeweg. Der Einstieg im Gedaechtnis-Sheet steht in
+// MemoryDetailSheet.test.tsx.
+describe('CaseFromOriginDialog (D6e)', () => {
+  const LESSON: ReportCaseOrigin = {
+    kind: 'lesson',
+    memoryId: 'm1',
+    agentName: 'coder',
+    count: 2,
+    text: 'Vor dem Push lokal testen.',
+    date: '2026-10-01T09:12:00Z',
+  }
+
+  function renderOrigin(
+    origin: ReportCaseOrigin,
+    extra: Partial<Parameters<typeof CaseFromOriginDialog>[0]> = {},
+  ) {
+    return renderDialog(
+      <CaseFromOriginDialog agent={agent} origin={origin} label="Fall daraus machen" {...extra} />,
+    )
+  }
+
+  async function open(label = 'Fall daraus machen') {
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    return screen.findByTestId('report-case-dialog')
+  }
+
+  function fillSituationAndBehavior() {
+    fill(/Was war die Lage\?/, 'Release-Notes.')
+    fill(/Was hat der Agent getan\?/, 'Ohne Tests gepusht.')
+  }
+
+  it('lesson: Zitat als blockquote mit Quelle und Datum, Felder leer, Titel und Knopf „Fall anlegen“', async () => {
+    renderOrigin(LESSON)
+    const dialog = await open()
+    expect(within(dialog).getByRole('heading', { name: 'Fall anlegen' })).toBeInTheDocument()
+    const origin = within(dialog).getByTestId('report-case-origin')
+    expect(within(origin).getByRole('heading', { name: 'Ausgangspunkt' })).toBeInTheDocument()
+    const quote = origin.querySelector('blockquote')
+    expect(quote).toHaveTextContent('Vor dem Push lokal testen.')
+    expect(origin.querySelector('cite')).toHaveTextContent(
+      'Lernvorschlag von coder, 2× vorgeschlagen',
+    )
+    expect(origin.querySelector('time')).toHaveAttribute('datetime', '2026-10-01T09:12:00Z')
+    for (const label of [/Was war die Lage\?/, /Was hat der Agent getan\?/, /Was hättest du erwartet\?/]) {
+      expect(within(dialog).getByLabelText(label)).toHaveValue('')
+    }
+    expect(within(dialog).getByRole('button', { name: 'Fall anlegen' })).toHaveAttribute(
+      'type',
+      'submit',
+    )
+  })
+
+  it('„In ‚Erwartet‘ übernehmen“: aria-describedby auf das Zitat, kopiert editierbar, fokussiert das Feld', async () => {
+    renderOrigin(LESSON)
+    const dialog = await open()
+    const use = within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' })
+    const quote = within(dialog).getByTestId('report-case-origin').querySelector('blockquote')
+    expect(quote?.id).toBeTruthy()
+    expect(use).toHaveAttribute('aria-describedby', quote?.id)
+    expect(use).toHaveAccessibleDescription('Vor dem Push lokal testen.')
+
+    fireEvent.click(use)
+    const expected = within(dialog).getByLabelText(/Was hättest du erwartet\?/)
+    expect(expected).toHaveValue('Vor dem Push lokal testen.')
+    await waitFor(() => expect(expected).toHaveFocus())
+    fireEvent.change(expected, { target: { value: 'Vor dem Push immer lokal testen.' } })
+    expect(expected).toHaveValue('Vor dem Push immer lokal testen.')
+  })
+
+  it('lesson sendet über convert ohne agent_id, ruft onCreated und schließt den Dialog', async () => {
+    const bodies: Record<string, unknown>[] = []
+    stubFetch({
+      [`POST ${WS}/agents/a1/memories/m1/convert`]: (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json(caseRead({ id: 'case-7', source_memory_id: 'm1' }), 201)
+      },
+    })
+    const onCreated = vi.fn()
+    renderOrigin(LESSON, { onCreated })
+    const dialog = await open()
+    fillSituationAndBehavior()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1))
+    expect(onCreated.mock.calls[0][0]).toMatchObject({ id: 'case-7' })
+    expect(bodies).toEqual([
+      {
+        situation: 'Release-Notes.',
+        behavior: 'Ohne Tests gepusht.',
+        expected_behavior: 'Vor dem Push lokal testen.',
+        severity: 'medium',
+      },
+    ])
+    await waitFor(() => expect(screen.queryByTestId('report-case-dialog')).toBeNull())
+    expect(toast.success).toHaveBeenCalledTimes(1)
+  })
+
+  it('memory_not_convertible: Spec-Text, Eingaben bleiben, kein onCreated', async () => {
+    stubFetch({
+      [`POST ${WS}/agents/a1/memories/m1/convert`]: () =>
+        new Response(
+          JSON.stringify({ detail: 'nicht umwandelbar', reason: 'memory_not_convertible' }),
+          { status: 409, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+    })
+    const onCreated = vi.fn()
+    renderOrigin(LESSON, { onCreated })
+    const dialog = await open()
+    fillSituationAndBehavior()
+    fill(/Was hättest du erwartet\?/, 'Lokal testen.')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+
+    expect(await within(dialog).findByTestId('error-alert')).toHaveTextContent(
+      'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall.',
+    )
+    expect(within(dialog).getByLabelText(/Was hättest du erwartet\?/)).toHaveValue('Lokal testen.')
+    expect(onCreated).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('feedback: Quelle mit Element und Datum, Agent wählbar mit Vorschlag, sendet über promote', async () => {
+    const bodies: Record<string, unknown>[] = []
+    stubFetch({
+      [`GET ${WS}/agents`]: () => json([agentRow('a1', 'coder'), agentRow('a2', 'reviewer')]),
+      [`POST ${WS}/feedback/f1/promote`]: (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json(caseRead(), 201)
+      },
+    })
+    renderDialog(
+      <CaseFromOriginDialog
+        presetAgentId="a2"
+        origin={{
+          kind: 'feedback',
+          feedbackId: 'f1',
+          element: 'Playbook Release',
+          text: 'Changelog fehlt immer.',
+          date: '2026-09-20T08:00:00Z',
+        }}
+        label="In Fall übernehmen"
+      />,
+    )
+    const dialog = await open('In Fall übernehmen')
+    const origin = within(dialog).getByTestId('report-case-origin')
+    expect(origin.querySelector('cite')?.textContent).toMatch(
+      /^Altes Feedback zu Playbook Release vom .*2026/,
+    )
+    const select = await within(dialog).findByRole('combobox', { name: /^Agent/ })
+    await waitFor(() => expect(select).toHaveValue('a2'))
+    fillSituationAndBehavior()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toMatchObject({ agent_id: 'a2', expected_behavior: 'Changelog fehlt immer.' })
+  })
+
+  it('pattern: Quelle „Muster: …“, Knopf „Fall melden“, sendet über POST /cases', async () => {
+    const bodies: Record<string, unknown>[] = []
+    stubFetch({
+      [`POST ${WS}/cases`]: (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return json(caseRead(), 201)
+      },
+    })
+    renderOrigin(
+      {
+        kind: 'pattern',
+        title: 'Push ohne Tests',
+        text: 'Hat wieder ohne Tests gepusht.',
+        date: '2026-10-05T12:00:00Z',
+      },
+      { label: 'Fall anlegen aus Muster' },
+    )
+    const dialog = await open('Fall anlegen aus Muster')
+    expect(within(dialog).getByTestId('report-case-origin').querySelector('cite')).toHaveTextContent(
+      'Muster: Push ohne Tests',
+    )
+    fillSituationAndBehavior()
+    fill(/Was hättest du erwartet\?/, 'Erst testen.')
+    fireEvent.click(submitButton(dialog))
+
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toMatchObject({ agent_id: 'a1', expected_behavior: 'Erst testen.' })
+  })
+
+  it('ohne Ausgangspunkt bleibt der Block weg (Standard-Melden)', async () => {
+    renderDialog()
+    const dialog = await openDialog()
+    expect(within(dialog).queryByTestId('report-case-origin')).toBeNull()
+    expect(within(dialog).queryByRole('button', { name: /übernehmen/ })).toBeNull()
+  })
+
+  it('a11y: keine axe-Violations mit Zitat und übernommenem Text', async () => {
+    renderOrigin(LESSON)
+    const dialog = await open()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' }))
+    expect(await axe(document.body)).toHaveNoViolations()
+  }, 15_000)
 })

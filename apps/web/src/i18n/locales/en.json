@@ -2469,7 +2469,16 @@
           "agentRequired": "Please choose an agent."
         },
         "error": {
-          "agentGone": "This agent no longer exists. Pick another one."
+          "agentGone": "This agent no longer exists. Pick another one.",
+          "notConvertible": "This learning suggestion can no longer be converted. It was rejected or already turned into a case."
+        },
+        "create": "Create case",
+        "origin": {
+          "title": "Starting point",
+          "lesson": "Learning suggestion from {{agent}}, suggested {{count}}×",
+          "feedback": "Old feedback on {{element}} from {{date}}",
+          "pattern": "Pattern: {{title}}",
+          "useAsExpected": "Use as \"expected\""
         }
       },
       "list": {
@@ -3628,7 +3637,9 @@
         "confirm": "Confirm",
         "reactivate": "Reactivate",
         "approve": "Approve",
-        "decideInQueue": "Decide in the queue"
+        "decideInQueue": "Decide in the queue",
+        "convert": "Turn into a case",
+        "toCase": "Go to case"
       },
       "done": {
         "confirm": "Confirmed.",

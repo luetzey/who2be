@@ -1,4 +1,4 @@
-import { MoreHorizontal, Trash2, TriangleAlert } from 'lucide-react'
+import { ArrowRight, MoreHorizontal, Trash2, TriangleAlert } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -6,15 +6,19 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ComponentProps,
   type RefObject,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
-import type { Member, MemoryEventRead, MemoryRead } from '@/api/types'
+import type { CaseRead, Member, MemoryEventRead, MemoryRead } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useSession } from '@/auth/session-context'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CaseFromOriginDialog } from '@/components/cases/ReportCaseForm'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { StatusLine } from '@/components/memory/MemoryList'
 import { MemoryHistory } from '@/components/memory/MemoryHistory'
@@ -161,6 +165,7 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
   const canManageAgents = role !== null && role !== 'viewer'
   const reasonText = useReasonText()
   const { agents } = useAgents()
+  const wsPath = useWorkspacePath()
   const descriptionId = useId()
 
   const [memory, setMemory] = useState<MemoryRead | null>(
@@ -174,6 +179,15 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
   const [historyNonce, setHistoryNonce] = useState(0)
   const [members, setMembers] = useState<Member[]>([])
   const [busy, setBusy] = useState(false)
+  // Nach „Fall daraus machen“ Fokus auf „Zum Fall“ (der Ausloeser ist weg).
+  const [focusCase, setFocusCase] = useState(0)
+  const caseLinkRef = useRef<HTMLAnchorElement>(null)
+  useEffect(() => {
+    if (focusCase === 0) return
+    // Nach dem Aufraeumen des Dialogs, der den Fokus sonst auf `body` legt.
+    const timer = window.setTimeout(() => caseLinkRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
+  }, [focusCase])
 
   // Deep-Link: Einzelabruf. Unsichtbares beantwortet der Server mit 404 wie
   // eine unbekannte ID; `visibleToMe` verwirft fremdes Nutzergedaechtnis
@@ -348,6 +362,33 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
       true,
     )
 
+  // „Fall daraus machen“ (Delta-Spec „Gedaechtnis-Anschluss“, D6e): nur
+  // Lernvorschlag, pending, ab editor. Lernvorschlaege gehoeren immer einem
+  // Agenten (3.1.6), deshalb ist `ownerKey` hier eine Agent-ID.
+  const agentName = agentNameOf(agents, memory) ?? t('approval.unknownAgent')
+  const convert =
+    canManageAgents && lesson && memory.status === 'pending' && ownerKey !== null
+      ? {
+          agent: { id: ownerKey, name: agentName },
+          origin: {
+            kind: 'lesson' as const,
+            memoryId: memory.id,
+            agentName,
+            count: memory.occurrence_count ?? 1,
+            text: memory.fact,
+            date: memory.created_at,
+          },
+          // Das Sheet bleibt offen (S6 „Erfolg“): Status und Link „Zum Fall“
+          // aus der Antwort, Verlauf und Liste laden neu.
+          onCreated: (created: CaseRead) => {
+            setMemory({ ...memory, status: 'converted', converted_case_id: created.id })
+            setFocusCase((value) => value + 1)
+            setHistoryNonce((value) => value + 1)
+            onChanged()
+          },
+        }
+      : null
+
   return (
     <>
       <SheetHeader className="sticky top-0 z-10 gap-2 border-b bg-background p-4 pr-12 text-left">
@@ -367,11 +408,25 @@ function DetailBody({ entryId, initial, titleRef, onClose, onChanged }: DetailBo
       <div className="flex min-w-0 flex-col gap-6 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {cause !== null ? <HoldReason cause={cause} /> : null}
 
+        {memory.status === 'converted' && memory.converted_case_id ? (
+          <Button asChild variant="outline" className={cn(ACTION, 'self-start')}>
+            <Link
+              ref={caseLinkRef}
+              to={wsPath(`/feedback/cases/${memory.converted_case_id}`)}
+              data-testid="detail-to-case"
+            >
+              {t('entries.action.toCase')}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        ) : null}
+
         {canAct ? (
           <DetailActions
             memory={memory}
             busy={busy}
             lesson={lesson}
+            convert={convert}
             onApprove={() => triage('approve').catch(() => undefined)}
             onReject={(note) => triage('reject', note === '' ? undefined : note)}
             onConfirm={() =>
@@ -455,6 +510,11 @@ interface DetailActionsProps {
   memory: MemoryRead
   busy: boolean
   lesson: boolean
+  /** „Fall daraus machen“ (nur Lernvorschlag, pending, editor), sonst `null`. */
+  convert: Pick<
+    ComponentProps<typeof CaseFromOriginDialog>,
+    'agent' | 'origin' | 'onCreated'
+  > | null
   onApprove: () => void
   onReject: (note: string) => Promise<void>
   onConfirm: () => void
@@ -465,7 +525,8 @@ interface DetailActionsProps {
 
 /**
  * Aktionen je Status (Spec §7): `pending` → Freigeben/Ablehnen (Lernvorschlag
- * nur Ablehnen), aktiv unbestaetigt → Bestaetigen, `expired` → Wieder
+ * „Fall daraus machen“ ab editor, dann Ablehnen; Delta-Spec D6e), aktiv
+ * unbestaetigt → Bestaetigen, `expired` → Wieder
  * aktivieren. Bearbeiten bei allen ausser `lesson` und `rejected`; Loeschen
  * immer, im Menue „Weitere Aktionen“.
  */
@@ -473,6 +534,7 @@ function DetailActions({
   memory,
   busy,
   lesson,
+  convert,
   onApprove,
   onReject,
   onConfirm,
@@ -553,6 +615,15 @@ function DetailActions({
         <Button type="button" className={ACTION} disabled={busy} onClick={onApprove}>
           {t('approval.approve')}
         </Button>
+      ) : null}
+      {convert !== null ? (
+        <CaseFromOriginDialog
+          {...convert}
+          label={t('entries.action.convert')}
+          variant="default"
+          className={ACTION}
+          disabled={busy}
+        />
       ) : null}
       {memory.status === 'pending' ? (
         <RejectDialog

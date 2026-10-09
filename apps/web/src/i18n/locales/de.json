@@ -2469,7 +2469,16 @@
           "agentRequired": "Bitte einen Agenten wählen."
         },
         "error": {
-          "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen."
+          "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen.",
+          "notConvertible": "Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall."
+        },
+        "create": "Fall anlegen",
+        "origin": {
+          "title": "Ausgangspunkt",
+          "lesson": "Lernvorschlag von {{agent}}, {{count}}× vorgeschlagen",
+          "feedback": "Altes Feedback zu {{element}} vom {{date}}",
+          "pattern": "Muster: {{title}}",
+          "useAsExpected": "In „Erwartet“ übernehmen"
         }
       },
       "list": {
@@ -3628,7 +3637,9 @@
         "confirm": "Bestätigen",
         "reactivate": "Wieder aktivieren",
         "approve": "Freigeben",
-        "decideInQueue": "In der Warteschlange entscheiden"
+        "decideInQueue": "In der Warteschlange entscheiden",
+        "convert": "Fall daraus machen",
+        "toCase": "Zum Fall"
       },
       "done": {
         "confirm": "Bestätigt.",

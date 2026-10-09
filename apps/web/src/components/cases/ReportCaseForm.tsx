@@ -1,9 +1,11 @@
 import { ChevronRight, Info, LoaderCircle, MessageSquareWarning, Users } from 'lucide-react'
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
@@ -13,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
-import type { Agent, CaseCreate, CaseSeverity, FeedbackSignal } from '@/api/types'
+import type { Agent, CaseCreate, CaseRead, CaseSeverity, FeedbackSignal } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -200,6 +202,196 @@ export function ReportCaseDialog({ agent, variant = 'outline' }: ReportCaseDialo
   )
 }
 
+/**
+ * Ausgangspunkt eines Falls (Delta-Spec S6, Einstiege convert, promote und
+ * Muster). `text` ist das Zitat, `date` (ISO) sein Zeitpunkt. Die Variante
+ * bestimmt Quelle und Absendeweg: lesson → `convert` (D6e), feedback →
+ * `promote` (D6f), pattern → `POST /cases` (D6g).
+ */
+export type ReportCaseOrigin = { text: string; date: string } & (
+  | { kind: 'lesson'; memoryId: string; agentName: string; count: number }
+  | { kind: 'feedback'; feedbackId: string; element: string }
+  | { kind: 'pattern'; title: string }
+)
+
+/** Knopftext: „Fall anlegen“ bei convert und promote, sonst „Fall melden“. */
+function createsFromOrigin(origin: ReportCaseOrigin | undefined): boolean {
+  return origin?.kind === 'lesson' || origin?.kind === 'feedback'
+}
+
+interface CaseFromOriginDialogProps {
+  /** Fester Agent (lesson, pattern); ohne ihn waehlt man den Agenten. */
+  agent?: { id: string; name: string }
+  /** Vorschlag in der Auswahl (feedback: `agent_id` des Feedbacks). */
+  presetAgentId?: string
+  origin: ReportCaseOrigin
+  /** Text des Ausloesers, z. B. „Fall daraus machen“. */
+  label: string
+  variant?: ButtonProps['variant']
+  className?: string
+  disabled?: boolean
+  onCreated?: (created: CaseRead) => void
+}
+
+/**
+ * Fall aus einem Ausgangspunkt (Lernvorschlag, Alt-Feedback, Muster). Immer
+ * als Dialog, auch unter `md` (dort Vollbild): der Einstieg sitzt in einem
+ * Sheet bzw. einer Detailseite, die nach dem Anlegen offen bleibt (S6
+ * „Erfolg“). Ab editor; der Server prueft das Recht.
+ */
+export function CaseFromOriginDialog({
+  agent,
+  presetAgentId,
+  origin,
+  label,
+  variant = 'default',
+  className,
+  disabled,
+  onCreated,
+}: CaseFromOriginDialogProps) {
+  const { t } = useTranslation('feedback')
+  const [open, setOpen] = useState(false)
+  const title = createsFromOrigin(origin) ? t('cases.report.create') : t('cases.report.title')
+  return (
+    <>
+      <Button
+        type="button"
+        variant={variant}
+        className={className}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        {label}
+      </Button>
+      {open ? (
+        <ReportCaseFlow
+          agent={agent}
+          presetAgentId={presetAgentId}
+          origin={origin}
+          onCreated={onCreated}
+          onClose={() => setOpen(false)}
+          Footer={DialogFooter}
+          frame={({ body, discard, requestClose }) => (
+            <Dialog open onOpenChange={(next) => (next ? undefined : requestClose())}>
+              <DialogContent
+                className="h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-lg"
+                data-testid="report-case-dialog"
+              >
+                <DialogHeader>
+                  <DialogTitle>{title}</DialogTitle>
+                  <DialogDescription>{t('cases.report.intro')}</DialogDescription>
+                </DialogHeader>
+                {body}
+                {discard}
+              </DialogContent>
+            </Dialog>
+          )}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/**
+ * Block „Ausgangspunkt“: Zitat (`blockquote`) mit Quelle und Datum. Unter
+ * `md` auf 3 Zeilen gekuerzt mit „Mehr anzeigen“ (S6 „390 px“); der Knopf
+ * steht ausserhalb des Zitats, damit `aria-describedby` nur das Zitat liest.
+ */
+function OriginQuote({
+  origin,
+  quoteId,
+  onUse,
+}: {
+  origin: ReportCaseOrigin
+  quoteId: string
+  onUse: () => void
+}) {
+  const { t, i18n } = useTranslation('feedback')
+  const textRef = useRef<HTMLParagraphElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [clamped, setClamped] = useState(false)
+
+  const measure = useCallback(() => {
+    const el = textRef.current
+    if (el === null || expanded) return
+    setClamped(el.scrollHeight > el.clientHeight + 1)
+  }, [expanded])
+
+  useLayoutEffect(() => {
+    measure()
+    const el = textRef.current
+    if (el === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [measure, origin.text])
+
+  const date = new Date(origin.date).toLocaleDateString(i18n.language, { dateStyle: 'medium' })
+  const source =
+    origin.kind === 'lesson'
+      ? t('cases.report.origin.lesson', { agent: origin.agentName, count: origin.count })
+      : origin.kind === 'feedback'
+        ? t('cases.report.origin.feedback', { element: origin.element, date })
+        : t('cases.report.origin.pattern', { title: origin.title })
+
+  return (
+    <section
+      className="flex min-w-0 flex-col gap-2 rounded-md border bg-muted/40 p-3"
+      aria-labelledby={`${quoteId}-title`}
+      data-testid="report-case-origin"
+    >
+      <h3 id={`${quoteId}-title`} className="text-sm font-medium">
+        {t('cases.report.origin.title')}
+      </h3>
+      <figure className="flex min-w-0 flex-col gap-1">
+        <blockquote id={quoteId} className="border-l-2 pl-3 text-sm text-muted-foreground">
+          <p
+            ref={textRef}
+            className={cn(
+              'wrap-anywhere whitespace-pre-wrap',
+              !expanded && 'line-clamp-3 md:line-clamp-6',
+            )}
+          >
+            {origin.text}
+          </p>
+        </blockquote>
+        <figcaption className="text-xs text-muted-foreground">
+          <cite className="not-italic">{source}</cite>
+          {origin.kind === 'feedback' ? null : (
+            <>
+              {' · '}
+              <time dateTime={origin.date}>{date}</time>
+            </>
+          )}
+        </figcaption>
+      </figure>
+      <div className="flex flex-wrap items-center gap-2">
+        {clamped || expanded ? (
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto min-h-11 px-0 py-0 md:min-h-8"
+            aria-expanded={expanded}
+            aria-controls={quoteId}
+            onClick={() => setExpanded((prev) => !prev)}
+          >
+            {expanded ? t('common:actions.showLess') : t('common:actions.showMore')}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 w-fit px-2"
+          aria-describedby={quoteId}
+          onClick={onUse}
+        >
+          {t('cases.report.origin.useAsExpected')}
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 /** Waehlbare Agenten (`GET /agents`, ab viewer); laedt nur ohne festen Agenten. */
 function useAgentChoices(enabled: boolean) {
   const api = useApi()
@@ -241,6 +433,13 @@ export interface ReportCaseFlowProps {
    * solange der Agent in `GET /agents` vorkommt, sonst bleibt sie leer.
    */
   presetAgentId?: string
+  /**
+   * Ausgangspunkt (Delta-Spec S6, „Zitat statt Vorbelegung der Felder“):
+   * Zitat ueber leeren Feldern und der passende Absendeweg (D6e).
+   */
+  origin?: ReportCaseOrigin
+  /** Nach erfolgreichem Anlegen, vor `onClose` (z. B. Sheet aktualisieren). */
+  onCreated?: (created: CaseRead) => void
   /** Verlassen ohne Melden (Abbrechen, Verwerfen) und nach Erfolg. */
   onClose: () => void
   /** Fusszeilen-Container (Dialog: `DialogFooter`, Seite: fixierte Leiste). */
@@ -256,6 +455,8 @@ export interface ReportCaseFlowProps {
 export function ReportCaseFlow({
   agent,
   presetAgentId,
+  origin,
+  onCreated,
   onClose,
   Footer,
   frame,
@@ -342,8 +543,7 @@ export function ReportCaseFlow({
       return
     }
     const optional = (text: string) => (text.trim() === '' ? undefined : text.trim())
-    const payload: CaseCreate = {
-      agent_id: values.agentId,
+    const fields: Omit<CaseCreate, 'agent_id'> = {
       situation: values.situation.trim(),
       behavior: values.behavior.trim(),
       expected_behavior: values.expected.trim(),
@@ -352,11 +552,19 @@ export function ReportCaseFlow({
       signal: values.signal ?? undefined,
       source_ref: optional(values.sourceRef),
     }
+    const payload: CaseCreate = { agent_id: values.agentId, ...fields }
     inFlight.current = true
     setBusy(true)
     setSendError(null)
     try {
-      const created = await api.createCase(payload)
+      // Absendeweg je Ausgangspunkt (Delta-Spec S6 „Absenden“): convert ohne
+      // `agent_id` (der Agent kommt aus dem Lernvorschlag), promote mit.
+      const created =
+        origin?.kind === 'lesson'
+          ? await api.convertMemory(values.agentId, origin.memoryId, fields)
+          : origin?.kind === 'feedback'
+            ? await api.promoteFeedback(origin.feedbackId, payload)
+            : await api.createCase(payload)
       toast.success(
         role === 'viewer' ? t('cases.report.successViewer') : t('cases.report.success'),
         {
@@ -367,14 +575,18 @@ export function ReportCaseFlow({
         },
       )
       casesChanged?.()
+      onCreated?.(created)
       onClose()
     } catch (cause: unknown) {
+      const reason = problemReason(cause)
       setSendError(
-        problemReason(cause) === 'agent_not_found'
+        reason === 'agent_not_found'
           ? t('cases.report.error.agentGone')
-          : cause instanceof Error
-            ? cause.message
-            : String(cause),
+          : reason === 'memory_not_convertible'
+            ? t('cases.report.error.notConvertible')
+            : cause instanceof Error
+              ? cause.message
+              : String(cause),
       )
     } finally {
       inFlight.current = false
@@ -489,6 +701,18 @@ export function ReportCaseFlow({
         void onSubmit()
       }}
     >
+      {origin !== undefined ? (
+        <OriginQuote
+          origin={origin}
+          quoteId={idOf('origin-quote')}
+          onUse={() => {
+            // Kopie ins Feld „Erwartet“, bleibt editierbar (S6); Fokus dorthin.
+            set('expected', origin.text)
+            setFocusTarget({ key: 'expected' })
+          }}
+        />
+      ) : null}
+
       {fixedAgent ? (
         // Agent fest (Einstieg Agent-Detail): Lesewert statt Auswahl.
         <ReadOnlyField label={t('cases.report.agent')} value={agent.name} />
@@ -583,7 +807,7 @@ export function ReportCaseFlow({
         </Button>
         <Button type="submit" variant="brand" disabled={busy} aria-busy={busy || undefined}>
           {busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-          {t('cases.report.submit')}
+          {createsFromOrigin(origin) ? t('cases.report.create') : t('cases.report.submit')}
         </Button>
       </Footer>
     </form>
