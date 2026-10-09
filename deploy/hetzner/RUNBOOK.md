@@ -20,7 +20,8 @@ Aktive Sektionen:
 - [Provisioning-Nachweise](#provisioning-nachweise) — Protokoll fuer SSH-Zustand und Host-Update-Automatik (W8/S4)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
-- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) — Host-Crons fuer DSGVO-Purge und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **einmalig eintragen**, sonst laeuft keiner der Jobs (Dokploy: [Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen))
+- [Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker) — DSGVO-Purge, Verfall unbestaetigten Gedaechtnisses und Protokoll-Aufraeumen laufen im Compose-Dienst `worker` (ADR-0057); **nichts einzutragen**, nur pruefen, dass er gesund ist
+- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **entfallen**: alte Crontab-Zeilen entfernen; die CLIs bleiben als manueller Ausloeser und Notfallweg
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
@@ -49,7 +50,7 @@ ist „mehr API-Kapazitaet" **keine** Konfigurationsfrage.
 |---|---|---|
 | Start-Guard | `apps/api/.../main.py` | `WEB_CONCURRENCY` / `--workers N` im API-Prozess |
 | Compose-Drift-Tests | `apps/api/tests/test_single_writer_guard.py` | `replicas`, `scale`, `--workers`, `update_config`/`start-first` in **jeder** Compose-Datei mit `api`-Dienst |
-| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`-Container nach dem `up` → Abbruch mit Exit 3 |
+| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`- bzw. `worker`-Container nach dem `up` → Abbruch mit Exit 3 |
 
 **Der Start-Guard ist kein Beleg.** Er sieht nur den eigenen Prozessbaum;
 mehrere *Container* kann kein In-Process-Check erkennen. Dass er schweigt, sagt
@@ -122,13 +123,25 @@ aus dem letzten Snapshot (§Tabellen-Store-Backup).
 
 ### Legitime zweite Prozesse
 
-Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
-die API laeuft: der Retention-Cron (`docker compose … run --rm --no-deps api who2be-purge`,
-Zeile siehe [Retention-Cron](#retention-cron-who2be-purge))
-und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
-kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
-Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
-waehrend eines Deploys starten.
+Zwei dokumentierte Betriebspfade fassen die Area-Dateien an, **waehrend** die
+API laeuft:
+
+- der Purge-Sweep im Dienst `worker` (Routine `purge`, siehe
+  [Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)). Er loescht
+  nur Dateien geloeschter Areas und nur nach 24 h ohne Schreibaktivitaet
+  (`apps/api/src/who2be_api/core/purge.py#cleanup_deleted_area_stores`).
+  Ein manueller `who2be-purge` nimmt denselben Lock und laeuft nie parallel
+  zum Worker-Lauf.
+- der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`).
+
+Beide sind gewollt und **kein** zweiter API-Container. Fuer `worker` gilt
+dieselbe Grenze wie fuer `api`: **genau ein** laufender Container, kein
+`replicas`, kein `--scale worker=2` (ADR-0057 §10). Die Deploy-Assertion
+misst deshalb beide Dienste und bricht bei einer anderen Zahl als 1 mit Exit 3
+ab; Meldung und Vorgehen sind dieselben wie oben, mit `worker` statt `api` in
+den Befehlen. Ein zweiter Worker verursacht keinen doppelten Lauf (die
+Exklusivitaet liegt in Postgres), waere aber ein zweiter Prozess auf demselben
+Volume.
 
 ---
 
@@ -498,27 +511,32 @@ und der Abnahme. Reihenfolge einhalten:
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
       `push: main` via `deploy/hetzner/scripts/deploy.sh <sha>`; Rollback identisch
       mit altem SHA.
-- [ ] **7b — Host-Crons eintragen (Backup, Purge, Memory-Verfall):** in der Crontab des
-      Deploy-Users je eine Zeile fuer den
-      [Backup-Lauf](#trigger-routine), den
-      [Retention-Cron `who2be-purge`](#retention-cron-who2be-purge) und den
-      [Verfall unbestaetigten Gedaechtnisses `who2be-memory-expire`](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire)
-      — jeweils die Zeile der **Cloud-Edition** (mit Overlay und `--env-file`),
-      vorher die Log-Dateien unter `/var/log` per `install` anlegen (steht bei
-      jeder Zeile). Ohne diese Eintraege laeuft keiner der Jobs: es gibt kein
-      Backup, es wird nichts gepurgt, und unbestaetigtes Gedaechtnis verfaellt
-      nie. Verifikation:
+- [ ] **7b — Backup-Cron eintragen, Worker healthy, erster Lauf sichtbar:**
+      In der Crontab des Deploy-Users steht die Zeile des
+      [Backup-Laufs](#trigger-routine) — die Zeile der **Cloud-Edition**
+      (mit Overlay und `--env-file`), vorher die Log-Datei unter `/var/log`
+      per `install` anlegen (steht bei der Zeile). Ohne sie gibt es kein
+      Backup. (Die [Access-Log-Rotation](#access-logs--ressourcen-limits)
+      ist ein eigener Host-Cron, siehe dort.) Purge und Gedaechtnis-Verfall
+      traegst du **nicht** mehr ein:
+      sie laufen im Dienst `worker`, der mit dem Stack startet
+      ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)).
+      Abgehakt ist der Punkt erst, wenn der Worker gesund ist und seinen
+      ersten Lauf protokolliert hat. Verifikation:
       ```bash
-      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup'
-      # → je eine Zeile (drei insgesamt), jede mit
-      #   -f deploy/hetzner/who2be/docker-compose.yml -f …cloud.yml --env-file
-      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup' | grep -vc -- '--env-file'
-      # → 0   (sonst laeuft eine Zeile gegen die Root-Compose = Dev-Stack)
-      # am Folgetag:
-      tail -2 /var/log/who2be-purge.log
-      # → Purge: … / Retention: …
-      tail -1 /var/log/who2be-memory-expire.log
-      # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
+      crontab -l | grep -E 'who2be-(purge|memory-expire)'
+      # → keine Zeile (Altbestand: siehe Retention-Cron, "entfaellt")
+      crontab -l | grep 'run --rm backup' | grep -c -- '--env-file'
+      # → 1   (sonst laeuft die Zeile gegen die Root-Compose = Dev-Stack)
+      COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+      $COMPOSE ps worker
+      # → genau ein Container, Status "Up … (healthy)"
+      $COMPOSE exec worker who2be-worker list
+      # → Tabelle mit purge, memory-expire, routine-run-retention, alle "on"
+      # nach dem ersten Lauf (catch_up startet purge/memory-expire beim
+      # ersten Start sofort, danach taeglich 03:30 / 03:45 / 04:15 UTC):
+      $COMPOSE logs worker | grep -E 'Routine (purge|memory-expire), Slot .*: succeeded'
+      # → je Routine mindestens eine Zeile
       ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -1
       # → Dump vom heutigen Tag (weitere Pruefung: Backup & Restore, Verifikation)
       ```
@@ -2011,12 +2029,13 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
-- **Parallelitaet zum Retention-Cron ist unbedenklich** (gemessen 2026-09-26,
+- **Parallelitaet zum Purge ist unbedenklich** (gemessen 2026-09-26,
   ADR-0049-Nachtrag): `VACUUM INTO` laeuft als **Leser** — ein 6 s offener
   Snapshot liess 692 parallele Commits mit 0 Fehlern durch, `integrity_check`
   danach `ok`. Es ist also **keine** Betriebsregel einzuhalten, die Backup und
-  `who2be-purge` auseinanderhaelt; dass die Cron-Zeiten (03:15 bzw. 03:30 UTC)
-  auseinanderliegen, ist Bequemlichkeit, keine Bedingung.
+  Purge (Worker-Routine `purge` bzw. `who2be-purge`) auseinanderhaelt; dass
+  die Zeiten (03:15 bzw. 03:30 UTC) auseinanderliegen, ist Bequemlichkeit,
+  keine Bedingung.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
@@ -2057,58 +2076,212 @@ comm -13 /tmp/ws-live.txt /tmp/ws-dirs.txt   # -> nach Pruefung loeschen
 
 ---
 
+## Hintergrund-Routinen (Worker)
+
+Der DSGVO-Purge, der Verfall unbestaetigten Gedaechtnisses und das Aufraeumen
+des eigenen Laufprotokolls laufen im Compose-Dienst `worker` (ADR-0057). Er
+startet mit jedem `up` bzw. Deploy, in beiden Editionen. **Einzutragen ist
+nichts**, weder auf der Hetzner-Box noch in Dokploy.
+
+| Routine | Zeitplan (UTC) | Was sie tut | Nachholen nach Ausfall |
+|---|---|---|---|
+| `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace plus WorkArea-/KB-Sweeps (Ausgabe und Log-Meldungen: [Retention-Cron](#retention-cron-who2be-purge)) | ja, einmal beim Start |
+| `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Fristablauf auf `expired` (ADR-0053 3.1.3), loescht nichts | ja, einmal beim Start |
+| `routine-run-retention` | `15 4 * * *` | loescht Laufprotokoll aelter als 90 Tage, meldet externe Zeitplaene | nein |
+
+Quelle der Tabelle ist die Registry
+(`apps/api/src/who2be_api/worker/routines.py#purge`,
+`apps/api/src/who2be_api/worker/routines.py#memory_expire`,
+`apps/api/src/who2be_api/worker/routines.py#routine_run_retention`);
+`who2be-worker list` zeigt den tatsaechlich wirksamen Stand.
+
+**Dienst.** Dasselbe Image wie `api`, Befehl `who2be-worker`, Owner-Verbindung
+`DATABASE_URL`, BlobStore- und Tabellen-Store-Werte wie `api`, im
+Cloud-Overlay zusaetzlich `SUPABASE_SERVICE_KEY` (der Account-Purge loescht
+den GoTrue-User). Kein Port, kein Caddy-Eintrag. Genau **ein** Container,
+siehe [Legitime zweite Prozesse](#legitime-zweite-prozesse).
+`stop_grace_period: 65m`: ein Stopp laesst einen laufenden Purge (Timeout 1 h)
+zu Ende laufen. Ein Deploy kann deshalb im Ausnahmefall bis zu einer Stunde
+auf den alten Worker warten; das ist gewollt.
+
+**Laufprotokoll.** Jeder Lauf steht als Zeile in `routine_run` (Postgres,
+Migration 0102): Routine, Slot, Ausloeser (`schedule`, `cli`, `manual`),
+Status (`running`, `succeeded`, `failed`, `skipped`), Zaehler, bei Fehlern nur
+der Klassenname. Genau ein Lauf je Slot; ein Lauf, dessen Heartbeat aelter als
+5 min ist, wird als `failed` mit `Abandoned` abgeschlossen.
+
+### Worker pruefen
+
+```bash
+cd /opt/who2be
+# Cloud-Edition; On-Prem ohne das zweite -f.
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+SUPABASE_COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml --env-file deploy/hetzner/supabase/.env"
+
+# 1) Laeuft er, und ist er gesund? Healthcheck = `who2be-worker check`:
+#    eigener Heartbeat in der DB juenger als 2 min.
+$COMPOSE ps worker
+# → genau ein Container, "Up … (healthy)"
+
+# 2) Wirksame Zeitplaene (Code plus Env-Overrides):
+$COMPOSE exec worker who2be-worker list
+# ROUTINE                SCHEDULE    ENABLED  SOURCE
+# memory-expire          45 3 * * *  on       code
+# purge                  30 3 * * *  on       code
+# routine-run-retention  15 4 * * *  on       code
+
+# 3) Letzte Laeufe aus dem Protokoll (ohne UI):
+$SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -c \
+  "SELECT routine, trigger, status, started_at, finished_at, error_class, result
+     FROM routine_run ORDER BY started_at DESC LIMIT 10"
+# → je Routine ein Lauf mit status = succeeded; result enthaelt nur Zaehler
+```
+
+Beim Start schreibt der Worker die Logzeile `Worker <id> (Version …),
+aktiviert. Effektive Zeitplaene (UTC):` mit derselben Tabelle wie
+`who2be-worker list`; je Lauf folgen `Routine <name>, Slot …: Start.` und
+`… succeeded {…}` bzw. `… failed (<Klasse>)`. Mit `LOG_FORMAT=json` steht die
+Tabelle in einem Feld derselben Zeile.
+
+| Befund | Bedeutung | Aktion |
+|---|---|---|
+| Container `unhealthy`, `who2be-worker check` meldet `worker: stale` | kein Heartbeat seit 2 min: DB nicht erreichbar oder Prozess haengt | `$COMPOSE logs --tail 100 worker`, DB pruefen, dann `$COMPOSE restart worker` |
+| `Tick fehlgeschlagen (<Klasse>)` | DB-Verbindung im Tick verloren | keine, solange es nicht dauerhaft ist; der naechste Tick verbindet neu |
+| `Routine …: failed (<Klasse>)` | Routine hat geworfen | Logzeilen davor lesen; Routinen sind idempotent, der naechste Slot laeuft regulaer, ein Sofort-Lauf geht von Hand (unten) |
+| `… abgebrochene(r) Lauf/Laeufe auf failed/Abandoned gesetzt` | ein Lauf hatte 5 min keinen Heartbeat (Container-Kill, OOM) | `mem_limit` und `docker inspect` (OOMKilled) pruefen |
+| `Lock belegt, skipped` | zur selben Zeit lief ein CLI- oder anderer Lauf derselben Routine | keine |
+| `Externer Zeitplan erkannt: Routine …` | an zwei aufeinanderfolgenden Tagen lief die Routine per CLI: es steht noch eine Crontab-Zeile oder ein Dokploy-Schedule | Zeile bzw. Schedule entfernen ([Umstieg](#umstieg-alte-zeitplaene-entfernen)) |
+| `WHO2BE_ROUTINE_… passt zu keiner registrierten Routine` | Tippfehler im Override-Namen | Namen korrigieren |
+| Worker startet nicht, `Ungueltige Worker-Konfiguration: …` | ungueltiger Override; der Worker faellt bewusst nicht still auf den Code-Wert zurueck | Wert korrigieren |
+
+### Zeitplaene ueberschreiben, Routinen abschalten
+
+Der Code ist die Wahrheit; die Umgebung des Dienstes `worker` darf ohne
+Rebuild ueberschreiben
+(`apps/api/src/who2be_api/worker/schedule.py#effective_table`):
+
+- `WHO2BE_ROUTINE_<NAME>_SCHEDULE` — Cron-Ausdruck mit fuenf Feldern, Alias wie
+  `@daily` oder Intervall wie `@every 6h`, immer UTC.
+- `WHO2BE_ROUTINE_<NAME>_ENABLED` — `true`/`false`.
+- `WHO2BE_WORKER_ENABLED=false` — global: der Worker laeuft weiter und meldet
+  Heartbeat (bleibt also healthy), fuehrt aber keine Routine aus.
+
+`<NAME>` ist der Routinen-Name in Grossbuchstaben, Bindestrich wird
+Unterstrich: `WHO2BE_ROUTINE_PURGE_SCHEDULE`,
+`WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED`.
+
+> **Wirkt nur, wenn die Variable im Container ankommt.** Die Stacks nutzen
+> kein `env_file`, und die Compose-Dateien reichen diese Variablen heute
+> **nicht** an `worker` durch. Ein Eintrag allein in `deploy/hetzner/.env`
+> (bzw. in den Dokploy-Variablen) bleibt deshalb wirkungslos. Belegen statt
+> annehmen: nach der Aenderung muss `who2be-worker list` in der Spalte
+> `SOURCE` `env` zeigen.
+
+Kurzfristig anhalten, etwa fuer eine Fehlersuche: `$COMPOSE stop worker`. Der
+naechste Deploy startet ihn wieder (und `deploy.sh` verlangt genau einen
+laufenden `worker`). Wer anhaelt, setzt die Zusagen aus: kein DSGVO-Purge,
+kein Verfall. Beim Wiederstart holt der Worker je Routine **einen** Lauf nach.
+
+### Manueller Lauf und Notfallweg
+
+Die CLIs bleiben (ADR-0057 §8). Sie laufen ueber dasselbe Protokoll und
+denselben Advisory-Lock wie der Worker:
+
+```bash
+# Sofort-Lauf im laufenden Worker-Container (Protokoll trigger='manual'):
+$COMPOSE exec worker who2be-worker run-once purge
+# → purge @ <zeitpunkt>: succeeded
+# Notfallweg ohne laufenden Worker, frischer Container mit api-Umgebung
+# (Protokoll trigger='cli'):
+$COMPOSE run --rm --no-deps api who2be-purge
+$COMPOSE run --rm --no-deps api who2be-memory-expire
+```
+
+`run-once` lehnt eine abgeschaltete Routine ohne `--force` ab. Laeuft dieselbe
+Routine gerade, endet jeder manuelle Lauf als `skipped`: die CLI meldet
+`Routine … uebersprungen: ein anderer Lauf (Worker oder CLI) haelt gerade den
+Lock.` und endet mit Exit 0, `run-once` endet mit Exit 1. Doppelt gearbeitet
+wird nie.
+
+### Umstieg: alte Zeitplaene entfernen
+
+Instanzen, die vor dem Worker eingerichtet wurden, haben noch eine
+Crontab-Zeile (Hetzner) bzw. einen Dokploy-Schedule je Job. Sie richten keinen
+Schaden an (Ueberlappung endet als `skipped`, sonst ist der Lauf ein No-op),
+sind aber ueberfluessig. Erst entfernen, wenn der Worker gesund ist und je
+Routine einen `succeeded`-Lauf im Protokoll hat ([Worker pruefen](#worker-pruefen)).
+
+- Hetzner: [Retention-Cron](#retention-cron-who2be-purge) unten.
+- Dokploy: [`docs/cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy).
+
+Vergessene Eintraege meldet der Worker selbst: `routine-run-retention`
+schreibt taeglich `Externer Zeitplan erkannt: Routine …`, sobald eine Routine
+an zwei aufeinanderfolgenden Tagen per CLI lief. Ohne Log:
+
+```bash
+$SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -c \
+  "SELECT routine, started_at::date AS tag, status FROM routine_run
+    WHERE trigger = 'cli' AND started_at > now() - interval '7 days'
+    ORDER BY started_at DESC"
+# → leer, sobald keine Crontab-Zeile / kein Schedule mehr laeuft
+#   (eigene manuelle CLI-Aufrufe tauchen hier ebenfalls auf)
+```
+
+**Unveraendert Host-Cron:** der [Backup-Lauf](#trigger-routine) und die
+[Access-Log-Rotation](#access-logs--ressourcen-limits). Beide brauchen
+Host-Zugriff (Docker-Socket, `pg_dump`, restic) und bleiben in der Crontab.
+
+---
+
 ## Retention-Cron (`who2be-purge`)
 
-> **Instanz auf Dokploy?** Dort gibt es keine Host-Crontab. Beide Jobs
-> (`who2be-purge` und `who2be-memory-expire`) plant Dokploy als Compose-Job im
-> Dienst `api` ein: [`docs/cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen).
-> Dieser Abschnitt gilt fuer den Hetzner-Stack aus `deploy/hetzner/who2be/`.
+> **Entfaellt ab dieser Version.** Der Purge laeuft als Routine `purge` im
+> Dienst `worker` ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)).
+> Neue Instanzen tragen nichts ein. Bestehende Zeilen entfernen, sobald der
+> Worker gesund ist:
+>
+> ```bash
+> crontab -l | grep who2be-
+> # → zeigt Altzeilen fuer who2be-purge / who2be-memory-expire
+> crontab -e
+> # → beide Zeilen loeschen; die Backup-Zeile (run --rm backup) bleibt
+> crontab -l | grep -E 'who2be-(purge|memory-expire)'
+> # → keine Ausgabe
+> ```
+>
+> Die Log-Dateien `/var/log/who2be-purge.log` und
+> `/var/log/who2be-memory-expire.log` werden danach nicht mehr beschrieben und
+> koennen geloescht werden.
 
-Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach der
-30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
+Der Abschnitt bleibt als Referenz fuer den **Inhalt** des Laufs und fuer den
+Notfallweg. Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach
+der 30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
 idempotent — ein Lauf ohne faellige Daten ist ein No-op, ein abgebrochener
 Lauf wird vom naechsten fortgesetzt.
 
-Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
-`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
-`docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest verdrahteter
-Dev-DB) und purgt in der Produktions-DB nichts. Genau **eine** der beiden
-Zeilen eintragen, passend zur Edition:
+**Notfallweg von Hand** (Worker laeuft nicht, oder ein Lauf soll sofort
+passieren): der Aufruf muss den **Produktions-Stack** ansprechen — dieselben
+`-f`- und `--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh`
+baut. Ein nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest
+die Root-`docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest
+verdrahteter Dev-DB) und purgt in der Produktions-DB nichts.
 
 ```bash
-# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
-# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
-# der Job laeuft gar nicht).
-install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-purge.log
-
-# Host-Crontab des Deploy-Users (crontab -e), taeglich 03:30.
+cd /opt/who2be
 # On-Prem-Edition:
-30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge
 # Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
-30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge
 ```
 
 Der Lauf braucht `DATABASE_URL` (Owner-Rolle, RLS-Bypass), und fuer die
 Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
 `WHO2BE_TABLESTORE_DIR`-Werte wie die API. Der `api`-Dienst des
 Produktions-Stacks bringt beides in beiden Editionen mit (das Cloud-Overlay
-ergaenzt `APP_DATABASE_URL`, laesst `DATABASE_URL` aber stehen); ein Lauf
-ausserhalb dieses Compose-Kontexts hat beides nicht. `--no-deps`: der Job
-braucht nur die laufenden Dienste DB und `seaweedfs`. Ohne den Schalter startet
-`run` die Abhaengigkeiten des `api`-Dienstes mit, darunter `migrate`.
-
-**Verifikation**, dass der Job eingeplant ist und laeuft:
-
-```bash
-crontab -l | grep who2be-purge
-# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
-# Sofort-Probe: die eingetragene Cron-Zeile ab `cd` von Hand ausfuehren, OHNE
-# die Umleitung `>> …` — Ausgabe dann im Terminal (zwei Zeilen, s. u.).
-# Am Folgetag:
-tail -2 /var/log/who2be-purge.log
-# → Purge: … / Retention: …   (leere Datei ⇒ Cron lief nicht)
-```
+ergaenzt `APP_DATABASE_URL`, laesst `DATABASE_URL` aber stehen). `--no-deps`:
+der Job braucht nur die laufenden Dienste DB und `seaweedfs`. Haelt der Worker
+gerade den Lock, endet der Aufruf als `skipped` (Meldung, Exit 0) — der
+laufende Worker-Lauf erledigt dann die Arbeit.
 
 **Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
 ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert
@@ -2122,71 +2295,56 @@ sein Ergebnis nicht verliert. Das ist **kein Rueckstand und keine Aktion**: der
 naechste Lauf betrachtet die Datei erneut, und im Normalfall (keine
 Schreibaktivitaet) verschwindet sie wie bisher im selben Lauf.
 
-Ausgabe (zwei Zeilen, beide ins Log):
+Ausgabe der CLI (zwei Zeilen); im Worker stehen dieselben Zahlen als Zaehler
+in `routine_run.result`:
 
 ```
 Purge: 0 Org(s), 0 Account(s) geloescht; 0 Audit-Zeile(n) anonymisiert, …
 Retention: 12 Artifact(s) abgelaufen, 3 Blob-Zeile(n) + 3 Objekt(e) verwaist, 1 Area-Store(s) entfernt
 ```
 
-Worauf im Log zu achten ist:
+Worauf zu achten ist (CLI-Ausgabe bzw. `$COMPOSE logs worker` und
+`routine_run.result`):
 
 | Meldung | Bedeutung | Aktion |
 |---|---|---|
-| `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
-| `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `(kein BlobStore konfiguriert)` bzw. `blobstore_skipped: 1` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
+| `… unbekannte(s) Store-Verzeichnis(se) gemeldet` bzw. `unknown_store_dirs` > 0 | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
 | `… bleibt in der Karenzfrist liegen` | Area-Datei mit kuerzlicher Schreibaktivitaet | **keine** — der naechste Lauf nimmt sie |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 
 ### Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)
 
-Eigener Einstiegspunkt neben `who2be-purge` (ADR-0053 3.1.3): setzt
-unbestaetigte Gedaechtnis-Eintraege (`pending` und automatisch aktivierte
-ohne Bestaetigung), deren `expires_at` erreicht ist, auf `expired` und
-schreibt je Eintrag das Ereignis `expired`. Geloescht wird nichts. Idempotent;
-ein ausgefallener Lauf holt der naechste nach — es verfaellt dann nur spaeter,
-nichts geht verloren.
+> **Entfaellt ab dieser Version.** Der Verfall laeuft als Routine
+> `memory-expire` im Dienst `worker`
+> ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)). Eine
+> bestehende Crontab-Zeile entfernen wie unter
+> [Retention-Cron](#retention-cron-who2be-purge) beschrieben
+> (`crontab -l | grep who2be-` zeigt sie).
 
-Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
-`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
-`docker-compose.yml` (Dev-Stack mit eigener Dev-DB) und laesst in der
-Produktions-DB nichts verfallen. Genau **eine** der beiden Zeilen eintragen,
-passend zur Edition:
+Setzt unbestaetigte Gedaechtnis-Eintraege (`pending` und automatisch
+aktivierte ohne Bestaetigung), deren `expires_at` erreicht ist, auf `expired`
+und schreibt je Eintrag das Ereignis `expired` (ADR-0053 3.1.3). Geloescht
+wird nichts. Idempotent; ein ausgefallener Lauf holt der naechste nach — es
+verfaellt dann nur spaeter, nichts geht verloren. Taeglich reicht: die Frist
+betraegt 30 Tage, ein Tag Versatz ist fachlich ohne Belang.
+
+**Notfallweg von Hand**, gleiche Regeln wie beim Purge (Produktions-Stack mit
+`-f` und `--env-file`, `--no-deps`, `skipped` bei belegtem Lock). Er braucht
+nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass), die der `api`-Dienst in beiden
+Editionen mitbringt:
 
 ```bash
-# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
-# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
-# der Job laeuft gar nicht).
-install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-memory-expire.log
-
-# Host-Crontab des Deploy-Users (crontab -e), Vorschlag: taeglich 03:45.
+cd /opt/who2be
 # On-Prem-Edition:
-45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire
 # Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
-45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
-```
-
-`--no-deps`: der Job braucht nur die laufende DB; ohne den Schalter startet
-`run` die Abhaengigkeiten des `api`-Dienstes mit (u. a. `migrate`). Er braucht
-nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass) — der `api`-Dienst bringt sie in
-beiden Editionen mit. Taeglich reicht: die Frist betraegt 30 Tage, ein Tag
-Versatz ist fachlich ohne Belang. Ausgabe:
-`Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.`
-
-**Verifikation**, dass der Job eingeplant ist und laeuft:
-
-```bash
-crontab -l | grep who2be-memory-expire
-# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
-# Sofort-Probe statt bis 03:45 warten: die eingetragene Cron-Zeile ab `cd`
-# von Hand ausfuehren, OHNE die Umleitung `>> …` — Ausgabe dann im Terminal:
+docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire
 # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
-# Am Folgetag: der naechtliche Lauf hat geschrieben
-tail -1 /var/log/who2be-memory-expire.log
-# → Gedaechtnis: … abgelaufen.   (leere Datei ⇒ Cron lief nicht; Fehlertext ⇒ Ursache steht dort)
 ```
+
+Im Worker steht dieselbe Zahl als `expired` in `routine_run.result`.
 
 ---
 
