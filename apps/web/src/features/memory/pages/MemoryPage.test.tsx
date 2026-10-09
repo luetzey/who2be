@@ -16,6 +16,17 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+// Filter-Sheet unter `md`: jsdom kennt keine Breakpoints, `useIsMobile` ist
+// gemockt (Standard: Desktop), `useMediaQuery` bleibt echt.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/useMediaQuery')>()),
+  useIsMobile: () => viewport.mobile,
+}))
+afterEach(() => {
+  viewport.mobile = false
+})
+
 // Stapel-Obergrenze: echt 100 (geprueft im Kuerzel-Test). Fuer den Test der
 // Grenze per `x` laesst sie sich absenken, statt 100 Zeilen anzuklicken.
 const selectionLimit = vi.hoisted(() => ({ override: null as number | null, actual: 0 }))
@@ -586,11 +597,80 @@ describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
     const { calls } = stubEntries({ rows: [memory({ id: 'm1', status: 'active' })] })
     renderPage('editor', ENTRIES)
     await screen.findByTestId('entries-list')
-    fireEvent.click(screen.getByRole('radio', { name: /^Abgelaufen/ }))
+    fireEvent.change(screen.getByLabelText('Herkunft laut Agent'), {
+      target: { value: 'inferred' },
+    })
+    await waitFor(() =>
+      expect(calls.some((c) => /\/memories\?.*origin=inferred/.test(c.url))).toBe(true),
+    )
+    const chip = screen.getByRole('button', {
+      name: 'Filter „Herkunft laut Agent: Vom Agenten geschlossen“ entfernen',
+    })
+    expect(screen.getByRole('list', { name: 'Aktive Filter' })).toContainElement(chip)
+    expect(screen.getByRole('button', { name: 'Filter zurücksetzen' })).toBeInTheDocument()
+  })
+
+  it('setzt den Status über die Chips; 0er-Chips entfallen, Zahlen aus counts.groups.status', async () => {
+    const { calls } = stubEntries({
+      rows: [memory({ id: 'm1', status: 'active' })],
+      counts: () =>
+        jsonResponse({ total: 7, groups: { agent: { a1: 7 }, status: { active: 5, expired: 2 } } }),
+    })
+    renderPage('editor', ENTRIES)
+    await screen.findByTestId('entries-list')
+    const group = await screen.findByRole('group', { name: 'Nach Status filtern' })
+    await waitFor(() =>
+      expect(within(group).getByRole('button', { name: 'Alle 7' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    )
+    expect(within(group).queryByRole('button', { name: /^Zur Freigabe/ })).toBeNull()
+    expect(within(group).queryByRole('button', { name: /^Abgelehnt/ })).toBeNull()
+    fireEvent.click(within(group).getByRole('button', { name: 'Abgelaufen 2' }))
     await waitFor(() =>
       expect(calls.some((c) => /\/memories\?.*status=expired/.test(c.url))).toBe(true),
     )
-    expect(screen.getByRole('button', { name: 'Filter „Status: Abgelaufen“ entfernen' })).toBeInTheDocument()
+    // Status bekommt keinen Chip „Aktive Filter“, das Zuruecksetzen steht aber da.
+    expect(screen.queryByRole('list', { name: 'Aktive Filter' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Filter zurücksetzen' })).toBeInTheDocument()
+  })
+
+  it('zeigt Facettenwerte mit Serverzahl, Agenten alphabetisch und den Hinweis zum gewählten Zustand', async () => {
+    stubEntries({
+      rows: [memory({ id: 'm1', status: 'active' })],
+      counts: () =>
+        jsonResponse({
+          total: 3,
+          groups: { agent: { a1: 3, a0: 1 }, health: { unconfirmed: 2 }, status: { active: 3 } },
+        }),
+    })
+    renderPage('editor', `${ENTRIES}&health=unconfirmed`)
+    await screen.findByTestId('entries-list')
+    const health = screen.getByLabelText('Zustand')
+    await waitFor(() =>
+      expect(within(health).getByRole('option', { name: /^Unbestätigt \(2\)$/ })).toBeInTheDocument(),
+    )
+    // Werte mit 0 bleiben wählbar.
+    expect(within(health).getAllByRole('option', { name: /\(0\)$/ }).length).toBe(4)
+    // Alphabetisch, nicht nach Zahl: „a0“ (1) steht vor „coder“ (3).
+    const agentOptions = within(screen.getByLabelText('Agent'))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+    expect(agentOptions).toEqual(['Alle Agenten', 'a0 (1)', 'coder (3)'])
+    const hintId = health.getAttribute('aria-describedby')
+    expect(hintId).toBeTruthy()
+    expect(document.getElementById(hintId!)?.textContent).not.toBe('')
+  })
+
+  it('zeigt gefiltert leer den Standard „Keine Treffer“ und setzt zurück', async () => {
+    stubEntries({ rows: [], counts: () => jsonResponse({ total: 0, groups: {} }) })
+    renderPage('editor', `${ENTRIES}&kind=lesson`)
+    expect(await screen.findByText('Keine Treffer')).toBeInTheDocument()
+    const resets = screen.getAllByRole('button', { name: 'Filter zurücksetzen' })
+    expect(resets.length).toBe(2)
+    fireEvent.click(resets[resets.length - 1])
+    await waitFor(() => expect(screen.queryByText('Keine Treffer')).toBeNull())
   })
 
   it('bietet „Bestätigen“ für unbestätigte und „Wieder aktivieren“ für abgelaufene Einträge an', async () => {
@@ -747,14 +827,21 @@ describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
     for (const call of listCalls) expect(call.url).toContain('scope=user')
   })
 
-  it('lädt die Liste auch ohne Zähler und sagt das klein über den Facetten', async () => {
+  it('lädt die Liste auch ohne Zähler und sagt das klein in der Filterleiste', async () => {
     stubEntries({
       rows: [memory({ id: 'm1', status: 'active', fact: 'Bleibt sichtbar.' })],
       counts: () => jsonResponse({ detail: 'kaputt' }, 500),
     })
     renderPage('editor', ENTRIES)
     expect(await screen.findByText('Bleibt sichtbar.')).toBeInTheDocument()
-    expect((await screen.findAllByTestId('counts-unavailable')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Zahlen gerade nicht verfügbar.')).toBeInTheDocument()
+    // Ohne Zahlen: Chips und Werte nur mit Wort.
+    expect(
+      within(screen.getByRole('group', { name: 'Nach Status filtern' })).getByRole('button', {
+        name: 'Alle',
+      }),
+    ).toBeInTheDocument()
+    expect(within(screen.getByLabelText('Agent')).getByRole('option', { name: 'coder' })).toBeInTheDocument()
   })
 
   it('hat keine axe-Violations mit Liste, Facetten und Stapelleiste', async () => {
@@ -768,6 +855,36 @@ describe('MemoryPage · Einträge (C5b-1, Spec S2′)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: /Erster/ }))
     await screen.findByTestId('entries-bulk-bar')
     expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('legt unter md die Facetten in das Sheet: „Filter (n)“, Fuß „n Treffer zeigen“, Fokus zurück', async () => {
+    viewport.mobile = true
+    stubEntries({
+      rows: [memory({ id: 'm1', status: 'active' })],
+      counts: () => jsonResponse({ total: 12, groups: { agent: { a1: 12 }, status: { active: 12 } } }),
+    })
+    renderPage('editor', `${ENTRIES}&kind=lesson`)
+    await screen.findByTestId('entries-list')
+    // Inline gibt es keine Selects; der Knopf zählt nur gesetzte Facetten.
+    expect(screen.queryByLabelText('Zustand')).toBeNull()
+    const button = screen.getByRole('button', { name: 'Filter (1)' })
+    fireEvent.click(button)
+    const sheet = await screen.findByRole('dialog', { name: 'Filter' })
+    expect(within(sheet).getByLabelText('Art')).toHaveValue('lesson')
+    expect(within(sheet).getByLabelText('Sortierung')).toBeInTheDocument()
+    fireEvent.click(await within(sheet).findByRole('button', { name: '12 Treffer zeigen' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(button).toHaveFocus()
+  })
+
+  it('hat keine axe-Violations mit offenem Filter-Sheet', async () => {
+    viewport.mobile = true
+    stubEntries({ rows: [memory({ id: 'm1', status: 'active' })] })
+    renderPage('editor', ENTRIES)
+    await screen.findByTestId('entries-list')
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
+    await screen.findByRole('dialog', { name: 'Filter' })
+    expect(await axe(document.body)).toHaveNoViolations()
   })
 })
 

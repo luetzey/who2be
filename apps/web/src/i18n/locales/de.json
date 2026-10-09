@@ -3650,8 +3650,6 @@
       "resetFilters": "Filter zurücksetzen",
       "removeFilter": "Filter „{{label}}“ entfernen",
       "activeFilters": "Aktive Filter",
-      "facetsRegion": "Filter",
-      "hintFor": "Zu „{{label}}“",
       "countsUnavailable": "Zahlen gerade nicht verfügbar.",
       "facet": {
         "all": "Alle",
@@ -3660,8 +3658,7 @@
         "status": "Status",
         "health": "Zustand",
         "origin": "Herkunft laut Agent",
-        "source": "Kanal",
-        "showAll": "Alle {{count}} zeigen"
+        "source": "Kanal"
       },
       "status": {
         "active": "Aktiv",
@@ -3725,7 +3722,6 @@
         "body": "Sobald deine Agenten sich etwas merken, steht es hier – nach Agent, Art und Zustand filterbar.",
         "action": "Agenten ansehen"
       },
-      "noMatch": "Keine Einträge für diese Filter",
       "gone": "Diesen Eintrag gibt es nicht mehr.",
       "openDetail": "Details zu „{{fact}}“ öffnen"
     },

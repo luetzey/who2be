@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/useMediaQuery'
+import type { FacetSpec, StatusChipOption } from '@/lib/listFilter'
 import { cn } from '@/lib/utils'
 
 import {
@@ -24,18 +25,101 @@ import {
   type EntryFilters,
 } from '@/features/memory/hooks/useMemoryApi'
 
-// Facetten des Tabs „Eintraege“ (Gedaechtnisverwaltung §6.2/§6.3).
+// Facetten des Gedaechtnisses (Gedaechtnisverwaltung §6.2/§6.3).
 //
-// Je Gruppe genau EIN Wert: `GET /memories` nimmt je Feld einen Wert
-// (`MemoryFilter`, ADR-0053 6.4.1). Mehrfachauswahl wie in der Spec braeuchte
-// Listen-Parameter in der API — bis dahin ist jede Gruppe eine Radiogruppe mit
-// „Alle“ als erstem Wert. Zaehler kommen aus `/memories/counts` (je Gruppe ohne
-// den eigenen Filter); Werte mit 0 bleiben sichtbar und waehlbar, damit das
-// Layout nicht springt.
+// Je Facette genau EIN Wert: `GET /memories` nimmt je Feld einen Wert
+// (`MemoryFilter`, ADR-0053 6.4.1). Zaehler kommen aus `/memories/counts`
+// (je Gruppe ohne den eigenen Filter); Werte mit 0 bleiben waehlbar.
+//
+// Tab „Eintraege“: `useMemoryFilterBar` → Props der ListFilterBar
+// (Filter-Standard §3.1, M1). Die Radiogruppen samt `FilterSheetButton` und
+// `ActiveFilterChips` dienen nur noch der Gedaechtnis-Karte am Agenten (bis M2).
 
-// Ab so vielen Agenten zeigt die Agent-Facette erst 7 plus „Alle n zeigen“.
-const AGENT_COLLAPSE_AT = 8
-const AGENT_PREVIEW = 7
+// Status-Chips in Lebenszyklus-Reihenfolge, Punkt-Token wie `StatusLine`.
+const STATUS_TOKENS: Record<string, string> = {
+  active: 'active',
+  pending: 'review',
+  expired: 'draft',
+  rejected: 'draft',
+}
+
+// Facetten der Leiste (ohne Status — der steht in den Chips), feste Reihenfolge.
+const BAR_FACETS = ['agent', 'kind', 'health', 'origin', 'source'] as const
+
+/**
+ * Adapter Tab „Eintraege“ → ListFilterBar (Filter-Standard §3.1): Status als
+ * Chips, die uebrigen Facetten als Selects mit Serverzahl „(n)“, Agenten
+ * alphabetisch, Hinweis zum gewaehlten Zustand unter dem Select.
+ */
+export function useMemoryFilterBar({
+  filters,
+  counts,
+  countsError,
+  agents,
+  onChange,
+}: Omit<FacetsProps, 'hideAgent'>): {
+  statusOptions: StatusChipOption[]
+  status: string
+  onStatusChange: (value: string) => void
+  facets: FacetSpec[]
+} {
+  const { t } = useTranslation(['learning', 'data'])
+  const label = useFacetLabel(agents)
+  const known = !countsError && counts !== null
+  const countOf = (facet: EntryFacet, value: string): number | undefined =>
+    known ? (counts?.groups?.[facet]?.[value] ?? 0) : undefined
+
+  // „Alle“: ohne Status-Filter ist `total` genau diese Menge; mit Filter die
+  // Summe der Status-Gruppe (die Gruppe zaehlt ohne den eigenen Filter).
+  const statusGroup = counts?.groups?.status ?? {}
+  const allCount = !known
+    ? null
+    : filters.status === ''
+      ? (counts?.total ?? 0)
+      : Object.values(statusGroup).reduce((sum, value) => sum + value, 0)
+  const statusOptions: StatusChipOption[] = [
+    { value: 'all', label: t('data:filter.all'), count: allCount, keepWhenZero: true },
+    ...ENTRY_FACET_VALUES.status.map((value) => ({
+      value,
+      label: label('status', value),
+      count: known ? (statusGroup[value] ?? 0) : null,
+      token: STATUS_TOKENS[value],
+    })),
+  ]
+
+  const facets = BAR_FACETS.map((facet): FacetSpec => {
+    let values: string[]
+    if (facet === 'agent') {
+      // Server meldet nur vorhandene Agenten; ohne Zahlen alle bekannten. Ein
+      // gesetzter Agent bleibt waehlbar, auch ohne Eintraege.
+      values = known ? Object.keys(counts?.groups?.agent ?? {}) : agents.map((agent) => agent.id)
+      if (filters.agent !== '' && !values.includes(filters.agent)) values.push(filters.agent)
+      values.sort((a, b) => label('agent', a).localeCompare(label('agent', b)))
+    } else {
+      values = [...ENTRY_FACET_VALUES[facet]]
+    }
+    return {
+      key: facet,
+      label: t(`learning:entries.facet.${facet}`),
+      allLabel: facet === 'agent' ? t('data:filter.allAgents') : t('learning:entries.facet.all'),
+      options: values.map((value) => ({
+        value,
+        label: label(facet, value),
+        count: countOf(facet, value),
+        hint: facet === 'health' ? t(`learning:health.${value}Hint`) : undefined,
+      })),
+      value: filters[facet],
+      onChange: (value) => onChange(facet, value),
+    }
+  })
+
+  return {
+    statusOptions,
+    status: filters.status === '' ? 'all' : filters.status,
+    onStatusChange: (value) => onChange('status', value === 'all' ? '' : value),
+    facets,
+  }
+}
 
 interface FacetsProps {
   filters: EntryFilters
@@ -90,14 +174,9 @@ function FacetGroup({
 }: Omit<FacetsProps, 'hideAgent'> & { facet: EntryFacet; idPrefix: string }) {
   const { t, i18n } = useTranslation('learning')
   const label = useFacetLabel(agents)
-  const [showAll, setShowAll] = useState(false)
   const format = new Intl.NumberFormat(i18n.language)
   const legendId = `${idPrefix}-${facet}-legend`
-  const all = valuesOf(facet, filters, counts)
-  const collapsed = facet === 'agent' && all.length >= AGENT_COLLAPSE_AT && !showAll
-  const values = collapsed ? all.slice(0, AGENT_PREVIEW) : all
-  // Der gewaehlte Agent bleibt auch eingeklappt sichtbar.
-  if (collapsed && filters.agent !== '' && !values.includes(filters.agent)) values.push(filters.agent)
+  const values = valuesOf(facet, filters, counts)
   const groupCounts = counts?.groups?.[facet] ?? null
 
   const item = (value: string, text: string, count: number | null, hint?: string) => {
@@ -131,7 +210,7 @@ function FacetGroup({
             <span id={hintId} className="sr-only">
               {hint}
             </span>
-            <InfoTooltip label={t('entries.hintFor', { label: text })}>{hint}</InfoTooltip>
+            <InfoTooltip>{hint}</InfoTooltip>
           </>
         ) : null}
       </div>
@@ -162,17 +241,6 @@ function FacetGroup({
           ),
         )}
       </RadioGroup>
-      {collapsed ? (
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          className="h-auto self-start px-0"
-          onClick={() => setShowAll(true)}
-        >
-          {t('entries.facet.showAll', { count: all.length })}
-        </Button>
-      ) : null}
     </fieldset>
   )
 }
@@ -191,20 +259,6 @@ function FacetGroups(props: FacetsProps & { idPrefix: string }) {
         <FacetGroup key={facet} facet={facet} {...props} />
       ))}
     </div>
-  )
-}
-
-/** Facettenspalte ab `lg` (Spec §6.1). Darunter: `FilterSheetButton`. */
-export function MemoryFacetColumn(props: FacetsProps) {
-  const { t } = useTranslation('learning')
-  return (
-    <aside
-      aria-label={t('entries.facetsRegion')}
-      className="hidden w-60 shrink-0 lg:block"
-      data-testid="memory-facets"
-    >
-      <FacetGroups {...props} idPrefix="facet-col" />
-    </aside>
   )
 }
 

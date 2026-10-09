@@ -1,17 +1,14 @@
 import { MoreHorizontal, Undo2 } from 'lucide-react'
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useSearchParams } from 'react-router-dom'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { MemoryDetailSheet } from '@/components/memory/MemoryDetailSheet'
-import {
-  ActiveFilterChips,
-  FilterSheetButton,
-  MemoryFacetColumn,
-} from '@/components/memory/MemoryFacets'
+import { useMemoryFilterBar } from '@/components/memory/MemoryFacets'
 import { MemoryList } from '@/components/memory/MemoryList'
 import type { MemoryEntryState } from '@/components/memory/MemoryRow'
 import { Button } from '@/components/ui/button'
@@ -272,14 +269,16 @@ export function MemoryPage() {
           <EntriesTab
             params={params}
             reloadNonce={listNonce}
-            search={search(
+            query={query}
+            onQueryChange={setQuery}
+            searchPlaceholder={
               counts.entries !== null
                 ? t('entries.searchPlaceholder', {
                     count: counts.entries,
                     formatted: format.format(counts.entries),
                   })
-                : t('entries.searchPlaceholderPlain'),
-            )}
+                : t('entries.searchPlaceholderPlain')
+            }
             onFilter={setParam}
             onResetFilters={resetFilters}
             onChanged={() => setCountNonce((value) => value + 1)}
@@ -296,23 +295,30 @@ interface EntriesTabProps {
   params: URLSearchParams
   // Erhoeht sich nach einer Aenderung im Detail-Sheet → Liste neu laden.
   reloadNonce: number
-  search: ReactNode
+  query: string
+  onQueryChange: (value: string) => void
+  searchPlaceholder: string
   onFilter: (key: string, value: string) => void
   onResetFilters: () => void
   onChanged: () => void
 }
 
-/** Tab „Eintraege“ (S2′): Facetten links ab `lg`, sonst Filter-Sheet. */
+/**
+ * Tab „Eintraege“ (S2′): Filterleiste nach dem Filter-Standard (§3.1) über
+ * der Liste in voller Breite — Status als Chips, Facetten als Selects, unter
+ * `md` im Sheet.
+ */
 function EntriesTab({
   params,
   reloadNonce,
-  search,
+  query,
+  onQueryChange,
+  searchPlaceholder,
   onFilter,
   onResetFilters,
   onChanged,
 }: EntriesTabProps) {
   const { t } = useTranslation('learning')
-  const sortId = useId()
   // `entry` (Detail-Sheet) ist kein Filter: oeffnen/schliessen laedt nichts neu.
   const key = useMemo(() => {
     const next = new URLSearchParams(params)
@@ -327,52 +333,42 @@ function EntriesTab({
     if (reloadNonce > 0) reload()
   }, [reload, reloadNonce])
   const setFacet = (facet: EntryFacet, value: string) => onFilter(facet, value)
-  const facetProps = {
+  const bar = useMemoryFilterBar({
     filters,
     counts: data.counts,
     countsError: data.countsError,
     agents: data.agents,
     onChange: setFacet,
-  }
+  })
+  const active = query.trim() !== '' || ENTRY_FACETS.some((facet) => filters[facet] !== '')
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:items-start">
-      <MemoryFacetColumn {...facetProps} />
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          {search}
-          <div className="flex flex-wrap items-end gap-2">
-            <FilterSheetButton
-              {...facetProps}
-              total={data.counts?.total ?? null}
-              onReset={onResetFilters}
-            />
-            <div className="flex flex-col gap-1">
-              <Label htmlFor={sortId}>{t('entries.sort.label')}</Label>
-              <Select
-                id={sortId}
-                value={filters.sort}
-                className="min-h-11 md:min-h-10"
-                onChange={(event) =>
-                  onFilter('sort', event.target.value === 'oldest' ? 'oldest' : '')
-                }
-              >
-                <option value="newest">{t('entries.sort.newest')}</option>
-                <option value="oldest">{t('entries.sort.oldest')}</option>
-              </Select>
-            </div>
-          </div>
-        </div>
-        <ActiveFilterChips filters={filters} agents={data.agents} onChange={setFacet} />
-        <MemoryList
-          data={data}
-          filters={filters}
-          onFilter={setFacet}
-          onResetFilters={onResetFilters}
-          onChanged={onChanged}
-          detailLinks
-        />
-      </div>
+    <div className="flex min-w-0 flex-col gap-4">
+      <ListFilterBar
+        idPrefix="memory-entries"
+        {...bar}
+        query={query}
+        onQueryChange={onQueryChange}
+        searchPlaceholder={searchPlaceholder}
+        active={active}
+        onReset={onResetFilters}
+        sortOptions={[
+          { value: '', label: t('entries.sort.newest') },
+          { value: 'oldest', label: t('entries.sort.oldest') },
+        ]}
+        sort={filters.sort === 'oldest' ? 'oldest' : ''}
+        onSortChange={(value) => onFilter('sort', value === 'oldest' ? 'oldest' : '')}
+        countsUnavailable={data.countsError}
+        resultCount={data.counts?.total ?? null}
+      />
+      <MemoryList
+        data={data}
+        filters={filters}
+        onFilter={setFacet}
+        onResetFilters={onResetFilters}
+        onChanged={onChanged}
+        detailLinks
+      />
     </div>
   )
 }

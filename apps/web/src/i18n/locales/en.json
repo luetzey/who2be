@@ -3650,8 +3650,6 @@
       "resetFilters": "Reset filters",
       "removeFilter": "Remove filter \"{{label}}\"",
       "activeFilters": "Active filters",
-      "facetsRegion": "Filters",
-      "hintFor": "About \"{{label}}\"",
       "countsUnavailable": "Counts currently unavailable.",
       "facet": {
         "all": "All",
@@ -3660,8 +3658,7 @@
         "status": "Status",
         "health": "Condition",
         "origin": "Source per agent",
-        "source": "Channel",
-        "showAll": "Show all {{count}}"
+        "source": "Channel"
       },
       "status": {
         "active": "Active",
@@ -3725,7 +3722,6 @@
         "body": "As soon as your agents remember something, it shows up here – filterable by agent, type and condition.",
         "action": "View agents"
       },
-      "noMatch": "No entries match these filters",
       "gone": "This entry no longer exists.",
       "openDetail": "Open details for “{{fact}}”"
     },
