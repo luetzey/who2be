@@ -33,7 +33,11 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
    (RLS-Bypass) und entfernt alles, dessen `purge_after <= now()`:
    - **Organisationen:** `DELETE FROM organization …` — per `ON DELETE CASCADE`
      atomar inkl. Workspaces → Personas/Playbooks/Resources/Agents (+ Versionen),
-     `org_entitlement`, `mcp_usage`.
+     `org_entitlement`, `mcp_usage`, Agent-Telemetrie `usage_event` und
+     `agent_feedback` samt `feedback_resolution` (FK auf `workspace` seit
+     Migration 0104; vorher blieben die Zeilen verwaist zurueck, 0104 hat den
+     Bestand bereinigt). Dieselbe CASCADE greift bei der Workspace-Loeschung
+     (`DELETE /v1/workspaces/{id}`).
    - **Konten:** loescht `api_token`, `org_member`, `workspace_member`, die
      persoenliche Organisation des Nutzers und ruft die **GoTrue-Admin-API** zum
      Loeschen von `auth.users` (E-Mail/Auth-Daten). Erst nach bestaetigtem
@@ -74,7 +78,10 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | `oauth_refresh_token` (Migration 0049) | ganze Zeile (via `api_token_id`) | beim Account-Purge ueber den `api_token`-FK-CASCADE **geloescht**; zusaetzlich laufender Cleanup abgelaufener Tokens (`cleanup_expired_oauth`; konsumierte, nicht abgelaufene Glieder bleiben fuer Grace-Retry/Rotationsketten-Revocation) |
 
 So bleibt nachvollziehbar, **dass** ein Statuswechsel/Audit-/Telemetrie-Ereignis
-stattfand, aber nicht mehr **welche Person** dahinterstand. Diese Anonymisierung
+stattfand, aber nicht mehr **welche Person** dahinterstand. Das gilt fuer den
+Account-Purge in Workspaces, die weiterbestehen; faellt der Workspace selbst
+(Workspace-Loeschung, Org-Purge), gehen `usage_event` und `agent_feedback` seit
+Migration 0104 per CASCADE ganz mit (§1). Diese Anonymisierung
 wird durch **WP-D** umgesetzt (der Purge laeuft als Owner und darf trotz
 Append-only-REVOKE aus WP-A das `UPDATE` ausfuehren); die Abdeckung von
 `usage_event`/`agent_feedback`/`oauth_*` schliesst Befund **CMP-1**
@@ -436,7 +443,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
 | `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel) |
-| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | beim Purge **anonymisiert** (Sentinel) |
+| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
@@ -466,7 +473,9 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 - `apps/api/src/who2be_api/migrations/0049_oauth_connector.sql` —
   `oauth_client`/`oauth_authorization_code`/`oauth_refresh_token`.
 - `apps/api/src/who2be_api/migrations/0053_feedback_flywheel.sql` —
-  `usage_event`/`agent_feedback` (append-only, `actor_id`).
+  `usage_event`/`agent_feedback` (append-only, `actor_id`);
+  `0104_telemetry_workspace_fk.sql` — FK auf `workspace` mit CASCADE,
+  Bestands-Waisen bereinigt.
 - `deploy/hetzner/scripts/backup.sh` — Backup-Retention.
 - ADR-0031 — Append-only/Anonymisierung/Aufbewahrungs-Abwaegung.
 
