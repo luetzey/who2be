@@ -7,7 +7,6 @@
   "auth.connector.loadingAgents",
   "common.actions.add",
   "common.actions.confirm",
-  "common.actions.copy",
   "common.actions.create",
   "common.actions.deactivate",
   "common.actions.delete",

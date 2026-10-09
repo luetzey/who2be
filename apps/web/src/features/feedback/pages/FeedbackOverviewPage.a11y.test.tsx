@@ -7,18 +7,34 @@ import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents } = vi.hoisted(
-  () => ({
-    getFeedbackOverview: vi.fn(),
-    getFeedbackItems: vi.fn(),
-    listCases: vi.fn(),
-    countCases: vi.fn(),
-    listAgents: vi.fn(),
-  }),
-)
+const {
+  getFeedbackOverview,
+  getFeedbackItems,
+  listCases,
+  countCases,
+  listAgents,
+  listPatterns,
+  countMemories,
+} = vi.hoisted(() => ({
+  getFeedbackOverview: vi.fn(),
+  getFeedbackItems: vi.fn(),
+  listCases: vi.fn(),
+  countCases: vi.fn(),
+  listAgents: vi.fn(),
+  listPatterns: vi.fn(),
+  countMemories: vi.fn(),
+}))
 
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackItems, listCases, countCases, listAgents }
+  const api = {
+    getFeedbackOverview,
+    getFeedbackItems,
+    listCases,
+    countCases,
+    listAgents,
+    listPatterns,
+    countMemories,
+  }
   return { useApi: () => api }
 })
 
@@ -30,7 +46,7 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
  * Setzt die API-Mocks frisch und rendert die Seite auf dem angegebenen Tab.
  * Liefert den Container fuer den axe-Lauf.
  */
-function renderTab(tab: 'cases' | 'signals' | 'curation'): HTMLElement {
+function renderTab(tab: 'cases' | 'patterns' | 'signals' | 'curation'): HTMLElement {
   const overview: FeedbackOverview = {
     items: [
       {
@@ -97,6 +113,22 @@ function renderTab(tab: 'cases' | 'signals' | 'curation'): HTMLElement {
     ],
     next_cursor: null,
   })
+  countMemories.mockResolvedValue({ total: 1 })
+  listPatterns.mockResolvedValue({
+    threshold: 3,
+    window_days: 30,
+    patterns: [
+      {
+        source: 'lesson',
+        agent_id: 'a1',
+        element: null,
+        count: 3,
+        evidence_ids: ['m1'],
+        first_seen: '2026-10-01T10:00:00Z',
+        last_seen: '2026-10-05T10:00:00Z',
+      },
+    ],
+  })
 
   const { container } = renderInRoutes(<FeedbackOverviewPage />, {
     path: '/w/:workspaceId/feedback',
@@ -116,6 +148,14 @@ describe('FeedbackOverviewPage (a11y)', () => {
   it('hat keine axe-Violations mit Daten — Fälle', async () => {
     const container = renderTab('cases')
     await waitFor(() => expect(screen.getByRole('link', { name: 'coder' })).toBeInTheDocument())
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('hat keine axe-Violations mit Daten — Muster', async () => {
+    const container = renderTab('patterns')
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Dieselbe Korrektur 3×' })).toBeInTheDocument(),
+    )
     expect(await axe(container)).toHaveNoViolations()
   })
 

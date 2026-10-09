@@ -76,6 +76,7 @@ import type {
   Organization,
   OrganizationDeletion,
   OrganizationInput,
+  PatternListRead,
   PendingInvitation,
   Persona,
   PersonaInput,
@@ -745,6 +746,8 @@ export interface Api {
     input: Omit<CaseCreate, 'agent_id'>,
   ) => Promise<CaseRead>
   promoteFeedback: (feedbackId: string, input: CaseCreate) => Promise<CaseRead>
+  // ADR-0053 3.7/6.5 (D5b) — berechnete Muster, ab editor bzw. `case_triage`.
+  listPatterns: (agentId?: string) => Promise<PatternListRead>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -1354,6 +1357,11 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    listPatterns: (agentId) => {
+      const params = new URLSearchParams()
+      if (agentId) params.set('agent_id', agentId)
+      return request<PatternListRead>(token, withQuery(apiPath`${ws}/patterns`, params))
+    },
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>

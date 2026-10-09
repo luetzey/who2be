@@ -2315,7 +2315,8 @@
         "cases": "Cases",
         "myCases": "My cases",
         "signals": "Building blocks",
-        "curation": "Curation"
+        "curation": "Curation",
+        "patterns": "Patterns"
       },
       "tabsAria": "Feedback sections",
       "signalsDescription": "Notes from agents and members on individual building blocks: outdated, incorrect, unclear or helpful. Report an agent's behaviour as a case."
@@ -2648,6 +2649,41 @@
         "success": "Case deleted.",
         "error": "The case couldn't be deleted."
       }
+    },
+    "patterns": {
+      "description": "What keeps coming back. The server counts similar learning suggestions and cases; from {{threshold}} matches a pattern shows up here. Nothing is interpreted.",
+      "descriptionNoThreshold": "What keeps coming back. The server counts similar learning suggestions and cases; from a fixed number of similar entries a pattern shows up here. Nothing is interpreted.",
+      "vanishHint": "A pattern disappears once the learning suggestion is decided or the cases are triaged.",
+      "kind": {
+        "lesson": {
+          "title": "Same correction {{count}}×",
+          "text": "A learning suggestion from {{agent}} came up {{count}} times with similar wording."
+        },
+        "case": {
+          "title": "Similar cases {{count}}×",
+          "text": "{{count}} open cases for {{agent}}, all assigned to {{element}}, within {{days}} days."
+        }
+      },
+      "detail": {
+        "why": "Why is this a pattern?",
+        "evidence": "Evidence",
+        "showAll": "Show all {{count}} pieces of evidence",
+        "deleted": "Deleted entry"
+      },
+      "action": {
+        "createCase": "Create case",
+        "viewCases": "View cases"
+      },
+      "builder": {
+        "label": "Or let the Builder phrase it – paste into your client:",
+        "promptLesson": "Turn learning suggestion {{id}} from {{agent}} into a case with situation, behaviour and expectation.",
+        "promptCase": "Summarise the open cases {{ids}} for {{agent}} and propose a change to {{element}}."
+      },
+      "emptyTitle": "No patterns yet",
+      "emptyDescription": "Once learning suggestions or cases resemble each other, the server groups them here. A pattern appears from {{threshold}} matches.",
+      "emptyNoData": "Patterns need learning suggestions or cases. There are none yet.",
+      "loadError": "Patterns couldn't be computed.",
+      "gone": "This pattern no longer applies."
     }
   },
   "tools": {

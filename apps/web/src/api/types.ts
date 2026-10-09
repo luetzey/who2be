@@ -1972,3 +1972,35 @@ export interface CasePage {
 
 // `GET /cases/counts`: Zaehler je Status (auch 0).
 export type CaseCounts = Record<CaseStatus, number>
+
+// ADR-0053 3.7/6.5 (D5b) — Muster: berechnete Sicht ohne Zustand und ohne ID.
+// Quelle `lesson` (aehnliche offene Lernvorschlaege eines Agenten) oder `case`
+// (offene Faelle eines Agenten mit derselben Zuordnung im Zeitfenster).
+export type PatternSource = 'lesson' | 'case'
+
+// Gemeinsame Zuordnung eines Fall-Musters; `entity_id` leer bei
+// `tool_policy`/`model_limit`.
+export interface PatternElement {
+  target: CaseTarget
+  entity_id: string | null
+}
+
+export interface PatternRead {
+  source: PatternSource
+  agent_id: string
+  // Nur bei `source='case'`.
+  element: PatternElement | null
+  // Faelle: Zahl der Faelle; Lernvorschlaege: Summe von `occurrence_count`.
+  count: number
+  // Fall- bzw. Lernvorschlags-IDs, aufsteigend sortiert.
+  evidence_ids: string[]
+  first_seen: string
+  last_seen: string
+}
+
+// `GET /patterns`: Schwelle und Zeitfenster kommen mit (Q8), ohne Paginierung.
+export interface PatternListRead {
+  threshold: number
+  window_days: number
+  patterns: PatternRead[]
+}

@@ -1,4 +1,11 @@
-import { ChevronRight, Inbox, MessageSquareWarning, ThumbsUp, TriangleAlert } from 'lucide-react'
+import {
+  ChevronRight,
+  Inbox,
+  MessageSquareWarning,
+  Repeat,
+  ThumbsUp,
+  TriangleAlert,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -20,14 +27,15 @@ import { cn } from '@/lib/utils'
 
 import { CaseList } from '../components/CaseList'
 import { FeedbackInbox } from '../components/FeedbackInbox'
+import { PatternList } from '../components/PatternList'
 import { ReportProblemDialog } from '../components/ReportProblemDialog'
 import { entityMeta } from '../lib/entityMeta'
 
 type SortMode = 'care' | 'usage' | 'activity'
 
-// Hub-Tabs (Delta-Spec Phase D §0). „Muster“ folgt mit D6g, „Gespraeche“ mit E5.
-type HubTab = 'cases' | 'signals' | 'curation'
-const EDITOR_TABS: readonly HubTab[] = ['cases', 'signals', 'curation']
+// Hub-Tabs (Delta-Spec Phase D §0), Reihenfolge wie dort. „Gespraeche“ folgt mit E5.
+type HubTab = 'cases' | 'patterns' | 'signals' | 'curation'
+const EDITOR_TABS: readonly HubTab[] = ['cases', 'patterns', 'signals', 'curation']
 const DEFAULT_TAB: HubTab = 'cases'
 
 const MAX_COLLAPSED = 8
@@ -314,6 +322,10 @@ export function FeedbackOverviewPage() {
             <MessageSquareWarning className="size-4" aria-hidden="true" />
             {t('overview.tabs.cases')}
           </TabsTrigger>
+          <TabsTrigger value="patterns">
+            <Repeat className="size-4" aria-hidden="true" />
+            {t('overview.tabs.patterns')}
+          </TabsTrigger>
           <TabsTrigger value="signals">
             <Inbox className="size-4" aria-hidden="true" />
             {t('overview.tabs.signals')}
@@ -326,6 +338,12 @@ export function FeedbackOverviewPage() {
 
         <TabsContent value="cases" className="mt-6">
           {casesPanel}
+        </TabsContent>
+
+        {/* Nur editor (Spec S5): viewer sehen den Tab nicht, `?tab=patterns`
+            faellt fuer sie oben per `replace` auf `cases` zurueck. */}
+        <TabsContent value="patterns" className="mt-6">
+          <PatternList />
         </TabsContent>
 
         <TabsContent value="signals" className="mt-6">
