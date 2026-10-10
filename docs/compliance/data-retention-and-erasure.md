@@ -273,6 +273,15 @@ Workspace explizit, *bevor* die Organization-CASCADE die Agenten erreicht
 (`repositories/account_repository.py`, `_PURGE_ACCESS_LOG_SQL`).
 Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
+**Keine Zeitfrist (Stand Owner-Entscheidung E4b, 2026-10-10).** E4b befristet
+die rohen Nutzungsdaten (`usage_event`, 13 Monate, s. §6), nicht dieses Log.
+Sein Zweck ist die Rechenschaft, welche Elemente **je** an welchen externen
+Modell-Anbieter gegangen sind (VVT V20, Art. 5 Abs. 2); eine Frist naehme diese
+Auskunft fuer alles Aeltere weg und braucht eine eigene Owner-Entscheidung.
+Das Log enthaelt keine `actor_id` und ist je Agent, Element, Operation und Tag
+dedupliziert. Wird eine Frist beschlossen, nimmt die Routine
+`usage-retention` sie ohne neuen Dienst auf.
+
 ---
 
 ## 4b · Pruefaelle und Prueflaeufe (`test_case`, `test_run`)
@@ -532,7 +541,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
 | `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate ab Anonymisierung, dann geloescht (Routine `audit-retention`) | beim Purge **anonymisiert** (Sentinel); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
-| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
+| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | `usage_event`: **13 Monate** ab `created_at`, dann geloescht (Routine `usage-retention`, Owner E4b, aktiv); `agent_feedback`: Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
@@ -540,7 +549,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
 | Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Org-/Workspace-Purge: **CASCADE** (0105) |
 | Inhaltspassagen (`content_chunk`, 0070) | abgeleitet aus der aktiven Version, bis Loeschung von Element bzw. Workspace | Element: Neuaufbau bzw. Waisen-Ernte (`core/chunk_backfill.py`); Org-/Workspace-Purge: **CASCADE** (0105) |
-| `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
+| `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis); bewusst **ohne** die 13-Monats-Frist von `usage_event` (s. §4a Zugriffslog) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
 | Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
@@ -557,10 +566,13 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 - `apps/api/src/who2be_api/core/purge.py` — `purge_expired()`, `PurgeResult`,
   CLI-Entrypoint `who2be-purge`.
 - `apps/api/src/who2be_api/worker/routines.py` — Routinen `purge`,
-  `memory-expire` und `audit-retention` (Zeitplan, Laufprotokoll
+  `memory-expire`, `audit-retention` und `usage-retention` (Zeitplan,
+  Laufprotokoll
   `routine_run`, ADR-0057).
 - `apps/api/src/who2be_api/core/audit_retention.py` — Endloeschung des
   anonymen `audit_log`-Rests nach 12 Monaten (Owner E1a).
+- `apps/api/src/who2be_api/core/usage_retention.py` — Loeschung der
+  `usage_event`-Rohzeilen nach 13 Monaten (Owner E4b).
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
   (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.

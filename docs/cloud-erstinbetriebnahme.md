@@ -446,10 +446,12 @@ dieser Abschnitt nennt nur, was auf Dokploy anders ist.
 | `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace, dazu die WorkArea-/KB-Sweeps (abgelaufene Artifacts, verwaiste Blobs, geloeschte Area-Stores) |
 | `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Ablauf der 30-Tage-Frist auf `expired` (ADR-0053 3.1.3), loescht nichts |
 | `audit-retention` | `0 4 * * *` | loescht den anonymen Audit-Rest geloeschter Workspaces/Orgs 12 Monate nach der Anonymisierung (Owner E1a) |
+| `usage-retention` | `10 4 * * *` | loescht Nutzungs-Rohzeilen (`usage_event`) aelter als 13 Monate (Owner E4b) |
 | `routine-run-retention` | `15 4 * * *` | loescht das eigene Laufprotokoll nach 90 Tagen |
 
 Alle Routinen sind idempotent. Beim ersten Start holt der Worker Purge,
-Verfall und Audit-Aufbewahrung einmal nach; danach gelten die Zeiten der Tabelle.
+Verfall, Audit- und Nutzungs-Aufbewahrung einmal nach; danach gelten die
+Zeiten der Tabelle.
 
 ### Schedules loeschen, falls angelegt
 
@@ -485,7 +487,8 @@ docker inspect -f '{{.State.Health.Status}}' "$W"
 
 # 2) Wirksame Zeitplaene:
 docker exec "$W" who2be-worker list
-# → audit-retention, purge, memory-expire, routine-run-retention, alle "on"
+# → audit-retention, purge, memory-expire, routine-run-retention,
+#   usage-retention, alle "on"
 
 # 3) Erste Laeufe im Protokoll:
 docker exec -i "$DB" psql -U supabase_admin -d postgres -c \
