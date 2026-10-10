@@ -578,12 +578,7 @@
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
-      "noPlaybooks": "No playbooks linked.",
-      "summaryPlaybooks_one": "{{count}} playbook",
-      "summaryPlaybooks_other": "{{count}} playbooks",
-      "summaryNoPlaybooks": "no playbooks",
-      "summaryNoPersona": "No persona",
-      "summarySeparator": " · "
+      "noPlaybooks": "No playbooks linked."
     },
     "copy": {
       "plain": "Copy",
