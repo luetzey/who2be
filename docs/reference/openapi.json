@@ -10093,6 +10093,69 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/work-areas": {
+      "get": {
+        "tags": [
+          "work-areas"
+        ],
+        "summary": "List Agent Work Areas",
+        "description": "Arbeitsbereiche eines Agenten mit Stufe, Owner-Kennung und Agentenzahl\n(Agent-Ueberblick, Navigation A4). Nur Menschen; Gate liegt im Service.\n\nLiegt bewusst in diesem Router (nicht in `agents.py`): so erbt die Route\ndie Sperre fuer ungebundene Maschinen-Tokens (`require_agent_bound_token`).",
+        "operationId": "list_agent_work_areas_v1_workspaces__workspace_id__agents__agent_id__work_areas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentWorkAreaRead"
+                  },
+                  "title": "Response List Agent Work Areas V1 Workspaces  Workspace Id  Agents  Agent Id  Work Areas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas/{area_id}/grants/{agent_id}": {
       "put": {
         "tags": [
@@ -16292,6 +16355,45 @@
         ],
         "title": "AgentWithRenderedPrompt",
         "description": "Antwort des MCP-Tools `fetch_agent` (und des API-Endpoints `GET .../rendered`).\n\nLiefert den Agent zusammen mit seiner Persona und dem bereits expandierten\nSystem-Prompt als Plain-Text — alle Placeholder wurden bereits aufgeloest,\nsodass MCP-Konsumenten den fertigen Prompt direkt einsetzen koennen.\n\nHinweis: `persona` ist direkt inline (kein Wrapper-Objekt), damit der\nFrontend-Agent und der MCP-Konsument ohne zusaetzlichen Fetch auskommen.\n\n`unresolved_placeholders` enthaelt jeden Placeholder-Key, der beim Render\nnicht aufgeloest werden konnte (z. B. `\"playbook:abc-uuid\"` bei fehlender\naktiver Version). Default leere Liste fuer Backward-Compat.\n\n`locale` (WP5, „Ein Element, eine Sprache\"): die Sprache des System-Prompt-\nTemplates, MIT der `system_prompt_rendered` erzeugt wurde (inkl. der vom\nRenderer angehaengten Sprachanweisung, siehe `agent_language.py`). Default\n`DEFAULT_LOCALE` deckt Alt-Clients/Fixtures ohne das Feld ab."
+      },
+      "AgentWorkAreaRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/WorkAreaScope"
+          },
+          "level": {
+            "$ref": "#/components/schemas/WorkAreaGrantLevel"
+          },
+          "owner": {
+            "type": "boolean",
+            "title": "Owner"
+          },
+          "agent_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Agent Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "level",
+          "owner",
+          "agent_count"
+        ],
+        "title": "AgentWorkAreaRead",
+        "description": "Arbeitsbereich eines Agenten aus Menschen-Sicht (Navigation A4).\n\nAntwort von `GET .../agents/{agent_id}/work-areas` fuer den Block\n„Arbeitsbereiche\" im Agent-Ueberblick. Quelle sind die materialisierten\nGrants des Agenten (inkl. Owner-Grant der privaten Area).\n\n- `level`: Grant-Stufe DIESES Agenten.\n- `owner`: `True` fuer die private Area dieses Agenten („eigener\").\n- `agent_count`: Zahl der Agenten mit Grant an der Area, einschliesslich\n  dieses Agenten („geteilt · +n Agenten\" = `agent_count - 1`)."
       },
       "ApiErrorBody": {
         "properties": {

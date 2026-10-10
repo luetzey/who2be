@@ -235,6 +235,11 @@
     "operationId": "fetch_agent_rendered_v1_workspaces__workspace_id__agents__agent_id__rendered_get"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/work-areas",
+    "operationId": "list_agent_work_areas_v1_workspaces__workspace_id__agents__agent_id__work_areas_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/artifacts",
     "operationId": "create_artifact_in_private_area_v1_workspaces__workspace_id__artifacts_post"

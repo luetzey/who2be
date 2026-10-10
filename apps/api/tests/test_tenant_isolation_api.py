@@ -460,6 +460,8 @@ PROBES: dict[str, Probe] = {
         body={"file_b64": _TEXT_FILE, "filename": "iso.txt"}
     ),
     f"GET {_WS}/work-areas/{{area_id}}/grants": Probe(),
+    # Arbeitsbereiche je Agent (Navigation A4): fremder Agent = agent_not_found.
+    f"GET {_WS}/agents/{{agent_id}}/work-areas": Probe(),
     f"PUT {_WS}/work-areas/{{area_id}}/grants/{{agent_id}}": Probe(body={"level": "read"}),
     f"DELETE {_WS}/work-areas/{{area_id}}/grants/{{agent_id}}": Probe(),
     f"GET {_WS}/work-areas/{{area_id}}/category-rules": Probe(),
