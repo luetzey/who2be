@@ -161,6 +161,7 @@ export function PlaybookDetailPage() {
                   />
                 }
                 description={playbook.content.description}
+                usage={{ entityType: 'playbook', entityId: playbook.id }}
                 // Audit A13: Feedback und Export sind Sekundaeraktionen —
                 // unter md hinter „Mehr", wie bei Persona und Resource.
                 collapseActionsBelowMd

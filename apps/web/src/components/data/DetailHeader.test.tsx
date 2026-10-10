@@ -1,7 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import type { Session } from '@supabase/supabase-js'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { FileText } from 'lucide-react'
-import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { UsageEntityType, UsageStats } from '@/api/types'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
+import { SessionContext } from '@/auth/session-context'
+import { axe } from '@/test/a11y'
 
 import { DetailHeader } from './DetailHeader'
 
@@ -177,5 +183,129 @@ describe('DetailHeader', () => {
     expect(row?.children).toHaveLength(1)
     expect(screen.queryByTestId('detail-header-version')).not.toBeInTheDocument()
     expect(screen.queryByTestId('detail-header-slug')).not.toBeInTheDocument()
+  })
+})
+
+// ------------------------------------------------- Nutzungszeile (U4b)
+
+const session = { access_token: 'jwt' } as unknown as Session
+const USAGE_PATH = '/v1/workspaces/ws-1/usage/playbook/pb1'
+
+function usageStats(overrides: Partial<UsageStats> = {}): UsageStats {
+  return {
+    entity_type: 'playbook',
+    entity_id: 'pb1',
+    name: 'Onboarding',
+    uses_7d: 3,
+    uses_30d: 12,
+    last_used_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    distinct_agents_30d: 2,
+    daily: [],
+    counting_since: '2026-10-08',
+    ...overrides,
+  }
+}
+
+function stubUsage(respond: () => Response | Promise<Response>) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname
+    if (path !== USAGE_PATH) throw new Error(`Unmocked ${path}`)
+    return respond()
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function renderWithUsage(usage?: { entityType: UsageEntityType; entityId: string }) {
+  return render(
+    <SessionContext.Provider
+      value={{
+        session,
+        me: null,
+        sessionLoaded: true,
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        refreshMe: vi.fn(),
+      }}
+    >
+      <AuthTokenProvider>
+        <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+          <Routes>
+            <Route
+              path="/w/:workspaceId/playbooks/:id"
+              element={
+                <DetailHeader
+                  icon={FileText}
+                  iconTone="playbook"
+                  title="Onboarding"
+                  description="Neue Mitarbeitende einarbeiten."
+                  usage={usage}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthTokenProvider>
+    </SessionContext.Provider>,
+  )
+}
+
+describe('DetailHeader — Nutzungszeile (U4b)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('laedt den Zaehler des Elements und zeigt „n× in 30 Tagen · zuletzt vor …“ mit Zaehlbeginn', async () => {
+    const fetchMock = stubUsage(() => new Response(JSON.stringify(usageStats())))
+    renderWithUsage({ entityType: 'playbook', entityId: 'pb1' })
+
+    expect(screen.getByTestId('detail-header-usage-loading')).toBeInTheDocument()
+    const line = await screen.findByTestId('detail-header-usage')
+    expect(line).toHaveTextContent(
+      'Nutzung: 12× in 30 Tagen · zuletzt vor 2 Stunden · gezählt seit 08.10.2026',
+    )
+    expect(screen.queryByTestId('detail-header-usage-loading')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ohne Auslieferung: „Noch keine Nutzung · gezählt seit 08.10.2026“', async () => {
+    stubUsage(
+      () =>
+        new Response(JSON.stringify(usageStats({ uses_7d: 0, uses_30d: 0, last_used_at: null }))),
+    )
+    renderWithUsage({ entityType: 'playbook', entityId: 'pb1' })
+    const line = await screen.findByTestId('detail-header-usage')
+    expect(line).toHaveTextContent('Noch keine Nutzung · gezählt seit 08.10.2026')
+  })
+
+  it('Fehler: die Zeile entfaellt still, der Header bleibt', async () => {
+    const fetchMock = stubUsage(() => new Response(JSON.stringify({ detail: 'x' }), { status: 500 }))
+    renderWithUsage({ entityType: 'playbook', entityId: 'pb1' })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByTestId('detail-header-usage-loading')).toBeNull())
+    expect(screen.queryByTestId('detail-header-usage')).toBeNull()
+    expect(screen.getByRole('heading', { level: 1, name: 'Onboarding' })).toBeInTheDocument()
+  })
+
+  it('unerwartete Antwort zaehlt als Fehler', async () => {
+    stubUsage(() => new Response(JSON.stringify({ counting_since: 'kaputt' })))
+    renderWithUsage({ entityType: 'playbook', entityId: 'pb1' })
+    await waitFor(() => expect(screen.queryByTestId('detail-header-usage-loading')).toBeNull())
+    expect(screen.queryByTestId('detail-header-usage')).toBeNull()
+  })
+
+  it('ohne Prop `usage` gibt es weder Zeile noch Anfrage', () => {
+    const fetchMock = stubUsage(() => new Response('{}'))
+    renderWithUsage()
+    expect(screen.queryByTestId('detail-header-usage-loading')).toBeNull()
+    expect(screen.queryByTestId('detail-header-usage')).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('hat mit Nutzungszeile keine axe-Violations', async () => {
+    stubUsage(() => new Response(JSON.stringify(usageStats())))
+    const { container } = renderWithUsage({ entityType: 'playbook', entityId: 'pb1' })
+    await screen.findByTestId('detail-header-usage')
+    expect(await axe(container)).toHaveNoViolations()
   })
 })

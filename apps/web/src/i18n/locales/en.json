@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} of {{total}} shown"
     },
+    "usageLine": {
+      "label": "Usage",
+      "used": "{{n}}× in {{days}} days · last used {{age}} · counted since {{date}}",
+      "never": "Not used yet · counted since {{date}}"
+    },
     "table": {
       "scrollHint": "Swipe sideways for more columns"
     },
