@@ -428,18 +428,56 @@ def _missing_overrides(env: dict[str, Any], routines: Iterable[Routine]) -> list
     )
 
 
+# `worker` laeuft nach den Overrides, `api` zeigt sie in GET /v1/system/routines
+# an (ADR-0057 §7, `routine_overview_service`). Beide lesen die Tabelle aus der
+# eigenen Prozess-Umgebung — fehlt ein Paar an einem der beiden, weicht die
+# Anzeige still vom tatsaechlichen Lauf ab.
+_OVERRIDE_SERVICES = ("worker", "api")
+
+
+@pytest.mark.parametrize("service", _OVERRIDE_SERVICES)
 @pytest.mark.parametrize("stack", sorted(_STACKS), ids=str)
 # effect-exempt: Konfigurations-Drift, Env-Override erreicht den Container (ADR-0057 §4)
-def test_worker_reicht_die_overrides_jeder_routine_durch(stack: str) -> None:
-    """Jede registrierte Routine hat ihre `_SCHEDULE`/`_ENABLED` am `worker`.
+def test_dienst_reicht_die_overrides_jeder_routine_durch(stack: str, service: str) -> None:
+    """Jede registrierte Routine hat ihre `_SCHEDULE`/`_ENABLED` an `worker` UND `api`.
 
     Die Stacks nutzen kein `env_file`: was hier fehlt, setzt der Betreiber in
-    der `.env` und es passiert nichts. Eine neue Routine ohne neue Zeilen in
-    den Compose-Dateien macht diesen Test rot.
+    der `.env` und es passiert nichts (am `worker`) bzw. die Betreiber-Route
+    zeigt den Code-Zeitplan (an `api`). Eine neue Routine ohne neue Zeilen in
+    beiden Bloecken der Compose-Dateien macht diesen Test rot.
     """
-    env = _merged_service(_STACKS[stack], "worker").get("environment") or {}
+    env = _merged_service(_STACKS[stack], service).get("environment") or {}
     missing = _missing_overrides(env, REGISTRY)
-    assert not missing, f"{stack}: worker reicht nicht durch: " + "; ".join(missing)
+    assert not missing, f"{stack}: {service} reicht nicht durch: " + "; ".join(missing)
+
+
+@pytest.mark.parametrize("relpath", _BASE_COMPOSES)
+def test_api_traegt_dieselben_override_zeilen_wie_worker(relpath: str) -> None:
+    """Gleiche Namen, gleiche Vorgaben, kein Extra an einem der beiden Dienste.
+
+    Ergaenzt den Soll-Abgleich oben um den Fall einer Override-Zeile, die nur
+    an einem Dienst steht (z. B. ein Tippfehler-Paar am `worker`).
+    """
+    services = _services(relpath)
+
+    def _overrides(name: str) -> dict[str, Any]:
+        env = services[name].get("environment") or {}
+        return {
+            key: value
+            for key, value in env.items()
+            if key == WORKER_ENABLED_ENV or key.startswith("WHO2BE_ROUTINE_")
+        }
+
+    assert _overrides("api") == _overrides("worker"), relpath
+
+
+def test_override_drift_erkennt_eine_fehlende_api_zeile() -> None:
+    """Rot-Probe: fehlt eine Variable im api-Block, meldet der Drift-Test sie."""
+    env = dict(_merged_service(_STACKS["hetzner"], "api")["environment"])
+    assert not _missing_overrides(env, REGISTRY)
+    victim = schedule_env_key(next(iter(REGISTRY)).name)
+    del env[victim]
+    assert [m.split(" ")[0] for m in _missing_overrides(env, REGISTRY)] == [victim]
 
 
 def test_override_drift_erkennt_eine_neue_routine() -> None:

@@ -6,6 +6,8 @@
   `WHO2BE_OPERATORS` mit MFA-Session (aal2), in Cloud und On-Prem. Alle anderen
   bekommen 403, auch Org-Admins von Kunden-Organisationen und API-Tokens. Ein
   ungültiger Zeitplan-Override ergibt 503 mit dem Namen der Variable statt eines
-  Serverfehlers. Bekannte Einschränkung: Der `api`-Dienst bekommt die
-  `WHO2BE_ROUTINE_*`-Variablen in den Compose-Stacks noch nicht. Bis das
-  nachgezogen ist, zeigt die Übersicht die Zeitpläne aus dem Code.
+  Serverfehlers. Der `api`-Dienst bekommt dafür in allen Compose-Stacks
+  dieselben `WHO2BE_WORKER_ENABLED`- und `WHO2BE_ROUTINE_*`-Variablen wie der
+  `worker`, damit die Übersicht die Zeitpläne zeigt, nach denen der Worker
+  tatsächlich läuft. Ein Drift-Test schlägt fehl, wenn eine Routine an einem
+  der beiden Dienste fehlt.
