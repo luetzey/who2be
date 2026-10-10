@@ -2086,3 +2086,40 @@ export interface PatternListRead {
   window_days: number
   patterns: PatternRead[]
 }
+
+// ADR-0057 §7 (Paket P4c/P5) — Betreiber-Sicht auf die Hintergrund-Routinen
+// (`GET /v1/system/routines`). Spiegelt `RoutineLastRun`, `RoutineStatus` und
+// `RoutinesOverview` aus packages/models (`who2be_models/routine.py`). Nur fuer
+// Betreiber (`WHO2BE_OPERATORS`, MFA); alle anderen bekommen 403.
+export type RoutineRunStatus = 'running' | 'succeeded' | 'failed' | 'skipped'
+export type RoutineRunTrigger = 'schedule' | 'cli' | 'manual'
+export type RoutineConfigSource = 'code' | 'env'
+
+export interface RoutineLastRun {
+  status: RoutineRunStatus
+  trigger: RoutineRunTrigger
+  started_at: string
+  /** `null`, solange der Lauf noch `running` ist. */
+  duration_ms: number | null
+  /** Nur Zaehler, nie Inhalte. */
+  result: Record<string, number> | null
+  /** Nur der Klassenname der Exception bzw. `Abandoned`. */
+  error_class: string | null
+}
+
+export interface RoutineStatus {
+  name: string
+  /** Cron-Ausdruck (UTC) oder `@every …`. */
+  schedule: string
+  enabled: boolean
+  source: RoutineConfigSource
+  last_run: RoutineLastRun | null
+  next_run_at: string | null
+  last_success_at: string | null
+  external_schedule_detected: boolean
+}
+
+export interface RoutinesOverview {
+  routines: RoutineStatus[]
+  worker_last_seen_at: string | null
+}
