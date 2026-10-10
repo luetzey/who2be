@@ -50,6 +50,7 @@ from who2be_api.routers import (
     external_tools,
     feedback,
     gdpr,
+    inbox,
     invitations,
     kb,
     me,
@@ -567,6 +568,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
+    # Aufgaben-Zaehler fuer Glocke/Dashboard/Agent (Navigation W1, nur Menschen).
+    app.include_router(inbox.router, prefix=_WORKSPACE_PREFIX)
     # Identitaets-/Capability-Introspektion (#253) — ungated Read, Viewer-offen.
     app.include_router(whoami.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)

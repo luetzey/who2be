@@ -14008,6 +14008,71 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/inbox/counts": {
+      "get": {
+        "tags": [
+          "inbox"
+        ],
+        "summary": "Get Inbox Counts",
+        "operationId": "get_inbox_counts_v1_workspaces__workspace_id__inbox_counts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/whoami": {
       "get": {
         "tags": [
@@ -19171,6 +19236,93 @@
           "worker"
         ],
         "title": "Health"
+      },
+      "InboxCounts": {
+        "properties": {
+          "follow_ups_due": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Ups Due"
+          },
+          "memory_approval": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Approval"
+          },
+          "versions_review": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versions Review"
+          },
+          "system_prompts_review": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompts Review"
+          },
+          "cases_open": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases Open"
+          },
+          "patterns": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patterns"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "InboxCounts",
+        "description": "Antwort von `GET /inbox/counts[?agent_id]`.\n\nJe Art eine Zahl. `None` heisst: diese Art gibt es fuer die Rolle des\nAufrufers nicht (Abschnitt entfaellt), `0` heisst: sichtbar, nichts offen.\n\n- `follow_ups_due`: faellige Nachkontrollen — Massnahmen, deren\n  Nachschau-Datum (`measure.follow_up_at`, sonst das des Protokolls)\n  heute oder frueher liegt und die weder eingestuft noch zurueckgezogen\n  sind. Ab `editor`.\n- `memory_approval`: Gedaechtnis zur Freigabe (`status=pending` ohne\n  Lernvorschlaege plus offene Aenderungsvorschlaege). Ab `viewer`; ein\n  viewer zaehlt nur das eigene Nutzergedaechtnis.\n- `versions_review`, `system_prompts_review`: Versionen bzw.\n  System-Prompts zur Freigabe. Ab `editor` sichtbar, in `total` nur fuer\n  `admin` (nur admin darf freigeben). Mit `agent_id` immer `None`: eine\n  Version gehoert keinem einzelnen Agenten.\n- `cases_open`: Rueckmeldungen, nicht eingeordnet (Faelle `open` und\n  `reopened`). Ab `editor`.\n- `patterns`: Zahl der Muster. Ab `editor`, nie in `total` (Muster haben\n  keinen Zustand „erledigt“, ADR-0053 3.7).\n- `total`: die Zahl an der Glocke (Spec §2.2, Spalte „zaehlt in Glocke“)."
       },
       "IngestRequest": {
         "properties": {

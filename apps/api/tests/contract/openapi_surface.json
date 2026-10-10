@@ -400,6 +400,11 @@
     "operationId": "set_feedback_resolution_v1_workspaces__workspace_id__feedback__feedback_id__resolution_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/inbox/counts",
+    "operationId": "get_inbox_counts_v1_workspaces__workspace_id__inbox_counts_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/ingest",
     "operationId": "ingest_into_private_area_v1_workspaces__workspace_id__ingest_post"
