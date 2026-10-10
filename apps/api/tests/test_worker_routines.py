@@ -33,7 +33,7 @@ from typing import Literal
 import asyncpg
 import pytest
 
-from who2be_api.core import memory_expiry, purge
+from who2be_api.core import audit_retention, memory_expiry, purge
 from who2be_api.core.config import get_settings
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
@@ -49,6 +49,7 @@ _T0 = datetime(2026, 11, 6, 3, 45, tzinfo=UTC)
 _EXPECTED = {
     "purge": "30 3 * * *",
     "memory-expire": "45 3 * * *",
+    "audit-retention": "0 4 * * *",
     "routine-run-retention": "15 4 * * *",
 }
 
@@ -457,5 +458,81 @@ def test_catch_up_after_skipped_slot_runs_once_at_start_time() -> None:
         outcomes = await Runner(reg, env={}, clock=lambda: start).start(conn)
         assert [(o.status, o.slot) for o in outcomes] == [("succeeded", start)]
         assert calls == [start]
+
+    _in_schema(body)
+
+
+# --- audit-retention (Owner E1a, Paket E1-2) ---------------------------------
+
+
+def test_audit_retention_is_registered_daily_with_catch_up() -> None:
+    a = REGISTRY.get(routines.AUDIT_RETENTION)
+    assert (a.catch_up, a.touches_tablestore) == (True, False)
+    assert a.schedule.expr == "0 4 * * *"
+    assert audit_retention.AUDIT_ANONYMIZED_RETENTION == "12 months"
+
+
+async def _insert_audit(
+    conn: asyncpg.Connection,
+    target: str,
+    *,
+    created_at: datetime,
+    anonymized_at: datetime | None,
+) -> None:
+    await conn.execute(
+        "INSERT INTO audit_log (action, target, created_at, anonymized_at) "
+        "VALUES ('member.removed', $1, $2, $3)",
+        target,
+        created_at,
+        anonymized_at,
+    )
+
+
+@pytest_integration
+def test_audit_retention_deletes_only_anonymized_rows_older_than_twelve_months(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Akzeptanz E1-2: 11 Monate bleibt, 13 Monate faellt; lebendes Audit-Log bleibt.
+
+    Laeuft ueber den Runner wie im Worker (Trigger `schedule`) und belegt die
+    Zeilen im Worker-Log.
+    """
+    slot = datetime(2026, 11, 6, 4, 0, tzinfo=UTC)
+    eleven = datetime(2025, 12, 6, 4, 0, tzinfo=UTC)
+    twelve = datetime(2025, 11, 6, 4, 0, tzinfo=UTC)  # genau auf der Grenze
+    thirteen = datetime(2025, 10, 6, 4, 0, tzinfo=UTC)
+    old = datetime(2024, 1, 1, tzinfo=UTC)
+
+    async def body(conn: asyncpg.Connection) -> None:
+        await _insert_audit(conn, "anon-11", created_at=old, anonymized_at=eleven)
+        await _insert_audit(conn, "anon-12", created_at=old, anonymized_at=twelve)
+        await _insert_audit(conn, "anon-13", created_at=old, anonymized_at=thirteen)
+        # Lebender Scope: uralt, aber nie anonymisiert → nicht Sache der Routine.
+        await _insert_audit(conn, "live-old", created_at=old, anonymized_at=None)
+
+        runner = Runner(REGISTRY, env={}, clock=lambda: slot, worker_id="w:1")
+        with caplog.at_level(logging.INFO, logger="who2be_api.worker.runner"):
+            outcome = await runner.execute(
+                conn, REGISTRY.get(routines.AUDIT_RETENTION), slot, "schedule"
+            )
+        assert outcome is not None and outcome.status == "succeeded"
+
+        left = await conn.fetch("SELECT target FROM audit_log ORDER BY target")
+        assert [r["target"] for r in left] == ["anon-11", "anon-12", "live-old"]
+        (row,) = await _rows(conn, routines.AUDIT_RETENTION)
+        assert (row["trigger"], row["status"], row["result"]) == (
+            "schedule",
+            "succeeded",
+            '{"deleted": 1}',
+        )
+        log = [r.getMessage() for r in caplog.records]
+        assert any(m.startswith("Routine audit-retention, Slot ") and "Start" in m for m in log)
+        assert any("audit-retention" in m and "succeeded {'deleted': 1}" in m for m in log)
+
+        # Idempotent: ein zweiter Lauf auf demselben Slot findet nichts mehr.
+        assert await audit_retention.delete_expired_anonymized_audit(conn, slot) == 0
+        # Die Grenzzeile faellt erst danach (strikt aelter als 12 Monate).
+        later = slot + timedelta(seconds=1)
+        assert await audit_retention.delete_expired_anonymized_audit(conn, later) == 1
 
     _in_schema(body)
