@@ -17,8 +17,12 @@ sondern die GESAMTE Tool-Liste.
   `set_convention`), NICHT das Budget anheben.
 - **Docstring-Cap fuer neue Domain-Module:** Die `tools/`-Module (WP8+)
   halten je Tool <= 1100 Zeichen Beschreibung. Der Bestand in `server.py`
-  ist grandfathered (laengste Beschreibung 2047 Zeichen, transition-Tools
-  mit `TRANSITION_RULE_DOC`).
+  ist grandfathered, haelt aber wie alle Werkzeuge die 2048-Zeichen-Kappung
+  von Claude Code.
+- **Je Referenzprofil (MCP-Token T1):** Kennzahl der Teilliste, die ein
+  Agent beim Start bekommt (`who2be_mcp.payload_report`), dazu die Guards
+  „erster Satz <= 100 Zeichen" und die Ratsche gegen Entwickler-Historie
+  im Draht-Schema.
 
 **Antwortgroesse je Werkzeug:** Die Laufzeit deckelt eine EINZELNE
 Tool-Antwort bei 50.000 Zeichen. Darueber sieht das Modell die Antwort nicht —
@@ -39,6 +43,7 @@ import json
 import pathlib
 import pkgutil
 from collections.abc import Callable
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
@@ -47,9 +52,10 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ValidationError
 
-from who2be_mcp import server
+from who2be_mcp import payload_report, server
 from who2be_mcp import tools as tools_pkg
 from who2be_mcp.client import ApiClient
+from who2be_mcp.config import Settings
 from who2be_mcp.server import (
     _RESPONSE_FORMATS,
     PersonaWithPlaybooks,
@@ -205,6 +211,225 @@ def test_new_domain_tool_docstrings_stay_capped(module_name: str) -> None:
         and len(inspect.getdoc(fn) or "") > _NEW_TOOL_DOC_CAP
     }
     assert not offenders, f"Docstrings ueber {_NEW_TOOL_DOC_CAP} Zeichen: {offenders}"
+
+
+# ---------------------------------------------------------------------------
+# Katalog je Referenzprofil und Text-Guards (MCP-Token T1)
+# ---------------------------------------------------------------------------
+
+# Claude Code kappt Werkzeugbeschreibungen bei 2 048 Zeichen; was danach steht,
+# kommt beim Agenten nicht an (Claude-Code-Doku „For MCP server authors").
+_DESCRIPTION_CHAR_CAP = 2_048
+# Kurzkataloge (Hermes `tool_search`, Claude Code Tool Search) zeigen ohne
+# Suche nur Namen und ersten Satz. Er soll den Zweck tragen, nicht erklaeren.
+_FIRST_SENTENCE_CHAR_CAP = 100
+
+# Ratsche fuer Entwickler-Historie im Draht-Schema: Anzahl der Schema-Texte je
+# Werkzeug, die ADR-, Phase-, Track-, Welle-, WP- oder Gap-Verweise tragen
+# (Stand 2026-10-10). Sie stammen aus Pydantic-Docstrings in
+# `packages/models` und werden in T2 (Schema-Diaet) entfernt. Bis dahin darf
+# kein Werkzeug mehr davon bekommen und kein neues dazukommen; wird ein Wert
+# kleiner, ist er hier mit abzusenken — am Ende steht ein leeres Dict.
+_DEVELOPER_REF_BASELINE: dict[str, int] = {
+    "create_agent": 3,
+    "create_edge": 1,
+    "create_node": 1,
+    "create_persona": 5,
+    "create_playbook": 3,
+    "create_resource": 2,
+    "neighbors": 1,
+    "propose_memory_change": 1,
+    "record_usage": 1,
+    "resolve_feedback": 1,
+    "search_content": 1,
+    "set_playbook_resource_links": 1,
+    "set_resource_sub_resources": 1,
+    "transition_system_prompt": 1,
+    "update_agent": 4,
+    "update_node": 1,
+    "update_persona": 4,
+    "update_playbook": 2,
+    "update_resource": 1,
+}
+
+
+def _wire_tools() -> list[dict[str, Any]]:
+    return asyncio.run(payload_report.wire_tools(mcp))
+
+
+def _long_descriptions(tools: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        tool["name"]: len(tool.get("description") or "")
+        for tool in tools
+        if len(tool.get("description") or "") > _DESCRIPTION_CHAR_CAP
+    }
+
+
+def _long_first_sentences(tools: list[dict[str, Any]]) -> dict[str, str]:
+    found = {tool["name"]: payload_report.first_sentence(tool.get("description")) for tool in tools}
+    return {name: s for name, s in found.items() if len(s) > _FIRST_SENTENCE_CHAR_CAP}
+
+
+def _developer_ref_counts(tools: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {tool["name"]: len(payload_report.developer_refs(tool)) for tool in tools}
+    return {name: count for name, count in counts.items() if count}
+
+
+def _with_description(tools: list[dict[str, Any]], description: str) -> list[dict[str, Any]]:
+    """Kopie der Liste, in der das erste Werkzeug `description` traegt."""
+    return [{**tools[0], "description": description}, *tools[1:]]
+
+
+def _respond_with(payload: dict[str, object]) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    return handler
+
+
+def test_reference_profiles_measure_the_middleware_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Profil-Kennzahl ist das, was die Middleware wirklich ausliefert.
+
+    Fuer jedes Agent-Profil wird ein `whoami` aus seiner Policy gebaut und
+    `tools/list` durch den echten `PolicyFilterMiddleware` geschickt. Weicht
+    die Simulation in `payload_report` davon ab (eigene Sichtbarkeitslogik,
+    vergessene Policy-Felder), misst die Kennzahl einen Agenten, den es nicht
+    gibt — dann faellt dieser Test.
+    """
+    from who2be_mcp import policy_filter
+
+    tools = _wire_tools()
+    for profile in payload_report.REFERENCE_PROFILES:
+        policy = profile.policy
+        payload: dict[str, object] = {
+            "user_id": str(uuid4()),
+            "workspace_id": str(_WORKSPACE_ID),
+            "role": profile.role.value,
+            "is_api_token": not profile.unrestricted,
+            "agent_id": None if profile.unrestricted else str(uuid4()),
+            "unrestricted": profile.unrestricted,
+            "capabilities": None if policy is None else policy.granted_capabilities(),
+            "read_scopes": None if policy is None else policy.read_scopes(),
+            "memory_mode": None if policy is None else policy.memory_mode,
+            "features": ["core"],
+        }
+        policy_filter._whoami_cache.clear()
+        monkeypatch.setattr(
+            policy_filter,
+            "get_settings",
+            lambda: Settings(api_base_url="http://test", api_token="w2b_t1", transport="stdio"),
+        )
+        monkeypatch.setattr(server, "build_client", _factory(_respond_with(payload)))
+        filtered = asyncio.run(_tools_payload_bytes())
+        simulated = payload_report.visible_tools(tools, profile)
+        assert filtered == payload_report.payload_bytes(simulated), profile.key
+    policy_filter._whoami_cache.clear()
+
+
+def test_reference_profiles_order_and_figures() -> None:
+    """Die Kennzahl je Profil: Teilmengen-Ordnung und Gegenprobe zum Gesamt-Guard.
+
+    Rot-Probe ist die Ordnung selbst: liefert ein Profil wegen eines
+    Filterfehlers alles oder nichts, faellt die strikte Ungleichung.
+    """
+    tools = _wire_tools()
+    sizes = {
+        profile.key: payload_report.payload_bytes(payload_report.visible_tools(tools, profile))
+        for profile in payload_report.REFERENCE_PROFILES
+    }
+    total = payload_report.payload_bytes(tools)
+    assert set(sizes) == {"default", "default_memory", "builder", "editor"}
+    assert 0 < sizes["default"] < sizes["default_memory"] < sizes["editor"] < sizes["builder"]
+    # Der Builder hat alle Rechte und sieht damit den ganzen Katalog: seine
+    # Kennzahl ist der Gesamt-Guard. Faellt ein Werkzeug fuer ihn heraus, ist
+    # die Builder-Policy unvollstaendig, nicht der Katalog kleiner geworden.
+    assert sizes["builder"] == total
+    assert total <= _PAYLOAD_BUDGET_BYTES
+
+
+def test_tool_descriptions_stay_under_client_cap() -> None:
+    """Keine Werkzeugbeschreibung ueber 2 048 Zeichen (Kappung bei Claude Code)."""
+    tools = _wire_tools()
+    # Rot-Probe: eine Beschreibung knapp ueber der Grenze wird gefunden.
+    assert _long_descriptions(_with_description(tools, "x" * (_DESCRIPTION_CHAR_CAP + 1)))
+    offenders = _long_descriptions(tools)
+    assert not offenders, (
+        f"Beschreibungen ueber {_DESCRIPTION_CHAR_CAP} Zeichen: {offenders}. Der Rest wird "
+        "bei Claude Code abgeschnitten — kuerzen, das Wichtige nach vorn."
+    )
+
+
+def test_tool_first_sentences_fit_short_catalogs() -> None:
+    """Der erste Satz jeder Beschreibung bleibt bei hoechstens 100 Zeichen."""
+    tools = _wire_tools()
+    long_sentence = "Wort " * 25 + "Ende. Zweiter Satz."
+    assert _long_first_sentences(_with_description(tools, long_sentence))
+    assert not _long_first_sentences(_with_description(tools, "Kurz. " + long_sentence))
+    offenders = _long_first_sentences(tools)
+    assert not offenders, (
+        f"Erste Saetze ueber {_FIRST_SENTENCE_CHAR_CAP} Zeichen: {offenders}. Kurzkataloge "
+        "zeigen nur diesen Satz — Zweck und Suchwoerter nach vorn, Details danach."
+    )
+
+
+def test_wire_schema_developer_refs_only_shrink() -> None:
+    """Entwickler-Historie im Draht-Schema waechst nicht (Ratsche bis T2).
+
+    Ein neuer Verweis auf ADR, Phase, Track, Welle, WP oder Gap in einem
+    Pydantic-Docstring, der als Schema auf den Draht geht, faellt hier auf.
+    Die Historie gehoert in den Code-Kommentar oder die ADR, nicht in das
+    Schema, das jeder Agent bezahlt.
+    """
+    tools = _wire_tools()
+    probe = [
+        {**tools[0], "inputSchema": {"type": "object", "description": "Seit Phase 3 (ADR-0042)."}}
+    ]
+    assert _developer_ref_counts(probe) == {tools[0]["name"]: 1}
+    assert not _developer_ref_counts(
+        [{**tools[0], "inputSchema": {"description": "Phasenmodell und Trackpad"}}]
+    )
+
+    counts = _developer_ref_counts(tools)
+    grown = {
+        name: (count, _DEVELOPER_REF_BASELINE.get(name, 0))
+        for name, count in counts.items()
+        if count > _DEVELOPER_REF_BASELINE.get(name, 0)
+    }
+    assert not grown, (
+        f"Mehr Entwickler-Verweise im Draht-Schema als erlaubt (ist, Basis): {grown}. "
+        "Den Verweis aus dem Docstring des Modells nehmen (Kommentar statt Docstring)."
+    )
+    shrunk = {
+        name: (counts.get(name, 0), base)
+        for name, base in _DEVELOPER_REF_BASELINE.items()
+        if counts.get(name, 0) < base
+    }
+    assert not shrunk, (
+        f"Weniger Entwickler-Verweise als die Basis (ist, Basis): {shrunk}. "
+        "Gut so — `_DEVELOPER_REF_BASELINE` auf den neuen Stand absenken."
+    )
+
+
+def test_first_sentence_splits_on_sentence_end_and_paragraph() -> None:
+    assert payload_report.first_sentence("Liefert X: Y. Danach mehr.") == "Liefert X: Y."
+    assert payload_report.first_sentence("Ohne Punkt\n\nzweiter Absatz") == "Ohne Punkt"
+    assert payload_report.first_sentence("Zeile eins\n  Zeile zwei. Rest") == (
+        "Zeile eins Zeile zwei."
+    )
+    assert payload_report.first_sentence(None) == ""
+
+
+def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixture[str]) -> None:
+    """Der Bericht fuer die Doku nennt alle Profile und genau zehn Werkzeuge."""
+    payload_report.main()
+    out = capsys.readouterr().out
+    for profile in payload_report.REFERENCE_PROFILES:
+        assert f"| {profile.label} |" in out
+    costs = payload_report.tool_costs(_wire_tools())
+    assert f"| 1 | `{costs[0].name}` |" in out
+    assert f"| 10 | `{costs[9].name}` |" in out
+    assert "| 11 |" not in out
+    assert costs == sorted(costs, key=lambda c: -c.total)
 
 
 # ---------------------------------------------------------------------------

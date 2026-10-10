@@ -212,11 +212,90 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-08-13, Einfuehrung (name/description/inputSchema) | 71 | 110.133 Bytes |
 | 2026-10-06, alte Messung auf FastMCP 4.0.11 | 86 | 136.764 Bytes |
 | 2026-10-06, Draht-Form auf FastMCP 4.0.11 | 86 | **142.295 Bytes** |
+| 2026-10-10, Draht-Form | 90 | **147.325 Bytes** |
 
-Bis zur Grenze bleiben damit 17.705 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 12.675 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
+
+### Katalog je Referenzprofil
+
+Den vollen Katalog bekommt nur, wer alle Rechte hat. Ein Agent sieht beim
+Start die Teilmenge, die der `PolicyFilterMiddleware` fuer seine Rechte
+durchlaesst (ADR-0042). Diese Teilmenge ist die eigentliche Kennzahl „was
+kostet ein Agent-Start“. Gemessen wird sie mit
+`apps/mcp/src/who2be_mcp/payload_report.py`; der Bericht laesst sich jederzeit
+neu erzeugen:
+
+```bash
+uv run python -m who2be_mcp.payload_report
+```
+
+Stand 2026-10-10, 90 Werkzeuge, Draht-Form wie oben:
+
+| Profil | Werkzeuge | Bytes |
+| --- | ---: | ---: |
+| Agent, Default-Policy | 38 | 46.316 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 51.775 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 147.325 |
+| Mensch/JWT, Rolle editor | 86 | 141.866 |
+| alle Werkzeuge (Guard) | 90 | 147.325 |
+
+Die Profile sind keine Nachbildung: `test_reference_profiles_measure_the_
+middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
+echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht. Zielwerte je
+Profil gibt es noch nicht; sie kommen mit der Beschreibungs-Diaet (T3) als
+harter Test. Bis dahin ist die Tabelle eine Kennzahl, keine Grenze.
+
+Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
+
+| # | Werkzeug | gesamt | Beschreibung | Schema |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | `create_persona` | 8.365 | 1.522 | 6.654 |
+| 2 | `update_agent` | 7.639 | 148 | 7.368 |
+| 3 | `update_persona` | 7.325 | 724 | 6.461 |
+| 4 | `create_agent` | 7.181 | 244 | 6.812 |
+| 5 | `create_playbook` | 3.998 | 1.465 | 2.342 |
+| 6 | `create_resource` | 3.443 | 1.195 | 2.069 |
+| 7 | `create_external_tool` | 3.314 | 737 | 2.427 |
+| 8 | `update_playbook` | 2.999 | 500 | 2.360 |
+| 9 | `update_external_tool` | 2.827 | 375 | 2.305 |
+| 10 | `create_system_prompt` | 2.826 | 1.286 | 1.327 |
+
+Bei den vier teuersten liegt das Gewicht im Schema, nicht in der
+Beschreibung: das `inputSchema` traegt das ganze Inhalts- bzw.
+Policy-Modell samt seiner Docstrings.
+
+### Text-Guards
+
+Drei Guards halten den Text fest, den ein Client wirklich sieht:
+
+- **Beschreibung hoechstens 2.048 Zeichen**
+  (`test_tool_descriptions_stay_under_client_cap`). Claude Code schneidet
+  Werkzeugbeschreibungen dort ab; was dahinter steht, kommt beim Agenten nicht
+  an. Gilt fuer alle Werkzeuge, auch den Bestand in `server.py`.
+- **Erster Satz hoechstens 100 Zeichen**
+  (`test_tool_first_sentences_fit_short_catalogs`). Kurzkataloge (Hermes
+  `tool_search`, Claude Code Tool Search) zeigen ohne Suche nur Namen und
+  ersten Satz. Der Satz soll den Zweck tragen; Bedingungen und Details
+  gehoeren dahinter. Ein Satz endet an `.`, `!` oder `?` vor Leerraum oder an
+  einem Absatzwechsel.
+- **Keine neue Entwickler-Historie im Draht-Schema**
+  (`test_wire_schema_developer_refs_only_shrink`). Verweise auf ADR, Phase,
+  Track, Welle, WP oder Gap in den `description`-Texten des `inputSchema`
+  stammen aus Pydantic-Docstrings in `packages/models` und kosten jeden
+  Agenten Bytes, ohne einen Aufruf zu erklaeren. Der Bestand (35 Texte in
+  19 Werkzeugen) steht als Ratsche `_DEVELOPER_REF_BASELINE` im Test: kein
+  Werkzeug darf mehr davon bekommen, und wer einen entfernt, senkt die Basis
+  ab. Die Schema-Diaet (T2) leert sie. Historie gehoert in einen
+  Code-Kommentar oder die ADR, nicht in den Docstring eines Modells, das als
+  Schema ausgeliefert wird.
+
+**Wenn ein Text-Guard reisst:** den Text kuerzen bzw. den Satz umstellen,
+nicht die Grenze anheben.
+
+### Antwortgroesse je Werkzeug
 
 Die Antwort-Tests messen die Antwort so, wie sie ankommt: unter `text` den
 Markdown-String, unter `full` das serialisierte Modell (`model_dump_json`).
