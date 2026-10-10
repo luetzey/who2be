@@ -26,6 +26,7 @@ from who2be_models import (
     WorkAreaGrantRead,
     WorkAreaRead,
 )
+from who2be_models.workarea import AgentWorkAreaRead
 
 _AREA_COLUMNS = (
     "id, workspace_id, scope, owner_agent_id, name, retention_days, created_at, updated_at"
@@ -105,6 +106,10 @@ class WorkAreaRepository(Protocol):
     async def list_assignments_for_agent(
         self, workspace_id: UUID, agent_id: UUID
     ) -> list[WorkAreaAssignment]: ...
+
+    async def list_for_agent(
+        self, workspace_id: UUID, agent_id: UUID, restrict_ids: list[UUID] | None
+    ) -> list[AgentWorkAreaRead]: ...
 
 
 class PgWorkAreaRepository:
@@ -218,3 +223,29 @@ class PgWorkAreaRepository:
             agent_id,
         )
         return [WorkAreaAssignment.model_validate(dict(row)) for row in rows]
+
+    async def list_for_agent(
+        self, workspace_id: UUID, agent_id: UUID, restrict_ids: list[UUID] | None
+    ) -> list[AgentWorkAreaRead]:
+        """Arbeitsbereiche eines Agenten fuer den Agent-Ueberblick (Navigation A4).
+
+        Grant-Areas des Agenten mit Owner-Kennung und Agentenzahl je Area.
+        `restrict_ids` ist der Scope des menschlichen Aufrufers
+        (`readable_area_ids`: `None` = editor+, sonst die shared Areas).
+        """
+        rows = await self._pool.fetch(
+            "SELECT wa.id, wa.name, wa.scope, g.level, "
+            "(wa.scope = 'private' AND wa.owner_agent_id = g.agent_id) AS owner, "
+            "(SELECT count(*) FROM work_area_grant c "
+            " WHERE c.workspace_id = wa.workspace_id AND c.area_id = wa.id)::int "
+            "AS agent_count "
+            "FROM work_area_grant g "
+            "JOIN work_area wa ON wa.id = g.area_id AND wa.workspace_id = g.workspace_id "
+            "WHERE g.workspace_id = $1 AND g.agent_id = $2 "
+            "AND ($3::uuid[] IS NULL OR wa.id = ANY($3::uuid[])) "
+            "ORDER BY (wa.scope = 'private') DESC, wa.name, wa.id",
+            workspace_id,
+            agent_id,
+            restrict_ids,
+        )
+        return [AgentWorkAreaRead.model_validate(dict(row)) for row in rows]
