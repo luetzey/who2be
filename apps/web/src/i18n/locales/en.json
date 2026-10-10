@@ -861,50 +861,24 @@
       "pageOf": "Page {{page}} of {{totalPages}}",
       "next": "Next"
     },
-    "attention": {
-      "ariaLabel": "Needs your attention now",
-      "eyebrow": "Needs your attention now",
-      "reviews": {
-        "title_one": "1 version is awaiting review",
-        "title_other": "{{count}} versions are awaiting review",
-        "description": "Review the submitted versions and publish them or send them back to draft.",
-        "openVersion": "Review {{name}} v{{version}}",
-        "openList": {
-          "persona_one": "Review 1 persona",
-          "persona_other": "Review {{count}} personas",
-          "playbook_one": "Review 1 playbook",
-          "playbook_other": "Review {{count}} playbooks",
-          "resource_one": "Review 1 resource",
-          "resource_other": "Review {{count}} resources"
-        }
-      },
-      "memories": {
-        "title_one": "1 entry awaiting approval",
-        "title_other": "{{count}} entries awaiting approval",
-        "description": "Approve or reject the memory suggestions from your agents.",
-        "action": "Review"
-      },
-      "patterns": {
-        "title_one": "1 pattern",
-        "title_other": "{{count}} patterns",
-        "description": "Learning suggestions or cases that keep coming back.",
-        "action": "View"
-      },
-      "cases": {
-        "title_one": "1 open case",
-        "title_other": "{{count}} open cases",
-        "description": "Reported situations nobody has triaged yet.",
-        "action": "Triage"
-      },
-      "systemPrompts": {
-        "title_one": "1 system prompt is awaiting review",
-        "title_other": "{{count}} system prompts are awaiting review",
-        "description": "Review the submitted system prompt versions.",
-        "action": "Go to review"
-      },
-      "allClear": {
-        "title": "All clear",
-        "description": "Nothing is waiting on you — go ahead and start."
+    "inbox": {
+      "ariaLabel": "To do",
+      "loading": "Counting tasks …",
+      "title_one": "1 task is waiting for you",
+      "title_other": "{{count}} tasks are waiting for you",
+      "clear": "Nothing to do.",
+      "action": "View all",
+      "more_one": "+ 1 more",
+      "more_other": "+ {{count}} more",
+      "kind": {
+        "followUps_one": "1 follow-up due",
+        "followUps_other": "{{count}} follow-ups due",
+        "memory_one": "1 memory entry",
+        "memory_other": "{{count}} memory entries",
+        "versions_one": "1 version awaiting approval",
+        "versions_other": "{{count}} versions awaiting approval",
+        "cases_one": "1 feedback report",
+        "cases_other": "{{count}} feedback reports"
       }
     },
     "quickStart": {
