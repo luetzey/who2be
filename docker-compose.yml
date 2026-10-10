@@ -196,6 +196,20 @@ services:
       # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
       # Editionen, deshalb im Basis-Stack; leer ⇒ niemand (fail-closed).
       WHO2BE_OPERATORS: ${WHO2BE_OPERATORS:-}
+      # Dieselben Zeitplan-Overrides wie am `worker` (ADR-0057 §4, §7): die
+      # Betreiber-Route GET /v1/system/routines bildet die wirksame Tabelle aus
+      # der Umgebung DIESES Prozesses. Fehlt hier ein Paar, zeigt sie den
+      # Code-Zeitplan, waehrend der Worker nach dem Override laeuft
+      # (Drift-Test: test_single_writer_guard.py).
+      WHO2BE_WORKER_ENABLED: ${WHO2BE_WORKER_ENABLED:-true}
+      WHO2BE_ROUTINE_PURGE_SCHEDULE: ${WHO2BE_ROUTINE_PURGE_SCHEDULE:-}
+      WHO2BE_ROUTINE_PURGE_ENABLED: ${WHO2BE_ROUTINE_PURGE_ENABLED:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED: ${WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED:-}
       # Tabellen-Store (ADR-0049): eine SQLite-Datei pro WorkArea unter
       # {workspace_id}/{area_id}.sqlite — die Datei ist die Isolationsgrenze,
       # read-only erzwingt die Engine (query_only + Authorizer). Persistiert
