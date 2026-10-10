@@ -1415,6 +1415,14 @@ export interface FeedbackOverview {
   items: FeedbackOverviewItem[]
 }
 
+// Navigation A6 — optionale Filter von `GET /feedback-overview`. Ohne Filter
+// unveraendert die Gesamtsumme des Workspace.
+export interface FeedbackOverviewFilter {
+  agent_id?: string
+  // 1..365 (Server validiert).
+  days?: number
+}
+
 // Veroeffentlichte, aber ungenutzte Elemente (`GET …/feedback-unused`): aktive
 // Version vorhanden, aber kein einziges Usage-/Feedback-Ereignis (Stale).
 export interface FeedbackUnusedItem {
@@ -1457,6 +1465,18 @@ export interface WorkArea {
   retention_days: number | null
   created_at: string
   updated_at: string
+}
+
+// Navigation A4 — `GET /agents/{id}/work-areas`, Spiegel von
+// `who2be_models.workarea.AgentWorkAreaRead`. `level` ist die Stufe DIESES
+// Agenten, `owner` markiert seine private Area, `agent_count` zaehlt ihn mit.
+export interface AgentWorkArea {
+  id: string
+  name: string
+  scope: WorkAreaScope
+  level: WorkAreaGrantLevel
+  owner: boolean
+  agent_count: number
 }
 
 export interface WorkAreaGrant {

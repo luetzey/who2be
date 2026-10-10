@@ -11,6 +11,7 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  AgentWorkArea,
   ArtifactExportFormat,
   ArtifactMarkdown,
   CaseCounts,
@@ -37,6 +38,7 @@ import type {
   FeedbackInput,
   FeedbackItems,
   FeedbackOverview,
+  FeedbackOverviewFilter,
   FeedbackResolutionInput,
   FeedbackSummary,
   FeedbackTarget,
@@ -570,7 +572,8 @@ export interface Api {
   getDashboard: (page?: number) => Promise<DashboardData>
   getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
-  getFeedbackOverview: () => Promise<FeedbackOverview>
+  // Navigation A6: optional je Agent und Zeitraum (`days` 1..365).
+  getFeedbackOverview: (filter?: FeedbackOverviewFilter) => Promise<FeedbackOverview>
   getFeedbackItems: () => Promise<FeedbackItems>
   // Detailsicht auf ein einzelnes Feedback (Absender + Triage-Historie).
   getFeedbackDetail: (feedbackId: string) => Promise<FeedbackDetail>
@@ -869,6 +872,9 @@ export interface Api {
   // greift nur bei `w2b_`-Tokens. Sichtbarkeit serverseitig: editor+ sehen
   // auch fremde private Areas, viewer nur `scope='shared'`.
   listWorkAreas: () => Promise<WorkArea[]>
+  // Navigation A4: Arbeitsbereiche eines Agenten (nur Menschen, ab viewer;
+  // viewer sieht nur geteilte Bereiche).
+  listAgentWorkAreas: (agentId: string) => Promise<AgentWorkArea[]>
   createWorkArea: (input: WorkAreaCreateInput) => Promise<WorkArea>
   // Grants gibt es nur auf SHARED Areas (private Area => 403 `area_forbidden`);
   // die Vergabe ist Menschen vorbehalten.
@@ -1019,8 +1025,12 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackSummary>(token, apiPath`${ws}/feedback/${type}/${id}`),
     getFeedbackEvents: (type, id) =>
       request<FeedbackEvents>(token, apiPath`${ws}/feedback/${type}/${id}/events`),
-    getFeedbackOverview: () =>
-      request<FeedbackOverview>(token, apiPath`${ws}/feedback-overview`),
+    getFeedbackOverview: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.agent_id) params.set('agent_id', filter.agent_id)
+      if (filter?.days !== undefined) params.set('days', String(filter.days))
+      return request<FeedbackOverview>(token, withQuery(apiPath`${ws}/feedback-overview`, params))
+    },
     getFeedbackItems: () =>
       request<FeedbackItems>(token, apiPath`${ws}/feedback-items`),
     getFeedbackDetail: (feedbackId) =>
@@ -1532,6 +1542,8 @@ export function createApi(token: string, workspaceId: string): Api {
       )
     },
     listWorkAreas: () => request<WorkArea[]>(token, apiPath`${ws}/work-areas`),
+    listAgentWorkAreas: (agentId) =>
+      request<AgentWorkArea[]>(token, apiPath`${ws}/agents/${agentId}/work-areas`),
     createWorkArea: (input) =>
       request<WorkArea>(token, apiPath`${ws}/work-areas`, {
         method: 'POST',
