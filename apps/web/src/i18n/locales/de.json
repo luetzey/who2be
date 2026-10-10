@@ -603,6 +603,9 @@
         "patternCase": "Fälle",
         "tests": "Prüffälle",
         "testsActive": "aktiv",
+        "usage": "Nutzung",
+        "usageLast": "zuletzt {{age}} · {{days}} Tage",
+        "usageNever": "Noch keine · gezählt seit {{date}}",
         "none": "Noch keine",
         "unavailable": "Nicht verfügbar"
       },

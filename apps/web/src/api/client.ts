@@ -11,6 +11,7 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  AgentUsageStats,
   AgentWorkArea,
   ArtifactExportFormat,
   ArtifactMarkdown,
@@ -119,6 +120,8 @@ import type {
   TokenCreated,
   TokenInput,
   TokenRenameInput,
+  UsageEntityType,
+  UsageStats,
   VersionDiff,
   VersionedEntityType,
   VersionStatus,
@@ -875,6 +878,9 @@ export interface Api {
   // Navigation A4: Arbeitsbereiche eines Agenten (nur Menschen, ab viewer;
   // viewer sieht nur geteilte Bereiche).
   listAgentWorkAreas: (agentId: string) => Promise<AgentWorkArea[]>
+  // Nutzung U1/U2 — Zaehler je Element bzw. Agent (ab viewer, nur Menschen).
+  getUsage: (entityType: UsageEntityType, entityId: string) => Promise<UsageStats>
+  getAgentUsage: (agentId: string) => Promise<AgentUsageStats>
   createWorkArea: (input: WorkAreaCreateInput) => Promise<WorkArea>
   // Grants gibt es nur auf SHARED Areas (private Area => 403 `area_forbidden`);
   // die Vergabe ist Menschen vorbehalten.
@@ -1544,6 +1550,10 @@ export function createApi(token: string, workspaceId: string): Api {
     listWorkAreas: () => request<WorkArea[]>(token, apiPath`${ws}/work-areas`),
     listAgentWorkAreas: (agentId) =>
       request<AgentWorkArea[]>(token, apiPath`${ws}/agents/${agentId}/work-areas`),
+    getUsage: (entityType, entityId) =>
+      request<UsageStats>(token, apiPath`${ws}/usage/${entityType}/${entityId}`),
+    getAgentUsage: (agentId) =>
+      request<AgentUsageStats>(token, apiPath`${ws}/agents/${agentId}/usage`),
     createWorkArea: (input) =>
       request<WorkArea>(token, apiPath`${ws}/work-areas`, {
         method: 'POST',
