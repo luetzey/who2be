@@ -209,6 +209,14 @@ from who2be_models.resource import (
     SubResourceLinkSet,
     SubResourceRead,
 )
+from who2be_models.routine import (
+    RoutineConfigSource,
+    RoutineLastRun,
+    RoutineRunStatus,
+    RoutineRunTrigger,
+    RoutinesOverview,
+    RoutineStatus,
+)
 from who2be_models.search import (
     ChunkType,
     ContentChunkHit,
@@ -551,6 +559,12 @@ __all__ = [
     "ResourceUpdate",
     "ResourceUsage",
     "ResourceVersionRead",
+    "RoutineConfigSource",
+    "RoutineLastRun",
+    "RoutineRunStatus",
+    "RoutineRunTrigger",
+    "RoutineStatus",
+    "RoutinesOverview",
     "RowsInsert",
     "SaveQueryResult",
     "SubResourceLinkItem",
