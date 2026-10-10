@@ -580,6 +580,47 @@
       "notLoaded": "— nicht geladen —",
       "noPlaybooks": "Keine Playbooks verknüpft."
     },
+    "overview": {
+      "glance": "Auf einen Blick",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Rückmeldungen offen",
+        "casesReopened_one": "1 wieder offen",
+        "casesReopened_other": "{{count}} wieder offen",
+        "casesInProgress_one": "1 in Arbeit",
+        "casesInProgress_other": "{{count}} in Arbeit",
+        "feedback": "Feedback zu seinen Bausteinen",
+        "feedbackSub_one": "1 negativ · {{days}} Tage",
+        "feedbackSub_other": "{{count}} negativ · {{days}} Tage",
+        "memory": "Gedächtnis",
+        "memoryPending_one": "1 zur Freigabe",
+        "memoryPending_other": "{{count}} zur Freigabe",
+        "memoryExpiring_one": "1 läuft bald ab",
+        "memoryExpiring_other": "{{count}} laufen bald ab",
+        "patterns": "Muster",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Lernvorschlag",
+        "patternCase": "Fälle",
+        "tests": "Prüffälle",
+        "testsActive": "aktiv",
+        "none": "Noch keine",
+        "unavailable": "Nicht verfügbar"
+      },
+      "workAreas": {
+        "title": "Arbeitsbereiche",
+        "own": "eigener",
+        "shared": "geteilt · {{level}}",
+        "level": {
+          "read": "lesen",
+          "write": "lesen/schreiben"
+        },
+        "moreAgents_one": "+1 Agent",
+        "moreAgents_other": "+{{count}} Agenten",
+        "empty": "Dieser Agent hat noch keinen Arbeitsbereich. Der private entsteht beim ersten Zugriff.",
+        "hint": "Zugriff vergibst du am Arbeitsbereich unter „Zugriff“.",
+        "error": "Die Arbeitsbereiche konnten nicht geladen werden."
+      }
+    },
     "copy": {
       "plain": "Kopieren",
       "markdown": "Als Markdown kopieren",

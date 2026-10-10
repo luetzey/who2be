@@ -21,6 +21,7 @@ import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
 import { AgentHierarchyView } from '../components/AgentHierarchyView'
+import { AgentOverview } from '../components/AgentOverview'
 import { AgentTokensSection } from '../components/AgentTokensSection'
 import { CopyPromptButton } from '../components/CopyPromptButton'
 import { DeleteAgentButton } from '../components/DeleteAgentButton'
@@ -167,11 +168,18 @@ export function AgentDetailPage() {
                   </TabsList>
 
                   <TabsContent value="overview">
-                    <AgentHierarchyView
+                    {/* Navigation W2-b (Spec §3.2): Aufgaben-Zeile, Kacheln,
+                        Zusammensetzung und Arbeitsbereiche. */}
+                    <AgentOverview
                       agent={agent}
-                      persona={persona}
-                      template={template}
-                      playbooks={playbooks}
+                      composition={
+                        <AgentHierarchyView
+                          agent={agent}
+                          persona={persona}
+                          template={template}
+                          playbooks={playbooks}
+                        />
+                      }
                     />
                   </TabsContent>
 

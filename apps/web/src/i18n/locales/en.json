@@ -580,6 +580,47 @@
       "notLoaded": "— not loaded —",
       "noPlaybooks": "No playbooks linked."
     },
+    "overview": {
+      "glance": "At a glance",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Open feedback reports",
+        "casesReopened_one": "1 reopened",
+        "casesReopened_other": "{{count}} reopened",
+        "casesInProgress_one": "1 in progress",
+        "casesInProgress_other": "{{count}} in progress",
+        "feedback": "Feedback on its building blocks",
+        "feedbackSub_one": "1 negative · {{days}} days",
+        "feedbackSub_other": "{{count}} negative · {{days}} days",
+        "memory": "Memory",
+        "memoryPending_one": "1 awaiting approval",
+        "memoryPending_other": "{{count}} awaiting approval",
+        "memoryExpiring_one": "1 expiring soon",
+        "memoryExpiring_other": "{{count}} expiring soon",
+        "patterns": "Patterns",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Learning proposal",
+        "patternCase": "Cases",
+        "tests": "Test cases",
+        "testsActive": "active",
+        "none": "None yet",
+        "unavailable": "Not available"
+      },
+      "workAreas": {
+        "title": "Work areas",
+        "own": "own",
+        "shared": "shared · {{level}}",
+        "level": {
+          "read": "read",
+          "write": "read/write"
+        },
+        "moreAgents_one": "+1 agent",
+        "moreAgents_other": "+{{count}} agents",
+        "empty": "This agent has no work area yet. The private one is created on first access.",
+        "hint": "You grant access on the work area under \"Access\".",
+        "error": "Couldn't load the work areas."
+      }
+    },
     "copy": {
       "plain": "Copy",
       "markdown": "Copy as Markdown",
