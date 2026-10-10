@@ -13,8 +13,13 @@ from uuid import UUID
 
 from fastapi import status
 
-from who2be_api.core.errors import ApiError
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.errors import ApiError, ApiGateError
+from who2be_api.core.security import (
+    WorkspaceContext,
+    is_agent_bound,
+    require_capability,
+    require_role,
+)
 from who2be_api.core.workarea_scope import agent_not_found
 from who2be_api.repositories.feedback_repository import FeedbackRepository
 from who2be_models import (
@@ -31,8 +36,11 @@ from who2be_models import (
     FeedbackTarget,
     FeedbackUnused,
     SystemFeedbackCreate,
+    UsageEntityType,
     UsageEventCreate,
     UsageEventRead,
+    UsageList,
+    UsageStats,
     WorkspaceRole,
 )
 
@@ -201,3 +209,39 @@ class FeedbackService:
         if not await self._repo.feedback_belongs_to(ctx.workspace_id, feedback_id):
             raise _entity_not_found()
         await self._repo.delete_feedback(ctx.workspace_id, feedback_id)
+
+    async def get_usage(
+        self, ctx: WorkspaceContext, entity_type: UsageEntityType, entity_id: UUID
+    ) -> UsageStats:
+        # Nutzung U1: Zaehler je Element. Ab viewer (Spec §3.2 „Nutzung · ab
+        # viewer“) — reine Zaehler ohne Personenbezug. Agent-gebundene Tokens
+        # bleiben draussen: die Liste nennt alle Elemente des Workspace und
+        # umginge den Lese-Scope ihrer Policy; die Zaehler sind eine Web-Sicht.
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        if not await self._repo.entity_belongs_to(ctx.workspace_id, entity_type, entity_id):
+            raise _entity_not_found()
+        return await self._repo.usage_stats(ctx.workspace_id, entity_type, entity_id)
+
+    async def list_usage(
+        self, ctx: WorkspaceContext, entity_type: UsageEntityType | None = None
+    ) -> UsageList:
+        # Nutzung U1 fuer Listenspalten („Zuletzt genutzt“, „30 Tage“).
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        items = await self._repo.usage_list(ctx.workspace_id, entity_type)
+        return UsageList(items=items)
+
+
+def _deny_agent_bound_usage(ctx: WorkspaceContext) -> None:
+    """403 fuer agent-gebundene Tokens auf den Nutzungszaehlern (`is_agent_bound`)."""
+    if is_agent_bound(ctx):
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                "Nutzungszaehler sind eine Sicht fuer Menschen im Web — ein "
+                "agent-gebundener Token liest sie nicht."
+            ),
+        )

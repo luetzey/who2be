@@ -13,7 +13,7 @@ konsumierbaren Wissensobjekte.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
@@ -313,6 +313,11 @@ class FeedbackOverviewItem(BaseModel):
     negative_count: int = Field(ge=0, default=0)
     helpful_count: int = Field(ge=0, default=0)
     last_activity_at: datetime | None = None
+    # Nutzung U1: getrennt statt des vermischten `last_activity_at` —
+    # `last_used_at` nur aus der Server-Aufzeichnung (Auslieferung an einen
+    # Agenten), `last_feedback_at` nur aus `agent_feedback`.
+    last_used_at: datetime | None = None
+    last_feedback_at: datetime | None = None
 
 
 class FeedbackOverview(BaseModel):
@@ -344,3 +349,57 @@ class FeedbackUnused(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: list[FeedbackUnusedItem] = Field(default_factory=list)
+
+
+# --- Nutzungszaehler (Konzept W5, Paket U1) ---------------------------------
+
+# Elemente, deren Auslieferung an einen Agenten der Server aufzeichnet
+# (`record_server_usage`, ADR-0053 3.4). External Tools haben noch keine
+# Schreibstelle (Paket U2) und fehlen deshalb bewusst.
+UsageEntityType = Literal["persona", "playbook", "resource"]
+
+# Zaehlbeginn: Deploy der Server-Aufzeichnung (D3, #856, Migration 0101). Aeltere
+# Zeilen sind Selbstauskunft (`agent_report`) und zaehlen nicht als Nutzung —
+# ohne diesen Hinweis wirkt alles davor ungenutzt.
+USAGE_COUNTING_SINCE = date(2026, 10, 8)
+
+
+class UsageDay(BaseModel):
+    """Auslieferungen an einem Kalendertag (UTC)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    day: date
+    uses: int = Field(ge=0, default=0)
+
+
+class UsageStats(BaseModel):
+    """Nutzungszaehler eines Elements (`GET …/usage/{entity_type}/{entity_id}`).
+
+    Gezaehlt werden nur Auslieferungen an agent-gebundene Tokens (Owner-Weiche
+    Z1a). Die Fenster sind Kalendertage in UTC einschliesslich heute, darum gilt
+    `uses_30d == sum(daily.uses)`. `last_used_at` ist die juengste Auslieferung
+    ueberhaupt, nicht nur im Fenster. `daily` traegt in der Einzelsicht genau 30
+    Tage (aeltester zuerst, Luecken mit 0) und bleibt in Listen leer.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    entity_type: UsageEntityType
+    entity_id: UUID
+    name: str | None = None
+    uses_7d: int = Field(ge=0, default=0)
+    uses_30d: int = Field(ge=0, default=0)
+    last_used_at: datetime | None = None
+    distinct_agents_30d: int = Field(ge=0, default=0)
+    daily: list[UsageDay] = Field(default_factory=list)
+    counting_since: date = USAGE_COUNTING_SINCE
+
+
+class UsageList(BaseModel):
+    """Nutzungszaehler fuer Listen (`GET …/usage`), je Element eine Zeile."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[UsageStats] = Field(default_factory=list)
+    counting_since: date = USAGE_COUNTING_SINCE

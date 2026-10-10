@@ -6110,6 +6110,159 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "List Usage",
+        "operationId": "list_usage_v1_workspaces__workspace_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "playbook",
+                    "resource"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Elemente dieses Typs; ohne Angabe alle drei.",
+              "title": "Entity Type"
+            },
+            "description": "Nur Elemente dieses Typs; ohne Angabe alle drei."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/usage/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Usage",
+        "operationId": "get_usage_v1_workspaces__workspace_id__usage__entity_type___entity_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "persona",
+                "playbook",
+                "resource"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: feedback_element_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agent-memories": {
       "post": {
         "tags": [
@@ -19083,6 +19236,30 @@
               }
             ],
             "title": "Last Activity At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_feedback_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Feedback At"
           }
         },
         "type": "object",
@@ -26069,6 +26246,27 @@
         "title": "TriggerOverview",
         "description": "Welle 5: ein deduplizierter Trigger mit den Playbooks, die ihn fuehren.\n\nQuelle: denormalisierte `playbook.triggers`-Spalte, kommagetrennt. Wird vom\nDiscovery-Endpoint `GET /v1/workspaces/{ws}/playbooks/triggers` und vom\nMCP-Tool `list_triggers` zurueckgegeben — der LLM nutzt die Tabelle, um\nfuer eine User-Anfrage das passende Playbook zu finden, ohne dass alle\nPlaybook-Bodies in den Systemprompt geladen werden muessen."
       },
+      "UsageDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "UsageDay",
+        "description": "Auslieferungen an einem Kalendertag (UTC)."
+      },
       "UsageEventCreate": {
         "properties": {
           "entity_type": {
@@ -26189,6 +26387,26 @@
         "title": "UsageEventRead",
         "description": "Ein persistiertes Nutzungs-Ereignis (read-only)."
       },
+      "UsageList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsageStats"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "title": "UsageList",
+        "description": "Nutzungszaehler fuer Listen (`GET …/usage`), je Element eine Zeile."
+      },
       "UsageOutcome": {
         "type": "string",
         "enum": [
@@ -26198,6 +26416,85 @@
         ],
         "title": "UsageOutcome",
         "description": "Ergebnis einer Nutzung — quantitatives Signal."
+      },
+      "UsageStats": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uses_7d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 7D",
+            "default": 0
+          },
+          "uses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 30D",
+            "default": 0
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "distinct_agents_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Distinct Agents 30D",
+            "default": 0
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/UsageDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
+        "title": "UsageStats",
+        "description": "Nutzungszaehler eines Elements (`GET …/usage/{entity_type}/{entity_id}`).\n\nGezaehlt werden nur Auslieferungen an agent-gebundene Tokens (Owner-Weiche\nZ1a). Die Fenster sind Kalendertage in UTC einschliesslich heute, darum gilt\n`uses_30d == sum(daily.uses)`. `last_used_at` ist die juengste Auslieferung\nueberhaupt, nicht nur im Fenster. `daily` traegt in der Einzelsicht genau 30\nTage (aeltester zuerst, Luecken mit 0) und bleibt in Listen leer."
       },
       "ValidationError": {
         "properties": {

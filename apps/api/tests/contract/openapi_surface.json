@@ -1015,9 +1015,19 @@
     "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/usage",
+    "operationId": "list_usage_v1_workspaces__workspace_id__usage_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/usage-events",
     "operationId": "record_usage_v1_workspaces__workspace_id__usage_events_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/usage/{entity_type}/{entity_id}",
+    "operationId": "get_usage_v1_workspaces__workspace_id__usage__entity_type___entity_id__get"
   },
   {
     "method": "GET",
