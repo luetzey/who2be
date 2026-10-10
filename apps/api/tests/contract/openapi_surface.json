@@ -95,6 +95,11 @@
     "operationId": "create_organization_workspace_v1_organizations__organization_id__workspaces_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/system/routines",
+    "operationId": "get_routines_v1_system_routines_get"
+  },
+  {
     "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}",
     "operationId": "delete_workspace_v1_workspaces__workspace_id__delete"

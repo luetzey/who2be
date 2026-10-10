@@ -68,6 +68,7 @@ from who2be_api.routers import (
     resources,
     search,
     system_prompts,
+    system_routines,
     test_cases,
     tokens,
     usages,
@@ -583,6 +584,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces.router)
     app.include_router(gdpr.router)
     app.include_router(invitations.accept_router)
+    # Betreiber-Sicht (ADR-0057 §7): workspace-uebergreifend, nur Betreiber + MFA.
+    app.include_router(system_routines.router)
     # OAuth-2.1-Authorization-Server (Remote-MCP-Connector): top-level, anonym
     # erreichbar (`/oauth/*`), plus RFC-8414-Metadaten unter `/.well-known`.
     app.include_router(oauth.router)
