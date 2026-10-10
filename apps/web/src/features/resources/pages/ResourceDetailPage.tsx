@@ -153,6 +153,7 @@ export function ResourceDetailPage() {
                   />
                 }
                 description={description}
+                usage={{ entityType: 'resource', entityId: resource.id }}
                 // Audit A13: Feedback, Export, Duplizieren sind Sekundaer-
                 // aktionen — unter md hinter „Mehr", damit Statusleiste und
                 // Tabs naeher an den ersten Viewport ruecken.

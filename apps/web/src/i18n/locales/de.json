@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} von {{total}} angezeigt"
     },
+    "usageLine": {
+      "label": "Nutzung",
+      "used": "{{n}}× in {{days}} Tagen · zuletzt {{age}} · gezählt seit {{date}}",
+      "never": "Noch keine Nutzung · gezählt seit {{date}}"
+    },
     "table": {
       "scrollHint": "Seitlich wischen für weitere Spalten"
     },
