@@ -19152,13 +19152,23 @@
           "db": {
             "type": "string",
             "title": "Db"
+          },
+          "worker": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "stale",
+              "unknown"
+            ],
+            "title": "Worker"
           }
         },
         "type": "object",
         "required": [
           "status",
           "version",
-          "db"
+          "db",
+          "worker"
         ],
         "title": "Health"
       },

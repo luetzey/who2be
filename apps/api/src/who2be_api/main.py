@@ -9,6 +9,7 @@ Routen-Layout nach Phase 2:
   `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
+import asyncio
 import importlib
 import logging
 import os
@@ -80,6 +81,7 @@ from who2be_api.routers import (
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
+from who2be_api.worker.store import WorkerHealth, worker_health
 from who2be_models import ApiErrorBody, ApiProblem
 
 logger = logging.getLogger(__name__)
@@ -340,6 +342,37 @@ class Health(BaseModel):
     status: str
     version: str
     db: str
+    #: Dead-Man-Signal des Workers (ADR-0057 §7): `ok`, `stale` (juengster
+    #: Heartbeat aelter als 5 min) oder `unknown` (kein Heartbeat bzw. keine
+    #: Datenbank). Nur Information — `status` bleibt davon unberuehrt.
+    worker: WorkerHealth
+
+
+#: Zeitgrenze fuer das Health-Feld `worker` (Pool-Acquire + Abfrage zusammen).
+#: Deutlich unter dem Container-Healthcheck-Timeout (5 s), damit ein reines
+#: Info-Feld den API-Dienst nie unhealthy macht.
+WORKER_HEALTH_TIMEOUT_S = 1.5
+
+
+async def _read_worker_health() -> WorkerHealth:
+    async with database.pool.acquire() as conn:
+        return await worker_health(conn)
+
+
+async def _worker_health() -> WorkerHealth:
+    """Health-Feld `worker`; jede DB-Stoerung ergibt `unknown` statt eines 500.
+
+    Acquire und Abfrage laufen unter `WORKER_HEALTH_TIMEOUT_S`: ein Lock auf
+    `worker_heartbeat` oder ein erschoepfter Pool liefert `unknown`, statt den
+    Endpunkt haengen zu lassen (`TimeoutError` ist ein `OSError`). Ein
+    schliessender Pool (`asyncpg.InterfaceError`) ergibt ebenfalls `unknown`.
+    """
+    if not database.is_connected:
+        return "unknown"
+    try:
+        return await asyncio.wait_for(_read_worker_health(), timeout=WORKER_HEALTH_TIMEOUT_S)
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError):
+        return "unknown"
 
 
 def _on_rate_limit(request: Request, exc: Exception) -> Response:
@@ -560,7 +593,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:
         db_status = "ok" if await database.ping() else "unavailable"
-        return Health(status="ok", version=__version__, db=db_status)
+        return Health(status="ok", version=__version__, db=db_status, worker=await _worker_health())
 
     return app
 
