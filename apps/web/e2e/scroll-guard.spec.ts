@@ -622,16 +622,20 @@ test('M7: Tab-Leisten brechen um, jeder Tab liegt im Viewport, ?tab= bleibt', as
   // und Resource tragen den gemeinsamen Namen „Detailansicht“ (vorher:
   // Persona ohne Namen, Resource faelschlich „Sub-Resources“).
   const detailView = /^(Detailansicht|Detail view)$/
-  const routes: Array<[string, string, number, RegExp]> = [
-    [`${ws}/agents/${agent.id}`, 'agents/:id', 3, /.+/],
+  // Agent: Seiten-Leiste (Navigation §3.1) und, im Tab „Einstellungen“, die
+  // innere Leiste des Editors (fuenfter Wert: Index der Leiste) — die war die
+  // Ausloeserin von M7 (461 von 288 px).
+  const routes: Array<[string, string, number, RegExp, number?]> = [
+    [`${ws}/agents/${agent.id}`, 'agents/:id', 4, /^(Bereiche des Agenten|Agent sections)$/],
+    [`${ws}/agents/${agent.id}?tab=settings`, 'agents/:id?tab=settings', 3, /.+/, 1],
     [`${ws}/resources/${resource.id}`, 'resources/:id', 4, detailView],
     [`${ws}/personas/${persona.id}`, 'personas/:id', 5, detailView],
   ]
 
   const failures: string[] = []
-  for (const [path, label, tabCount, expectedName] of routes) {
+  for (const [path, label, tabCount, expectedName, index = 0] of routes) {
     await page.goto(path)
-    const tablist = page.getByRole('tablist').first()
+    const tablist = page.getByRole('tablist').nth(index)
     await expect(tablist.getByRole('tab')).toHaveCount(tabCount)
     const probe = await tablist.evaluate((list) => {
       const viewport = document.documentElement.clientWidth

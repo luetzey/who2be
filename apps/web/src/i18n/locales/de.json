@@ -399,6 +399,15 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Speichern",
+      "pageTabsAria": "Bereiche des Agenten",
+      "pageTabs": {
+        "overview": "Überblick",
+        "evolution": "Weiterentwicklung",
+        "memory": "Gedächtnis",
+        "tests": "Prüffälle",
+        "settings": "Einstellungen"
+      },
+      "evolutionPlaceholder": "Hier entsteht die Weiterentwicklung des Agenten: Rückmeldungen, Änderungen und Nachkontrollen.",
       "tabsAria": "Agent-Einstellungen",
       "tabs": {
         "config": "Konfiguration",
