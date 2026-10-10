@@ -202,7 +202,9 @@ function stubApi(cases: unknown[] = [testCase]) {
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input))
       if (url.pathname === `${WS}/test-cases`) {
-        testCaseRequests.push(url)
+        // Die Kachel „Prüffälle“ im Agent-Überblick zaehlt die aktiven
+        // (status=active) schon beim Laden — gezaehlt wird hier nur die Liste.
+        if (url.searchParams.get('status') !== 'active') testCaseRequests.push(url)
         return json(cases)
       }
       if (url.pathname in bySuffix) return json(bySuffix[url.pathname])

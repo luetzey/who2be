@@ -120,11 +120,13 @@ function KpiTile({ label, icon, tone, href, state, testId }: KpiTileProps) {
       aria-label={state.status === 'loading' ? label : t('overview.kpi.linkLabel', { label, value })}
       aria-describedby={subtitle !== '' ? subtitleId : undefined}
       aria-busy={state.status === 'loading' ? true : undefined}
-      className="group flex min-w-0 items-start gap-3 rounded-lg border border-border/40 bg-card p-4 text-card-foreground shadow-card transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="group relative flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/40 bg-card p-4 text-card-foreground shadow-card transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:flex-row sm:gap-3"
     >
+      {/* Unter sm steht das Icon ueber dem Text: zwei Spalten auf 390 px
+          lassen neben Icon und Pfeil sonst nur ~80 px fuer die Bezeichnung. */}
       <EntityIcon icon={icon} tone={tone} size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm wrap-anywhere text-muted-foreground">{label}</div>
+      <div className="w-full min-w-0 flex-1 pr-5 sm:pr-6">
+        <div className="text-sm wrap-anywhere hyphens-auto text-muted-foreground">{label}</div>
         <div className="text-2xl font-semibold tracking-tight tabular-nums">
           {state.status === 'loading' ? (
             <span className="inline-block h-7 w-8 animate-pulse rounded-md bg-muted" aria-hidden="true" />
@@ -133,13 +135,13 @@ function KpiTile({ label, icon, tone, href, state, testId }: KpiTileProps) {
           )}
         </div>
         {subtitle !== '' ? (
-          <p id={subtitleId} className="mt-1 text-xs wrap-anywhere text-muted-foreground">
+          <p id={subtitleId} className="mt-1 text-xs wrap-anywhere hyphens-auto text-muted-foreground">
             {subtitle}
           </p>
         ) : null}
       </div>
       <ChevronRight
-        className="mt-0.5 size-4 flex-none text-muted-foreground/60 group-hover:text-muted-foreground"
+        className="absolute top-4 right-4 size-4 text-muted-foreground/60 group-hover:text-muted-foreground"
         aria-hidden="true"
       />
     </Link>
