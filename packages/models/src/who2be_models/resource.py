@@ -51,13 +51,11 @@ EmbeddingMode = Literal["lazy", "inline"]
 _MAX_CONTENT_BYTES = 1_000_000
 
 
+# `extra="allow"`, weil das BlockNote-Schema (`props`, `content`, `children`,
+# …) offen und versionsabhaengig ist. Der Docstring geht in jedes Schema mit
+# Bloecken (zehnmal im Katalog, MCP-Token T2) — deshalb ein Satz.
 class ResourceBlock(BaseModel):
-    """Ein Top-Level-Block eines BlockNote-Dokuments.
-
-    `extra="allow"`, weil das BlockNote-Schema (`props`, `content`, `children`,
-    …) offen und versionsabhaengig ist. Verbindlich sind nur `id` (Anker fuer
-    Block-Refs) und `type`.
-    """
+    """BlockNote-Block; Pflicht sind nur `id` (Anker) und `type`, weitere Felder frei."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -82,13 +80,11 @@ class ResourceBlockAnchor(BaseModel):
     text: str
 
 
+# E3 (Track E3, ADR-0009 additive jsonb-Evolution): `tags` ermoeglicht das
+# Filtern ueber `GET /resources?tag=` ohne denormalisierte DB-Spalte.
+# Default `[]` — Backward-Compat: alte Versionen ohne Tags bleiben gueltig.
 class ResourceContent(BaseModel):
-    """Typisierter Inhalt einer Resource-Version (`resource_version.content`).
-
-    E3 (Track E3, ADR-0009 additive jsonb-Evolution): `tags` ermoeglicht das
-    Filtern ueber `GET /resources?tag=` ohne denormalisierte DB-Spalte.
-    Default `[]` — Backward-Compat: alte Versionen ohne Tags bleiben gueltig.
-    """
+    """Inhalt einer Resource-Version: Beschreibung, BlockNote-Bloecke, Tags."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -104,11 +100,12 @@ class ResourceContent(BaseModel):
         return self
 
 
+# Welle 4: `content` ist optional; fehlt es, setzt der Service eine leere
+# `ResourceContent` ein (description="" + blocks=[]).
 class ResourceCreate(BaseModel):
     """Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.
 
-    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
-    eine leere `ResourceContent` eingesetzt (description="" + blocks=[]).
+    Nur `name` ist Pflicht. Fehlt `content`, entsteht eine leere Resource.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -227,14 +224,14 @@ class ResourceVersionRead(BaseModel):
     created_at: datetime
 
 
+# `link_scope` kam mit den Phase-3-Fixes (Track 4). Default `'block'` ist
+# Backward-Compat fuer alte Clients; `block_id=None` erzwingt im Validator die
+# explizite Block-ID fuer 'block'-Items.
 class ResourceLinkItem(BaseModel):
     """Ein einzelner Playbook→Resource-Verweis (Eingabe).
 
-    Phase-3-Fixes Track 4: `link_scope` unterscheidet zwischen Volldokument-
-    Referenz (`'resource'`, kein `block_id`) und Block-Anker (`'block'`, mit
-    `block_id`). Default `'block'` ist Backward-Compat fuer alte Clients;
-    Default `block_id=None` erzwingt im Validator die explizite Block-ID
-    fuer 'block'-Items.
+    `link_scope='resource'` verweist auf das ganze Dokument (ohne `block_id`),
+    `link_scope='block'` (Default) auf einen Heading-Anker (mit `block_id`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -341,13 +338,14 @@ class ResourceRef(BaseModel):
     name: str
 
 
+# Sub-Resource-Links kamen mit Track E; das Item spiegelt `ResourceLinkItem`.
 class SubResourceLinkItem(BaseModel):
-    """Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource, Track E).
+    """Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource).
 
-    Spiegelt `ResourceLinkItem`: `link_scope='resource'` referenziert das ganze
-    Kind-Dokument (kein `block_id`), `link_scope='block'` einen Heading-Anker
-    im Kind (mit `block_id`). Default ist `'resource'` — bei Sub-Resources ist
-    die Volldokument-Referenz der Normalfall.
+    `link_scope='resource'` referenziert das ganze Kind-Dokument (kein
+    `block_id`), `link_scope='block'` einen Heading-Anker im Kind (mit
+    `block_id`). Default ist `'resource'` — bei Sub-Resources ist die
+    Volldokument-Referenz der Normalfall.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -60,21 +60,22 @@ class AgentCreate(BaseModel):
     tool_policy: AgentToolPolicy = Field(default_factory=AgentToolPolicy)
 
 
+# `model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config
+# (User-Entscheidung 6, ADR-0047). Grund fuer die LEER-Semantik: die Felder
+# tragen die Compliance-Attribution — ein einmal falsch eingetragener Anbieter
+# muss entfernbar sein, sonst verfaelscht er die Auswertung „welche Daten gingen
+# an wen" dauerhaft. Aenderungen (auch das Leeren) protokolliert der Service im
+# `audit_log`.
 class AgentUpdate(BaseModel):
     """Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.
 
     `tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet
     (analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.
 
-    `model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config
-    (User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,
-    nicht pro Einzelaufruf. Sie sind das einzige Feld-Paar mit einer
-    LEER-Semantik: `""` setzt den Wert explizit auf NULL zurueck, weggelassen
-    bzw. `None` laesst den Bestand unangetastet (analog `tool_policy`). Grund:
-    die Felder tragen die Compliance-Attribution — ein einmal falsch
-    eingetragener Anbieter muss entfernbar sein, sonst verfaelscht er die
-    Auswertung „welche Daten gingen an wen" dauerhaft. Aenderungen (auch das
-    Leeren) protokolliert der Service im `audit_log`.
+    `model_provider`/`model_name` gelten pro Agent-Konfiguration, nicht pro
+    Einzelaufruf. Sie sind das einzige Feld-Paar mit einer LEER-Semantik: `""`
+    setzt den Wert explizit auf NULL zurueck, weggelassen bzw. `None` laesst
+    den Bestand unangetastet.
     """
 
     model_config = ConfigDict(extra="forbid")

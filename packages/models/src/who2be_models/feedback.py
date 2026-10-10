@@ -66,8 +66,9 @@ class SystemFeedbackCategory(StrEnum):
     other = "other"
 
 
+# Append-only nach ADR-0038.
 class FeedbackResolution(StrEnum):
-    """Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
+    """Triage-Status eines Feedback-Eintrags.
 
     Kuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`
     (in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle" Status

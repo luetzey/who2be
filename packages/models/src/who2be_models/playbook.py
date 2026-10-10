@@ -21,13 +21,10 @@ from who2be_models.status import VersionStatus
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 
 
+# Kuratiertes Typ-Set seit Phase 3-0 (Master-Plan §Track 0). Migration
+# `0020_playbook_type_check.sql` setzt den passenden CHECK-Constraint in der DB.
 class PlaybookType(StrEnum):
-    """Kurierte Playbook-Typen (Phase 3-0, Master-Plan §Track 0).
-
-    Migration `0020_playbook_type_check.sql` setzt den passenden CHECK-
-    Constraint in der DB. `PlaybookContent.type` bleibt aus Backward-Compat-
-    Gruenden vorlaeufig `str`; Frontend/Service ziehen mit Track 3-A/B nach.
-    """
+    """Kuratierte Playbook-Typen."""
 
     prompt = "prompt"
     instructions = "instructions"
@@ -69,18 +66,18 @@ def normalize_triggers(value: str | None) -> str | None:
     return ", ".join(ordered)
 
 
+# Welle 4: description, body und type haben Default "" — Create erlaubt
+# unvollstaendige Drafts; die Promote-Validation (draft → review/active) prueft
+# im Transition-Endpunkt auf vollstaendige Pflichtfelder.
+# Track B (Nur-BlockNote): der frueher gefuehrte `body_format`-Schalter ist
+# entfallen; Migration `0030_blocknote_only.sql` hat Altbestaende
+# markdown-aware konvertiert und den Key aus allen Versions-Snapshots entfernt.
 class PlaybookContent(BaseModel):
-    """Typisierter Inhalt einer Playbook-Version (`playbook_version.content`).
+    """Inhalt einer Playbook-Version.
 
-    Welle 4: description, body und type haben Default "" — Create erlaubt
-    unvollstaendige Drafts. Promote-Validation (draft → review/active) prueft
-    im Transition-Endpunkt auf vollstaendige Pflichtfelder.
-
-    Track B (Nur-BlockNote): `body` ist immer ein stringifiziertes BlockNote-
-    JSON-Dokument (`JSON.stringify(editor.document)`) mit Inline-Placeholder-
-    Pills. Der frueher gefuehrte `body_format`-Schalter ist entfallen; Migration
-    `0030_blocknote_only.sql` hat Altbestaende markdown-aware konvertiert und den
-    `body_format`-Key aus allen Versions-Snapshots entfernt.
+    `body` ist ein stringifiziertes BlockNote-JSON-Dokument
+    (`JSON.stringify(editor.document)`) mit Inline-Placeholder-Pills. Leere
+    Felder sind im Entwurf erlaubt; die Freigabe verlangt sie gefuellt.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -123,11 +120,12 @@ class PlaybookContent(BaseModel):
         return normalize_triggers(value)
 
 
+# Welle 4: `content` ist optional; fehlt es, setzt der Service eine leere
+# `PlaybookContent` ein.
 class PlaybookCreate(BaseModel):
     """Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.
 
-    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
-    eine leere `PlaybookContent` eingesetzt.
+    Nur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf.
     """
 
     model_config = ConfigDict(extra="forbid")

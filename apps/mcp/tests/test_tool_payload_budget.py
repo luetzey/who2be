@@ -230,32 +230,11 @@ _DESCRIPTION_CHAR_CAP = 2_048
 _FIRST_SENTENCE_CHAR_CAP = 100
 
 # Ratsche fuer Entwickler-Historie im Draht-Schema: Anzahl der Schema-Texte je
-# Werkzeug, die ADR-, Phase-, Track-, Welle-, WP- oder Gap-Verweise tragen
-# (Stand 2026-10-10). Sie stammen aus Pydantic-Docstrings in
-# `packages/models` und werden in T2 (Schema-Diaet) entfernt. Bis dahin darf
-# kein Werkzeug mehr davon bekommen und kein neues dazukommen; wird ein Wert
-# kleiner, ist er hier mit abzusenken — am Ende steht ein leeres Dict.
-_DEVELOPER_REF_BASELINE: dict[str, int] = {
-    "create_agent": 3,
-    "create_edge": 1,
-    "create_node": 1,
-    "create_persona": 5,
-    "create_playbook": 3,
-    "create_resource": 2,
-    "neighbors": 1,
-    "propose_memory_change": 1,
-    "record_usage": 1,
-    "resolve_feedback": 1,
-    "search_content": 1,
-    "set_playbook_resource_links": 1,
-    "set_resource_sub_resources": 1,
-    "transition_system_prompt": 1,
-    "update_agent": 4,
-    "update_node": 1,
-    "update_persona": 4,
-    "update_playbook": 2,
-    "update_resource": 1,
-}
+# Werkzeug, die ADR-, Phase-, Track-, Welle-, WP- oder Gap-Verweise tragen.
+# Die Schema-Diaet (T2, Stand 2026-10-11) hat sie geleert; die Historie steht
+# seitdem als `#`-Kommentar ueber der Klasse. Das Dict bleibt leer — ein
+# Eintrag hier waere eine neue Ausnahme und braucht eine Begruendung.
+_DEVELOPER_REF_BASELINE: dict[str, int] = {}
 
 
 def _wire_tools() -> list[dict[str, Any]]:
@@ -378,7 +357,7 @@ def test_tool_first_sentences_fit_short_catalogs() -> None:
 
 
 def test_wire_schema_developer_refs_only_shrink() -> None:
-    """Entwickler-Historie im Draht-Schema waechst nicht (Ratsche bis T2).
+    """Keine Entwickler-Historie im Draht-Schema (Ratsche, seit T2 leer).
 
     Ein neuer Verweis auf ADR, Phase, Track, Welle, WP oder Gap in einem
     Pydantic-Docstring, der als Schema auf den Draht geht, faellt hier auf.
