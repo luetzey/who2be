@@ -11,10 +11,12 @@ Loeschung blieben Aussagen (`kb_node.content`), Widerspruchs-Begruendungen
 einmal mit ihren Nodes. 0105 bereinigt die Waisen und haengt alle fuenf
 Tabellen per `ON DELETE CASCADE` an `workspace`.
 
-`audit_log` wird hier nur **belegt**, nicht geaendert: die Zeilen ueberleben
-Workspace-Loeschung und Org-Purge (append-only, ADR-0031). Wie damit zu
-verfahren ist, ist eine Owner-Weiche (Karte t_a0ce24ba); faellt sie, kippt der
-Ist-Test bewusst und wird mit der Umsetzung umgeschrieben.
+`audit_log` faellt nicht mit, sondern wird anonymisiert (Owner-Entscheidung
+E1a, Migration 0106): Aktion, Zeitpunkt und Scope bleiben, Akteur, Ziel und
+personenbezogene Details werden geleert. Der Test unten hielt bis 0106 das
+Ist-Verhalten (Zeile bleibt unveraendert) fest und ist mit der Umsetzung
+umgestellt; die Einzelheiten (App-Rolle, Bestand, Allowlist) belegt
+`test_audit_log_anonymization.py`.
 
 Belegt gegen die echte DB, in einem frisch migrierten Wegwerf-Schema. Ohne DB
 greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
@@ -183,19 +185,38 @@ async def _counts(owner: asyncpg.Connection, ws: UUID) -> dict[str, int]:
     }
 
 
+_SENTINEL = UUID(int=0)
+
+
 async def _audit(owner: asyncpg.Connection, org_id: UUID, ws: UUID) -> None:
     await owner.execute(
         "INSERT INTO audit_log (org_id, workspace_id, actor_id, action, target, detail)"
-        " VALUES ($1, $2, $3, 'member.removed', 'user:x', '{\"note\": \"frei\"}')",
+        " VALUES ($1, $2, $3, 'member.removed', 'user:x',"
+        " '{\"role\": \"editor\", \"note\": \"frei\"}')",
         org_id,
         ws,
         uuid4(),
     )
 
 
-async def _audit_count(owner: asyncpg.Connection, ws: UUID) -> int:
-    count: int = await owner.fetchval("SELECT count(*) FROM audit_log WHERE workspace_id = $1", ws)
-    return count
+async def _audit_rows(owner: asyncpg.Connection, ws: UUID) -> list[asyncpg.Record]:
+    rows: list[asyncpg.Record] = await owner.fetch(
+        "SELECT org_id, workspace_id, actor_id, action, target, detail::text AS detail, "
+        "created_at FROM audit_log WHERE workspace_id = $1",
+        ws,
+    )
+    return rows
+
+
+def _assert_anonymized(row: asyncpg.Record, org_id: UUID, ws: UUID) -> None:
+    """Aktion, Zeitpunkt und Scope bleiben; Akteur, Ziel und freies Detail weg."""
+    assert row["action"] == "member.removed"
+    assert row["org_id"] == org_id
+    assert row["workspace_id"] == ws
+    assert row["created_at"] is not None
+    assert row["actor_id"] == _SENTINEL, "Akteur nach Loeschung nicht anonymisiert"
+    assert row["target"] is None, "Ziel nach Loeschung nicht geleert"
+    assert row["detail"] == '{"role": "editor"}', "freies Detail nach Loeschung vorhanden"
 
 
 def test_workspace_delete_removes_its_kb_and_chunks() -> None:
@@ -249,13 +270,13 @@ def test_migration_removes_existing_orphans_and_keeps_live_rows() -> None:
     _in_isolated_schema(body, stop_before=_MIGRATION)
 
 
-def test_audit_log_survives_workspace_delete_and_org_purge_as_is() -> None:
-    """Ist-Verhalten, bewusst unveraendert (Owner-Weiche t_a0ce24ba).
+def test_audit_log_is_anonymized_on_workspace_delete_and_org_purge() -> None:
+    """Owner-Entscheidung E1a (Migration 0106), vorher Ist-Test `..._as_is`.
 
-    `audit_log` hat keinen FK auf `workspace`/`organization` und ist fuer die
-    Laufzeitrolle append-only (0044). Nach Workspace-Loeschung und Org-Purge
-    bleiben die Zeilen samt `actor_id`, `target` und `detail` stehen. Kippt
-    dieser Test, wurde die Weiche umgesetzt — dann mit ihr umschreiben.
+    `audit_log` haengt weiter an keinem FK und faellt nicht mit. Nach
+    Workspace-Loeschung und Org-Purge bleibt die Zeile, aber `actor_id` steht
+    auf dem Sentinel, `target` ist leer und `detail` traegt nur die Schluessel
+    der Allowlist. Der Nachbar-Workspace bleibt bis zum Org-Purge unberuehrt.
     """
 
     async def body(owner: asyncpg.Connection, pool: asyncpg.Pool) -> None:
@@ -265,10 +286,16 @@ def test_audit_log_survives_workspace_delete_and_org_purge_as_is() -> None:
         await _audit(owner, org_id, sibling)
 
         assert await PgWorkspaceRepository(pool).delete(doomed) is True
-        assert await _audit_count(owner, doomed) == 1
+        (gone,) = await _audit_rows(owner, doomed)
+        _assert_anonymized(gone, org_id, doomed)
+        (alive,) = await _audit_rows(owner, sibling)
+        assert alive["target"] == "user:x", "Nachbar-Workspace vorzeitig anonymisiert"
+        assert alive["actor_id"] != _SENTINEL
 
         await PgAccountPurgeRepository(owner).purge_organization(org_id)
-        assert await _audit_count(owner, sibling) == 1
-        assert await _audit_count(owner, doomed) == 1
+        (purged,) = await _audit_rows(owner, sibling)
+        _assert_anonymized(purged, org_id, sibling)
+        (still,) = await _audit_rows(owner, doomed)
+        _assert_anonymized(still, org_id, doomed)
 
     _in_isolated_schema(body)
