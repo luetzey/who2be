@@ -127,6 +127,9 @@ PROBES: dict[str, Probe] = {
     f"DELETE {_WS}": Probe(),
     f"GET {_WS}/whoami": Probe(),
     f"GET {_WS}/dashboard": Probe(),
+    # Aufgaben-Zaehler (Navigation W1): `agent_id` filtert jede Zahl; ein
+    # fremder Agent ist `agent_not_found` wie ein unbekannter.
+    f"GET {_WS}/inbox/counts": Probe(query={"agent_id": "<<agent_id>>"}),
     f"GET {_WS}/billing/entitlement": Probe(),
     f"GET {_WS}/members": Probe(),
     f"PATCH {_WS}/members/{{user_id}}": Probe(body={"role": "viewer"}),

@@ -14,7 +14,8 @@ Schreibwege:
 
 Lesewege: Protokoll je ID (mit eingebetteten Massnahmen, QE1 = a), Liste je
 Workspace/Agent/Fall mit Keyset-Cursor, Massnahme je ID, Massnahmen je Fall
-und je verknuepfter Version (E3).
+und je verknuepfter Version (E3), Zahl der faelligen Massnahmen
+(`count_due_measures`, Aufgaben-Zaehler Navigation W1).
 
 Was das Repository bewusst NICHT tut:
 
@@ -33,7 +34,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -132,6 +133,10 @@ class SessionRepository(Protocol):
         limit: int = 50,
         cursor: tuple[datetime, UUID] | None = None,
     ) -> list[SessionRead]: ...
+
+    async def count_due_measures(
+        self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
+    ) -> int: ...
 
     async def get_measure(self, workspace_id: UUID, measure_id: UUID) -> MeasureRead | None: ...
 
@@ -285,6 +290,32 @@ class PgSessionRepository:
             limit,
         )
         return [_session(r) for r in rows]
+
+    async def count_due_measures(
+        self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
+    ) -> int:
+        """Faellige Massnahmen (Phase-E-Delta §0.4, Navigation §2.2 Art 1).
+
+        Faellig = Nachschau-Datum (`measure.follow_up_at`, sonst das des
+        Protokolls) `<= today` UND das juengste Event ist weder `reviewed`
+        noch `withdrawn`. Massnahmen eines ersetzten Protokolls zaehlen mit
+        (QE11 a: sie gelten weiter, bis ein Mensch sie zurueckzieht).
+        """
+        count = await self._pool.fetchval(
+            "SELECT COUNT(*)::int FROM measure m "
+            "JOIN feedback_session s ON s.workspace_id = m.workspace_id AND s.id = m.session_id "
+            "LEFT JOIN LATERAL (SELECT e.event FROM measure_event e "
+            "    WHERE e.workspace_id = m.workspace_id AND e.measure_id = m.id "
+            "    ORDER BY e.created_at DESC, e.id DESC LIMIT 1) last ON TRUE "
+            "WHERE m.workspace_id = $1 "
+            "  AND ($2::uuid IS NULL OR m.agent_id = $2) "
+            "  AND COALESCE(m.follow_up_at, s.follow_up_at) <= $3 "
+            "  AND (last.event IS NULL OR last.event NOT IN ('reviewed', 'withdrawn'))",
+            workspace_id,
+            agent_id,
+            today,
+        )
+        return int(count or 0)
 
     async def get_measure(self, workspace_id: UUID, measure_id: UUID) -> MeasureRead | None:
         async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):
