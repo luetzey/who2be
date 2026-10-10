@@ -69,3 +69,104 @@ git-Schreibbefehl (`add`, `commit`, `checkout`, `stash`, `restore`, `reset`).
 - [ ] #442 traegt eine Reihenfolge, die aus den fuenf Kriterien folgt; Praeferenzen stehen getrennt.
 - [ ] Jede Welle nennt Dateien, Stack und Vorbedingung.
 - [ ] Protokoll liegt als Datei im Repo, PR offen.
+
+---
+
+# Protokoll (nach dem Lauf)
+
+## Ergebnis der Messwellen
+
+Alle fuenf Messpakete zurueckgegeben, danach zwei Schreibpakete und ein
+Verifikationspaket. **Kein Code angefasst, kein Issue angelegt, kein Issue
+geschlossen, kein Label gewechselt.**
+
+### Messwerte (sequenziell, ein Schreiber je Baum; Node v22.22.0)
+
+| Gate | Exit | Messwert | gegen Lauf 45 |
+|---|---|---|---|
+| `npm run lint` | 0 | **94** problems, 0 errors, **62** von 645 Dateien, **9** `--fix`-bar | 93 → **94** |
+| `npx tsc -b` | 0 | Ausgabe leer | unveraendert |
+| `npm run test:coverage` | 0 | **253 Dateien / 2162 Tests**; **88,78 / 82,73 / 85,2 / 90,5** | 251/2056; **alle vier gestiegen** |
+| `npm run i18n:check` | 0 | **159** Waisen (geteilte Baseline), keine neuen, keine Duplikate | unveraendert |
+| `uv run pytest --collect-only -q` | 0 | **3362** Tests, 135 Zeilen unter `packages/billing/` | 3166 → **3362** |
+| `uv run ruff check .` | 0 | 0 Funde | erstmals gemessen |
+| `uv run mypy .` | 0 | 0 Funde in **575** Dateien | erstmals gemessen |
+| `changelog_fragments.py check` | 0 | **265** Fragmente (`ls` zaehlt 266, Differenz `README.md`) | 240 → **265** |
+| `docker info` | 1 | keine Container-Laufzeit, **22. Lauf** | unveraendert |
+
+### Die drei tragenden Funde
+
+**1. Die einzige Sperre des Bestands hat sich von allein geloest.** #869 ist als
+`6aa50df4` gemergt; `locales/{de,en}.json` ist ueber alle zwoelf offenen PRs
+frei. **#632 und #633 haben erstmals seit Lauf 44 keine Datei-Sperre** —
+Regel 87 mit Ausgang bestaetigt.
+
+**2. Die Praemissen-Korrektur von Lauf 45 traegt nicht.** 25 Commits in
+23 h 24 min = **1,07 Commits/h** (Lauf 45: 0,69/h), davon **24 x `success`,
+0 x `cancelled`**; zwei Push-Paare mit **1 min 30 s** und **4 min 24 s**
+Abstand behielten je ihren Spruch. Der Beleg-Lauf `37822973287` hat
+`created_at` = `run_started_at` = 18:16:15 — **er hat nie gewartet** — und
+`ci.yml:14` setzt auf `main` `cancel-in-progress: false`, verbietet den
+Abbruch also. **Ursache des einen Abbruchs: ungemessen.** Nebenbefund: der
+Kommentar `ci.yml:7-11` begruendet die Einstellung mit einer „run_id-Gruppe",
+die der Code (`:13`) nicht hat. → **Regel 105**, Weiche 1 neu gestellt,
+Einschraenkung aus #849 entfernt.
+
+**3. Vier verrottete Zeiger — alle in Dateien ohne mitgefuehrte
+Gesamtzeilenzahl.** `who2be/docker-compose.yml:352` → **`:414`** (Datei +62
+Zeilen durch #885/#890), `cloud-prod-smoke.md:166` → **`:168`** und
+`:285` → **`:287`**, `deploy.yml:83` → **`:185`/`:214`**. **Keine** der
+Zeilenzahlen, die die Bodies ausdruecklich nennen, ist abgewichen — Regel 98
+greift genau dort, wo sie nicht angewandt wurde.
+
+### Norm-Befund (alle elf offenen Issues gegen die vier Pflichtteile)
+
+| Issue | Pflichtteile | Lücke |
+|---|---|---|
+| #849, #633, #632 | **4/4** | — (`agent-ready`, `size/S`); #849 fuehrt 6 Kriterien statt 2–5 und weist das nicht aus |
+| #435 | **4/4** | aber `size/M` → Regel 7 |
+| #540 | 3/4 | **Scope-In fehlt**; 7 Kriterien, mind. 4 ohne Schwelle |
+| #454 | 2 voll, 2 teilweise | `human-only` |
+| #542 | 0 voll | Outcome fehlt, 5 Kriterien ohne Kommando; `human-only` |
+| #535, #428 | je 0 voll | **Outcome und Verifikation fehlen ganz**; `size/M` → Regel 7 |
+| #338 | 0/4 | `human-only`, Owner-Checkliste |
+
+**Regel 7 angewandt:** an den `size/M`-Bodies wurden **keine Felder
+ergaenzt**, nur Zeiger repariert — ein `size/M`-Issue wird nicht durch
+Nachtragen startbar, der naechste Schritt ist ein Zuschnitt.
+
+## Geschrieben
+
+- **#540** — Caddy-Zeiger an vier Fundstellen auf `:414`, Messsatz ergaenzt.
+- **#428** — zwei Zeiger auf `:168`/`:287`, OSV-Restlaufzeit an zwei Stellen auf 23 Tage.
+- **#454** — Deploy-Zeiger auf `:185`/`:214` (reine Tatsachen-Korrektur, `human-only` unberuehrt).
+- **#632** — Sperre als gefallen, zweite Achse 11x, Zahlen, Coverage-Richtung korrigiert.
+- **#633** — Sperre als gefallen, genau zwei Blocker, Herleitung 26/35 nachgezogen.
+- **#849** — Praemisse korrigiert, Einschraenkung aus Lauf 45 entfernt.
+- **#442** — Body neu (76.106 Zeichen) + zwei Kommentare (Weiche 1 neu gestellt, neue Weiche zu #823).
+- **Nicht angefasst:** #535, #435, #542, #338 — alle Zeiger und Dateigroessen halten.
+
+## Qualitaetssicherung des Laufs selbst
+
+Das Schreibpaket W2 hat die drei `agent-ready`-Bodies **vollstaendig neu
+getippt** (die API nimmt nur den ganzen Body) und keinen Abschluss-Lesecheck
+gemacht. Ein Verifikationspaket mit frischen Augen hat daraufhin alle drei
+geprueft: **kein zerstoerender Schaden**, alle Pflichtteile und
+Kriterienzahlen vorhanden (6/6/5), Fences und Tabellenspalten konsistent, nur
+ein datierter Standblock je Issue. **Zwei Funde wurden korrigiert:** eine
+Aussage in #849, die den Haenger-Mechanismus als „zweimal eingetreten"
+auswies (belegt ist er **einmal**), und eine Zahlenreihe in #632, deren Summe
+nicht aufging (`12/14→15` und ein fehlendes `scroll-guard` 3).
+
+**Lehre fuer kuenftige Laeufe:** ein Issue-Body ueber ~10.000 Zeichen wird
+nicht von einem Modell abgetippt. Entweder chirurgisch per Suchen-Ersetzen
+auf dem abgerufenen Body, oder mit anschliessender Verifikation durch einen
+zweiten Agenten. Beides wurde in diesem Lauf gebraucht.
+
+## Completion-Condition — Nachweis
+
+- [x] Alle 11 offenen Issues gegen die vier Pflichtteile geprueft, Ergebnis in der Tabelle oben.
+- [x] Jeder Zeiger in den sieben Bodies nachgemessen; 4 verrottet, 4 repariert, Rest haelt.
+- [x] #442 traegt eine Reihenfolge aus den fuenf Kriterien; Praeferenzen stehen getrennt.
+- [x] Zehn Wellen (A–J) mit Dateien, Stack und Vorbedingung; A und C erstmals beide ohne Vorbedingung.
+- [x] Protokoll liegt als Datei im Repo, PR offen.
