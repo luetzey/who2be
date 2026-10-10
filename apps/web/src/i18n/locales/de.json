@@ -3788,5 +3788,90 @@
       "importanceChange": "Wichtigkeit: {{from}} → {{to}}",
       "restored": "Früheren Stand wiederhergestellt."
     }
+  },
+  "inbox": {
+    "page": {
+      "title": "Zu erledigen",
+      "description": "Alles, was auf eine Entscheidung von dir wartet. Erledigtes verschwindet von selbst."
+    },
+    "chip": {
+      "followUps": "Fällig",
+      "memory": "Gedächtnis",
+      "versions": "Freigaben",
+      "cases": "Rückmeldungen"
+    },
+    "kind": {
+      "followUps": "Nachkontrollen fällig",
+      "followUpsHint": "Hat die Änderung gewirkt? Nur ein Mensch stuft ein.",
+      "memory": "Gedächtnis zur Freigabe",
+      "memoryHint": "Einträge werden erst nach deiner Freigabe wirksam.",
+      "versions": "Versionen zur Freigabe",
+      "versionsHint": "Erst nach deiner Freigabe nutzen die Agenten die neue Version.",
+      "versionsEditorHint": "Warten auf Freigabe durch einen Admin. Du kannst sie zurück auf Entwurf setzen.",
+      "cases": "Rückmeldungen, nicht eingeordnet",
+      "casesHint": "Gemeldete Situationen, die noch niemand eingeordnet hat."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Zum Anschauen",
+      "toLookHint": "zählt nicht in die Glocke"
+    },
+    "followUps": {
+      "pending": "Die einzelnen Nachkontrollen öffnest du künftig am Agenten unter „Weiterentwicklung“. Bis dahin zeigt diese Zeile nur, wie viele fällig sind."
+    },
+    "memory": {
+      "userMemory": "Dein Nutzergedächtnis"
+    },
+    "cases": {
+      "reopened": "wieder offen"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System-Prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} Persona",
+        "persona_other": "{{count}} Personas",
+        "playbook_one": "{{count}} Playbook",
+        "playbook_other": "{{count}} Playbooks",
+        "resource_one": "{{count}} Resource",
+        "resource_other": "{{count}} Resources",
+        "systemPrompt_one": "{{count}} System-Prompt",
+        "systemPrompt_other": "{{count}} System-Prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} Muster",
+      "patterns_other": "{{count}} Muster",
+      "patternsHint": "Rückmeldungen oder Lernvorschläge, die sich wiederholen",
+      "versions_one": "{{count}} Version wartet auf Freigabe durch einen Admin",
+      "versions_other": "{{count}} Versionen warten auf Freigabe durch einen Admin",
+      "open": "Ansehen",
+      "openAria": "Ansehen: {{title}}"
+    },
+    "action": {
+      "review": "Prüfen",
+      "reviewAria": "Prüfen: {{text}}",
+      "triage": "Einordnen",
+      "triageAria": "Einordnen: {{text}}",
+      "open": "Öffnen",
+      "openVersionAria": "{{name}} Version {{version}} öffnen"
+    },
+    "quoted": "„{{text}}“",
+    "unknownAgent": "Unbekannter Agent",
+    "showAll_one": "Alle {{count}} ansehen",
+    "showAll_other": "Alle {{count}} ansehen",
+    "empty": {
+      "title": "Alles erledigt",
+      "description": "Neue Aufgaben erscheinen hier und an der Glocke.",
+      "filtered": "Für diese Auswahl ist nichts offen."
+    },
+    "sectionError": "Konnte nicht geladen werden.",
+    "loadError": "Die Aufgaben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen"
   }
 }

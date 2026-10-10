@@ -116,6 +116,12 @@ const DashboardPage = lazy(() =>
     default: mod.DashboardPage,
   })),
 )
+// Navigation & Transparenz W1-b: Seite „Zu erledigen“ hinter der Glocke.
+const InboxPage = lazy(() =>
+  import('@/features/inbox/pages/InboxPage').then((mod) => ({
+    default: mod.InboxPage,
+  })),
+)
 const AgentsPage = lazy(() =>
   import('@/features/agents/pages/AgentsPage').then((mod) => ({
     default: mod.AgentsPage,
@@ -359,6 +365,7 @@ export function RouterRoot() {
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />
+                <Route path="/w/:workspaceId/inbox" element={<InboxPage />} />
                 <Route path="/w/:workspaceId/personas" element={<PersonasPage />} />
                 <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
                 <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
