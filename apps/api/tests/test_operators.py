@@ -217,6 +217,7 @@ _ComposeLoader.add_multi_constructor("!", _untagged)
 
 
 @pytest.mark.parametrize("compose_path", _BASE_STACKS, ids=lambda p: str(p.relative_to(_REPO_ROOT)))
+# effect-exempt: Konfigurations-Drift; Compose reicht nur gelistete Variablen an den Container
 def test_base_stack_passes_operators_to_api_with_empty_default(compose_path: Path) -> None:
     text = compose_path.read_text(encoding="utf-8")
     data: dict[str, Any] = yaml.load(text, Loader=_ComposeLoader)
@@ -229,8 +230,8 @@ def test_base_stack_passes_operators_to_api_with_empty_default(compose_path: Pat
     )
 
 
+# effect-exempt: haelt die Betreiber-Vorlage gegen die Compose-Durchreichung, kein Pruefling
 def test_hetzner_env_example_offers_operators() -> None:
     """Die Betreiber-Vorlage bietet die Variable an — sonst setzt sie niemand."""
-    # effect-exempt: haelt die Betreiber-Vorlage gegen die Compose-Durchreichung, kein Subjekt
     example = (_REPO_ROOT / "deploy" / "hetzner" / ".env.example").read_text(encoding="utf-8")
     assert f"\n{OPERATORS_ENV}=\n" in example
