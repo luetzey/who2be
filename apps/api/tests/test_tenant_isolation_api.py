@@ -22,6 +22,10 @@ hinzufuegen, ohne sich zu ihrer Mandantentrennung zu verhalten.
 * **V3 Listen-Scan** — lesende Route ohne Objekt-Referenz im eigenen
   Workspace. Erwartet 2xx, und die Antwort enthaelt nichts von B.
 
+Workspace-uebergreifende Betreiber-Routen (ADR-0057 §7) haben weder Workspace
+noch Objekt-ID; fuer sie gibt es stattdessen **V4 Nicht-Betreiber**: A ist
+nicht in der Betreiber-Allowlist und muss 403 bekommen.
+
 Fuer **jede** Antwort an A gilt zusaetzlich: kein Marker und keine ID von B
 im Antworttext, ausser A hat die ID selbst gesendet (Fehlermeldungen duerfen
 die Anfrage zitieren). Und nach allen A-Aufrufen ist der Fingerabdruck von B
@@ -98,6 +102,10 @@ class Probe:
     `oracle_exempt`: Begruendung, warum unterschiedliche Antworten fuer
     fremde und unbekannte IDs hier kein Orakel sind (etwa weil die "ID" ein
     Geheimnis ist, das nur der Berechtigte kennt).
+    `operator_only=True`: workspace-uebergreifende Betreiber-Route (ADR-0057
+    §7). Sie hat keine Objekt-ID und keinen Mandanten; die Grenze ist die
+    Betreiber-Allowlist. Variante V4: A ist kein Betreiber und muss 403
+    bekommen, ohne B-Spuren. Eine Gegenprobe gibt es nicht, B ist auch keiner.
     """
 
     body: Any = None
@@ -108,6 +116,7 @@ class Probe:
     known: str = ""
     oracle_exempt: str = ""
     denied: frozenset[int] = DENIED
+    operator_only: bool = False
 
 
 _TEXT_FILE = base64.b64encode(b"Isolation probe text.").decode()
@@ -581,6 +590,10 @@ PROBES: dict[str, Probe] = {
             "hat, darf wissen, dass er gilt (403 bei falscher E-Mail statt 404)."
         ),
     ),
+    # --- Betreiber-Routen (ADR-0057 §7) ------------------------------------
+    # Workspace-uebergreifend: Routinen und Laufprotokoll aller Mandanten.
+    # Die Grenze ist die Betreiber-Allowlist; A ist kein Betreiber (V4: 403).
+    "GET /v1/system/routines": Probe(operator_only=True, denied=frozenset({403})),
 }
 
 EXEMPT: dict[str, str] = {
@@ -756,6 +769,8 @@ def build_calls(key: str, probe: Probe, me: Tenant, other: Tenant) -> list[Call]
         )
 
     calls: list[Call] = []
+    if probe.operator_only:
+        return [call("V4", me, me, mine)]
     if on_ws:
         calls.append(call("V1", other, other, theirs))
     if object_params:
@@ -931,6 +946,8 @@ def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
         assert counts.get("V2", 0) >= 140, counts
         assert counts.get("V2-mix", 0) >= 6, counts
         assert counts.get("V3", 0) >= 20, counts
+        # Betreiber-Routen: Nicht-Betreiber bekommt 403 (ADR-0057 §7).
+        assert counts.get("V4", 0) >= 1, counts
         # V1- und V2-Gegenprobe sind derselbe Aufruf (B, eigene IDs) und
         # laufen nur einmal.
         assert counts.get("control", 0) >= 175, counts
@@ -961,6 +978,13 @@ def _probe_as_a(
         report.findings.append(f"{c.variant} {c.key}: B-Daten in Antwort an A: {leaked}")
     if status >= 500:
         report.findings.append(f"{c.variant} {c.key}: A -> {status} (Serverfehler)")
+        return
+    if c.variant == "V4":
+        if status not in probe.denied:
+            report.findings.append(
+                f"V4 {c.key}: Betreiber-Route als Nicht-Betreiber -> {status}, "
+                f"erwartet {sorted(probe.denied)} {response.text[:200]}"
+            )
         return
     if c.variant == "V3":
         if not 200 <= status < 300:
@@ -1006,7 +1030,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
         for c in build_calls(key, probe, a, b):
             control = next((m for m in mirror if m.variant == c.variant), None)
             g = next((m for m in phantom if m.variant == c.variant), None)
-            plan.append((c, g, control if c.variant != "V3" else None))
+            plan.append((c, g, control if c.variant not in ("V3", "V4") else None))
 
     for c, g, _ in plan:
         _probe_as_a(client, report, c, g, a, b)

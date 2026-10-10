@@ -15608,6 +15608,33 @@
         }
       }
     },
+    "/v1/system/routines": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Routines",
+        "description": "Alle registrierten Routinen mit Zeitplan und Laufstand (nur Betreiber, MFA).",
+        "operationId": "get_routines_v1_system_routines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutinesOverview"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/oauth/register": {
       "post": {
         "tags": [
@@ -24492,6 +24519,187 @@
         ],
         "title": "ResourceVersionRead",
         "description": "Ein unveraenderlicher Versions-Snapshot einer Resource."
+      },
+      "RoutineLastRun": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "schedule",
+              "cli",
+              "manual"
+            ],
+            "title": "Trigger"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Class"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "trigger",
+          "started_at"
+        ],
+        "title": "RoutineLastRun",
+        "description": "Der juengste Lauf einer Routine, gleich welcher Status."
+      },
+      "RoutineStatus": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "code",
+              "env"
+            ],
+            "title": "Source"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutineLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "external_schedule_detected": {
+            "type": "boolean",
+            "title": "External Schedule Detected",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "schedule",
+          "enabled",
+          "source"
+        ],
+        "title": "RoutineStatus",
+        "description": "Eine Routine mit wirksamem Zeitplan und Laufstand."
+      },
+      "RoutinesOverview": {
+        "properties": {
+          "routines": {
+            "items": {
+              "$ref": "#/components/schemas/RoutineStatus"
+            },
+            "type": "array",
+            "title": "Routines"
+          },
+          "worker_last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Last Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "routines"
+        ],
+        "title": "RoutinesOverview",
+        "description": "Alle registrierten Routinen plus „Worker zuletzt gesehen“."
       },
       "RowsInsert": {
         "properties": {
