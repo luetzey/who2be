@@ -443,31 +443,28 @@ async def get_persona(
     gerendertem Profil, Modi und Playbook-Katalog. Fuer `update_*` (PUT,
     Vollstand) oder strukturelle Verarbeitung: `format="full"`.
 
-    Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
-    deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
-    Alt-Clients:
-    - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, es werden
-      weiterhin nur aktive Versionen geliefert. Die tatsaechliche Sprache der
-      Persona steht im Kopf (`locale`) der Antwort — nutze DAS, nicht den
-      Parameter.
+    Jede Persona IST deutsch ODER englisch — `locale` ist ein
+    Backward-Compat-Parameter fuer Alt-Clients:
+    - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, geliefert
+      wird nur die aktive Version. Die tatsaechliche Sprache steht im Kopf
+      (`locale`) der Antwort.
     - Aufloesung per Name (`identifier` ist keine UUID): `locale` wirkt als
       optionaler Filter auf gleichnamige Personae in anderen Sprachen
       (`None` = kein Filter, alle Sprachen — der sichere Default, damit ein
       Alt-Client mit hartkodiertem `locale='de'` keine EN-Personae mehr
       versteckt).
 
-    Modi einer Multi-Modus-Persona (Gap 3.4; unter `full` in
+    Modi einer Multi-Modus-Persona (unter `full` in
     `persona.content.modes`) tragen Name, `trigger` (Erkennungs-Keywords),
     Default-Markierung (Fallback ohne Trigger-Match), `identity_add`
     (Ergaenzung zur Basis-Identitaet) und `output_style_override`
     (Output-Stil-Anpassung). Ohne Modi ist die Persona single-mode.
 
-    Das Profil (`body_rendered` unter `full`) ist fetch-time expandiert
-    (Track F): Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
-    Slash-Refs sind bereits zu Plain-Text aufgeloest. Nutze diesen Text als
-    gebrauchsfertiges Persona-Briefing.
+    Das Profil (`body_rendered` unter `full`) ist fetch-time expandiert:
+    Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
+    Slash-Refs sind bereits zu Plain-Text aufgeloest.
 
-    Modus-Workflow (WP-F): lies zuerst die Modi (z. B. via `get_persona` ohne
+    Modus-Workflow: lies zuerst die Modi (z. B. via `get_persona` ohne
     `mode`), waehle anhand der Modus-`trigger` den passenden
     Modus und rufe dann `get_persona(identifier, mode="<Modus-Name>")` auf —
     der Server haengt die Aktiver-Modus-Sektion an das Profil an
@@ -477,8 +474,7 @@ async def get_persona(
     case-insensitiv; ein unbekannter Modus antwortet mit einem Fehler, der die
     verfuegbaren Modi auflistet.
 
-    Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
-    nicht im Profil.
+    Skills sind derzeit deaktiviert und erscheinen nicht im Profil.
     """
     _validate_response_format(format)
     client = await build_client()
@@ -1484,8 +1480,9 @@ async def create_external_tool(data: ExternalToolCreate) -> ExternalToolRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("update_external_tool")
 async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> ExternalToolRead:
-    """Aktualisiert eine externe Tool-Bindung (versioniert; PUT auf aktiv → neue
-    Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix.
+    """Aktualisiert eine externe Tool-Bindung (versioniert, Alias fix).
+
+    PUT auf aktiv → neue Draft, 409 bei bestehendem Draft.
 
     PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
     (`format="full"`, sofern angeboten), nie die Lesefassung.
