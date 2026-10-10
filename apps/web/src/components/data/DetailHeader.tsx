@@ -268,7 +268,16 @@ export function DetailHeader({
               />
             ) : null}
             {usage !== undefined ? (
-              <UsageLine entityType={usage.entityType} entityId={usage.entityId} />
+              // #624 (Owner-Entscheidung C): auf mobile-320 kostet die Zeile
+              // genau den Platz, den „Publish" im ersten Viewport braucht.
+              // Unter `md` liegt sie daher mit den Sekundaeraktionen hinter
+              // „Mehr"; ab `md` steht sie immer.
+              <div
+                className={cn(collapsible && !actionsOpen && 'hidden md:block')}
+                data-testid="detail-header-usage-slot"
+              >
+                <UsageLine entityType={usage.entityType} entityId={usage.entityId} />
+              </div>
             ) : null}
           </div>
         </div>

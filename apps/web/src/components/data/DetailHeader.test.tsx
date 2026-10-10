@@ -216,7 +216,10 @@ function stubUsage(respond: () => Response | Promise<Response>) {
   return fetchMock
 }
 
-function renderWithUsage(usage?: { entityType: UsageEntityType; entityId: string }) {
+function renderWithUsage(
+  usage?: { entityType: UsageEntityType; entityId: string },
+  collapse = false,
+) {
   return render(
     <SessionContext.Provider
       value={{
@@ -240,6 +243,8 @@ function renderWithUsage(usage?: { entityType: UsageEntityType; entityId: string
                   title="Onboarding"
                   description="Neue Mitarbeitende einarbeiten."
                   usage={usage}
+                  collapseActionsBelowMd={collapse}
+                  actions={collapse ? <button type="button">Exportieren</button> : undefined}
                 />
               }
             />
@@ -300,6 +305,16 @@ describe('DetailHeader — Nutzungszeile (U4b)', () => {
     expect(screen.queryByTestId('detail-header-usage-loading')).toBeNull()
     expect(screen.queryByTestId('detail-header-usage')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('mit eingeklappten Aktionen liegt die Zeile unter md hinter „Mehr“ (#624)', async () => {
+    stubUsage(() => new Response(JSON.stringify(usageStats())))
+    renderWithUsage({ entityType: 'playbook', entityId: 'pb1' }, true)
+    await screen.findByTestId('detail-header-usage')
+    const slot = screen.getByTestId('detail-header-usage-slot')
+    expect(slot).toHaveClass('hidden', 'md:block')
+    fireEvent.click(screen.getByTestId('detail-header-more'))
+    expect(slot).not.toHaveClass('hidden')
   })
 
   it('hat mit Nutzungszeile keine axe-Violations', async () => {
