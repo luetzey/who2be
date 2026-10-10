@@ -3788,5 +3788,90 @@
       "importanceChange": "Importance: {{from}} → {{to}}",
       "restored": "Earlier state restored."
     }
+  },
+  "inbox": {
+    "page": {
+      "title": "To do",
+      "description": "Everything waiting for your decision. Done items disappear on their own."
+    },
+    "chip": {
+      "followUps": "Due",
+      "memory": "Memory",
+      "versions": "Approvals",
+      "cases": "Feedback reports"
+    },
+    "kind": {
+      "followUps": "Follow-ups due",
+      "followUpsHint": "Did the change work? Only a person rates it.",
+      "memory": "Memory awaiting approval",
+      "memoryHint": "Entries take effect only after you approve them.",
+      "versions": "Versions awaiting approval",
+      "versionsHint": "Agents use the new version only after you approve it.",
+      "versionsEditorHint": "Waiting for an admin to approve. You can move them back to draft.",
+      "cases": "Feedback reports, not triaged",
+      "casesHint": "Reported situations nobody has triaged yet."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Worth a look",
+      "toLookHint": "not counted in the bell"
+    },
+    "followUps": {
+      "pending": "You will open individual follow-ups on the agent under “Improvement”. Until then, this row only shows how many are due."
+    },
+    "memory": {
+      "userMemory": "Your user memory"
+    },
+    "cases": {
+      "reopened": "reopened"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} persona",
+        "persona_other": "{{count}} personas",
+        "playbook_one": "{{count}} playbook",
+        "playbook_other": "{{count}} playbooks",
+        "resource_one": "{{count}} resource",
+        "resource_other": "{{count}} resources",
+        "systemPrompt_one": "{{count}} system prompt",
+        "systemPrompt_other": "{{count}} system prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} pattern",
+      "patterns_other": "{{count}} patterns",
+      "patternsHint": "Feedback reports or learning suggestions that keep recurring",
+      "versions_one": "{{count}} version is waiting for an admin to approve",
+      "versions_other": "{{count}} versions are waiting for an admin to approve",
+      "open": "View",
+      "openAria": "View: {{title}}"
+    },
+    "action": {
+      "review": "Review",
+      "reviewAria": "Review: {{text}}",
+      "triage": "Triage",
+      "triageAria": "Triage: {{text}}",
+      "open": "Open",
+      "openVersionAria": "Open {{name}} version {{version}}"
+    },
+    "quoted": "“{{text}}”",
+    "unknownAgent": "Unknown agent",
+    "showAll_one": "View all {{count}}",
+    "showAll_other": "View all {{count}}",
+    "empty": {
+      "title": "All done",
+      "description": "New tasks show up here and on the bell.",
+      "filtered": "Nothing is open for this selection."
+    },
+    "sectionError": "Couldn't be loaded.",
+    "loadError": "The tasks couldn't be loaded.",
+    "retry": "Try again"
   }
 }
