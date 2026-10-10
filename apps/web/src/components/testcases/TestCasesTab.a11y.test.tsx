@@ -333,38 +333,35 @@ describe('Tab „Prüffälle" an den Element-Detailseiten (B4b)', () => {
   })
 })
 
-describe('Prüffälle am Agenten (B4b)', () => {
-  it('ist zugeklappt, laedt nichts und klappt per Knopf auf', async () => {
+describe('Prüffälle am Agenten (Tab, Navigation §3.1)', () => {
+  it('Tab ist nicht gewählt, laedt nichts und laedt beim Öffnen auf den Agenten gefiltert', async () => {
     const requests = stubApi()
     renderPage(<AgentDetailPage />, '/w/:workspaceId/agents/:id', '/w/ws-1/agents/a1')
 
     await screen.findByRole('heading', { level: 1, name: 'coder' })
-    const section = screen.getByTestId('agent-test-cases')
-    expect(section).toHaveAttribute('id', 'tests')
-    const toggle = within(section).getByRole('button', { name: 'Prüffälle' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(within(section).queryByTestId('test-case-list')).toBeNull()
+    const tab = screen.getByRole('tab', { name: 'Prüffälle' })
+    expect(tab).toHaveAttribute('aria-selected', 'false')
+    // Wie an den Elementen: kein Zaehler am Tab.
+    expect(tab.textContent).toBe('Prüffälle')
+    expect(screen.queryByTestId('agent-test-cases')).toBeNull()
     expect(requests).toHaveLength(0)
 
-    fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(tab)
+    expect(tab).toHaveAttribute('aria-selected', 'true')
+    const section = await screen.findByTestId('agent-test-cases')
     expect(await within(section).findByTestId('test-case-row')).toBeInTheDocument()
     expect(requests).toHaveLength(1)
     expect(requests[0].searchParams.get('agent_id')).toBe('a1')
     expect(requests[0].searchParams.has('entity_type')).toBe(false)
-
-    fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(within(section).queryByTestId('test-case-list')).toBeNull()
   })
 
-  it.each(['#tests', '?tab=tests'])('%s oeffnet die Sektion direkt', async (suffix) => {
+  it.each(['#tests', '?tab=tests'])('%s öffnet den Tab direkt', async (suffix) => {
     const requests = stubApi()
     renderPage(<AgentDetailPage />, '/w/:workspaceId/agents/:id', `/w/ws-1/agents/a1${suffix}`)
 
     const section = await screen.findByTestId('agent-test-cases')
-    expect(within(section).getByRole('button', { name: 'Prüffälle' })).toHaveAttribute(
-      'aria-expanded',
+    expect(screen.getByRole('tab', { name: 'Prüffälle' })).toHaveAttribute(
+      'aria-selected',
       'true',
     )
     expect(
@@ -398,19 +395,18 @@ describe('Prüffälle-Einstieg (a11y)', () => {
     expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('Agent-Sektion (zugeklappt, Standardansicht) hat keine axe-Violations', async () => {
+  it('Agent-Seite (Standardansicht, Tab Überblick) hat keine axe-Violations', async () => {
     stubApi()
     const { container } = renderPage(
       <AgentDetailPage />,
       '/w/:workspaceId/agents/:id',
       '/w/ws-1/agents/a1',
     )
-    await screen.findByTestId('agent-test-cases')
     await screen.findByTestId('agent-hierarchy')
     expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('Agent-Sektion (aufgeklappt) hat keine axe-Violations im AppLayout', async () => {
+  it('Agent-Tab „Prüffälle“ (über alten Anker #tests) hat keine axe-Violations im AppLayout', async () => {
     stubApi()
     const { container } = renderPage(
       <AgentDetailPage />,

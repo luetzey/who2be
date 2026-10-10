@@ -1,28 +1,18 @@
-import { ChevronRight } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation } from 'react-router-dom'
 
 import type { VersionedEntityType } from '@/api/types'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAgents } from '@/hooks/useAgents'
-import { cn } from '@/lib/utils'
 
 import { TestCaseList } from './TestCaseList'
 
 // Einstiege in die Prueffall-Liste (Lernschleife B4b, Spec S10 / §2.2):
-// Tab „Prüffälle" (`?tab=tests`) auf Persona-, Playbook- und System-Prompt-
-// Detail, am Agenten eine aufklappbare Sektion mit Anker `#tests`. Die
-// Agent-Detailseite hat (noch) keine Tabs — der Umbau aus Spec §2.3 ist ein
-// eigenes Paket; bis dahin oeffnet auch `?tab=tests` die Sektion, damit der
-// Link der Spec-Route schon heute traegt.
+// Tab „Prüffälle" (`?tab=tests`) auf Persona-, Playbook-, System-Prompt- und
+// Agent-Detail (Agent: Navigation-Spec §3.1; der alte Anker `#tests` leitet
+// dort auf `?tab=tests` um).
 
 /** Wert des Tab-Parameters `?tab=` fuer die Prueffaelle (Spec §2.2). */
 export const TESTS_TAB = 'tests'
-
-/** Anker der Prueffall-Sektion auf der Agent-Detailseite. */
-export const TESTS_ANCHOR = 'tests'
 
 type ElementType = Extract<VersionedEntityType, 'persona' | 'playbook' | 'system_prompt_template'>
 
@@ -50,7 +40,7 @@ export function EntityTestCases({ type, id, name }: EntityTestCasesProps) {
   const subjectLabel = `${t(`testCases.entityType.${type}`)} ${open}${name}${close}`
   // Die Liste bringt ihr eigenes h3 mit (Kopf mit Anlage-Aktion). Die
   // Detailseite hat darueber nur das h1 — das unsichtbare h2 haelt die
-  // Ueberschriften-Hierarchie lueckenlos, wie die Sektion am Agenten.
+  // Ueberschriften-Hierarchie lueckenlos, wie der Tab am Agenten.
   return (
     <section aria-labelledby={headingId} className="min-w-0">
       <h2 id={headingId} className="sr-only">
@@ -67,59 +57,20 @@ interface AgentTestCasesSectionProps {
 }
 
 /**
- * Prueffall-Sektion auf der Agent-Detailseite. Zugeklappt, damit die Seite
- * ohne Bedarf keine zusaetzlichen Requests absetzt; `#tests` bzw.
- * `?tab=tests` klappt sie auf und scrollt hin.
+ * Inhalt des Tabs „Prüffälle" auf der Agent-Detailseite (Navigation-Spec
+ * §3.1): die an den Agenten gebundenen Prueffaelle. Nur gemountet, solange
+ * der Tab aktiv ist — ohne Bedarf also keine Requests.
  */
 export function AgentTestCasesSection({ agentId, agentName }: AgentTestCasesSectionProps) {
   const { t } = useTranslation('learning')
-  const { hash, search } = useLocation()
-  const deepLinked =
-    hash === `#${TESTS_ANCHOR}` || new URLSearchParams(search).get('tab') === TESTS_TAB
-  // Offen, solange der Deep-Link es verlangt — bis der Nutzer selbst klickt.
-  const [toggled, setToggled] = useState<boolean | null>(null)
-  const open = toggled ?? deepLinked
-  const sectionRef = useRef<HTMLDivElement>(null)
-  const contentId = useId()
-
-  useEffect(() => {
-    if (!deepLinked) return
-    sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-  }, [deepLinked])
-
-  return (
-    <Card id={TESTS_ANCHOR} ref={sectionRef} data-testid="agent-test-cases" className="scroll-mt-6">
-      <CardHeader>
-        <CardTitle>
-          <Button
-            type="button"
-            variant="ghost"
-            aria-expanded={open}
-            aria-controls={open ? contentId : undefined}
-            onClick={() => setToggled(!open)}
-            className="-mx-2 h-auto min-h-10 justify-start gap-2 px-2 text-lg font-semibold md:min-h-0"
-          >
-            <ChevronRight
-              className={cn(
-                'size-4 transition-transform duration-[var(--duration-fast)] ease-standard',
-                open && 'rotate-90',
-              )}
-              aria-hidden="true"
-            />
-            {t('testCases.title')}
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      {open ? (
-        <CardContent id={contentId}>
-          <AgentTestCases agentId={agentId} agentName={agentName} />
-        </CardContent>
-      ) : null}
-    </Card>
-  )
-}
-
-function AgentTestCases({ agentId, agentName }: AgentTestCasesSectionProps) {
   const { agents } = useAgents()
-  return <TestCaseList agentId={agentId} agents={agents} subjectLabel={agentName} />
+  const headingId = useId()
+  return (
+    <section aria-labelledby={headingId} data-testid="agent-test-cases" className="min-w-0">
+      <h2 id={headingId} className="sr-only">
+        {t('testCases.title')}
+      </h2>
+      <TestCaseList agentId={agentId} agents={agents} subjectLabel={agentName} />
+    </section>
+  )
 }

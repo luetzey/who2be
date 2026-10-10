@@ -399,6 +399,15 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Save",
+      "pageTabsAria": "Agent sections",
+      "pageTabs": {
+        "overview": "Overview",
+        "evolution": "Evolution",
+        "memory": "Memory",
+        "tests": "Test cases",
+        "settings": "Settings"
+      },
+      "evolutionPlaceholder": "This is where the agent's evolution will live: feedback, changes and follow-ups.",
       "tabsAria": "Agent settings",
       "tabs": {
         "config": "Configuration",
