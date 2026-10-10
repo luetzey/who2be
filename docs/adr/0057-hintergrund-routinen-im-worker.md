@@ -260,7 +260,8 @@ Mandanten. Deshalb sehen sie **nur Betreiber** (W2 = a):
   Variable und Funktion im Kern heißen und ob Billing auf die Kern-Prüfung
   umzieht, legt P4 fest; die Semantik (fail-closed, pro Aufruf gelesen) ist
   verbindlich.
-- **On-Prem:** Org-Admin der Bootstrap-Org.
+- **On-Prem:** Org-Admin der Bootstrap-Org. *Ersetzt durch den Nachtrag
+  2026-10-10 unten: On-Prem nutzt dieselbe Allowlist wie die Cloud.*
 - **Keine Zähler in Kunden-Admin-Sichten.** Ein Org-Admin einer
   Kunden-Organisation sieht weder Routinen noch Laufprotokoll.
 
@@ -281,6 +282,45 @@ Was sichtbar wird (Paket P4/P5):
 Ein manuell ausgelöster Lauf aus der UI (`trigger='manual'`) ist möglich, aber
 nicht Teil dieser ADR; er käme in einem späteren Paket und nimmt denselben
 Lock.
+
+### Nachtrag 2026-10-10 — Betreiber On-Prem über dieselbe Allowlist
+
+Owner-Entscheidung vom 2026-10-10 (Telegram, „E2a“). Gilt für beide
+Editionen und ersetzt die On-Prem-Regel oben.
+
+**Befund.** Die Regel „Org-Admin der Bootstrap-Org“ lässt sich im Code nicht
+eindeutig bestimmen:
+
+- `services/bootstrap_service.py` legt die Bootstrap-Org als Personal-Org mit
+  einem aus `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` abgeleiteten Slug an. Sie trägt
+  keinen dauerhaften Marker; wiederfinden lässt sie sich nur, solange die
+  Variable gesetzt bleibt, und ohne die Variable gibt es keine Bootstrap-Org.
+- Mitglied der Org ist eine abgeleitete User-ID, die kein echter Login
+  bekommt. Ein Login landet in einer eigenen Personal-Org. Heute wäre also
+  niemand Betreiber nach dieser Regel (eigene Karte zur Login-Zuordnung).
+- „Die älteste Org“ als Ersatz wäre eine Vermutung, die nach Löschung oder
+  Übertragung einer Org auf die falsche zeigt.
+
+**Entscheidung.** Betreiber ist in Cloud **und** On-Prem, wer in der
+Allowlist `WHO2BE_OPERATORS` steht. Die Semantik ist die aus Abschnitt 7:
+kommaseparierte User-UUIDs, Default leer, fail-closed, je Aufruf gelesen,
+unparsbare Einträge geloggt und verworfen, API-Tokens nie Betreiber.
+
+**Umsetzung (P4a).** `apps/api/src/who2be_api/core/operators.py` trägt den
+einzigen Allowlist-Parser (`parse_uuid_allowlist`), `is_operator` und die
+Dependency `require_operator` (403 wie das Billing-Gate). Billing ruft den
+Kern-Parser für seine unveränderte Variable
+`WHO2BE_BILLING_OVERRIDE_OPERATORS` auf
+(`packages/billing/src/who2be_billing/router.py#_override_operator_ids`);
+damit gibt es keine zweite Fassung (Abschnitt 13). Die beiden Listen bleiben
+getrennt: Betreiber zu sein gibt kein Override-Recht. Weil die Regel in beiden
+Editionen gilt, reichen die drei Basis-Composes (`docker-compose.yml`,
+`deploy/dokploy/docker-compose.yml`, `deploy/hetzner/who2be/docker-compose.yml`)
+die Variable an `api` durch; die Cloud-Overlays erben sie.
+
+**Ausbau.** Ist die Login-Zuordnung zur Bootstrap-Org behoben, kann die
+ursprüngliche Regel zusätzlich gelten. Sie würde die Allowlist ergänzen,
+nicht ersetzen.
 
 ## 8. Migrationspfad: externe Zeitpläne, CLIs bleiben
 

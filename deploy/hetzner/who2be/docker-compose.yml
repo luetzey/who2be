@@ -80,6 +80,11 @@ services:
       # kein `env_file`, eine nur in `.env` gesetzte Variable erreicht den
       # Container nicht (Guard: apps/api/tests/test_compose_env_promises.py).
       WHO2BE_DOCS_PUBLIC: ${WHO2BE_DOCS_PUBLIC:-false}
+      # Betreiber-Allowlist (ADR-0057 §7, Nachtrag 2026-10-10): kommaseparierte
+      # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
+      # Editionen, deshalb hier im Basis-Stack und nicht im Cloud-Overlay;
+      # leer ⇒ niemand (fail-closed).
+      WHO2BE_OPERATORS: ${WHO2BE_OPERATORS:-}
       # OAuth-Remote-MCP-Connector (ADR-0036): die API ist OAuth-2.1-AS. Die URLs
       # leiten sich aus ${DOMAIN} ab (wie Caddys api./app./mcp.-Bloecke).
       # MCP_RESOURCE_URL muss der vom MCP-Server advertisierten Resource gleichen

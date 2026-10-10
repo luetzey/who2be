@@ -305,6 +305,10 @@ services:
       CORS_ORIGINS: https://app.${DOMAIN}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       WHO2BE_EDITION: onprem
+      # Betreiber-Allowlist (ADR-0057 §7, Nachtrag 2026-10-10): kommaseparierte
+      # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
+      # Editionen, deshalb im Basis-Stack; leer ⇒ niemand (fail-closed).
+      WHO2BE_OPERATORS: ${WHO2BE_OPERATORS:-}
       # OAuth-Remote-MCP-Connector (ADR-0036) — aus DOMAIN abgeleitet.
       OAUTH_ISSUER_URL: https://api.${DOMAIN}
       OAUTH_CONSENT_URL: https://app.${DOMAIN}/oauth/consent
