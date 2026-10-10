@@ -249,6 +249,12 @@
       "memory": "Memory"
     },
     "signOut": "Sign out",
+    "inbox": {
+      "label": "To do",
+      "bell_zero": "To do: nothing open",
+      "bell_one": "To do: {{count}} open",
+      "bell_other": "To do: {{count}} open"
+    },
     "language": {
       "label": "Language",
       "switch": "Change language"

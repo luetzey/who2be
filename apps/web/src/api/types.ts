@@ -1973,6 +1973,20 @@ export interface CasePage {
 // `GET /cases/counts`: Zaehler je Status (auch 0).
 export type CaseCounts = Record<CaseStatus, number>
 
+// Navigation & Transparenz W1 (Spec §2.2/§2.6 a) — `GET /inbox/counts`.
+// Je Art eine Zahl; `null` = diese Art gibt es fuer die Rolle nicht
+// (Abschnitt entfaellt), `0` = sichtbar, nichts offen. `total` ist die Zahl
+// an der Glocke (Versionen nur fuer admin, Muster nie).
+export interface InboxCounts {
+  follow_ups_due: number | null
+  memory_approval: number | null
+  versions_review: number | null
+  system_prompts_review: number | null
+  cases_open: number | null
+  patterns: number | null
+  total: number
+}
+
 // ADR-0053 3.7/6.5 (D5b) — Muster: berechnete Sicht ohne Zustand und ohne ID.
 // Quelle `lesson` (aehnliche offene Lernvorschlaege eines Agenten) oder `case`
 // (offene Faelle eines Agenten mit derselben Zuordnung im Zeitfenster).

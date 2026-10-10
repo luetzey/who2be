@@ -199,6 +199,9 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.kbNeighbors({ anchor: `node:${ID}` }),
     api.getEntitlement(),
     api.createCheckout({} as never),
+    // Navigation & Transparenz W1 — Aufgaben-Zaehler (Glocke).
+    api.getInboxCounts(),
+    api.getInboxCounts(ID),
     // ADR-0053 C5a: workspace-weite Gedaechtnis-Warteschlange.
     api.listMemories({ status: 'pending' }),
     api.countMemories({ status: 'pending' }, ['agent']),

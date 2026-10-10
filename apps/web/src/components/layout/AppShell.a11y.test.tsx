@@ -1,10 +1,11 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Me } from '@/api/types'
 import { ThemeProvider } from '@/app/ThemeProvider'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { axe } from '@/test/a11y'
 
@@ -39,30 +40,77 @@ const me: Me = {
   ],
 }
 
-function renderShell() {
+function renderShell(path = '/w/ws-1/dashboard') {
   return render(
     <SessionContext.Provider
       value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
-      <ThemeProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/dashboard']}>
-          <Routes>
-            <Route
-              path="/w/:workspaceId/*"
-              element={
-                <AppShell onSignOut={vi.fn()}>
-                  <span>Seiteninhalt</span>
-                </AppShell>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
-      </ThemeProvider>
+      <AuthTokenProvider>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <Routes>
+              <Route
+                path="/w/:workspaceId/*"
+                element={
+                  <AppShell onSignOut={vi.fn()}>
+                    <span>Seiteninhalt</span>
+                  </AppShell>
+                }
+              />
+            </Routes>
+          </MemoryRouter>
+        </ThemeProvider>
+      </AuthTokenProvider>
     </SessionContext.Provider>,
   )
 }
 
+// Glocke (Navigation W1): `GET /inbox/counts` liefert 7 offene Aufgaben.
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      String(url).includes('/inbox/counts')
+        ? new Response(
+            JSON.stringify({
+              follow_ups_due: 1,
+              memory_approval: 2,
+              versions_review: 0,
+              system_prompts_review: 0,
+              cases_open: 4,
+              patterns: 0,
+              total: 7,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        : new Response('[]', { status: 200 }),
+    ),
+  )
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('AppShell (a11y)', () => {
+  it('hat keine axe-Violations mit Glocke samt Zaehler in der Kopfleiste', async () => {
+    renderShell()
+    const header = screen.getByRole('banner')
+    await waitFor(() => expect(within(header).getByTestId('inbox-bell-count')).toBeInTheDocument())
+
+    expect(await axe(header)).toHaveNoViolations()
+  })
+
+  it('hat keine axe-Violations mit aktiver Glocke auf /inbox', async () => {
+    renderShell('/w/ws-1/inbox')
+    const header = screen.getByRole('banner')
+    await waitFor(() =>
+      expect(within(header).getByTestId('inbox-bell')).toHaveAttribute('aria-current', 'page'),
+    )
+
+    expect(await axe(header)).toHaveNoViolations()
+  })
+
   it('hat keine axe-Violations im Ruhezustand (Sheet geschlossen, Sidebar-Markup)', async () => {
     const { container } = renderShell()
 

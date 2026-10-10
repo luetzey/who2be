@@ -285,10 +285,15 @@ describe('DashboardPage — Review-Banner (Audit A4)', () => {
     current_status: status,
   })
 
-  // Antwortet je Pfad: Dashboard-Aggregat bzw. die jeweilige Liste.
+  // Antwortet je Pfad: Dashboard-Aggregat bzw. die jeweilige Liste. Die
+  // Glocke in der Kopfleiste (Navigation W1) zaehlt nebenher; ihr Request
+  // geht in `pageCalls` nicht mit ein.
   function routedFetch(dashboard: DashboardData, lists: Record<string, unknown[]>) {
     return vi.fn().mockImplementation((url: string) => {
       const path = new URL(String(url), 'http://x').pathname
+      if (path.endsWith('/inbox/counts')) {
+        return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+      }
       if (path.endsWith('/dashboard')) {
         return Promise.resolve(new Response(JSON.stringify(dashboard), { status: 200 }))
       }
@@ -305,6 +310,11 @@ describe('DashboardPage — Review-Banner (Audit A4)', () => {
       path: '/w/:workspaceId/dashboard',
       initialEntries: ['/w/ws-1/dashboard'],
     })
+  }
+
+  // Requests der Seite selbst, ohne den Zaehler der Glocke.
+  function pageCalls(fetchMock: ReturnType<typeof vi.fn>): number {
+    return fetchMock.mock.calls.filter(([url]) => !String(url).includes('/inbox/counts')).length
   }
 
   it('Singular: eine Version, Direktlink auf die Pruefansicht', async () => {
@@ -364,13 +374,13 @@ describe('DashboardPage — Review-Banner (Audit A4)', () => {
     )
     expect(screen.queryByRole('link', { name: /Resources? prüfen/ })).not.toBeInTheDocument()
     expect(screen.getByText('4 Versionen liegen zur Review')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(pageCalls(fetchMock)).toBe(1)
   })
 
   // Wartet, bis die Listen-Requests beantwortet und verarbeitet sind — sonst
   // saehe ein fehlender Direktlink auch vor dem Laden gruen aus.
   async function settleLists(fetchMock: ReturnType<typeof vi.fn>, count: number) {
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1 + count))
+    await waitFor(() => expect(pageCalls(fetchMock)).toBe(1 + count))
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
