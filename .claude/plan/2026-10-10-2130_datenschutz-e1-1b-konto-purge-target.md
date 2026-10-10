@@ -27,7 +27,8 @@ Owner E1a (2026-10-10), PM: gilt sinngemaess fuer den Konto-Purge.
   die User-ID als Ziel schreibt, ist erfasst, auch kuenftige.
 - **`detail` ueber `w2b_audit_anonymized_detail` (0106)** fuer Zeilen, deren
   Ziel der User ist oder deren `detail` die User-ID irgendwo als Wert traegt
-  (`jsonb_path_exists '$.** ? (@ == $u)'`). Zeilen, in denen der User nur
+  (`strpos(detail::text, $u) > 0`, damit auch doppelt kodierter Altbestand
+  aus 0081 erfasst wird; `jsonb_path_exists` haette ihn verfehlt). Zeilen, in denen der User nur
   Akteur ist, behalten ihr `detail` (wie bisher, Scope lebt).
 - **Kein `anonymized_at`**: Anker der Retention fuer geloeschte Scopes (E1-2).
 - **Keine Migration**: Purge laeuft als Owner, Funktion existiert seit 0106.
