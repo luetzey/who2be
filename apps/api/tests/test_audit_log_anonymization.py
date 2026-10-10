@@ -311,6 +311,96 @@ def test_migration_anonymizes_rows_of_already_deleted_scopes() -> None:
     _in_isolated_schema(body, stop_before=_MIGRATION)
 
 
+def test_account_purge_anonymizes_target_and_detail_of_the_user() -> None:
+    """Konto-Purge (E1-1b): die User-ID verschwindet auch aus `target`/`detail`.
+
+    Die Workspaces bestehen weiter, der 0106-Trigger greift also nicht. Ziel
+    ist die User-ID bei `account.deletion_requested` (ohne Scope),
+    `member.role_changed` und `member.removed` (Akteur ein Admin) sowie bei
+    `memory.user_purged`. `target` wird Sentinel statt NULL, damit Aktion und
+    Zahl lesbar bleiben; `detail` wird auf die Allowlist gekuerzt. Zeilen, in
+    denen der User nur Akteur ist, behalten `detail`; fremde Zeilen bleiben.
+    `anonymized_at` bleibt NULL: es ist der Anker der 12-Monats-Frist fuer
+    geloeschte Scopes (E1-2), und der Scope lebt.
+    """
+
+    async def body(owner: asyncpg.Connection, _schema: str) -> None:
+        org_id = await _org(owner)
+        ws = await _workspace(owner, org_id)
+        user, admin, other = uuid4(), uuid4(), uuid4()
+
+        async def seed(
+            action: str, actor: UUID | None, target: str | None, detail: dict[str, object]
+        ) -> UUID:
+            scoped = not action.startswith("account.")
+            row_id: UUID = await owner.fetchval(
+                "INSERT INTO audit_log (org_id, workspace_id, actor_id, action, target, detail) "
+                "VALUES ($1, $2, $3, $4, $5, $6::text::jsonb) RETURNING id",
+                org_id if scoped else None,
+                ws if scoped else None,
+                actor,
+                action,
+                target,
+                json.dumps(detail),
+            )
+            return row_id
+
+        requested = await seed(
+            "account.deletion_requested", user, str(user), {"purge_after": "2026-11-09"}
+        )
+        changed = await seed(
+            "member.role_changed", admin, str(user), {"from": "viewer", "to": "editor"}
+        )
+        removed = await seed("member.removed", admin, str(user), {"role": "editor"})
+        purged = await seed("memory.user_purged", admin, str(user), {"count": 2})
+        in_detail = await seed(
+            "token.issued", admin, str(uuid4()), {"role": "viewer", "agent_id": str(user)}
+        )
+        as_actor = await seed("token.issued", user, "tok", {"name": "Laptop", "role": "editor"})
+        foreign = await seed("member.removed", admin, str(other), {"role": "viewer"})
+
+        anonymized = await PgAccountPurgeRepository(owner).purge_account_data(user)
+        assert anonymized == 6, "jede betroffene audit_log-Zeile zaehlt genau einmal"
+
+        sentinel = str(ANONYMIZED_USER_ID)
+        expected = {
+            requested: (ANONYMIZED_USER_ID, sentinel, {"purge_after": "2026-11-09"}),
+            changed: (admin, sentinel, {"from": "viewer", "to": "editor"}),
+            removed: (admin, sentinel, {"role": "editor"}),
+            purged: (admin, sentinel, {"count": 2}),
+        }
+        for row_id, (actor, target, detail) in expected.items():
+            row = await _row(owner, row_id)
+            assert row["actor_id"] == actor, row["action"]
+            assert row["target"] == target, f"{row['action']}: User-ID steht noch in target"
+            assert json.loads(row["detail"]) == detail, row["action"]
+            assert row["anonymized_at"] is None, "Scope lebt: kein Retention-Anker"
+
+        hidden = await _row(owner, in_detail)
+        assert json.loads(hidden["detail"]) == {"role": "viewer"}, "User-ID in detail ueberlebt"
+        assert hidden["target"] != sentinel
+        actor_only = await _row(owner, as_actor)
+        assert actor_only["actor_id"] == ANONYMIZED_USER_ID
+        assert actor_only["target"] == "tok"
+        assert json.loads(actor_only["detail"]) == {"name": "Laptop", "role": "editor"}
+        untouched = await _row(owner, foreign)
+        assert untouched["target"] == str(other)
+        assert untouched["actor_id"] == admin
+
+        leftover = await owner.fetchval(
+            "SELECT count(*) FROM audit_log "
+            "WHERE actor_id = $1 OR target = $1::text OR strpos(detail::text, $1::text) > 0",
+            user,
+        )
+        assert leftover == 0, "User-ID ueberlebt den Konto-Purge in audit_log"
+        # Append-only bleibt: die App-Rolle bekommt durch den Purge kein UPDATE.
+        assert not await owner.fetchval(
+            "SELECT has_table_privilege('who2be_app', 'audit_log', 'UPDATE')"
+        )
+
+    _in_isolated_schema(body)
+
+
 # Aktionen im Code: `action="x.y"` (AuditService.record), Konstanten
 # `*_AUDIT_ACTION = "x.y"` (Repositories, Modelle) und Literale in
 # Migrationen, die selbst in `audit_log` schreiben (0088).
