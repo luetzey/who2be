@@ -19,6 +19,7 @@ import asyncpg
 
 from who2be_api.core.tenancy import scope_to_self
 from who2be_api.repositories.workspace_repository import ensure_personal_workspace
+from who2be_api.services.bootstrap_service import claim_bootstrap_org
 from who2be_models import DEFAULT_LOCALE, MeOrganization, MeRead, MeWorkspace
 from who2be_models.locale import SUPPORTED_LOCALES, normalize_locale
 
@@ -72,6 +73,15 @@ class PgMeRepository:
         # Lazy-Seed: kein Workspace vorhanden → Personal-Workspace anlegen und
         # sofort erneut abfragen, damit der Response stets eine valide
         # default_workspace_id traegt.
+        if not rows:
+            # On-Prem-Bootstrap (services/bootstrap_service.py): der erste Login
+            # des Bootstrap-Admins mit bestaetigter Adresse uebernimmt die
+            # geseedete Org, statt eine eigene Personal-Org zu bekommen.
+            async with self._pool.acquire() as conn, conn.transaction():
+                claimed = await claim_bootstrap_org(conn, user_id)
+            if claimed:
+                rows = await self._pool.fetch(_MEMBER_QUERY, user_id)
+
         if not rows:
             user_email, content_locale = await self._lookup_profile(user_id)
             # Transaktion: der Seed besteht aus mehreren Inserts (Org, Member,
