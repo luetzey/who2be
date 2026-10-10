@@ -28,8 +28,11 @@ from who2be_models import (
     FeedbackTarget,
     FeedbackUnused,
     SystemFeedbackCreate,
+    UsageEntityType,
     UsageEventCreate,
     UsageEventRead,
+    UsageList,
+    UsageStats,
 )
 
 router = APIRouter(tags=["feedback"])
@@ -130,3 +133,27 @@ async def delete_feedback(feedback_id: UUID, ctx: Ctx, service: Service) -> None
     # Hard-Delete eines Feedback-Eintrags (editor+). 404, wenn das Feedback
     # nicht im eigenen Workspace liegt; 204 bei Erfolg.
     await service.delete_feedback(ctx, feedback_id)
+
+
+@router.get("/usage")
+async def list_usage(
+    ctx: Ctx,
+    service: Service,
+    entity_type: Annotated[
+        UsageEntityType | None,
+        Query(description="Nur Elemente dieses Typs; ohne Angabe alle drei."),
+    ] = None,
+) -> UsageList:
+    # Nutzung U1: Zaehler je Element fuer Listen (ohne Tagesreihe).
+    return await service.list_usage(ctx, entity_type)
+
+
+@router.get(
+    "/usage/{entity_type}/{entity_id}",
+    responses={404: {"model": ApiErrorBody, "description": "reason: feedback_element_not_found"}},
+)
+async def get_usage(
+    entity_type: UsageEntityType, entity_id: UUID, ctx: Ctx, service: Service
+) -> UsageStats:
+    # Nutzung U1: 7/30 Tage, zuletzt genutzt, Agenten, Tagesreihe 30 Tage.
+    return await service.get_usage(ctx, entity_type, entity_id)

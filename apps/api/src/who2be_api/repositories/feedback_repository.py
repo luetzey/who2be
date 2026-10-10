@@ -27,7 +27,9 @@ from who2be_models import (
     FeedbackSummary,
     FeedbackSummaryItem,
     FeedbackUnusedItem,
+    UsageDay,
     UsageEventRead,
+    UsageStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -188,6 +190,12 @@ class FeedbackRepository(Protocol):
         resolution: str,
         note: str | None,
     ) -> AgentFeedbackRead: ...
+
+    async def usage_stats(
+        self, workspace_id: UUID, entity_type: str, entity_id: UUID
+    ) -> UsageStats: ...
+
+    async def usage_list(self, workspace_id: UUID, entity_type: str | None) -> list[UsageStats]: ...
 
 
 # Polymorphes entity_type → physische Tabelle fuer den Workspace-Belongs-Check.
@@ -380,6 +388,8 @@ class PgFeedbackRepository:
         # implizit geloeschte Elemente (name NULL) heraus.
         # `usage_count` zaehlt nur die Server-Aufzeichnung (ADR-0053 3.4); die
         # juengste Aktivitaet nimmt jede Zeile, auch einen Ergebnisbericht.
+        # Nutzung U1: `last_used_at` (nur Server-Aufzeichnung) und
+        # `last_feedback_at` getrennt; `last_activity_at` bleibt fuer Back-Compat.
         # Navigation A6: `agent_id` beschraenkt beide Tabellen auf Ereignisse
         # dieses Agenten, `days` auf die letzten N Tage. Beide Filter sind
         # `$n IS NULL OR …` — ohne Parameter bleibt die Gesamtsumme unveraendert.
@@ -387,7 +397,8 @@ class PgFeedbackRepository:
             "WITH usage_agg AS ("
             "  SELECT entity_type, entity_id, "
             "         COUNT(*) FILTER (WHERE source = 'server')::int AS usage_count, "
-            "         MAX(created_at) AS last_usage "
+            "         MAX(created_at) AS last_usage, "
+            "         MAX(created_at) FILTER (WHERE source = 'server') AS last_used_at "
             "  FROM usage_event WHERE workspace_id = $1 "
             "    AND ($2::uuid IS NULL OR agent_id = $2::uuid) "
             "    AND ($3::int IS NULL OR created_at >= now() - make_interval(days => $3::int)) "
@@ -409,13 +420,15 @@ class PgFeedbackRepository:
             "         COALESCE(f.feedback_count, 0) AS feedback_count, "
             "         COALESCE(f.negative_count, 0) AS negative_count, "
             "         COALESCE(f.helpful_count, 0) AS helpful_count, "
-            "         GREATEST(u.last_usage, f.last_feedback) AS last_activity_at "
+            "         GREATEST(u.last_usage, f.last_feedback) AS last_activity_at, "
+            "         u.last_used_at, f.last_feedback AS last_feedback_at "
             "  FROM usage_agg u "
             "  FULL OUTER JOIN fb_agg f "
             "    ON u.entity_type = f.entity_type AND u.entity_id = f.entity_id"
             ") "
             "SELECT c.entity_type, c.entity_id, c.usage_count, c.feedback_count, "
             "       c.negative_count, c.helpful_count, c.last_activity_at, "
+            "       c.last_used_at, c.last_feedback_at, "
             "       COALESCE(p.name, pb.name, r.name, et.name) AS name "
             "FROM combined c "
             "LEFT JOIN persona p   ON c.entity_type = 'persona'  "
@@ -630,3 +643,99 @@ class PgFeedbackRepository:
         )
         assert row is not None
         return AgentFeedbackRead.model_validate(dict(row))
+
+    async def usage_stats(
+        self, workspace_id: UUID, entity_type: str, entity_id: UUID
+    ) -> UsageStats:
+        # Nutzung U1: Tagesreihe ueber 30 Kalendertage (UTC, heute eingeschlossen)
+        # direkt aus `usage_event`. Der Zeitbereich laeuft ueber
+        # `usage_event_entity_idx` (workspace, typ, id, created_at DESC) — die
+        # Abfrage waechst mit dem Fenster, nicht mit der Gesamthistorie.
+        rows = await self._pool.fetch(
+            _USAGE_BOUNDS_CTE + ", ev AS ("
+            "  SELECT (e.created_at AT TIME ZONE 'UTC')::date AS day, e.agent_id "
+            "  FROM usage_event e, bounds b "
+            "  WHERE e.workspace_id = $1 AND e.entity_type = $2 AND e.entity_id = $3 "
+            "    AND e.source = 'server' AND e.created_at >= b.start30"
+            "), per_day AS (SELECT day, COUNT(*)::int AS uses FROM ev GROUP BY day) "
+            "SELECT gs.day::date AS day, COALESCE(p.uses, 0) AS uses, "
+            "       (SELECT COUNT(DISTINCT agent_id)::int FROM ev) AS agents "
+            "FROM bounds b "
+            "CROSS JOIN LATERAL generate_series("
+            "  (b.today - 29)::timestamp, b.today::timestamp, interval '1 day') AS gs(day) "
+            "LEFT JOIN per_day p ON p.day = gs.day::date "
+            "ORDER BY gs.day",
+            workspace_id,
+            entity_type,
+            entity_id,
+        )
+        # „Zuletzt genutzt“ gilt ueber die ganze Zeit, nicht nur im Fenster.
+        last_used_at = await self._pool.fetchval(
+            "SELECT created_at FROM usage_event "
+            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+            "AND source = 'server' ORDER BY created_at DESC LIMIT 1",
+            workspace_id,
+            entity_type,
+            entity_id,
+        )
+        daily = [UsageDay(day=r["day"], uses=r["uses"]) for r in rows]
+        return UsageStats(
+            entity_type=entity_type,  # type: ignore[arg-type]
+            entity_id=entity_id,
+            uses_7d=sum(d.uses for d in daily[-7:]),
+            uses_30d=sum(d.uses for d in daily),
+            last_used_at=last_used_at,
+            distinct_agents_30d=rows[0]["agents"] if rows else 0,
+            daily=daily,
+        )
+
+    async def usage_list(self, workspace_id: UUID, entity_type: str | None) -> list[UsageStats]:
+        # Nutzung U1 fuer Listen: je Element des Workspace eine Zeile, auch ohne
+        # Nutzung (0). Ausgangspunkt sind die Element-Tabellen; je Element zwei
+        # LATERAL-Abfragen auf `usage_event_entity_idx` (Fenster-Zaehler und
+        # juengste Auslieferung). Geloeschte Elemente fallen so von selbst heraus.
+        rows = await self._pool.fetch(
+            _USAGE_BOUNDS_CTE + ", el AS ("
+            "  SELECT 'persona'::text AS entity_type, id AS entity_id, name "
+            "  FROM persona WHERE workspace_id = $1 "
+            "  UNION ALL SELECT 'playbook', id, name FROM playbook WHERE workspace_id = $1 "
+            "  UNION ALL SELECT 'resource', id, name FROM resource WHERE workspace_id = $1"
+            ") "
+            "SELECT el.entity_type, el.entity_id, el.name, "
+            "       COALESCE(s.uses_7d, 0) AS uses_7d, COALESCE(s.uses_30d, 0) AS uses_30d, "
+            "       COALESCE(s.agents, 0) AS distinct_agents_30d, lu.last_used_at "
+            "FROM el CROSS JOIN bounds b "
+            "LEFT JOIN LATERAL ("
+            "  SELECT COUNT(*)::int AS uses_30d, "
+            "         COUNT(*) FILTER (WHERE u.created_at >= b.start7)::int AS uses_7d, "
+            "         COUNT(DISTINCT u.agent_id)::int AS agents "
+            "  FROM usage_event u "
+            "  WHERE u.workspace_id = $1 AND u.entity_type = el.entity_type "
+            "    AND u.entity_id = el.entity_id AND u.source = 'server' "
+            "    AND u.created_at >= b.start30"
+            ") s ON true "
+            "LEFT JOIN LATERAL ("
+            "  SELECT u.created_at AS last_used_at FROM usage_event u "
+            "  WHERE u.workspace_id = $1 AND u.entity_type = el.entity_type "
+            "    AND u.entity_id = el.entity_id AND u.source = 'server' "
+            "  ORDER BY u.created_at DESC LIMIT 1"
+            ") lu ON true "
+            "WHERE $2::text IS NULL OR el.entity_type = $2::text "
+            "ORDER BY lu.last_used_at DESC NULLS LAST, el.entity_type, el.name, el.entity_id",
+            workspace_id,
+            entity_type,
+        )
+        return [UsageStats.model_validate(dict(r)) for r in rows]
+
+
+# Zeitfenster der Nutzungszaehler als Kalendertage in UTC, heute eingeschlossen:
+# `start30` = Beginn des Tages vor 29 Tagen, `start7` = vor 6 Tagen. So stimmt
+# `uses_30d` mit der Summe der Tagesreihe ueberein.
+_USAGE_BOUNDS_CTE = (
+    "WITH bounds AS ("
+    "  SELECT t.today, "
+    "         ((t.today - 29)::timestamp AT TIME ZONE 'UTC') AS start30, "
+    "         ((t.today - 6)::timestamp AT TIME ZONE 'UTC') AS start7 "
+    "  FROM (SELECT (now() AT TIME ZONE 'UTC')::date AS today) t"
+    ")"
+)
