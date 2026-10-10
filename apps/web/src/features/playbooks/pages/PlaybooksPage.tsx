@@ -11,6 +11,7 @@ import { Stack } from '@/components/layout/Stack'
 import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { CountPill } from '@/components/data/CountPill'
 import { DataView } from '@/components/data/DataView'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
 import {
@@ -24,7 +25,6 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { groupPlaybooks, parseGroupMode } from '../lib/grouping'
 import { splitTriggers } from '@/lib/triggers'
 
-import { PlaybookListToolbar } from '../components/PlaybookListToolbar'
 import { PlaybookRow } from '../components/PlaybookRow'
 import {
   PlaybooksNoResults,
@@ -134,7 +134,13 @@ export function PlaybooksPage() {
           }
         />
         {showToolbar ? (
-          <PlaybookListToolbar
+          // Filter-Standard G3: gemeinsame ListFilterBar statt der frueheren
+          // eigenen Toolbar (Segment-Leiste + Popover) — unter `md` traegt
+          // das Filter-Sheet Facetten und Gruppieren.
+          <ListFilterBar
+            idPrefix="playbooks"
+            searchPlaceholder={t('playbooks:list.searchPlaceholder')}
+            resultCount={filters.filtered.length}
             counts={filters.counts}
             status={filters.status}
             onStatusChange={filters.setStatus}
