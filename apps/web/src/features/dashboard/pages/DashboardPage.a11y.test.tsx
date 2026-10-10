@@ -53,21 +53,25 @@ describe('DashboardPage (a11y)', () => {
     expect(results).toHaveNoViolations()
   })
 
-  // D6h: Band mit „Muster“ und „offene Fälle“ (editor), eigenes `it()` je
-  // Zustand wie in der Delta-Spec verlangt.
-  it('hat keine axe-Violations mit den Einträgen Muster und offene Fälle', async () => {
+  // W1-c: Zeile „Zu erledigen“ mit Arten und Knopf (editor).
+  it('hat keine axe-Violations mit der Zeile „Zu erledigen“', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
         const path = new URL(String(input), 'http://x').pathname
         const json = (body: unknown) =>
           Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
-        if (path.endsWith('/patterns')) {
-          return json({ threshold: 3, window_days: 30, patterns: [{}, {}] })
+        if (path.endsWith('/inbox/counts')) {
+          return json({
+            follow_ups_due: 1,
+            memory_approval: 2,
+            versions_review: 0,
+            system_prompts_review: 0,
+            cases_open: 3,
+            patterns: 2,
+            total: 6,
+          })
         }
-        if (path.endsWith('/cases/counts')) return json({ open: 2, reopened: 1 })
-        if (path.endsWith('/memories/counts')) return json({ total: 0 })
-        if (path.endsWith('/memory-proposals')) return json([])
         return json(sampleData)
       }),
     )
@@ -90,8 +94,8 @@ describe('DashboardPage (a11y)', () => {
       },
     })
 
-    await screen.findByText('2 Muster')
-    await screen.findByText('3 offene Fälle')
+    await screen.findByText('6 Aufgaben warten auf dich')
+    await screen.findByText('3 Rückmeldungen')
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
