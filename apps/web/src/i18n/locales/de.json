@@ -249,6 +249,12 @@
       "memory": "Gedächtnis"
     },
     "signOut": "Abmelden",
+    "inbox": {
+      "label": "Zu erledigen",
+      "bell_zero": "Zu erledigen: nichts offen",
+      "bell_one": "Zu erledigen: {{count}} offen",
+      "bell_other": "Zu erledigen: {{count}} offen"
+    },
     "language": {
       "label": "Sprache",
       "switch": "Sprache umstellen"

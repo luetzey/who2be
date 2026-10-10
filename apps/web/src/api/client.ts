@@ -42,6 +42,7 @@ import type {
   FeedbackTarget,
   FeedbackUnused,
   GdprExport,
+  InboxCounts,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
@@ -164,6 +165,28 @@ function urlFor(path: ApiPath): string {
   return `${config.apiBaseUrl}${resolved}`
 }
 
+/**
+ * Meldung „eine eigene Schreibanfrage ist durch“ (Navigation W1, Spec §2.3/N5 a):
+ * Zaehler wie die Glocke laden danach neu, ohne dass jede Fachseite ihre
+ * Aktionen einzeln melden muss. Gemeldet wird nur nach Erfolg und nur fuer
+ * schreibende Methoden; der Hörer bekommt keine Daten, nur das Signal.
+ */
+const mutationListeners = new Set<() => void>()
+
+export function subscribeApiMutations(listener: () => void): () => void {
+  mutationListeners.add(listener)
+  return () => {
+    mutationListeners.delete(listener)
+  }
+}
+
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function notifyMutation(method: string | undefined): void {
+  if (READ_METHODS.has((method ?? 'GET').toUpperCase())) return
+  for (const listener of mutationListeners) listener()
+}
+
 async function request<T>(token: string, path: ApiPath, init?: RequestInit): Promise<T> {
   const url = urlFor(path)
   const headers: Record<string, string> = {
@@ -195,6 +218,7 @@ async function request<T>(token: string, path: ApiPath, init?: RequestInit): Pro
     const { message, body } = await readErrorBody(response)
     throw new ApiError(response.status, message, body)
   }
+  notifyMutation(init?.method)
   if (response.status === 204) {
     return undefined as T
   }
@@ -733,6 +757,9 @@ export interface Api {
     options?: { cursor?: string; limit?: number },
   ) => Promise<CasePage>
   countCases: (agentId?: string) => Promise<CaseCounts>
+  // Navigation & Transparenz W1 — Aufgaben-Zaehler fuer Glocke, Dashboard-
+  // Zeile und Agent-Ueberblick (ein Request, rollengerecht).
+  getInboxCounts: (agentId?: string) => Promise<InboxCounts>
   getCase: (caseId: string) => Promise<CaseDetail>
   deleteCase: (caseId: string) => Promise<void>
   transitionCase: (caseId: string, input: CaseTransitionInput) => Promise<CaseRead>
@@ -1333,6 +1360,11 @@ export function createApi(token: string, workspaceId: string): Api {
       const params = new URLSearchParams()
       if (agentId) params.set('agent_id', agentId)
       return request<CaseCounts>(token, withQuery(apiPath`${ws}/cases/counts`, params))
+    },
+    getInboxCounts: (agentId) => {
+      const params = new URLSearchParams()
+      if (agentId) params.set('agent_id', agentId)
+      return request<InboxCounts>(token, withQuery(apiPath`${ws}/inbox/counts`, params))
     },
     getCase: (caseId) => request<CaseDetail>(token, apiPath`${ws}/cases/${caseId}`),
     deleteCase: (caseId) =>

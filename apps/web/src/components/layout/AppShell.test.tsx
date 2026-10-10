@@ -1,10 +1,11 @@
 import type { Session } from '@supabase/supabase-js'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Me } from '@/api/types'
 import { ThemeProvider } from '@/app/ThemeProvider'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import i18n from '@/i18n'
 
@@ -79,26 +80,70 @@ function renderShell(options?: { onSignOut?: () => void; initialPath?: string })
         refreshMe: vi.fn(),
       }}
     >
-      <ThemeProvider>
-        <MemoryRouter initialEntries={[initialPath]}>
-          <Routes>
-            <Route
-              path="/w/:workspaceId/*"
-              element={
-                <>
-                  <AppShell onSignOut={onSignOut}>
-                    <span>Seiteninhalt</span>
-                  </AppShell>
-                  <LocationProbe />
-                </>
-              }
-            />
-          </Routes>
-        </MemoryRouter>
-      </ThemeProvider>
+      <AuthTokenProvider>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={[initialPath]}>
+            <Routes>
+              <Route
+                path="/w/:workspaceId/*"
+                element={
+                  <>
+                    <AppShell onSignOut={onSignOut}>
+                      <span>Seiteninhalt</span>
+                    </AppShell>
+                    <LocationProbe />
+                  </>
+                }
+              />
+            </Routes>
+          </MemoryRouter>
+        </ThemeProvider>
+      </AuthTokenProvider>
     </SessionContext.Provider>,
   )
 }
+
+// Die Glocke zaehlt ueber `GET /inbox/counts` (Navigation W1). Standard:
+// Antwort mit `total`; einzelne Tests stellen den Wert oder einen Fehler ein.
+const fetchMock = vi.fn()
+let inboxTotal: number | 'error' | 'pending' = 0
+
+function inboxResponse(): Promise<Response> {
+  if (inboxTotal === 'pending') return new Promise<Response>(() => undefined)
+  if (inboxTotal === 'error') {
+    return Promise.resolve(
+      new Response(JSON.stringify({ detail: 'kaputt' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+  }
+  return Promise.resolve(
+    new Response(
+      JSON.stringify({
+        follow_ups_due: 0,
+        memory_approval: inboxTotal,
+        versions_review: 0,
+        system_prompts_review: 0,
+        cases_open: 0,
+        patterns: 3,
+        total: inboxTotal,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    ),
+  )
+}
+
+beforeEach(() => {
+  inboxTotal = 0
+  fetchMock.mockReset()
+  fetchMock.mockImplementation((url: string) =>
+    String(url).includes('/inbox/counts')
+      ? inboxResponse()
+      : Promise.resolve(new Response('[]', { status: 200 })),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+})
 
 const NAV_LABELS = [
   'Dashboard',
@@ -222,6 +267,7 @@ function uninstallMatchMedia() {
 
 afterEach(() => {
   uninstallMatchMedia()
+  vi.unstubAllGlobals()
 })
 
 function openSheet() {
@@ -392,5 +438,112 @@ describe('AppShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Abmelden' }))
     expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
+
+  describe('Glocke „Zu erledigen“ (Navigation W1, Spec §2.3)', () => {
+    function bell() {
+      return screen.getByTestId('inbox-bell')
+    }
+
+    it('ist ein Link auf /w/:ws/inbox in der Kopfleiste vor der Sprache, nicht in der Nav', async () => {
+      inboxTotal = 7
+      renderShell()
+      const link = await screen.findByRole('link', { name: 'Zu erledigen: 7 offen' })
+      expect(link).toHaveAttribute('href', '/w/ws-1/inbox')
+      const header = screen.getByRole('banner')
+      expect(header).toContainElement(link)
+      // Vor Sprache/Theme/Abmelden (DOM-Reihenfolge = Tab-Reihenfolge).
+      const language = within(header).getByRole('button', { name: 'Sprache umstellen' })
+      expect(link.compareDocumentPosition(language) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // Kein zusaetzlicher Nav-Eintrag (Spec §2.3 „Navigation“).
+      for (const nav of screen.getAllByRole('navigation', { hidden: true })) {
+        expect(within(nav).queryByRole('link', { name: /Zu erledigen/ })).toBeNull()
+      }
+    })
+
+    it('zeigt den Zaehler aria-hidden; vorgelesen wird nur das aria-label', async () => {
+      inboxTotal = 7
+      renderShell()
+      await waitFor(() => expect(screen.getByTestId('inbox-bell-count')).toHaveTextContent('7'))
+      const count = screen.getByTestId('inbox-bell-count')
+      expect(count).toHaveAttribute('aria-hidden', 'true')
+      expect(count).toHaveClass('bg-brand', 'text-brand-foreground', 'tabular-nums')
+      expect(bell()).toHaveAccessibleName('Zu erledigen: 7 offen')
+    })
+
+    it('zeigt bei 0 keinen Zaehler, die Glocke bleibt', async () => {
+      inboxTotal = 0
+      renderShell()
+      await waitFor(() => expect(bell()).toHaveAccessibleName('Zu erledigen: nichts offen'))
+      expect(screen.queryByTestId('inbox-bell-count')).toBeNull()
+    })
+
+    it('zeigt ab 100 „99+“, das aria-label nennt die echte Zahl', async () => {
+      inboxTotal = 100
+      renderShell()
+      await waitFor(() => expect(screen.getByTestId('inbox-bell-count')).toHaveTextContent('99+'))
+      expect(bell()).toHaveAccessibleName('Zu erledigen: 100 offen')
+    })
+
+    it('zeigt bei genau 99 die Zahl', async () => {
+      inboxTotal = 99
+      renderShell()
+      await waitFor(() => expect(screen.getByTestId('inbox-bell-count')).toHaveTextContent(/^99$/))
+    })
+
+    it('behauptet beim Laden keine 0: kein Zaehler, Name ohne Zahl', () => {
+      inboxTotal = 'pending'
+      renderShell()
+      expect(bell()).toHaveAccessibleName('Zu erledigen')
+      expect(screen.queryByTestId('inbox-bell-count')).toBeNull()
+    })
+
+    it('bleibt bei einem Fehler ein Link, ohne Zaehler und ohne Fehlerbanner', async () => {
+      inboxTotal = 'error'
+      renderShell()
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/inbox/counts'))).toBe(
+          true,
+        ),
+      )
+      expect(bell()).toHaveAttribute('href', '/w/ws-1/inbox')
+      expect(bell()).toHaveAccessibleName('Zu erledigen')
+      expect(screen.queryByTestId('inbox-bell-count')).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('markiert sich auf /inbox als aktuelle Seite (aria-current, bg-accent)', async () => {
+      renderShell({ initialPath: '/w/ws-1/inbox' })
+      await waitFor(() => expect(bell()).toHaveAttribute('aria-current', 'page'))
+      expect(bell()).toHaveClass('bg-accent')
+    })
+
+    it('ist auf anderen Seiten nicht aktuell', () => {
+      renderShell()
+      expect(bell()).not.toHaveAttribute('aria-current')
+      expect(bell()).not.toHaveClass('bg-accent')
+    })
+
+    it('hat unter md eine Trefferflaeche von 44 px und steht nicht im Nav-Sheet', () => {
+      renderShell()
+      expect(bell()).toHaveClass('h-11', 'w-11', 'md:h-9', 'md:w-9')
+      expect(bell()).not.toHaveClass('md:hidden')
+      expect(bell()).not.toHaveClass('hidden')
+    })
+
+    it('navigiert per Klick auf die Seite „Zu erledigen“', async () => {
+      renderShell()
+      fireEvent.click(bell())
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/w/ws-1/inbox'))
+    })
+
+    it('zeigt das aria-label auf Englisch', async () => {
+      await act(async () => {
+        await i18n.changeLanguage('en')
+      })
+      inboxTotal = 1
+      renderShell()
+      await waitFor(() => expect(bell()).toHaveAccessibleName('To do: 1 open'))
+    })
   })
 })
