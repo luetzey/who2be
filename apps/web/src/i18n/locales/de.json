@@ -1771,6 +1771,42 @@
       "workspace": "Workspace",
       "members": "Mitglieder"
     },
+    "routines": {
+      "title": "Hintergrund-Routinen",
+      "description": "Nur für Betreiber sichtbar und nur lesend. Zeiten in Ortszeit ({{timeZone}}), UTC in Klammern.",
+      "workerLastSeen": "Worker zuletzt gesehen:",
+      "listLabel": "Routinen",
+      "empty": "Keine Routinen registriert.",
+      "none": "—",
+      "neverRun": "Noch kein Lauf",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Zeitplan",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Letzter Lauf",
+      "nextRun": "Nächster Termin",
+      "lastSuccess": "Letzter Erfolg",
+      "counters": "Zähler:",
+      "errorClass": "Fehlerklasse:",
+      "enabled": "An",
+      "disabled": "Aus",
+      "source": {
+        "code": "Quelle: Code",
+        "env": "Quelle: Umgebung"
+      },
+      "status": {
+        "running": "Läuft",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "skipped": "Übersprungen"
+      },
+      "trigger": {
+        "schedule": "nach Zeitplan",
+        "cli": "per CLI",
+        "manual": "manuell"
+      },
+      "externalTitle": "Externer Zeitplan erkannt (Crontab/Dokploy).",
+      "externalDescription": "Kann entfernt werden."
+    },
     "account": {
       "title": "Konto",
       "description": "Dein persönliches Profil, Sicherheit und Anzeige-Präferenzen.",

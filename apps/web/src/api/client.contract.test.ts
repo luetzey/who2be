@@ -153,6 +153,7 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.deleteAccount(),
     api.deleteOrganization('__ORG__'),
     api.exportMyData(),
+    api.getSystemRoutines(),
     api.listSystemPromptTemplates(),
     api.getSystemPromptTemplate(ID),
     api.createSystemPromptTemplate({} as never),

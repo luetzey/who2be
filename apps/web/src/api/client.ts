@@ -100,6 +100,7 @@ import type {
   ResourceRef,
   ResourceUsage,
   ResourceVersion,
+  RoutinesOverview,
   SubResource,
   SubResourceLinkInput,
   SystemFeedbackInput,
@@ -688,6 +689,9 @@ export interface Api {
   deleteAccount: () => Promise<AccountDeletion>
   deleteOrganization: (orgId: string) => Promise<OrganizationDeletion>
   exportMyData: () => Promise<GdprExport>
+  // ADR-0057 §7 — Hintergrund-Routinen, nur Betreiber (alle anderen 403).
+  // Nicht workspace-scoped: die Routinen gelten fuer die ganze Instanz.
+  getSystemRoutines: () => Promise<RoutinesOverview>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: (filters?: { locale?: string }) => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -1220,6 +1224,7 @@ export function createApi(token: string, workspaceId: string): Api {
     deleteOrganization: (orgId) =>
       request<OrganizationDeletion>(token, apiPath`/v1/organizations/${orgId}`, { method: 'DELETE' }),
     exportMyData: () => request<GdprExport>(token, apiPath`/v1/gdpr/export`),
+    getSystemRoutines: () => request<RoutinesOverview>(token, apiPath`/v1/system/routines`),
     listSystemPromptTemplates: (filters) => {
       const params = new URLSearchParams()
       if (filters?.locale) params.set('locale', filters.locale)

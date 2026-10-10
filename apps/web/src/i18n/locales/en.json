@@ -1771,6 +1771,42 @@
       "workspace": "Workspace",
       "members": "Members"
     },
+    "routines": {
+      "title": "Background routines",
+      "description": "Visible to operators only, read-only. Times in local time ({{timeZone}}), UTC in brackets.",
+      "workerLastSeen": "Worker last seen:",
+      "listLabel": "Routines",
+      "empty": "No routines registered.",
+      "none": "—",
+      "neverRun": "No run yet",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Schedule",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Last run",
+      "nextRun": "Next run",
+      "lastSuccess": "Last success",
+      "counters": "Counters:",
+      "errorClass": "Error class:",
+      "enabled": "On",
+      "disabled": "Off",
+      "source": {
+        "code": "Source: code",
+        "env": "Source: environment"
+      },
+      "status": {
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "trigger": {
+        "schedule": "scheduled",
+        "cli": "via CLI",
+        "manual": "manual"
+      },
+      "externalTitle": "External schedule detected (crontab/Dokploy).",
+      "externalDescription": "It can be removed."
+    },
     "account": {
       "title": "Account",
       "description": "Your personal profile, security and display preferences.",
