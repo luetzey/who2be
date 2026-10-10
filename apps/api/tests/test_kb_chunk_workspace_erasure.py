@@ -192,7 +192,7 @@ async def _audit(owner: asyncpg.Connection, org_id: UUID, ws: UUID) -> None:
     await owner.execute(
         "INSERT INTO audit_log (org_id, workspace_id, actor_id, action, target, detail)"
         " VALUES ($1, $2, $3, 'member.removed', 'user:x',"
-        " '{\"role\": \"editor\", \"note\": \"frei\"}')",
+        ' \'{"role": "editor", "note": "frei"}\')',
         org_id,
         ws,
         uuid4(),

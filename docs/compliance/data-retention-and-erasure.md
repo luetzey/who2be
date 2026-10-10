@@ -42,12 +42,21 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
      Bestand bereinigt). Dieselbe CASCADE greift bei der Workspace-Loeschung
      (`DELETE /v1/workspaces/{id}`).
    - **Nicht** mit dem Workspace faellt `audit_log`: die Tabelle hat keinen FK
-     auf `workspace`/`organization` und ist append-only (ADR-0031). Nach
-     Workspace-Loeschung und Org-Purge bleiben ihre Zeilen samt `actor_id`,
-     `target` und `detail` stehen; beim Account-Purge wird nur `actor_id`
-     anonymisiert (§2). Wie damit zu verfahren ist, ist offen (Owner-Weiche,
-     Karte t_a0ce24ba); das Ist-Verhalten haelt
-     `tests/test_kb_chunk_workspace_erasure.py` fest.
+     auf `workspace`/`organization` und ist append-only (ADR-0031). Seit
+     Migration 0106 wird sie beim Loeschen **anonymisiert** (Owner-Entscheidung
+     E1a): ein `AFTER DELETE`-Trigger auf `workspace` und `organization` setzt
+     in jeder Zeile des geloeschten Scopes `actor_id` auf den Sentinel (§2),
+     leert `target` und kuerzt `detail` auf die Schluessel der Allowlist
+     `w2b_audit_detail_allowlist()` (Rollen, Fristen, Zaehler; keine Namen,
+     Freitexte oder IDs). Eine Aktion ohne Allowlist-Eintrag verliert `detail`
+     ganz. Es bleiben Aktion, Zeitpunkt (`created_at`) und Scope
+     (`org_id`/`workspace_id`); `anonymized_at` haelt den Zeitpunkt fest. Der
+     Trigger greift auf jedem Loeschweg, auch beim API-Workspace-Delete unter
+     der App-Rolle. Zeilen aus vor 0106 geloeschten Scopes hat die Migration
+     nachgezogen. **Frist:** 12 Monate nach der Anonymisierung loescht der
+     Worker auch den anonymen Rest (Routine folgt, eigenes Paket). Belegt in
+     `tests/test_kb_chunk_workspace_erasure.py` und
+     `tests/test_audit_log_anonymization.py`.
    - **Konten:** loescht `api_token`, `org_member`, `workspace_member`, die
      persoenliche Organisation des Nutzers und ruft die **GoTrue-Admin-API** zum
      Loeschen von `auth.users` (E-Mail/Auth-Daten). Erst nach bestaetigtem
@@ -72,7 +81,7 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | Tabelle | Feld | Behandlung beim Purge |
 |---|---|---|
 | `status_history` | `changed_by` | → Sentinel `00000000-0000-0000-0000-000000000000` |
-| `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000`; faellt der Workspace bzw. die Org, zusaetzlich `target` → NULL und `detail` → Allowlist (Migration 0106, §1) |
 | `usage_event` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `test_case` (Migration 0089, ADR-0053) | `created_by` — **nur** bei `created_by_kind = 'human'` (bei `'agent'` steht dort eine Agent-ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
@@ -518,7 +527,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 |---|---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
-| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel); `audit_log` ueberlebt Org-/Workspace-Purge ganz (kein FK, Owner-Weiche offen, s. §1) |
+| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate (Routine folgt) | beim Purge **anonymisiert** (Sentinel); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
 | `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
