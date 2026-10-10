@@ -17,6 +17,7 @@ from who2be_api.repositories.feedback_repository import PgFeedbackRepository
 from who2be_api.services.feedback_service import FeedbackService
 from who2be_models import (
     AgentFeedbackRead,
+    AgentUsageStats,
     ApiErrorBody,
     FeedbackCreate,
     FeedbackDetailRead,
@@ -33,6 +34,7 @@ from who2be_models import (
     UsageEventRead,
     UsageList,
     UsageStats,
+    WorkAreaUsageStats,
 )
 
 router = APIRouter(tags=["feedback"])
@@ -41,7 +43,7 @@ router = APIRouter(tags=["feedback"])
 def get_feedback_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> FeedbackService:
-    return FeedbackService(PgFeedbackRepository(pool))
+    return FeedbackService(PgFeedbackRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
@@ -157,3 +159,23 @@ async def get_usage(
 ) -> UsageStats:
     # Nutzung U1: 7/30 Tage, zuletzt genutzt, Agenten, Tagesreihe 30 Tage.
     return await service.get_usage(ctx, entity_type, entity_id)
+
+
+@router.get(
+    "/agents/{agent_id}/usage",
+    responses={404: {"model": ApiErrorBody, "description": "reason: agent_not_found"}},
+)
+async def get_agent_usage(agent_id: UUID, ctx: Ctx, service: Service) -> AgentUsageStats:
+    # Nutzung U2: Abrufe 7/30 Tage, je Art, aktive Tage, zuletzt genutzt/aktiv,
+    # Arbeitsbereiche mit Zugriffstagen. Ab viewer, nicht fuer Agent-Tokens.
+    return await service.get_agent_usage(ctx, agent_id)
+
+
+@router.get(
+    "/work-areas/{area_id}/usage",
+    responses={404: {"model": ApiErrorBody, "description": "reason: area_not_found"}},
+)
+async def get_work_area_usage(area_id: UUID, ctx: Ctx, service: Service) -> WorkAreaUsageStats:
+    # Nutzung U2: Zugriffstage, Lese-/Schreibzugriffe, Agentenzahl, zuletzt am
+    # (Datum) aus dem Zugriffslog. Ab viewer (nur sichtbare Bereiche).
+    return await service.get_work_area_usage(ctx, area_id)

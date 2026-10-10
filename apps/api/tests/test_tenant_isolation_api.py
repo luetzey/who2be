@@ -367,6 +367,9 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/usage/{{entity_type}}/{{entity_id}}": Probe(
         path={"entity_type": "playbook", "entity_id": "playbook_id"}
     ),
+    # Nutzung U2: Agent- und Arbeitsbereich-Zaehler.
+    f"GET {_WS}/agents/{{agent_id}}/usage": Probe(),
+    f"GET {_WS}/work-areas/{{area_id}}/usage": Probe(),
     # --- Pruefaelle --------------------------------------------------------
     f"GET {_WS}/test-cases": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
     f"POST {_WS}/test-cases": Probe(
