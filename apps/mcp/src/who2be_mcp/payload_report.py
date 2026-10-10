@@ -30,6 +30,7 @@ from typing import Any
 
 from fastmcp import Client, FastMCP
 
+from who2be_mcp.instructions import ALWAYS_LOAD_KEY
 from who2be_models import (
     AgentToolPolicy,
     MemoryMode,
@@ -151,6 +152,26 @@ def visible_tools(tools: list[WireTool], profile: ReferenceProfile) -> list[Wire
     return [tool for tool in tools if profile.sees(tool["name"])]
 
 
+def always_loaded(tools: list[WireTool]) -> list[WireTool]:
+    """Werkzeuge mit `_meta["anthropic/alwaysLoad"]`: Claude Code laedt sie sofort."""
+    return [tool for tool in tools if (tool.get("_meta") or {}).get(ALWAYS_LOAD_KEY) is True]
+
+
+def tool_search_start_bytes(tools: list[WireTool], instructions: str | None) -> int:
+    """Was Claude Code mit Tool Search beim Start laedt, in Bytes.
+
+    Laut Claude-Code-Doku: Server-`instructions`, die Namen aller Werkzeuge
+    und das volle Schema der `alwaysLoad`-Werkzeuge. Der Rest kommt erst nach
+    einer Suche. Das ist eine Naeherung an den Kontext, nicht die Draht-Form:
+    `tools/list` geht weiterhin vollstaendig ueber die Leitung.
+    """
+    eager = always_loaded(tools)
+    eager_names = {tool["name"] for tool in eager}
+    names = [tool["name"] for tool in tools if tool["name"] not in eager_names]
+    eager_bytes = payload_bytes(eager) if eager else 0
+    return len((instructions or "").encode()) + _bytes(names) + eager_bytes
+
+
 def first_sentence(description: str | None) -> str:
     """Der erste Satz einer Beschreibung, Leerraum zusammengezogen.
 
@@ -213,13 +234,27 @@ def _fmt(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
 
-def report(tools: list[WireTool]) -> str:
-    """Die Tabellen fuer `docs/mcp-payload-budget.md` als Markdown."""
-    lines = ["| Profil | Werkzeuge | Bytes |", "| --- | ---: | ---: |"]
-    for profile in REFERENCE_PROFILES:
-        subset = visible_tools(tools, profile)
-        lines.append(f"| {profile.label} | {len(subset)} | {_fmt(payload_bytes(subset))} |")
-    lines.append(f"| alle Werkzeuge (Guard) | {len(tools)} | {_fmt(payload_bytes(tools))} |")
+def report(tools: list[WireTool], instructions: str | None = None) -> str:
+    """Die Tabellen fuer `docs/mcp-payload-budget.md` als Markdown.
+
+    Je Profil: Draht-Bytes von `tools/list` und, daneben, was Claude Code mit
+    Tool Search beim Start in den Kontext laedt (`tool_search_start_bytes`).
+    """
+    lines = [
+        "| Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    rows = [(profile.label, visible_tools(tools, profile)) for profile in REFERENCE_PROFILES]
+    rows.append(("alle Werkzeuge (Guard)", tools))
+    for label, subset in rows:
+        eager = always_loaded(subset)
+        lines.append(
+            f"| {label} | {len(subset)} | {_fmt(payload_bytes(subset))} "
+            f"| {len(eager)} / {_fmt(payload_bytes(eager))} "
+            f"| {_fmt(tool_search_start_bytes(subset, instructions))} |"
+        )
+    lines.append("")
+    lines.append(f"Server-`instructions`: {_fmt(len((instructions or '').encode()))} Bytes.")
     lines += [
         "",
         "| # | Werkzeug | gesamt | Beschreibung | Schema |",
@@ -237,7 +272,7 @@ def main() -> None:
     """Druckt den Bericht fuer den registrierten Server."""
     from who2be_mcp.server import mcp  # spaet: der Server-Import registriert alle Werkzeuge
 
-    print(report(asyncio.run(wire_tools(mcp))))
+    print(report(asyncio.run(wire_tools(mcp)), mcp.instructions))
 
 
 if __name__ == "__main__":

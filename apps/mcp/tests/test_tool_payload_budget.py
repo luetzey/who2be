@@ -40,8 +40,12 @@ import asyncio
 import importlib
 import inspect
 import json
+import os
 import pathlib
 import pkgutil
+import re
+import subprocess
+import sys
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID, uuid4
@@ -56,6 +60,7 @@ from who2be_mcp import payload_report, server
 from who2be_mcp import tools as tools_pkg
 from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings
+from who2be_mcp.instructions import ALWAYS_LOAD_KEY, ALWAYS_LOAD_TOOLS, SERVER_INSTRUCTIONS
 from who2be_mcp.server import (
     _RESPONSE_FORMATS,
     PersonaWithPlaybooks,
@@ -430,6 +435,151 @@ def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixtur
     assert f"| 10 | `{costs[9].name}` |" in out
     assert "| 11 |" not in out
     assert costs == sorted(costs, key=lambda c: -c.total)
+
+
+# ---------------------------------------------------------------------------
+# Start bei Tool Search: instructions, alwaysLoad, Reihenfolge (MCP-Token T4)
+# ---------------------------------------------------------------------------
+
+# Begriffe in Backticks, die keine Werkzeuge sind: Felder und Werte, die die
+# instructions erklaeren. Alles andere in Backticks muss ein Werkzeugname sein.
+_INSTRUCTION_NON_TOOL_TERMS = frozenset({"agent_id", "content_locale", "promote_retire", "outcome"})
+_BACKTICK_WORD = re.compile(r"`([a-z][a-z_]*)`")
+
+
+async def _instructions_and_tools() -> tuple[str | None, list[dict[str, Any]]]:
+    async with Client(mcp) as client:
+        result = await client.list_tools_mcp()
+        instructions = client.instructions
+    tools = result.model_dump(mode="json", by_alias=True, exclude_none=True)["tools"]
+    return instructions, tools
+
+
+def _unknown_tool_refs(instructions: str, tool_names: set[str]) -> set[str]:
+    words = set(_BACKTICK_WORD.findall(instructions))
+    return words - tool_names - _INSTRUCTION_NON_TOOL_TERMS
+
+
+def test_server_instructions_reach_the_client_and_name_only_real_tools() -> None:
+    """Die instructions kommen beim Client an, passen in die Kappung und luegen nicht.
+
+    Ein Werkzeug, das umbenannt oder entfernt wird, faellt hier auf: die
+    instructions wuerden sonst einen Agenten beim Start auf ein Werkzeug
+    schicken, das es nicht gibt.
+    """
+    instructions, tools = asyncio.run(_instructions_and_tools())
+    names = {tool["name"] for tool in tools}
+
+    assert instructions == SERVER_INSTRUCTIONS
+    assert instructions is not None
+    assert len(instructions) <= _DESCRIPTION_CHAR_CAP, (
+        f"instructions {len(instructions)} Zeichen > {_DESCRIPTION_CHAR_CAP}: Claude Code "
+        "schneidet sie ab — kuerzen, Boot-Reihenfolge nach vorn."
+    )
+    # Rot-Probe: ein erfundener Werkzeugname wird gefunden.
+    assert _unknown_tool_refs(instructions + " `fetch_everything`", names) == {"fetch_everything"}
+    assert not _unknown_tool_refs(instructions, names)
+    # Die Querschnittsregeln stehen drin, nicht nur die Boot-Liste.
+    assert 'format="full"' in instructions
+    assert "draft -> active" in instructions
+    assert "data.locale" in instructions
+    # Keine Entwickler-Historie: die instructions bezahlt jeder Start.
+    assert not payload_report.developer_refs({"inputSchema": {"description": instructions}})
+
+
+def test_always_load_marks_exactly_the_boot_tools() -> None:
+    """Genau die Boot-Werkzeuge tragen `anthropic/alwaysLoad`, und sie stehen im Boot-Text.
+
+    Anthropic empfiehlt drei bis fuenf sofort geladene Werkzeuge; jedes
+    weitere kostet jeden Claude-Code-Start sein volles Schema.
+    """
+    instructions, tools = asyncio.run(_instructions_and_tools())
+    eager = {tool["name"] for tool in payload_report.always_loaded(tools)}
+
+    assert eager == ALWAYS_LOAD_TOOLS
+    assert 3 <= len(eager) <= 5
+    assert instructions is not None
+    assert all(f"`{name}`" in instructions for name in eager)
+    # Rot-Probe der Erkennung: nur ein echtes `True` zaehlt.
+    probe: list[dict[str, Any]] = [
+        {"name": "x", "_meta": {ALWAYS_LOAD_KEY: "true"}},
+        {"name": "y", "_meta": None},
+    ]
+    assert payload_report.always_loaded(probe) == []
+
+
+def test_tool_search_start_bytes_counts_instructions_names_and_eager_schemas() -> None:
+    eager = {"name": "a", "description": "A.", "_meta": {ALWAYS_LOAD_KEY: True}}
+    lazy = {"name": "bb", "description": "B." * 500}
+    size = payload_report.tool_search_start_bytes([eager, lazy], "Hallo")
+    assert size == 5 + len(b'["bb"]') + payload_report.payload_bytes([eager])
+    assert payload_report.tool_search_start_bytes([lazy], None) == len(b'["bb"]')
+
+
+_ORDER_PROBE = (
+    "import asyncio, json\n"
+    "from who2be_mcp import payload_report\n"
+    "from who2be_mcp.server import mcp\n"
+    "print(json.dumps([t['name'] for t in asyncio.run(payload_report.wire_tools(mcp))]))\n"
+)
+
+
+def test_tools_list_order_is_deterministic_across_processes() -> None:
+    """Die Reihenfolge haengt nicht am Hash-Seed (MCP-Spec: deterministisch, Prompt-Cache).
+
+    Zwei frische Prozesse mit verschiedenem `PYTHONHASHSEED` muessen dieselbe
+    Liste liefern. Entstuende die Reihenfolge aus einem `set`, wuerde sie hier
+    zwischen den Prozessen wechseln.
+    """
+
+    def names(seed: str) -> list[str]:
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        out = subprocess.run(
+            [sys.executable, "-c", _ORDER_PROBE],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+            timeout=120,
+        ).stdout
+        result: list[str] = json.loads(out.strip().splitlines()[-1])
+        return result
+
+    first, second = names("1"), names("4242")
+    assert first == second
+    assert first == [tool["name"] for tool in _wire_tools()]
+    assert len(first) == len(set(first))
+
+
+def test_policy_filter_keeps_the_catalog_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Filter nimmt Werkzeuge heraus, ordnet aber nicht um."""
+    from who2be_mcp import policy_filter
+
+    full = [tool["name"] for tool in _wire_tools()]
+    payload: dict[str, object] = {
+        "user_id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "role": "editor",
+        "is_api_token": True,
+        "agent_id": str(uuid4()),
+        "unrestricted": False,
+        "capabilities": [],
+        "read_scopes": None,
+        "memory_mode": None,
+        "features": ["core"],
+    }
+    policy_filter._whoami_cache.clear()
+    monkeypatch.setattr(
+        policy_filter,
+        "get_settings",
+        lambda: Settings(api_base_url="http://test", api_token="w2b_t4", transport="stdio"),
+    )
+    monkeypatch.setattr(server, "build_client", _factory(_respond_with(payload)))
+    filtered = [tool["name"] for tool in asyncio.run(payload_report.wire_tools(mcp))]
+    policy_filter._whoami_cache.clear()
+
+    assert 0 < len(filtered) < len(full)
+    assert filtered == [name for name in full if name in set(filtered)]
 
 
 # ---------------------------------------------------------------------------
