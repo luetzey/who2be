@@ -53,10 +53,14 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
      (`org_id`/`workspace_id`); `anonymized_at` haelt den Zeitpunkt fest. Der
      Trigger greift auf jedem Loeschweg, auch beim API-Workspace-Delete unter
      der App-Rolle. Zeilen aus vor 0106 geloeschten Scopes hat die Migration
-     nachgezogen. **Frist:** 12 Monate nach der Anonymisierung loescht der
-     Worker auch den anonymen Rest (Routine folgt, eigenes Paket). Belegt in
-     `tests/test_kb_chunk_workspace_erasure.py` und
-     `tests/test_audit_log_anonymization.py`.
+     nachgezogen. **Frist (aktiv):** 12 Kalendermonate nach der
+     Anonymisierung (`anonymized_at`) loescht die Worker-Routine
+     `audit-retention` (taeglich 04:00 UTC, holt einen verpassten Lauf nach)
+     auch den anonymen Rest. Zeilen lebender Workspaces/Orgs
+     (`anonymized_at IS NULL`) beruehrt sie nie. Belegt in
+     `tests/test_kb_chunk_workspace_erasure.py`,
+     `tests/test_audit_log_anonymization.py` und
+     `tests/test_worker_routines.py`.
    - **Konten:** loescht `api_token`, `org_member`, `workspace_member`, die
      persoenliche Organisation des Nutzers und ruft die **GoTrue-Admin-API** zum
      Loeschen von `auth.users` (E-Mail/Auth-Daten). Erst nach bestaetigtem
@@ -527,7 +531,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 |---|---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
-| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate (Routine folgt) | beim Purge **anonymisiert** (Sentinel); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
+| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate ab Anonymisierung, dann geloescht (Routine `audit-retention`) | beim Purge **anonymisiert** (Sentinel); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
 | `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
@@ -552,8 +556,11 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 - `apps/api/src/who2be_api/core/purge.py` — `purge_expired()`, `PurgeResult`,
   CLI-Entrypoint `who2be-purge`.
-- `apps/api/src/who2be_api/worker/routines.py` — Routinen `purge` und
-  `memory-expire` (Zeitplan, Laufprotokoll `routine_run`, ADR-0057).
+- `apps/api/src/who2be_api/worker/routines.py` — Routinen `purge`,
+  `memory-expire` und `audit-retention` (Zeitplan, Laufprotokoll
+  `routine_run`, ADR-0057).
+- `apps/api/src/who2be_api/core/audit_retention.py` — Endloeschung des
+  anonymen `audit_log`-Rests nach 12 Monaten (Owner E1a).
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
   (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.
