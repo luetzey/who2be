@@ -603,6 +603,9 @@
         "patternCase": "Cases",
         "tests": "Test cases",
         "testsActive": "active",
+        "usage": "Usage",
+        "usageLast": "last used {{age}} · {{days}} days",
+        "usageNever": "None yet · counted since {{date}}",
         "none": "None yet",
         "unavailable": "Not available"
       },

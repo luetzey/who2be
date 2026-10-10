@@ -61,6 +61,22 @@ const caseCounts = {
 
 type Handlers = Record<string, () => Response>
 
+function agentUsage(overrides: Record<string, unknown> = {}) {
+  return {
+    agent_id: 'a1',
+    uses_7d: 12,
+    uses_30d: 42,
+    uses_by_type_30d: { persona: 10, playbook: 30, resource: 2 },
+    active_days_30d: 9,
+    last_used_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    last_active_at: null,
+    daily: [],
+    work_areas: [],
+    counting_since: '2026-10-08',
+    ...overrides,
+  }
+}
+
 function defaultHandlers(): Handlers {
   return {
     [`${WS}/inbox/counts`]: () =>
@@ -93,6 +109,7 @@ function defaultHandlers(): Handlers {
         ],
       }),
     [`${WS}/test-cases`]: () => json([{ id: 't1' }, { id: 't2' }]),
+    [`${WS}/agents/a1/usage`]: () => json(agentUsage()),
     [`${WS}/agents/a1/work-areas`]: () =>
       json([
         { id: 'w1', name: 'Privat', scope: 'private', level: 'write', owner: true, agent_count: 1 },
@@ -222,6 +239,37 @@ describe('AgentOverview (Navigation W2-b, Spec §3.2)', () => {
     await waitFor(() => expect(paths).toContain(`${WS}/inbox/counts`))
     expect(screen.queryByTestId('inbox-summary')).toBeNull()
     expect(screen.queryByTestId('inbox-summary-loading')).toBeNull()
+    // Nutzung steht auch für viewer.
+    expect(await screen.findByRole('group', { name: 'Nutzung: 42' })).toBeInTheDocument()
+  })
+
+  it('Nutzung: uses_30d, „zuletzt vor …“, kein Link; Anfrage an den Agent-Zähler', async () => {
+    const fetchMock = stub()
+    renderOverview('editor')
+
+    const usage = await screen.findByRole('group', { name: 'Nutzung: 42' })
+    expect(usage).toHaveAccessibleDescription('zuletzt vor 2 Stunden · 30 Tage')
+    expect(usage.tagName).toBe('DIV')
+    expect(screen.queryByRole('link', { name: /Nutzung/ })).toBeNull()
+    expect(requestedUrls(fetchMock).map((url) => url.pathname)).toContain(`${WS}/agents/a1/usage`)
+  })
+
+  it('Nutzung ohne Auslieferung nennt den Zählbeginn; Fehler zeigt „–“', async () => {
+    stub({
+      [`${WS}/agents/a1/usage`]: () =>
+        json(agentUsage({ uses_7d: 0, uses_30d: 0, last_used_at: null })),
+    })
+    const { unmount } = renderOverview('viewer')
+    const usage = await screen.findByRole('group', { name: 'Nutzung: 0' })
+    expect(usage).toHaveAccessibleDescription('Noch keine · gezählt seit 08.10.2026')
+    unmount()
+    vi.unstubAllGlobals()
+
+    stub({ [`${WS}/agents/a1/usage`]: () => json({ detail: 'x' }, 500) })
+    renderOverview('viewer')
+    const failed = await screen.findByRole('group', { name: 'Nutzung: –' })
+    expect(failed).toHaveAccessibleDescription('Nicht verfügbar')
+    expect(await screen.findByRole('link', { name: 'Rückmeldungen offen: 4' })).toBeInTheDocument()
   })
 
   it('Zahl 0 zeigt „0“ und „Noch keine“; Fehler einer Kachel zeigt „–“, die anderen bleiben', async () => {

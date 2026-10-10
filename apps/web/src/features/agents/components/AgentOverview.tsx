@@ -1,4 +1,5 @@
 import {
+  Activity,
   Brain,
   ChevronRight,
   FolderLock,
@@ -16,6 +17,7 @@ import { Link } from 'react-router-dom'
 import type { Api } from '@/api/client'
 import type {
   Agent,
+  AgentUsageStats,
   AgentWorkArea,
   CaseCounts,
   FeedbackOverview,
@@ -35,6 +37,9 @@ import { useInboxCounts } from '@/hooks/useInboxCounts'
 
 // Zeitraum der Kachel „Feedback zu seinen Bausteinen“ (Spec §3.2: „30 Tage“).
 export const FEEDBACK_WINDOW_DAYS = 30
+
+// Fenster der Kachel „Nutzung“ — fest im Server (`uses_30d`, Konzept §5.2).
+const USAGE_WINDOW_DAYS = 30
 
 // Rueckmeldungen, die noch auf jemanden warten (Spec §3.2, Kachel 1).
 const OPEN_CASE_STATUSES = ['open', 'reopened', 'triaged', 'in_progress'] as const
@@ -91,7 +96,8 @@ interface KpiTileProps {
   label: string
   icon: LucideIcon
   tone: EntityTone
-  href: string
+  /** Ziel der Kachel; ohne Ziel ist sie kein Link (Spec §3.2 Nutzung: „–“). */
+  href?: string
   state: Loaded<{ value: number; subtitle: string }>
   testId: string
 }
@@ -100,7 +106,8 @@ interface KpiTileProps {
  * Kennzahl-Kachel als Link (Spec §3.2, `KpiCard`-Optik erweitert um
  * Untertitel und Ziel). Die ganze Kachel ist ein Link; der zugaengliche Name
  * traegt Bezeichnung und Zahl, der Untertitel kommt per `aria-describedby`
- * (Spec §8). Fehler: „–“ und „Nicht verfuegbar“, kein Banner.
+ * (Spec §8). Ohne Ziel steht dieselbe Kachel als benannte Gruppe ohne Pfeil.
+ * Fehler: „–“ und „Nicht verfuegbar“, kein Banner.
  */
 function KpiTile({ label, icon, tone, href, state, testId }: KpiTileProps) {
   const { t } = useTranslation('agents')
@@ -113,19 +120,22 @@ function KpiTile({ label, icon, tone, href, state, testId }: KpiTileProps) {
         ? t('overview.kpi.unavailable')
         : ''
 
-  return (
-    <Link
-      to={href}
-      data-testid={testId}
-      aria-label={state.status === 'loading' ? label : t('overview.kpi.linkLabel', { label, value })}
-      aria-describedby={subtitle !== '' ? subtitleId : undefined}
-      aria-busy={state.status === 'loading' ? true : undefined}
-      className="group relative flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/40 bg-card p-4 text-card-foreground shadow-card transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:flex-row sm:gap-3"
-    >
+  const shared = {
+    'data-testid': testId,
+    'aria-label':
+      state.status === 'loading' ? label : t('overview.kpi.linkLabel', { label, value }),
+    'aria-describedby': subtitle !== '' ? subtitleId : undefined,
+    'aria-busy': state.status === 'loading' ? true : undefined,
+  }
+  const frame =
+    'relative flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/40 bg-card p-4 text-card-foreground shadow-card sm:flex-row sm:gap-3'
+
+  const content = (
+    <>
       {/* Unter sm steht das Icon ueber dem Text: zwei Spalten auf 390 px
           lassen neben Icon und Pfeil sonst nur ~80 px fuer die Bezeichnung. */}
       <EntityIcon icon={icon} tone={tone} size="sm" />
-      <div className="w-full min-w-0 flex-1 pr-5 sm:pr-6">
+      <div className={href === undefined ? 'w-full min-w-0 flex-1' : 'w-full min-w-0 flex-1 pr-5 sm:pr-6'}>
         <div className="text-sm wrap-anywhere hyphens-auto text-muted-foreground">{label}</div>
         <div className="text-2xl font-semibold tracking-tight tabular-nums">
           {state.status === 'loading' ? (
@@ -140,10 +150,29 @@ function KpiTile({ label, icon, tone, href, state, testId }: KpiTileProps) {
           </p>
         ) : null}
       </div>
-      <ChevronRight
-        className="absolute top-4 right-4 size-4 text-muted-foreground/60 group-hover:text-muted-foreground"
-        aria-hidden="true"
-      />
+      {href !== undefined ? (
+        <ChevronRight
+          className="absolute top-4 right-4 size-4 text-muted-foreground/60 group-hover:text-muted-foreground"
+          aria-hidden="true"
+        />
+      ) : null}
+    </>
+  )
+
+  if (href === undefined) {
+    return (
+      <div role="group" {...shared} className={frame}>
+        {content}
+      </div>
+    )
+  }
+  return (
+    <Link
+      to={href}
+      {...shared}
+      className={`group ${frame} transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
+    >
+      {content}
     </Link>
   )
 }
@@ -163,6 +192,32 @@ function mapLoaded<T, R>(state: Loaded<T>, map: (data: T) => R): Loaded<R> {
 
 function joinParts(parts: string[]): string {
   return parts.join(' · ')
+}
+
+/**
+ * „vor 2 Stunden“ in der Sprache der Oberflaeche (wie „Zu erledigen“).
+ * Mindestens eine Minute, damit Uhrabweichung nie „in 1 Minute“ zeigt.
+ */
+function formatAge(iso: string, language: string, now: number = Date.now()): string {
+  const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
+  const seconds = Math.min((new Date(iso).getTime() - now) / 1000, -60)
+  if (Number.isNaN(seconds)) throw new Error('invalid date')
+  const abs = Math.abs(seconds)
+  if (abs < 3600) return format.format(Math.round(seconds / 60), 'minute')
+  if (abs < 86400) return format.format(Math.round(seconds / 3600), 'hour')
+  return format.format(Math.round(seconds / 86400), 'day')
+}
+
+/** Zaehlbeginn `YYYY-MM-DD` als Datum der Oberflaeche („08.10.2026“). */
+function formatCountingSince(day: string, language: string): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) throw new Error('invalid date')
+  return new Intl.DateTimeFormat(language, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
 }
 
 // ---------------------------------------------------------- Arbeitsbereiche
@@ -269,10 +324,11 @@ interface AgentOverviewProps {
  * Rollen je Kachel (Tabelle §3.2): Rückmeldungen ab viewer (der Server
  * zaehlt fuer viewer nur eigene); Feedback, Gedaechtnis, Muster und
  * Pruefaelle ab editor — der Server verlangt dort editor, eine Kachel ohne
- * Recht entfaellt (kein Schloss). Nutzung folgt mit U4.
+ * Recht entfaellt (kein Schloss). Nutzung (U4a) ab viewer, ohne Ziel.
  */
 export function AgentOverview({ agent, composition }: AgentOverviewProps) {
-  const { t } = useTranslation('agents')
+  const { t, i18n } = useTranslation('agents')
+  const language = i18n.language
   const { t: tf } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const role = useCurrentWorkspaceRole()
@@ -303,6 +359,8 @@ export function AgentOverview({ agent, composition }: AgentOverviewProps) {
     [agentId],
   )
   const [cases] = useLoaded<CaseCounts>(loadCases, `cases|${agentId}`)
+  const loadUsage = useCallback((api: Api) => api.getAgentUsage(agentId), [agentId])
+  const [usage] = useLoaded<AgentUsageStats>(loadUsage, `usage|${agentId}`)
   const [feedback] = useLoaded<FeedbackOverview>(
     isEditor ? loadFeedback : null,
     `feedback|${agentId}|${isEditor}`,
@@ -377,6 +435,25 @@ export function AgentOverview({ agent, composition }: AgentOverviewProps) {
     subtitle: list.length === 0 ? none : t('overview.kpi.testsActive'),
   }))
 
+  // Nutzung (U4a): Auslieferungen an diesen Agenten in 30 Tagen. Ohne je eine
+  // Auslieferung nennt der Untertitel den Zaehlbeginn, sonst wirkt alles
+  // Aeltere ungenutzt (Konzept §5.1).
+  const usageTile = mapLoaded(usage, (stats) => {
+    if (typeof stats.uses_30d !== 'number') throw new Error('unexpected usage')
+    return {
+      value: stats.uses_30d,
+      subtitle:
+        stats.last_used_at !== null
+          ? t('overview.kpi.usageLast', {
+              age: formatAge(stats.last_used_at, language),
+              days: USAGE_WINDOW_DAYS,
+            })
+          : t('overview.kpi.usageNever', {
+              date: formatCountingSince(stats.counting_since, language),
+            }),
+    }
+  })
+
   const agentPath = (tab: string) => wsPath(`/agents/${agentParam}?tab=${tab}`)
 
   return (
@@ -442,6 +519,13 @@ export function AgentOverview({ agent, composition }: AgentOverviewProps) {
               />
             </>
           ) : null}
+          <KpiTile
+            testId="agent-kpi-usage"
+            label={t('overview.kpi.usage')}
+            icon={Activity}
+            tone="tools"
+            state={usageTile}
+          />
         </div>
       </section>
 
