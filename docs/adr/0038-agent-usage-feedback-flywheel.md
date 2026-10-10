@@ -139,3 +139,27 @@ Detailseiten-Panel. Redesign zum **Management-Center** (eine gestapelte Seite):
   Zustaende: `addressed`/`in_progress`/`dismissed`. `POST …/feedback/{id}/resolution`
   (editor-gated); der Drill-down (`…/events`) gibt pro Feedback den aktuellen
   Status mit aus. Web: Status-Select je Feedback-Eintrag im `FeedbackPanel`.
+
+## Nachtrag 2026-10-10: Aufbewahrung von `usage_event` (Owner E4b)
+
+Die Entscheidung oben nennt die Tabellen „immutable“ und schliesst Update und
+Delete aus. Das gilt weiter fuer die **App-Rolle** (`who2be_app`: nur
+SELECT/INSERT) und fuer MCP. Neu ist eine **Frist**: der Worker loescht
+`usage_event`-Rohzeilen, deren `created_at` aelter als 13 Kalendermonate ist
+(Routine `usage-retention`, taeglich 04:10 UTC, Owner-Connection,
+`core/usage_retention.py`). Owner-Wortlaut E4b: „Jetzt 13 Monate festlegen
+und die Routine sofort bauen.“
+
+- **Was gleich bleibt:** die Nutzungszaehler (7/30 Tage, Tagesreihe, Agenten)
+  und die Fallraten je Version aus Phase E lesen innerhalb der Frist und
+  aendern sich durch den Lauf nicht.
+- **Was sich aendert:** alles, was ueber die ganze Zeit rechnet, reicht
+  hoechstens 13 Monate zurueck: „zuletzt genutzt“, die Gesamtsumme in
+  `get_feedback`/`feedback-overview` und die Stale-Sicht (ein Element ohne
+  Auslieferung in 13 Monaten gilt als ungenutzt).
+- **Nicht betroffen:** `agent_feedback` und `feedback_resolution` (Kurations-
+  Posteingang, keine Frist) sowie `agent_access_log` (ADR-0047, Begruendung im
+  Loeschkonzept §4a).
+
+Kein neuer Index: ein Lauf am Tag, Seq Scan auf 2 Mio. Zeilen um 0,5 s;
+ein Index auf `created_at` muesste jeder Auslieferungs-INSERT mitpflegen.
