@@ -7,13 +7,16 @@ Angebunden werden die bestehenden Nachtlaeufe; ihre Logik bleibt in `core/`:
 | `purge`                 | `30 3 * * *`   | 1 h     | ja       | ja (Sweep mit 24-h-Karenz) |
 | `memory-expire`         | `45 3 * * *`   | 15 min  | ja       | nein           |
 | `audit-retention`       | `0 4 * * *`    | 15 min  | ja       | nein           |
+| `usage-retention`       | `10 4 * * *`   | 15 min  | ja       | nein           |
 | `routine-run-retention` | `15 4 * * *`   | 15 min  | nein     | nein           |
 
 Purge und Verfall tragen dieselben Zeiten wie bisher die Hetzner-Crontab und
 die Dokploy-Schedules (RUNBOOK §Retention-Cron, Cloud-Inbetriebnahme
 §Hintergrundjobs: 03:30 bzw. 03:45). `audit-retention` (Owner E1a,
 `core/audit_retention.py`) loescht den anonymen Audit-Rest geloeschter
-Workspaces/Orgs 12 Monate nach der Anonymisierung; sie hat kein eigenes CLI.
+Workspaces/Orgs 12 Monate nach der Anonymisierung; `usage-retention` (Owner
+E4b, `core/usage_retention.py`) loescht `usage_event`-Rohzeilen nach 13
+Monaten. Beide haben kein eigenes CLI.
 `routine-run-retention` laeuft danach und
 vor der Access-Log-Rotation (04:30). Jeder Zeitplan ist per
 `WHO2BE_ROUTINE_<NAME>_SCHEDULE` ueberschreibbar.
@@ -44,6 +47,7 @@ from who2be_api.core.audit_retention import delete_expired_anonymized_audit
 from who2be_api.core.config import get_settings
 from who2be_api.core.memory_expiry import expire_unconfirmed_memories
 from who2be_api.core.purge import purge_counters, purge_expired, run_retention_sweeps
+from who2be_api.core.usage_retention import delete_expired_usage_events
 from who2be_api.repositories.account_repository import PgAccountPurgeRepository
 from who2be_api.worker import store
 from who2be_api.worker.registry import REGISTRY, Registry, RoutineContext, routine
@@ -54,6 +58,7 @@ logger = logging.getLogger(__name__)
 PURGE = "purge"
 MEMORY_EXPIRE = "memory-expire"
 AUDIT_RETENTION = "audit-retention"
+USAGE_RETENTION = "usage-retention"
 ROUTINE_RUN_RETENTION = "routine-run-retention"
 
 
@@ -91,6 +96,17 @@ async def memory_expire(ctx: RoutineContext) -> dict[str, int]:
 async def audit_retention(ctx: RoutineContext) -> dict[str, int]:
     """Loescht den anonymen Audit-Rest 12 Monate nach der Anonymisierung (E1a)."""
     return {"deleted": await delete_expired_anonymized_audit(ctx.conn, ctx.slot)}
+
+
+@routine(
+    USAGE_RETENTION,
+    schedule="10 4 * * *",
+    timeout=timedelta(minutes=15),
+    catch_up=True,
+)
+async def usage_retention(ctx: RoutineContext) -> dict[str, int]:
+    """Loescht `usage_event`-Rohzeilen aelter als 13 Monate (E4b)."""
+    return {"deleted": await delete_expired_usage_events(ctx.conn, ctx.slot)}
 
 
 @routine(

@@ -532,10 +532,12 @@ und der Abnahme. Reihenfolge einhalten:
       $COMPOSE ps worker
       # → genau ein Container, Status "Up … (healthy)"
       $COMPOSE exec worker who2be-worker list
-      # → Tabelle mit audit-retention, purge, memory-expire, routine-run-retention, alle "on"
-      # nach dem ersten Lauf (catch_up startet purge/memory-expire/audit-retention
-      # beim ersten Start sofort, danach taeglich 03:30 / 03:45 / 04:00 / 04:15 UTC):
-      $COMPOSE logs worker | grep -E 'Routine (purge|memory-expire|audit-retention), Slot .*: succeeded'
+      # → Tabelle mit audit-retention, purge, memory-expire, routine-run-retention,
+      # usage-retention, alle "on"
+      # nach dem ersten Lauf (catch_up startet purge/memory-expire/audit-retention/
+      # usage-retention beim ersten Start sofort, danach taeglich
+      # 03:30 / 03:45 / 04:00 / 04:10 / 04:15 UTC):
+      $COMPOSE logs worker | grep -E 'Routine (purge|memory-expire|audit-retention|usage-retention), Slot .*: succeeded'
       # → je Routine mindestens eine Zeile
       ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -1
       # → Dump vom heutigen Tag (weitere Pruefung: Backup & Restore, Verifikation)
@@ -2088,12 +2090,14 @@ nichts**, weder auf der Hetzner-Box noch in Dokploy.
 | `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace plus WorkArea-/KB-Sweeps (Ausgabe und Log-Meldungen: [Retention-Cron](#retention-cron-who2be-purge)) | ja, einmal beim Start |
 | `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Fristablauf auf `expired` (ADR-0053 3.1.3), loescht nichts | ja, einmal beim Start |
 | `audit-retention` | `0 4 * * *` | loescht `audit_log`-Zeilen geloeschter Workspaces/Orgs 12 Monate nach ihrer Anonymisierung (Owner E1a); Zaehler `deleted` | ja, einmal beim Start |
+| `usage-retention` | `10 4 * * *` | loescht `usage_event`-Rohzeilen (Nutzungszaehler) aelter als 13 Monate (Owner E4b); Zaehler `deleted` | ja, einmal beim Start |
 | `routine-run-retention` | `15 4 * * *` | loescht Laufprotokoll aelter als 90 Tage, meldet externe Zeitplaene | nein |
 
 Quelle der Tabelle ist die Registry
 (`apps/api/src/who2be_api/worker/routines.py#purge`,
 `apps/api/src/who2be_api/worker/routines.py#memory_expire`,
 `apps/api/src/who2be_api/worker/routines.py#audit_retention`,
+`apps/api/src/who2be_api/worker/routines.py#usage_retention`,
 `apps/api/src/who2be_api/worker/routines.py#routine_run_retention`);
 `who2be-worker list` zeigt den tatsaechlich wirksamen Stand.
 
@@ -2132,6 +2136,7 @@ $COMPOSE exec worker who2be-worker list
 # memory-expire          45 3 * * *  on       code
 # purge                  30 3 * * *  on       code
 # routine-run-retention  15 4 * * *  on       code
+# usage-retention        10 4 * * *  on       code
 
 # 3) Letzte Laeufe aus dem Protokoll (ohne UI):
 $SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -c \

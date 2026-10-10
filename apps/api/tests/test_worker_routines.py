@@ -29,12 +29,14 @@ from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
+from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
 
-from who2be_api.core import audit_retention, memory_expiry, purge
+from who2be_api.core import audit_retention, memory_expiry, purge, usage_retention
 from who2be_api.core.config import get_settings
+from who2be_api.repositories.feedback_repository import PgFeedbackRepository
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
 from who2be_api.testing.isolated_schema import isolated_schema
@@ -42,6 +44,7 @@ from who2be_api.worker import cli, routines, store
 from who2be_api.worker.registry import REGISTRY, Registry, RoutineContext
 from who2be_api.worker.runner import SLOT_DODGE, Runner
 from who2be_api.worker.store import FinalStatus, RunTrigger
+from who2be_models import UsageStats
 
 _T0 = datetime(2026, 11, 6, 3, 45, tzinfo=UTC)
 
@@ -50,6 +53,7 @@ _EXPECTED = {
     "purge": "30 3 * * *",
     "memory-expire": "45 3 * * *",
     "audit-retention": "0 4 * * *",
+    "usage-retention": "10 4 * * *",
     "routine-run-retention": "15 4 * * *",
 }
 
@@ -534,5 +538,162 @@ def test_audit_retention_deletes_only_anonymized_rows_older_than_twelve_months(
         # Die Grenzzeile faellt erst danach (strikt aelter als 12 Monate).
         later = slot + timedelta(seconds=1)
         assert await audit_retention.delete_expired_anonymized_audit(conn, later) == 1
+
+    _in_schema(body)
+
+
+# --- usage-retention (Owner E4b, Paket U5) -----------------------------------
+
+
+def test_usage_retention_is_registered_daily_with_catch_up() -> None:
+    u = REGISTRY.get(routines.USAGE_RETENTION)
+    assert (u.catch_up, u.touches_tablestore) == (True, False)
+    assert u.schedule.expr == "10 4 * * *"
+    assert usage_retention.USAGE_EVENT_RETENTION == "13 months"
+
+
+async def _usage_workspace(conn: asyncpg.Connection) -> tuple[UUID, UUID]:
+    """Workspace (FK seit 0104) und ein Playbook, damit `usage_list` es fuehrt."""
+    org_id = await conn.fetchval(
+        "INSERT INTO organization (name, slug, kind) VALUES ('o', $1, 'company') RETURNING id",
+        f"o-{secrets.token_hex(4)}",
+    )
+    ws_id: UUID = await conn.fetchval(
+        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', $2) RETURNING id",
+        org_id,
+        f"w-{secrets.token_hex(4)}",
+    )
+    pb_id: UUID = await conn.fetchval(
+        "INSERT INTO playbook (workspace_id, owner_id, name, type) "
+        "VALUES ($1, $2, 'pb', '') RETURNING id",
+        ws_id,
+        uuid4(),
+    )
+    return ws_id, pb_id
+
+
+async def _insert_usage(
+    conn: asyncpg.Connection,
+    ws_id: UUID,
+    pb_id: UUID,
+    agent_id: UUID,
+    *,
+    at: datetime,
+    age: str,
+    source: str = "server",
+) -> None:
+    """Eine Rohzeile, `age` als Postgres-Intervall vor `at` (Kalendermonate)."""
+    await conn.execute(
+        "INSERT INTO usage_event "
+        "(workspace_id, agent_id, entity_type, entity_id, source, created_at) "
+        "VALUES ($1, $2, 'playbook', $3, $4, $5::timestamptz - $6::text::interval)",
+        ws_id,
+        agent_id,
+        pb_id,
+        source,
+        at,
+        age,
+    )
+
+
+@pytest_integration
+def test_usage_retention_deletes_only_rows_older_than_thirteen_months(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Akzeptanz U5: 12 Monate bleibt, 14 Monate faellt; Grenze strikt.
+
+    Laeuft ueber den Runner wie im Worker (Trigger `schedule`) und belegt die
+    Zeilen im Worker-Log. Beide Quellen (`server`, `agent_report`) fallen.
+    """
+    slot = datetime(2026, 11, 6, 4, 10, tzinfo=UTC)
+
+    async def body(conn: asyncpg.Connection) -> None:
+        ws_id, pb_id = await _usage_workspace(conn)
+        agent = uuid4()
+        for age, source in (
+            ("12 months", "server"),
+            ("13 months", "server"),  # genau auf der Grenze
+            ("14 months", "server"),
+            ("14 months", "agent_report"),
+        ):
+            await _insert_usage(conn, ws_id, pb_id, agent, at=slot, age=age, source=source)
+
+        runner = Runner(REGISTRY, env={}, clock=lambda: slot, worker_id="w:1")
+        with caplog.at_level(logging.INFO, logger="who2be_api.worker.runner"):
+            outcome = await runner.execute(
+                conn, REGISTRY.get(routines.USAGE_RETENTION), slot, "schedule"
+            )
+        assert outcome is not None and outcome.status == "succeeded"
+
+        left = await conn.fetch("SELECT created_at FROM usage_event ORDER BY created_at DESC")
+        assert [r["created_at"] for r in left] == [
+            datetime(2025, 11, 6, 4, 10, tzinfo=UTC),
+            datetime(2025, 10, 6, 4, 10, tzinfo=UTC),
+        ]
+        (row,) = await _rows(conn, routines.USAGE_RETENTION)
+        assert (row["trigger"], row["status"], row["result"]) == (
+            "schedule",
+            "succeeded",
+            '{"deleted": 2}',
+        )
+        log = [r.getMessage() for r in caplog.records]
+        assert any(m.startswith("Routine usage-retention, Slot ") and "Start" in m for m in log)
+        assert any("usage-retention" in m and "succeeded {'deleted': 2}" in m for m in log)
+
+        # Idempotent: ein zweiter Lauf auf demselben Slot findet nichts mehr.
+        assert await usage_retention.delete_expired_usage_events(conn, slot) == 0
+        # Die Grenzzeile faellt erst danach (strikt aelter als 13 Monate).
+        later = slot + timedelta(seconds=1)
+        assert await usage_retention.delete_expired_usage_events(conn, later) == 1
+
+    _in_schema(body)
+
+
+@pytest_integration
+def test_usage_retention_leaves_counters_within_thirty_days_unchanged() -> None:
+    """Akzeptanz U5: die Zaehler U1/U2 (7/30 Tage) sind vor und nach dem Lauf gleich.
+
+    Der Slot ist die echte Uhr, weil die Zaehler gegen `now()` der Datenbank
+    rechnen. Alte Zeilen (14 Monate) fallen, die Fensterwerte nicht.
+    """
+    slot = datetime.now(UTC)
+
+    async def body(conn: asyncpg.Connection) -> None:
+        ws_id, pb_id = await _usage_workspace(conn)
+        agents = [uuid4(), uuid4()]
+        for age, agent in (
+            ("1 hour", agents[0]),
+            ("3 days", agents[1]),
+            ("10 days", agents[0]),
+            ("28 days", agents[1]),
+            ("14 months", agents[0]),
+            ("14 months", agents[1]),
+        ):
+            await _insert_usage(conn, ws_id, pb_id, agent, at=slot, age=age)
+
+        pool = await asyncpg.create_pool(get_settings().database_url, min_size=1, max_size=2)
+        assert pool is not None
+        try:
+            repo = PgFeedbackRepository(pool)
+
+            async def counters() -> tuple[object, ...]:
+                return (
+                    await repo.usage_stats(ws_id, "playbook", pb_id),
+                    await repo.usage_list(ws_id, "playbook"),
+                    await repo.agent_usage(ws_id, agents[0], None),
+                    await repo.agent_usage(ws_id, agents[1], None),
+                )
+
+            before = await counters()
+            assert await usage_retention.delete_expired_usage_events(conn, slot) == 2
+            after = await counters()
+        finally:
+            await pool.close()
+
+        assert after == before
+        stats = before[0]
+        assert isinstance(stats, UsageStats)
+        assert (stats.uses_7d, stats.uses_30d, stats.distinct_agents_30d) == (2, 4, 2)
+        assert await conn.fetchval("SELECT COUNT(*) FROM usage_event") == 4
 
     _in_schema(body)
