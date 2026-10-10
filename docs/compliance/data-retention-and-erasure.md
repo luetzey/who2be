@@ -85,7 +85,7 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | Tabelle | Feld | Behandlung beim Purge |
 |---|---|---|
 | `status_history` | `changed_by` | → Sentinel `00000000-0000-0000-0000-000000000000` |
-| `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000`; faellt der Workspace bzw. die Org, zusaetzlich `target` → NULL und `detail` → Allowlist (Migration 0106, §1) |
+| `audit_log` (WP-A/B) | `actor_id`; `target`, wo es die User-ID ist (`account.deletion_requested`, `member.role_changed`, `member.removed`, `memory.user_purged`); `detail` von Zeilen ueber den User bzw. mit seiner ID als Wert | → Sentinel `00000000-0000-0000-0000-000000000000` (`target` als Sentinel, nicht NULL — Aktion und Zahl bleiben lesbar); `detail` → Allowlist aus 0106; ist der User nur Akteur, bleibt `detail`. `anonymized_at` bleibt NULL, der Scope lebt (E1-1b). Faellt der Workspace bzw. die Org, zusaetzlich `target` → NULL und `detail` → Allowlist (Migration 0106, §1) |
 | `usage_event` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `test_case` (Migration 0089, ADR-0053) | `created_by` — **nur** bei `created_by_kind = 'human'` (bei `'agent'` steht dort eine Agent-ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
@@ -540,7 +540,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 |---|---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
-| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate ab Anonymisierung, dann geloescht (Routine `audit-retention`) | beim Purge **anonymisiert** (Sentinel); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
+| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate ab Anonymisierung, dann geloescht (Routine `audit-retention`) | beim Purge **anonymisiert** (Sentinel), beim Konto-Purge auch `audit_log.target` und `detail` mit der User-ID (§2); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
 | `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | `usage_event`: **13 Monate** ab `created_at`, dann geloescht (Routine `usage-retention`, Owner E4b, aktiv); `agent_feedback`: Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |

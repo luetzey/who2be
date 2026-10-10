@@ -40,6 +40,26 @@ _PURGE_USER_MEMORY_SQL = (
     f"SELECT workspace_id, NULL::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
 )
 
+# Personenbezug des Users in `audit_log` beim Konto-Purge (WP-D, E1-1b, Owner
+# E1a sinngemaess): Akteur, Ziel und `detail`. Die Workspaces bestehen weiter,
+# der 0106-Trigger greift hier nicht. `target` (`account.deletion_requested`,
+# `member.role_changed`, `member.removed`, `memory.user_purged`, ...) wird
+# Sentinel statt NULL, damit Aktion und Zahl lesbar bleiben. `detail` wird nur
+# dort auf die Allowlist aus 0106 gekuerzt, wo die Zeile vom User handelt
+# (Ziel) oder seine ID als Wert traegt — `strpos` statt jsonb-Pfad, damit auch
+# doppelt kodierter Altbestand (0081) erfasst ist. Ist der User nur Akteur,
+# bleibt `detail` (Scope lebt). Eine Anweisung, damit eine Zeile mit Akteur =
+# Ziel einmal zaehlt. `anonymized_at` bleibt NULL: es ist der Anker der
+# 12-Monats-Frist fuer geloeschte Scopes (E1-2). SET liest die alten Werte.
+_ANONYMIZE_AUDIT_LOG_SQL = (
+    "UPDATE audit_log SET "
+    "  actor_id = CASE WHEN actor_id = $1 THEN $2 ELSE actor_id END, "
+    "  target = CASE WHEN target = $1::text THEN $2::text ELSE target END, "
+    "  detail = CASE WHEN target = $1::text OR strpos(detail::text, $1::text) > 0 "
+    "    THEN w2b_audit_anonymized_detail(action, detail) ELSE detail END "
+    "WHERE actor_id = $1 OR target = $1::text OR strpos(detail::text, $1::text) > 0"
+)
+
 # jsonb-Listen eines Protokolls (`participants`, `dissent`, ADR-0053 3.5),
 # deren Eintraege einen Menschen per `{<kind_key>: 'human', <id_key>: <uuid>}`
 # nennen. Ersetzt nur die ID der passenden Eintraege durch den Sentinel ($2),
@@ -243,7 +263,10 @@ class PgAccountPurgeRepository:
           * `oauth_authorization_code`-Zeilen des Users loeschen (CMP-1): die
             Tabelle traegt `user_id` ohne CASCADE auf den User; nach der
             Konto-Loeschung sind die Codes wertlos.
-          * `status_history.changed_by`, `audit_log.actor_id` sowie
+          * `audit_log`: `actor_id` und `target` des Users auf den Sentinel,
+            `detail` von Zeilen ueber den User auf die Allowlist (0106) —
+            s. `_ANONYMIZE_AUDIT_LOG_SQL`.
+          * `status_history.changed_by` sowie
             `usage_event.actor_id` und `agent_feedback.actor_id` (0053) des
             Users auf den Sentinel anonymisieren (Audit-/Telemetrie-Integritaet
             bleibt, PII weg).
@@ -300,9 +323,7 @@ class PgAccountPurgeRepository:
                 ANONYMIZED_USER_ID,
             )
             al_result = await self._conn.execute(
-                "UPDATE audit_log SET actor_id = $2 WHERE actor_id = $1",
-                user_id,
-                ANONYMIZED_USER_ID,
+                _ANONYMIZE_AUDIT_LOG_SQL, user_id, ANONYMIZED_USER_ID
             )
             ue_result = await self._conn.execute(
                 "UPDATE usage_event SET actor_id = $2 WHERE actor_id = $1",
