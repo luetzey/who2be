@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -17,6 +17,7 @@ from who2be_api.repositories.feedback_repository import PgFeedbackRepository
 from who2be_api.services.feedback_service import FeedbackService
 from who2be_models import (
     AgentFeedbackRead,
+    ApiErrorBody,
     FeedbackCreate,
     FeedbackDetailRead,
     FeedbackEvents,
@@ -68,9 +69,26 @@ async def get_feedback_items(ctx: Ctx, service: Service) -> FeedbackItems:
     return await service.get_items(ctx)
 
 
-@router.get("/feedback-overview")
-async def get_feedback_overview(ctx: Ctx, service: Service) -> FeedbackOverview:
-    return await service.get_overview(ctx)
+@router.get(
+    "/feedback-overview",
+    # ADR-0051: der Fehler-Body ist Teil des Vertrags. Nur deklarativ — den
+    # `reason` setzt der Service.
+    responses={404: {"model": ApiErrorBody, "description": "reason: agent_not_found"}},
+)
+async def get_feedback_overview(
+    ctx: Ctx,
+    service: Service,
+    agent_id: Annotated[
+        UUID | None,
+        Query(description="Nur Ereignisse dieses Agenten (Nutzung und Feedback)."),
+    ] = None,
+    days: Annotated[
+        int | None,
+        Query(ge=1, le=365, description="Nur Ereignisse der letzten N Tage (1..365)."),
+    ] = None,
+) -> FeedbackOverview:
+    # Navigation A6: ohne Parameter unveraendert die Gesamtsumme des Workspace.
+    return await service.get_overview(ctx, agent_id=agent_id, days=days)
 
 
 @router.get("/feedback-unused")

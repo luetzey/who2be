@@ -5666,6 +5666,45 @@
               "format": "uuid",
               "title": "Workspace Id"
             }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Ereignisse dieses Agenten (Nutzung und Feedback).",
+              "title": "Agent Id"
+            },
+            "description": "Nur Ereignisse dieses Agenten (Nutzung und Feedback)."
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 365,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Ereignisse der letzten N Tage (1..365).",
+              "title": "Days"
+            },
+            "description": "Nur Ereignisse der letzten N Tage (1..365)."
           }
         ],
         "responses": {
@@ -5675,6 +5714,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeedbackOverview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
                 }
               }
             }
