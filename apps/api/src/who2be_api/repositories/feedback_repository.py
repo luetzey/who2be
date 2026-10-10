@@ -18,7 +18,10 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import (
+    AccessDay,
     AgentFeedbackRead,
+    AgentUsageStats,
+    AgentWorkAreaUsage,
     FeedbackDetailRead,
     FeedbackEvents,
     FeedbackItem,
@@ -27,9 +30,11 @@ from who2be_models import (
     FeedbackSummary,
     FeedbackSummaryItem,
     FeedbackUnusedItem,
+    UsageByType,
     UsageDay,
     UsageEventRead,
     UsageStats,
+    WorkAreaUsageStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,6 +201,14 @@ class FeedbackRepository(Protocol):
     ) -> UsageStats: ...
 
     async def usage_list(self, workspace_id: UUID, entity_type: str | None) -> list[UsageStats]: ...
+
+    async def agent_usage(
+        self, workspace_id: UUID, agent_id: UUID, restrict_area_ids: list[UUID] | None
+    ) -> AgentUsageStats: ...
+
+    async def area_exists(self, workspace_id: UUID, area_id: UUID) -> bool: ...
+
+    async def work_area_usage(self, workspace_id: UUID, area_id: UUID) -> WorkAreaUsageStats: ...
 
 
 # Polymorphes entity_type → physische Tabelle fuer den Workspace-Belongs-Check.
@@ -727,6 +740,140 @@ class PgFeedbackRepository:
         )
         return [UsageStats.model_validate(dict(r)) for r in rows]
 
+    async def agent_usage(
+        self, workspace_id: UUID, agent_id: UUID, restrict_area_ids: list[UUID] | None
+    ) -> AgentUsageStats:
+        # Nutzung U2 (Z2a): Agent-Kennzahlen nur aus vorhandenen Daten.
+        # Auslieferungen an DIESEN Agenten (`usage_event.agent_id`, nur
+        # `source='server'`) als Tagesreihe je Elementart, Fenster wie U1.
+        rows = await self._pool.fetch(
+            _USAGE_BOUNDS_CTE + ", ev AS ("
+            "  SELECT (e.created_at AT TIME ZONE 'UTC')::date AS day, e.entity_type "
+            "  FROM usage_event e, bounds b "
+            "  WHERE e.workspace_id = $1 AND e.agent_id = $2 AND e.source = 'server' "
+            "    AND e.created_at >= b.start30"
+            "), per_day AS (SELECT day, COUNT(*)::int AS uses FROM ev GROUP BY day) "
+            "SELECT gs.day::date AS day, COALESCE(p.uses, 0) AS uses, "
+            "  (SELECT COUNT(*) FILTER (WHERE entity_type = 'persona')::int FROM ev) AS persona, "
+            "  (SELECT COUNT(*) FILTER (WHERE entity_type = 'playbook')::int FROM ev) AS playbook, "
+            "  (SELECT COUNT(*) FILTER (WHERE entity_type = 'resource')::int FROM ev) AS resource "
+            "FROM bounds b "
+            "CROSS JOIN LATERAL generate_series("
+            "  (b.today - 29)::timestamp, b.today::timestamp, interval '1 day') AS gs(day) "
+            "LEFT JOIN per_day p ON p.day = gs.day::date "
+            "ORDER BY gs.day",
+            workspace_id,
+            agent_id,
+        )
+        # „Zuletzt genutzt“ ueber die ganze Zeit; „zuletzt aktiv“ ist der
+        # juengste Token-Aufruf (auch widerrufene Tokens: die Aktivitaet war da).
+        last = await self._pool.fetchrow(
+            "SELECT (SELECT MAX(created_at) FROM usage_event "
+            "        WHERE workspace_id = $1 AND agent_id = $2 AND source = 'server') "
+            "       AS last_used_at, "
+            "       (SELECT MAX(last_used_at) FROM api_token "
+            "        WHERE workspace_id = $1 AND agent_id = $2) AS last_active_at",
+            workspace_id,
+            agent_id,
+        )
+        areas = await self._pool.fetch(
+            _ACCESS_REFS_CTE + " "
+            "SELECT r.area_id, "
+            "       COUNT(DISTINCT l.access_date) "
+            "         FILTER (WHERE l.access_date >= CURRENT_DATE - 29)::int AS access_days_30d, "
+            "       MAX(l.access_date) AS last_access_on "
+            "FROM agent_access_log l "
+            "JOIN refs r ON r.ref_kind = l.ref_kind AND r.ref_id = l.ref_id "
+            "WHERE l.workspace_id = $1 AND l.agent_id = $3 "
+            "  AND ($4::uuid[] IS NULL OR r.area_id = ANY($4::uuid[])) "
+            "GROUP BY r.area_id "
+            "ORDER BY MAX(l.access_date) DESC, r.area_id",
+            workspace_id,
+            None,
+            agent_id,
+            restrict_area_ids,
+        )
+        daily = [UsageDay(day=r["day"], uses=r["uses"]) for r in rows]
+        first = rows[0] if rows else None
+        active_days = sum(1 for d in daily if d.uses > 0)
+        return AgentUsageStats(
+            agent_id=agent_id,
+            uses_7d=sum(d.uses for d in daily[-7:]),
+            uses_30d=sum(d.uses for d in daily),
+            uses_by_type_30d=UsageByType(
+                persona=first["persona"] if first else 0,
+                playbook=first["playbook"] if first else 0,
+                resource=first["resource"] if first else 0,
+            ),
+            active_days_30d=active_days,
+            last_used_at=last["last_used_at"] if last else None,
+            last_active_at=last["last_active_at"] if last else None,
+            daily=daily,
+            work_areas=[AgentWorkAreaUsage.model_validate(dict(a)) for a in areas],
+        )
+
+    async def area_exists(self, workspace_id: UUID, area_id: UUID) -> bool:
+        found = await self._pool.fetchval(
+            "SELECT 1 FROM work_area WHERE id = $1 AND workspace_id = $2", area_id, workspace_id
+        )
+        return found is not None
+
+    async def work_area_usage(self, workspace_id: UUID, area_id: UUID) -> WorkAreaUsageStats:
+        # Nutzung U2: Zugriffe auf einen Arbeitsbereich aus dem Zugriffslog.
+        # Ausgangspunkt sind Artifacts und Tabellen DIESES Bereichs (Index
+        # `(workspace_id, area_id)`), dann die Log-Eintraege dazu. Das Log ist
+        # pro (Agent, Element, Operation, Tag) dedupliziert und kennt nur das
+        # Datum (`access_date` = CURRENT_DATE beim Schreiben), darum laufen
+        # die Fenster hier ueber CURRENT_DATE und es gibt keine Uhrzeit.
+        rows = await self._pool.fetch(
+            _ACCESS_REFS_CTE + ", acc AS ("
+            "  SELECT l.agent_id, l.operation, l.access_date "
+            "  FROM agent_access_log l "
+            "  JOIN refs r ON r.ref_kind = l.ref_kind AND r.ref_id = l.ref_id "
+            "  WHERE l.workspace_id = $1"
+            "), win AS (SELECT * FROM acc WHERE access_date >= CURRENT_DATE - 29), "
+            "per_day AS (SELECT access_date, COUNT(*)::int AS n FROM win GROUP BY access_date) "
+            "SELECT gs.day::date AS day, COALESCE(p.n, 0) AS accesses, "
+            "  (SELECT COUNT(*) FILTER (WHERE operation = 'read')::int FROM win) AS reads, "
+            "  (SELECT COUNT(*) FILTER (WHERE operation = 'write')::int FROM win) AS writes, "
+            "  (SELECT COUNT(DISTINCT agent_id)::int FROM win) AS agents, "
+            "  (SELECT MAX(access_date) FROM acc) AS last_access_on "
+            "FROM generate_series("
+            "  (CURRENT_DATE - 29)::timestamp, CURRENT_DATE::timestamp, interval '1 day') "
+            "  AS gs(day) "
+            "LEFT JOIN per_day p ON p.access_date = gs.day::date "
+            "ORDER BY gs.day",
+            workspace_id,
+            area_id,
+        )
+        daily = [AccessDay(day=r["day"], accesses=r["accesses"]) for r in rows]
+        first = rows[0] if rows else None
+        return WorkAreaUsageStats(
+            area_id=area_id,
+            access_days_30d=sum(1 for d in daily if d.accesses > 0),
+            accesses_30d=sum(d.accesses for d in daily),
+            reads_30d=first["reads"] if first else 0,
+            writes_30d=first["writes"] if first else 0,
+            distinct_agents_30d=first["agents"] if first else 0,
+            last_access_on=first["last_access_on"] if first else None,
+            daily=daily,
+        )
+
+
+# Elemente des Zugriffslogs mit Arbeitsbereich: Artifacts und Tabellen
+# (`ref_id` ist dort die UUID als Text). Blobs und KB-Knoten haben keinen
+# Bereich und fallen heraus; geloeschte Elemente ebenso. `$2` beschraenkt auf
+# einen Bereich (`NULL` = alle Bereiche des Workspace). Vergleich als Text,
+# damit nie ein Blob-sha256 nach uuid gecastet wird.
+_ACCESS_REFS_CTE = (
+    "WITH refs AS ("
+    "  SELECT 'artifact'::text AS ref_kind, id::text AS ref_id, area_id "
+    "  FROM wa_artifact WHERE workspace_id = $1 AND ($2::uuid IS NULL OR area_id = $2::uuid) "
+    "  UNION ALL "
+    "  SELECT 'table'::text, id::text, area_id "
+    "  FROM wa_table WHERE workspace_id = $1 AND ($2::uuid IS NULL OR area_id = $2::uuid)"
+    ")"
+)
 
 # Zeitfenster der Nutzungszaehler als Kalendertage in UTC, heute eingeschlossen:
 # `start30` = Beginn des Tages vor 29 Tagen, `start7` = vor 6 Tagen. So stimmt

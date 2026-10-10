@@ -56,7 +56,10 @@ from who2be_models.external_tool import (
     ExternalToolVersionRead,
 )
 from who2be_models.feedback import (
+    AccessDay,
     AgentFeedbackRead,
+    AgentUsageStats,
+    AgentWorkAreaUsage,
     FeedbackCreate,
     FeedbackDetailRead,
     FeedbackEntityType,
@@ -77,6 +80,7 @@ from who2be_models.feedback import (
     FeedbackUnusedItem,
     SystemFeedbackCategory,
     SystemFeedbackCreate,
+    UsageByType,
     UsageDay,
     UsageEntityType,
     UsageEventCreate,
@@ -84,6 +88,7 @@ from who2be_models.feedback import (
     UsageList,
     UsageOutcome,
     UsageStats,
+    WorkAreaUsageStats,
 )
 from who2be_models.invitation import (
     InvitationAccept,
@@ -438,6 +443,11 @@ __all__ = [
     "UsageList",
     "UsageOutcome",
     "UsageStats",
+    "UsageByType",
+    "AccessDay",
+    "AgentUsageStats",
+    "AgentWorkAreaUsage",
+    "WorkAreaUsageStats",
     "SearchHit",
     "SearchMode",
     "SearchType",

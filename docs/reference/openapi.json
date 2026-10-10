@@ -6263,6 +6263,142 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Agent Usage",
+        "operationId": "get_agent_usage_v1_workspaces__workspace_id__agents__agent_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/work-areas/{area_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Work Area Usage",
+        "operationId": "get_work_area_usage_v1_workspaces__workspace_id__work_areas__area_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "area_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Area Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAreaUsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: area_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agent-memories": {
       "post": {
         "tags": [
@@ -15812,6 +15948,27 @@
   },
   "components": {
     "schemas": {
+      "AccessDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "accesses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accesses",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "AccessDay",
+        "description": "Zugriffslog-Eintraege an einem Kalendertag."
+      },
       "AccountDeletionRead": {
         "properties": {
           "purge_after": {
@@ -16508,6 +16665,87 @@
         "title": "AgentUpdate",
         "description": "Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.\n\n`tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet\n(analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.\n\n`model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config\n(User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,\nnicht pro Einzelaufruf. Sie sind das einzige Feld-Paar mit einer\nLEER-Semantik: `\"\"` setzt den Wert explizit auf NULL zurueck, weggelassen\nbzw. `None` laesst den Bestand unangetastet (analog `tool_policy`). Grund:\ndie Felder tragen die Compliance-Attribution — ein einmal falsch\neingetragener Anbieter muss entfernbar sein, sonst verfaelscht er die\nAuswertung „welche Daten gingen an wen\" dauerhaft. Aenderungen (auch das\nLeeren) protokolliert der Service im `audit_log`."
       },
+      "AgentUsageStats": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "uses_7d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 7D",
+            "default": 0
+          },
+          "uses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 30D",
+            "default": 0
+          },
+          "uses_by_type_30d": {
+            "$ref": "#/components/schemas/UsageByType"
+          },
+          "active_days_30d": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Active Days 30D",
+            "default": 0
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_active_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Active At"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/UsageDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "work_areas": {
+            "items": {
+              "$ref": "#/components/schemas/AgentWorkAreaUsage"
+            },
+            "type": "array",
+            "title": "Work Areas"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "title": "AgentUsageStats",
+        "description": "Nutzungszaehler eines Agenten (`GET …/agents/{agent_id}/usage`).\n\nOwner-Weiche Z2a: nur aus vorhandenen Daten, kein `fetch_agent`-Zaehler.\n`uses_*`, `active_days_30d`, `last_used_at` und `daily` kommen aus den\nAuslieferungen an diesen Agenten (`usage_event`, `source='server'`),\nFenster wie bei `UsageStats`. `last_active_at` ist der juengste\nToken-Aufruf des Agenten (`max(api_token.last_used_at)`), auch wenn dabei\nnichts ausgeliefert wurde. `work_areas` nennt die fuer den Aufrufer\nsichtbaren Arbeitsbereiche mit Zugriffen dieses Agenten."
+      },
       "AgentWithRenderedPrompt": {
         "properties": {
           "id": {
@@ -16596,6 +16834,39 @@
         ],
         "title": "AgentWorkAreaRead",
         "description": "Arbeitsbereich eines Agenten aus Menschen-Sicht (Navigation A4).\n\nAntwort von `GET .../agents/{agent_id}/work-areas` fuer den Block\n„Arbeitsbereiche\" im Agent-Ueberblick. Quelle sind die materialisierten\nGrants des Agenten (inkl. Owner-Grant der privaten Area).\n\n- `level`: Grant-Stufe DIESES Agenten.\n- `owner`: `True` fuer die private Area dieses Agenten („eigener\").\n- `agent_count`: Zahl der Agenten mit Grant an der Area, einschliesslich\n  dieses Agenten („geteilt · +n Agenten\" = `agent_count - 1`)."
+      },
+      "AgentWorkAreaUsage": {
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area Id"
+          },
+          "access_days_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Access Days 30D",
+            "default": 0
+          },
+          "last_access_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Access On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "area_id"
+        ],
+        "title": "AgentWorkAreaUsage",
+        "description": "Zugriffe eines Agenten auf einen Arbeitsbereich (aus `agent_access_log`).\n\nDas Log kennt je (Agent, Element, Operation) nur den Tag, darum ist\n`last_access_on` ein Datum ohne Uhrzeit."
       },
       "ApiErrorBody": {
         "properties": {
@@ -26246,6 +26517,31 @@
         "title": "TriggerOverview",
         "description": "Welle 5: ein deduplizierter Trigger mit den Playbooks, die ihn fuehren.\n\nQuelle: denormalisierte `playbook.triggers`-Spalte, kommagetrennt. Wird vom\nDiscovery-Endpoint `GET /v1/workspaces/{ws}/playbooks/triggers` und vom\nMCP-Tool `list_triggers` zurueckgegeben — der LLM nutzt die Tabelle, um\nfuer eine User-Anfrage das passende Playbook zu finden, ohne dass alle\nPlaybook-Bodies in den Systemprompt geladen werden muessen."
       },
+      "UsageByType": {
+        "properties": {
+          "persona": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Persona",
+            "default": 0
+          },
+          "playbook": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Playbook",
+            "default": 0
+          },
+          "resource": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Resource",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "UsageByType",
+        "description": "Auslieferungen an einen Agenten im 30-Tage-Fenster je Elementart."
+      },
       "UsageDay": {
         "properties": {
           "day": {
@@ -27164,6 +27460,71 @@
         ],
         "title": "WorkAreaSearchHit",
         "description": "Ein Suchtreffer der WorkArea-Suche — Anker + Snippet, nie das Dokument.\n\n`anchor` ist ``<artifact_id>#<block_id>`` (ADR-0021) und direkt\n`read_artifact(id, anchor)`-faehig."
+      },
+      "WorkAreaUsageStats": {
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area Id"
+          },
+          "access_days_30d": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Access Days 30D",
+            "default": 0
+          },
+          "accesses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accesses 30D",
+            "default": 0
+          },
+          "reads_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads 30D",
+            "default": 0
+          },
+          "writes_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Writes 30D",
+            "default": 0
+          },
+          "distinct_agents_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Distinct Agents 30D",
+            "default": 0
+          },
+          "last_access_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Access On"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/AccessDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "type": "object",
+        "required": [
+          "area_id"
+        ],
+        "title": "WorkAreaUsageStats",
+        "description": "Zugriffszaehler eines Arbeitsbereichs (`GET …/work-areas/{area_id}/usage`).\n\nQuelle ist das Zugriffslog (`agent_access_log`, ein Eintrag je Agent,\nElement, Operation und Tag) fuer Artifacts und Tabellen des Bereichs.\n`accesses_30d` zaehlt diese Eintraege, `access_days_30d` die Tage mit\nmindestens einem Eintrag. Keine Uhrzeit, keine Agent-Namen."
       },
       "WorkspaceCreate": {
         "properties": {

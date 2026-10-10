@@ -403,3 +403,86 @@ class UsageList(BaseModel):
 
     items: list[UsageStats] = Field(default_factory=list)
     counting_since: date = USAGE_COUNTING_SINCE
+
+
+# --- Nutzungszaehler Agent und Arbeitsbereich (Konzept W5, Paket U2) --------
+
+
+class UsageByType(BaseModel):
+    """Auslieferungen an einen Agenten im 30-Tage-Fenster je Elementart."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    persona: int = Field(ge=0, default=0)
+    playbook: int = Field(ge=0, default=0)
+    resource: int = Field(ge=0, default=0)
+
+
+class AccessDay(BaseModel):
+    """Zugriffslog-Eintraege an einem Kalendertag."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    day: date
+    accesses: int = Field(ge=0, default=0)
+
+
+class AgentWorkAreaUsage(BaseModel):
+    """Zugriffe eines Agenten auf einen Arbeitsbereich (aus `agent_access_log`).
+
+    Das Log kennt je (Agent, Element, Operation) nur den Tag, darum ist
+    `last_access_on` ein Datum ohne Uhrzeit.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: UUID
+    access_days_30d: int = Field(ge=0, default=0)
+    last_access_on: date | None = None
+
+
+class AgentUsageStats(BaseModel):
+    """Nutzungszaehler eines Agenten (`GET …/agents/{agent_id}/usage`).
+
+    Owner-Weiche Z2a: nur aus vorhandenen Daten, kein `fetch_agent`-Zaehler.
+    `uses_*`, `active_days_30d`, `last_used_at` und `daily` kommen aus den
+    Auslieferungen an diesen Agenten (`usage_event`, `source='server'`),
+    Fenster wie bei `UsageStats`. `last_active_at` ist der juengste
+    Token-Aufruf des Agenten (`max(api_token.last_used_at)`), auch wenn dabei
+    nichts ausgeliefert wurde. `work_areas` nennt die fuer den Aufrufer
+    sichtbaren Arbeitsbereiche mit Zugriffen dieses Agenten.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    agent_id: UUID
+    uses_7d: int = Field(ge=0, default=0)
+    uses_30d: int = Field(ge=0, default=0)
+    uses_by_type_30d: UsageByType = Field(default_factory=UsageByType)
+    active_days_30d: int = Field(ge=0, le=30, default=0)
+    last_used_at: datetime | None = None
+    last_active_at: datetime | None = None
+    daily: list[UsageDay] = Field(default_factory=list)
+    work_areas: list[AgentWorkAreaUsage] = Field(default_factory=list)
+    counting_since: date = USAGE_COUNTING_SINCE
+
+
+class WorkAreaUsageStats(BaseModel):
+    """Zugriffszaehler eines Arbeitsbereichs (`GET …/work-areas/{area_id}/usage`).
+
+    Quelle ist das Zugriffslog (`agent_access_log`, ein Eintrag je Agent,
+    Element, Operation und Tag) fuer Artifacts und Tabellen des Bereichs.
+    `accesses_30d` zaehlt diese Eintraege, `access_days_30d` die Tage mit
+    mindestens einem Eintrag. Keine Uhrzeit, keine Agent-Namen.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: UUID
+    access_days_30d: int = Field(ge=0, le=30, default=0)
+    accesses_30d: int = Field(ge=0, default=0)
+    reads_30d: int = Field(ge=0, default=0)
+    writes_30d: int = Field(ge=0, default=0)
+    distinct_agents_30d: int = Field(ge=0, default=0)
+    last_access_on: date | None = None
+    daily: list[AccessDay] = Field(default_factory=list)
