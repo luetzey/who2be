@@ -153,7 +153,11 @@ class FeedbackRepository(Protocol):
         self, workspace_id: UUID, entity_type: str, entity_id: UUID, limit: int
     ) -> FeedbackEvents: ...
 
-    async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]: ...
+    async def overview(
+        self, workspace_id: UUID, agent_id: UUID | None = None, days: int | None = None
+    ) -> list[FeedbackOverviewItem]: ...
+
+    async def agent_exists(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
 
     async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]: ...
 
@@ -367,19 +371,26 @@ class PgFeedbackRepository:
             usage=[UsageEventRead.model_validate(dict(r)) for r in usage_rows],
         )
 
-    async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]:
+    async def overview(
+        self, workspace_id: UUID, agent_id: UUID | None = None, days: int | None = None
+    ) -> list[FeedbackOverviewItem]:
         # Workspace-weite Aggregation pro Element ueber beide Telemetrie-Tabellen.
         # FULL OUTER JOIN, damit auch Elemente mit nur Usage ODER nur Feedback
         # erscheinen. Der Namens-JOIN auf die drei Ziel-Tabellen filtert
         # implizit geloeschte Elemente (name NULL) heraus.
         # `usage_count` zaehlt nur die Server-Aufzeichnung (ADR-0053 3.4); die
         # juengste Aktivitaet nimmt jede Zeile, auch einen Ergebnisbericht.
+        # Navigation A6: `agent_id` beschraenkt beide Tabellen auf Ereignisse
+        # dieses Agenten, `days` auf die letzten N Tage. Beide Filter sind
+        # `$n IS NULL OR …` — ohne Parameter bleibt die Gesamtsumme unveraendert.
         rows = await self._pool.fetch(
             "WITH usage_agg AS ("
             "  SELECT entity_type, entity_id, "
             "         COUNT(*) FILTER (WHERE source = 'server')::int AS usage_count, "
             "         MAX(created_at) AS last_usage "
             "  FROM usage_event WHERE workspace_id = $1 "
+            "    AND ($2::uuid IS NULL OR agent_id = $2::uuid) "
+            "    AND ($3::int IS NULL OR created_at >= now() - make_interval(days => $3::int)) "
             "  GROUP BY entity_type, entity_id"
             "), fb_agg AS ("
             "  SELECT entity_type, entity_id, COUNT(*)::int AS feedback_count, "
@@ -388,6 +399,8 @@ class PgFeedbackRepository:
             "    COUNT(*) FILTER (WHERE signal = 'helpful')::int AS helpful_count, "
             "    MAX(created_at) AS last_feedback "
             "  FROM agent_feedback WHERE workspace_id = $1 "
+            "    AND ($2::uuid IS NULL OR agent_id = $2::uuid) "
+            "    AND ($3::int IS NULL OR created_at >= now() - make_interval(days => $3::int)) "
             "  GROUP BY entity_type, entity_id"
             "), combined AS ("
             "  SELECT COALESCE(u.entity_type, f.entity_type) AS entity_type, "
@@ -416,8 +429,16 @@ class PgFeedbackRepository:
             "WHERE COALESCE(p.name, pb.name, r.name, et.name) IS NOT NULL "
             "ORDER BY c.last_activity_at DESC NULLS LAST",
             workspace_id,
+            agent_id,
+            days,
         )
         return [FeedbackOverviewItem.model_validate(dict(r)) for r in rows]
+
+    async def agent_exists(self, workspace_id: UUID, agent_id: UUID) -> bool:
+        found = await self._pool.fetchval(
+            "SELECT 1 FROM agent WHERE id = $1 AND workspace_id = $2", agent_id, workspace_id
+        )
+        return found is not None
 
     async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]:
         # „Ungenutzt" = hat eine aktive Version (Agenten KOENNTEN es nutzen), aber

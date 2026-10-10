@@ -15,6 +15,7 @@ from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.workarea_scope import agent_not_found
 from who2be_api.repositories.feedback_repository import FeedbackRepository
 from who2be_models import (
     AgentCapability,
@@ -128,10 +129,17 @@ class FeedbackService:
             raise _entity_not_found()
         return await self._repo.list_events(ctx.workspace_id, entity_type, entity_id, _EVENTS_LIMIT)
 
-    async def get_overview(self, ctx: WorkspaceContext) -> FeedbackOverview:
+    async def get_overview(
+        self, ctx: WorkspaceContext, agent_id: UUID | None = None, days: int | None = None
+    ) -> FeedbackOverview:
         # Workspace-weite Kurations-Uebersicht (Dashboard-Kacheln + Feedback-Seite).
+        # Navigation A6: optional je Agent (`agent_id`) und Zeitraum (`days`).
+        # Rechte bleiben editor+ (PM-Weiche W2) — die Rolle wird VOR dem
+        # Agent-Lookup geprueft, damit ein viewer keine Agent-IDs enumeriert.
         require_role(ctx, WorkspaceRole.editor)
-        items = await self._repo.overview(ctx.workspace_id)
+        if agent_id is not None and not await self._repo.agent_exists(ctx.workspace_id, agent_id):
+            raise agent_not_found()
+        items = await self._repo.overview(ctx.workspace_id, agent_id=agent_id, days=days)
         return FeedbackOverview(items=items)
 
     async def get_unused(self, ctx: WorkspaceContext) -> FeedbackUnused:
