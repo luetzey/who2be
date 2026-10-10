@@ -233,15 +233,16 @@ neu erzeugen:
 uv run python -m who2be_mcp.payload_report
 ```
 
-Stand 2026-10-10, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4):
+Stand 2026-10-11, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4)
+und nach der Schema-Diaet (T2):
 
 | Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
 | --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 38 | 46.436 | 4 / 6.911 | 9.103 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 51.925 | 5 / 8.253 | 10.502 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 147.475 | 5 / 8.253 | 11.483 |
-| Mensch/JWT, Rolle editor | 86 | 141.986 | 4 / 6.911 | 10.084 |
-| alle Werkzeuge (Guard) | 90 | 147.475 | 5 / 8.253 | 11.483 |
+| Agent, Default-Policy | 38 | 45.938 | 4 / 6.582 | 8.774 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 51.410 | 5 / 7.924 | 10.173 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 138.060 | 5 / 7.924 | 11.154 |
+| Mensch/JWT, Rolle editor | 86 | 132.588 | 4 / 6.582 | 9.755 |
+| alle Werkzeuge (Guard) | 90 | 138.060 | 5 / 7.924 | 11.154 |
 
 „Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
 die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
@@ -259,16 +260,16 @@ Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
 
 | # | Werkzeug | gesamt | Beschreibung | Schema |
 | ---: | --- | ---: | ---: | ---: |
-| 1 | `create_persona` | 8.365 | 1.522 | 6.654 |
-| 2 | `update_agent` | 7.639 | 148 | 7.368 |
-| 3 | `update_persona` | 7.325 | 724 | 6.461 |
-| 4 | `create_agent` | 7.181 | 244 | 6.812 |
-| 5 | `create_playbook` | 3.998 | 1.465 | 2.342 |
-| 6 | `create_resource` | 3.443 | 1.195 | 2.069 |
-| 7 | `create_external_tool` | 3.314 | 737 | 2.427 |
-| 8 | `update_playbook` | 2.999 | 500 | 2.360 |
-| 9 | `update_external_tool` | 2.827 | 375 | 2.305 |
-| 10 | `create_system_prompt` | 2.826 | 1.286 | 1.327 |
+| 1 | `create_persona` | 6.710 | 1.522 | 4.999 |
+| 2 | `update_agent` | 5.971 | 148 | 5.700 |
+| 3 | `create_agent` | 5.896 | 244 | 5.527 |
+| 4 | `update_persona` | 5.805 | 724 | 4.941 |
+| 5 | `create_external_tool` | 3.314 | 737 | 2.427 |
+| 6 | `create_playbook` | 3.284 | 1.465 | 1.628 |
+| 7 | `create_resource` | 2.995 | 1.195 | 1.621 |
+| 8 | `update_external_tool` | 2.827 | 375 | 2.305 |
+| 9 | `create_system_prompt` | 2.826 | 1.286 | 1.327 |
+| 10 | `get_persona` | 2.492 | 1.970 | 330 |
 
 Bei den vier teuersten liegt das Gewicht im Schema, nicht in der
 Beschreibung: das `inputSchema` traegt das ganze Inhalts- bzw.
@@ -288,19 +289,47 @@ Drei Guards halten den Text fest, den ein Client wirklich sieht:
   ersten Satz. Der Satz soll den Zweck tragen; Bedingungen und Details
   gehoeren dahinter. Ein Satz endet an `.`, `!` oder `?` vor Leerraum oder an
   einem Absatzwechsel.
-- **Keine neue Entwickler-Historie im Draht-Schema**
+- **Keine Entwickler-Historie im Draht-Schema**
   (`test_wire_schema_developer_refs_only_shrink`). Verweise auf ADR, Phase,
   Track, Welle, WP oder Gap in den `description`-Texten des `inputSchema`
   stammen aus Pydantic-Docstrings in `packages/models` und kosten jeden
-  Agenten Bytes, ohne einen Aufruf zu erklaeren. Der Bestand (35 Texte in
-  19 Werkzeugen) steht als Ratsche `_DEVELOPER_REF_BASELINE` im Test: kein
-  Werkzeug darf mehr davon bekommen, und wer einen entfernt, senkt die Basis
-  ab. Die Schema-Diaet (T2) leert sie. Historie gehoert in einen
-  Code-Kommentar oder die ADR, nicht in den Docstring eines Modells, das als
-  Schema ausgeliefert wird.
+  Agenten Bytes, ohne einen Aufruf zu erklaeren. Die Ratsche
+  `_DEVELOPER_REF_BASELINE` im Test ist seit der Schema-Diaet (T2) leer:
+  jeder neue Verweis laesst den Test fallen. Historie gehoert in einen
+  `#`-Kommentar ueber der Klasse oder in die ADR, nicht in den Docstring eines
+  Modells, das als Schema ausgeliefert wird.
 
 **Wenn ein Text-Guard reisst:** den Text kuerzen bzw. den Satz umstellen,
 nicht die Grenze anheben.
+
+### Schema-Diaet (T2)
+
+Pydantic schreibt den Klassen-Docstring jedes Modells als `description` in
+das JSON-Schema. Ueber `inputSchema` landet er bei jedem Agenten, der das
+Werkzeug sieht, ueber `docs/reference/openapi.json` auch in der API-Referenz.
+Regel fuer Modelle, die als Werkzeug-Eingabe dienen:
+
+- Der **Docstring** erklaert dem Aufrufer, was das Feld bedeutet und was er
+  senden darf. Kurz, ohne Projektgeschichte.
+- Der **`#`-Kommentar ueber der Klasse** traegt das Warum fuer Entwickler:
+  ADR, Phase, Migration, Backward-Compat.
+- Ein Modell, das in vielen Schemas steckt (`ReadScope` achtmal,
+  `ResourceBlock` zehnmal), bekommt einen Satz.
+
+**Wirkung (gemessen mit `payload_report`, Stand 2026-10-11):**
+
+| Größe | vorher | nachher |
+| --- | ---: | ---: |
+| Draht `tools/list`, alle Werkzeuge | 147.475 | 138.060 (−9.415) |
+| Agent, Default-Policy | 46.436 | 45.938 (−498) |
+| Agent, Default + Gedaechtnis `suggest` | 51.925 | 51.410 (−515) |
+| Mensch/JWT, Rolle editor | 141.986 | 132.588 (−9.398) |
+| Schema-Texte im Katalog | 29.615 | 20.416 (−9.199) |
+| Schema-Texte mit Entwickler-Historie | 35 | 0 |
+
+Beim Default-Agenten ist die Ersparnis klein, weil er keine Schreibwerkzeuge
+sieht; die Historie sass fast ganz in den Schemas von `create_*`/`update_*`.
+Fuer den Default-Agenten wirkt erst die Beschreibungs-Diaet (T3).
 
 ### Start bei Tool Search: `instructions` und `alwaysLoad`
 
