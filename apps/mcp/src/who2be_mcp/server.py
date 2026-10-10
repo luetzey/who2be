@@ -34,6 +34,7 @@ from who2be_mcp.client import (
 )
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
+from who2be_mcp.instructions import ALWAYS_LOAD_META, SERVER_INSTRUCTIONS
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
 from who2be_mcp.tools.kb import register as register_kb_tools
 from who2be_mcp.tools.learning import FramedMemoryHit, frame_hits
@@ -105,7 +106,9 @@ from who2be_models.memory import MemorySaveResult
 
 logger = logging.getLogger(__name__)
 
-mcp: FastMCP = FastMCP("who2be")
+# `instructions` und `ALWAYS_LOAD_META` (MCP-Token T4): Boot-Reihenfolge und
+# Querschnittsregeln fuer Clients mit Tool Search, siehe `instructions.py`.
+mcp: FastMCP = FastMCP("who2be", instructions=SERVER_INSTRUCTIONS)
 
 # Per-Request-Policy-Filterung von tools/list + Call-Sperre (ADR-0042):
 # fail-open ohne aufloesbare Identitaet (ping bleibt token-frei nutzbar);
@@ -402,7 +405,7 @@ def ping() -> str:
     return "pong"
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("whoami")
 async def whoami() -> WhoAmIRead:
     """Identitaet + effektive Berechtigungen des aktuellen API-Tokens (#253).
@@ -432,7 +435,7 @@ async def whoami() -> WhoAmIRead:
     return await client.whoami()
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("get_persona")
 async def get_persona(
     identifier: str, locale: str | None = None, mode: str | None = None, format: str = "text"
@@ -1677,7 +1680,7 @@ class UsageReport(UsageEventCreate):
     outcome: UsageOutcome
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("record_usage")
 async def record_usage(data: UsageReport) -> UsageEventRead:
     """Meldet, dass du ein Element genutzt hast (append-only Telemetrie).
@@ -1773,7 +1776,7 @@ async def resolve_feedback(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("search_memory")
 async def search_memory(query: str, k: int = 5) -> list[FramedMemoryHit]:
     """Durchsucht dein Langzeitgedaechtnis (freigegebene Memories).
@@ -1872,7 +1875,7 @@ async def save_memory(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("search")
 async def search(
     query: str, types: list[SearchType] | None = None, limit: int = 20

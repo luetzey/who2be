@@ -213,8 +213,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-06, alte Messung auf FastMCP 4.0.11 | 86 | 136.764 Bytes |
 | 2026-10-06, Draht-Form auf FastMCP 4.0.11 | 86 | **142.295 Bytes** |
 | 2026-10-10, Draht-Form | 90 | **147.325 Bytes** |
+| 2026-10-10, mit `alwaysLoad` an fünf Werkzeugen (T4) | 90 | **147.475 Bytes** |
 
-Bis zur Grenze bleiben damit 12.675 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 12.525 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -232,15 +233,21 @@ neu erzeugen:
 uv run python -m who2be_mcp.payload_report
 ```
 
-Stand 2026-10-10, 90 Werkzeuge, Draht-Form wie oben:
+Stand 2026-10-10, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4):
 
-| Profil | Werkzeuge | Bytes |
-| --- | ---: | ---: |
-| Agent, Default-Policy | 38 | 46.316 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 51.775 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 147.325 |
-| Mensch/JWT, Rolle editor | 86 | 141.866 |
-| alle Werkzeuge (Guard) | 90 | 147.325 |
+| Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
+| --- | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 38 | 46.436 | 4 / 6.911 | 9.103 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 51.925 | 5 / 8.253 | 10.502 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 147.475 | 5 / 8.253 | 11.483 |
+| Mensch/JWT, Rolle editor | 86 | 141.986 | 4 / 6.911 | 10.084 |
+| alle Werkzeuge (Guard) | 90 | 147.475 | 5 / 8.253 | 11.483 |
+
+„Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
+die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
+Search“ ist eine Näherung an das, was Claude Code beim Start in den Kontext
+lädt: `instructions`, die Namen der übrigen Werkzeuge und die vollen
+Definitionen der sofort geladenen (siehe „Start bei Tool Search“ unten).
 
 Die Profile sind keine Nachbildung: `test_reference_profiles_measure_the_
 middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
@@ -294,6 +301,59 @@ Drei Guards halten den Text fest, den ein Client wirklich sieht:
 
 **Wenn ein Text-Guard reisst:** den Text kuerzen bzw. den Satz umstellen,
 nicht die Grenze anheben.
+
+### Start bei Tool Search: `instructions` und `alwaysLoad`
+
+Claude Code (Tool Search, Default) und Hermes (`tool_search`) laden beim
+Start nicht die vollen Werkzeugdefinitionen, sondern Namen bzw. einen
+Kurzkatalog und die Server-`instructions`. Die vollen Definitionen holt der
+Agent erst per Suche. Zwei Hebel steuern, was dabei sofort da ist. Beide
+stehen in `apps/mcp/src/who2be_mcp/instructions.py`.
+
+- **Server-`instructions`** (1.604 Bytes): Boot-Reihenfolge `whoami` →
+  `get_persona` → `search_memory` → `list_triggers`/`fetch_playbook`, wann
+  `search` und wann `search_content`, dazu die Regeln, die für viele Werkzeuge
+  gelten: `format="full"` als Vorlage für `update_*`, die
+  Versions-Übergänge, die Sprache neuer Elemente, Gedächtnis-Treffer als
+  Daten und `record_usage` nach jedem Einsatz. Die `instructions` gehen nicht
+  über `tools/list` und zählen deshalb nicht zum Katalog-Budget.
+- **`_meta["anthropic/alwaysLoad"]`** an fünf Werkzeugen: `whoami`,
+  `get_persona`, `search`, `search_memory`, `record_usage`. Claude Code lädt
+  deren volle Definition sofort. Andere Clients ignorieren den Schlüssel. Der
+  Policy-Filter bleibt maßgeblich: wer `search_memory` nicht sehen darf,
+  bekommt es auch mit `alwaysLoad` nicht.
+
+**Wirkung (gemessen mit `payload_report`, Stand 2026-10-10):**
+
+| Größe | vorher | nachher |
+| --- | ---: | ---: |
+| Draht `tools/list`, alle Werkzeuge | 147.325 | 147.475 (+150, je Werkzeug 30 Bytes `_meta`) |
+| Draht `tools/list`, Default-Agent | 46.316 | 46.436 (+120) |
+| Server-`instructions` | 0 | 1.604 |
+| Start mit Tool Search, Default-Agent | 639 (nur Namen) | 9.103 |
+| Start mit Tool Search, Builder | 1.694 (nur Namen) | 11.483 |
+
+Der Start mit Tool Search wird damit größer, nicht kleiner. Das ist gewollt:
+die fünf Werkzeuge braucht jeder Start ohnehin, vorher kamen sie erst über eine
+oder mehrere Suchen in den Kontext, mit denselben Bytes plus Suchanfrage und
+Suchergebnis. Gespart wird der Suchschritt, gewonnen wird ein Boot-Text, der
+vorher fehlte. Beim Draht-Budget, an dem Claude Chat die Liste verwirft, ändert
+sich praktisch nichts (+150 Bytes). Senken lässt es sich nur über kürzere
+Beschreibungen und Schemas (T2, T3).
+
+**Reihenfolge:** Die MCP-Spec verlangt eine deterministische Reihenfolge von
+`tools/list` (Client-Cache, Prompt-Cache). Sie folgt der Registrierung im Code.
+Zwei Tests halten das fest: `test_tools_list_order_is_deterministic_across_
+processes` vergleicht zwei Prozesse mit verschiedenem `PYTHONHASHSEED`, und
+`test_policy_filter_keeps_the_catalog_order` verlangt, dass der Filter nur
+herausnimmt und nicht umordnet.
+
+**Guards:** `test_server_instructions_reach_the_client_and_name_only_real_tools`
+prüft, dass die `instructions` beim Client ankommen, höchstens 2.048 Zeichen
+lang sind, keine Entwickler-Historie tragen und nur existierende
+Werkzeugnamen in Backticks nennen. Wer ein Werkzeug umbenennt, muss den
+Boot-Text mitziehen. `test_always_load_marks_exactly_the_boot_tools` hält die
+Menge bei drei bis fünf Werkzeugen, die alle im Boot-Text stehen.
 
 ### Antwortgroesse je Werkzeug
 
