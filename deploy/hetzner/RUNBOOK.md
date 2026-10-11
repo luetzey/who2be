@@ -962,7 +962,8 @@ Caddy haelt keinen Zustand, der eine Version voraussetzt; `caddy-data`
 
 **Trigger:** der Pin `supabase/gotrue:<tag>` in
 `deploy/hetzner/supabase/docker-compose.yml` wird im Repo gehoben (zuletzt
-`v2.158.1` → `v2.196.0`, Issue #499) und soll auf den Host.
+`v2.196.0` → `v2.197.0`, PR #671; davor `v2.158.1` → `v2.196.0`, Issue
+#499) und soll auf den Host.
 
 **Warum eine eigene Prozedur:** GoTrue faehrt seine Schema-Migrationen beim
 Start selbst gegen `auth.*` — es gibt keinen separaten Migrations-Container,
