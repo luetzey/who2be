@@ -15,14 +15,15 @@ sondern die GESAMTE Tool-Liste.
   Docstring-Inflation. Reisst der Guard, zuerst Beschreibungen kuerzen bzw.
   die Fold-Reihenfolge aus dem Plan ziehen (`list_category_rules` ->
   `set_convention`), NICHT das Budget anheben.
-- **Docstring-Cap fuer neue Domain-Module:** Die `tools/`-Module (WP8+)
-  halten je Tool <= 1100 Zeichen Beschreibung. Der Bestand in `server.py`
-  ist grandfathered, haelt aber wie alle Werkzeuge die 2048-Zeichen-Kappung
-  von Claude Code.
-- **Je Referenzprofil (MCP-Token T1):** Kennzahl der Teilliste, die ein
-  Agent beim Start bekommt (`who2be_mcp.payload_report`), dazu die Guards
-  „erster Satz <= 100 Zeichen" und die Ratsche gegen Entwickler-Historie
-  im Draht-Schema.
+- **Docstring-Cap:** Jedes Werkzeug haelt <= 1100 Zeichen Beschreibung,
+  seit der Beschreibungs-Diaet (T3) auch der Bestand in `server.py`
+  (`test_every_tool_description_stays_under_doc_cap`); darueber liegt die
+  2048-Zeichen-Kappung von Claude Code.
+- **Je Referenzprofil (MCP-Token T1, Ziele seit T3):** Kennzahl der
+  Teilliste, die ein Agent beim Start bekommt (`who2be_mcp.payload_report`),
+  mit harten Zielen fuer Default (35.000 B) und Builder (110.000 B), dazu
+  die Guards „erster Satz <= 100 Zeichen" und die Ratsche gegen
+  Entwickler-Historie im Draht-Schema.
 
 **Antwortgroesse je Werkzeug:** Die Laufzeit deckelt eine EINZELNE
 Tool-Antwort bei 50.000 Zeichen. Darueber sieht das Modell die Antwort nicht —
@@ -77,7 +78,7 @@ from who2be_mcp.server import (
     list_versions,
     mcp,
 )
-from who2be_models import AgentWithRenderedPrompt
+from who2be_models import AgentToolPolicy, AgentWithRenderedPrompt, MemoryMode, WorkspaceRole
 from who2be_models.external_tool import ExternalToolContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
@@ -414,6 +415,156 @@ def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixtur
     assert f"| 10 | `{costs[9].name}` |" in out
     assert "| 11 |" not in out
     assert costs == sorted(costs, key=lambda c: -c.total)
+
+
+# ---------------------------------------------------------------------------
+# Zielwerte je Agent-Start und Sichtbarkeit (MCP-Token T3, Owner T4a)
+# ---------------------------------------------------------------------------
+
+# Was ein Agent beim Start bezahlt: Draht-Bytes seiner `tools/list` plus die
+# Server-`instructions`, die seit T4 jeder Client beim Verbinden bekommt. Das
+# Gesamt-Budget `_PAYLOAD_BUDGET_BYTES` bleibt die harte Obergrenze daneben.
+# Reisst ein Ziel: Beschreibungen kuerzen, nicht das Ziel anheben.
+_START_TARGET_BYTES = {"default": 35_000, "builder": 110_000}
+
+
+def _start_bytes(tools: list[dict[str, Any]], profile: payload_report.ReferenceProfile) -> int:
+    visible = payload_report.visible_tools(tools, profile)
+    return payload_report.payload_bytes(visible) + len((mcp.instructions or "").encode())
+
+
+def _profile(key: str) -> payload_report.ReferenceProfile:
+    return next(p for p in payload_report.REFERENCE_PROFILES if p.key == key)
+
+
+def test_agent_start_meets_target_per_profile() -> None:
+    """Default-Agent <= 35.000 Bytes, Builder <= 110.000 Bytes beim Start.
+
+    Rot-Probe: eine aufgeblaehte Beschreibung an einem Werkzeug, das beide
+    Profile sehen, traegt jedes Profil ueber sein Ziel.
+    """
+    tools = _wire_tools()
+    assert mcp.instructions, "instructions fehlen: der Start waere zu billig gemessen"
+    sizes = {key: _start_bytes(tools, _profile(key)) for key in _START_TARGET_BYTES}
+
+    shared = next(i for i, t in enumerate(tools) if t["name"] == "whoami")
+    pad = "x" * (_START_TARGET_BYTES["builder"] - sizes["default"] + 1)
+    padded = [*tools[:shared], {**tools[shared], "description": pad}, *tools[shared + 1 :]]
+    for key, target in _START_TARGET_BYTES.items():
+        assert _start_bytes(padded, _profile(key)) > target, key
+
+    over = {
+        key: (size, _START_TARGET_BYTES[key])
+        for key, size in sizes.items()
+        if size > _START_TARGET_BYTES[key]
+    }
+    assert not over, (
+        f"Agent-Start ueber dem Ziel (ist, Ziel): {over}. Beschreibungen kuerzen "
+        "(docs/mcp-payload-budget.md, Beschreibungs-Diaet), nicht das Ziel anheben."
+    )
+
+
+def test_every_tool_description_stays_under_doc_cap() -> None:
+    """Jede Werkzeugbeschreibung auf dem Draht hat hoechstens 1.100 Zeichen.
+
+    Seit der Beschreibungs-Diaet (T3) gilt der Cap der `tools/`-Module fuer
+    alle Werkzeuge, auch fuer `server.py` und die per `description=` gesetzten.
+    """
+    tools = _wire_tools()
+    probe = _with_description(tools, "x" * (_NEW_TOOL_DOC_CAP + 1))
+    assert any(len(t["description"]) > _NEW_TOOL_DOC_CAP for t in probe)
+    offenders = {
+        tool["name"]: len(tool.get("description") or "")
+        for tool in tools
+        if len(tool.get("description") or "") > _NEW_TOOL_DOC_CAP
+    }
+    assert not offenders, f"Beschreibungen ueber {_NEW_TOOL_DOC_CAP} Zeichen: {offenders}"
+
+
+def _whoami_for(profile: payload_report.ReferenceProfile) -> dict[str, object]:
+    policy = profile.policy
+    return {
+        "user_id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "role": profile.role.value,
+        "is_api_token": not profile.unrestricted,
+        "agent_id": None if profile.unrestricted else str(uuid4()),
+        "unrestricted": profile.unrestricted,
+        "capabilities": None if policy is None else policy.granted_capabilities(),
+        "read_scopes": None if policy is None else policy.read_scopes(),
+        "memory_mode": None if policy is None else policy.memory_mode,
+        "features": ["core"],
+    }
+
+
+def _middleware_names(
+    monkeypatch: pytest.MonkeyPatch, profile: payload_report.ReferenceProfile
+) -> tuple[set[str], set[str]]:
+    """Sichtbare und sofort geladene Werkzeuge, durch den echten Policy-Filter."""
+    from who2be_mcp import policy_filter
+
+    policy_filter._whoami_cache.clear()
+    monkeypatch.setattr(
+        policy_filter,
+        "get_settings",
+        lambda: Settings(api_base_url="http://test", api_token="w2b_t3", transport="stdio"),
+    )
+    monkeypatch.setattr(server, "build_client", _factory(_respond_with(_whoami_for(profile))))
+    tools = asyncio.run(payload_report.wire_tools(mcp))
+    policy_filter._whoami_cache.clear()
+    eager = {tool["name"] for tool in payload_report.always_loaded(tools)}
+    return {tool["name"] for tool in tools}, eager
+
+
+_NO_FEEDBACK = payload_report.ReferenceProfile(
+    key="no_feedback",
+    label="Agent ohne feedback_write",
+    unrestricted=False,
+    role=WorkspaceRole.editor,
+    policy=AgentToolPolicy(feedback_write=False),
+)
+
+
+def test_record_usage_and_memory_tools_hidden_without_rights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne `feedback_write` kein `record_usage`, bei `memory_mode=off` kein Gedaechtnis.
+
+    Geprueft durch die echte Middleware, nicht nur an der Simulation. Die
+    Gegenprobe (Default mit `feedback_write`, Gedaechtnis `suggest`) zeigt,
+    dass der Test die Werkzeuge ueberhaupt finden kann.
+    """
+    memory_tools = {"search_memory", "list_memories", "save_memory"}
+
+    no_feedback, _ = _middleware_names(monkeypatch, _NO_FEEDBACK)
+    default, _ = _middleware_names(monkeypatch, _profile("default"))
+    with_memory, _ = _middleware_names(monkeypatch, _profile("default_memory"))
+
+    assert "record_usage" not in no_feedback
+    assert "record_usage" in default
+    default_policy = _profile("default").policy
+    assert default_policy is not None
+    assert default_policy.memory_mode is MemoryMode.off
+    assert not memory_tools & default
+    assert memory_tools <= with_memory
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [*payload_report.REFERENCE_PROFILES, _NO_FEEDBACK],
+    ids=lambda p: p.key,
+)
+def test_always_load_is_subset_of_visible_tools(
+    profile: payload_report.ReferenceProfile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`alwaysLoad` macht kein Werkzeug sichtbar, das die Policy ausblendet.
+
+    Sofort geladen wird je Profil genau der Schnitt aus `ALWAYS_LOAD_TOOLS`
+    und den sichtbaren Werkzeugen.
+    """
+    visible, eager = _middleware_names(monkeypatch, profile)
+    assert eager <= visible
+    assert eager == ALWAYS_LOAD_TOOLS & visible
 
 
 # ---------------------------------------------------------------------------

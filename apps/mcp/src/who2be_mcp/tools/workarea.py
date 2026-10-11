@@ -88,22 +88,12 @@ async def create_artifact(
     source_url: str | None = None,
     fetched_at: datetime | None = None,
 ) -> ArtifactRead:
-    """Legt ein doc-Artifact in der WorkArea an (unversioniert, lockfrei).
+    """Legt ein Dokument in der WorkArea an (unversioniert, ohne Sperre).
 
-    `occurred_at` ist der Zeitpunkt, zu dem der Inhalt PASSIERT ist (Meeting,
-    Beleg, Ereignis) — NICHT der Aufruf-Zeitpunkt. Kennst du ihn nicht, setze
-    `occurred_precision='unknown'` (ein now()-Fallback existiert bewusst
-    nicht). `area_id=None` schreibt in deine private Area (auto-angelegt);
-    fuer Team-Inhalte eine shared Area angeben (siehe `whoami.work_areas`).
-    Stammt der Inhalt aus einem Fremdsystem, setze `source_system` +
-    `fetched_at` (Pflicht-Paar) und ggf. `source_url`.
-
-    Der Server splittet `content_md` deterministisch in Bloecke und vergibt
-    stabile 8-stellige `block_id`s — die Antwort traegt sie in `blocks`.
-    `<artifact_id>#<block_id>` ist der Anker, mit dem `read_artifact(anchor)`
-    und `patch_artifact` eine Stelle direkt adressieren; Suchtreffer liefern
-    ihn mit. Weiterschreiben: `append_artifact` (konfliktfrei) oder
-    `patch_artifact` (gezielt am Anker).
+    `occurred_at` ist der fachliche Zeitpunkt des Inhalts, nicht der Aufruf; unbekannt:
+    `occurred_precision='unknown'`. `area_id=None` ist die private Area. Inhalte aus
+    Fremdsystemen tragen `source_system` und `fetched_at`. Die Antwort nennt die `block_id`s;
+    weiter mit `append_artifact` oder `patch_artifact`.
     """
     client = await _client()
     try:
@@ -124,14 +114,10 @@ async def create_artifact(
 
 @with_tool_log("append_artifact")
 async def append_artifact(artifact_id: str, content_md: str) -> ArtifactRead:
-    """Haengt Markdown als neue Bloecke an ein doc-Artifact an (lockfrei).
+    """Haengt Markdown als neue Bloecke an ein WorkArea-Dokument an, ohne Konflikt.
 
-    Der sichere Default fuers Weiterschreiben: Append ist atomar (rev+1),
-    braucht KEIN `expected_rev` und kollidiert nie mit parallelen Appends
-    anderer Agenten. Nutze `patch_artifact` nur, wenn ein BESTEHENDER Block
-    gezielt geaendert werden muss. Die Antwort traegt die neuen Bloecke mit
-    ihren stabilen 8-stelligen `block_id`s (Anker-Sprache
-    `<artifact_id>#<block_id>`) und die neue `rev`.
+    Der sichere Weg zum Weiterschreiben, ohne `expected_rev`. Antwort: neue `block_id`s und
+    `rev`.
     """
     client = await _client()
     try:
@@ -149,20 +135,11 @@ async def patch_artifact(
     expected_rev: int,
     content_md: str | None = None,
 ) -> ArtifactRead:
-    """Bearbeitet EINEN Block eines doc-Artifacts am Anker (optimistisch).
+    """Aendert einen Block eines WorkArea-Dokuments am Anker, mit `expected_rev`.
 
-    `anchor` ist die 8-stellige `block_id` — aus `read_artifact` (dort als
-    `[#block_id]` annotiert) oder aus einem Suchtreffer-Anker
-    `<artifact_id>#<block_id>` (beide Formen werden akzeptiert). `op`:
-    'replace' ersetzt den Block, 'insert_after' fuegt `content_md` als neue
-    Bloecke dahinter ein, 'delete' entfernt ihn (dann ohne `content_md`).
-
-    `expected_rev` ist die zuletzt GELESENE `rev` des Artifacts. Ist sie
-    veraltet, antwortet der Server 409 `rev_conflict` — die AKTUELLE rev
-    steht im Fehlerdetail. Dann: Artifact via `read_artifact` neu lesen,
-    pruefen, ob dein Edit noch passt, und den Patch mit der aktuellen rev
-    wiederholen — nicht blind die rev aus dem Fehler einsetzen. Fuer reines
-    Anhaengen ist `append_artifact` konfliktfrei die bessere Wahl.
+    `op`: `replace`, `insert_after` (mit `content_md`) oder `delete`. Bei 409 `rev_conflict` neu
+    lesen, den Edit pruefen und mit der aktuellen rev wiederholen. Zum Anhaengen besser
+    `append_artifact`.
     """
     client = await _client()
     try:
@@ -179,25 +156,11 @@ async def patch_artifact(
 
 @with_tool_log("read_artifact")
 async def read_artifact(artifact_id: str, anchor: str | None = None) -> ArtifactMarkdown:
-    """Liest ein doc-Artifact als Markdown mit `[#block_id]`-Anker-Annotationen.
+    """Liest ein WorkArea-Dokument als Markdown mit `[#block_id]`-Ankern.
 
-    Jeder Block ist mit seinem stabilen Anker annotiert — der `block_id`-Teil
-    der Anker-Sprache `<artifact_id>#<block_id>` (Suchtreffer, Patches).
-    Akzeptiert die reine `block_id` oder den vollen Treffer-Anker.
-
-    `anchor` schneidet zu, und zwar so, wie du es an der Stelle brauchst:
-
-    - **Anker aus einem Suchtreffer** (der Anfang einer Passage): du bekommst
-      die GANZE Passage — Ueberschrift plus zugehoerigen Text bis zur
-      naechsten Ueberschrift. Das ist der Folgeschritt nach
-      `search_workarea`, statt das ganze Dokument zu laden.
-    - **Anker mitten in einer Passage**: du bekommst genau diesen einen Block
-      — der Blick, den du vor einem `patch_artifact` willst.
-
-    Was du bekommen hast, siehst du an den `[#…]`-Ankern in der Antwort: sie
-    stehen an jedem gelieferten Block. Die Antwort traegt zudem die aktuelle
-    `rev` — nutze sie als `expected_rev` fuer einen anschliessenden
-    `patch_artifact`.
+    `anchor` (block_id oder `<artifact_id>#<block_id>`) schneidet zu: der Anker eines
+    Suchtreffers liefert die ganze Passage bis zur naechsten Ueberschrift, ein Anker mitten im
+    Text genau diesen Block. Die Antwort traegt `rev` als `expected_rev` fuer `patch_artifact`.
     """
     client = await _client()
     block = None if anchor is None else _block_id(anchor)
@@ -206,15 +169,10 @@ async def read_artifact(artifact_id: str, anchor: str | None = None) -> Artifact
 
 @with_tool_log("list_artifacts")
 async def list_artifacts(area_id: str | None = None) -> list[ArtifactRead]:
-    """Listet die Artifact-Metadaten einer Area; Einstieg ist `search_workarea`.
+    """Listet die Dokumente einer WorkArea (Titel, Typ, rev, Zeitpunkt), ohne Inhalt.
 
-    Nur fuer die vollstaendige Bestandsaufnahme kleiner Areas. Liefert
-    Titel, Typ, `rev`, `occurred_at` und `sensitivity`, keine Inhalte.
-    `area_id=None` = deine
-    private Area. Inhalte danach gezielt via `read_artifact(artifact_id)`
-    laden; suchst du eine bestimmte Stelle, liefert `search_workarea` Anker
-    (`<artifact_id>#<block_id>`) + Snippet, ohne dass du Dokumente
-    durchgehen musst.
+    Nur fuer kleine Areas; eine Stelle findet `search_workarea`. `area_id=None` ist deine
+    private Area.
     """
     client = await _client()
     parsed_area = parse_area_id(area_id)
@@ -225,13 +183,10 @@ async def list_artifacts(area_id: str | None = None) -> list[ArtifactRead]:
 
 @with_tool_log("delete_artifact")
 async def delete_artifact(artifact_id: str) -> str:
-    """Loescht ein WorkArea-Artifact endgueltig (inkl. seiner Such-Chunks).
+    """Loescht ein WorkArea-Dokument endgueltig, ohne Papierkorb.
 
-    Es gibt KEINEN Papierkorb und keine Versionierung in der WorkArea —
-    geloescht ist geloescht. Nutze das nur fuer Rohmaterial, das nachweislich
-    obsolet ist (Duplikat, Fehl-Ingest, ueberholter Zwischenstand). Inhalte,
-    die dauerhaft gebraucht werden, gehoeren VOR dem Loeschen als kuratierte
-    Resource gesichert. Antwort ist eine kurze Bestaetigung.
+    Nur fuer nachweislich Obsoletes; Dauerhaftes vorher als Resource sichern
+    (`promote_artifact`).
     """
     client = await _client()
     parsed = _parse_uuid(artifact_id, "Artifact")
@@ -248,20 +203,11 @@ async def ingest(
     occurred_at: datetime | None = None,
     sensitivity: Sensitivity | None = None,
 ) -> IngestResult:
-    """Ingestiert eine Datei (`file_b64`) ODER eine `url` in die WorkArea.
+    """Nimmt eine Datei (`file_b64`) oder `url` in die WorkArea auf und macht sie durchsuchbar.
 
-    Der Server extrahiert den Text (PDF, HTML, Text/Markdown — sonst 422)
-    und legt in EINER Transaktion an: den Roh-Blob (content-addressed,
-    SHA-256), ein blob-Artifact und ein doc-Artifact mit dem Text als
-    durchsuchbare Bloecke inkl. Such-Chunks. Genau EINE Quelle angeben; bei
-    `file_b64` moeglichst auch `filename`. Dedup laeuft ueber den
-    Inhalts-Hash: derselbe Inhalt in derselben Area liefert
-    `deduplicated=True` mit den bestehenden IDs — idempotent, kein Fehler.
-
-    `area_id=None` = deine private Area. `occurred_at` ist der fachliche
-    Zeitpunkt des Inhalts (z. B. Rechnungsdatum), nicht der Abruf-Zeitpunkt.
-    Danach findet `search_workarea` die Passagen (Anker
-    `<artifact_id>#<block_id>`), `read_artifact` liest das doc-Artifact.
+    Genau eine Quelle; PDF, HTML, Text oder Markdown. Derselbe Inhalt in derselben Area liefert
+    `deduplicated=True` mit den bestehenden IDs. `occurred_at` ist der fachliche Zeitpunkt.
+    Danach `search_workarea`.
     """
     client = await _client()
     try:
@@ -279,16 +225,11 @@ async def ingest(
 
 @with_tool_log("search_workarea")
 async def search_workarea(query: str, area_id: str | None = None) -> list[WorkAreaSearchHit]:
-    """DER Einstieg in die WorkArea: Volltextsuche mit Anker + Snippet.
+    """Volltextsuche in der WorkArea (Rohmaterial, Notizen, Ingest) mit Anker und Snippet.
 
-    Beginne hier statt bei `list_artifacts`. Jeder Treffer traegt `snippet`
-    (die Passage), `title`, `area_id` und den Anker
-    `<artifact_id>#<block_id>` (ADR-0021): damit liefert
-    `read_artifact(artifact_id, anchor)` direkt DIESE PASSAGE im Volltext,
-    ohne das ganze Dokument zu laden. Durchsucht werden nur Areas, die du lesen
-    darfst; `area_id` schraenkt optional auf eine Area ein — ausserhalb
-    deines Scopes ist das Ergebnis leer (kein Existenz-Orakel). Findest du
-    nichts, sag das offen, statt zu raten.
+    Einstieg statt `list_artifacts`. Der Anker `<artifact_id>#<block_id>` geht direkt an
+    `read_artifact`. `area_id` schraenkt ein; durchsucht wird nur, was du lesen darfst. Nichts
+    gefunden: sag es offen.
     """
     client = await _client()
     return await wa_api.search_workarea(client, query, parse_area_id(area_id))

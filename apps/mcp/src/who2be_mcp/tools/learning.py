@@ -110,13 +110,10 @@ async def list_test_cases(
     entity_type: EntityType | None = None,
     entity_id: str | None = None,
 ) -> list[TestCaseRead]:
-    """Listet Prueffaelle (Eingabe + erwartetes Verhalten + check_kind).
+    """Listet Prueffaelle: Eingabe, erwartetes Verhalten, `check_kind`.
 
-    Ohne `agent_id` bekommst du die Prueffaelle deines EIGENEN Agenten. Einen
-    anderen Agenten per `agent_id` darfst du nur mit der Capability
-    `case_triage` abfragen — sonst lehnt der Server ab (missing_capability).
-    `entity_type`/`entity_id` filtern auf direkt an ein Element gebundene
-    Faelle.
+    Ohne `agent_id` die des eigenen Agenten; fremde nur mit `case_triage`. `entity_type` und
+    `entity_id` filtern auf ein Element.
     """
     parsed_agent = None if agent_id is None else _parse_uuid(agent_id, "Agent")
     parsed_entity = None if entity_id is None else _parse_uuid(entity_id, "Element")
@@ -134,16 +131,12 @@ async def submit_test_results(
     model_provider: str | None = None,
     model_name: str | None = None,
 ) -> list[TestRunRead]:
-    """Meldet Prueffall-Ergebnisse fuer EINE Elementversion (Selbstauskunft).
+    """Meldet Prueffall-Ergebnisse fuer eine Elementversion (Selbstauskunft).
 
-    Je Ergebnis: `test_case_id`, `runs_total` (>= 1), `runs_passed`,
-    `verdict` (pass|fail|error), `output_excerpt`. `verdict='pass'` NUR bei
-    runs_passed = runs_total, sonst 422 test_run_verdict_inconsistent.
-    `human_rule`-Faelle bewertest du NICHT: nur Ausgabe in `output_excerpt`
-    und `verdict='error'` — die Bewertung macht ein Mensch im Web. Der
-    Server speichert alles als `client_self_report`; ein Herkunftsfeld gibt
-    es nicht. Die Charge gilt ganz oder gar nicht. Braucht `test_report`.
-    Nennt `model_provider`/`model_name`, womit du geprueft hast.
+    Je Ergebnis `test_case_id`, `runs_total`, `runs_passed`, `verdict` und `output_excerpt`;
+    `pass` nur, wenn alle Laeufe bestanden. `human_rule`-Faelle nicht bewerten: Ausgabe
+    mitschicken, `verdict='error'`. Alles oder nichts. Braucht `test_report`; nenne
+    `model_provider` und `model_name`.
     """
     try:
         data = TestRunBatch(
@@ -171,21 +164,11 @@ async def propose_memory_change(
     reason: str,
     new_fact: str | None = None,
 ) -> MemoryProposalRead:
-    """Schlaegt vor, einen Gedaechtniseintrag zu aendern oder zu loeschen.
+    """Schlaegt vor, einen Gedaechtnis-Eintrag zu aendern oder zu loeschen.
 
-    Fuer Eintraege, die du per `search_memory`/`list_memories` siehst: dein
-    Agentengedaechtnis oder das Nutzergedaechtnis deines Nutzers. Nutze es,
-    wenn ein Fakt veraltet, falsch oder doppelt ist — statt einen
-    widersprechenden neuen Fakt per `save_memory` anzulegen.
-
-    `action`: `change` (dann `new_fact` Pflicht, 3. Person, max. 300 Zeichen)
-    oder `delete` (ohne `new_fact`). `reason` (Pflicht, max. 200 Zeichen): woran
-    du erkennst, dass der Eintrag nicht mehr stimmt — ein Mensch liest das.
-
-    Es aendert sich nichts sofort: der Vorschlag entsteht immer als
-    `pending` und gilt erst, wenn ein Mensch ihn annimmt — auch unter
-    automatischer Freigabe. Sag dem Nutzer, dass er offen ist. Fremde oder
-    nicht abrufbare Eintraege beantwortet der Server mit `memory_not_found`.
+    Statt einen widersprechenden Eintrag anzulegen. `action`: `change` (mit `new_fact`, max. 300
+    Zeichen) oder `delete`. `reason` (Pflicht, max. 200 Zeichen) liest ein Mensch. Wirkt erst
+    nach Freigabe.
     """
     try:
         data = MemoryProposalCreate(
@@ -278,13 +261,9 @@ async def report_case(
 ) -> CaseRead:
     """Meldet einen Fall: ein Agent hat sich in einer Situation falsch verhalten.
 
-    Pflicht: `situation` (was war los), `behavior` (was der Agent tat),
-    `expected_behavior` (was richtig gewesen waere). Optional `impact` (Folge),
-    `severity` (low|medium|high), `signal`, `source_ref` (Fundstelle).
-
-    Ohne `subject_agent_id` meldest du einen Fall ueber DICH SELBST; mit ihm
-    ueber einen anderen Agenten dieses Workspace. Braucht `feedback_write`.
-    Ein Fall aendert nie selbst etwas: ein Mensch triagiert ihn.
+    Pflicht `situation`, `behavior`, `expected_behavior`; optional `impact`, `severity`,
+    `signal`, `source_ref`. Ohne `subject_agent_id` geht es um dich selbst. Braucht
+    `feedback_write`; ein Mensch triagiert.
     """
     agent_id = None if subject_agent_id is None else _parse_uuid(subject_agent_id, "Agent")
     client = await _client()
@@ -319,16 +298,11 @@ async def report_case(
 async def submit_case_statement(
     case_id: str, followed_instruction: str, missing_information: str, conflict: str
 ) -> CaseStatementRead:
-    """Gibt deine Schilderung zu einem Fall ab, in dem es um DICH geht.
+    """Gibt deine Schilderung zu einem Fall ab, in dem es um dich geht.
 
-    Drei Felder (je max. 2000 Zeichen, leer erlaubt): `followed_instruction`
-    (welcher Anweisung du gefolgt bist), `missing_information` (was dir
-    fehlte), `conflict` (welche Vorgaben sich widersprachen). Keine
-    Selbstbewertung — beschreibe, nicht urteile.
-
-    Nur der betroffene Agent darf schildern (sonst
-    `case_statement_not_subject`). Eine neue Schilderung ersetzt die alte in
-    der Anzeige, die alte bleibt erhalten.
+    `followed_instruction`, `missing_information`, `conflict`, je max. 2000 Zeichen.
+    Beschreiben, nicht bewerten. Nur der betroffene Agent darf; eine neue Schilderung ersetzt
+    die alte in der Anzeige.
     """
     parsed = _parse_uuid(case_id, "Fall")
     try:
@@ -352,16 +326,10 @@ async def list_cases(
     status: CaseStatus | list[CaseStatus] | None = None,
     format: str = "text",
 ) -> list[CaseRead] | str:
-    """Listet Faelle, neueste zuerst (bis 50).
+    """Listet Faelle, neueste zuerst (bis 50); braucht `case_triage`.
 
-    Ohne `agent_id` alle Faelle, die du sehen darfst, mit `agent_id` die ueber
-    diesen Agenten; `status` filtert, ein Wert oder eine Liste (ODER), z. B.
-    ["open", "triaged", "in_progress", "reopened"] fuer alle offenen. Werte:
-    open, triaged, in_progress, addressed, verified, dismissed, reopened.
-    Fuer `case_triage`.
-
-    `format="text"` (Default): Markdown, Felder gekuerzt. Volltext und
-    strukturelle Verarbeitung: `format="full"`.
+    `agent_id` und `status` (Wert oder Liste) filtern. Status: open, triaged, in_progress,
+    addressed, verified, dismissed, reopened. Default `format="text"` mit gekuerzten Feldern.
     """
     from who2be_mcp.server import _validate_response_format
 
@@ -376,13 +344,10 @@ async def list_cases(
 async def assign_case_elements(
     case_id: str, elements: list[CaseElementInput]
 ) -> list[CaseElementRead]:
-    """Ordnet einem Fall die Elemente zu, an denen er liegt (Replace).
+    """Ordnet einem Fall die betroffenen Elemente zu; die Liste ersetzt alle, `[]` leert.
 
-    Je Eintrag `target` (persona, playbook, resource, external_tool,
-    system_prompt_template, memory — dann `entity_id` Pflicht — oder
-    tool_policy, model_limit ohne `entity_id`). Die Liste ERSETZT die bisherige
-    Zuordnung vollstaendig; `[]` leert sie. Braucht `case_triage`.
-    Antwort: die neue Zuordnung.
+    Je Eintrag `target`: persona, playbook, resource, external_tool, system_prompt_template oder
+    memory mit `entity_id`; tool_policy und model_limit ohne. Braucht `case_triage`.
     """
     parsed = _parse_uuid(case_id, "Fall")
     try:
