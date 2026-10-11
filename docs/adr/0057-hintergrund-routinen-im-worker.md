@@ -322,6 +322,11 @@ die Variable an `api` durch; die Cloud-Overlays erben sie.
 ursprüngliche Regel zusätzlich gelten. Sie würde die Allowlist ergänzen,
 nicht ersetzen.
 
+*Stand:* Die Login-Zuordnung ist inzwischen behoben
+(`bootstrap_service.claim_bootstrap_org`, erster `/v1/me` mit bestätigter
+Adresse). Die Bootstrap-Org trägt weiterhin keinen dauerhaften Marker; die
+Betreiber-Regel bleibt deshalb unverändert die Allowlist.
+
 ## 8. Migrationspfad: externe Zeitpläne, CLIs bleiben
 
 **CLIs bleiben (W4).** `who2be-purge` und `who2be-memory-expire` bleiben als
