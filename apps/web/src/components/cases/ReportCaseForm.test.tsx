@@ -673,11 +673,11 @@ describe('CaseFromOriginDialog (D6e)', () => {
     extra: Partial<Parameters<typeof CaseFromOriginDialog>[0]> = {},
   ) {
     return renderDialog(
-      <CaseFromOriginDialog agent={agent} origin={origin} label="Fall daraus machen" {...extra} />,
+      <CaseFromOriginDialog agent={agent} origin={origin} label="Rückmeldung daraus machen" {...extra} />,
     )
   }
 
-  async function open(label = 'Fall daraus machen') {
+  async function open(label = 'Rückmeldung daraus machen') {
     fireEvent.click(screen.getByRole('button', { name: label }))
     return screen.findByTestId('report-case-dialog')
   }
@@ -687,10 +687,10 @@ describe('CaseFromOriginDialog (D6e)', () => {
     fill(/Was hat der Agent getan\?/, 'Ohne Tests gepusht.')
   }
 
-  it('lesson: Zitat als blockquote mit Quelle und Datum, Felder leer, Titel und Knopf „Fall anlegen“', async () => {
+  it('lesson: Zitat als blockquote mit Quelle und Datum, Felder leer, Titel und Knopf „Rückmeldung anlegen“', async () => {
     renderOrigin(LESSON)
     const dialog = await open()
-    expect(within(dialog).getByRole('heading', { name: 'Fall anlegen' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Rückmeldung anlegen' })).toBeInTheDocument()
     const origin = within(dialog).getByTestId('report-case-origin')
     expect(within(origin).getByRole('heading', { name: 'Ausgangspunkt' })).toBeInTheDocument()
     const quote = origin.querySelector('blockquote')
@@ -702,7 +702,7 @@ describe('CaseFromOriginDialog (D6e)', () => {
     for (const label of [/Was war die Lage\?/, /Was hat der Agent getan\?/, /Was hättest du erwartet\?/]) {
       expect(within(dialog).getByLabelText(label)).toHaveValue('')
     }
-    expect(within(dialog).getByRole('button', { name: 'Fall anlegen' })).toHaveAttribute(
+    expect(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' })).toHaveAttribute(
       'type',
       'submit',
     )
@@ -738,7 +738,7 @@ describe('CaseFromOriginDialog (D6e)', () => {
     const dialog = await open()
     fillSituationAndBehavior()
     fireEvent.click(within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1))
     expect(onCreated.mock.calls[0][0]).toMatchObject({ id: 'case-7' })
@@ -767,10 +767,10 @@ describe('CaseFromOriginDialog (D6e)', () => {
     const dialog = await open()
     fillSituationAndBehavior()
     fill(/Was hättest du erwartet\?/, 'Lokal testen.')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     expect(await within(dialog).findByTestId('error-alert')).toHaveTextContent(
-      'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall.',
+      'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder ist schon eine Rückmeldung geworden.',
     )
     expect(within(dialog).getByLabelText(/Was hättest du erwartet\?/)).toHaveValue('Lokal testen.')
     expect(onCreated).not.toHaveBeenCalled()
@@ -796,10 +796,10 @@ describe('CaseFromOriginDialog (D6e)', () => {
           text: 'Changelog fehlt immer.',
           date: '2026-09-20T08:00:00Z',
         }}
-        label="In Fall übernehmen"
+        label="In Rückmeldung übernehmen"
       />,
     )
-    const dialog = await open('In Fall übernehmen')
+    const dialog = await open('In Rückmeldung übernehmen')
     const origin = within(dialog).getByTestId('report-case-origin')
     expect(origin.querySelector('cite')?.textContent).toMatch(
       /^Altes Feedback zu Playbook Release vom .*2026/,
@@ -808,7 +808,7 @@ describe('CaseFromOriginDialog (D6e)', () => {
     await waitFor(() => expect(select).toHaveValue('a2'))
     fillSituationAndBehavior()
     fireEvent.click(within(dialog).getByRole('button', { name: 'In „Erwartet“ übernehmen' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     await waitFor(() => expect(bodies).toHaveLength(1))
     expect(bodies[0]).toMatchObject({ agent_id: 'a2', expected_behavior: 'Changelog fehlt immer.' })

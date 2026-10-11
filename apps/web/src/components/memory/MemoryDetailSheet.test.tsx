@@ -584,11 +584,11 @@ describe('MemoryDetailSheet (C5c-1)', () => {
   })
 })
 
-// D6e (Delta-Spec „Gedaechtnis-Anschluss“, S6): „Fall daraus machen“ nur bei
+// D6e (Delta-Spec „Gedaechtnis-Anschluss“, S6): „Rückmeldung daraus machen“ nur bei
 // Lernvorschlag + pending + ab editor, vor „Ablehnen“; das Sheet bleibt nach
-// dem Anlegen offen und zeigt „Zu Fall geworden“ mit Link „Zum Fall“.
+// dem Anlegen offen und zeigt „Zur Rückmeldung geworden“ mit Link „Zur Rückmeldung“.
 describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
-  const CONVERT = 'Fall daraus machen'
+  const CONVERT = 'Rückmeldung daraus machen'
 
   function fillCase() {
     const dialog = screen.getByTestId('report-case-dialog')
@@ -602,7 +602,7 @@ describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
   }
 
   it.each([['editor'], ['admin']] as const)(
-    '%s sieht „Fall daraus machen“ als default-Aktion vor „Ablehnen“',
+    '%s sieht „Rückmeldung daraus machen“ als default-Aktion vor „Ablehnen“',
     async (role) => {
       stubApi({ items: [lesson()] })
       const sheet = await openSheet(ENTRY, role)
@@ -635,7 +635,7 @@ describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
     expect(within(sheet).queryByRole('button', { name: CONVERT })).toBeNull()
   })
 
-  it('öffnet das Formular mit Zitat und leeren Feldern, Knopf „Fall anlegen“', async () => {
+  it('öffnet das Formular mit Zitat und leeren Feldern, Knopf „Rückmeldung anlegen“', async () => {
     stubApi({ items: [lesson()] })
     const sheet = await openSheet()
     fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
@@ -651,26 +651,26 @@ describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
     )
     expect(within(dialog).getByLabelText(/Was hättest du erwartet\?/)).toHaveValue('')
     expect(within(dialog).getByLabelText(/Was war die Lage\?/)).toHaveValue('')
-    expect(within(dialog).getByRole('button', { name: 'Fall anlegen' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' })).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Fall melden' })).toBeNull()
   })
 
-  it('legt den Fall über convert an; das Sheet bleibt offen mit „Zu Fall geworden“ und „Zum Fall“', async () => {
+  it('legt den Fall über convert an; das Sheet bleibt offen mit „Zur Rückmeldung geworden“ und „Zur Rückmeldung“', async () => {
     const { calls } = stubApi({ items: [lesson()] })
     const sheet = await openSheet()
     fireEvent.click(within(sheet).getByRole('button', { name: CONVERT }))
     await screen.findByTestId('report-case-dialog')
     const dialog = fillCase()
     fireEvent.click(within(dialog).getByRole('button', { name: /In „Erwartet“ übernehmen/ }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     const link = await within(sheet).findByTestId('detail-to-case')
-    expect(link).toHaveTextContent('Zum Fall')
+    expect(link).toHaveTextContent('Zur Rückmeldung')
     expect(link).toHaveAttribute('href', '/w/ws-1/feedback/cases/case-9')
     await waitFor(() => expect(link).toHaveFocus())
     expect(screen.queryByTestId('report-case-dialog')).toBeNull()
     expect(screen.getByTestId('memory-detail-sheet')).toBeInTheDocument()
-    expect(within(sheet).getByText('Zu Fall geworden')).toBeInTheDocument()
+    expect(within(sheet).getByText('Zur Rückmeldung geworden')).toBeInTheDocument()
     expect(within(sheet).queryByRole('button', { name: CONVERT })).toBeNull()
     expect(within(sheet).queryByRole('button', { name: 'Ablehnen' })).toBeNull()
 
@@ -703,10 +703,10 @@ describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
     fireEvent.change(within(dialog).getByLabelText(/Was hättest du erwartet\?/), {
       target: { value: 'Lokal testen.' },
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
     expect(
       await within(dialog).findByText(
-        'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall.',
+        'Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder ist schon eine Rückmeldung geworden.',
       ),
     ).toBeInTheDocument()
     expect(within(dialog).getByLabelText(/Was war die Lage\?/)).toHaveValue(
@@ -715,7 +715,7 @@ describe('MemoryDetailSheet: Lernvorschlag wird Fall (D6e)', () => {
     expect(within(sheet).queryByTestId('detail-to-case')).toBeNull()
   })
 
-  it('zeigt „Zum Fall“ bei einem schon umgewandelten Lernvorschlag', async () => {
+  it('zeigt „Zur Rückmeldung“ bei einem schon umgewandelten Lernvorschlag', async () => {
     stubApi({ items: [lesson({ status: 'converted', converted_case_id: 'case-1' })] })
     const sheet = await openSheet()
     expect(within(sheet).getByTestId('detail-to-case')).toHaveAttribute(
