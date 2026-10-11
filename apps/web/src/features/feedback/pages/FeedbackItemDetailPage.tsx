@@ -14,6 +14,7 @@ import { DeleteFeedbackButton } from '@/components/feedback/DeleteFeedbackButton
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDateTime } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
@@ -219,7 +220,7 @@ export function FeedbackItemDetailPage() {
                       </span>
                     </DefRow>
                     <DefRow label={t('itemDetail.submitted')}>
-                      {new Date(detail.created_at).toLocaleString()}
+                      {formatDateTime(detail.created_at)}
                     </DefRow>
                   </dl>
                 </CardContent>
@@ -331,7 +332,7 @@ export function FeedbackItemDetailPage() {
                               />
                               <span className="text-xs text-muted-foreground">{actorLabel}</span>
                               <span className="ml-auto text-xs text-muted-foreground">
-                                {new Date(ev.created_at).toLocaleString()}
+                                {formatDateTime(ev.created_at)}
                               </span>
                             </div>
                             {ev.note !== null && ev.note !== '' ? (

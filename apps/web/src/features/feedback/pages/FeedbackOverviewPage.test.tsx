@@ -269,7 +269,7 @@ describe('FeedbackOverviewPage — Kuration', () => {
     expect(meterColumn.className).not.toMatch(/(^|\s)min-w-\[7\.5rem\](\s|$)/)
 
     // Spalte 3 (Datum): rechtsbuendig erst ab `md`, sonst im Textfluss.
-    const dateColumn = screen.getByText(new Date('2026-06-20T10:00:00Z').toLocaleDateString())
+    const dateColumn = screen.getByText(new Date('2026-06-20T10:00:00Z').toLocaleDateString('de'))
     expect(dateColumn).toHaveClass('md:w-24', 'md:flex-none', 'md:text-right')
     expect(dateColumn.className).not.toMatch(/(^|\s)w-24(\s|$)/)
   })

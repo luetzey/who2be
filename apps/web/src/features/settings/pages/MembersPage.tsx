@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/table'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { copyToClipboard } from '@/lib/clipboard'
+import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { isDowngrade, ROLE_ORDER, roleLabel } from '@/lib/roles'
 
@@ -129,7 +130,7 @@ function MemberListItem({ member, onChangeRole, onRemove }: MemberListItemProps)
       >
         <dl className="flex gap-2 text-sm">
           <dt className="text-muted-foreground">{t('members.list.colJoined')}</dt>
-          <dd>{new Date(member.joined_at).toLocaleDateString()}</dd>
+          <dd>{formatDate(member.joined_at)}</dd>
         </dl>
         <Button
           type="button"
@@ -322,7 +323,7 @@ export function MembersPage() {
                         </Select>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {new Date(member.joined_at).toLocaleDateString()}
+                        {formatDate(member.joined_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -420,7 +421,7 @@ export function MembersPage() {
                       <div className="font-medium break-all">{invitation.email}</div>
                       <div className="text-xs text-muted-foreground">
                         {roleLabel(invitation.role)} · {t('members.invitations.expiresLabel')}{' '}
-                        {new Date(invitation.expires_at).toLocaleDateString()}
+                        {formatDate(invitation.expires_at)}
                       </div>
                     </Stack>
                     <div className="flex flex-wrap gap-2">

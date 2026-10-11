@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useFeedbackOverview } from '@/hooks/useFeedback'
+import { formatDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 import { CaseList } from '../components/CaseList'
@@ -213,7 +214,7 @@ function CurationPanel({ reloadNonce }: { reloadNonce: number }) {
                           </span>
                           <span className="text-xs text-muted-foreground md:w-24 md:flex-none md:text-right">
                             {item.last_activity_at !== null
-                              ? new Date(item.last_activity_at).toLocaleDateString()
+                              ? formatDate(item.last_activity_at)
                               : '—'}
                           </span>
                           {/* Rein dekorativer Affordanz-Pfeil — im gestapelten

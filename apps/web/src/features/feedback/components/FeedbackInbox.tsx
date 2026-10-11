@@ -18,6 +18,7 @@ import { MetaPill } from '@/components/data/MetaPill'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useFeedbackItems } from '@/hooks/useFeedback'
+import { formatDate } from '@/lib/dates'
 import type { FacetSpec, StatusChipOption } from '@/lib/listFilter'
 
 import { entityMeta } from '../lib/entityMeta'
@@ -280,7 +281,7 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
                     <>
                       <MetaPill icon={SourceIcon}>
                         {item.agent_id !== null ? t('feedback:panel.agent') : t('feedback:panel.human')} ·{' '}
-                        {new Date(item.created_at).toLocaleDateString()}
+                        {formatDate(item.created_at)}
                       </MetaPill>
                       <MetaPill>{t(`feedback:overview.type.${item.entity_type}`)}</MetaPill>
                     </>

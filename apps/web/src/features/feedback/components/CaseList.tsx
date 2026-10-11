@@ -15,6 +15,7 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate } from '@/lib/dates'
 import type { StatusChipOption } from '@/lib/listFilter'
 
 // Chip-Werte (Filter-Standard §3.2). „Offen“ ist ein Sammel-Chip aus `open`
@@ -280,7 +281,7 @@ function CaseRow({ item, agents, linkQuery }: { item: CaseRead; agents: Agent[];
           <MetaPill icon={SourceIcon}>
             {source}
             {selfReported ? ` ${t('feedback:cases.row.selfReported')}` : ''} ·{' '}
-            {new Date(item.created_at).toLocaleDateString()}
+            {formatDate(item.created_at)}
           </MetaPill>
           {item.signal !== null ? <MetaPill>{t(`feedback:signal.${item.signal}`)}</MetaPill> : null}
           {item.severity === 'high' ? (
