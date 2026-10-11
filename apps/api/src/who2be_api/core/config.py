@@ -227,6 +227,21 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("WHO2BE_BOOTSTRAP_ADMIN_EMAIL", "bootstrap_admin_email"),
     )
+    # Spiegel der GoTrue-Signup-Schalter fuer die API (Owner-Entscheidung B1a,
+    # 2026-10-11). Der erste Login uebernimmt die Bootstrap-Org nur, wenn die
+    # E-Mail-Bestaetigung Pflicht ist (AUTOCONFIRM=false) ODER Registrierungen
+    # geschlossen sind (DISABLE_SIGNUP=true). Die Defaults sind die von GoTrue
+    # im Basis-Stack (autoconfirm an, Signup offen) — fehlt der Spiegel am
+    # api-Dienst, gibt es also keine Uebernahme (fail-closed). Muss zum Wert am
+    # auth-Dienst passen.
+    gotrue_mailer_autoconfirm: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("GOTRUE_MAILER_AUTOCONFIRM", "gotrue_mailer_autoconfirm"),
+    )
+    gotrue_disable_signup: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("GOTRUE_DISABLE_SIGNUP", "gotrue_disable_signup"),
+    )
     # MFA-Haertung On-Prem (SEC-1, Standards-Review 2026-07-08): `require_aal2`
     # laesst On-Prem/Dev-JWTs OHNE `aal`-Claim (Legacy-/Magic-Link-/Test-Tokens)
     # per Default durch (fail-open, nur mit Warn-Log `aal_missing_onprem`).

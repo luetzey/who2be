@@ -80,6 +80,13 @@ services:
       # kein `env_file`, eine nur in `.env` gesetzte Variable erreicht den
       # Container nicht (Guard: apps/api/tests/test_compose_env_promises.py).
       WHO2BE_DOCS_PUBLIC: ${WHO2BE_DOCS_PUBLIC:-false}
+      # Spiegel der Signup-Schalter des Supabase-Stacks (supabase/.env) fuer
+      # die Uebernahme der Bootstrap-Org beim ersten Login: sie setzt
+      # GOTRUE_MAILER_AUTOCONFIRM=false oder GOTRUE_DISABLE_SIGNUP=true voraus.
+      # Ohne Eintrag in dieser .env gilt der vorsichtige Default (keine
+      # Uebernahme). Werte muessen zu supabase/.env passen.
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       # Betreiber-Allowlist (ADR-0057 §7, Nachtrag 2026-10-10): kommaseparierte
       # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
       # Editionen, deshalb hier im Basis-Stack und nicht im Cloud-Overlay;

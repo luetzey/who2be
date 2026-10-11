@@ -305,6 +305,12 @@ services:
       CORS_ORIGINS: https://app.${DOMAIN}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       WHO2BE_EDITION: onprem
+      # Spiegel der Signup-Schalter des auth-Dienstes, gleiche Variablen und
+      # Defaults wie dort: die Uebernahme der Bootstrap-Org beim ersten Login
+      # (WHO2BE_BOOTSTRAP_ADMIN_EMAIL) setzt GOTRUE_MAILER_AUTOCONFIRM=false oder
+      # GOTRUE_DISABLE_SIGNUP=true voraus.
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       # Betreiber-Allowlist (ADR-0057 §7, Nachtrag 2026-10-10): kommaseparierte
       # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
       # Editionen, deshalb im Basis-Stack; leer ⇒ niemand (fail-closed).

@@ -169,6 +169,114 @@ def _skip_without_db() -> None:
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
 
 
+def _safe_onprem(email: str) -> Settings:
+    """On-Prem mit Bestaetigungspflicht (B1a erfuellt), sonst Defaults."""
+    return Settings(edition="onprem", bootstrap_admin_email=email, gotrue_mailer_autoconfirm=False)
+
+
+# Owner-Entscheidung B1a (2026-10-11): uebernommen wird nur mit
+# GOTRUE_MAILER_AUTOCONFIRM=false ODER GOTRUE_DISABLE_SIGNUP=true.
+_GATE_MATRIX = [
+    # (autoconfirm, disable_signup, claim_erwartet)
+    (True, False, False),  # GoTrue-Default im Basis-Stack
+    (False, False, True),
+    (True, True, True),
+    (False, True, True),
+]
+_GATE_IDS = [
+    "autoconfirm-an_signup-offen",
+    "autoconfirm-aus_signup-offen",
+    "autoconfirm-an_signup-zu",
+    "autoconfirm-aus_signup-zu",
+]
+
+
+@pytest.mark.parametrize(("autoconfirm", "disable_signup", "expected"), _GATE_MATRIX, ids=_GATE_IDS)
+def test_bootstrap_claim_allowed_matrix(
+    autoconfirm: bool, disable_signup: bool, expected: bool
+) -> None:
+    settings = Settings(gotrue_mailer_autoconfirm=autoconfirm, gotrue_disable_signup=disable_signup)
+    assert bootstrap_service.bootstrap_claim_allowed(settings) is expected
+
+
+def test_gate_defaults_are_fail_closed_and_read_from_gotrue_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Spiegel am api-Dienst gilt der GoTrue-Default (autoconfirm an,
+    Signup offen) — also keine Uebernahme. Gelesen werden genau die
+    GoTrue-Namen, damit Compose denselben Wert an auth und api reichen kann."""
+    monkeypatch.delenv("GOTRUE_MAILER_AUTOCONFIRM", raising=False)
+    monkeypatch.delenv("GOTRUE_DISABLE_SIGNUP", raising=False)
+    defaults = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert defaults.gotrue_mailer_autoconfirm is True
+    assert defaults.gotrue_disable_signup is False
+    assert bootstrap_service.bootstrap_claim_allowed(defaults) is False
+
+    monkeypatch.setenv("GOTRUE_MAILER_AUTOCONFIRM", "false")
+    monkeypatch.setenv("GOTRUE_DISABLE_SIGNUP", "true")
+    from_env = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert from_env.gotrue_mailer_autoconfirm is False
+    assert from_env.gotrue_disable_signup is True
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(("autoconfirm", "disable_signup", "expected"), _GATE_MATRIX, ids=_GATE_IDS)
+def test_first_login_claims_only_with_safe_gotrue_config(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    autoconfirm: bool,
+    disable_signup: bool,
+    expected: bool,
+) -> None:
+    """Matrix ueber /v1/me: unsichere Konfiguration bedeutet kein Claim, keine
+    Fehlermeldung an den Nutzer (200 mit eigener Org) und genau ein WARN mit
+    beiden Variablen — ohne Adresse und ohne User-ID im Log."""
+    _skip_without_db()
+    email = f"boot-{uuid4().hex[:10]}@who2be.dev"
+    user = fresh_user_id()
+    placeholder = _deterministic_user_id(email)
+    org_id = _prepare(email, user, confirmed=True)
+    settings = Settings(
+        edition="onprem",
+        bootstrap_admin_email=email,
+        gotrue_mailer_autoconfirm=autoconfirm,
+        gotrue_disable_signup=disable_signup,
+    )
+    try:
+        with caplog.at_level("WARNING", logger=bootstrap_service.logger.name):
+            me = _login(monkeypatch, user, email, settings=settings)
+        warnings = [
+            r
+            for r in caplog.records
+            if r.name == bootstrap_service.logger.name and r.levelname == "WARNING"
+        ]
+        orgs = me["organizations"]
+        assert isinstance(orgs, list)
+        if expected:
+            assert _org_ids_of(user) == [org_id]
+            assert _org_ids_of(placeholder) == []
+            assert len(_audit_rows(org_id)) == 1
+            assert warnings == []
+        else:
+            # Normale eigene Org wie vor #921, Bootstrap-Org bleibt beim Platzhalter.
+            own = _org_ids_of(user)
+            assert len(own) == 1
+            assert org_id not in own
+            assert [o["id"] for o in orgs] == [str(own[0])]
+            assert _org_ids_of(placeholder) == [org_id]
+            assert _audit_rows(org_id) == []
+            assert len(warnings) == 1
+            text = warnings[0].getMessage()
+            assert "GOTRUE_MAILER_AUTOCONFIRM=true" in text
+            assert "GOTRUE_DISABLE_SIGNUP=false" in text
+            assert email not in text
+            assert email.split("@")[0] not in text
+            assert str(user) not in text
+            assert user.hex not in text
+    finally:
+        _cleanup(org_id, [user, placeholder])
+
+
 @pytest.mark.integration
 def test_first_login_of_bootstrap_admin_lands_in_bootstrap_org(
     monkeypatch: pytest.MonkeyPatch,
@@ -183,7 +291,7 @@ def test_first_login_of_bootstrap_admin_lands_in_bootstrap_org(
             monkeypatch,
             user,
             email,
-            settings=Settings(edition="onprem", bootstrap_admin_email=email),
+            settings=_safe_onprem(email),
         )
         # Der echte Login ist Owner der Bootstrap-Org und Admin ihres Workspaces,
         # es entsteht keine zweite Personal-Org.
@@ -212,7 +320,7 @@ def test_unconfirmed_email_does_not_take_over_bootstrap_org(
             monkeypatch,
             user,
             email,
-            settings=Settings(edition="onprem", bootstrap_admin_email=email),
+            settings=_safe_onprem(email),
         )
         assert org_id not in _org_ids_of(user)
         assert _org_ids_of(placeholder) == [org_id]
@@ -235,9 +343,34 @@ def test_other_confirmed_email_does_not_take_over_bootstrap_org(
             monkeypatch,
             other,
             email,
-            settings=Settings(edition="onprem", bootstrap_admin_email=f"x-{email}"),
+            settings=_safe_onprem(f"x-{email}"),
         )
         assert org_id not in _org_ids_of(other)
+        assert _org_ids_of(placeholder) == [org_id]
+    finally:
+        _cleanup(org_id, [other, placeholder])
+
+
+@pytest.mark.integration
+def test_ordinary_login_with_unsafe_config_logs_no_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Der WARN gilt nur dem Login der Bootstrap-Adresse; jeder andere Erst-Login
+    auf einer Instanz mit GoTrue-Defaults bleibt still."""
+    _skip_without_db()
+    email = f"boot-{uuid4().hex[:10]}@who2be.dev"
+    other = fresh_user_id()
+    placeholder = _deterministic_user_id(email)
+    org_id = _prepare(email, other, confirmed=True)
+    try:
+        with caplog.at_level("WARNING", logger=bootstrap_service.logger.name):
+            _login(
+                monkeypatch,
+                other,
+                email,
+                settings=Settings(edition="onprem", bootstrap_admin_email=f"x-{email}"),
+            )
+        assert [r for r in caplog.records if r.name == bootstrap_service.logger.name] == []
         assert _org_ids_of(placeholder) == [org_id]
     finally:
         _cleanup(org_id, [other, placeholder])
@@ -257,7 +390,11 @@ def test_login_is_unchanged_without_variable_or_in_cloud(
     user = fresh_user_id()
     placeholder = _deterministic_user_id(email)
     org_id = _prepare(email, user, confirmed=True)
-    settings = Settings(edition=edition, bootstrap_admin_email=email if with_variable else "")
+    settings = Settings(
+        edition=edition,
+        bootstrap_admin_email=email if with_variable else "",
+        gotrue_mailer_autoconfirm=False,
+    )
     try:
         _login(monkeypatch, user, email, settings=settings)
         assert org_id not in _org_ids_of(user)
@@ -293,7 +430,7 @@ def test_parallel_first_logins_end_in_exactly_one_org(monkeypatch: pytest.Monkey
     user = fresh_user_id()
     placeholder = _deterministic_user_id(email)
     org_id = _prepare(email, user, confirmed=True)
-    settings = Settings(edition="onprem", bootstrap_admin_email=email)
+    settings = _safe_onprem(email)
     monkeypatch.setattr(bootstrap_service, "get_settings", lambda: settings)
 
     async def _run() -> list[MeRead]:
@@ -330,7 +467,7 @@ def test_claim_writes_audit_row_and_account_purge_anonymizes_it(
             monkeypatch,
             user,
             email,
-            settings=Settings(edition="onprem", bootstrap_admin_email=email),
+            settings=_safe_onprem(email),
         )
         rows = _audit_rows(org_id)
         assert len(rows) == 1

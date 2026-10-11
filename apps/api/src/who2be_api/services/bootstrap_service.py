@@ -12,8 +12,11 @@ zufaellige UUID. Diese Naht schliesst `claim_bootstrap_org`: beim ersten
 `/v1/me` eines Kontos ohne Mitgliedschaft wandern die Mitgliedschaften des
 Platzhalters auf das Konto — aber nur, wenn dessen E-Mail in GoTrue
 **bestaetigt** ist und der Bootstrap-Adresse entspricht. Eine unbestaetigte
-Adresse uebernimmt nie eine Org. Die Tenancy-Tabellen tragen keine FK auf
-`auth.users`, daher ist der Seed eigenstaendig testbar.
+Adresse uebernimmt nie eine Org. Zusaetzlich muss GoTrue die Bestaetigung
+erzwingen (`GOTRUE_MAILER_AUTOCONFIRM=false`) oder Registrierungen geschlossen
+haben (`GOTRUE_DISABLE_SIGNUP=true`), siehe `bootstrap_claim_allowed`. Die
+Tenancy-Tabellen tragen keine FK auf `auth.users`, daher ist der Seed
+eigenstaendig testbar.
 """
 
 from __future__ import annotations
@@ -94,11 +97,19 @@ async def bootstrap_admin_if_needed(pool: asyncpg.Pool, settings: Settings | Non
     logger.info(
         "On-Prem-Bootstrap: Admin '%s' geseedet (org=%s). "
         "Magic-Link/Initialpasswort fuer diese Email senden; der erste Login "
-        "mit bestaetigter Adresse uebernimmt die Org.",
+        "mit bestaetigter Adresse uebernimmt die Org (nur mit "
+        "GOTRUE_MAILER_AUTOCONFIRM=false oder GOTRUE_DISABLE_SIGNUP=true).",
         email,
         org_id,
     )
     return True
+
+
+def bootstrap_claim_allowed(settings: Settings) -> bool:
+    """Owner-Entscheidung B1a: Uebernahme nur mit Bestaetigungspflicht oder
+    geschlossenen Registrierungen (`GOTRUE_MAILER_AUTOCONFIRM=false` ODER
+    `GOTRUE_DISABLE_SIGNUP=true`)."""
+    return (not settings.gotrue_mailer_autoconfirm) or settings.gotrue_disable_signup
 
 
 async def claim_bootstrap_org(
@@ -109,6 +120,9 @@ async def claim_bootstrap_org(
     Nur On-Prem, nur mit gesetzter `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` und nur, wenn
     die eigene GoTrue-Adresse (`w2b_self_account()`, Migrationen 0093/0094)
     **bestaetigt** ist und der Variable entspricht (ohne Gross-/Kleinschreibung).
+    Ausserdem nur bei `bootstrap_claim_allowed` (B1a); sonst bleibt es beim
+    normalen Personal-Seed und einem WARN mit beiden GoTrue-Variablen, ohne
+    Adresse oder User-ID im Log.
     Erwartet eine umgebende Transaktion (`scope_to_self` ist transaktionslokal).
     True = mindestens eine Mitgliedschaft uebernommen. Idempotent: nach der
     Uebernahme haelt der Platzhalter nichts mehr, ein zweiter Lauf ist ein No-Op.
@@ -135,6 +149,19 @@ async def claim_bootstrap_org(
     if row is None or not row["email_confirmed"]:
         return False
     if (row["email"] or "").strip().lower() != email:
+        return False
+    # Erst nach dem Adress-Abgleich pruefen: gewoehnliche Logins sollen keinen
+    # WARN ausloesen, nur der eine, der die Org uebernehmen wuerde.
+    if not bootstrap_claim_allowed(resolved):
+        logger.warning(
+            "On-Prem-Bootstrap: Org-Uebernahme beim ersten Login uebersprungen, "
+            "der Login bekommt eine eigene Org. Die Uebernahme setzt "
+            "GOTRUE_MAILER_AUTOCONFIRM=false oder GOTRUE_DISABLE_SIGNUP=true "
+            "voraus (am auth- UND am api-Dienst gesetzt); aktuell "
+            "GOTRUE_MAILER_AUTOCONFIRM=%s, GOTRUE_DISABLE_SIGNUP=%s.",
+            str(resolved.gotrue_mailer_autoconfirm).lower(),
+            str(resolved.gotrue_disable_signup).lower(),
+        )
         return False
 
     org_ids = await conn.fetch(
