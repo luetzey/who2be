@@ -42,26 +42,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CaseStatusDot } from '@/features/feedback/components/CaseList'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
-// Punkt-Token je Status wie in der Fall-Liste (Delta-Spec §0). `in_progress`
-// und `verified` gibt es in Phase D nicht; kommen sie doch, steht nur das Wort.
-const STATUS_TOKEN: Partial<Record<CaseStatus, string>> = {
-  open: 'draft',
-  reopened: 'draft',
-  triaged: 'review',
-  addressed: 'active',
-  dismissed: 'inactive',
-}
+// Status mit Erklaersatz unter dem Kopf (E-Delta §6.1): beide setzt nur der
+// Server, fuer alle Rollen sichtbar, ohne Link (der kommt mit E5h).
+const EXPLAINED_STATUSES: ReadonlySet<CaseStatus> = new Set<CaseStatus>(['in_progress', 'verified'])
 
-// Ereignisse mit eigenem Wort (Delta-Spec S8). Alles andere faellt auf
-// `cases.history.event.unknown` zurueck und wird nie roh angezeigt.
+// Ereignisse mit eigenem Wort (Delta-Spec S8, E-Delta §6.1). Alles andere
+// faellt auf `cases.history.event.unknown` zurueck und wird nie roh angezeigt.
 const KNOWN_EVENTS: ReadonlySet<CaseEventKind> = new Set<CaseEventKind>([
   'reported',
   'triaged',
+  'in_progress',
   'addressed',
+  'verified',
   'dismissed',
   'reopened',
   'element_assigned',
@@ -350,7 +347,6 @@ function StatusLabel({
   statusRef?: Ref<HTMLSpanElement>
 }) {
   const { t } = useTranslation('feedback')
-  const token = STATUS_TOKEN[status]
   const label =
     status === 'addressed'
       ? addressedTo !== null
@@ -367,21 +363,7 @@ function StatusLabel({
       className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       data-testid="case-status"
     >
-      {token ? (
-        <span
-          className={
-            status === 'addressed'
-              ? 'inline-block size-2 rounded-full border-2'
-              : 'inline-block size-2 rounded-full'
-          }
-          style={
-            status === 'addressed'
-              ? { borderColor: `var(--status-${token})` }
-              : { backgroundColor: `var(--status-${token})` }
-          }
-          aria-hidden="true"
-        />
-      ) : null}
+      <CaseStatusDot status={status} />
       {label}
     </span>
   )
@@ -636,14 +618,22 @@ export function CaseDetailPage() {
 
   const eventLabel = (event: CaseEvent): string => {
     if (!KNOWN_EVENTS.has(event.event)) return t('feedback:cases.history.event.unknown')
+    // Folgen der Nachkontrolle bzw. der Aktivierung setzt der Server (ADR-0053
+    // 3.3, F3 a): eigene Woerter, damit sie nicht wie ein Handgriff aussehen.
+    const bySystem = event.actor_kind === 'system'
     if (event.event === 'addressed') {
       const version = event.version_id !== null ? data.versions[event.version_id] : undefined
       return version !== undefined
-        ? t('feedback:cases.history.event.addressed', {
-            element: version.name,
-            version: version.version,
-          })
+        ? t(
+            bySystem
+              ? 'feedback:cases.history.event.addressedOnActivation'
+              : 'feedback:cases.history.event.addressed',
+            { element: version.name, version: version.version },
+          )
         : t('feedback:cases.status.addressedShort')
+    }
+    if (event.event === 'reopened' && bySystem && event.measure_id !== null) {
+      return t('feedback:cases.history.event.reopenedByFollowUp', { note: event.note ?? '' })
     }
     if (event.event === 'element_assigned' || event.event === 'element_unassigned') {
       return t(`feedback:cases.history.event.${event.event}`, {
@@ -774,6 +764,12 @@ export function CaseDetailPage() {
             </DropdownMenu>
           }
         />
+
+        {EXPLAINED_STATUSES.has(item.status) ? (
+          <p className="-mt-3 text-sm text-muted-foreground" data-testid="case-status-explain">
+            {t(`feedback:cases.status.explain.${item.status}`)}
+          </p>
+        ) : null}
 
         {isEditor && linked.testCases !== null ? (
           <CaseActions

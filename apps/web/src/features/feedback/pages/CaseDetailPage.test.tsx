@@ -117,7 +117,11 @@ function caseDetail(overrides: Partial<CaseDetail['case']> = {}): CaseDetail {
         created_at: '2026-10-08T13:00:00Z',
       }),
       // Ein Wert, den diese UI nicht kennt, faellt auf „Änderung“ zurueck.
-      event({ id: 'e5', event: 'verified', created_at: '2026-10-08T14:00:00Z' }),
+      event({
+        id: 'e5',
+        event: 'future_event' as CaseEvent['event'],
+        created_at: '2026-10-08T14:00:00Z',
+      }),
     ],
     elements: [
       {
@@ -180,17 +184,17 @@ describe('CaseDetailPage', () => {
   it('zeigt Kopf, Status mit Version, nicht-leere SBI-Blöcke, Schilderung und Zuordnung (editor)', async () => {
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Fall · coder' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Rückmeldung · coder' })).toBeInTheDocument()
     expect(screen.getByText(/^gemeldet am /)).toBeInTheDocument()
     await waitFor(() =>
-      expect(screen.getByTestId('case-status')).toHaveTextContent('Umgesetzt → Release v3'),
+      expect(screen.getByTestId('case-status')).toHaveTextContent('Geändert → Release v3'),
     )
     // „Folge“ ist leer und entfaellt.
     expect(screen.getByTestId('case-block-situation')).toHaveTextContent('Fix für #512 gepusht')
     expect(screen.getByTestId('case-block-behavior')).toBeInTheDocument()
     expect(screen.getByTestId('case-block-expected')).toBeInTheDocument()
     expect(screen.queryByTestId('case-block-impact')).not.toBeInTheDocument()
-    expect(screen.getByText(/Der Inhalt eines Falls bleibt, wie er gemeldet wurde/)).toBeInTheDocument()
+    expect(screen.getByText(/Der Inhalt einer Rückmeldung bleibt, wie er gemeldet wurde/)).toBeInTheDocument()
 
     const statement = screen.getByTestId('case-statement')
     expect(within(statement).getByText('Selbstauskunft, keine Bewertung')).toBeInTheDocument()
@@ -208,9 +212,9 @@ describe('CaseDetailPage', () => {
     const items = await screen.findAllByTestId('case-history-item')
     expect(items).toHaveLength(5)
     expect(items[0]).toHaveTextContent('Änderung')
-    expect(items[0]).not.toHaveTextContent('verified')
+    expect(items[0]).not.toHaveTextContent('future_event')
     await waitFor(() =>
-      expect(within(items[1]).getByRole('link', { name: 'Umgesetzt mit Release v3' })).toHaveAttribute(
+      expect(within(items[1]).getByRole('link', { name: 'Geändert mit Release v3' })).toHaveAttribute(
         'href',
         '/w/ws-1/playbooks/pb1?tab=versions',
       ),
@@ -225,7 +229,7 @@ describe('CaseDetailPage', () => {
   it('führt mit den Filtern der Liste zurück', async () => {
     renderPage('?status=all&agent=a1')
 
-    const back = await screen.findByRole('link', { name: 'Fälle' })
+    const back = await screen.findByRole('link', { name: 'Rückmeldungen' })
     expect(back).toHaveAttribute('href', '/w/ws-1/feedback?tab=cases&status=all&agent=a1')
   })
 
@@ -233,7 +237,7 @@ describe('CaseDetailPage', () => {
     role = 'viewer'
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Fall · coder' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Rückmeldung · coder' })).toBeInTheDocument()
     expect(screen.getByTestId('case-statement')).toBeInTheDocument()
     expect(screen.getAllByTestId('case-history-item').length).toBeGreaterThan(0)
     expect(screen.queryByTestId('case-assignment')).not.toBeInTheDocument()
@@ -241,7 +245,7 @@ describe('CaseDetailPage', () => {
 
     openOverflow()
     expect(await screen.findByRole('menuitem', { name: 'ID kopieren' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Fall löschen…' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Rückmeldung löschen…' })).not.toBeInTheDocument()
   })
 
   it('viewer: fremder Fall (404) zeigt die Nicht-gefunden-Darstellung', async () => {
@@ -249,12 +253,12 @@ describe('CaseDetailPage', () => {
     api.getCase.mockRejectedValue(new ApiError(404, 'Not Found', { reason: 'case_not_found' }))
     renderPage('?status=all')
 
-    expect(await screen.findByText('Diesen Fall gibt es nicht (mehr).')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Zu den Fällen' })).toHaveAttribute(
+    expect(await screen.findByText('Diese Rückmeldung gibt es nicht (mehr).')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Zu den Rückmeldungen' })).toHaveAttribute(
       'href',
       '/w/ws-1/feedback?tab=cases&status=all',
     )
-    expect(screen.queryByRole('heading', { name: /Fall ·/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Rückmeldung ·/ })).not.toBeInTheDocument()
   })
 
   it('zeigt Skeletons, solange der Fall lädt', () => {
@@ -266,11 +270,11 @@ describe('CaseDetailPage', () => {
 
   it('editor: „Fall löschen…“ fragt nach, löscht und kehrt mit Toast zur Liste zurück', async () => {
     renderPage('?status=triaged')
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
 
     openOverflow()
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Fall löschen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall löschen?' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rückmeldung löschen…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung löschen?' })
     expect(within(dialog).getByText(/mit Inhalt, Verlauf, Zuordnung/)).toBeInTheDocument()
     expect(api.deleteCase).not.toHaveBeenCalled()
 
@@ -280,23 +284,23 @@ describe('CaseDetailPage', () => {
     await waitFor(() =>
       expect(navigateSpy).toHaveBeenCalledWith('/w/ws-1/feedback?tab=cases&status=triaged'),
     )
-    expect(notifySuccess).toHaveBeenCalledWith('Fall gelöscht.')
+    expect(notifySuccess).toHaveBeenCalledWith('Rückmeldung gelöscht.')
   })
 
   it('nennt im Löschdialog den Lernvorschlag nur, wenn der Fall daraus entstand', async () => {
     api.getCase.mockResolvedValue(caseDetail({ source_memory_id: 'm1' }))
     renderPage()
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
 
     openOverflow()
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Fall löschen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall löschen?' })
-    expect(within(dialog).getByText(/Lernvorschlag, aus dem dieser Fall entstanden ist/)).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rückmeldung löschen…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung löschen?' })
+    expect(within(dialog).getByText(/Lernvorschlag, aus dem diese Rückmeldung entstanden ist/)).toBeInTheDocument()
   })
 
   it('a11y: Detail ohne Violations', async () => {
     const { container } = renderPage()
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
     await waitFor(() => expect(screen.getByTestId('case-status')).toHaveTextContent('Release v3'))
 
     expect(await axe(container)).toHaveNoViolations()
@@ -304,10 +308,10 @@ describe('CaseDetailPage', () => {
 
   it('a11y: Löschdialog ohne Violations', async () => {
     renderPage()
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
     openOverflow()
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Fall löschen…' }))
-    await screen.findByRole('dialog', { name: 'Fall löschen?' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rückmeldung löschen…' }))
+    await screen.findByRole('dialog', { name: 'Rückmeldung löschen?' })
 
     expect(await axe(document.body)).toHaveNoViolations()
   })
@@ -330,7 +334,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
 
     const bar = await nextStep()
     fireEvent.click(within(bar).getByRole('button', { name: 'Zuordnen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall zuordnen' })
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung zuordnen' })
     fireEvent.click(await within(dialog).findByLabelText('Release'))
     expect(within(dialog).getByLabelText('Danach als eingeordnet markieren')).toBeChecked()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Zuordnung speichern' }))
@@ -347,7 +351,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     renderPage()
 
     fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Zuordnen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall zuordnen' })
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung zuordnen' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Zuordnung speichern' }))
 
     expect(await within(dialog).findByText(/mindestens einem Baustein/)).toBeInTheDocument()
@@ -363,7 +367,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
       renderPage()
 
       fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Zuordnen…' }))
-      const dialog = await screen.findByRole('dialog', { name: 'Fall zuordnen' })
+      const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung zuordnen' })
       fireEvent.click(await within(dialog).findByLabelText('Release'))
       fireEvent.click(within(dialog).getByRole('button', { name: 'Zuordnung speichern' }))
 
@@ -378,7 +382,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
       // Dialog bleibt offen, Seite laedt genau einmal neu, die Zuordnung ist sichtbar.
       await waitFor(() => expect(api.getCase).toHaveBeenCalledTimes(2))
       expect(dialog).toBeInTheDocument()
-      expect(screen.getByRole('dialog', { name: 'Fall zuordnen' })).toBe(dialog)
+      expect(screen.getByRole('dialog', { name: 'Rückmeldung zuordnen' })).toBe(dialog)
       await waitFor(() =>
         expect(within(screen.getByTestId('case-assignment')).getByText('Playbook: Release')).toBeInTheDocument(),
       )
@@ -486,15 +490,15 @@ describe('CaseDetailPage – Triage (D6d)', () => {
       'href',
       '/w/ws-1/agents/a1#tests',
     )
-    fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Als umgesetzt markieren…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Als umgesetzt markieren' })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Als umgesetzt markieren' }))
+    fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Als geändert markieren…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Als geändert markieren' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Als geändert markieren' }))
     expect(await within(dialog).findAllByText('Pflichtfeld.')).not.toHaveLength(0)
     expect(api.transitionCase).not.toHaveBeenCalled()
 
     await within(dialog).findByRole('option', { name: 'v3 · aktiv' })
     fireEvent.change(within(dialog).getByLabelText('Version'), { target: { value: 'pbv3' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Als umgesetzt markieren' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Als geändert markieren' }))
 
     await waitFor(() =>
       expect(api.transitionCase).toHaveBeenCalledWith('case-1', {
@@ -516,7 +520,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     await nextStep()
     openStatusMenu()
     expect(await screen.findByTestId('case-address-unavailable')).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Als umgesetzt markieren…' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Als geändert markieren…' })).not.toBeInTheDocument()
   })
 
   it('Verwerfen verlangt eine Begründung mit mindestens 10 Zeichen', async () => {
@@ -526,7 +530,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     await nextStep()
     openStatusMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Verwerfen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall verwerfen' })
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung verwerfen' })
     const reason = within(dialog).getByLabelText('Warum wird nichts geändert?')
     fireEvent.change(reason, { target: { value: 'zu kurz' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Verwerfen' }))
@@ -552,7 +556,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     renderPage()
 
     fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Verwerfen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall verwerfen' })
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung verwerfen' })
     expect(within(dialog).getByLabelText('Warum wird nichts geändert?')).toHaveValue(
       'Modellgrenze – keine Änderung sinnvoll.',
     )
@@ -570,8 +574,8 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     )
     openStatusMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Wieder öffnen…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall wieder öffnen' })
-    fireEvent.change(within(dialog).getByLabelText('Warum wird der Fall wieder geöffnet?'), {
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung wieder öffnen' })
+    fireEvent.change(within(dialog).getByLabelText('Warum wird die Rückmeldung wieder geöffnet?'), {
       target: { value: 'Tritt mit v3 wieder auf.' },
     })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Wieder öffnen' }))
@@ -587,7 +591,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     api.getCase.mockResolvedValue(caseDetail({ status: 'dismissed' }))
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
     await waitFor(() => expect(api.listTestCases).toHaveBeenCalled())
     expect(screen.queryByTestId('case-next-step')).not.toBeInTheDocument()
   })
@@ -597,7 +601,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     api.getCase.mockResolvedValue(caseDetail({ status: 'open', source_memory_id: 'm1' }))
     renderPage()
 
-    await screen.findByRole('heading', { name: 'Fall · coder' })
+    await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
     expect(screen.queryByTestId('case-next-step')).not.toBeInTheDocument()
     expect(screen.queryByTestId('case-linked')).not.toBeInTheDocument()
     expect(api.listTestCases).not.toHaveBeenCalled()
@@ -654,7 +658,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     await nextStep()
     openStatusMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Zuordnung ändern…' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Fall zuordnen' })
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung zuordnen' })
     await within(dialog).findByLabelText('Release')
 
     expect(await axe(document.body)).toHaveNoViolations()
@@ -666,8 +670,177 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     await nextStep()
     openStatusMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Verwerfen…' }))
-    await screen.findByRole('dialog', { name: 'Fall verwerfen' })
+    await screen.findByRole('dialog', { name: 'Rückmeldung verwerfen' })
 
     expect(await axe(document.body)).toHaveNoViolations()
   })
+})
+
+describe('CaseDetailPage – Status aus Phase E (E5a)', () => {
+  function systemEvent(overrides: Partial<CaseEvent>): CaseEvent {
+    return event({ actor_kind: 'system', actor_id: null, ...overrides })
+  }
+
+  function phaseEDetail(status: CaseDetail['case']['status']): CaseDetail {
+    const base = caseDetail({ status })
+    return {
+      ...base,
+      events: [
+        event({ id: 'e1', event: 'reported' }),
+        event({ id: 'e2', event: 'triaged', created_at: '2026-10-08T11:00:00Z' }),
+        systemEvent({
+          id: 'e3',
+          event: 'in_progress',
+          measure_id: 'm1',
+          created_at: '2026-10-08T12:00:00Z',
+        }),
+        systemEvent({
+          id: 'e4',
+          event: 'addressed',
+          version_entity_type: 'playbook',
+          version_id: 'pbv3',
+          measure_id: 'm1',
+          created_at: '2026-10-08T13:00:00Z',
+        }),
+        systemEvent({
+          id: 'e5',
+          event: 'reopened',
+          measure_id: 'm1',
+          note: 'Fallrate unverändert',
+          created_at: '2026-10-08T14:00:00Z',
+        }),
+        systemEvent({
+          id: 'e6',
+          event: 'verified',
+          measure_id: 'm2',
+          created_at: '2026-10-08T15:00:00Z',
+        }),
+      ],
+    }
+  }
+
+  it('In Arbeit: Ring-Punkt, Wort und Erklärsatz unter dem Status', async () => {
+    api.getCase.mockResolvedValue(caseDetail({ status: 'in_progress' }))
+    renderPage()
+
+    const status = await screen.findByTestId('case-status')
+    expect(status).toHaveTextContent('In Arbeit')
+    const dot = within(status).getByTestId('case-status-dot')
+    expect(dot).toHaveAttribute('data-shape', 'ring')
+    expect(dot).toHaveClass('ring-2', 'ring-offset-1')
+    expect(dot).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('case-status-explain')).toHaveTextContent(
+      'Wird gerade über eine Änderung umgesetzt.',
+    )
+    // Kein Link im Erklaersatz (der kommt mit E5h).
+    expect(within(screen.getByTestId('case-status-explain')).queryByRole('link')).toBeNull()
+  })
+
+  it('Hat gewirkt: gefüllter Punkt und Erklärsatz, auch für viewer', async () => {
+    role = 'viewer'
+    api.getCase.mockResolvedValue(caseDetail({ status: 'verified' }))
+    renderPage()
+
+    const status = await screen.findByTestId('case-status')
+    expect(status).toHaveTextContent('Hat gewirkt')
+    const dot = within(status).getByTestId('case-status-dot')
+    expect(dot).toHaveAttribute('data-shape', 'filled')
+    expect(dot).not.toHaveClass('border-2')
+    expect(dot).not.toHaveClass('ring-2')
+    expect(screen.getByTestId('case-status-explain')).toHaveTextContent(
+      'Die Änderung hat in der Nachkontrolle gewirkt.',
+    )
+  })
+
+  it('Geändert bleibt hohl und hat keinen Erklärsatz', async () => {
+    renderPage()
+    const status = await screen.findByTestId('case-status')
+    await waitFor(() => expect(status).toHaveTextContent('Geändert → Release v3'))
+    expect(within(status).getByTestId('case-status-dot')).toHaveAttribute('data-shape', 'hollow')
+    expect(within(status).getByTestId('case-status-dot')).toHaveClass('border-2')
+    expect(screen.queryByTestId('case-status-explain')).not.toBeInTheDocument()
+  })
+
+  it('Verlauf: vier neue Ereignistexte statt „Änderung“, Aktivierung mit Element und Version', async () => {
+    api.getCase.mockResolvedValue(phaseEDetail('verified'))
+    renderPage()
+
+    const items = await screen.findAllByTestId('case-history-item')
+    expect(items).toHaveLength(6)
+    expect(items[0]).toHaveTextContent('Hat gewirkt laut Nachkontrolle')
+    expect(items[1]).toHaveTextContent(
+      'Wieder geöffnet nach Nachkontrolle „Hat nicht gewirkt“: Fallrate unverändert',
+    )
+    await waitFor(() =>
+      expect(
+        within(items[2]).getByRole('link', {
+          name: 'Geändert mit Release v3 (bei Aktivierung)',
+        }),
+      ).toHaveAttribute('href', '/w/ws-1/playbooks/pb1?tab=versions'),
+    )
+    expect(items[3]).toHaveTextContent('In Arbeit: Änderung aus einem Review')
+    // Kein Eintrag faellt mehr auf das Ersatzwort zurueck.
+    expect(screen.queryByText('Änderung')).not.toBeInTheDocument()
+    // Die Notiz steht im Wort, nicht doppelt darunter.
+    expect(screen.getAllByText(/Fallrate unverändert/)).toHaveLength(1)
+    // Noch kein Link „Zur Änderung“ (E5h).
+    expect(screen.queryByRole('link', { name: /Zur Maßnahme|Zur Änderung/ })).toBeNull()
+  })
+
+  it('Wieder geöffnet durch einen Menschen behält den alten Text', async () => {
+    api.getCase.mockResolvedValue({
+      ...caseDetail({ status: 'reopened' }),
+      events: [event({ id: 'e1', event: 'reopened', note: 'Doch nicht behoben' })],
+    })
+    renderPage()
+    const items = await screen.findAllByTestId('case-history-item')
+    expect(items[0]).toHaveTextContent('Wieder geöffnet: Doch nicht behoben')
+    expect(items[0]).not.toHaveTextContent('Nachkontrolle')
+  })
+
+  it.each(['open', 'triaged', 'in_progress', 'addressed', 'verified'] as const)(
+    'kein Knopf und kein Menüpunkt setzt In Arbeit oder Hat gewirkt (%s)',
+    async (status) => {
+      api.getCase.mockResolvedValue(phaseEDetail(status))
+      api.listTestCases.mockResolvedValue([{ id: 't1', title: 'Push erst nach Tests' }])
+      renderPage()
+      await screen.findByRole('heading', { name: 'Rückmeldung · coder' })
+      await waitFor(() => expect(api.listTestCases).toHaveBeenCalled())
+
+      const forbidden = /In Arbeit|Hat gewirkt|Bestätig|verified|in_progress/
+      expect(screen.queryByRole('button', { name: forbidden })).toBeNull()
+      if (screen.queryByTestId('case-status-menu') !== null) {
+        openStatusMenu()
+        await screen.findAllByRole('menuitem')
+        expect(screen.queryByRole('menuitem', { name: forbidden })).toBeNull()
+        fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+      }
+      openOverflow()
+      await screen.findByRole('menuitem', { name: 'ID kopieren' })
+      expect(screen.queryByRole('menuitem', { name: forbidden })).toBeNull()
+      expect(api.transitionCase).not.toHaveBeenCalled()
+      // In Arbeit und Hat gewirkt haben keine eigene Aktion (E5i bringt Links).
+      if (status === 'in_progress' || status === 'verified') {
+        expect(screen.queryByTestId('case-next-step')).not.toBeInTheDocument()
+      }
+    },
+  )
+
+  it('a11y: In Arbeit mit Verlauf ohne Violations (editor)', async () => {
+    api.getCase.mockResolvedValue(phaseEDetail('in_progress'))
+    const { container } = renderPage()
+    await screen.findByTestId('case-status-explain')
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /bei Aktivierung/ })).toBeInTheDocument(),
+    )
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
+
+  it('a11y: Hat gewirkt mit Verlauf ohne Violations (viewer)', async () => {
+    role = 'viewer'
+    api.getCase.mockResolvedValue(phaseEDetail('verified'))
+    const { container } = renderPage()
+    await screen.findByTestId('case-status-explain')
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
 })

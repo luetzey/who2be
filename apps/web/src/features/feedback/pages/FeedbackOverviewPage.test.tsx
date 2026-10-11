@@ -119,7 +119,7 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     expect(tabs.map((tab) => tab.textContent)).toEqual(['Fälle', 'Muster', 'Bausteine', 'Kuration'])
     expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tablist', { name: 'Bereiche des Feedbacks' })).toBeInTheDocument()
-    expect(await screen.findByText('Keine offenen Fälle')).toBeInTheDocument()
+    expect(await screen.findByText('Keine offenen Rückmeldungen')).toBeInTheDocument()
     // Kuration laedt erst, wenn der Tab offen ist.
     expect(getFeedbackOverview).not.toHaveBeenCalled()
   })
@@ -153,7 +153,7 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
 
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Meine Fälle' })).toBeInTheDocument()
-    expect(await screen.findByText('Du hast noch keinen Fall gemeldet')).toBeInTheDocument()
+    expect(await screen.findByText('Du hast noch keine Rückmeldung gegeben')).toBeInTheDocument()
     await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
     expect(getFeedbackOverview).not.toHaveBeenCalled()
     expect(getFeedbackItems).not.toHaveBeenCalled()
