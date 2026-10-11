@@ -381,6 +381,21 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions",
+    "operationId": "list_sessions_v1_workspaces__workspace_id__feedback_sessions_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions",
+    "operationId": "submit_session_protocol_v1_workspaces__workspace_id__feedback_sessions_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions/{session_id}",
+    "operationId": "get_session_v1_workspaces__workspace_id__feedback_sessions__session_id__get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/feedback-unused",
     "operationId": "get_feedback_unused_v1_workspaces__workspace_id__feedback_unused_get"
   },
@@ -508,6 +523,26 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/triage",
     "operationId": "triage_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__triage_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/follow-up",
+    "operationId": "get_measure_follow_up_v1_workspaces__workspace_id__measures__measure_id__follow_up_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/link-draft",
+    "operationId": "link_measure_draft_v1_workspaces__workspace_id__measures__measure_id__link_draft_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/review",
+    "operationId": "review_measure_v1_workspaces__workspace_id__measures__measure_id__review_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/withdraw",
+    "operationId": "withdraw_measure_v1_workspaces__workspace_id__measures__measure_id__withdraw_post"
   },
   {
     "method": "GET",

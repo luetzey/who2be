@@ -67,6 +67,7 @@ from who2be_api.routers import (
     resource_composition,
     resources,
     search,
+    sessions,
     system_prompts,
     system_routines,
     test_cases,
@@ -558,6 +559,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(test_cases.router, prefix=_WORKSPACE_PREFIX)
     # Faelle (ADR-0053 6.5, Lernschleife D2b).
     app.include_router(cases.router, prefix=_WORKSPACE_PREFIX)
+    # Gespraechsprotokolle und Massnahmen (ADR-0053 6.6, Lernschleife E2b-3).
+    app.include_router(sessions.router, prefix=_WORKSPACE_PREFIX)
     # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
     # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
     # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der

@@ -194,6 +194,11 @@
       "reason": "Qualitatives Feedback zu einem Element; zaehlt in keinem Kontingent, und ein Deckel darauf wuerde den Rueckmeldeweg verschliessen."
     },
     {
+      "path": "/feedback-sessions",
+      "name": "submit_session_protocol",
+      "reason": "Gespraechsprotokolle zaehlen in keinem Plan-Kontingent (wie die Faelle, ueber die sie sprechen); nur Mensch ab editor oder Agent mit case_triage, Agenten laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
       "path": "/feedback/{feedback_id}/promote",
       "name": "promote_feedback_to_case",
       "reason": "Uebernimmt ein bestehendes Alt-Feedback in einen Fall (je Feedback hoechstens einmal, sonst 409); Faelle zaehlen in keinem Plan-Kontingent, nur Menschen ab editor, gebremst durch write_limit."
@@ -237,6 +242,21 @@
       "path": "/me/memories/{memory_id}/triage",
       "name": "triage_my_memory",
       "reason": "Statuswechsel (approve/reject) an einem bestehenden Eintrag des eigenen Nutzergedaechtnisses, legt nichts Neues an."
+    },
+    {
+      "path": "/measures/{measure_id}/link-draft",
+      "name": "link_measure_draft",
+      "reason": "Haengt ein Event an eine bestehende Massnahme, legt kein neues Objekt an; Agenten laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
+      "path": "/measures/{measure_id}/review",
+      "name": "review_measure",
+      "reason": "Einstufung einer bestehenden Massnahme (genau ein Event), nur Mensch ab editor, legt kein neues Objekt an."
+    },
+    {
+      "path": "/measures/{measure_id}/withdraw",
+      "name": "withdraw_measure",
+      "reason": "Statuswechsel einer bestehenden Massnahme (ein Event), nur Mensch ab editor, legt kein neues Objekt an."
     },
     {
       "path": "/memories/batch",

@@ -10259,6 +10259,497 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/feedback-sessions": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Submit Session Protocol",
+        "operationId": "submit_session_protocol_v1_workspaces__workspace_id__feedback_sessions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSubmitResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "List Sessions",
+        "operationId": "list_sessions_v1_workspaces__workspace_id__feedback_sessions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionRead"
+                  },
+                  "title": "Response List Sessions V1 Workspaces  Workspace Id  Feedback Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/feedback-sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Session",
+        "operationId": "get_session_v1_workspaces__workspace_id__feedback_sessions__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/link-draft": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Link Measure Draft",
+        "operationId": "link_measure_draft_v1_workspaces__workspace_id__measures__measure_id__link_draft_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureLinkDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureEventRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/follow-up": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Measure Follow Up",
+        "operationId": "get_measure_follow_up_v1_workspaces__workspace_id__measures__measure_id__follow_up_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/review": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Review Measure",
+        "operationId": "review_measure_v1_workspaces__workspace_id__measures__measure_id__review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureEventRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/withdraw": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Withdraw Measure",
+        "operationId": "withdraw_measure_v1_workspaces__workspace_id__measures__measure_id__withdraw_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureWithdrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureWithdrawResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -18237,6 +18728,25 @@
         "title": "CaseTransitionRequest",
         "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` ist Teil des Vertrags (6.5), wird in D2 aber abgewiesen —\nMassnahmen gibt es erst mit Phase E."
       },
+      "CaseUnchanged": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "status"
+        ],
+        "title": "CaseUnchanged",
+        "description": "Ein Fall einer Massnahme, der nicht auf `in_progress` ging, mit seinem Status."
+      },
       "CategoryRuleRead": {
         "properties": {
           "id": {
@@ -19822,6 +20332,86 @@
         "title": "FeedbackUnusedItem",
         "description": "Ein veroeffentlichtes, aber ungenutztes Element.\n\n„Ungenutzt\" = das Element hat eine aktive Version (Agenten KOENNTEN es nutzen),\naber bisher kein einziges Usage- oder Feedback-Ereignis. Das ist das\nhandlungsrelevante Stale-Signal: publiziert, aber niemand greift darauf zu."
       },
+      "FollowUpReport": {
+        "properties": {
+          "measure_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Measure Id"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "due": {
+            "type": "boolean",
+            "title": "Due"
+          },
+          "reviewable": {
+            "type": "boolean",
+            "title": "Reviewable"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recurrence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence"
+          },
+          "min_uses": {
+            "type": "integer",
+            "title": "Min Uses"
+          },
+          "insufficient": {
+            "type": "boolean",
+            "title": "Insufficient"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "measure_id",
+          "state",
+          "follow_up_at",
+          "due",
+          "reviewable",
+          "before",
+          "after",
+          "recurrence",
+          "min_uses",
+          "insufficient"
+        ],
+        "title": "FollowUpReport",
+        "description": "`GET /measures/{id}/follow-up` (6.6): drei Kennzahlen als Rohzahlen (QE8 a)."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -20843,6 +21433,463 @@
         ],
         "title": "MeWorkspace",
         "description": "Workspace + Rolle des aktuellen Users."
+      },
+      "MeasureActorKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "system"
+        ],
+        "title": "MeasureActorKind",
+        "description": "Wer ein Massnahmen-Event ausgeloest hat."
+      },
+      "MeasureCreate": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Change Summary"
+          },
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "success_criterion": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Success Criterion"
+          },
+          "counterposition": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Counterposition"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_ids",
+          "target",
+          "change_summary",
+          "test_case_id",
+          "success_criterion",
+          "counterposition"
+        ],
+        "title": "MeasureCreate",
+        "description": "Eine Massnahme im Protokoll (6.6 `measures[]`).\n\n`case_ids` mindestens ein Eintrag (3.6 „>= 1“); dass die Faelle zum\nProtokoll gehoeren, prueft der Service."
+      },
+      "MeasureEventKind": {
+        "type": "string",
+        "enum": [
+          "draft_linked",
+          "activated",
+          "follow_up_prepared",
+          "reviewed",
+          "withdrawn"
+        ],
+        "title": "MeasureEventKind",
+        "description": "Ereignisse im Verlauf einer Massnahme (3.6, Tabelle)."
+      },
+      "MeasureEventRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "measure_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Measure Id"
+          },
+          "event": {
+            "$ref": "#/components/schemas/MeasureEventKind"
+          },
+          "actor_kind": {
+            "$ref": "#/components/schemas/MeasureActorKind"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "version_entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "measure_id",
+          "event",
+          "actor_kind",
+          "actor_id",
+          "version_entity_type",
+          "version_id",
+          "verdict",
+          "metrics",
+          "note",
+          "created_at"
+        ],
+        "title": "MeasureEventRead",
+        "description": "Ein Event aus dem Verlauf einer Massnahme (append-only)."
+      },
+      "MeasureLinkDraftRequest": {
+        "properties": {
+          "version_entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version_entity_type",
+          "version_id"
+        ],
+        "title": "MeasureLinkDraftRequest",
+        "description": "`POST /measures/{id}/link-draft` (6.6): die Version des Entwurfs."
+      },
+      "MeasureRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "title": "Change Summary"
+          },
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "success_criterion": {
+            "type": "string",
+            "title": "Success Criterion"
+          },
+          "counterposition": {
+            "type": "string",
+            "title": "Counterposition"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureEventRead"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "session_id",
+          "case_ids",
+          "target",
+          "entity_id",
+          "change_summary",
+          "test_case_id",
+          "success_criterion",
+          "counterposition",
+          "follow_up_at",
+          "state",
+          "events",
+          "created_at"
+        ],
+        "title": "MeasureRead",
+        "description": "Eine Massnahme mit Faellen, abgeleitetem Zustand und Verlauf (aelteste zuerst)."
+      },
+      "MeasureReviewRequest": {
+        "properties": {
+          "verdict": {
+            "$ref": "#/components/schemas/MeasureVerdict"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "MeasureReviewRequest",
+        "description": "`POST /measures/{id}/review` (6.6): Einstufung, `ineffective` mit Begruendung."
+      },
+      "MeasureState": {
+        "type": "string",
+        "enum": [
+          "agreed",
+          "draft_linked",
+          "activated",
+          "follow_up_prepared",
+          "effective",
+          "ineffective",
+          "not_measurable",
+          "withdrawn"
+        ],
+        "title": "MeasureState",
+        "description": "Abgeleiteter Zustand einer Massnahme (juengstes Event).\n\n`agreed` heisst: beschlossen, noch kein Event. Die drei Einstufungen\nsind eigene Zustaende, damit eine Liste ohne zweites Feld filtern kann."
+      },
+      "MeasureTarget": {
+        "type": "string",
+        "enum": [
+          "persona",
+          "playbook",
+          "resource",
+          "external_tool",
+          "system_prompt_template",
+          "tool_policy",
+          "memory"
+        ],
+        "title": "MeasureTarget",
+        "description": "Element einer Massnahme (3.6): wie `CaseTarget`, ohne `model_limit`."
+      },
+      "MeasureVerdict": {
+        "type": "string",
+        "enum": [
+          "effective",
+          "ineffective",
+          "not_measurable"
+        ],
+        "title": "MeasureVerdict",
+        "description": "Einstufung der Nachschau (3.6 `reviewed`); nur ein Mensch."
+      },
+      "MeasureWithdrawRequest": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "MeasureWithdrawRequest",
+        "description": "`POST /measures/{id}/withdraw` (6.6): Zurueckziehen braucht eine Begruendung."
+      },
+      "MeasureWithdrawResult": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/MeasureEventRead"
+          },
+          "cases_reset": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cases Reset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "cases_reset"
+        ],
+        "title": "MeasureWithdrawResult",
+        "description": "Ergebnis des Zurueckziehens: das Event und die Faelle, die auf `triaged` zurueckgingen."
       },
       "MemoryActorKind": {
         "type": "string",
@@ -24777,6 +25824,41 @@
         "title": "RowsInsertResult",
         "description": "Bilanz eines Imports: wie viele Zeilen neu, wie viele Duplikate.\n\nLokales Antwort-Modell (Router-Ebene, wie `Health` in `main.py`) — das\nMCP-Tool `insert_rows` (WP19) reicht es unveraendert durch."
       },
+      "RunRate": {
+        "properties": {
+          "runs_total": {
+            "type": "integer",
+            "title": "Runs Total"
+          },
+          "runs_passed": {
+            "type": "integer",
+            "title": "Runs Passed"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          },
+          "attestation": {
+            "type": "string",
+            "title": "Attestation"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs_total",
+          "runs_passed",
+          "verdict",
+          "attestation",
+          "created_at"
+        ],
+        "title": "RunRate",
+        "description": "Juengster Pruefall-Lauf einer Version (3.2: „Es zaehlt das letzte Ergebnis“)."
+      },
       "SaveQueryResult": {
         "properties": {
           "sql": {
@@ -24886,6 +25968,355 @@
         ],
         "title": "Sensitivity",
         "description": "Sensibilitaets-Stufe eines Inhalts (Zugriffslog snapshottet sie)."
+      },
+      "SessionCreate": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureCreate"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id",
+          "trigger",
+          "summary",
+          "follow_up_at"
+        ],
+        "title": "SessionCreate",
+        "description": "Protokoll samt Faellen und Massnahmen (6.6 `submit_session_protocol`).\n\nEinreicher (`submitted_by_*`) setzt der Server aus dem Aufrufweg."
+      },
+      "SessionDecision": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "standard_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SessionDecision",
+        "description": "Ein entschiedener Widerspruch `{text, standard_ref?}` (3.5)."
+      },
+      "SessionDetail": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SessionRead"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureRead"
+            },
+            "type": "array",
+            "title": "Measures"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session",
+          "measures"
+        ],
+        "title": "SessionDetail",
+        "description": "Protokoll mit eingebetteten Massnahmen (QE1 = a)."
+      },
+      "SessionDissent": {
+        "properties": {
+          "participant_kind": {
+            "$ref": "#/components/schemas/SessionParticipantKind"
+          },
+          "participant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Participant Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "participant_kind",
+          "participant_id",
+          "text"
+        ],
+        "title": "SessionDissent",
+        "description": "Eine abweichende Meinung `{participant_kind, participant_id, text}` (3.5)."
+      },
+      "SessionParticipant": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SessionParticipantKind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "role"
+        ],
+        "title": "SessionParticipant",
+        "description": "Ein Teilnehmer `{kind, id, role}` (3.5).\n\n`id`: Nutzer-ID bei `human`, Agent-ID bei `agent`/`builder`. `role` ist\nFreitext (z. B. „Moderation“) und wird nicht uebersetzt."
+      },
+      "SessionParticipantKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "builder"
+        ],
+        "title": "SessionParticipantKind",
+        "description": "Wer am Gespraech teilnahm (3.5 `participants.kind`)."
+      },
+      "SessionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "submitted_by_kind": {
+            "$ref": "#/components/schemas/SessionSubmitterKind"
+          },
+          "submitted_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Submitted By"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "trigger",
+          "participants",
+          "summary",
+          "decisions",
+          "dissent",
+          "follow_up_at",
+          "supersedes_id",
+          "submitted_by_kind",
+          "submitted_by",
+          "case_ids",
+          "created_at"
+        ],
+        "title": "SessionRead",
+        "description": "Ein Protokoll ohne Massnahmen (Liste)."
+      },
+      "SessionSubmitResult": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/SessionDetail"
+          },
+          "cases_started": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cases Started"
+          },
+          "cases_unchanged": {
+            "items": {
+              "$ref": "#/components/schemas/CaseUnchanged"
+            },
+            "type": "array",
+            "title": "Cases Unchanged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "cases_started",
+          "cases_unchanged"
+        ],
+        "title": "SessionSubmitResult",
+        "description": "Ergebnis des Einreichens: das Protokoll und was mit den Faellen geschah (W-E2 = a)."
+      },
+      "SessionSubmitterKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent"
+        ],
+        "title": "SessionSubmitterKind",
+        "description": "Wer das Protokoll eingereicht hat: ein Mensch oder ein Agent (Builder)."
+      },
+      "SessionTrigger": {
+        "type": "string",
+        "enum": [
+          "threshold",
+          "scheduled",
+          "manual"
+        ],
+        "title": "SessionTrigger",
+        "description": "Anlass eines Gespraechs (3.5)."
       },
       "SkillRef": {
         "properties": {
@@ -27138,6 +28569,61 @@
         ],
         "title": "VersionDiffChange",
         "description": "Eine einzelne Aenderung im Versions-Diff.\n\n`path` ist ein punkt-/klammer-separierter Pfad in den Content-JSON\n(`description`, `tags`, `content.blocks[<block-id>]`). Block-Listen werden\nper stabiler Block-`id` gematcht, sodass das Verschieben eines Blocks nicht\nals Massen-Aenderung erscheint."
+      },
+      "VersionReport": {
+        "properties": {
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "test_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunRate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uses": {
+            "type": "integer",
+            "title": "Uses"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "version",
+          "test_run",
+          "uses",
+          "cases"
+        ],
+        "title": "VersionReport",
+        "description": "Rohzahlen einer Version: Pruefall-Lauf, Nutzungen, Faelle (QE8 a, keine Raten)."
       },
       "VersionStatus": {
         "type": "string",

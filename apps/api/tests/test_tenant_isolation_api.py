@@ -127,6 +127,26 @@ _CONTENT_TOOL = {"display_name": "x", "mcp_server_name": "x", "tool_names": ["t"
 _CONTENT_TEMPLATE = {"description": "", "body": "x"}
 _TRANSITION = {"to": "review"}
 _FEEDBACK_REF = {"entity_type": "playbook", "entity_id": "<<playbook_id>>"}
+# Protokoll mit einer Massnahme am Mandanten-Agenten: der Fall ist der
+# gemeldete Fall (`agent_case_id`), der Pruefall der Seed-Pruefall (`case_id`).
+_SESSION_BODY = {
+    "agent_id": "<<agent_id>>",
+    "trigger": "manual",
+    "case_ids": ["<<agent_case_id>>"],
+    "summary": "iso",
+    "follow_up_at": "2099-01-01",
+    "measures": [
+        {
+            "case_ids": ["<<agent_case_id>>"],
+            "target": "persona",
+            "entity_id": "<<persona_id>>",
+            "change_summary": "iso",
+            "test_case_id": "<<case_id>>",
+            "success_criterion": "x",
+            "counterposition": "x",
+        }
+    ],
+}
 
 # Jede Route: Schluessel "METHOD Pfad" (Pfad wie im Router-Baum).
 PROBES: dict[str, Probe] = {
@@ -440,6 +460,20 @@ PROBES: dict[str, Probe] = {
         path={"case_id": "agent_case_id"},
         agent=True,
     ),
+    # --- Protokolle und Massnahmen (ADR-0053 6.6, E2b-3) ---------------------
+    # Protokoll und Massnahme je Mandant setzt `_session_extras`. Fremder
+    # Agent bzw. fremde Faelle im Body: `agent_not_found` wie ein unbekannter.
+    f"POST {_WS}/feedback-sessions": Probe(body=_SESSION_BODY),
+    f"GET {_WS}/feedback-sessions": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
+    f"GET {_WS}/feedback-sessions/{{session_id}}": Probe(),
+    # Mischform: eigene Massnahme, fremde Version -> 404 wie eine unbekannte.
+    f"POST {_WS}/measures/{{measure_id}}/link-draft": Probe(
+        body={"version_entity_type": "persona", "version_id": "<<version_id>>"}
+    ),
+    f"GET {_WS}/measures/{{measure_id}}/follow-up": Probe(),
+    # Gegenprobe: die Massnahme ist nicht aktiviert -> 409 nach dem Lookup.
+    f"POST {_WS}/measures/{{measure_id}}/review": Probe(body={"verdict": "not_measurable"}),
+    f"POST {_WS}/measures/{{measure_id}}/withdraw": Probe(body={"note": "iso"}),
     # --- Umwandeln / Uebernehmen (ADR-0053 6.4/6.5, D2c-2) ------------------
     # Seed-`memory_id` ist ein user_fact: die Gegenprobe als B endet fachlich
     # mit 409 memory_not_convertible — nach dem Lookup, also bestanden.
@@ -685,6 +719,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
         "own_invitation_id", "user_memory_id", "proposal_id", "agent_case_id",
+        "session_id", "measure_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -923,6 +958,25 @@ def _case_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
     ghost.ids["agent_case_id"] = str(uuid4())
 
 
+def _session_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
+    """Ein Protokoll mit einer Massnahme je Mandant (ADR-0053 3.5/3.6), nach `_case_extras`.
+
+    Ueber `POST /feedback-sessions` wie im Betrieb; die Zusammenfassung traegt
+    den Marker, damit ein Leck im Antworttext auffaellt.
+    """
+    for t in tenants:
+        body = _fill(_SESSION_BODY, t.ids) | {"summary": f"{t.marker} Protokoll"}
+        res = client.post(
+            f"/v1/workspaces/{t.workspace_id}/feedback-sessions", json=body, headers=t.human
+        )
+        assert res.status_code == 201, res.text
+        detail = res.json()["detail"]
+        t.ids["session_id"] = detail["session"]["id"]
+        t.ids["measure_id"] = detail["measures"][0]["id"]
+    for key in ("session_id", "measure_id"):
+        ghost.ids[key] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -1022,6 +1076,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
     _own_invitations(ghost, a, b)
     _memory_extras(ghost, a, b)
     _case_extras(client, ghost, a, b)
+    _session_extras(client, ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():
