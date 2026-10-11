@@ -195,14 +195,14 @@ describe('PatternList — Liste', () => {
     expect(screen.queryByRole('combobox', { name: /Agent/ })).not.toBeInTheDocument()
   })
 
-  it('zeigt ohne jedes Material den Hinweis und „Fall melden“', async () => {
+  it('zeigt ohne jedes Material den Hinweis und „Rückmeldung geben“', async () => {
     listPatterns.mockResolvedValue(list([]))
     renderList()
 
     expect(
       await screen.findByText('Muster brauchen Lernvorschläge oder Fälle. Es gibt noch keine.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fall melden' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toBeInTheDocument()
     expect(countMemories).toHaveBeenCalledWith({ kind: 'lesson' })
   })
 

@@ -271,7 +271,7 @@ describe('CaseList', () => {
     await waitFor(() => expect(currentSearch()).toBe(''))
   })
 
-  it('Leerzustand viewer ohne Faelle: „Du hast noch keinen Fall gemeldet“ mit „Fall melden“', async () => {
+  it('Leerzustand viewer ohne Faelle: „Du hast noch keinen Fall gemeldet“ mit „Rückmeldung geben“', async () => {
     listCases.mockResolvedValue({ items: [], next_cursor: null })
     countCases.mockResolvedValue(
       counts({ open: 0, reopened: 0, triaged: 0, addressed: 0, dismissed: 0 }),
@@ -279,7 +279,7 @@ describe('CaseList', () => {
     renderList(true)
 
     expect(await screen.findByText('Du hast noch keine Rückmeldung gegeben')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fall melden' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toBeInTheDocument()
     // Ohne jeden Fall entfaellt die Filterleiste (Filter-Standard §2.3).
     expect(screen.queryByRole('group', { name: 'Nach Status filtern' })).not.toBeInTheDocument()
   })
