@@ -290,6 +290,7 @@ class CaseRepository(Protocol):
         require_element: bool,
         actor_kind: CaseActorKind,
         actor_id: UUID | None,
+        require_measure_case: bool = False,
     ) -> CaseEventRead | None: ...
 
     async def set_elements(
@@ -628,6 +629,7 @@ class PgCaseRepository:
         require_element: bool,
         actor_kind: CaseActorKind,
         actor_id: UUID | None,
+        require_measure_case: bool = False,
     ) -> CaseEventRead | None:
         """Status-Event nur, wenn der Fall noch im erwarteten Zustand ist (D2).
 
@@ -637,6 +639,8 @@ class PgCaseRepository:
         Uebergaenge nicht beide von demselben Ausgangsstatus ausgehen, und ein
         paralleles Leeren der Zuordnung kann ein `triaged` ohne Element nicht
         mehr unterlaufen. `require_element`: mindestens eine Zuordnung.
+        `require_measure_case`: die Massnahme `data.measure_id` enthaelt diesen
+        Fall (`measure_case`; PM-5 fuer `in_progress`, E3).
 
         None, wenn der Fall fehlt oder der Stand abweicht; der Aufrufer liest
         dann neu und meldet den passenden Fehler.
@@ -660,6 +664,16 @@ class PgCaseRepository:
                     case_id,
                 )
                 if has_element is None:
+                    return None
+            if require_measure_case:
+                linked = await conn.fetchval(
+                    "SELECT 1 FROM measure_case "
+                    "WHERE workspace_id = $1 AND measure_id = $2 AND case_id = $3",
+                    workspace_id,
+                    data.measure_id,
+                    case_id,
+                )
+                if linked is None:
                     return None
             return await _insert_event(
                 conn,
@@ -919,6 +933,70 @@ class PgCaseRepository:
 async def _lock_case(conn: asyncpg.Connection, case_id: UUID) -> None:
     """Transaktionsgebundene Sperre je Fall (Zuordnung und Uebergaenge)."""
     await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))", case_id)
+
+
+async def apply_system_status(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    case_ids: Sequence[UUID],
+    *,
+    event: CaseEventKind,
+    sources: Collection[CaseStatus],
+    via_triage: Collection[CaseStatus] = (),
+    measure_id: UUID,
+    note: str | None = None,
+    version_entity_type: str | None = None,
+    version_id: UUID | None = None,
+) -> list[UUID]:
+    """Statusfolge einer Massnahme durch das System (ADR-0053 3.3/3.6, E3).
+
+    In der Transaktion von `conn`, unter der Fall-Sperre, in fester
+    Reihenfolge nach `case_id` (wie `start_cases`/`reset_cases_after_withdraw`).
+    Ein Fall in `sources` bekommt `event`. Ein Fall in `via_triage` geht nur
+    ueber `triaged` (3.3: `-> triaged` verlangt eine Zuordnung) — mit
+    Zuordnung entstehen beide Events, ohne bleibt er. Jeder andere Status
+    bleibt unveraendert. Akteur ist das System; `event` traegt die
+    `measure_id`, die Version und die Begruendung. Ergebnis: die Faelle, die
+    `event` bekommen haben.
+    """
+    moved: list[UUID] = []
+    for case_id in sorted(dict.fromkeys(case_ids), key=lambda c: c.int):
+        await _lock_case(conn, case_id)
+        raw = await conn.fetchval(
+            f"SELECT {_STATUS_SQL} FROM agent_case c WHERE c.workspace_id = $1 AND c.id = $2",
+            workspace_id,
+            case_id,
+        )
+        if raw is None:
+            continue
+        current = CaseStatus(raw)
+        if current in via_triage:
+            has_element = await conn.fetchval(
+                "SELECT 1 FROM agent_case_element WHERE workspace_id = $1 AND case_id = $2 LIMIT 1",
+                workspace_id,
+                case_id,
+            )
+            if has_element is None:
+                continue
+            await _insert_event(
+                conn, workspace_id, case_id, CaseEventKind.triaged, CaseActorKind.system, None
+            )
+        elif current not in sources:
+            continue
+        await _insert_event(
+            conn,
+            workspace_id,
+            case_id,
+            event,
+            CaseActorKind.system,
+            None,
+            note=note,
+            version_entity_type=version_entity_type,
+            version_id=version_id,
+            measure_id=measure_id,
+        )
+        moved.append(case_id)
+    return moved
 
 
 async def _create_case_in(

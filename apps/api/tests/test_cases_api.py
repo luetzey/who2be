@@ -355,11 +355,11 @@ def test_transition_status_per_role(world: _World) -> None:
     judge = w.transition(cid, {"to": "dismissed", "note": "n"}, triage_auth)
     assert judge.status_code == 403
     assert judge.json()["reason"] == "case_transition_human_only"
-    # Phase E: in_progress/verified sind 409 mit requires=phase_e.
-    later = w.transition(cid, {"to": "in_progress"}, editor)
+    # verified nur ueber die Einstufung der Nachschau (PM-5): 409 requires=review.
+    later = w.transition(cid, {"to": "verified"}, editor)
     assert later.status_code == 409
     assert later.json()["reason"] == "case_transition_forbidden"
-    assert later.json()["params"]["requires"] == "phase_e"
+    assert later.json()["params"]["requires"] == "review"
     # Unbekanntes Feld im Body: 422.
     assert w.transition(cid, {"to": "triaged", "foo": 1}, editor).status_code == 422
 
