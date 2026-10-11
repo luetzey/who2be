@@ -16690,7 +16690,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "AgentUpdate",
-        "description": "Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.\n\n`tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet\n(analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.\n\n`model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config\n(User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,\nnicht pro Einzelaufruf. Sie sind das einzige Feld-Paar mit einer\nLEER-Semantik: `\"\"` setzt den Wert explizit auf NULL zurueck, weggelassen\nbzw. `None` laesst den Bestand unangetastet (analog `tool_policy`). Grund:\ndie Felder tragen die Compliance-Attribution — ein einmal falsch\neingetragener Anbieter muss entfernbar sein, sonst verfaelscht er die\nAuswertung „welche Daten gingen an wen\" dauerhaft. Aenderungen (auch das\nLeeren) protokolliert der Service im `audit_log`."
+        "description": "Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.\n\n`tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet\n(analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.\n\n`model_provider`/`model_name` gelten pro Agent-Konfiguration, nicht pro\nEinzelaufruf. Sie sind das einzige Feld-Paar mit einer LEER-Semantik: `\"\"`\nsetzt den Wert explizit auf NULL zurueck, weggelassen bzw. `None` laesst\nden Bestand unangetastet."
       },
       "AgentUsageStats": {
         "properties": {
@@ -18643,7 +18643,7 @@
           "co_occurs_with"
         ],
         "title": "EdgeType",
-        "description": "Kantentyp der Knowledge Base (ADR-0047)."
+        "description": "Kantentyp der Knowledge Base."
       },
       "EntitlementInfo": {
         "properties": {
@@ -19577,7 +19577,7 @@
           "dismissed"
         ],
         "title": "FeedbackResolution",
-        "description": "Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).\n\nKuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`\n(in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle\" Status\nist das juengste Resolution-Event — die Feedback-Zeile selbst bleibt\nunveraendert (append-only)."
+        "description": "Triage-Status eines Feedback-Eintrags.\n\nKuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`\n(in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle\" Status\nist das juengste Resolution-Event — die Feedback-Zeile selbst bleibt\nunveraendert (append-only)."
       },
       "FeedbackResolutionCreate": {
         "properties": {
@@ -21175,7 +21175,7 @@
           "recommended"
         ],
         "title": "MemoryDirective",
-        "description": "Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt (ADR-0044).\n\nBestimmt NUR die Formulierung der tools-overview-Sektion („rufe zu\nGespraechsbeginn dein Gedaechtnis ab\" vs. „nutze es, wenn Kontext\nhilfreich ist\") — KEIN Recht, daher bewusst nicht Teil des\n`is_within`-Anti-Escalation-Vergleichs."
+        "description": "Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt.\n\nBestimmt NUR die Formulierung („rufe zu Gespraechsbeginn dein Gedaechtnis\nab\" vs. „nutze es, wenn Kontext hilfreich ist\") — kein Recht."
       },
       "MemoryEventKind": {
         "type": "string",
@@ -21574,7 +21574,7 @@
           "auto"
         ],
         "title": "MemoryMode",
-        "description": "Gedaechtnis-Modus eines Agenten (ADR-0044) — geordnete Stufen.\n\nSteuert BEIDE Seiten des Agent-Memorys: ob die Memory-MCP-Tools fuer den\nAgenten ueberhaupt existieren (tools/list-Filter, ADR-0042) und wie\n`save_memory` persistiert wird.\n\n- ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.\n- ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).\n- ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —\n  retrieval-sichtbar erst nach menschlicher Freigabe (Kurations-Schleuse,\n  Muster ADR-0038).\n- ``auto``: `save_memory` speichert direkt `active`; die serverseitigen\n  Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer."
+        "description": "Gedaechtnis-Modus eines Agenten — geordnete Stufen.\n\nSteuert, ob die Memory-Werkzeuge fuer den Agenten sichtbar sind und wie\n`save_memory` speichert.\n\n- ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.\n- ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).\n- ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —\n  sichtbar erst nach menschlicher Freigabe.\n- ``auto``: `save_memory` speichert direkt `active`; die serverseitigen\n  Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer."
       },
       "MemoryOrigin": {
         "type": "string",
@@ -21622,7 +21622,7 @@
           "delete"
         ],
         "title": "MemoryProposalAction",
-        "description": "Art eines Agenten-Vorschlags zu einem bestehenden Eintrag (ADR-0053 3.1.4)."
+        "description": "Art eines Agenten-Vorschlags zu einem bestehenden Eintrag."
       },
       "MemoryProposalCreate": {
         "properties": {
@@ -22517,7 +22517,7 @@
           "hypothesis"
         ],
         "title": "NodeTier",
-        "description": "Vertrauensstufe eines KB-Nodes (ADR-0047) — geordnete Leiter.\n\n- ``verified``: menschlich bestaetigt (Heben dorthin ist P2-UI-Thema).\n- ``derived``: aus mehreren Belegen abgeleitet.\n- ``hypothesis``: unbestaetigte Vermutung (Einstieg fuer Agenten)."
+        "description": "Vertrauensstufe eines KB-Nodes — geordnete Leiter.\n\n- ``verified``: menschlich bestaetigt.\n- ``derived``: aus mehreren Belegen abgeleitet.\n- ``hypothesis``: unbestaetigte Vermutung (Einstieg fuer Agenten)."
       },
       "OAuthClientRegistered": {
         "properties": {
@@ -22996,7 +22996,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PersonaContent",
-        "description": "BlockNote-strukturierter Persona-Profil-Inhalt (Phase 3-0).\n\nWird als optionales Feld an `PersonaVersionContent.content` haengen und\ntraegt Rolle, Tonfall, Beispiele als BlockNote-Dokument (ADR-0022). Gleiche\nObergrenze (`max_length=2000`) wie bei `ResourceContent.blocks` — gross\ngenug fuer eine Persona-Karte, klein genug zum Embedden in Listen."
+        "description": "Profil-Inhalt der Persona (Rolle, Tonfall, Beispiele) als BlockNote-Bloecke."
       },
       "PersonaCreate": {
         "properties": {
@@ -23030,7 +23030,7 @@
           "name"
         ],
         "title": "PersonaCreate",
-        "description": "Eingabe fuer `POST /v1/personas` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `PersonaVersionContent` eingesetzt. Promote-Validation (draft →\nreview/active) prueft im Transition-Endpunkt auf vollstaendige Pflichtfelder\n(description, body in `content.content.blocks`)."
+        "description": "Eingabe fuer `POST /v1/personas` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf; fuer\ndie Freigabe muessen Beschreibung und Profil-Inhalt gefuellt sein."
       },
       "PersonaMode": {
         "properties": {
@@ -23106,7 +23106,7 @@
           "name"
         ],
         "title": "PersonaMode",
-        "description": "Ein einzelner Modus einer Multi-Modus-Persona (Gap 3.4).\n\nEin Modus beschreibt, wie sich die Persona in einem bestimmten Kontext\nverhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne\nTrigger-Match greift der Default-Modus (`is_default=True`).\n\n`identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`\nbeschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`\nlistet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Dokumente\n(PR-A — vorher `str`; Alt-Daten werden per `_coerce_str_to_blocks` gelesen).\n\n`playbook_id` bindet einen Modus an ein zugehoeriges Playbook (Brainstormer:\n„Zugehoeriges Playbook\"); `playbook_name` ist ein denormalisierter Snapshot\nfuer das Rendering (der reine Profil-Resolver hat keinen DB-Zugriff). Der\n`playbook_id` bleibt die Wahrheit — der Name kann bei Umbenennung veralten."
+        "description": "Ein einzelner Modus einer Multi-Modus-Persona.\n\nEin Modus beschreibt, wie sich die Persona in einem bestimmten Kontext\nverhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne\nTrigger-Match greift der Default-Modus (`is_default=True`).\n\n`identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`\nbeschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`\nlistet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Bloecke.\n\n`playbook_id` bindet den Modus an ein zugehoeriges Playbook;\n`playbook_name` ist dessen Name zur Anzeige und kann bei Umbenennung\nveralten."
       },
       "PersonaPlaybookLinkSet": {
         "properties": {
@@ -23347,7 +23347,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PersonaVersionContent",
-        "description": "Typisierter Inhalt einer Persona-Version (`persona_version.content`).\n\nVor Phase 3-0 hiess diese Klasse `PersonaContent`. Der Name ist mit Phase\n3-0 an die neue BlockNote-Profil-Klasse uebergegangen; die per-Version\npersistierten Felder leben hier.\n\n`traits` ist mit Phase 3-0 als Persona-Strukturfeld deprecated — neue UIs\nliefern den strukturierten Profil-Inhalt ueber `content` (BlockNote). Das\nFeld bleibt mit Default `[]` als Wire-Schema-Backward-Compat (alte Clients\nschicken/erwarten es weiter)."
+        "description": "Inhalt einer Persona-Version.\n\nDen strukturierten Profil-Inhalt traegt `content` (BlockNote). `traits`\nist veraltet und kann leer bleiben."
       },
       "PersonaVersionRead": {
         "properties": {
@@ -23590,7 +23590,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PlaybookContent",
-        "description": "Typisierter Inhalt einer Playbook-Version (`playbook_version.content`).\n\nWelle 4: description, body und type haben Default \"\" — Create erlaubt\nunvollstaendige Drafts. Promote-Validation (draft → review/active) prueft\nim Transition-Endpunkt auf vollstaendige Pflichtfelder.\n\nTrack B (Nur-BlockNote): `body` ist immer ein stringifiziertes BlockNote-\nJSON-Dokument (`JSON.stringify(editor.document)`) mit Inline-Placeholder-\nPills. Der frueher gefuehrte `body_format`-Schalter ist entfallen; Migration\n`0030_blocknote_only.sql` hat Altbestaende markdown-aware konvertiert und den\n`body_format`-Key aus allen Versions-Snapshots entfernt."
+        "description": "Inhalt einer Playbook-Version.\n\n`body` ist ein stringifiziertes BlockNote-JSON-Dokument\n(`JSON.stringify(editor.document)`) mit Inline-Placeholder-Pills. Leere\nFelder sind im Entwurf erlaubt; die Freigabe verlangt sie gefuellt."
       },
       "PlaybookCreate": {
         "properties": {
@@ -23624,7 +23624,7 @@
           "name"
         ],
         "title": "PlaybookCreate",
-        "description": "Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `PlaybookContent` eingesetzt."
+        "description": "Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf."
       },
       "PlaybookRead": {
         "properties": {
@@ -23798,7 +23798,7 @@
           "faq"
         ],
         "title": "PlaybookType",
-        "description": "Kurierte Playbook-Typen (Phase 3-0, Master-Plan §Track 0).\n\nMigration `0020_playbook_type_check.sql` setzt den passenden CHECK-\nConstraint in der DB. `PlaybookContent.type` bleibt aus Backward-Compat-\nGruenden vorlaeufig `str`; Frontend/Service ziehen mit Track 3-A/B nach."
+        "description": "Kuratierte Playbook-Typen."
       },
       "PlaybookUpdate": {
         "properties": {
@@ -23979,7 +23979,7 @@
           "none"
         ],
         "title": "ReadScope",
-        "description": "Sichtbarkeitsumfang eines lesenden Tools.\n\n- ``all``: der gesamte Workspace („alles sehen\").\n- ``assigned``: nur die dem Agenten ueber seine Persona zugewiesenen\n  Playbooks bzw. die daraus erreichbaren Resources (Default — least\n  privilege/„secure by default\").\n- ``none``: das Tool ist fuer diesen Agenten gar nicht verfuegbar."
+        "description": "Lese-Umfang: `all` ganzer Workspace, `assigned` nur Zugewiesenes (Default), `none` aus."
       },
       "ResourceBlock": {
         "properties": {
@@ -24003,7 +24003,7 @@
           "type"
         ],
         "title": "ResourceBlock",
-        "description": "Ein Top-Level-Block eines BlockNote-Dokuments.\n\n`extra=\"allow\"`, weil das BlockNote-Schema (`props`, `content`, `children`,\n…) offen und versionsabhaengig ist. Verbindlich sind nur `id` (Anker fuer\nBlock-Refs) und `type`."
+        "description": "BlockNote-Block; Pflicht sind nur `id` (Anker) und `type`, weitere Felder frei."
       },
       "ResourceBlockAnchor": {
         "properties": {
@@ -24061,7 +24061,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ResourceContent",
-        "description": "Typisierter Inhalt einer Resource-Version (`resource_version.content`).\n\nE3 (Track E3, ADR-0009 additive jsonb-Evolution): `tags` ermoeglicht das\nFiltern ueber `GET /resources?tag=` ohne denormalisierte DB-Spalte.\nDefault `[]` — Backward-Compat: alte Versionen ohne Tags bleiben gueltig."
+        "description": "Inhalt einer Resource-Version: Beschreibung, BlockNote-Bloecke, Tags."
       },
       "ResourceCreate": {
         "properties": {
@@ -24109,7 +24109,7 @@
           "name"
         ],
         "title": "ResourceCreate",
-        "description": "Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `ResourceContent` eingesetzt (description=\"\" + blocks=[])."
+        "description": "Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht eine leere Resource."
       },
       "ResourceLinkItem": {
         "properties": {
@@ -24162,7 +24162,7 @@
           "position"
         ],
         "title": "ResourceLinkItem",
-        "description": "Ein einzelner Playbook→Resource-Verweis (Eingabe).\n\nPhase-3-Fixes Track 4: `link_scope` unterscheidet zwischen Volldokument-\nReferenz (`'resource'`, kein `block_id`) und Block-Anker (`'block'`, mit\n`block_id`). Default `'block'` ist Backward-Compat fuer alte Clients;\nDefault `block_id=None` erzwingt im Validator die explizite Block-ID\nfuer 'block'-Items."
+        "description": "Ein einzelner Playbook→Resource-Verweis (Eingabe).\n\n`link_scope='resource'` verweist auf das ganze Dokument (ohne `block_id`),\n`link_scope='block'` (Default) auf einen Heading-Anker (mit `block_id`)."
       },
       "ResourceLinkRead": {
         "properties": {
@@ -24871,7 +24871,7 @@
           "hybrid"
         ],
         "title": "SearchMode",
-        "description": "Wie gesucht wird (ADR-0037 §35-38, eingeloest in ADR-0046).\n\n- `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst\n  Volltext. Der Tool-Vertrag aendert sich dadurch NICHT, wenn eine\n  Installation ohne die optionale Embedding-Gruppe laeuft.\n- `text`: nur Volltext — deterministisch und reproduzierbar.\n- `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und\n  sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).\n- `hybrid`: beide Raenge per Reciprocal Rank Fusion verschmolzen.\n\nOhne verfuegbaren Embedding-Port verhalten sich alle Stufen wie `text`."
+        "description": "Wie gesucht wird.\n\n- `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst\n  Volltext.\n- `text`: nur Volltext — deterministisch und reproduzierbar.\n- `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und\n  sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).\n- `hybrid`: beide Raenge per Reciprocal Rank Fusion verschmolzen.\n\nOhne verfuegbaren Embedding-Port verhalten sich alle Stufen wie `text`."
       },
       "Sensitivity": {
         "type": "string",
@@ -24903,7 +24903,7 @@
           "name"
         ],
         "title": "SkillRef",
-        "description": "Referenz auf einen relevanten Skill der Persona (Gap 3.5).\n\nRein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis\n(z. B. „nuetzlich im Story-Crafter-Modus\"). Keine Ausfuehrungs-Bindung —\nder gerenderte Profil-Text teilt dem Agenten die relevanten Skills mit."
+        "description": "Referenz auf einen relevanten Skill der Persona.\n\nRein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis\n(z. B. „nuetzlich im Story-Crafter-Modus\"). Keine Ausfuehrungs-Bindung —\nder gerenderte Profil-Text teilt dem Agenten die relevanten Skills mit."
       },
       "SourceConventionRead": {
         "properties": {
@@ -25121,7 +25121,7 @@
           "child_id"
         ],
         "title": "SubResourceLinkItem",
-        "description": "Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource, Track E).\n\nSpiegelt `ResourceLinkItem`: `link_scope='resource'` referenziert das ganze\nKind-Dokument (kein `block_id`), `link_scope='block'` einen Heading-Anker\nim Kind (mit `block_id`). Default ist `'resource'` — bei Sub-Resources ist\ndie Volldokument-Referenz der Normalfall."
+        "description": "Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource).\n\n`link_scope='resource'` referenziert das ganze Kind-Dokument (kein\n`block_id`), `link_scope='block'` einen Heading-Anker im Kind (mit\n`block_id`). Default ist `'resource'` — bei Sub-Resources ist die\nVolldokument-Referenz der Normalfall."
       },
       "SubResourceLinkSet": {
         "properties": {
@@ -26701,7 +26701,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "TransitionGrant",
-        "description": "Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).\n\nWirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent\n`promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die\nexplizit gewaehrten Richtungen erlaubt — so laesst sich „darf Playbooks\npromoten, aber keine Personas; nie retiren\" abbilden, ohne `promote_retire`\naufzuweiten. Fehlt der Domain-Eintrag, gilt die ungeteilte `promote_retire`."
+        "description": "Pro-Domain-Einschraenkung von `promote_retire`.\n\nWirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent\n`promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die\nexplizit gewaehrten Richtungen erlaubt — so laesst sich „darf Playbooks\npromoten, aber keine Personas; nie retiren\" abbilden, ohne `promote_retire`\naufzuweiten. Fehlt der Domain-Eintrag, gilt die ungeteilte `promote_retire`."
       },
       "TriggerOverview": {
         "properties": {
@@ -27186,7 +27186,7 @@
           "to"
         ],
         "title": "VersionTransitionRequest",
-        "description": "Eingabe fuer `POST .../versions/{v}/transition`.\n\n`acknowledge_test_report` und `override_reason` gehoeren zum\nAktivierungsvertrag (ADR-0053 6.3): Sind Pruefaelle der Zielversion rot\noder fehlen Ergebnisse, verlangt `to='active'` beides. Ist die\nPruefall-Menge leer oder alles `pass`, werden beide ignoriert.\n\n`override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein\nleerer Grund (auch nur Leerzeichen) ist hier zulaessig und wird erst vom\nService als 409 `test_override_reason_required` beantwortet — der\nVertrag unterscheidet „bestaetigt ohne Grund\" ausdruecklich von einem\nFormatfehler. Eine Mindestlaenge ueber ein Zeichen gibt es nicht."
+        "description": "Eingabe fuer `POST .../versions/{v}/transition`.\n\nSind Pruefaelle der Zielversion rot oder fehlen Ergebnisse, verlangt\n`to='active'` zusaetzlich `acknowledge_test_report=true` und einen\n`override_reason`. Ist die Pruefall-Menge leer oder alles `pass`, werden\nbeide ignoriert.\n\n`override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein\nleerer Grund wird mit 409 `test_override_reason_required` abgelehnt."
       },
       "WaTableCreate": {
         "properties": {

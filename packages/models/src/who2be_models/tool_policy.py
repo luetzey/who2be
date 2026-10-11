@@ -24,15 +24,12 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 
+# Der Docstring geht als Schema-Text auf den Draht, achtmal je Agent-Werkzeug
+# (MCP-Token T2) — deshalb ein Satz. `assigned` ist der Default nach least
+# privilege/„secure by default"; fuer Resources heisst es „die aus den
+# zugewiesenen Playbooks erreichbaren", fuer `agent_read` „nur der eigene Agent".
 class ReadScope(StrEnum):
-    """Sichtbarkeitsumfang eines lesenden Tools.
-
-    - ``all``: der gesamte Workspace („alles sehen").
-    - ``assigned``: nur die dem Agenten ueber seine Persona zugewiesenen
-      Playbooks bzw. die daraus erreichbaren Resources (Default — least
-      privilege/„secure by default").
-    - ``none``: das Tool ist fuer diesen Agenten gar nicht verfuegbar.
-    """
+    """Lese-Umfang: `all` ganzer Workspace, `assigned` nur Zugewiesenes (Default), `none` aus."""
 
     all = "all"
     assigned = "assigned"
@@ -88,18 +85,18 @@ class AgentCapability(StrEnum):
 _TRANSITION_DOMAINS = ("persona", "playbook", "resource", "external_tool")
 
 
+# Gedaechtnis-Modell nach ADR-0044; der Werkzeug-Filter in tools/list folgt
+# ADR-0042, die Freigabe-Schleuse bei `suggest` dem Muster aus ADR-0038.
 class MemoryMode(StrEnum):
-    """Gedaechtnis-Modus eines Agenten (ADR-0044) — geordnete Stufen.
+    """Gedaechtnis-Modus eines Agenten — geordnete Stufen.
 
-    Steuert BEIDE Seiten des Agent-Memorys: ob die Memory-MCP-Tools fuer den
-    Agenten ueberhaupt existieren (tools/list-Filter, ADR-0042) und wie
-    `save_memory` persistiert wird.
+    Steuert, ob die Memory-Werkzeuge fuer den Agenten sichtbar sind und wie
+    `save_memory` speichert.
 
     - ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.
     - ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).
     - ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —
-      retrieval-sichtbar erst nach menschlicher Freigabe (Kurations-Schleuse,
-      Muster ADR-0038).
+      sichtbar erst nach menschlicher Freigabe.
     - ``auto``: `save_memory` speichert direkt `active`; die serverseitigen
       Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer.
     """
@@ -110,21 +107,22 @@ class MemoryMode(StrEnum):
     auto = "auto"
 
 
+# ADR-0044. Bewusst nicht Teil des `is_within`-Anti-Escalation-Vergleichs,
+# weil die Stufe kein Recht ist.
 class MemoryDirective(StrEnum):
-    """Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt (ADR-0044).
+    """Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt.
 
-    Bestimmt NUR die Formulierung der tools-overview-Sektion („rufe zu
-    Gespraechsbeginn dein Gedaechtnis ab" vs. „nutze es, wenn Kontext
-    hilfreich ist") — KEIN Recht, daher bewusst nicht Teil des
-    `is_within`-Anti-Escalation-Vergleichs.
+    Bestimmt NUR die Formulierung („rufe zu Gespraechsbeginn dein Gedaechtnis
+    ab" vs. „nutze es, wenn Kontext hilfreich ist") — kein Recht.
     """
 
     required = "required"
     recommended = "recommended"
 
 
+# Pro-Domain-Verfeinerung von `promote_retire` nach ADR-0039.
 class TransitionGrant(BaseModel):
-    """Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
+    """Pro-Domain-Einschraenkung von `promote_retire`.
 
     Wirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent
     `promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die

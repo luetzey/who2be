@@ -1666,15 +1666,16 @@ async def transition_system_prompt(
 # ---------------------------------------------------------------------------
 
 
+# Pflicht-`outcome` nach ADR-0053 6.5. Die REST-Form (`UsageEventCreate`)
+# bleibt optional: ADR-0053 3.4 plant eine serverseitige Nutzungsaufzeichnung
+# ohne Ergebnis (Paket D3, hier noch nicht umgesetzt). Pflicht im Schema statt
+# Laufzeit-Pruefung: so steht es im inputSchema unter `required`, und ein
+# Modell sieht es vor dem Aufruf.
 class UsageReport(UsageEventCreate):
-    """Eingabe von `record_usage` ueber MCP: `outcome` ist Pflicht (ADR-0053 6.5).
+    """Eingabe von `record_usage`: `outcome` ist Pflicht.
 
-    Die REST-Form (`UsageEventCreate`) bleibt optional: ADR-0053 3.4 plant eine
-    serverseitige Nutzungsaufzeichnung ohne Ergebnis (Paket D3, hier noch nicht
-    umgesetzt). Ein Agent dagegen meldet immer, WIE die Nutzung ausging — das
-    Ergebnis ist der Teil, den nur er kennt. Pflicht im Schema statt
-    Laufzeit-Pruefung: so steht es im inputSchema unter `required`, und ein
-    Modell sieht es vor dem Aufruf.
+    Der Agent meldet immer, WIE die Nutzung ausging — das Ergebnis ist der
+    Teil, den nur er kennt.
     """
 
     outcome: UsageOutcome

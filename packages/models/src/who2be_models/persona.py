@@ -46,8 +46,9 @@ def _coerce_str_to_blocks(value: object) -> object:
     return value
 
 
+# Persona-Skills kamen mit Gap 3.5.
 class SkillRef(BaseModel):
-    """Referenz auf einen relevanten Skill der Persona (Gap 3.5).
+    """Referenz auf einen relevanten Skill der Persona.
 
     Rein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis
     (z. B. „nuetzlich im Story-Crafter-Modus"). Keine Ausfuehrungs-Bindung —
@@ -60,8 +61,13 @@ class SkillRef(BaseModel):
     note: str = Field(default="", max_length=1_000)
 
 
+# Multi-Modus-Personas kamen mit Gap 3.4. `identity_add`,
+# `output_style_override` und `anti_patterns` sind seit PR-A BlockNote-Listen
+# (vorher `str`); Alt-Daten liest `_coerce_str_to_blocks`. `playbook_name` ist
+# ein denormalisierter Snapshot, weil der reine Profil-Resolver keinen
+# DB-Zugriff hat; `playbook_id` bleibt die Wahrheit.
 class PersonaMode(BaseModel):
-    """Ein einzelner Modus einer Multi-Modus-Persona (Gap 3.4).
+    """Ein einzelner Modus einer Multi-Modus-Persona.
 
     Ein Modus beschreibt, wie sich die Persona in einem bestimmten Kontext
     verhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne
@@ -69,13 +75,11 @@ class PersonaMode(BaseModel):
 
     `identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`
     beschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`
-    listet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Dokumente
-    (PR-A — vorher `str`; Alt-Daten werden per `_coerce_str_to_blocks` gelesen).
+    listet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Bloecke.
 
-    `playbook_id` bindet einen Modus an ein zugehoeriges Playbook (Brainstormer:
-    „Zugehoeriges Playbook"); `playbook_name` ist ein denormalisierter Snapshot
-    fuer das Rendering (der reine Profil-Resolver hat keinen DB-Zugriff). Der
-    `playbook_id` bleibt die Wahrheit — der Name kann bei Umbenennung veralten.
+    `playbook_id` bindet den Modus an ein zugehoeriges Playbook;
+    `playbook_name` ist dessen Name zur Anzeige und kann bei Umbenennung
+    veralten.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -95,14 +99,11 @@ class PersonaMode(BaseModel):
         return _coerce_str_to_blocks(value)
 
 
+# Seit Phase 3-0. Gleiche Obergrenze (`max_length=2000`) wie bei
+# `ResourceContent.blocks` (ADR-0022) — gross genug fuer eine Persona-Karte,
+# klein genug zum Embedden in Listen.
 class PersonaContent(BaseModel):
-    """BlockNote-strukturierter Persona-Profil-Inhalt (Phase 3-0).
-
-    Wird als optionales Feld an `PersonaVersionContent.content` haengen und
-    traegt Rolle, Tonfall, Beispiele als BlockNote-Dokument (ADR-0022). Gleiche
-    Obergrenze (`max_length=2000`) wie bei `ResourceContent.blocks` — gross
-    genug fuer eine Persona-Karte, klein genug zum Embedden in Listen.
-    """
+    """Profil-Inhalt der Persona (Rolle, Tonfall, Beispiele) als BlockNote-Bloecke."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -110,17 +111,15 @@ class PersonaContent(BaseModel):
     blocks: list[ResourceBlock] = Field(default_factory=list, max_length=2_000)
 
 
+# Vor Phase 3-0 hiess diese Klasse `PersonaContent`; der Name ist mit Phase
+# 3-0 an die BlockNote-Profil-Klasse oben uebergegangen. `traits` ist seit
+# Phase 3-0 deprecated und bleibt mit Default `[]` als Wire-Schema-
+# Backward-Compat fuer alte Clients.
 class PersonaVersionContent(BaseModel):
-    """Typisierter Inhalt einer Persona-Version (`persona_version.content`).
+    """Inhalt einer Persona-Version.
 
-    Vor Phase 3-0 hiess diese Klasse `PersonaContent`. Der Name ist mit Phase
-    3-0 an die neue BlockNote-Profil-Klasse uebergegangen; die per-Version
-    persistierten Felder leben hier.
-
-    `traits` ist mit Phase 3-0 als Persona-Strukturfeld deprecated — neue UIs
-    liefern den strukturierten Profil-Inhalt ueber `content` (BlockNote). Das
-    Feld bleibt mit Default `[]` als Wire-Schema-Backward-Compat (alte Clients
-    schicken/erwarten es weiter).
+    Den strukturierten Profil-Inhalt traegt `content` (BlockNote). `traits`
+    ist veraltet und kann leer bleiben.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -168,13 +167,14 @@ class PersonaVersionContent(BaseModel):
         return self
 
 
+# Welle 4: nur `name` ist Pflicht. Promote-Validation (draft → review/active)
+# prueft im Transition-Endpunkt auf vollstaendige Pflichtfelder
+# (description, body in `content.content.blocks`).
 class PersonaCreate(BaseModel):
     """Eingabe fuer `POST /v1/personas` — legt Version 1 an.
 
-    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
-    eine leere `PersonaVersionContent` eingesetzt. Promote-Validation (draft →
-    review/active) prueft im Transition-Endpunkt auf vollstaendige Pflichtfelder
-    (description, body in `content.content.blocks`).
+    Nur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf; fuer
+    die Freigabe muessen Beschreibung und Profil-Inhalt gefuellt sein.
     """
 
     model_config = ConfigDict(extra="forbid")
