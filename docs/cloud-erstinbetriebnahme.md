@@ -441,6 +441,13 @@ Zeitplaene, Overrides und Notfallweg stehen im RUNBOOK unter
 dieser Abschnitt nennt nur, was auf Dokploy anders ist.
 [`oauth-e2e-dokploy.md`](oauth-e2e-dokploy.md) verweist hierher.
 
+Wer einen Zeitplan per `WHO2BE_ROUTINE_*` oder den Worker per
+`WHO2BE_WORKER_ENABLED` aendert, erzeugt danach `worker` **und** `api` neu:
+auf Dokploy per Redeploy, auf Hetzner mit `$COMPOSE up -d worker api` (RUNBOOK).
+`api` liest dieselben Variablen fuer die Betreiber-Uebersicht
+`GET /v1/system/routines`; bleibt `api` auf dem alten Stand, zeigt sie
+weiter die alten Zeitplaene, obwohl der Worker schon nach den neuen laeuft.
+
 | Routine | Zeitplan (UTC) | Was sie tut |
 |---|---|---|
 | `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace, dazu die WorkArea-/KB-Sweeps (abgelaufene Artifacts, verwaiste Blobs, geloeschte Area-Stores) |
