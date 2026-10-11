@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} of {{total}} shown"
     },
+    "usageLine": {
+      "label": "Usage",
+      "used": "{{n}}× in {{days}} days · last used {{age}} · counted since {{date}}",
+      "never": "Not used yet · counted since {{date}}"
+    },
     "table": {
       "scrollHint": "Swipe sideways for more columns"
     },
@@ -249,6 +254,12 @@
       "memory": "Memory"
     },
     "signOut": "Sign out",
+    "inbox": {
+      "label": "To do",
+      "bell_zero": "To do: nothing open",
+      "bell_one": "To do: {{count}} open",
+      "bell_other": "To do: {{count}} open"
+    },
     "language": {
       "label": "Language",
       "switch": "Change language"
@@ -393,6 +404,15 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Save",
+      "pageTabsAria": "Agent sections",
+      "pageTabs": {
+        "overview": "Overview",
+        "evolution": "Evolution",
+        "memory": "Memory",
+        "tests": "Test cases",
+        "settings": "Settings"
+      },
+      "evolutionPlaceholder": "This is where the agent's evolution will live: feedback, changes and follow-ups.",
       "tabsAria": "Agent settings",
       "tabs": {
         "config": "Configuration",
@@ -563,12 +583,51 @@
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
-      "noPlaybooks": "No playbooks linked.",
-      "summaryPlaybooks_one": "{{count}} playbook",
-      "summaryPlaybooks_other": "{{count}} playbooks",
-      "summaryNoPlaybooks": "no playbooks",
-      "summaryNoPersona": "No persona",
-      "summarySeparator": " · "
+      "noPlaybooks": "No playbooks linked."
+    },
+    "overview": {
+      "glance": "At a glance",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Open feedback reports",
+        "casesReopened_one": "1 reopened",
+        "casesReopened_other": "{{count}} reopened",
+        "casesInProgress_one": "1 in progress",
+        "casesInProgress_other": "{{count}} in progress",
+        "feedback": "Feedback on its building blocks",
+        "feedbackSub_one": "1 negative · {{days}} days",
+        "feedbackSub_other": "{{count}} negative · {{days}} days",
+        "memory": "Memory",
+        "memoryPending_one": "1 awaiting approval",
+        "memoryPending_other": "{{count}} awaiting approval",
+        "memoryExpiring_one": "1 expiring soon",
+        "memoryExpiring_other": "{{count}} expiring soon",
+        "patterns": "Patterns",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Learning proposal",
+        "patternCase": "Cases",
+        "tests": "Test cases",
+        "testsActive": "active",
+        "usage": "Usage",
+        "usageLast": "last used {{age}} · {{days}} days",
+        "usageNever": "None yet · counted since {{date}}",
+        "none": "None yet",
+        "unavailable": "Not available"
+      },
+      "workAreas": {
+        "title": "Work areas",
+        "own": "own",
+        "shared": "shared · {{level}}",
+        "level": {
+          "read": "read",
+          "write": "read/write"
+        },
+        "moreAgents_one": "+1 agent",
+        "moreAgents_other": "+{{count}} agents",
+        "empty": "This agent has no work area yet. The private one is created on first access.",
+        "hint": "You grant access on the work area under \"Access\".",
+        "error": "Couldn't load the work areas."
+      }
     },
     "copy": {
       "plain": "Copy",
@@ -618,12 +677,7 @@
       "error": "Copy failed."
     },
     "filter": {
-      "all": "All",
-      "statusGroup": "Filter by status",
-      "searchLabel": "Search",
       "searchPlaceholder": "Search agents…",
-      "reset": "Reset filters",
-      "emptyTitle": "No matches",
       "emptyDescription": "No agent matches the filter and search."
     },
     "memory": {
@@ -860,50 +914,24 @@
       "pageOf": "Page {{page}} of {{totalPages}}",
       "next": "Next"
     },
-    "attention": {
-      "ariaLabel": "Needs your attention now",
-      "eyebrow": "Needs your attention now",
-      "reviews": {
-        "title_one": "1 version is awaiting review",
-        "title_other": "{{count}} versions are awaiting review",
-        "description": "Review the submitted versions and publish them or send them back to draft.",
-        "openVersion": "Review {{name}} v{{version}}",
-        "openList": {
-          "persona_one": "Review 1 persona",
-          "persona_other": "Review {{count}} personas",
-          "playbook_one": "Review 1 playbook",
-          "playbook_other": "Review {{count}} playbooks",
-          "resource_one": "Review 1 resource",
-          "resource_other": "Review {{count}} resources"
-        }
-      },
-      "memories": {
-        "title_one": "1 entry awaiting approval",
-        "title_other": "{{count}} entries awaiting approval",
-        "description": "Approve or reject the memory suggestions from your agents.",
-        "action": "Review"
-      },
-      "patterns": {
-        "title_one": "1 pattern",
-        "title_other": "{{count}} patterns",
-        "description": "Learning suggestions or cases that keep coming back.",
-        "action": "View"
-      },
-      "cases": {
-        "title_one": "1 open case",
-        "title_other": "{{count}} open cases",
-        "description": "Reported situations nobody has triaged yet.",
-        "action": "Triage"
-      },
-      "systemPrompts": {
-        "title_one": "1 system prompt is awaiting review",
-        "title_other": "{{count}} system prompts are awaiting review",
-        "description": "Review the submitted system prompt versions.",
-        "action": "Go to review"
-      },
-      "allClear": {
-        "title": "All clear",
-        "description": "Nothing is waiting on you — go ahead and start."
+    "inbox": {
+      "ariaLabel": "To do",
+      "loading": "Counting tasks …",
+      "title_one": "1 task is waiting for you",
+      "title_other": "{{count}} tasks are waiting for you",
+      "clear": "Nothing to do.",
+      "action": "View all",
+      "more_one": "+ 1 more",
+      "more_other": "+ {{count}} more",
+      "kind": {
+        "followUps_one": "1 follow-up due",
+        "followUps_other": "{{count}} follow-ups due",
+        "memory_one": "1 memory entry",
+        "memory_other": "{{count}} memory entries",
+        "versions_one": "1 version awaiting approval",
+        "versions_other": "{{count}} versions awaiting approval",
+        "cases_one": "1 feedback report",
+        "cases_other": "{{count}} feedback reports"
       }
     },
     "quickStart": {
@@ -1743,6 +1771,42 @@
       "workspace": "Workspace",
       "members": "Members"
     },
+    "routines": {
+      "title": "Background routines",
+      "description": "Visible to operators only, read-only. Times in local time ({{timeZone}}), UTC in brackets.",
+      "workerLastSeen": "Worker last seen:",
+      "listLabel": "Routines",
+      "empty": "No routines registered.",
+      "none": "—",
+      "neverRun": "No run yet",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Schedule",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Last run",
+      "nextRun": "Next run",
+      "lastSuccess": "Last success",
+      "counters": "Counters:",
+      "errorClass": "Error class:",
+      "enabled": "On",
+      "disabled": "Off",
+      "source": {
+        "code": "Source: code",
+        "env": "Source: environment"
+      },
+      "status": {
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "trigger": {
+        "schedule": "scheduled",
+        "cli": "via CLI",
+        "manual": "manual"
+      },
+      "externalTitle": "External schedule detected (crontab/Dokploy).",
+      "externalDescription": "It can be removed."
+    },
     "account": {
       "title": "Account",
       "description": "Your personal profile, security and display preferences.",
@@ -2278,16 +2342,16 @@
         "type": "Type",
         "allSignals": "All signals",
         "allTypes": "All types",
-        "statusGroup": "Filter by status"
+        "searchPlaceholder": "Search by element…"
       },
       "status": {
         "open": "Open",
         "in_progress": "In progress",
         "addressed": "Done",
-        "dismissed": "Dismissed",
-        "all": "All"
+        "dismissed": "Dismissed"
       },
-      "empty": "No feedback for this selection.",
+      "emptyOpenTitle": "No open feedback",
+      "emptyOpenDescription": "All feedback has been triaged. New items appear here as soon as an agent or a person leaves feedback.",
       "openElement": "Open element"
     },
     "overview": {
@@ -3787,5 +3851,90 @@
       "importanceChange": "Importance: {{from}} → {{to}}",
       "restored": "Earlier state restored."
     }
+  },
+  "inbox": {
+    "page": {
+      "title": "To do",
+      "description": "Everything waiting for your decision. Done items disappear on their own."
+    },
+    "chip": {
+      "followUps": "Due",
+      "memory": "Memory",
+      "versions": "Approvals",
+      "cases": "Feedback reports"
+    },
+    "kind": {
+      "followUps": "Follow-ups due",
+      "followUpsHint": "Did the change work? Only a person rates it.",
+      "memory": "Memory awaiting approval",
+      "memoryHint": "Entries take effect only after you approve them.",
+      "versions": "Versions awaiting approval",
+      "versionsHint": "Agents use the new version only after you approve it.",
+      "versionsEditorHint": "Waiting for an admin to approve. You can move them back to draft.",
+      "cases": "Feedback reports, not triaged",
+      "casesHint": "Reported situations nobody has triaged yet."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Worth a look",
+      "toLookHint": "not counted in the bell"
+    },
+    "followUps": {
+      "pending": "You will open individual follow-ups on the agent under “Improvement”. Until then, this row only shows how many are due."
+    },
+    "memory": {
+      "userMemory": "Your user memory"
+    },
+    "cases": {
+      "reopened": "reopened"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} persona",
+        "persona_other": "{{count}} personas",
+        "playbook_one": "{{count}} playbook",
+        "playbook_other": "{{count}} playbooks",
+        "resource_one": "{{count}} resource",
+        "resource_other": "{{count}} resources",
+        "systemPrompt_one": "{{count}} system prompt",
+        "systemPrompt_other": "{{count}} system prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} pattern",
+      "patterns_other": "{{count}} patterns",
+      "patternsHint": "Feedback reports or learning suggestions that keep recurring",
+      "versions_one": "{{count}} version is waiting for an admin to approve",
+      "versions_other": "{{count}} versions are waiting for an admin to approve",
+      "open": "View",
+      "openAria": "View: {{title}}"
+    },
+    "action": {
+      "review": "Review",
+      "reviewAria": "Review: {{text}}",
+      "triage": "Triage",
+      "triageAria": "Triage: {{text}}",
+      "open": "Open",
+      "openVersionAria": "Open {{name}} version {{version}}"
+    },
+    "quoted": "“{{text}}”",
+    "unknownAgent": "Unknown agent",
+    "showAll_one": "View all {{count}}",
+    "showAll_other": "View all {{count}}",
+    "empty": {
+      "title": "All done",
+      "description": "New tasks show up here and on the bell.",
+      "filtered": "Nothing is open for this selection."
+    },
+    "sectionError": "Couldn't be loaded.",
+    "loadError": "The tasks couldn't be loaded.",
+    "retry": "Try again"
   }
 }

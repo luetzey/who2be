@@ -54,12 +54,14 @@ graph TD
     MODELS["packages/models — geteilte Pydantic-/Domain-Modelle"]
     SUPA["Supabase Auth — JWT-Ausstellung"]
     PG[("Postgres — Supabase")]
+    WORKER["worker — Hintergrund-Routinen (gleiches Image wie api)"]
 
     AGENT --> TOOLS
     WEB -->|"Login (JWT)"| SUPA
     WEB -->|"Bearer JWT"| R
     TOOLS -->|"Bearer API-Token"| R
     R --> S --> REPO --> PG
+    WORKER -->|"Owner-Verbindung, routine_run"| PG
     R -.-> CORE
     S -.-> CORE
     R --> MODELS
@@ -68,6 +70,14 @@ graph TD
     TOOLS --> MODELS
     CORE -->|"JWT-Verify"| SUPA
 ```
+
+**Hintergrund-Routinen** (DSGVO-Purge, Gedaechtnis-Verfall,
+Protokoll-Aufraeumen) laufen im Compose-Dienst `worker` (ADR-0057): dasselbe
+Image wie `api`, ein eigener Prozess ohne Port, Zeitplaene als Registry im Code
+(`apps/api/src/who2be_api/worker/`), Laufprotokoll in der Tabelle `routine_run`,
+kein Broker. Die API bleibt der einzige HTTP-Eingang; der Worker schreibt als
+interner Owner-Client direkt in dieselbe DB, genau ein Container. Betrieb:
+[`deploy/hetzner/RUNBOOK.md` § Hintergrund-Routinen (Worker)](../deploy/hetzner/RUNBOOK.md#hintergrund-routinen-worker).
 
 ### 2.1 Schichten (Clean Architecture)
 

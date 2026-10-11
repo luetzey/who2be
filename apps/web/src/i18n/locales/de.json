@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} von {{total}} angezeigt"
     },
+    "usageLine": {
+      "label": "Nutzung",
+      "used": "{{n}}× in {{days}} Tagen · zuletzt {{age}} · gezählt seit {{date}}",
+      "never": "Noch keine Nutzung · gezählt seit {{date}}"
+    },
     "table": {
       "scrollHint": "Seitlich wischen für weitere Spalten"
     },
@@ -249,6 +254,12 @@
       "memory": "Gedächtnis"
     },
     "signOut": "Abmelden",
+    "inbox": {
+      "label": "Zu erledigen",
+      "bell_zero": "Zu erledigen: nichts offen",
+      "bell_one": "Zu erledigen: {{count}} offen",
+      "bell_other": "Zu erledigen: {{count}} offen"
+    },
     "language": {
       "label": "Sprache",
       "switch": "Sprache umstellen"
@@ -393,6 +404,15 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Speichern",
+      "pageTabsAria": "Bereiche des Agenten",
+      "pageTabs": {
+        "overview": "Überblick",
+        "evolution": "Weiterentwicklung",
+        "memory": "Gedächtnis",
+        "tests": "Prüffälle",
+        "settings": "Einstellungen"
+      },
+      "evolutionPlaceholder": "Hier entsteht die Weiterentwicklung des Agenten: Rückmeldungen, Änderungen und Nachkontrollen.",
       "tabsAria": "Agent-Einstellungen",
       "tabs": {
         "config": "Konfiguration",
@@ -563,12 +583,51 @@
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
-      "noPlaybooks": "Keine Playbooks verknüpft.",
-      "summaryPlaybooks_one": "{{count}} Playbook",
-      "summaryPlaybooks_other": "{{count}} Playbooks",
-      "summaryNoPlaybooks": "keine Playbooks",
-      "summaryNoPersona": "Ohne Persona",
-      "summarySeparator": " · "
+      "noPlaybooks": "Keine Playbooks verknüpft."
+    },
+    "overview": {
+      "glance": "Auf einen Blick",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Rückmeldungen offen",
+        "casesReopened_one": "1 wieder offen",
+        "casesReopened_other": "{{count}} wieder offen",
+        "casesInProgress_one": "1 in Arbeit",
+        "casesInProgress_other": "{{count}} in Arbeit",
+        "feedback": "Feedback zu seinen Bausteinen",
+        "feedbackSub_one": "1 negativ · {{days}} Tage",
+        "feedbackSub_other": "{{count}} negativ · {{days}} Tage",
+        "memory": "Gedächtnis",
+        "memoryPending_one": "1 zur Freigabe",
+        "memoryPending_other": "{{count}} zur Freigabe",
+        "memoryExpiring_one": "1 läuft bald ab",
+        "memoryExpiring_other": "{{count}} laufen bald ab",
+        "patterns": "Muster",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Lernvorschlag",
+        "patternCase": "Fälle",
+        "tests": "Prüffälle",
+        "testsActive": "aktiv",
+        "usage": "Nutzung",
+        "usageLast": "zuletzt {{age}} · {{days}} Tage",
+        "usageNever": "Noch keine · gezählt seit {{date}}",
+        "none": "Noch keine",
+        "unavailable": "Nicht verfügbar"
+      },
+      "workAreas": {
+        "title": "Arbeitsbereiche",
+        "own": "eigener",
+        "shared": "geteilt · {{level}}",
+        "level": {
+          "read": "lesen",
+          "write": "lesen/schreiben"
+        },
+        "moreAgents_one": "+1 Agent",
+        "moreAgents_other": "+{{count}} Agenten",
+        "empty": "Dieser Agent hat noch keinen Arbeitsbereich. Der private entsteht beim ersten Zugriff.",
+        "hint": "Zugriff vergibst du am Arbeitsbereich unter „Zugriff“.",
+        "error": "Die Arbeitsbereiche konnten nicht geladen werden."
+      }
     },
     "copy": {
       "plain": "Kopieren",
@@ -618,12 +677,7 @@
       "error": "Kopieren fehlgeschlagen."
     },
     "filter": {
-      "all": "Alle",
-      "statusGroup": "Nach Status filtern",
-      "searchLabel": "Suche",
       "searchPlaceholder": "Agents durchsuchen…",
-      "reset": "Filter zurücksetzen",
-      "emptyTitle": "Keine Treffer",
       "emptyDescription": "Kein Agent passt zu Filter und Suche."
     },
     "memory": {
@@ -860,50 +914,24 @@
       "pageOf": "Seite {{page}} von {{totalPages}}",
       "next": "Weiter"
     },
-    "attention": {
-      "ariaLabel": "Braucht jetzt deine Aufmerksamkeit",
-      "eyebrow": "Braucht jetzt deine Aufmerksamkeit",
-      "reviews": {
-        "title_one": "1 Version liegt zur Review",
-        "title_other": "{{count}} Versionen liegen zur Review",
-        "description": "Prüfe die eingereichten Versionen und veröffentliche sie oder setze sie zurück auf Entwurf.",
-        "openVersion": "{{name}} v{{version}} prüfen",
-        "openList": {
-          "persona_one": "1 Persona prüfen",
-          "persona_other": "{{count}} Personas prüfen",
-          "playbook_one": "1 Playbook prüfen",
-          "playbook_other": "{{count}} Playbooks prüfen",
-          "resource_one": "1 Resource prüfen",
-          "resource_other": "{{count}} Resources prüfen"
-        }
-      },
-      "memories": {
-        "title_one": "1 Eintrag zur Freigabe",
-        "title_other": "{{count}} Einträge zur Freigabe",
-        "description": "Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab.",
-        "action": "Freigeben"
-      },
-      "patterns": {
-        "title_one": "1 Muster",
-        "title_other": "{{count}} Muster",
-        "description": "Lernvorschläge oder Fälle, die sich wiederholen.",
-        "action": "Ansehen"
-      },
-      "cases": {
-        "title_one": "1 offener Fall",
-        "title_other": "{{count}} offene Fälle",
-        "description": "Gemeldete Situationen, die noch niemand eingeordnet hat.",
-        "action": "Einordnen"
-      },
-      "systemPrompts": {
-        "title_one": "1 System-Prompt liegt zur Review",
-        "title_other": "{{count}} System-Prompts liegen zur Review",
-        "description": "Prüfe die eingereichten System-Prompt-Versionen.",
-        "action": "Zur Review"
-      },
-      "allClear": {
-        "title": "Alles erledigt",
-        "description": "Nichts wartet gerade auf dich — leg direkt los."
+    "inbox": {
+      "ariaLabel": "Zu erledigen",
+      "loading": "Aufgaben werden gezählt …",
+      "title_one": "1 Aufgabe wartet auf dich",
+      "title_other": "{{count}} Aufgaben warten auf dich",
+      "clear": "Nichts zu erledigen.",
+      "action": "Alle ansehen",
+      "more_one": "+ 1 weitere",
+      "more_other": "+ {{count}} weitere",
+      "kind": {
+        "followUps_one": "1 Nachkontrolle fällig",
+        "followUps_other": "{{count}} Nachkontrollen fällig",
+        "memory_one": "1 Gedächtnis-Eintrag",
+        "memory_other": "{{count}} Gedächtnis-Einträge",
+        "versions_one": "1 Version zur Freigabe",
+        "versions_other": "{{count}} Versionen zur Freigabe",
+        "cases_one": "1 Rückmeldung",
+        "cases_other": "{{count}} Rückmeldungen"
       }
     },
     "quickStart": {
@@ -1743,6 +1771,42 @@
       "workspace": "Workspace",
       "members": "Mitglieder"
     },
+    "routines": {
+      "title": "Hintergrund-Routinen",
+      "description": "Nur für Betreiber sichtbar und nur lesend. Zeiten in Ortszeit ({{timeZone}}), UTC in Klammern.",
+      "workerLastSeen": "Worker zuletzt gesehen:",
+      "listLabel": "Routinen",
+      "empty": "Keine Routinen registriert.",
+      "none": "—",
+      "neverRun": "Noch kein Lauf",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Zeitplan",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Letzter Lauf",
+      "nextRun": "Nächster Termin",
+      "lastSuccess": "Letzter Erfolg",
+      "counters": "Zähler:",
+      "errorClass": "Fehlerklasse:",
+      "enabled": "An",
+      "disabled": "Aus",
+      "source": {
+        "code": "Quelle: Code",
+        "env": "Quelle: Umgebung"
+      },
+      "status": {
+        "running": "Läuft",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "skipped": "Übersprungen"
+      },
+      "trigger": {
+        "schedule": "nach Zeitplan",
+        "cli": "per CLI",
+        "manual": "manuell"
+      },
+      "externalTitle": "Externer Zeitplan erkannt (Crontab/Dokploy).",
+      "externalDescription": "Kann entfernt werden."
+    },
     "account": {
       "title": "Konto",
       "description": "Dein persönliches Profil, Sicherheit und Anzeige-Präferenzen.",
@@ -2278,16 +2342,16 @@
         "type": "Typ",
         "allSignals": "Alle Signale",
         "allTypes": "Alle Typen",
-        "statusGroup": "Nach Status filtern"
+        "searchPlaceholder": "Nach Element suchen…"
       },
       "status": {
         "open": "Offen",
         "in_progress": "In Arbeit",
         "addressed": "Erledigt",
-        "dismissed": "Ignoriert",
-        "all": "Alle"
+        "dismissed": "Ignoriert"
       },
-      "empty": "Keine Feedbacks für diese Auswahl.",
+      "emptyOpenTitle": "Kein offenes Feedback",
+      "emptyOpenDescription": "Alle Rückmeldungen sind eingeordnet. Neue erscheinen hier, sobald ein Agent oder ein Mensch Feedback gibt.",
       "openElement": "Element öffnen"
     },
     "overview": {
@@ -3787,5 +3851,90 @@
       "importanceChange": "Wichtigkeit: {{from}} → {{to}}",
       "restored": "Früheren Stand wiederhergestellt."
     }
+  },
+  "inbox": {
+    "page": {
+      "title": "Zu erledigen",
+      "description": "Alles, was auf eine Entscheidung von dir wartet. Erledigtes verschwindet von selbst."
+    },
+    "chip": {
+      "followUps": "Fällig",
+      "memory": "Gedächtnis",
+      "versions": "Freigaben",
+      "cases": "Rückmeldungen"
+    },
+    "kind": {
+      "followUps": "Nachkontrollen fällig",
+      "followUpsHint": "Hat die Änderung gewirkt? Nur ein Mensch stuft ein.",
+      "memory": "Gedächtnis zur Freigabe",
+      "memoryHint": "Einträge werden erst nach deiner Freigabe wirksam.",
+      "versions": "Versionen zur Freigabe",
+      "versionsHint": "Erst nach deiner Freigabe nutzen die Agenten die neue Version.",
+      "versionsEditorHint": "Warten auf Freigabe durch einen Admin. Du kannst sie zurück auf Entwurf setzen.",
+      "cases": "Rückmeldungen, nicht eingeordnet",
+      "casesHint": "Gemeldete Situationen, die noch niemand eingeordnet hat."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Zum Anschauen",
+      "toLookHint": "zählt nicht in die Glocke"
+    },
+    "followUps": {
+      "pending": "Die einzelnen Nachkontrollen öffnest du künftig am Agenten unter „Weiterentwicklung“. Bis dahin zeigt diese Zeile nur, wie viele fällig sind."
+    },
+    "memory": {
+      "userMemory": "Dein Nutzergedächtnis"
+    },
+    "cases": {
+      "reopened": "wieder offen"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System-Prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} Persona",
+        "persona_other": "{{count}} Personas",
+        "playbook_one": "{{count}} Playbook",
+        "playbook_other": "{{count}} Playbooks",
+        "resource_one": "{{count}} Resource",
+        "resource_other": "{{count}} Resources",
+        "systemPrompt_one": "{{count}} System-Prompt",
+        "systemPrompt_other": "{{count}} System-Prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} Muster",
+      "patterns_other": "{{count}} Muster",
+      "patternsHint": "Rückmeldungen oder Lernvorschläge, die sich wiederholen",
+      "versions_one": "{{count}} Version wartet auf Freigabe durch einen Admin",
+      "versions_other": "{{count}} Versionen warten auf Freigabe durch einen Admin",
+      "open": "Ansehen",
+      "openAria": "Ansehen: {{title}}"
+    },
+    "action": {
+      "review": "Prüfen",
+      "reviewAria": "Prüfen: {{text}}",
+      "triage": "Einordnen",
+      "triageAria": "Einordnen: {{text}}",
+      "open": "Öffnen",
+      "openVersionAria": "{{name}} Version {{version}} öffnen"
+    },
+    "quoted": "„{{text}}“",
+    "unknownAgent": "Unbekannter Agent",
+    "showAll_one": "Alle {{count}} ansehen",
+    "showAll_other": "Alle {{count}} ansehen",
+    "empty": {
+      "title": "Alles erledigt",
+      "description": "Neue Aufgaben erscheinen hier und an der Glocke.",
+      "filtered": "Für diese Auswahl ist nichts offen."
+    },
+    "sectionError": "Konnte nicht geladen werden.",
+    "loadError": "Die Aufgaben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen"
   }
 }

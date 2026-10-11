@@ -99,15 +99,16 @@ Compose zeigt: ignorierbar, die Labels erledigen es.
 
 **Deploy** klicken. Dokploy klont `main`, baut api/web/mcp aus dem Quellcode
 (erster Build dauert ein paar Minuten), startet db → migrate → auth → api → web →
-mcp-http und holt die LE-Zertifikate für die vier Hosts.
+mcp-http und worker und holt die LE-Zertifikate für die vier Hosts.
 
 Scheitert ein Cert: DNS (Schritt 0) oder Port 80 prüfen; Dokploy-Logs des Service
 zeigen den ACME-Fehler.
 
-**Danach die Hintergrundjobs einplanen.** `who2be-purge` (DSGVO-Purge) und
-`who2be-memory-expire` (Verfall unbestätigten Gedächtnisses) startet der Stack
-nicht von selbst. Beide laufen als Dokploy-Schedule im Dienst `api`:
-[`cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy einplanen](cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen).
+**Hintergrundjobs: nichts einplanen.** Der DSGVO-Purge und der Verfall
+unbestätigten Gedächtnisses laufen im Compose-Dienst `worker`, der mit dem
+Stack startet (ADR-0057). Einen Dokploy-Schedule braucht es nicht mehr; ein
+bestehender wird gelöscht. Prüfen, ob der Worker gesund ist und läuft:
+[`cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy](cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy).
 
 ## 6. OAuth-Verdrahtung verifizieren
 

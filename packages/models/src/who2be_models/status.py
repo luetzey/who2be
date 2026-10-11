@@ -67,19 +67,21 @@ OVERRIDE_REASON_MAX_LENGTH = 1_000
 TRANSITION_NOTE_MAX_LENGTH = 2_000
 
 
+# `acknowledge_test_report` und `override_reason` gehoeren zum
+# Aktivierungsvertrag aus ADR-0053 6.3. Ein leerer Grund ist hier zulaessig
+# und wird erst vom Service als 409 `test_override_reason_required`
+# beantwortet — der Vertrag unterscheidet „bestaetigt ohne Grund"
+# ausdruecklich von einem Formatfehler.
 class VersionTransitionRequest(BaseModel):
     """Eingabe fuer `POST .../versions/{v}/transition`.
 
-    `acknowledge_test_report` und `override_reason` gehoeren zum
-    Aktivierungsvertrag (ADR-0053 6.3): Sind Pruefaelle der Zielversion rot
-    oder fehlen Ergebnisse, verlangt `to='active'` beides. Ist die
-    Pruefall-Menge leer oder alles `pass`, werden beide ignoriert.
+    Sind Pruefaelle der Zielversion rot oder fehlen Ergebnisse, verlangt
+    `to='active'` zusaetzlich `acknowledge_test_report=true` und einen
+    `override_reason`. Ist die Pruefall-Menge leer oder alles `pass`, werden
+    beide ignoriert.
 
     `override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein
-    leerer Grund (auch nur Leerzeichen) ist hier zulaessig und wird erst vom
-    Service als 409 `test_override_reason_required` beantwortet — der
-    Vertrag unterscheidet „bestaetigt ohne Grund" ausdruecklich von einem
-    Formatfehler. Eine Mindestlaenge ueber ein Zeichen gibt es nicht.
+    leerer Grund wird mit 409 `test_override_reason_required` abgelehnt.
     """
 
     model_config = ConfigDict(extra="forbid")

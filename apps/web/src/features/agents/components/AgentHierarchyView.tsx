@@ -1,13 +1,11 @@
 import {
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   FileText,
   GitBranch,
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -19,7 +17,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { cn } from '@/lib/utils'
 
 /**
  * Playbook-Liste unter `md`: zuerst 4 im Seitenfluss (PM-Entscheidung zu P7:
@@ -38,12 +35,11 @@ interface AgentHierarchyViewProps {
 
 // Kleine Uppercase-Bereichsueberschrift (Design-Handoff „Detail-Redesign":
 // „Zusammensetzung" / „System-Prompt" / „Persona").
-// `as="span"` fuer den Schalter unter `md`: kein Block-Element im `<button>`.
-function SectionLabel({ children, as: Tag = 'div' }: { children: ReactNode; as?: 'div' | 'span' }) {
+function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <Tag className="block text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+    <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
       {children}
-    </Tag>
+    </div>
   )
 }
 
@@ -181,68 +177,14 @@ export function AgentHierarchyView({
     listRef.current?.children.item(index)?.querySelector<HTMLElement>('a[href]')?.focus()
   }, [shown])
 
-  // Designer-Delta t_42bff43b (Option a): Unter `md` startet die Karte bei
-  // jedem Besuch zugeklappt; nur der Schalter mit Persona und Playbook-Zahl
-  // steht vor den Tabs. Vorher lag die Tab-Oberkante bei 320 px auf
-  // 1,80 Bildschirmen (Mobil-Spec M2: Ziel <= 1,2). Ab `md` gibt es keinen
-  // Schalter, die Karte ist immer offen. `open` bleibt beim Wechsel der
-  // Breite erhalten, ebenso `shown` beim Zu- und Aufklappen.
-  const [open, setOpen] = useState(false)
-  const collapsed = isMobile && !open
-  const contentId = useId()
-  const summary = [
-    persona?.name ?? t('hierarchy.summaryNoPersona'),
-    playbooks.length === 0
-      ? t('hierarchy.summaryNoPlaybooks')
-      : t('hierarchy.summaryPlaybooks', { count: playbooks.length }),
-  ].join(t('hierarchy.summarySeparator'))
-
+  // Die Klapp-Regel aus t_42bff43b (Karte unter `md` zugeklappt) ist
+  // entfallen: Die Karte steht im Tab „Überblick“ hinter der Tab-Leiste der
+  // Agent-Seite, die Tabs liegen damit auch ohne Zuklappen frueh
+  // (Navigation-Spec §3.1, Mobil-Ziel M2). Die Karte ist auf jeder Breite offen.
   return (
     <Card data-testid="agent-hierarchy">
-      {isMobile ? (
-        // Keine Animation (Spec §4): `transition-none` hebt die Farb-
-        // Transition der Button-Basis auf; der Chevron wird getauscht, nicht
-        // gedreht. Volle Breite, Text links, zwei Zeilen: dieselben
-        // Overrides wie der Zeilen-Schalter in TestResultsPanel.
-        <Button
-          type="button"
-          variant="ghost"
-          aria-expanded={open}
-          aria-controls={contentId}
-          data-testid="agent-hierarchy-toggle"
-          onClick={() => setOpen((value) => !value)}
-          className="h-auto min-h-11 w-full justify-start gap-3 rounded-lg px-4 py-3 text-left font-normal whitespace-normal transition-none hover:bg-muted/50 hover:text-foreground"
-        >
-          <span className="flex min-w-0 flex-1 flex-col gap-1">
-            <SectionLabel as="span">{t('hierarchy.title')}</SectionLabel>{' '}
-            {/* Eine Zeile, auch aufgeklappt: so behaelt der Schalter beim
-                Umschalten seine Hoehe und der Fokus springt optisch nicht
-                (Spec §3.1). Der volle Persona-Name steht aufgeklappt direkt
-                darunter in der Persona-Zeile (R-F1). */}
-            <span
-              className="truncate text-sm text-foreground"
-              data-testid="agent-hierarchy-summary"
-            >
-              {summary}
-            </span>
-          </span>
-          {open ? (
-            <ChevronUp className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
-          )}
-        </Button>
-      ) : null}
-      {/* `hidden` statt Nicht-Rendern: `aria-controls` zeigt immer auf ein
-          vorhandenes Element, zugeklappt ist der Inhalt trotzdem weder im
-          Tab-Fluss noch im A11y-Tree (Preflight: `[hidden]` ist
-          `display: none !important`, `flex` ueberstimmt es nicht). */}
-      <CardContent
-        id={contentId}
-        hidden={collapsed}
-        className={cn('flex flex-col gap-4', isMobile ? 'pt-0' : 'pt-6')}
-      >
-        {isMobile ? null : <SectionLabel>{t('hierarchy.title')}</SectionLabel>}
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <SectionLabel>{t('hierarchy.title')}</SectionLabel>
 
         <div className="flex flex-col gap-2">
           {template !== null ? (

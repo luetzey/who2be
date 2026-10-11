@@ -206,11 +206,11 @@ async def read_artifact(artifact_id: str, anchor: str | None = None) -> Artifact
 
 @with_tool_log("list_artifacts")
 async def list_artifacts(area_id: str | None = None) -> list[ArtifactRead]:
-    """NICHT der Einstieg — nutze `search_workarea`; list nur fuer die
-    vollstaendige Bestandsaufnahme kleiner Areas.
+    """Listet die Artifact-Metadaten einer Area; Einstieg ist `search_workarea`.
 
-    Liefert die Artifact-METADATEN einer Area (Titel, Typ, `rev`,
-    `occurred_at`, `sensitivity` — keine Inhalte). `area_id=None` = deine
+    Nur fuer die vollstaendige Bestandsaufnahme kleiner Areas. Liefert
+    Titel, Typ, `rev`, `occurred_at` und `sensitivity`, keine Inhalte.
+    `area_id=None` = deine
     private Area. Inhalte danach gezielt via `read_artifact(artifact_id)`
     laden; suchst du eine bestimmte Stelle, liefert `search_workarea` Anker
     (`<artifact_id>#<block_id>`) + Snippet, ohne dass du Dokumente

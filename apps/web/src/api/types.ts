@@ -1415,6 +1415,14 @@ export interface FeedbackOverview {
   items: FeedbackOverviewItem[]
 }
 
+// Navigation A6 — optionale Filter von `GET /feedback-overview`. Ohne Filter
+// unveraendert die Gesamtsumme des Workspace.
+export interface FeedbackOverviewFilter {
+  agent_id?: string
+  // 1..365 (Server validiert).
+  days?: number
+}
+
 // Veroeffentlichte, aber ungenutzte Elemente (`GET …/feedback-unused`): aktive
 // Version vorhanden, aber kein einziges Usage-/Feedback-Ereignis (Stale).
 export interface FeedbackUnusedItem {
@@ -1457,6 +1465,66 @@ export interface WorkArea {
   retention_days: number | null
   created_at: string
   updated_at: string
+}
+
+// Navigation A4 — `GET /agents/{id}/work-areas`, Spiegel von
+// `who2be_models.workarea.AgentWorkAreaRead`. `level` ist die Stufe DIESES
+// Agenten, `owner` markiert seine private Area, `agent_count` zaehlt ihn mit.
+export interface AgentWorkArea {
+  id: string
+  name: string
+  scope: WorkAreaScope
+  level: WorkAreaGrantLevel
+  owner: boolean
+  agent_count: number
+}
+
+// Nutzung U1/U2 — Spiegel von `who2be_models.feedback.UsageStats` und
+// `AgentUsageStats`. Gezaehlt werden nur Auslieferungen an Agenten (Z1a),
+// Fenster in UTC-Kalendertagen einschliesslich heute. `counting_since` ist
+// der Zaehlbeginn (Datum, `YYYY-MM-DD`); davor gibt es keine Zahlen.
+export type UsageEntityType = 'persona' | 'playbook' | 'resource'
+
+export interface UsageDay {
+  day: string
+  uses: number
+}
+
+export interface UsageStats {
+  entity_type: UsageEntityType
+  entity_id: string
+  name: string | null
+  uses_7d: number
+  uses_30d: number
+  last_used_at: string | null
+  distinct_agents_30d: number
+  daily: UsageDay[]
+  counting_since: string
+}
+
+export interface UsageByType {
+  persona: number
+  playbook: number
+  resource: number
+}
+
+export interface AgentWorkAreaUsage {
+  area_id: string
+  access_days_30d: number
+  last_access_on: string | null
+}
+
+export interface AgentUsageStats {
+  agent_id: string
+  uses_7d: number
+  uses_30d: number
+  uses_by_type_30d: UsageByType
+  active_days_30d: number
+  last_used_at: string | null
+  last_active_at: string | null
+  daily: UsageDay[]
+  work_areas: AgentWorkAreaUsage[]
+  counting_since: string
 }
 
 export interface WorkAreaGrant {
@@ -1973,6 +2041,20 @@ export interface CasePage {
 // `GET /cases/counts`: Zaehler je Status (auch 0).
 export type CaseCounts = Record<CaseStatus, number>
 
+// Navigation & Transparenz W1 (Spec §2.2/§2.6 a) — `GET /inbox/counts`.
+// Je Art eine Zahl; `null` = diese Art gibt es fuer die Rolle nicht
+// (Abschnitt entfaellt), `0` = sichtbar, nichts offen. `total` ist die Zahl
+// an der Glocke (Versionen nur fuer admin, Muster nie).
+export interface InboxCounts {
+  follow_ups_due: number | null
+  memory_approval: number | null
+  versions_review: number | null
+  system_prompts_review: number | null
+  cases_open: number | null
+  patterns: number | null
+  total: number
+}
+
 // ADR-0053 3.7/6.5 (D5b) — Muster: berechnete Sicht ohne Zustand und ohne ID.
 // Quelle `lesson` (aehnliche offene Lernvorschlaege eines Agenten) oder `case`
 // (offene Faelle eines Agenten mit derselben Zuordnung im Zeitfenster).
@@ -2003,4 +2085,41 @@ export interface PatternListRead {
   threshold: number
   window_days: number
   patterns: PatternRead[]
+}
+
+// ADR-0057 §7 (Paket P4c/P5) — Betreiber-Sicht auf die Hintergrund-Routinen
+// (`GET /v1/system/routines`). Spiegelt `RoutineLastRun`, `RoutineStatus` und
+// `RoutinesOverview` aus packages/models (`who2be_models/routine.py`). Nur fuer
+// Betreiber (`WHO2BE_OPERATORS`, MFA); alle anderen bekommen 403.
+export type RoutineRunStatus = 'running' | 'succeeded' | 'failed' | 'skipped'
+export type RoutineRunTrigger = 'schedule' | 'cli' | 'manual'
+export type RoutineConfigSource = 'code' | 'env'
+
+export interface RoutineLastRun {
+  status: RoutineRunStatus
+  trigger: RoutineRunTrigger
+  started_at: string
+  /** `null`, solange der Lauf noch `running` ist. */
+  duration_ms: number | null
+  /** Nur Zaehler, nie Inhalte. */
+  result: Record<string, number> | null
+  /** Nur der Klassenname der Exception bzw. `Abandoned`. */
+  error_class: string | null
+}
+
+export interface RoutineStatus {
+  name: string
+  /** Cron-Ausdruck (UTC) oder `@every …`. */
+  schedule: string
+  enabled: boolean
+  source: RoutineConfigSource
+  last_run: RoutineLastRun | null
+  next_run_at: string | null
+  last_success_at: string | null
+  external_schedule_detected: boolean
+}
+
+export interface RoutinesOverview {
+  routines: RoutineStatus[]
+  worker_last_seen_at: string | null
 }

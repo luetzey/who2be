@@ -1,4 +1,5 @@
 import {
+  Bell,
   BookOpen,
   Bot,
   Brain,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useId, useState, type ComponentType, type ReactNode, type SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink, useMatch } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { LanguageSwitcher } from '@/components/ui/language-switcher'
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/sheet'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { useInboxCounts } from '@/hooks/useInboxCounts'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 
@@ -97,6 +99,56 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ to: '/settings/account', labelKey: 'nav.settings', icon: Settings }],
   },
 ]
+
+// Ab hier zeigt die Glocke „99+“ statt der Zahl (Spec §2.3).
+const BELL_MAX = 99
+
+/**
+ * Glocke in der Kopfleiste (Navigation W1, Spec §2.3, Weiche N2 a): ein Link
+ * auf die Seite „Zu erledigen“, kein Popover. Der Zaehler ist `total` aus
+ * `useInboxCounts`; bei 0, beim Laden und bei einem Fehler steht kein Zaehler
+ * da (nie eine behauptete „0“), der Link funktioniert immer. Die Zahl ist
+ * `aria-hidden` — vorgelesen wird sie einmal, im `aria-label`.
+ */
+function InboxBell() {
+  const { t } = useTranslation('layout')
+  const wsPath = useWorkspacePath()
+  const to = wsPath('/inbox')
+  const active = useMatch({ path: to, end: true }) !== null
+  const { counts } = useInboxCounts()
+  const total = counts?.total ?? null
+  const label =
+    total === null ? t('inbox.label') : t('inbox.bell', { count: total })
+  return (
+    <Button
+      asChild
+      variant="ghost"
+      size="icon"
+      className={cn(
+        'relative h-11 w-11 md:h-9 md:w-9',
+        active && 'bg-accent text-accent-foreground',
+      )}
+    >
+      <Link
+        to={to}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+        data-testid="inbox-bell"
+      >
+        <Bell className="h-5 w-5" aria-hidden="true" />
+        {total !== null && total > 0 && (
+          <span
+            aria-hidden="true"
+            data-testid="inbox-bell-count"
+            className="absolute top-1 left-1/2 ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-[0.6875rem] leading-none font-semibold text-brand-foreground tabular-nums md:-top-1 md:-right-1 md:left-auto md:ml-0"
+          >
+            {total > BELL_MAX ? `${BELL_MAX}+` : total}
+          </span>
+        )}
+      </Link>
+    </Button>
+  )
+}
 
 export function AppShell({ children, onSignOut }: AppShellProps) {
   const { t } = useTranslation('layout')
@@ -226,6 +278,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
             </SheetContent>
           </Sheet>
           <div className="ml-auto flex items-center gap-2">
+            <InboxBell />
             <LanguageSwitcher />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={onSignOut}>

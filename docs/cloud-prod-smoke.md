@@ -62,14 +62,16 @@ export DOMAIN=<deine-domain>     # z. B. example.com
 ```bash
 # API gesund hinter Caddy (gueltiges LE-Cert ⇒ kein -k)
 curl -fsS https://api.${DOMAIN}/v1/health
-# → {"status":"ok","version":"…","db":"ok"}
+# → {"status":"ok","version":"…","db":"ok","worker":"ok"}
 
 # Cloud-Schalter greifen
 dcc exec api printenv WHO2BE_EDITION APP_DATABASE_URL RATE_LIMIT_STORAGE_URI
 # → cloud / postgresql://who2be_app:***@db:5432/postgres / redis://redis:6379
 ```
 
-- [ ] `db:"ok"` und `WHO2BE_EDITION=cloud`.
+- [ ] `db:"ok"` und `WHO2BE_EDITION=cloud`. `worker` steht auf `ok`; `unknown`
+      nur, solange der Dienst `worker` noch nie einen Heartbeat geschrieben
+      hat (Takt 30 s). `stale` heißt: seit über fünf Minuten kein Heartbeat.
 
 ## 2 — Signup → Verify-Mail (echte Inbox) → Login
 

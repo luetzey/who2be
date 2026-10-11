@@ -83,6 +83,35 @@ _CASES_OWN_ONLY_NOTE = (
 )
 
 
+# Hinweis im Export-Manifest, wenn `feedback_sessions` wegen der Rolle nur die
+# eigenen Protokolle enthaelt (ADR-0053 6.6: `GET /feedback-sessions` ab editor).
+_SESSIONS_OWN_ONLY_NOTE = (
+    "Alle Gespraechsprotokolle dieses Workspace sind ab der Rolle editor sichtbar "
+    "(wie in der Oberflaeche). Enthalten sind deshalb nur die Protokolle, die du "
+    "eingereicht hast, an denen du teilgenommen hast oder an deren Massnahmen du "
+    "gehandelt hast, jeweils mit Faellen, Massnahmen und deren Verlauf."
+)
+
+# Protokolle, an denen ein Mensch beteiligt ist (ADR-0053 3.5/3.6): als
+# Einreicher, als Teilnehmer bzw. mit abweichender Meinung, oder als Akteur
+# eines Massnahmen-Events. `jsonb @>` sucht den Eintrag in der Liste; die IDs
+# liegen als kanonischer UUID-Text vor (`SessionParticipant`, mode="json").
+_OWN_SESSIONS_QUERY = (
+    "SELECT * FROM feedback_session s WHERE s.workspace_id = $1 AND ("
+    "  (s.submitted_by_kind = 'human' AND s.submitted_by = $2) "
+    "  OR s.participants @> jsonb_build_array("
+    "       jsonb_build_object('kind', 'human', 'id', $2::uuid::text)) "
+    "  OR s.dissent @> jsonb_build_array("
+    "       jsonb_build_object('participant_kind', 'human', 'participant_id', $2::uuid::text)) "
+    "  OR EXISTS ("
+    "    SELECT 1 FROM measure m JOIN measure_event e "
+    "      ON e.workspace_id = m.workspace_id AND e.measure_id = m.id "
+    "    WHERE m.workspace_id = s.workspace_id AND m.session_id = s.id "
+    "      AND e.actor_kind = 'human' AND e.actor_id = $2)"
+    ") ORDER BY s.created_at ASC, s.id ASC"
+)
+
+
 def _can_read_agent_memory(role: str) -> bool:
     """Gleiche Grenze wie `MemoryService.list_memories` (`require_role` editor).
 
@@ -101,6 +130,48 @@ def _can_read_all_cases(role: str) -> bool:
     selbst gemeldeten. Dieselbe Rollengrenze wie das Agentengedaechtnis, aber
     eine eigene Funktion, damit beide Regeln getrennt nachziehbar bleiben."""
     return _can_read_agent_memory(role)
+
+
+def _can_read_all_sessions(role: str) -> bool:
+    """ADR-0053 6.6: Protokolle lesen ab `editor`, darunter nur die eigenen.
+    Eigene Funktion wie `_can_read_all_cases`, damit die Regeln getrennt
+    nachziehbar bleiben."""
+    return _can_read_agent_memory(role)
+
+
+def _with_session_children(
+    sessions: list[asyncpg.Record],
+    session_cases: list[asyncpg.Record],
+    measures: list[asyncpg.Record],
+    measure_cases: list[asyncpg.Record],
+    measure_events: list[asyncpg.Record],
+) -> list[dict[str, Any]]:
+    """Protokolle mit `case_ids` und `measures`; jede Massnahme mit `case_ids`
+    und `events` (aelteste zuerst). Kinder fremder Protokolle fallen heraus,
+    auch wenn sie geladen worden waeren. Die Hilfsspalte `agent_id` der
+    Verknuepfungen steht schon am Protokoll und entfaellt."""
+    cases_by_session: dict[Any, list[Any]] = {}
+    for row in session_cases:
+        cases_by_session.setdefault(row["session_id"], []).append(row["case_id"])
+    cases_by_measure: dict[Any, list[Any]] = {}
+    for row in measure_cases:
+        cases_by_measure.setdefault(row["measure_id"], []).append(row["case_id"])
+    events_by_measure: dict[Any, list[dict[str, Any]]] = {}
+    for row in measure_events:
+        events_by_measure.setdefault(row["measure_id"], []).append(_clean(row))
+    measures_by_session: dict[Any, list[dict[str, Any]]] = {}
+    for row in measures:
+        item = _clean(row)
+        item["case_ids"] = cases_by_measure.get(row["id"], [])
+        item["events"] = events_by_measure.get(row["id"], [])
+        measures_by_session.setdefault(row["session_id"], []).append(item)
+    result: list[dict[str, Any]] = []
+    for row in sessions:
+        item = _clean(row)
+        item["case_ids"] = cases_by_session.get(row["id"], [])
+        item["measures"] = measures_by_session.get(row["id"], [])
+        result.append(item)
+    return result
 
 
 def _with_case_children(
@@ -398,6 +469,10 @@ class GdprExportService:
             )
             all_cases_visible = _can_read_all_cases(role)
             cases = await self._export_cases(workspace_id, user_id, all_cases=all_cases_visible)
+            all_sessions_visible = _can_read_all_sessions(role)
+            feedback_sessions = await self._export_sessions(
+                workspace_id, user_id, all_sessions=all_sessions_visible
+            )
         return {
             "id": str(workspace_id),
             "name": name,
@@ -421,6 +496,15 @@ class GdprExportService:
                     if all_cases_visible
                     else {"included": True, "scope": "own_reports", "reason": _CASES_OWN_ONLY_NOTE}
                 ),
+                "feedback_sessions": (
+                    {"included": True, "scope": "workspace"}
+                    if all_sessions_visible
+                    else {
+                        "included": True,
+                        "scope": "own_participation",
+                        "reason": _SESSIONS_OWN_ONLY_NOTE,
+                    }
+                ),
             },
             "work_areas": work_areas,
             "wa_blobs": {"note": _BLOB_EXPORT_NOTE, "items": blobs},
@@ -431,7 +515,68 @@ class GdprExportService:
             "test_cases": [_clean(row) for row in test_cases],
             "test_runs": [_clean(row) for row in test_runs],
             "cases": cases,
+            "feedback_sessions": feedback_sessions,
         }
+
+    async def _export_sessions(
+        self, workspace_id: UUID, user_id: UUID, *, all_sessions: bool
+    ) -> list[dict[str, Any]]:
+        """Gespraechsprotokolle mit Faellen und Massnahmen (ADR-0053 3.5/3.6,
+        Migration 0103); jede Massnahme mit ihren Faellen und ihrem Verlauf.
+
+        Sichtregel wie in der Oberflaeche (6.6: `GET /feedback-sessions` ab
+        `editor`; Muster `_export_cases`): ab `editor` alle Protokolle des
+        Workspace, darunter nur die, an denen der exportierende Mensch
+        beteiligt ist (`_OWN_SESSIONS_QUERY`). Freitext (`summary`,
+        `decisions`, `dissent`, `change_summary`, `note`) kann Personenbezug
+        tragen. Die Kind-Tabellen werden nur fuer die exportierten Protokolle
+        GELADEN, nicht workspace-weit.
+        """
+        if all_sessions:
+            session_rows = await self._pool.fetch(
+                "SELECT * FROM feedback_session WHERE workspace_id = $1 "
+                "ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
+        else:
+            session_rows = await self._pool.fetch(_OWN_SESSIONS_QUERY, workspace_id, user_id)
+        session_ids = [row["id"] for row in session_rows]
+        if not session_ids:
+            return []
+        session_cases = await self._pool.fetch(
+            "SELECT session_id, case_id FROM feedback_session_case "
+            "WHERE workspace_id = $1 AND session_id = ANY($2::uuid[]) "
+            "ORDER BY session_id ASC, created_at ASC, case_id ASC",
+            workspace_id,
+            session_ids,
+        )
+        measures = await self._pool.fetch(
+            "SELECT * FROM measure WHERE workspace_id = $1 AND session_id = ANY($2::uuid[]) "
+            "ORDER BY session_id ASC, created_at ASC, id ASC",
+            workspace_id,
+            session_ids,
+        )
+        measure_ids = [row["id"] for row in measures]
+        measure_cases: list[asyncpg.Record] = []
+        measure_events: list[asyncpg.Record] = []
+        if measure_ids:
+            measure_cases = await self._pool.fetch(
+                "SELECT measure_id, case_id FROM measure_case "
+                "WHERE workspace_id = $1 AND measure_id = ANY($2::uuid[]) "
+                "ORDER BY measure_id ASC, created_at ASC, case_id ASC",
+                workspace_id,
+                measure_ids,
+            )
+            measure_events = await self._pool.fetch(
+                "SELECT * FROM measure_event "
+                "WHERE workspace_id = $1 AND measure_id = ANY($2::uuid[]) "
+                "ORDER BY measure_id ASC, created_at ASC, id ASC",
+                workspace_id,
+                measure_ids,
+            )
+        return _with_session_children(
+            session_rows, session_cases, measures, measure_cases, measure_events
+        )
 
     async def _export_cases(
         self, workspace_id: UUID, user_id: UUID, *, all_cases: bool

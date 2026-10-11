@@ -48,6 +48,9 @@ from who2be_api.services.content_chunks import chunk_version_content
 
 logger = logging.getLogger(__name__)
 
+# FK aus Migration 0105 (Workspace-Loeschung raeumt die Passagen mit).
+_CHUNK_WORKSPACE_FK = "content_chunk_workspace_id_fkey"
+
 # Aktive Versionen eines Typs, inklusive Workspace der Identitaets-Zeile.
 _ACTIVE_VERSIONS_SQL = """
 SELECT e.workspace_id, e.id AS entity_id, ev.version, ev.locale, ev.content
@@ -110,16 +113,25 @@ async def backfill_chunks(
             )
         for row in rows:
             drafts = chunk_version_content(entity_type, row["content"])
-            async with conn.transaction():
-                await repo.replace(
-                    conn,
-                    row["workspace_id"],
-                    entity_type,
-                    row["entity_id"],
-                    row["version"],
-                    row["locale"],
-                    drafts,
-                )
+            try:
+                async with conn.transaction():
+                    await repo.replace(
+                        conn,
+                        row["workspace_id"],
+                        entity_type,
+                        row["entity_id"],
+                        row["version"],
+                        row["locale"],
+                        drafts,
+                    )
+            except asyncpg.ForeignKeyViolationError as exc:
+                # Workspace zwischen Lesen und Schreiben geloescht (Migration
+                # 0105: `content_chunk.workspace_id -> workspace` CASCADE). Die
+                # Entity ist mit ihm weg, es gibt nichts zu materialisieren —
+                # kein Grund, den ganzen Lauf abzubrechen.
+                if exc.constraint_name != _CHUNK_WORKSPACE_FK:
+                    raise
+                continue
             entities += 1
             chunks += len(drafts)
     return entities, chunks, orphans

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import hmac
 import logging
-import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -34,6 +33,7 @@ from pydantic import BaseModel, Field
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.operators import parse_uuid_allowlist
 from who2be_api.core.security import (
     WorkspaceContext,
     get_current_workspace,
@@ -344,30 +344,21 @@ async def create_checkout(
 # Env-Read statt als Feld in `who2be_api.core.config.Settings`: das Billing-Paket
 # ist build-zeit-isoliert (ADR-0029), der Kern soll keine billing-only-Config
 # tragen. Default leer ⇒ fail-closed (niemand darf schreiben).
+# Geparst wird mit dem einen Allowlist-Parser des Kerns (ADR-0057 §7,
+# `who2be_api/core/operators.py#parse_uuid_allowlist`); nur der Variablenname
+# bleibt hier. Die Betreiber-Allowlist des Kerns (`WHO2BE_OPERATORS`) ist eine
+# andere Liste und gibt kein Override-Recht.
 _OVERRIDE_OPERATORS_ENV = "WHO2BE_BILLING_OVERRIDE_OPERATORS"
 
 
 def _override_operator_ids() -> frozenset[UUID]:
-    """Parst die kommaseparierte Operator-Allowlist (User-UUIDs) aus dem Env.
+    """Die Override-Allowlist (User-UUIDs) — pro Aufruf gelesen, fail-closed.
 
-    Unparsbare Eintraege werden geloggt und verworfen — ein Tippfehler darf die
-    Liste niemals versehentlich oeffnen (fail-closed). Bewusst ungecacht: der
-    Wert wird pro Aufruf gelesen, damit eine Rotation ohne Prozess-Neustart
-    greift und Tests ihn per `monkeypatch.setenv` setzen koennen.
+    Unparsbare Eintraege verwirft und loggt der Kern-Parser; ein Tippfehler
+    darf die Liste niemals oeffnen. Ungecacht, damit eine Rotation ohne
+    Prozess-Neustart greift und Tests per `monkeypatch.setenv` setzen koennen.
     """
-    ids: set[UUID] = set()
-    for part in os.environ.get(_OVERRIDE_OPERATORS_ENV, "").split(","):
-        candidate = part.strip()
-        if not candidate:
-            continue
-        try:
-            ids.add(UUID(candidate))
-        except ValueError:
-            logger.warning(
-                "Unparsbarer Eintrag in %s ignoriert (erwartet: User-UUID).",
-                _OVERRIDE_OPERATORS_ENV,
-            )
-    return frozenset(ids)
+    return parse_uuid_allowlist(_OVERRIDE_OPERATORS_ENV)
 
 
 def _require_override_operator(ctx: WorkspaceContext) -> None:

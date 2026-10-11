@@ -207,6 +207,15 @@ ProblemReason = Literal[
     "memory_not_convertible",
     # 409 — nur offenes Alt-Feedback wird ein Fall (params: resolution)
     "feedback_not_promotable",
+    # Lernschleife Phase E — Gespraechsprotokoll und Massnahme (ADR-0053 6.1/6.6, E2b-1).
+    # `test_subject_version_not_found` (6.6) steht schon bei Phase B.
+    # 422 — Protokoll nennt fremde/unbekannte Faelle oder Massnahme Faelle ausserhalb
+    # des Protokolls (params: case_ids[, measure_index])
+    "session_cases_invalid",
+    # 422 — Pruefall der Massnahme fehlt im Workspace bzw. beim Agenten (params: measure_index)
+    "measure_test_case_required",
+    "measure_not_found",  # 404 — Massnahme unbekannt oder fuer den Aufrufer nicht lesbar
+    "session_not_found",  # 404 — Protokoll unbekannt oder nicht lesbar (QE3; params: field)
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -8,13 +8,20 @@ Schreibwege:
 - `insert_session`: Protokoll samt Faellen und Massnahmen (mit deren Faellen)
   in der Transaktion des UEBERGEBENEN `conn`. Der Service (E2b-1) oeffnet die
   Transaktion, weil in derselben Transaktion die Faelle auf `in_progress`
-  gehen (W-E2 = a) — das schreibt das Fall-Repository, nicht dieses hier.
+  gehen (W-E2 = a, `start_cases`).
 - `append_measure_event`: ein Event an einer Massnahme; optional in einer
   uebergebenen Transaktion (E3: `activated` zusammen mit dem Versionswechsel).
+- `start_cases`: die Faelle der Massnahmen gehen auf `in_progress` (W-E2 = a,
+  E2b-1), in derselben uebergebenen Transaktion und unter der Fall-Sperre
+  aus `case_repository` — dieselbe Event-Form wie jeder andere Fall-Uebergang.
 
 Lesewege: Protokoll je ID (mit eingebetteten Massnahmen, QE1 = a), Liste je
 Workspace/Agent/Fall mit Keyset-Cursor, Massnahme je ID, Massnahmen je Fall
-und je verknuepfter Version (E3).
+und je verknuepfter Version (E3), Zahl der faelligen Massnahmen
+(`count_due_measures`, Aufgaben-Zaehler Navigation W1). Fuer die Pruefungen
+vor dem Einreichen (`submit_refs`) liest es in der Transaktion des Aufrufers,
+welche der genannten Faelle, Pruefaelle und welches Vorgaenger-Protokoll dem
+besprochenen Agenten gehoeren.
 
 Was das Repository bewusst NICHT tut:
 
@@ -31,15 +38,26 @@ Was das Repository bewusst NICHT tut:
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from datetime import datetime
+from collections.abc import AsyncIterator, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
 import asyncpg
 
+# Status-Ableitung, Fall-Sperre und Event-Form aus EINER Quelle: ein
+# automatischer Uebergang (W-E2 = a) sieht genauso aus wie ein manueller.
+from who2be_api.repositories.case_repository import (
+    _STATUS_SQL,
+    _insert_event,
+    _lock_case,
+)
 from who2be_models import (
+    CaseActorKind,
+    CaseEventKind,
+    CaseStatus,
     EntityType,
     MeasureActorKind,
     MeasureEventCreate,
@@ -75,6 +93,25 @@ _EVENT_COLUMNS = (
     "id, measure_id, event, actor_kind, actor_id, version_entity_type, version_id, "
     "verdict, metrics, note, created_at"
 )
+
+
+@dataclass(frozen=True)
+class SubmitRefs:
+    """Was von den Verweisen eines Protokolls dem besprochenen Agenten gehoert."""
+
+    agent_exists: bool
+    case_ids: frozenset[UUID]
+    test_case_ids: frozenset[UUID]
+    supersedes_ok: bool
+
+
+@dataclass(frozen=True)
+class CaseStart:
+    """Ergebnis von `start_cases` je Fall: Status vorher, und ob er jetzt `in_progress` ist."""
+
+    case_id: UUID
+    status_before: CaseStatus
+    started: bool
 
 
 def _json_list(value: object) -> list[Any]:
@@ -133,6 +170,10 @@ class SessionRepository(Protocol):
         cursor: tuple[datetime, UUID] | None = None,
     ) -> list[SessionRead]: ...
 
+    async def count_due_measures(
+        self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
+    ) -> int: ...
+
     async def get_measure(self, workspace_id: UUID, measure_id: UUID) -> MeasureRead | None: ...
 
     async def append_measure_event(
@@ -157,12 +198,151 @@ class SessionRepository(Protocol):
         conn: asyncpg.Connection | None = None,
     ) -> list[MeasureRead]: ...
 
+    def begin(self) -> AbstractAsyncContextManager[asyncpg.Connection]: ...
+
+    async def submit_refs(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        agent_id: UUID,
+        *,
+        case_ids: Sequence[UUID],
+        test_case_ids: Sequence[UUID],
+        supersedes_id: UUID | None,
+    ) -> SubmitRefs: ...
+
+    async def start_cases(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        starts: Sequence[tuple[UUID, UUID]],
+        *,
+        actor_kind: CaseActorKind,
+        actor_id: UUID,
+    ) -> list[CaseStart]: ...
+
 
 class PgSessionRepository:
     """asyncpg-Implementierung von `SessionRepository`."""
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
+
+    @asynccontextmanager
+    async def begin(self) -> AsyncIterator[asyncpg.Connection]:
+        """Eine Verbindung in einer offenen Transaktion (Einreichen, E2b-1).
+
+        Der Service haelt damit Pruefungen, Protokoll und Fall-Uebergaenge in
+        EINER Transaktion, ohne den Pool zu kennen.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            yield conn
+
+    async def submit_refs(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        agent_id: UUID,
+        *,
+        case_ids: Sequence[UUID],
+        test_case_ids: Sequence[UUID],
+        supersedes_id: UUID | None,
+    ) -> SubmitRefs:
+        """Welche Verweise gehoeren dem besprochenen Agenten in diesem Workspace?
+
+        In der Transaktion des Aufrufers; unbekannte, fremde und Verweise
+        eines anderen Agenten fehlen im Ergebnis. Der Service macht daraus
+        die Fehler, die Composite-FKs der Migration 0103 halten es zusaetzlich.
+        """
+        agent = await conn.fetchval(
+            "SELECT 1 FROM agent WHERE workspace_id = $1 AND id = $2", workspace_id, agent_id
+        )
+        cases = await conn.fetch(
+            "SELECT id FROM agent_case "
+            "WHERE workspace_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[])",
+            workspace_id,
+            agent_id,
+            list(case_ids),
+        )
+        tests = await conn.fetch(
+            "SELECT id FROM test_case "
+            "WHERE workspace_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[])",
+            workspace_id,
+            agent_id,
+            list(test_case_ids),
+        )
+        supersedes_ok = True
+        if supersedes_id is not None:
+            found = await conn.fetchval(
+                "SELECT 1 FROM feedback_session WHERE workspace_id = $1 AND agent_id = $2 "
+                "AND id = $3",
+                workspace_id,
+                agent_id,
+                supersedes_id,
+            )
+            supersedes_ok = found is not None
+        return SubmitRefs(
+            agent_exists=agent is not None,
+            case_ids=frozenset(r["id"] for r in cases),
+            test_case_ids=frozenset(r["id"] for r in tests),
+            supersedes_ok=supersedes_ok,
+        )
+
+    async def start_cases(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        starts: Sequence[tuple[UUID, UUID]],
+        *,
+        actor_kind: CaseActorKind,
+        actor_id: UUID,
+    ) -> list[CaseStart]:
+        """Faelle mit Massnahme auf `in_progress` (W-E2 = a), Paare `(case_id, measure_id)`.
+
+        Kanten nach ADR-0053 3.3: `triaged -> in_progress` direkt. `open` und
+        `reopened` fuehren nur ueber `triaged`, und `-> triaged` verlangt eine
+        Zuordnung (>= 1 Element oder `model_limit`); mit Zuordnung entstehen
+        beide Events (`triaged`, dann `in_progress`), ohne bleibt der Fall.
+        Jeder andere Status bleibt unveraendert. Das `in_progress`-Event traegt
+        die `measure_id`.
+
+        Unter der Fall-Sperre aus `case_repository` (wie `append_transition`),
+        in fester Reihenfolge nach `case_id`, damit zwei Einreichungen sich
+        nicht gegenseitig sperren. Ergebnis in der Reihenfolge von `starts`.
+        """
+        results: dict[UUID, CaseStart] = {}
+        for case_id, measure_id in sorted(starts, key=lambda pair: pair[0].int):
+            await _lock_case(conn, case_id)
+            raw = await conn.fetchval(
+                f"SELECT {_STATUS_SQL} FROM agent_case c WHERE c.workspace_id = $1 AND c.id = $2",
+                workspace_id,
+                case_id,
+            )
+            before = CaseStatus(raw)
+            path: list[CaseEventKind] = []
+            if before is CaseStatus.triaged:
+                path = [CaseEventKind.in_progress]
+            elif before in (CaseStatus.open, CaseStatus.reopened):
+                has_element = await conn.fetchval(
+                    "SELECT 1 FROM agent_case_element WHERE workspace_id = $1 AND case_id = $2 "
+                    "LIMIT 1",
+                    workspace_id,
+                    case_id,
+                )
+                if has_element is not None:
+                    path = [CaseEventKind.triaged, CaseEventKind.in_progress]
+            for event in path:
+                await _insert_event(
+                    conn,
+                    workspace_id,
+                    case_id,
+                    event,
+                    actor_kind,
+                    actor_id,
+                    measure_id=measure_id if event is CaseEventKind.in_progress else None,
+                )
+            results[case_id] = CaseStart(case_id=case_id, status_before=before, started=bool(path))
+        return [results[case_id] for case_id, _ in starts]
 
     @asynccontextmanager
     async def _tx(self, conn: asyncpg.Connection | None) -> AsyncIterator[asyncpg.Connection]:
@@ -285,6 +465,32 @@ class PgSessionRepository:
             limit,
         )
         return [_session(r) for r in rows]
+
+    async def count_due_measures(
+        self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
+    ) -> int:
+        """Faellige Massnahmen (Phase-E-Delta §0.4, Navigation §2.2 Art 1).
+
+        Faellig = Nachschau-Datum (`measure.follow_up_at`, sonst das des
+        Protokolls) `<= today` UND das juengste Event ist weder `reviewed`
+        noch `withdrawn`. Massnahmen eines ersetzten Protokolls zaehlen mit
+        (QE11 a: sie gelten weiter, bis ein Mensch sie zurueckzieht).
+        """
+        count = await self._pool.fetchval(
+            "SELECT COUNT(*)::int FROM measure m "
+            "JOIN feedback_session s ON s.workspace_id = m.workspace_id AND s.id = m.session_id "
+            "LEFT JOIN LATERAL (SELECT e.event FROM measure_event e "
+            "    WHERE e.workspace_id = m.workspace_id AND e.measure_id = m.id "
+            "    ORDER BY e.created_at DESC, e.id DESC LIMIT 1) last ON TRUE "
+            "WHERE m.workspace_id = $1 "
+            "  AND ($2::uuid IS NULL OR m.agent_id = $2) "
+            "  AND COALESCE(m.follow_up_at, s.follow_up_at) <= $3 "
+            "  AND (last.event IS NULL OR last.event NOT IN ('reviewed', 'withdrawn'))",
+            workspace_id,
+            agent_id,
+            today,
+        )
+        return int(count or 0)
 
     async def get_measure(self, workspace_id: UUID, measure_id: UUID) -> MeasureRead | None:
         async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):

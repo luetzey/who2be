@@ -1,118 +1,42 @@
-import {
-  ArrowRight,
-  Bell,
-  BookOpen,
-  Bot,
-  Brain,
-  CircleCheck,
-  ClipboardCheck,
-  FileText,
-  LayoutDashboard,
-  MessageSquareWarning,
-  Plus,
-  Repeat,
-  ScrollText,
-  UserPlus,
-  Users,
-} from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowRight, BookOpen, Bot, FileText, LayoutDashboard, Plus, UserPlus, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { Api } from '@/api/client'
-import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { AttentionBanner } from '@/components/data'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
+import { InboxSummary } from '@/components/data/InboxSummary'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { statusLabel } from '@/components/version'
-import { useApprovalCount } from '@/hooks/useApprovalCount'
-import { cn } from '@/lib/utils'
+import { useInboxCounts } from '@/hooks/useInboxCounts'
 
 import { ActivityRow } from '../components/ActivityRow'
 import { KpiCard } from '../components/KpiCard'
 import { PaginationControls } from '../components/PaginationControls'
 import { StatusBar } from '../components/StatusBar'
 import { useDashboard } from '../hooks/useDashboard'
-import { useReviewTargets } from '../hooks/useReviewTargets'
 
 const EYEBROW = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 const LEGEND_STATUSES = ['draft', 'review', 'active', 'inactive'] as const
-
-/**
- * Eine Zahl fuer das Aufmerksamkeits-Band, die nur fuer editor+ geladen wird
- * (Lernschleife D6h). `enabled=false` (viewer, Rolle unbekannt) loest keinen
- * Aufruf aus. `null`, solange die Zahl laedt, nicht ladbar ist oder nicht
- * angefragt wird — dann zeigt das Band keinen Eintrag. Jede Zahl hat ihren
- * eigenen Effekt: scheitert ein Aufruf, bleibt der andere Eintrag stehen.
- */
-function useEditorCount(enabled: boolean, load: (api: Api) => Promise<number>): number | null {
-  const api = useApi()
-  // Ergebnis samt Anfrage-Schluessel, wie `useApprovalCount`: eine Zahl aus
-  // einem anderen Workspace gilt nicht.
-  const [result, setResult] = useState<{ api: Api; total: number | null } | null>(null)
-
-  useEffect(() => {
-    if (!enabled) return
-    let cancelled = false
-    load(api)
-      .then((total) => {
-        if (!cancelled) setResult({ api, total })
-      })
-      .catch(() => {
-        if (!cancelled) setResult({ api, total: null })
-      })
-    return () => {
-      cancelled = true
-    }
-    // `load` ist eine modulweite Funktion und damit stabil.
-  }, [api, enabled, load])
-
-  if (!enabled || result === null || result.api !== api) return null
-  return result.total
-}
-
-// Muster haben keinen Neu-Status (ADR 3.7): gezaehlt wird die ganze Liste.
-const loadPatternCount = (api: Api) =>
-  api.listPatterns().then((list) => list.patterns.length)
-
-// Offene Faelle = `open` + `reopened` aus dem Zaehler-Endpunkt (Q1); die
-// Fall-Liste wird zum Zaehlen nie geladen.
-const loadOpenCaseCount = (api: Api) =>
-  api.countCases().then((counts) => (counts.open ?? 0) + (counts.reopened ?? 0))
 
 export function DashboardPage() {
   const { t } = useTranslation('dashboard')
   const role = useCurrentWorkspaceRole()
   const wsPath = useWorkspacePath()
   const { data, loading, error, notFound, preparing, page, setPage } = useDashboard()
+  // Navigation W1-c: EINE Quelle fuer Glocke, Seite „Zu erledigen“ und diese
+  // Zeile (Spec §2.5). Rollengerecht rechnet der Server (§2.2); die frueheren
+  // Einzelzaehler des Bands (Gedaechtnis, Muster, Faelle, Review-Listen)
+  // entfallen damit.
+  const inbox = useInboxCounts()
 
   const pagination = data?.activity_pagination
   const totalPages = pagination?.total_pages ?? 1
-  const pendingReviews = data?.kpis.pending_reviews ?? 0
-  // Dieselbe Quelle wie der Tab „Zur Freigabe“ (C5a-2), rollengerecht ohne
-  // Lernvorschlaege und fremdes Nutzergedaechtnis; das Dashboard selbst
-  // liefert keine Gedaechtnis-Zahl (ADR-0053 3.1.1). `null` (laedt/Fehler)
-  // zeigt keinen Banner und kein „Alles erledigt“.
-  const pendingMemories = useApprovalCount()
-  const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
-  // Lernschleife D6h: Muster und offene Faelle nur fuer editor+ (wie die
-  // Hub-Tabs). viewer und eine noch unbekannte Rolle fragen nichts an.
-  const canTriage = role !== null && role !== 'viewer'
-  const patternCount = useEditorCount(canTriage, loadPatternCount)
-  const openCaseCount = useEditorCount(canTriage, loadOpenCaseCount)
-  // Fuer editor+ behauptet „Alles erledigt“ erst etwas, wenn beide Zahlen
-  // belegt 0 sind; fuer viewer zaehlen die Eintraege nicht.
-  const triageClear = !canTriage || (patternCount === 0 && openCaseCount === 0)
-  const allClear =
-    pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0 && triageClear
-  const reviewTargets = useReviewTargets(pendingReviews, data?.status_distribution)
   const activeResources =
     data?.kpis.active_resources ?? data?.status_distribution.resource?.active ?? 0
 
@@ -137,127 +61,14 @@ export function DashboardPage() {
           <DataView loading={loading && data === null} error={error}>
             {data !== null ? (
               <Stack gap="lg">
-                {/* Aufmerksamkeits-Band */}
-                <section className="flex flex-col gap-3" aria-label={t('attention.ariaLabel')}>
-                  <span className={cn('flex items-center gap-2', EYEBROW)}>
-                    <Bell className="size-3.5" aria-hidden="true" />
-                    {t('attention.eyebrow')}
-                  </span>
-                  {pendingReviews > 0 ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={ClipboardCheck}
-                      title={t('attention.reviews.title', { count: pendingReviews })}
-                      description={t('attention.reviews.description')}
-                      actions={
-                        reviewTargets.targets !== null
-                          ? reviewTargets.targets.map((target) => {
-                              const label = t('attention.reviews.openVersion', {
-                                name: target.name,
-                                version: target.version,
-                              })
-                              return (
-                                <Button
-                                  key={`${target.type}-${target.id}`}
-                                  asChild
-                                  variant="outline"
-                                  size="sm"
-                                  className="max-w-full"
-                                >
-                                  {/* `title`: auf 390 px wird der Name gekuerzt. */}
-                                  <Link to={wsPath(target.path)} title={label}>
-                                    <span className="min-w-0 truncate">{label}</span>
-                                    <ArrowRight />
-                                  </Link>
-                                </Button>
-                              )
-                            })
-                          : reviewTargets.lists.map((list) => (
-                              <Button key={list.type} asChild variant="outline" size="sm">
-                                <Link to={wsPath(list.path)}>
-                                  {t(`attention.reviews.openList.${list.type}`, {
-                                    count: list.count,
-                                  })}
-                                  <ArrowRight />
-                                </Link>
-                              </Button>
-                            ))
-                      }
-                    />
-                  ) : null}
-                  {pendingMemories !== null && pendingMemories > 0 ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={Brain}
-                      title={t('attention.memories.title', { count: pendingMemories })}
-                      description={t('attention.memories.description')}
-                      actions={
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={wsPath('/memory?tab=approval')}>
-                            {t('attention.memories.action')}
-                            <ArrowRight />
-                          </Link>
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {patternCount !== null && patternCount > 0 ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={Repeat}
-                      title={t('attention.patterns.title', { count: patternCount })}
-                      description={t('attention.patterns.description')}
-                      actions={
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={wsPath('/feedback?tab=patterns')}>
-                            {t('attention.patterns.action')}
-                            <ArrowRight />
-                          </Link>
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {openCaseCount !== null && openCaseCount > 0 ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={MessageSquareWarning}
-                      title={t('attention.cases.title', { count: openCaseCount })}
-                      description={t('attention.cases.description')}
-                      actions={
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={wsPath('/feedback?tab=cases')}>
-                            {t('attention.cases.action')}
-                            <ArrowRight />
-                          </Link>
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {pendingSystemPrompts > 0 ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={ScrollText}
-                      title={t('attention.systemPrompts.title', { count: pendingSystemPrompts })}
-                      description={t('attention.systemPrompts.description')}
-                      actions={
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={wsPath('/system-prompts?status=review')}>
-                            {t('attention.systemPrompts.action')}
-                            <ArrowRight />
-                          </Link>
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {allClear ? (
-                    <AttentionBanner
-                      variant="brand"
-                      icon={CircleCheck}
-                      title={t('attention.allClear.title')}
-                      description={t('attention.allClear.description')}
-                    />
-                  ) : null}
-                </section>
+                {/* Aufgaben-Zeile (Navigation W1-c, Spec §2.5): ersetzt das
+                    Band „Braucht jetzt deine Aufmerksamkeit“. */}
+                <InboxSummary
+                  counts={inbox.counts}
+                  failed={inbox.failed}
+                  isAdmin={role === 'admin'}
+                  href={wsPath('/inbox')}
+                />
 
                 {/* Schnellstart */}
                 {role !== 'viewer' ? (

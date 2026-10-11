@@ -180,6 +180,29 @@ class WorkAreaAssignment(BaseModel):
     level: WorkAreaGrantLevel
 
 
+class AgentWorkAreaRead(BaseModel):
+    """Arbeitsbereich eines Agenten aus Menschen-Sicht (Navigation A4).
+
+    Antwort von `GET .../agents/{agent_id}/work-areas` fuer den Block
+    „Arbeitsbereiche" im Agent-Ueberblick. Quelle sind die materialisierten
+    Grants des Agenten (inkl. Owner-Grant der privaten Area).
+
+    - `level`: Grant-Stufe DIESES Agenten.
+    - `owner`: `True` fuer die private Area dieses Agenten („eigener").
+    - `agent_count`: Zahl der Agenten mit Grant an der Area, einschliesslich
+      dieses Agenten („geteilt · +n Agenten" = `agent_count - 1`).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    scope: WorkAreaScope
+    level: WorkAreaGrantLevel
+    owner: bool
+    agent_count: int = Field(ge=0)
+
+
 class ArtifactCreate(BaseModel):
     """Eingabe fuer `POST .../work-areas/{area_id}/artifacts` (doc-Artifact).
 

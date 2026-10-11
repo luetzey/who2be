@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { useFeedback } from '@/hooks/useFeedback'
+import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
@@ -351,7 +352,7 @@ export function FeedbackDetailPage() {
                                 </span>
                                 <span className="ml-auto text-xs text-muted-foreground">
                                   {ev.agent_id !== null ? t('panel.agent') : t('panel.human')} ·{' '}
-                                  {new Date(ev.created_at).toLocaleDateString()}
+                                  {formatDate(ev.created_at)}
                                 </span>
                               </div>
                               {ev.note !== null && ev.note !== '' ? (

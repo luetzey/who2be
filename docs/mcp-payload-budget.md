@@ -212,11 +212,179 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-08-13, Einfuehrung (name/description/inputSchema) | 71 | 110.133 Bytes |
 | 2026-10-06, alte Messung auf FastMCP 4.0.11 | 86 | 136.764 Bytes |
 | 2026-10-06, Draht-Form auf FastMCP 4.0.11 | 86 | **142.295 Bytes** |
+| 2026-10-10, Draht-Form | 90 | **147.325 Bytes** |
+| 2026-10-10, mit `alwaysLoad` an fünf Werkzeugen (T4) | 90 | **147.475 Bytes** |
 
-Bis zur Grenze bleiben damit 17.705 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 12.525 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
+
+### Katalog je Referenzprofil
+
+Den vollen Katalog bekommt nur, wer alle Rechte hat. Ein Agent sieht beim
+Start die Teilmenge, die der `PolicyFilterMiddleware` fuer seine Rechte
+durchlaesst (ADR-0042). Diese Teilmenge ist die eigentliche Kennzahl „was
+kostet ein Agent-Start“. Gemessen wird sie mit
+`apps/mcp/src/who2be_mcp/payload_report.py`; der Bericht laesst sich jederzeit
+neu erzeugen:
+
+```bash
+uv run python -m who2be_mcp.payload_report
+```
+
+Stand 2026-10-11, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4)
+und nach der Schema-Diaet (T2):
+
+| Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
+| --- | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 38 | 45.938 | 4 / 6.582 | 8.774 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 51.410 | 5 / 7.924 | 10.173 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 138.060 | 5 / 7.924 | 11.154 |
+| Mensch/JWT, Rolle editor | 86 | 132.588 | 4 / 6.582 | 9.755 |
+| alle Werkzeuge (Guard) | 90 | 138.060 | 5 / 7.924 | 11.154 |
+
+„Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
+die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
+Search“ ist eine Näherung an das, was Claude Code beim Start in den Kontext
+lädt: `instructions`, die Namen der übrigen Werkzeuge und die vollen
+Definitionen der sofort geladenen (siehe „Start bei Tool Search“ unten).
+
+Die Profile sind keine Nachbildung: `test_reference_profiles_measure_the_
+middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
+echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht. Zielwerte je
+Profil gibt es noch nicht; sie kommen mit der Beschreibungs-Diaet (T3) als
+harter Test. Bis dahin ist die Tabelle eine Kennzahl, keine Grenze.
+
+Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
+
+| # | Werkzeug | gesamt | Beschreibung | Schema |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | `create_persona` | 6.710 | 1.522 | 4.999 |
+| 2 | `update_agent` | 5.971 | 148 | 5.700 |
+| 3 | `create_agent` | 5.896 | 244 | 5.527 |
+| 4 | `update_persona` | 5.805 | 724 | 4.941 |
+| 5 | `create_external_tool` | 3.314 | 737 | 2.427 |
+| 6 | `create_playbook` | 3.284 | 1.465 | 1.628 |
+| 7 | `create_resource` | 2.995 | 1.195 | 1.621 |
+| 8 | `update_external_tool` | 2.827 | 375 | 2.305 |
+| 9 | `create_system_prompt` | 2.826 | 1.286 | 1.327 |
+| 10 | `get_persona` | 2.492 | 1.970 | 330 |
+
+Bei den vier teuersten liegt das Gewicht im Schema, nicht in der
+Beschreibung: das `inputSchema` traegt das ganze Inhalts- bzw.
+Policy-Modell samt seiner Docstrings.
+
+### Text-Guards
+
+Drei Guards halten den Text fest, den ein Client wirklich sieht:
+
+- **Beschreibung hoechstens 2.048 Zeichen**
+  (`test_tool_descriptions_stay_under_client_cap`). Claude Code schneidet
+  Werkzeugbeschreibungen dort ab; was dahinter steht, kommt beim Agenten nicht
+  an. Gilt fuer alle Werkzeuge, auch den Bestand in `server.py`.
+- **Erster Satz hoechstens 100 Zeichen**
+  (`test_tool_first_sentences_fit_short_catalogs`). Kurzkataloge (Hermes
+  `tool_search`, Claude Code Tool Search) zeigen ohne Suche nur Namen und
+  ersten Satz. Der Satz soll den Zweck tragen; Bedingungen und Details
+  gehoeren dahinter. Ein Satz endet an `.`, `!` oder `?` vor Leerraum oder an
+  einem Absatzwechsel.
+- **Keine Entwickler-Historie im Draht-Schema**
+  (`test_wire_schema_developer_refs_only_shrink`). Verweise auf ADR, Phase,
+  Track, Welle, WP oder Gap in den `description`-Texten des `inputSchema`
+  stammen aus Pydantic-Docstrings in `packages/models` und kosten jeden
+  Agenten Bytes, ohne einen Aufruf zu erklaeren. Die Ratsche
+  `_DEVELOPER_REF_BASELINE` im Test ist seit der Schema-Diaet (T2) leer:
+  jeder neue Verweis laesst den Test fallen. Historie gehoert in einen
+  `#`-Kommentar ueber der Klasse oder in die ADR, nicht in den Docstring eines
+  Modells, das als Schema ausgeliefert wird.
+
+**Wenn ein Text-Guard reisst:** den Text kuerzen bzw. den Satz umstellen,
+nicht die Grenze anheben.
+
+### Schema-Diaet (T2)
+
+Pydantic schreibt den Klassen-Docstring jedes Modells als `description` in
+das JSON-Schema. Ueber `inputSchema` landet er bei jedem Agenten, der das
+Werkzeug sieht, ueber `docs/reference/openapi.json` auch in der API-Referenz.
+Regel fuer Modelle, die als Werkzeug-Eingabe dienen:
+
+- Der **Docstring** erklaert dem Aufrufer, was das Feld bedeutet und was er
+  senden darf. Kurz, ohne Projektgeschichte.
+- Der **`#`-Kommentar ueber der Klasse** traegt das Warum fuer Entwickler:
+  ADR, Phase, Migration, Backward-Compat.
+- Ein Modell, das in vielen Schemas steckt (`ReadScope` achtmal,
+  `ResourceBlock` zehnmal), bekommt einen Satz.
+
+**Wirkung (gemessen mit `payload_report`, Stand 2026-10-11):**
+
+| Größe | vorher | nachher |
+| --- | ---: | ---: |
+| Draht `tools/list`, alle Werkzeuge | 147.475 | 138.060 (−9.415) |
+| Agent, Default-Policy | 46.436 | 45.938 (−498) |
+| Agent, Default + Gedaechtnis `suggest` | 51.925 | 51.410 (−515) |
+| Mensch/JWT, Rolle editor | 141.986 | 132.588 (−9.398) |
+| Schema-Texte im Katalog | 29.615 | 20.416 (−9.199) |
+| Schema-Texte mit Entwickler-Historie | 35 | 0 |
+
+Beim Default-Agenten ist die Ersparnis klein, weil er keine Schreibwerkzeuge
+sieht; die Historie sass fast ganz in den Schemas von `create_*`/`update_*`.
+Fuer den Default-Agenten wirkt erst die Beschreibungs-Diaet (T3).
+
+### Start bei Tool Search: `instructions` und `alwaysLoad`
+
+Claude Code (Tool Search, Default) und Hermes (`tool_search`) laden beim
+Start nicht die vollen Werkzeugdefinitionen, sondern Namen bzw. einen
+Kurzkatalog und die Server-`instructions`. Die vollen Definitionen holt der
+Agent erst per Suche. Zwei Hebel steuern, was dabei sofort da ist. Beide
+stehen in `apps/mcp/src/who2be_mcp/instructions.py`.
+
+- **Server-`instructions`** (1.604 Bytes): Boot-Reihenfolge `whoami` →
+  `get_persona` → `search_memory` → `list_triggers`/`fetch_playbook`, wann
+  `search` und wann `search_content`, dazu die Regeln, die für viele Werkzeuge
+  gelten: `format="full"` als Vorlage für `update_*`, die
+  Versions-Übergänge, die Sprache neuer Elemente, Gedächtnis-Treffer als
+  Daten und `record_usage` nach jedem Einsatz. Die `instructions` gehen nicht
+  über `tools/list` und zählen deshalb nicht zum Katalog-Budget.
+- **`_meta["anthropic/alwaysLoad"]`** an fünf Werkzeugen: `whoami`,
+  `get_persona`, `search`, `search_memory`, `record_usage`. Claude Code lädt
+  deren volle Definition sofort. Andere Clients ignorieren den Schlüssel. Der
+  Policy-Filter bleibt maßgeblich: wer `search_memory` nicht sehen darf,
+  bekommt es auch mit `alwaysLoad` nicht.
+
+**Wirkung (gemessen mit `payload_report`, Stand 2026-10-10):**
+
+| Größe | vorher | nachher |
+| --- | ---: | ---: |
+| Draht `tools/list`, alle Werkzeuge | 147.325 | 147.475 (+150, je Werkzeug 30 Bytes `_meta`) |
+| Draht `tools/list`, Default-Agent | 46.316 | 46.436 (+120) |
+| Server-`instructions` | 0 | 1.604 |
+| Start mit Tool Search, Default-Agent | 639 (nur Namen) | 9.103 |
+| Start mit Tool Search, Builder | 1.694 (nur Namen) | 11.483 |
+
+Der Start mit Tool Search wird damit größer, nicht kleiner. Das ist gewollt:
+die fünf Werkzeuge braucht jeder Start ohnehin, vorher kamen sie erst über eine
+oder mehrere Suchen in den Kontext, mit denselben Bytes plus Suchanfrage und
+Suchergebnis. Gespart wird der Suchschritt, gewonnen wird ein Boot-Text, der
+vorher fehlte. Beim Draht-Budget, an dem Claude Chat die Liste verwirft, ändert
+sich praktisch nichts (+150 Bytes). Senken lässt es sich nur über kürzere
+Beschreibungen und Schemas (T2, T3).
+
+**Reihenfolge:** Die MCP-Spec verlangt eine deterministische Reihenfolge von
+`tools/list` (Client-Cache, Prompt-Cache). Sie folgt der Registrierung im Code.
+Zwei Tests halten das fest: `test_tools_list_order_is_deterministic_across_
+processes` vergleicht zwei Prozesse mit verschiedenem `PYTHONHASHSEED`, und
+`test_policy_filter_keeps_the_catalog_order` verlangt, dass der Filter nur
+herausnimmt und nicht umordnet.
+
+**Guards:** `test_server_instructions_reach_the_client_and_name_only_real_tools`
+prüft, dass die `instructions` beim Client ankommen, höchstens 2.048 Zeichen
+lang sind, keine Entwickler-Historie tragen und nur existierende
+Werkzeugnamen in Backticks nennen. Wer ein Werkzeug umbenennt, muss den
+Boot-Text mitziehen. `test_always_load_marks_exactly_the_boot_tools` hält die
+Menge bei drei bis fünf Werkzeugen, die alle im Boot-Text stehen.
+
+### Antwortgroesse je Werkzeug
 
 Die Antwort-Tests messen die Antwort so, wie sie ankommt: unter `text` den
 Markdown-String, unter `full` das serialisierte Modell (`model_dump_json`).

@@ -11,6 +11,8 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  AgentUsageStats,
+  AgentWorkArea,
   ArtifactExportFormat,
   ArtifactMarkdown,
   CaseCounts,
@@ -37,11 +39,13 @@ import type {
   FeedbackInput,
   FeedbackItems,
   FeedbackOverview,
+  FeedbackOverviewFilter,
   FeedbackResolutionInput,
   FeedbackSummary,
   FeedbackTarget,
   FeedbackUnused,
   GdprExport,
+  InboxCounts,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
@@ -96,6 +100,7 @@ import type {
   ResourceRef,
   ResourceUsage,
   ResourceVersion,
+  RoutinesOverview,
   SubResource,
   SubResourceLinkInput,
   SystemFeedbackInput,
@@ -116,6 +121,8 @@ import type {
   TokenCreated,
   TokenInput,
   TokenRenameInput,
+  UsageEntityType,
+  UsageStats,
   VersionDiff,
   VersionedEntityType,
   VersionStatus,
@@ -164,6 +171,28 @@ function urlFor(path: ApiPath): string {
   return `${config.apiBaseUrl}${resolved}`
 }
 
+/**
+ * Meldung „eine eigene Schreibanfrage ist durch“ (Navigation W1, Spec §2.3/N5 a):
+ * Zaehler wie die Glocke laden danach neu, ohne dass jede Fachseite ihre
+ * Aktionen einzeln melden muss. Gemeldet wird nur nach Erfolg und nur fuer
+ * schreibende Methoden; der Hörer bekommt keine Daten, nur das Signal.
+ */
+const mutationListeners = new Set<() => void>()
+
+export function subscribeApiMutations(listener: () => void): () => void {
+  mutationListeners.add(listener)
+  return () => {
+    mutationListeners.delete(listener)
+  }
+}
+
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function notifyMutation(method: string | undefined): void {
+  if (READ_METHODS.has((method ?? 'GET').toUpperCase())) return
+  for (const listener of mutationListeners) listener()
+}
+
 async function request<T>(token: string, path: ApiPath, init?: RequestInit): Promise<T> {
   const url = urlFor(path)
   const headers: Record<string, string> = {
@@ -195,6 +224,7 @@ async function request<T>(token: string, path: ApiPath, init?: RequestInit): Pro
     const { message, body } = await readErrorBody(response)
     throw new ApiError(response.status, message, body)
   }
+  notifyMutation(init?.method)
   if (response.status === 204) {
     return undefined as T
   }
@@ -546,7 +576,8 @@ export interface Api {
   getDashboard: (page?: number) => Promise<DashboardData>
   getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
-  getFeedbackOverview: () => Promise<FeedbackOverview>
+  // Navigation A6: optional je Agent und Zeitraum (`days` 1..365).
+  getFeedbackOverview: (filter?: FeedbackOverviewFilter) => Promise<FeedbackOverview>
   getFeedbackItems: () => Promise<FeedbackItems>
   // Detailsicht auf ein einzelnes Feedback (Absender + Triage-Historie).
   getFeedbackDetail: (feedbackId: string) => Promise<FeedbackDetail>
@@ -658,6 +689,9 @@ export interface Api {
   deleteAccount: () => Promise<AccountDeletion>
   deleteOrganization: (orgId: string) => Promise<OrganizationDeletion>
   exportMyData: () => Promise<GdprExport>
+  // ADR-0057 §7 — Hintergrund-Routinen, nur Betreiber (alle anderen 403).
+  // Nicht workspace-scoped: die Routinen gelten fuer die ganze Instanz.
+  getSystemRoutines: () => Promise<RoutinesOverview>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: (filters?: { locale?: string }) => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -733,6 +767,9 @@ export interface Api {
     options?: { cursor?: string; limit?: number },
   ) => Promise<CasePage>
   countCases: (agentId?: string) => Promise<CaseCounts>
+  // Navigation & Transparenz W1 — Aufgaben-Zaehler fuer Glocke, Dashboard-
+  // Zeile und Agent-Ueberblick (ein Request, rollengerecht).
+  getInboxCounts: (agentId?: string) => Promise<InboxCounts>
   getCase: (caseId: string) => Promise<CaseDetail>
   deleteCase: (caseId: string) => Promise<void>
   transitionCase: (caseId: string, input: CaseTransitionInput) => Promise<CaseRead>
@@ -842,6 +879,12 @@ export interface Api {
   // greift nur bei `w2b_`-Tokens. Sichtbarkeit serverseitig: editor+ sehen
   // auch fremde private Areas, viewer nur `scope='shared'`.
   listWorkAreas: () => Promise<WorkArea[]>
+  // Navigation A4: Arbeitsbereiche eines Agenten (nur Menschen, ab viewer;
+  // viewer sieht nur geteilte Bereiche).
+  listAgentWorkAreas: (agentId: string) => Promise<AgentWorkArea[]>
+  // Nutzung U1/U2 — Zaehler je Element bzw. Agent (ab viewer, nur Menschen).
+  getUsage: (entityType: UsageEntityType, entityId: string) => Promise<UsageStats>
+  getAgentUsage: (agentId: string) => Promise<AgentUsageStats>
   createWorkArea: (input: WorkAreaCreateInput) => Promise<WorkArea>
   // Grants gibt es nur auf SHARED Areas (private Area => 403 `area_forbidden`);
   // die Vergabe ist Menschen vorbehalten.
@@ -992,8 +1035,12 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackSummary>(token, apiPath`${ws}/feedback/${type}/${id}`),
     getFeedbackEvents: (type, id) =>
       request<FeedbackEvents>(token, apiPath`${ws}/feedback/${type}/${id}/events`),
-    getFeedbackOverview: () =>
-      request<FeedbackOverview>(token, apiPath`${ws}/feedback-overview`),
+    getFeedbackOverview: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.agent_id) params.set('agent_id', filter.agent_id)
+      if (filter?.days !== undefined) params.set('days', String(filter.days))
+      return request<FeedbackOverview>(token, withQuery(apiPath`${ws}/feedback-overview`, params))
+    },
     getFeedbackItems: () =>
       request<FeedbackItems>(token, apiPath`${ws}/feedback-items`),
     getFeedbackDetail: (feedbackId) =>
@@ -1177,6 +1224,7 @@ export function createApi(token: string, workspaceId: string): Api {
     deleteOrganization: (orgId) =>
       request<OrganizationDeletion>(token, apiPath`/v1/organizations/${orgId}`, { method: 'DELETE' }),
     exportMyData: () => request<GdprExport>(token, apiPath`/v1/gdpr/export`),
+    getSystemRoutines: () => request<RoutinesOverview>(token, apiPath`/v1/system/routines`),
     listSystemPromptTemplates: (filters) => {
       const params = new URLSearchParams()
       if (filters?.locale) params.set('locale', filters.locale)
@@ -1333,6 +1381,11 @@ export function createApi(token: string, workspaceId: string): Api {
       const params = new URLSearchParams()
       if (agentId) params.set('agent_id', agentId)
       return request<CaseCounts>(token, withQuery(apiPath`${ws}/cases/counts`, params))
+    },
+    getInboxCounts: (agentId) => {
+      const params = new URLSearchParams()
+      if (agentId) params.set('agent_id', agentId)
+      return request<InboxCounts>(token, withQuery(apiPath`${ws}/inbox/counts`, params))
     },
     getCase: (caseId) => request<CaseDetail>(token, apiPath`${ws}/cases/${caseId}`),
     deleteCase: (caseId) =>
@@ -1500,6 +1553,12 @@ export function createApi(token: string, workspaceId: string): Api {
       )
     },
     listWorkAreas: () => request<WorkArea[]>(token, apiPath`${ws}/work-areas`),
+    listAgentWorkAreas: (agentId) =>
+      request<AgentWorkArea[]>(token, apiPath`${ws}/agents/${agentId}/work-areas`),
+    getUsage: (entityType, entityId) =>
+      request<UsageStats>(token, apiPath`${ws}/usage/${entityType}/${entityId}`),
+    getAgentUsage: (agentId) =>
+      request<AgentUsageStats>(token, apiPath`${ws}/agents/${agentId}/usage`),
     createWorkArea: (input) =>
       request<WorkArea>(token, apiPath`${ws}/work-areas`, {
         method: 'POST',

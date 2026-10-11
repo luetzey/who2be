@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_TOOL_POLICY,
@@ -122,15 +122,41 @@ function stubFetchRoutes(handlers: Record<string, () => Response>) {
   return fetchMock
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{`${location.search}${location.hash}`}</output>
+}
+
+const editorMe: Me = {
+  ...me,
+  organizations: [
+    {
+      id: 'o1',
+      name: 'Org',
+      slug: 'org',
+      kind: 'personal',
+      workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role: 'editor' }],
+    },
+  ],
+} as Me
+
+function renderPage(entry = '/w/ws-1/agents/a1', currentMe: Me = me) {
   return render(
     <SessionContext.Provider
-      value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session, me: currentMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/agents/a1']}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
-            <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
+            <Route
+              path="/w/:workspaceId/agents/:id"
+              element={
+                <>
+                  <AgentDetailPage />
+                  <LocationProbe />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </AuthTokenProvider>
@@ -172,7 +198,8 @@ describe('AgentDetailPage', () => {
     expect(screen.getByTestId('delete-agent-trigger')).toBeInTheDocument()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
 
-    // Connector- + Token-Sektion liegen im Tab „Verbindung".
+    // Connector- + Token-Sektion liegen im Tab „Einstellungen“ → „Verbindung".
+    fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
 
     // Connector-Sektion mit agent-eindeutiger URL (Agent im Pfad, Issue #404).
@@ -213,7 +240,8 @@ describe('AgentDetailPage', () => {
     expect(within(hierarchy).getAllByText('— nicht geladen —')).toHaveLength(2)
     expect(within(hierarchy).getByText('Keine Playbooks verknüpft.')).toBeInTheDocument()
 
-    // Missing-Hinweis nennt die konkreten Luecken.
+    // Missing-Hinweis nennt die konkreten Luecken (Tab „Einstellungen").
+    fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
     const missingNotice = await screen.findByTestId('agent-missing-notice')
     expect(missingNotice).toHaveTextContent('Persona verknüpfen')
     expect(missingNotice).toHaveTextContent('Systemprompt verknüpfen')
@@ -236,7 +264,7 @@ describe('AgentDetailPage', () => {
       },
     })
 
-    renderPage()
+    renderPage('/w/ws-1/agents/a1?tab=settings')
 
     expect(await screen.findByTestId('managed-notice')).toBeInTheDocument()
     // Duplicate-Hinweis der Notice (nur auf der Agent-Detail-Page).
@@ -302,7 +330,7 @@ describe('AgentDetailPage', () => {
         }),
     })
 
-    renderPage()
+    renderPage('/w/ws-1/agents/a1?tab=settings')
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('Carla Bot')).toBeInTheDocument()
@@ -317,5 +345,135 @@ describe('AgentDetailPage', () => {
 
     expect(await screen.findByText('Name bereits vergeben.')).toBeInTheDocument()
     expect(notify.success).not.toHaveBeenCalled()
+  })
+})
+
+// Navigation-Spec §3.1 (W2-a1): Tabs statt Stapel, `?tab=` als einzige Quelle,
+// alte Anker leiten um. Fetches der Tab-Inhalte (Gedaechtnis, Prueffaelle)
+// werden tolerant beantwortet — geprueft wird hier die Seite, nicht die Karten.
+function stubTolerant(loadedAgent: Agent = agent()) {
+  const handlers = fullHandlers(loadedAgent)
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const path = new URL(String(input)).pathname
+    const handler = handlers[`${method} ${path}`]
+    if (handler) return handler()
+    if (path.endsWith('/memories/counts')) return jsonResponse({ total: 0, groups: { kind: {} } })
+    if (path.endsWith('/memories')) return jsonResponse({ items: [], next_cursor: null })
+    return jsonResponse([])
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function tabNames() {
+  return within(screen.getAllByRole('tablist')[0])
+    .getAllByRole('tab')
+    .map((tab) => tab.textContent)
+}
+
+describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
+  // jsdom kennt kein scrollIntoView; die Gedaechtnis-Karte scrollt bei `#memory`.
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+  it('Default „Überblick“: Zusammensetzung sichtbar, Editor und Prüffälle nicht gemountet', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1', editorMe)
+
+    await screen.findByRole('heading', { level: 1, name: 'Carla Bot' })
+    const outer = screen.getByRole('tablist', { name: 'Bereiche des Agenten' })
+    expect(tabNames()).toEqual(['Überblick', 'Gedächtnis', 'Prüffälle', 'Einstellungen'])
+    expect(within(outer).getByRole('tab', { name: 'Überblick' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // Weiterentwicklung bleibt hinter der Modulkonstante aus (Inhalt kommt mit Phase E).
+    expect(within(outer).queryByRole('tab', { name: 'Weiterentwicklung' })).toBeNull()
+    expect(await screen.findByTestId('agent-hierarchy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Speichern' })).toBeNull()
+    expect(screen.queryByTestId('agent-test-cases')).toBeNull()
+    expect(screen.queryByTestId('agent-memory-card')).toBeNull()
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/)
+  })
+
+  it('Tab-Wechsel schreibt ?tab=, Überblick entfernt den Parameter wieder', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1', editorMe)
+    await screen.findByTestId('agent-hierarchy')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Prüffälle' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=tests')
+    expect(await screen.findByTestId('agent-test-cases')).toBeInTheDocument()
+    expect(screen.queryByTestId('agent-hierarchy')).toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Überblick' }))
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/)
+    expect(screen.getByTestId('agent-hierarchy')).toBeInTheDocument()
+  })
+
+  it('?tab=memory zeigt das Gedächtnis ohne Kartenrahmen', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1?tab=memory', editorMe)
+
+    const card = await screen.findByTestId('agent-memory-card')
+    expect(card).toHaveClass('border-0', 'shadow-none')
+    expect(screen.getByRole('tab', { name: 'Gedächtnis' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('viewer: kein Tab „Gedächtnis“, ?tab=memory fällt auf den Überblick zurück', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1?tab=memory', {
+      ...editorMe,
+      organizations: [
+        {
+          ...editorMe.organizations[0],
+          workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role: 'viewer' }],
+        },
+      ],
+    } as Me)
+
+    await screen.findByTestId('agent-hierarchy')
+    expect(tabNames()).toEqual(['Überblick', 'Prüffälle', 'Einstellungen'])
+    expect(screen.queryByTestId('agent-memory-card')).toBeNull()
+  })
+
+  it('unbekannter ?tab= und ?tab=evolution fallen auf den Überblick zurück', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1?tab=evolution', editorMe)
+    await screen.findByTestId('agent-hierarchy')
+    expect(screen.getByRole('tab', { name: 'Überblick' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByTestId('agent-evolution-placeholder')).toBeNull()
+  })
+
+  it.each([
+    ['#tests', '?tab=tests', 'Prüffälle'],
+    ['#memory', '?tab=memory#memory', 'Gedächtnis'],
+    ['#sessions', '', 'Überblick'],
+    ['#delegations', '#delegations', 'Überblick'],
+  ])('alter Anker %s leitet auf „%s“ um', async (anchor, expected, tabName) => {
+    stubTolerant()
+    renderPage(`/w/ws-1/agents/a1${anchor}`, editorMe)
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe(expected),
+    )
+    expect(await screen.findByRole('tab', { name: tabName })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('ein expliziter ?tab= gewinnt gegen den Anker', async () => {
+    stubTolerant()
+    renderPage('/w/ws-1/agents/a1?tab=settings#tests', editorMe)
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('?tab=settings'),
+    )
+    expect(screen.getByRole('tab', { name: 'Einstellungen' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 })

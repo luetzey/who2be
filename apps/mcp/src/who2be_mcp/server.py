@@ -34,6 +34,7 @@ from who2be_mcp.client import (
 )
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
+from who2be_mcp.instructions import ALWAYS_LOAD_META, SERVER_INSTRUCTIONS
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
 from who2be_mcp.tools.kb import register as register_kb_tools
 from who2be_mcp.tools.learning import FramedMemoryHit, frame_hits
@@ -105,7 +106,9 @@ from who2be_models.memory import MemorySaveResult
 
 logger = logging.getLogger(__name__)
 
-mcp: FastMCP = FastMCP("who2be")
+# `instructions` und `ALWAYS_LOAD_META` (MCP-Token T4): Boot-Reihenfolge und
+# Querschnittsregeln fuer Clients mit Tool Search, siehe `instructions.py`.
+mcp: FastMCP = FastMCP("who2be", instructions=SERVER_INSTRUCTIONS)
 
 # Per-Request-Policy-Filterung von tools/list + Call-Sperre (ADR-0042):
 # fail-open ohne aufloesbare Identitaet (ping bleibt token-frei nutzbar);
@@ -402,7 +405,7 @@ def ping() -> str:
     return "pong"
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("whoami")
 async def whoami() -> WhoAmIRead:
     """Identitaet + effektive Berechtigungen des aktuellen API-Tokens (#253).
@@ -432,7 +435,7 @@ async def whoami() -> WhoAmIRead:
     return await client.whoami()
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("get_persona")
 async def get_persona(
     identifier: str, locale: str | None = None, mode: str | None = None, format: str = "text"
@@ -443,31 +446,28 @@ async def get_persona(
     gerendertem Profil, Modi und Playbook-Katalog. Fuer `update_*` (PUT,
     Vollstand) oder strukturelle Verarbeitung: `format="full"`.
 
-    Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
-    deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
-    Alt-Clients:
-    - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, es werden
-      weiterhin nur aktive Versionen geliefert. Die tatsaechliche Sprache der
-      Persona steht im Kopf (`locale`) der Antwort — nutze DAS, nicht den
-      Parameter.
+    Jede Persona IST deutsch ODER englisch — `locale` ist ein
+    Backward-Compat-Parameter fuer Alt-Clients:
+    - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, geliefert
+      wird nur die aktive Version. Die tatsaechliche Sprache steht im Kopf
+      (`locale`) der Antwort.
     - Aufloesung per Name (`identifier` ist keine UUID): `locale` wirkt als
       optionaler Filter auf gleichnamige Personae in anderen Sprachen
       (`None` = kein Filter, alle Sprachen — der sichere Default, damit ein
       Alt-Client mit hartkodiertem `locale='de'` keine EN-Personae mehr
       versteckt).
 
-    Modi einer Multi-Modus-Persona (Gap 3.4; unter `full` in
+    Modi einer Multi-Modus-Persona (unter `full` in
     `persona.content.modes`) tragen Name, `trigger` (Erkennungs-Keywords),
     Default-Markierung (Fallback ohne Trigger-Match), `identity_add`
     (Ergaenzung zur Basis-Identitaet) und `output_style_override`
     (Output-Stil-Anpassung). Ohne Modi ist die Persona single-mode.
 
-    Das Profil (`body_rendered` unter `full`) ist fetch-time expandiert
-    (Track F): Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
-    Slash-Refs sind bereits zu Plain-Text aufgeloest. Nutze diesen Text als
-    gebrauchsfertiges Persona-Briefing.
+    Das Profil (`body_rendered` unter `full`) ist fetch-time expandiert:
+    Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
+    Slash-Refs sind bereits zu Plain-Text aufgeloest.
 
-    Modus-Workflow (WP-F): lies zuerst die Modi (z. B. via `get_persona` ohne
+    Modus-Workflow: lies zuerst die Modi (z. B. via `get_persona` ohne
     `mode`), waehle anhand der Modus-`trigger` den passenden
     Modus und rufe dann `get_persona(identifier, mode="<Modus-Name>")` auf —
     der Server haengt die Aktiver-Modus-Sektion an das Profil an
@@ -477,8 +477,7 @@ async def get_persona(
     case-insensitiv; ein unbekannter Modus antwortet mit einem Fehler, der die
     verfuegbaren Modi auflistet.
 
-    Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
-    nicht im Profil.
+    Skills sind derzeit deaktiviert und erscheinen nicht im Profil.
     """
     _validate_response_format(format)
     client = await build_client()
@@ -1484,8 +1483,9 @@ async def create_external_tool(data: ExternalToolCreate) -> ExternalToolRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("update_external_tool")
 async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> ExternalToolRead:
-    """Aktualisiert eine externe Tool-Bindung (versioniert; PUT auf aktiv → neue
-    Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix.
+    """Aktualisiert eine externe Tool-Bindung (versioniert, Alias fix).
+
+    PUT auf aktiv → neue Draft, 409 bei bestehendem Draft.
 
     PUT: `content` ersetzt den Stand vollstaendig. Vorlage im Vollstand lesen
     (`format="full"`, sofern angeboten), nie die Lesefassung.
@@ -1666,21 +1666,22 @@ async def transition_system_prompt(
 # ---------------------------------------------------------------------------
 
 
+# Pflicht-`outcome` nach ADR-0053 6.5. Die REST-Form (`UsageEventCreate`)
+# bleibt optional: ADR-0053 3.4 plant eine serverseitige Nutzungsaufzeichnung
+# ohne Ergebnis (Paket D3, hier noch nicht umgesetzt). Pflicht im Schema statt
+# Laufzeit-Pruefung: so steht es im inputSchema unter `required`, und ein
+# Modell sieht es vor dem Aufruf.
 class UsageReport(UsageEventCreate):
-    """Eingabe von `record_usage` ueber MCP: `outcome` ist Pflicht (ADR-0053 6.5).
+    """Eingabe von `record_usage`: `outcome` ist Pflicht.
 
-    Die REST-Form (`UsageEventCreate`) bleibt optional: ADR-0053 3.4 plant eine
-    serverseitige Nutzungsaufzeichnung ohne Ergebnis (Paket D3, hier noch nicht
-    umgesetzt). Ein Agent dagegen meldet immer, WIE die Nutzung ausging — das
-    Ergebnis ist der Teil, den nur er kennt. Pflicht im Schema statt
-    Laufzeit-Pruefung: so steht es im inputSchema unter `required`, und ein
-    Modell sieht es vor dem Aufruf.
+    Der Agent meldet immer, WIE die Nutzung ausging — das Ergebnis ist der
+    Teil, den nur er kennt.
     """
 
     outcome: UsageOutcome
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("record_usage")
 async def record_usage(data: UsageReport) -> UsageEventRead:
     """Meldet, dass du ein Element genutzt hast (append-only Telemetrie).
@@ -1776,7 +1777,7 @@ async def resolve_feedback(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("search_memory")
 async def search_memory(query: str, k: int = 5) -> list[FramedMemoryHit]:
     """Durchsucht dein Langzeitgedaechtnis (freigegebene Memories).
@@ -1875,7 +1876,7 @@ async def save_memory(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(output_schema=None)
+@mcp.tool(output_schema=None, meta=ALWAYS_LOAD_META)
 @with_tool_log("search")
 async def search(
     query: str, types: list[SearchType] | None = None, limit: int = 20
