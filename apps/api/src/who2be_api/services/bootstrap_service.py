@@ -26,10 +26,13 @@ import asyncpg
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.tenancy import scope_to_self
 from who2be_api.licensing.edition import is_onprem
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 
 logger = logging.getLogger(__name__)
 
 _BOOTSTRAP_NAMESPACE = "who2be:bootstrap-admin"
+
+BOOTSTRAP_CLAIMED_AUDIT_ACTION = "org.bootstrap_claimed"
 
 
 def _deterministic_user_id(email: str) -> UUID:
@@ -109,6 +112,9 @@ async def claim_bootstrap_org(
     Erwartet eine umgebende Transaktion (`scope_to_self` ist transaktionslokal).
     True = mindestens eine Mitgliedschaft uebernommen. Idempotent: nach der
     Uebernahme haelt der Platzhalter nichts mehr, ein zweiter Lauf ist ein No-Op.
+    Die Uebernahme schreibt `org.bootstrap_claimed` in `audit_log` (dieselbe
+    Transaktion). Parallele Erst-Logins serialisiert der Aufrufer
+    (`PgMeRepository.fetch`, Advisory-Lock je User).
     """
     resolved = settings or get_settings()
     email = resolved.bootstrap_admin_email.strip().lower()
@@ -131,13 +137,34 @@ async def claim_bootstrap_org(
     if (row["email"] or "").strip().lower() != email:
         return False
 
-    org_rows = await conn.execute(
-        "UPDATE org_member SET user_id = $1 WHERE user_id = $2", user_id, placeholder
+    org_ids = await conn.fetch(
+        "UPDATE org_member SET user_id = $1 WHERE user_id = $2 RETURNING org_id",
+        user_id,
+        placeholder,
     )
-    await conn.execute(
-        "UPDATE workspace_member SET user_id = $1 WHERE user_id = $2", user_id, placeholder
+    ws_rows = await conn.fetch(
+        "UPDATE workspace_member m SET user_id = $1 FROM workspace w "
+        "WHERE m.user_id = $2 AND w.id = m.workspace_id "
+        "RETURNING m.workspace_id, w.org_id",
+        user_id,
+        placeholder,
     )
-    claimed = bool(org_rows != "UPDATE 0")
-    if claimed:
-        logger.info("On-Prem-Bootstrap: Org des Bootstrap-Admins an User %s uebergeben.", user_id)
-    return claimed
+    if not org_ids:
+        return False
+    # Admin-/Security-Event (ADR-0031): der User wird Owner einer Org und Admin
+    # ihres Workspaces. Eine Zeile je uebernommenem Workspace, in derselben
+    # Transaktion wie die Uebernahme. Akteur und Ziel sind der User selbst —
+    # die Konto-Purge (E1-1b, `_ANONYMIZE_AUDIT_LOG_SQL`) erfasst die Zeile
+    # ueber `actor_id`/`target`.
+    audit = PgAuditLogRepository()
+    for ws in ws_rows:
+        await audit.insert(
+            conn,
+            action=BOOTSTRAP_CLAIMED_AUDIT_ACTION,
+            org_id=ws["org_id"],
+            workspace_id=ws["workspace_id"],
+            actor_id=user_id,
+            target=str(user_id),
+        )
+    logger.info("On-Prem-Bootstrap: Org des Bootstrap-Admins an User %s uebergeben.", user_id)
+    return True

@@ -22,16 +22,27 @@ from fastapi.testclient import TestClient
 
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
+from who2be_api.core.db import init_connection
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.repositories.account_repository import (
+    ANONYMIZED_USER_ID,
+    PgAccountPurgeRepository,
+)
+from who2be_api.repositories.me_repository import PgMeRepository
 from who2be_api.services import bootstrap_service
-from who2be_api.services.bootstrap_service import _deterministic_user_id, seed_bootstrap_tenant
+from who2be_api.services.bootstrap_service import (
+    BOOTSTRAP_CLAIMED_AUDIT_ACTION,
+    _deterministic_user_id,
+    seed_bootstrap_tenant,
+)
 from who2be_api.testing.workspace_setup import (
     _connect_with_codec,
     _ensure_auth_users_stub,
     cleanup_workspaces,
     fresh_user_id,
 )
+from who2be_models import MeRead
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -111,6 +122,7 @@ def _cleanup(org_id: UUID, user_ids: list[UUID]) -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             async with conn.transaction():
+                await conn.execute("DELETE FROM audit_log WHERE org_id = $1", org_id)
                 await conn.execute(
                     "DELETE FROM agent_access_log WHERE workspace_id IN "
                     "(SELECT id FROM workspace WHERE org_id = $1)",
@@ -251,5 +263,95 @@ def test_login_is_unchanged_without_variable_or_in_cloud(
         assert org_id not in _org_ids_of(user)
         assert len(_org_ids_of(user)) == 1  # eigene Personal-Org wie bisher
         assert _org_ids_of(placeholder) == [org_id]
+    finally:
+        _cleanup(org_id, [user, placeholder])
+
+
+def _audit_rows(org_id: UUID) -> list[asyncpg.Record]:
+    async def _run() -> list[asyncpg.Record]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            rows: list[asyncpg.Record] = await conn.fetch(
+                "SELECT org_id, workspace_id, actor_id, action, target FROM audit_log "
+                "WHERE org_id = $1 ORDER BY created_at",
+                org_id,
+            )
+            return rows
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
+@pytest.mark.integration
+def test_parallel_first_logins_end_in_exactly_one_org(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Web-App ruft /v1/me beim Start mehrfach parallel auf. Ohne
+    Serialisierung uebernahm ein Aufruf die Bootstrap-Org, die anderen seedeten
+    zusaetzlich eine Personal-Org (Review PR #921)."""
+    _skip_without_db()
+    email = f"boot-{uuid4().hex[:10]}@who2be.dev"
+    user = fresh_user_id()
+    placeholder = _deterministic_user_id(email)
+    org_id = _prepare(email, user, confirmed=True)
+    settings = Settings(edition="onprem", bootstrap_admin_email=email)
+    monkeypatch.setattr(bootstrap_service, "get_settings", lambda: settings)
+
+    async def _run() -> list[MeRead]:
+        pool = await asyncpg.create_pool(
+            get_settings().database_url, init=init_connection, min_size=4, max_size=8
+        )
+        try:
+            repo = PgMeRepository(pool)
+            return list(await asyncio.gather(*(repo.fetch(user) for _ in range(6))))
+        finally:
+            await pool.close()
+
+    try:
+        results = asyncio.run(_run())
+        assert _org_ids_of(user) == [org_id]
+        assert _workspace_role_in_org(user, org_id) == ["admin"]
+        assert all([o.id for o in me.organizations] == [org_id] for me in results)
+        assert len(_audit_rows(org_id)) == 1
+    finally:
+        _cleanup(org_id, [user, placeholder])
+
+
+@pytest.mark.integration
+def test_claim_writes_audit_row_and_account_purge_anonymizes_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _skip_without_db()
+    email = f"boot-{uuid4().hex[:10]}@who2be.dev"
+    user = fresh_user_id()
+    placeholder = _deterministic_user_id(email)
+    org_id = _prepare(email, user, confirmed=True)
+    try:
+        me = _login(
+            monkeypatch,
+            user,
+            email,
+            settings=Settings(edition="onprem", bootstrap_admin_email=email),
+        )
+        rows = _audit_rows(org_id)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["action"] == BOOTSTRAP_CLAIMED_AUDIT_ACTION == "org.bootstrap_claimed"
+        assert str(row["workspace_id"]) == me["default_workspace_id"]
+        assert row["actor_id"] == user
+        assert row["target"] == str(user)
+
+        # Konto-Purge (E1-1b) erfasst die Zeile ueber actor_id/target.
+        async def _purge() -> int:
+            conn = await asyncpg.connect(get_settings().database_url)
+            try:
+                return await PgAccountPurgeRepository(conn).purge_account_data(user)
+            finally:
+                await conn.close()
+
+        assert asyncio.run(_purge()) >= 1
+        (purged,) = _audit_rows(org_id)
+        assert purged["action"] == "org.bootstrap_claimed"
+        assert purged["actor_id"] == ANONYMIZED_USER_ID
+        assert purged["target"] == str(ANONYMIZED_USER_ID)
     finally:
         _cleanup(org_id, [user, placeholder])

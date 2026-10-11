@@ -60,6 +60,16 @@ _MEMBER_QUERY = (
     "ORDER BY o.created_at ASC, o.id ASC, m.joined_at ASC, w.id ASC"
 )
 
+# Erneute Pruefung unter dem Seed-Lock — dieselbe Sicht wie `_MEMBER_QUERY`
+# (soft-geloeschte Orgs zaehlen nicht), sonst wichen Lazy-Seed-Entscheidung
+# und Response voneinander ab.
+_HAS_LIVE_MEMBERSHIP_QUERY = (
+    "SELECT 1 FROM workspace_member m "
+    "JOIN workspace w ON w.id = m.workspace_id "
+    "JOIN organization o ON o.id = w.org_id "
+    "WHERE m.user_id = $1 AND o.deleted_at IS NULL LIMIT 1"
+)
+
 
 class PgMeRepository:
     """asyncpg-Implementierung."""
@@ -74,25 +84,31 @@ class PgMeRepository:
         # sofort erneut abfragen, damit der Response stets eine valide
         # default_workspace_id traegt.
         if not rows:
-            # On-Prem-Bootstrap (services/bootstrap_service.py): der erste Login
-            # des Bootstrap-Admins mit bestaetigter Adresse uebernimmt die
-            # geseedete Org, statt eine eigene Personal-Org zu bekommen.
-            async with self._pool.acquire() as conn, conn.transaction():
-                claimed = await claim_bootstrap_org(conn, user_id)
-            if claimed:
-                rows = await self._pool.fetch(_MEMBER_QUERY, user_id)
-
-        if not rows:
+            # Profil VOR dem Lock lesen: `_lookup_profile` braucht eine eigene
+            # Pool-Connection, und wer unter dem Lock eine zweite anfordert,
+            # kann bei vielen wartenden Erstaufrufen den Pool erschoepfen.
             user_email, content_locale = await self._lookup_profile(user_id)
-            # Transaktion: der Seed besteht aus mehreren Inserts (Org, Member,
-            # Workspace, Default-Templates). Atomar, damit zwei parallele
-            # Erstaufrufe desselben Users keinen Teilzustand hinterlassen — die
-            # ON-CONFLICT-Klauseln in ensure_personal_workspace machen den
-            # Re-Lauf idempotent (analog WorkspaceRepository.create).
+            # Eine Transaktion, pro User serialisiert: die Web-App ruft /v1/me
+            # beim Start mehrfach parallel auf. Ohne Lock sahen alle Aufrufe
+            # `rows == []`, einer uebernahm die Bootstrap-Org, die anderen
+            # seedeten zusaetzlich eine Personal-Org. Unter dem Lock wird die
+            # Mitgliedschaft erneut gelesen; nur wer weiterhin keine hat,
+            # uebernimmt bzw. seedet. `xact_lock` gibt am Tx-Ende frei.
             async with self._pool.acquire() as conn, conn.transaction():
-                await ensure_personal_workspace(
-                    conn, user_id, user_email=user_email, content_locale=content_locale
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext($1))", f"me_seed:{user_id}"
                 )
+                if not await conn.fetchval(_HAS_LIVE_MEMBERSHIP_QUERY, user_id):
+                    # On-Prem-Bootstrap (services/bootstrap_service.py): der
+                    # erste Login des Bootstrap-Admins mit bestaetigter Adresse
+                    # uebernimmt die geseedete Org, statt eine eigene
+                    # Personal-Org zu bekommen.
+                    if not await claim_bootstrap_org(conn, user_id):
+                        # Seed aus mehreren Inserts (Org, Member, Workspace,
+                        # Default-Templates), atomar in dieser Transaktion.
+                        await ensure_personal_workspace(
+                            conn, user_id, user_email=user_email, content_locale=content_locale
+                        )
             rows = await self._pool.fetch(_MEMBER_QUERY, user_id)
 
         orgs: dict[UUID, MeOrganization] = {}
