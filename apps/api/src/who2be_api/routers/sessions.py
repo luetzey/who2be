@@ -4,7 +4,8 @@ Sieben Routen, Mount unter `/v1/workspaces/{ws_id}`:
 
 - `POST /feedback-sessions` — Protokoll einreichen (Sitzung, Faelle,
   Massnahmen in einer Transaktion; Faelle auf `in_progress`, W-E2 = a).
-- `GET /feedback-sessions?agent_id&case_id` — Liste, neueste zuerst (QE1/QE2).
+- `GET /feedback-sessions?agent_id&case_id&due` — Liste, neueste zuerst,
+  je Zeile mit Zaehlern (QE1/QE2 = a).
 - `GET /feedback-sessions/{id}` — Protokoll mit Massnahmen (QE1 = a).
 - `POST /measures/{id}/link-draft` — Entwurf verknuepfen (Weiche E2 = a).
 - `GET /measures/{id}/follow-up` — Kennzahlen als Rohzahlen (QE8 = a).
@@ -42,7 +43,7 @@ from who2be_models import (
     MeasureVerdict,
     SessionCreate,
     SessionDetail,
-    SessionRead,
+    SessionListItem,
     encode_cursor,
 )
 from who2be_models.session import MEASURE_EVENT_NOTE_MAX_LENGTH
@@ -136,12 +137,22 @@ async def list_sessions(
     cursor: PageCursor,
     agent_id: UUID | None = None,
     case_id: UUID | None = None,
+    due: Annotated[
+        bool,
+        Query(
+            description=(
+                "Nur Protokolle mit mindestens einer faelligen Massnahme: Nachschau-Datum "
+                "heute oder frueher, weder eingestuft noch zurueckgezogen."
+            )
+        ),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = SESSION_LIST_LIMIT_DEFAULT,
-) -> list[SessionRead]:
+) -> list[SessionListItem]:
     # `limit + 1`-Peek wie `GET /cases`: gibt es eine Folgezeile, entsteht
-    # der Cursor aus der letzten Zeile der Seite.
+    # der Cursor aus der letzten Zeile der Seite. Mit `due` gilt derselbe
+    # Keyset — der Filter wirkt vor dem LIMIT.
     rows = await service.list_sessions(
-        ctx, agent_id=agent_id, case_id=case_id, limit=limit + 1, cursor=cursor
+        ctx, agent_id=agent_id, case_id=case_id, due=due, limit=limit + 1, cursor=cursor
     )
     if len(rows) > limit:
         rows = rows[:limit]

@@ -10373,6 +10373,18 @@
             }
           },
           {
+            "name": "due",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Nur Protokolle mit mindestens einer faelligen Massnahme: Nachschau-Datum heute oder frueher, weder eingestuft noch zurueckgezogen.",
+              "default": false,
+              "title": "Due"
+            },
+            "description": "Nur Protokolle mit mindestens einer faelligen Massnahme: Nachschau-Datum heute oder frueher, weder eingestuft noch zurueckgezogen."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -10410,7 +10422,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/SessionRead"
+                    "$ref": "#/components/schemas/SessionListItem"
                   },
                   "title": "Response List Sessions V1 Workspaces  Workspace Id  Feedback Sessions Get"
                 }
@@ -26127,6 +26139,151 @@
         ],
         "title": "SessionDissent",
         "description": "Eine abweichende Meinung `{participant_kind, participant_id, text}` (3.5)."
+      },
+      "SessionListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "submitted_by_kind": {
+            "$ref": "#/components/schemas/SessionSubmitterKind"
+          },
+          "submitted_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Submitted By"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count"
+          },
+          "measure_count": {
+            "type": "integer",
+            "title": "Measure Count"
+          },
+          "next_follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Follow Up At"
+          },
+          "due_measure_count": {
+            "type": "integer",
+            "title": "Due Measure Count"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "trigger",
+          "participants",
+          "summary",
+          "decisions",
+          "dissent",
+          "follow_up_at",
+          "supersedes_id",
+          "submitted_by_kind",
+          "submitted_by",
+          "case_ids",
+          "created_at",
+          "case_count",
+          "measure_count",
+          "next_follow_up_at",
+          "due_measure_count",
+          "superseded_by_id"
+        ],
+        "title": "SessionListItem",
+        "description": "Eine Zeile der Protokoll-Liste (QE2 = a): Protokoll plus Zaehler.\n\n- `case_count`, `measure_count`: Faelle bzw. Massnahmen des Protokolls.\n- `due_measure_count`: Massnahmen, deren Nachschau-Datum (Massnahme,\n  sonst Protokoll) heute oder frueher liegt und die nicht abgeschlossen\n  sind (`reviewed`, `withdrawn`; PM-3).\n- `next_follow_up_at`: fruehestes Nachschau-Datum der offenen\n  Massnahmen; None, wenn keine Massnahme mehr offen ist.\n- `superseded_by_id`: das juengste Protokoll, das dieses korrigiert."
       },
       "SessionParticipant": {
         "properties": {

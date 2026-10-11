@@ -41,7 +41,7 @@ import json
 from collections.abc import AsyncIterator, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -68,6 +68,7 @@ from who2be_models import (
     MeasureRead,
     SessionCreate,
     SessionDetail,
+    SessionListItem,
     SessionRead,
     SessionSubmitterKind,
     measure_state_for,
@@ -95,6 +96,38 @@ _MEASURE_COLUMNS = (
 _EVENT_COLUMNS = (
     "id, measure_id, event, actor_kind, actor_id, version_entity_type, version_id, "
     "verdict, metrics, note, created_at"
+)
+
+# Faellig-Regel (PM-3) aus EINER Quelle — `count_due_measures`, `lock_measure`
+# und die Zeilenzaehler der Liste setzen sie aus diesen Bausteinen zusammen.
+# Erwartet `m` (measure) und `s` (das Protokoll der Massnahme) im Scope.
+# Nachschau-Datum: das der Massnahme, sonst das des Protokolls.
+_MEASURE_FOLLOW_UP_SQL = "COALESCE(m.follow_up_at, s.follow_up_at)"
+# Juengstes Event der Massnahme als `last` (None = noch kein Event, `agreed`).
+_MEASURE_LAST_EVENT_JOIN = (
+    "LEFT JOIN LATERAL (SELECT e.event FROM measure_event e "
+    "    WHERE e.workspace_id = m.workspace_id AND e.measure_id = m.id "
+    "    ORDER BY e.created_at DESC, e.id DESC LIMIT 1) last ON TRUE"
+)
+# Offen = kein Endzustand: `reviewed` und `withdrawn` sind nie faellig.
+_MEASURE_OPEN_SQL = "(last.event IS NULL OR last.event NOT IN ('reviewed', 'withdrawn'))"
+
+# Zeilenzaehler der Liste (QE2 = a) je Protokoll `s`, in derselben Abfrage
+# wie die Seite (kein N+1).
+_SESSION_LIST_STATS_JOIN = (
+    "CROSS JOIN LATERAL (SELECT COUNT(*)::int AS measure_count, "
+    f"    COUNT(*) FILTER (WHERE {_MEASURE_OPEN_SQL} "
+    f"        AND {_MEASURE_FOLLOW_UP_SQL} <= $7)::int AS due_measure_count, "
+    f"    MIN({_MEASURE_FOLLOW_UP_SQL}) FILTER (WHERE {_MEASURE_OPEN_SQL}) "
+    "        AS next_follow_up_at "
+    f"  FROM measure m {_MEASURE_LAST_EVENT_JOIN} "
+    "  WHERE m.workspace_id = s.workspace_id AND m.session_id = s.id) st"
+)
+# Juengste Korrektur dieses Protokolls (Index `feedback_session_supersedes_idx`).
+_SESSION_SUPERSEDED_BY_SQL = (
+    "(SELECT n.id FROM feedback_session n "
+    "  WHERE n.workspace_id = s.workspace_id AND n.supersedes_id = s.id "
+    "  ORDER BY n.created_at DESC, n.id DESC LIMIT 1) AS superseded_by_id"
 )
 
 
@@ -177,6 +210,15 @@ def _session(row: asyncpg.Record) -> SessionRead:
     return SessionRead.model_validate(data)
 
 
+def _session_list_item(row: asyncpg.Record) -> SessionListItem:
+    """Listenzeile: Protokoll plus Zaehler; `case_count` aus den Fall-IDs der Zeile."""
+    data = _session(row).model_dump()
+    data["case_count"] = len(data["case_ids"])
+    for key in ("measure_count", "due_measure_count", "next_follow_up_at", "superseded_by_id"):
+        data[key] = row[key]
+    return SessionListItem.model_validate(data)
+
+
 def _event(row: asyncpg.Record) -> MeasureEventRead:
     data = dict(row)
     data["metrics"] = _json_object(data["metrics"])
@@ -206,7 +248,9 @@ class SessionRepository(Protocol):
         case_id: UUID | None = None,
         limit: int = 50,
         cursor: tuple[datetime, UUID] | None = None,
-    ) -> list[SessionRead]: ...
+        today: date | None = None,
+        due: bool = False,
+    ) -> list[SessionListItem]: ...
 
     async def count_due_measures(
         self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
@@ -501,21 +545,29 @@ class PgSessionRepository:
         case_id: UUID | None = None,
         limit: int = 50,
         cursor: tuple[datetime, UUID] | None = None,
-    ) -> list[SessionRead]:
-        """Eine Seite, neueste zuerst, Keyset auf `(created_at, id)`.
+        today: date | None = None,
+        due: bool = False,
+    ) -> list[SessionListItem]:
+        """Eine Seite, neueste zuerst, Keyset auf `(created_at, id)`, mit Zeilenzaehlern.
 
         `agent_id`: Protokolle zu diesem Agenten. `case_id`: Protokolle, die
-        diesen Fall besprechen (QE1 = a). Feste Parameter-Positionen, NULL =
-        Filter aus — kein dynamisches SQL.
+        diesen Fall besprechen (QE1 = a). `due`: nur Protokolle mit
+        mindestens einer faelligen Massnahme (QE2 = a; Regel wie
+        `count_due_measures`, Stichtag `today`, Standard: heute in UTC).
+        Feste Parameter-Positionen, NULL bzw. FALSE = Filter aus — kein
+        dynamisches SQL. Die Zaehler kommen aus derselben Abfrage.
         """
         rows = await self._pool.fetch(
-            f"SELECT {_SESSION_COLUMNS}, {_SESSION_CASES_SQL} FROM feedback_session s "
+            f"SELECT {_SESSION_COLUMNS}, {_SESSION_CASES_SQL}, {_SESSION_SUPERSEDED_BY_SQL}, "
+            "  st.measure_count, st.due_measure_count, st.next_follow_up_at "
+            f"FROM feedback_session s {_SESSION_LIST_STATS_JOIN} "
             "WHERE s.workspace_id = $1 "
             "  AND ($2::uuid IS NULL OR s.agent_id = $2) "
             "  AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM feedback_session_case fc "
             "        WHERE fc.workspace_id = s.workspace_id AND fc.session_id = s.id "
             "          AND fc.case_id = $3)) "
             "  AND ($4::timestamptz IS NULL OR (s.created_at, s.id) < ($4, $5::uuid)) "
+            "  AND (NOT $8::bool OR st.due_measure_count > 0) "
             "ORDER BY s.created_at DESC, s.id DESC LIMIT $6",
             workspace_id,
             agent_id,
@@ -523,8 +575,10 @@ class PgSessionRepository:
             cursor[0] if cursor is not None else None,
             cursor[1] if cursor is not None else None,
             limit,
+            today if today is not None else datetime.now(UTC).date(),
+            due,
         )
-        return [_session(r) for r in rows]
+        return [_session_list_item(r) for r in rows]
 
     async def count_due_measures(
         self, workspace_id: UUID, *, today: date, agent_id: UUID | None = None
@@ -539,13 +593,11 @@ class PgSessionRepository:
         count = await self._pool.fetchval(
             "SELECT COUNT(*)::int FROM measure m "
             "JOIN feedback_session s ON s.workspace_id = m.workspace_id AND s.id = m.session_id "
-            "LEFT JOIN LATERAL (SELECT e.event FROM measure_event e "
-            "    WHERE e.workspace_id = m.workspace_id AND e.measure_id = m.id "
-            "    ORDER BY e.created_at DESC, e.id DESC LIMIT 1) last ON TRUE "
+            f"{_MEASURE_LAST_EVENT_JOIN} "
             "WHERE m.workspace_id = $1 "
             "  AND ($2::uuid IS NULL OR m.agent_id = $2) "
-            "  AND COALESCE(m.follow_up_at, s.follow_up_at) <= $3 "
-            "  AND (last.event IS NULL OR last.event NOT IN ('reviewed', 'withdrawn'))",
+            f"  AND {_MEASURE_FOLLOW_UP_SQL} <= $3 "
+            f"  AND {_MEASURE_OPEN_SQL}",
             workspace_id,
             agent_id,
             today,
@@ -658,7 +710,7 @@ class PgSessionRepository:
         if not measures:
             return None
         due: date = await conn.fetchval(
-            "SELECT COALESCE(m.follow_up_at, s.follow_up_at) FROM measure m "
+            f"SELECT {_MEASURE_FOLLOW_UP_SQL} FROM measure m "
             "JOIN feedback_session s ON s.workspace_id = m.workspace_id AND s.id = m.session_id "
             "WHERE m.workspace_id = $1 AND m.id = $2",
             workspace_id,

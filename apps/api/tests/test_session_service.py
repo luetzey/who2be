@@ -18,6 +18,9 @@ E2a-1, Mandant ueber `tenant_scope` (Fixture `_with_repo` aus
   open ohne Zuordnung und alle anderen Status bleiben und stehen im Ergebnis.
 - **Fall-Sperre:** zwei gleichzeitige Protokolle auf denselben Fall ergeben
   genau ein `in_progress` (Review E2b-1).
+- **Liste (QE2 = a, E2b-4):** due-Filter gestern/heute/morgen, Endzustand nie
+  faellig, Zeilenzaehler, Kombination mit agent_id/case_id, Cursor ueber das
+  due-Ergebnis, Mandantentrennung.
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
@@ -26,12 +29,14 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
 from test_feedback_session_schema import (  # type: ignore[import-not-found]
     _TABLES,
+    _graph,
     _insert_test_case,
     _measure,
     _protocol,
@@ -53,7 +58,12 @@ from who2be_models import (
     CaseEventKind,
     CaseStatus,
     CaseTarget,
+    MeasureActorKind,
+    MeasureEventCreate,
+    MeasureEventKind,
+    MeasureVerdict,
     SessionCreate,
+    SessionListItem,
     SessionSubmitterKind,
     WorkspaceRole,
 )
@@ -535,5 +545,148 @@ def test_concurrent_submits_start_a_case_exactly_once() -> None:
         unchanged = first.cases_unchanged + second.cases_unchanged
         assert [(c.case_id, c.status) for c in unchanged] == [(triaged, CaseStatus.in_progress)]
         assert [e for e, _ in await w.events(triaged)].count("in_progress") == 1
+
+    _run(body)
+
+
+# --- Liste: due-Filter und Zeilenzaehler (QE2 = a, E2b-4) -------------------
+
+
+def test_list_due_filter_and_row_counters() -> None:
+    """Faellig = Nachschau-Datum <= heute und kein Endzustand; Zaehler je Zeile.
+
+    Stichtag fest (`today=`), damit gestern/heute/morgen nicht vom Laufdatum
+    abhaengen. Faellig-Regel aus derselben Quelle wie `count_due_measures`:
+    beide muessen dieselbe Zahl liefern.
+    """
+
+    async def body(w: _World) -> None:
+        s = w.seed
+        today = date(2026, 11, 20)
+        svc = SessionService(w.repo, today=lambda: today)
+
+        def day(offset: int) -> str:
+            return (today + timedelta(days=offset)).isoformat()
+
+        async def submit(
+            agent_id: UUID,
+            follow_ups: list[str | None],
+            *,
+            session_follow_up: str,
+            cases: int = 1,
+            supersedes_id: UUID | None = None,
+        ) -> tuple[UUID, list[UUID], list[UUID]]:
+            case_ids = [await w.case(agent_id) for _ in range(cases)]
+            test_case = await w.test_case(agent_id)
+            measures = [_measure(case_ids, test_case, follow_up_at=f) for f in follow_ups]
+            result = await svc.submit_protocol(
+                w.editor,
+                _protocol(
+                    agent_id,
+                    case_ids,
+                    measures,
+                    follow_up_at=session_follow_up,
+                    supersedes_id=supersedes_id,
+                ),
+            )
+            return (
+                result.detail.session.id,
+                case_ids,
+                [m.id for m in result.detail.measures],
+            )
+
+        async def close(measure_id: UUID, data: MeasureEventCreate) -> None:
+            event = await w.repo.append_measure_event(
+                s.ws_a, measure_id, data, actor_kind=MeasureActorKind.human, actor_id=uuid4()
+            )
+            assert event is not None
+
+        reviewed = MeasureEventCreate(
+            event=MeasureEventKind.reviewed, verdict=MeasureVerdict.effective
+        )
+        withdrawn = MeasureEventCreate(event=MeasureEventKind.withdrawn, note="Doch nicht.")
+
+        # S1: gestern, heute, morgen, eingestuft (ueberfaellig), zurueckgezogen.
+        s1, s1_cases, s1_m = await submit(
+            s.agent_a,
+            [day(-1), day(0), day(1), day(-5), day(-5)],
+            session_follow_up=day(30),
+            cases=2,
+        )
+        await close(s1_m[3], reviewed)
+        await close(s1_m[4], withdrawn)
+        # S2: nur morgen faellig -> heute nicht in der due-Liste.
+        s2, s2_cases, _ = await submit(s.agent_a, [day(1)], session_follow_up=day(30))
+        # S3 (anderer Agent): Massnahme ohne eigenes Datum erbt das des Protokolls (heute).
+        s3, _, _ = await submit(s.agent_a2, [None], session_follow_up=day(0))
+        # S4: einzige Massnahme ueberfaellig, aber eingestuft -> nie faellig.
+        s4, _, s4_m = await submit(s.agent_a, [day(-3)], session_follow_up=day(-3))
+        await close(s4_m[0], reviewed)
+        # S5: ohne Massnahmen; das Protokoll-Datum allein macht nichts faellig.
+        s5, _, _ = await submit(s.agent_a, [], session_follow_up=day(-10))
+        # S6 korrigiert S1.
+        s6, _, _ = await submit(s.agent_a, [], session_follow_up=day(30), supersedes_id=s1)
+        # Fremder Workspace mit faelliger Massnahme (Nachschau = Stichtag).
+        foreign = await _graph(w.owner, s.ws_b, s.agent_b)
+
+        rows = {r.id: r for r in await svc.list_sessions(w.editor)}
+        assert set(rows) == {s1, s2, s3, s4, s5, s6}
+        counters = {
+            sid: (
+                r.case_count,
+                r.measure_count,
+                r.due_measure_count,
+                r.next_follow_up_at,
+                r.superseded_by_id,
+            )
+            for sid, r in rows.items()
+        }
+        assert counters == {
+            # Offen: gestern, heute, morgen -> fruehestes gestern; faellig: zwei.
+            s1: (2, 5, 2, today - timedelta(days=1), s6),
+            s2: (1, 1, 0, today + timedelta(days=1), None),
+            s3: (1, 1, 1, today, None),
+            s4: (1, 1, 0, None, None),
+            s5: (1, 0, 0, None, None),
+            s6: (1, 0, 0, None, None),
+        }
+        # Dieselbe Faellig-Regel wie der Aufgaben-Zaehler.
+        assert sum(r.due_measure_count for r in rows.values()) == (
+            await w.repo.count_due_measures(s.ws_a, today=today)
+        )
+
+        def ids(listed: Sequence[SessionListItem]) -> list[UUID]:
+            return [r.id for r in listed]
+
+        # due: neueste zuerst, nur mit faelliger Massnahme.
+        assert ids(await svc.list_sessions(w.editor, due=True)) == [s3, s1]
+        # Kombinierbar mit agent_id und case_id.
+        assert ids(await svc.list_sessions(w.editor, due=True, agent_id=s.agent_a)) == [s1]
+        assert ids(await svc.list_sessions(w.editor, due=True, agent_id=s.agent_a2)) == [s3]
+        assert ids(await svc.list_sessions(w.editor, due=True, case_id=s1_cases[1])) == [s1]
+        assert await svc.list_sessions(w.editor, due=True, case_id=s2_cases[0]) == []
+        # Cursor ueber das due-Ergebnis: Seite fuer Seite, ohne Luecke.
+        page_1 = await svc.list_sessions(w.editor, due=True, limit=1)
+        last = page_1[-1]
+        page_2 = await svc.list_sessions(
+            w.editor, due=True, limit=1, cursor=(last.created_at, last.id)
+        )
+        last = page_2[-1]
+        page_3 = await svc.list_sessions(
+            w.editor, due=True, limit=1, cursor=(last.created_at, last.id)
+        )
+        assert (ids(page_1), ids(page_2), page_3) == ([s3], [s1], [])
+
+        # Morgen ist auch S2 faellig; S1 zaehlt dann drei.
+        tomorrow = SessionService(w.repo, today=lambda: today + timedelta(days=1))
+        later = {r.id: r.due_measure_count for r in await tomorrow.list_sessions(w.editor)}
+        assert (later[s1], later[s2]) == (3, 1)
+        assert ids(await tomorrow.list_sessions(w.editor, due=True)) == [s3, s2, s1]
+
+        # Mandantentrennung: B's faelliges Protokoll taucht in A nie auf, und
+        # ein Aufruf fuer B sieht A's Protokolle nicht.
+        assert foreign.session not in ids(await svc.list_sessions(w.editor))
+        other = WorkspaceContext(s.ws_b, uuid4(), WorkspaceRole.editor)
+        assert await svc.list_sessions(other, due=True) == []
 
     _run(body)

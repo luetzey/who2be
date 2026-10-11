@@ -12,7 +12,8 @@ Belegt am Router (echte DB, echter Auth-Pfad) den Vertrag der HTTP-Schicht:
   `test_subject_version_not_found`, `measure_transition_forbidden` (mit
   `params.state`), 422 fuer Bodys mit fremden Feldern und fuer `ineffective`
   bzw. withdraw ohne Begruendung.
-- **Liste:** Filter `agent_id`/`case_id`, Keyset-Seite ueber `X-Next-Cursor`.
+- **Liste:** Filter `agent_id`/`case_id`/`due`, Zeilenzaehler (QE2 = a),
+  Keyset-Seite ueber `X-Next-Cursor`.
 - **Fremder Workspace:** jede Route mit einer ID aus Workspace B -> 404.
 - **Ohne geladene Policy:** ein agent-gebundener Aufruf ohne Policy darf nichts.
 - **write_limit:** jede schreibende Route liefert beim zweiten Aufruf 429.
@@ -427,6 +428,65 @@ def test_list_filters_and_pagination(world: _World) -> None:
     assert ids(page1) + ids(page2) == list(reversed(a_ids))
     assert w.get("/feedback-sessions", cursor="kaputt").status_code == 422
     assert w.get("/feedback-sessions", limit=0).status_code == 422
+
+
+def test_list_due_and_row_counters(world: _World) -> None:
+    """QE2 = a am Router: Zaehler je Zeile, `due=true`, Cursor ueber das due-Ergebnis.
+
+    Die Grenzfaelle (gestern/heute/morgen, Endzustaende) belegt der
+    Service-Test mit festem Stichtag; hier zaehlt der HTTP-Vertrag.
+    """
+    w = world
+    agent_id, _ = w.agent("Betroffen")
+    persona_id, _ = w.persona()
+
+    def submit(follow_up_at: str, summary: str, **extra: Any) -> dict[str, Any]:
+        body = w.protocol(agent_id, persona_id, summary=summary)
+        body["measures"][0]["follow_up_at"] = follow_up_at
+        return w.created("/feedback-sessions", body | extra)
+
+    due_old = submit("2000-01-01", "faellig alt")
+    later = submit("2099-01-01", "spaeter")
+    due_new = submit("2000-01-02", "faellig neu", supersedes_id=due_old["detail"]["session"]["id"])
+    withdrawn = submit("2000-01-03", "zurueckgezogen")
+    measure_id = withdrawn["detail"]["measures"][0]["id"]
+    assert w.post(f"/measures/{measure_id}/withdraw", {"note": "n"}).status_code == 200
+
+    def sid(out: dict[str, Any]) -> str:
+        return str(out["detail"]["session"]["id"])
+
+    res = w.get("/feedback-sessions")
+    assert res.status_code == 200, res.text
+    rows = {r["id"]: r for r in res.json()}
+    fields = (
+        "case_count",
+        "measure_count",
+        "due_measure_count",
+        "next_follow_up_at",
+        "superseded_by_id",
+    )
+    assert {k: tuple(r[f] for f in fields) for k, r in rows.items()} == {
+        sid(due_old): (1, 1, 1, "2000-01-01", sid(due_new)),
+        sid(later): (1, 1, 0, "2099-01-01", None),
+        sid(due_new): (1, 1, 1, "2000-01-02", None),
+        sid(withdrawn): (1, 1, 0, None, None),
+    }
+
+    def ids(res: Any) -> list[str]:
+        assert res.status_code == 200, res.text
+        return [s["id"] for s in res.json()]
+
+    assert ids(w.get("/feedback-sessions", due="true")) == [sid(due_new), sid(due_old)]
+    assert ids(w.get("/feedback-sessions", due="false")) == ids(w.get("/feedback-sessions"))
+    case_id = later["detail"]["session"]["case_ids"][0]
+    assert ids(w.get("/feedback-sessions", due="true", case_id=case_id)) == []
+    page1 = w.get("/feedback-sessions", due="true", agent_id=agent_id, limit=1)
+    cursor = page1.headers.get("X-Next-Cursor")
+    assert cursor, page1.headers
+    page2 = w.get("/feedback-sessions", due="true", agent_id=agent_id, limit=1, cursor=cursor)
+    assert "X-Next-Cursor" not in page2.headers
+    assert ids(page1) + ids(page2) == [sid(due_new), sid(due_old)]
+    assert w.get("/feedback-sessions", due="vielleicht").status_code == 422
 
 
 def test_foreign_workspace_is_404(world: _World, make_auth_headers: Any) -> None:
