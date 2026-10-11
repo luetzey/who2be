@@ -1,15 +1,18 @@
 <!-- Titel: Conventional-Commit-Stil (feat/fix/docs/… + Scope), siehe CONTRIBUTING.md -->
 
-## Issue-Bezug (Pflicht — genau eine Zeile stehen lassen)
+Issue: Closes #___
 
-<!-- `Closes` schliesst das Issue beim Merge automatisch, `Refs` verlinkt nur.
-     Teilarbeit an einem Tracking-/Epic-Issue traegt `Refs` — sonst schliesst
-     der erste Teil-PR das Issue vorzeitig (Queue-Regel 19, #442).
-     Siehe CONTRIBUTING.md §Issue reference. -->
+<!-- Pflichtzeile (CONTRIBUTING.md §Issue reference). Sie steht als EIGENE Zeile
+     ganz oben und beginnt am Zeilenanfang mit `Issue:` — kein Spiegelstrich,
+     keine Überschrift davor, nicht in einen Satz eingebettet. Genau eine Form:
 
-- Closes #___
-- Refs #___
-- n/a (kein Issue) — Begründung: <!-- z. B. Dependabot, Hotfix ohne Ticket -->
+       Issue: Closes #NNN                         Merge erledigt das Issue (GitHub schliesst es)
+       Issue: Refs #NNN                           Teilarbeit an Tracking-/Epic-Issue, bleibt offen
+                                                  (Queue-Regel 19, #442)
+       Issue: n/a (Kanban card <id>, <Kontext>)   kein Issue, z. B. Kanban-Karte, Dependabot, Hotfix
+
+     Selbstprüfung (muss `true` liefern):
+       gh pr view <n> --json body -q '.body|test("(?m)^Issue:")' -->
 
 ## Zusammenfassung
 
