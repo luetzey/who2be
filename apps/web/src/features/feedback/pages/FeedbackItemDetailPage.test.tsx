@@ -143,14 +143,14 @@ describe('FeedbackItemDetailPage', () => {
 
 // D6f (Delta-Spec „Alt-Feedback-Anschluss“, ADR-0053 5.2/6.5): „In Fall
 // übernehmen“ ab editor, nur fuer offenes Feedback, nie fuer System-Meldungen.
-describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
+describe('FeedbackItemDetailPage – In Rückmeldung übernehmen (D6f)', () => {
   const open: FeedbackDetail = { ...detail, resolution: null, history: [] }
   const created = { id: 'case-9', agent_id: 'a1', status: 'open' } as unknown as CaseRead
   const agents = [
     { id: 'a1', name: 'coder' },
     { id: 'a2', name: 'reviewer' },
   ] as unknown as Agent[]
-  const PROMOTE = 'In Fall übernehmen'
+  const PROMOTE = 'In Rückmeldung übernehmen'
 
   beforeEach(() => {
     role = 'editor'
@@ -174,7 +174,7 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
     await loaded()
     expect(screen.queryByRole('button', { name: PROMOTE }) !== null).toBe(visible)
     expect(
-      screen.queryByText(/Daraus wird ein Fall, dieses Feedback gilt dann als umgesetzt\./) !== null,
+      screen.queryByText(/Daraus wird eine Rückmeldung, dieses Feedback gilt dann als erledigt\./) !== null,
     ).toBe(visible)
   })
 
@@ -210,10 +210,10 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
     expect(origin.querySelector('cite')?.textContent).toMatch(/^Altes Feedback zu Onboarding vom /)
     const select = await within(dialog).findByRole('combobox', { name: /^Agent/ })
     await waitFor(() => expect(select).toHaveValue('a1'))
-    expect(within(dialog).getByRole('button', { name: 'Fall anlegen' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' })).toBeInTheDocument()
   })
 
-  it('Erfolg: promote mit den Fall-Feldern, danach „Umgesetzt“ mit Server-Notiz und „Zum Fall“', async () => {
+  it('Erfolg: promote mit den Fall-Feldern, danach „Umgesetzt“ mit Server-Notiz und „Zur Rückmeldung“', async () => {
     await loaded()
     fireEvent.click(screen.getByRole('button', { name: PROMOTE }))
     const dialog = await screen.findByTestId('report-case-dialog')
@@ -235,7 +235,7 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
         { resolution: 'addressed', actor_id: 'u1', note: 'case:case-9', created_at: '2026-10-09T08:00:00Z' },
       ],
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     await waitFor(() =>
       expect(promoteFeedback).toHaveBeenCalledWith('fb1', {
@@ -251,7 +251,7 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
     )
     const toCase = await screen.findByTestId('item-to-case')
     expect(toCase).toHaveAttribute('href', '/w/ws-1/feedback/cases/case-9')
-    expect(toCase).toHaveTextContent('Zum Fall')
+    expect(toCase).toHaveTextContent('Zur Rückmeldung')
     await waitFor(() => expect(toCase).toHaveFocus())
     expect(await screen.findByText('case:case-9')).toBeInTheDocument()
     expect(screen.getAllByText('Erledigt').length).toBeGreaterThan(0)
@@ -259,7 +259,7 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
     expect(screen.queryByTestId('report-case-dialog')).toBeNull()
   })
 
-  it('Fehler: 409 feedback_not_promotable bleibt im Formular sichtbar, kein „Zum Fall“', async () => {
+  it('Fehler: 409 feedback_not_promotable bleibt im Formular sichtbar, kein „Zur Rückmeldung“', async () => {
     promoteFeedback.mockRejectedValue(
       new ApiError(409, 'Nur ein offenes Feedback (noch nicht triagiert) wird ein Fall.', {
         reason: 'feedback_not_promotable',
@@ -277,7 +277,7 @@ describe('FeedbackItemDetailPage – In Fall übernehmen (D6f)', () => {
     fireEvent.change(within(dialog).getByLabelText(/Was hättest du erwartet\?/), {
       target: { value: 'E' },
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall anlegen' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung anlegen' }))
 
     expect(
       await within(dialog).findByText('Nur ein offenes Feedback (noch nicht triagiert) wird ein Fall.'),

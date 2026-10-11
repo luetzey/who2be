@@ -605,7 +605,7 @@
         "patterns": "Muster",
         "patternTop": "{{element}} · {{count}}×",
         "patternLesson": "Lernvorschlag",
-        "patternCase": "Fälle",
+        "patternCase": "Rückmeldungen",
         "tests": "Prüffälle",
         "testsActive": "aktiv",
         "usage": "Nutzung",
@@ -2475,8 +2475,8 @@
       "eventsEmpty": "Keine Einzel-Ereignisse."
     },
     "item": {
-      "promote": "In Fall übernehmen",
-      "promoteHelp": "Wenn es eigentlich um das Verhalten eines Agenten geht: Daraus wird ein Fall, dieses Feedback gilt dann als umgesetzt."
+      "promote": "In Rückmeldung übernehmen",
+      "promoteHelp": "Wenn es eigentlich um das Verhalten eines Agenten geht: Daraus wird eine Rückmeldung, dieses Feedback gilt dann als erledigt."
     },
     "itemDetail": {
       "description": "Alle Details zu dieser Rückmeldung — Bezug, Signal, Status und Verlauf.",
@@ -2551,9 +2551,9 @@
         },
         "error": {
           "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen.",
-          "notConvertible": "Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall."
+          "notConvertible": "Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder ist schon eine Rückmeldung geworden."
         },
-        "create": "Fall anlegen",
+        "create": "Rückmeldung anlegen",
         "origin": {
           "title": "Ausgangspunkt",
           "lesson": "Lernvorschlag von {{agent}}, {{count}}× vorgeschlagen",
@@ -2735,17 +2735,17 @@
       }
     },
     "patterns": {
-      "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
-      "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
-      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Fälle umgesetzt oder verworfen sind. Einordnen allein reicht nicht. Ein Fall-Muster verschwindet auch, wenn das Zeitfenster ohne neue Fälle abläuft.",
+      "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Rückmeldungen; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
+      "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Rückmeldungen; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
+      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Rückmeldungen geändert oder verworfen sind. Einordnen allein reicht nicht. Ein Rückmeldungs-Muster verschwindet auch, wenn das Zeitfenster ohne neue Rückmeldungen abläuft.",
       "kind": {
         "lesson": {
           "title": "Dieselbe Korrektur {{count}}×",
           "text": "Ein Lernvorschlag von {{agent}} kam {{count}}-mal mit ähnlichem Wortlaut."
         },
         "case": {
-          "title": "Ähnliche Fälle {{count}}×",
-          "text": "{{count}} offene Fälle zu {{agent}}, alle zugeordnet zu {{element}}, in {{days}} Tagen."
+          "title": "Ähnliche Rückmeldungen {{count}}×",
+          "text": "{{count}} offene Rückmeldungen zu {{agent}}, alle zugeordnet zu {{element}}, in {{days}} Tagen."
         }
       },
       "detail": {
@@ -2755,8 +2755,8 @@
         "deleted": "Gelöschter Eintrag"
       },
       "action": {
-        "createCase": "Fall anlegen",
-        "viewCases": "Fälle ansehen"
+        "createCase": "Rückmeldung anlegen",
+        "viewCases": "Rückmeldungen ansehen"
       },
       "builder": {
         "label": "Oder vom Builder formulieren lassen – im Client einfügen:",
@@ -2765,8 +2765,8 @@
         "promptCase": "Fasse die offenen Fälle {{ids}} zu {{agent}} zusammen und schlage eine Änderung an {{element}} vor."
       },
       "emptyTitle": "Noch keine Muster",
-      "emptyDescription": "Sobald sich Lernvorschläge oder Fälle ähneln, zählt der Server sie hier zusammen. Ab {{threshold}} Treffern erscheint ein Muster.",
-      "emptyNoData": "Muster brauchen Lernvorschläge oder Fälle. Es gibt noch keine.",
+      "emptyDescription": "Sobald sich Lernvorschläge oder Rückmeldungen ähneln, zählt der Server sie hier zusammen. Ab {{threshold}} Treffern erscheint ein Muster.",
+      "emptyNoData": "Muster brauchen Lernvorschläge oder Rückmeldungen. Es gibt noch keine.",
       "loadError": "Muster konnten nicht berechnet werden.",
       "gone": "Dieses Muster gilt nicht mehr."
     }
@@ -3255,7 +3255,7 @@
         "meta": "Prüfart: {{checkKind}} · angelegt {{date}}",
         "byAgent": "vom Builder angelegt",
         "revision": "neue Fassung",
-        "fromCase": "aus Fall {{id}}",
+        "fromCase": "aus Rückmeldung {{id}}",
         "actions": "Aktionen für Prüffall „{{title}}“"
       },
       "retired": {
@@ -3411,7 +3411,7 @@
         "instruction": "Einträge der Kategorie „Anweisung“ sagen dem Agenten, wie er arbeiten soll. Das behandeln wir wie eine Verhaltensänderung.",
         "agent_note": "Notizen über Werkzeuge und Umgebung steuern, wie der Agent arbeitet. Das behandeln wir wie eine Verhaltensänderung.",
         "proposal": "Ein Vorschlag, freigegebene Inhalte zu ändern, braucht immer einen Menschen – sonst könnte ein Agent Geprüftes still überschreiben.",
-        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden.",
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Rückmeldung, Prüffall und deine Freigabe zu einer neuen Version werden.",
         "generic": "Diese Kombination gibt der Server nie automatisch frei."
       },
       "humanChannel": "Was ein Mensch selbst einträgt, gilt sofort als bestätigt.",
@@ -3724,13 +3724,13 @@
         "pending": "Zur Freigabe",
         "expired": "Abgelaufen",
         "rejected": "Abgelehnt",
-        "converted": "Zu Fall geworden"
+        "converted": "Zur Rückmeldung geworden"
       },
       "intro": "Hier steht, was sich jeder Agent merkt:",
       "kindIntro": {
         "agent_note": "Was sich ein Agent über seine Umgebung und Werkzeuge merkt. Gilt nur für diesen Agenten.",
         "user_fact_agent": "Fakten über Menschen, die nur dieser Agent kennt. Das gemeinsame Nutzergedächtnis steht unter „Mein Gedächtnis“.",
-        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden."
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Rückmeldung, Prüffall und deine Freigabe zu einer neuen Version werden."
       },
       "sort": {
         "newest": "Neueste zuerst",
@@ -3746,8 +3746,8 @@
         "reactivate": "Wieder aktivieren",
         "approve": "Freigeben",
         "decideInQueue": "In der Warteschlange entscheiden",
-        "convert": "Fall daraus machen",
-        "toCase": "Zum Fall"
+        "convert": "Rückmeldung daraus machen",
+        "toCase": "Zur Rückmeldung"
       },
       "done": {
         "confirm": "Bestätigt.",
@@ -3839,7 +3839,7 @@
         "proposal_accepted": "Vorschlag übernommen",
         "proposal_rejected": "Vorschlag abgelehnt",
         "rolled_back": "Früheren Stand wiederhergestellt",
-        "converted": "Zu Fall geworden",
+        "converted": "Zur Rückmeldung geworden",
         "merged": "Erneut vorgeschlagen",
         "auto_revoked": "Automatische Freigabe zurückgenommen"
       },
