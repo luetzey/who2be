@@ -120,3 +120,10 @@ aktuell keinen Copyleft-Container mehr, an dem sie sich stellen würde. Sollte
 künftig wieder ein AGPL-/Copyleft-Service als Compose-Dienst in Betracht
 kommen, braucht diese Scope-Lücke eine bewusste Entscheidung, nicht nur einen
 CI-Gate-Pass.
+
+## Addendum 2026-10-11 — Valkey statt Redis
+
+Der Rate-Limit-Speicher der Cloud-Overlays läuft als **Valkey 8 (BSD-3)** statt
+Redis, weil schon `redis:7-alpine` (7.4) unter RSALv2/SSPLv1 stand und Redis 8
+nur RSALv2, SSPLv1 oder AGPLv3 zur Wahl stellt (Owner-Entscheidung D2a); damit
+entfällt die Lizenzfrage für diesen Dienst, den einzigen betroffenen Container.

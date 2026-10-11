@@ -25,6 +25,7 @@ Reiner Datei-Test: kein Docker, keine DB, kein Netz.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -156,3 +157,83 @@ def test_data_holding_majors_stay_out_of_auto_prs() -> None:
     ignored = {rule["dependency-name"] for rule in _compose_entry().get("ignore", [])}
     for name in ("postgres", "pgvector/pgvector", "supabase/postgres", "supabase/gotrue"):
         assert name in ignored, f"{name}-Major ist nicht von Auto-PRs ausgenommen"
+
+
+# --- Valkey statt Redis (ADR-0033-Addendum 2026-10-11, Owner D2a) ----------
+
+#: Die drei Cloud-Overlays, die den Rate-Limit-Speicher als Dienst `redis`
+#: fuehren. Der Dienstname bleibt bewusst, damit `redis://redis:6379` in allen
+#: Umgebungen unveraendert gilt.
+_CLOUD_OVERLAYS = (
+    _REPO_ROOT / "docker-compose.cloud.yml",
+    _REPO_ROOT / "deploy" / "dokploy" / "docker-compose.cloud.yml",
+    _REPO_ROOT / "deploy" / "hetzner" / "who2be" / "docker-compose.cloud.yml",
+)
+
+#: `valkey/valkey:8[-.…]-alpine@sha256:<64 hex>` — Major 8, Alpine, Digest-Pin.
+_VALKEY_PIN = re.compile(r"^valkey/valkey:8(?:\.\d+)*-alpine@sha256:[0-9a-f]{64}$")
+
+
+class _ComposeLoader(yaml.SafeLoader):
+    """SafeLoader, der Compose-Tags (``!override``, ``!reset``) durchlaesst."""
+
+
+def _plain(loader: yaml.SafeLoader, _suffix: str, node: yaml.Node) -> Any:
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    return loader.construct_scalar(node)  # type: ignore[arg-type]
+
+
+_ComposeLoader.add_multi_constructor("!", _plain)
+
+#: Redis-Image in jeder Schreibweise (`redis:…`, `library/redis@…`, `docker.io/…`).
+_REDIS_IMAGE = re.compile(r"^(?:docker\.io/)?(?:library/)?redis[:@]")
+
+
+def _images(path: Path) -> list[str]:
+    data = yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {}  # noqa: S506
+    services = data.get("services") or {}
+    return [str(s["image"]) for s in services.values() if isinstance(s, dict) and "image" in s]
+
+
+@pytest.mark.parametrize(
+    "compose_file",
+    _COMPOSE_FILES,
+    ids=[str(p.relative_to(_REPO_ROOT)) for p in _COMPOSE_FILES],
+)
+def test_no_compose_file_pins_a_redis_image(compose_file: Path) -> None:
+    """Kein Redis-Image mehr, in keiner Compose-Datei.
+
+    Redis 7.4 steht unter RSALv2/SSPLv1, Redis 8 unter RSALv2/SSPLv1/AGPLv3 —
+    genau die Lizenzfrage, die der Wechsel auf Valkey abraeumt. Ein Rueckfall
+    (etwa ein uebernommener Dependabot-PR auf `redis:8-alpine`) faellt hier auf.
+    """
+    redis = [i for i in _images(compose_file) if _REDIS_IMAGE.match(i)]
+    assert not redis, (
+        f"{compose_file.relative_to(_REPO_ROOT)} pinnt {redis} — der Rate-Limit-"
+        "Speicher laeuft als Valkey (BSD-3), ADR-0033-Addendum 2026-10-11"
+    )
+
+
+@pytest.mark.parametrize(
+    "overlay",
+    _CLOUD_OVERLAYS,
+    ids=[str(p.relative_to(_REPO_ROOT)) for p in _CLOUD_OVERLAYS],
+)
+def test_cloud_overlay_runs_digest_pinned_valkey(overlay: Path) -> None:
+    """Der Dienst `redis` ist ein per Digest gepinntes Valkey 8 ohne Persistenz.
+
+    Der Digest-Pin folgt dem Muster der anderen gepinnten Images: der Tag
+    `8-alpine` wandert, der Digest nicht, und Dependabot hebt beide zusammen an.
+    Befehl und Healthcheck muessen die Valkey-Binaries nennen; ``--save ""`` und
+    ``--appendonly no`` halten den Speicher fluechtig wie bisher.
+    """
+    service = yaml.safe_load(overlay.read_text(encoding="utf-8"))["services"]["redis"]
+    assert _VALKEY_PIN.match(service["image"]), (
+        f"{overlay.relative_to(_REPO_ROOT)}: redis.image={service['image']!r} ist "
+        "kein digest-gepinntes valkey/valkey:8-alpine"
+    )
+    assert service["command"] == ["valkey-server", "--save", "", "--appendonly", "no"]
+    assert service["healthcheck"]["test"] == ["CMD", "valkey-cli", "ping"]

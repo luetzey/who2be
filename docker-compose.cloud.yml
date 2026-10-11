@@ -31,12 +31,15 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Valkey 8 (BSD-3) statt Redis (RSALv2/SSPLv1), ADR-0033-Addendum 2026-10-11.
+    # Dienstname `redis` und `redis://` bleiben: Valkey spricht das Protokoll
+    # unveraendert, ein Umbenennen haette nur API-Umgebung und Doku bewegt.
+    image: valkey/valkey:8-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
