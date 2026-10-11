@@ -165,7 +165,7 @@ describe('SystemPromptStatusActionBar — Review-Leiste', () => {
   it('zeigt im Draft keinen Link, auch wenn eine Version uebergeben wird', () => {
     renderBar('draft', { diffVersion: 3 })
 
-    expect(screen.getByRole('button', { name: 'Zur Review einreichen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zur Freigabe einreichen' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Änderungen und Prüffälle ansehen' })).toBeNull()
   })
 })

@@ -13,9 +13,16 @@ describe('BranchStatus', () => {
         actions={[]}
       />,
     )
-    expect(screen.getByTestId('branch-node-active').textContent).toContain('v3 active')
-    expect(screen.getByTestId('branch-node-draft').textContent).toContain('v4 draft')
+    expect(screen.getByTestId('branch-node-active').textContent).toContain('v3 Aktiv')
+    expect(screen.getByTestId('branch-node-draft').textContent).toContain('v4 Entwurf')
     expect(screen.getByText('(du bearbeitest)')).toBeInTheDocument()
+  })
+
+  it('Phase E T1b: der Review-Knoten heisst sichtbar „Zur Freigabe“, nie roh „review“', () => {
+    render(<BranchStatus activeVersion={2} reviewVersion={3} currentVersion={3} actions={[]} />)
+    const node = screen.getByTestId('branch-node-review')
+    expect(node.textContent).toContain('v3 Zur Freigabe')
+    expect(node.textContent).not.toMatch(/review/i)
   })
 
   it('Audit A12: der aktuelle Knoten hat dunkle Schrift auf der Brand-Flaeche, kein text-brand', () => {

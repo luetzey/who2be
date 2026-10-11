@@ -162,7 +162,7 @@ describe('SystemPromptDetailPage', () => {
     // Draft-Zweig der Status-Action-Bar.
     expect(screen.getByRole('toolbar', { name: 'Status-Aktionen' })).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Zur Review einreichen' }),
+      screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeInTheDocument()
     // Formular mit geladenen Werten, editierbar (kein Managed-Lock) — Tab „Bearbeiten".
     await waitFor(() => {
@@ -204,7 +204,7 @@ describe('SystemPromptDetailPage', () => {
     // Trotz Draft-Version keine Status-Action-Bar.
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).not.toBeInTheDocument()
     // Audit A7: verwaltet → Werte als Lesetext, kein Speichern-Knopf.
     await waitFor(() => {
@@ -277,7 +277,7 @@ describe('SystemPromptDetailPage', () => {
       await screen.findByRole('button', { name: 'Als Draft reaktivieren' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).not.toBeInTheDocument()
   })
 })

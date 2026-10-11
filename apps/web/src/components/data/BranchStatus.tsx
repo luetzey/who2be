@@ -163,7 +163,9 @@ export function BranchStatus({
                 ──
               </span>
             ) : null}
-            {nodeFor(node.label, node.label, node.version, node.accent)}
+            {/* Sichtbar das geteilte Statuslabel (de „Zur Freigabe“), die
+                Testid behaelt den API-Wert (Phase E T1b). */}
+            {nodeFor(node.label, t(`common:status.${node.label}`), node.version, node.accent)}
           </span>
         ))}
         {nodes.find((n) => n.label === 'draft' && n.accent) !== undefined ? (
