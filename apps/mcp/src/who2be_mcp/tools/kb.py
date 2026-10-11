@@ -71,15 +71,10 @@ def _first_error(exc: ValidationError) -> str:
 
 @with_tool_log("search_kb")
 async def search_kb(query: str, limit: int = 20) -> list[KbSearchHit]:
-    """Durchsucht NUR die kuratierte Knowledge Base — nie die WorkArea.
+    """Durchsucht die kuratierte Knowledge Base (belegte Aussagen), nie die WorkArea.
 
-    KB und WorkArea haben getrennte Indizes: Rohmaterial findest du mit
-    `search_workarea`, hier liegen kuratierte, BELEGTE Aussagen (Nodes).
-    Jeder Treffer traegt `snippet`, `tier` (Vertrauensstufe), `status` und
-    den Anker ``node:<id>`` — reiche ihn unveraendert an
-    `neighbors(anchor)` weiter, um die Kontext-Kanten des Nodes zu sehen.
-    Durchsucht wird nur, was du laut deiner Quell-Area-Grants lesen darfst;
-    findest du nichts, sag das offen, statt zu raten. `limit` <= 50.
+    Treffer tragen `snippet`, `tier`, `status` und den Anker `node:<id>` fuer `neighbors`.
+    `limit` <= 50. Nichts gefunden: sag es offen.
     """
     client = await _client()
     return await kb_api.search_kb(client, query, limit)
@@ -95,19 +90,11 @@ async def create_node(
     content_ref: str | None = None,
     sensitivity: Sensitivity = Sensitivity.general,
 ) -> KbNodeRead:
-    """Legt eine belegte Aussage in der Knowledge Base an (Belegpflicht).
+    """Legt eine belegte Aussage in der Knowledge Base an.
 
-    `content` ist EINE praezise Aussage; `source_ref` ist ihr Pflicht-Beleg:
-    ``sha256:<hash>`` (Roh-Blob), ``url:<...>`` (externe Quelle) oder
-    ``<artifact_id>[#block]`` (WorkArea-Artifact, moeglichst mit
-    Block-Anker). Der Server loest den Beleg auf (unaufloesbar → 422) und
-    leitet `source_ref_kind` + Quell-Areas selbst ab. `tier`: `hypothesis`
-    (unbestaetigte Vermutung — dein Normalfall), `derived` (aus mehreren
-    Belegen abgeleitet), `verified` NUR fuer nachweislich Verifiziertes —
-    im Zweifel niedriger einsteigen und spaeter per `update_node` heben.
-    `occurred_at` ist der fachliche Zeitpunkt der Aussage (Default-
-    Praezision `day`), nie der Aufruf-Zeitpunkt. `content_ref` nennt
-    optional den Herkunfts-Anker des Aussagen-Texts.
+    `content`: eine praezise Aussage. `source_ref` (Pflicht): `sha256:<hash>`, `url:<...>` oder
+    `<artifact_id>[#block]`. `tier`: `hypothesis` (Normalfall), `derived`, `verified` nur fuer
+    Verifiziertes. `occurred_at` ist der fachliche Zeitpunkt.
     """
     client = await _client()
     try:
@@ -132,16 +119,10 @@ async def update_node(
     tier: NodeTier | None = None,
     additional_source_ref: str | None = None,
 ) -> KbNodeRead:
-    """Teilupdate eines KB-Nodes — Tier-Aufstieg braucht neuen, ANDERSARTIGEN Beleg.
+    """Aendert einen KB-Node; ein hoeherer `tier` braucht einen andersartigen Beleg.
 
-    Mindestens ein Feld angeben. `tier='derived'` von `hypothesis` aus
-    verlangt `additional_source_ref` mit einem Beleg ANDERER Art als der
-    bestehende (z. B. ``url:<...>`` zusaetzlich zu einem Artifact-Beleg) —
-    derselbe Beleg-Typ zaehlt nicht. Heben auf `verified` ist per Update
-    GESPERRT (immer 422 `tier_upgrade_forbidden`); das bestaetigt ein
-    Mensch. Abstufen ist frei. `additional_source_ref` nutzt die Formate
-    von `create_node` (``sha256:<hash>`` | ``url:<...>`` |
-    ``<artifact_id>[#block]``).
+    Nach `derived` nur mit `additional_source_ref` anderer Art; `verified` setzt nur ein Mensch
+    (422). Abstufen ist frei.
     """
     client = await _client()
     try:
@@ -163,18 +144,11 @@ async def create_edge(
     co_from: datetime | None = None,
     co_to: datetime | None = None,
 ) -> KbEdgeRead:
-    """Verbindet zwei Anker mit einer getypten, belegpflichtigen Kante.
+    """Verbindet zwei Anker mit einer getypten, belegten Kante.
 
-    `evidence_from`/`evidence_to`: min. 1, max. 20 Anker JE Seite — der
-    Server prueft Aufloesbarkeit und persistiert alles in EINER Transaktion
-    (fehlende Evidence → 422 `evidence_missing`, kein Teilzustand). Typen:
-    supports | contradicts | supersedes | derived_from | belongs_to |
-    co_occurs_with. Aus blosser GLEICHZEITIGKEIT folgt NUR
-    `co_occurs_with` — nie supports/derived_from. `co_occurs_with`
-    verlangt zusaetzlich die Statistik-Felder `co_query` (die Abfrage),
-    `co_n` (Fallzahl, n >= 20 — darunter 422 mit tatsaechlichem n) und den
-    Zeitraum `co_from`/`co_to`; alle anderen Typen duerfen KEINE
-    co_-Felder tragen.
+    `evidence_from` und `evidence_to` je 1-20 Anker. Typen: supports, contradicts, supersedes,
+    derived_from, belongs_to, co_occurs_with. Gleichzeitigkeit ergibt nur `co_occurs_with`, dann
+    mit `co_query`, `co_n` (>= 20), `co_from` und `co_to`; andere Typen ohne `co_`-Felder.
     """
     client = await _client()
     try:
@@ -196,15 +170,11 @@ async def create_edge(
 
 @with_tool_log("neighbors")
 async def neighbors(anchor: str, type: EdgeType | None = None, depth: int = 1) -> list[KbNeighbor]:
-    """Nachbar-Nodes eines Ankers entlang der KB-Kanten (Tiefe 1-3).
+    """Nachbar-Nodes eines KB-Ankers entlang der Kanten, Tiefe 1-3.
 
-    `anchor` ist ``node:<id>`` (z. B. aus einem `search_kb`-Treffer) oder
-    ein Artifact-Anker; `type` filtert optional auf einen Kantentyp. Jeder
-    Nachbar traegt den Node selbst, `edge_type` und `direction` (Richtung
-    relativ zum Ausgangs-Anker). WICHTIG bei `co_occurs_with`: `co_n`
-    traegt IMMER die Fallzahl — kommuniziere sie mit (etwa: tritt gemeinsam
-    auf, n=34), nie als blanke Behauptung; Ko-Okkurrenz ist KEINE
-    Kausalitaet und KEIN Beleg fuer supports/derived_from.
+    `anchor`: `node:<id>` oder ein Artifact-Anker; `type` filtert die Kante. Bei
+    `co_occurs_with` immer die Fallzahl `co_n` nennen: gemeinsames Auftreten ist weder Beleg
+    noch Ursache.
     """
     client = await _client()
     return await kb_api.neighbors(client, anchor, type, depth)
@@ -212,14 +182,10 @@ async def neighbors(anchor: str, type: EdgeType | None = None, depth: int = 1) -
 
 @with_tool_log("promote_artifact")
 async def promote_artifact(artifact_id: str, target_resource_id: str | None = None) -> ResourceRead:
-    """Kuratiert ein WorkArea-Artifact als Resource-DRAFT (nie direkt active).
+    """Uebernimmt ein WorkArea-Dokument als Resource-Draft, nie direkt aktiv.
 
-    Der einzige Uebergang von Rohmaterial zu kuratiertem Wissen (Spec G):
-    der Server uebernimmt den Inhalt als neuen Resource-Draft —
-    `target_resource_id` ergaenzt eine BESTEHENDE Resource um einen Draft,
-    ohne sie entsteht eine neue Resource — und protokolliert die Herkunft
-    (`status_history`-Note). Aktivieren muss danach ein Mensch bzw. eine
-    separate Transition; Promote veroeffentlicht NICHTS.
+    Mit `target_resource_id` als neuer Draft einer bestehenden Resource, sonst als neue
+    Resource. Aktivieren muss danach ein Mensch.
     """
     client = await _client()
     parsed_target = (

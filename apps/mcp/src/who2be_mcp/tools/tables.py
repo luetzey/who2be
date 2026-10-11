@@ -81,20 +81,10 @@ def _first_error(exc: ValidationError) -> str:
 async def create_table(area_id: str, name: str, schema: dict[str, object]) -> WaTableRead:
     """Legt eine Tabelle fuer strukturierte Daten in einer Area an.
 
-    `schema` ist ein Objekt: `columns` (Liste aus {name, type, nullable};
-    type = text|integer|numeric|date|timestamp|boolean), dazu optional
-    `dedupe_columns` (Spalten des Idempotenz-Hashes), `match_column`
-    (Eingang der Kategorisierung) und `category_column` (Ziel der Kategorie).
-
-    Eine Spalte `occurred_at` (type `timestamp` oder `date`) ist PFLICHT —
-    sie traegt den fachlichen Zeitpunkt jeder Zeile und haengt die Tabelle an
-    die Zeitachse (`timeline`). Tabellen- und Spaltennamen muessen
-    `^[a-z][a-z0-9_]*$` erfuellen (klein, keine Leerzeichen/Umlaute);
-    `_dedupe_hash`/`_source_artifact` vergibt der Server und sind als
-    Eingabe verboten.
-
-    Danach fuellt `insert_rows` die Tabelle und `query_table` wertet sie aus:
-    Zahlen gehoeren in eine Tabelle und in SQL, nicht in Prosa.
+    `schema.columns`: {name, type, nullable}, type text, integer, numeric, date, timestamp oder
+    boolean; optional `dedupe_columns`, `match_column`, `category_column`. Pflicht ist eine
+    Spalte `occurred_at` (date oder timestamp). Namen: `^[a-z][a-z0-9_]*$`. Danach `insert_rows`
+    und `query_table`.
     """
     client = await _client()
     try:
@@ -114,22 +104,12 @@ async def insert_rows(
     source_name: str | None = None,
     new_rules: list[NewRule] | None = None,
 ) -> RowsInsertResult:
-    """Importiert Zeilen in eine Tabelle — idempotent ueber den Dedupe-Hash.
+    """Importiert Zeilen in eine Tabelle, idempotent ueber den Dedupe-Hash.
 
-    Antwort ist die Bilanz {inserted, skipped}: derselbe Datensatz zweimal
-    importiert zaehlt als `skipped`, nicht als Fehler — ein Import darf also
-    gefahrlos wiederholt werden. Jede Zeile ist ein Objekt Spaltenname →
-    Wert und braucht `occurred_at` (fachlicher Zeitpunkt, nie now()).
-
-    Kategorien entstehen NUR aus Regeln (Regel vor Modell): traegt eine Zeile
-    einen Kategorie-Wert ohne passende Regel, antwortet der Server 422 —
-    dann die Regel als `new_rules` [{pattern, category, confidence?}]
-    mitschicken; sie wird VOR dem Import persistiert und angewandt. Eine
-    Kategorie im Kopf zu vergeben ist nie richtig.
-
-    `source_artifact_id` verankert die Herkunft der Zeilen (Roheingabe-
-    Artifact). `source_name` verlangt eine hinterlegte Quell-Konvention —
-    ohne sie 422 `convention_missing`, dann zuerst `set_convention` rufen.
+    Antwort {inserted, skipped}; Wiederholen ist gefahrlos. Jede Zeile braucht `occurred_at`.
+    Kategorien nur ueber Regeln: fehlt eine, antwortet der Server 422, dann `new_rules`
+    [{pattern, category}] mitschicken. `source_name` verlangt eine Konvention
+    (`set_convention`).
     """
     client = await _client()
     try:
@@ -153,21 +133,11 @@ async def query_table(
     format: QueryFormat = QueryFormat.json,
     limit: int = 200,
 ) -> QueryResult:
-    """Rechnet auf einer Tabelle — read-only SQL; das Ergebnis ist der Beleg.
+    """Rechnet auf einer Tabelle mit read-only SQL; das Ergebnis ist der Beleg.
 
-    Rechne Zahlen NIE selbst aus und tippe sie nie ab: Summen, Mittelwerte,
-    Gruppierungen und Vergleiche gehoeren in die Query. Nur Lesen ist
-    erlaubt (Engine-Garantie) — INSERT/UPDATE/DELETE/DROP beantwortet der
-    Server mit 403, ungueltiges SQL mit 400.
-
-    `format`: `json` (Spalten + Zeilen), `markdown` (fertige Tabelle zum
-    Zitieren), `csv`. `limit` deckelt die Zeilen (Default 200, max. 1000);
-    `truncated=true` heisst: es gab mehr — dann in SQL aggregieren, statt das
-    Cap hochzudrehen.
-
-    Kennst du Schema und Wertebereiche noch nicht, rufe zuerst
-    `describe_table`. Soll die Auswertung belegbar bleiben (Zitat, KB-Node),
-    nimm `save_query_result` statt Zahlen im Fliesstext.
+    Zahlen nie selbst ausrechnen oder abtippen: Summen und Gruppierungen gehoeren in die Query.
+    Schreibendes SQL: 403. `format`: json, markdown oder csv; `limit` Default 200, max. 1000;
+    `truncated=true` heisst: in SQL aggregieren. Fuer zitierbare Ergebnisse `save_query_result`.
     """
     client = await _client()
     try:
@@ -179,16 +149,11 @@ async def query_table(
 
 @with_tool_log("list_tables")
 async def list_tables(area_id: str | None = None) -> list[WaTableRead]:
-    """DER Einstieg zu Tabellen: welche gibt es, und wie heissen ihre IDs?
+    """Tabellen einer Area mit ID und Schema, ohne Zeilen.
 
-    Liefert den Katalog einer Area (Name, ID, Schema — keine Zeilen).
-    `area_id=None` = deine private Area. Danach `describe_table` (Umfang und
-    Wertebereiche) und `query_table` (rechnen).
-
-    Nutze das am ANFANG eines Laufs, statt eine Tabelle neu anzulegen, die es
-    schon gibt: Tabellen tauchen weder in `search_workarea` (die indiziert
-    Artifact-Passagen) noch in `timeline` auf — dort musst du die ID schon
-    kennen.
+    Am Anfang aufrufen, statt eine Tabelle neu anzulegen: Tabellen erscheinen weder in
+    `search_workarea` noch in `timeline`. Danach `describe_table`, dann `query_table`.
+    `area_id=None` ist die private Area.
     """
     client = await _client()
     parsed_area = parse_area_id(area_id)
@@ -199,16 +164,9 @@ async def list_tables(area_id: str | None = None) -> list[WaTableRead]:
 
 @with_tool_log("delete_table")
 async def delete_table(table_id: str) -> str:
-    """Loescht eine Tabelle samt aller Zeilen — endgueltig.
+    """Loescht eine Tabelle samt Zeilen endgueltig.
 
-    Es gibt KEINEN Papierkorb: Katalog-Eintrag und Daten sind danach weg, der
-    Name in der Area wieder frei. Nutze das fuer Fehlversuche und obsolete
-    Zwischenstaende — nicht fuer Daten, die noch jemand braucht.
-
-    Bereits eingefrorene Auswertungen (`save_query_result`-Artifacts) bleiben
-    bestehen: sie sind eigenstaendige Belege fuer Zahlen, die du vielleicht
-    schon zitiert hast. Kategorie-Regeln und Quell-Konventionen haengen an der
-    Area und bleiben ebenfalls.
+    Gespeicherte Auswertungen (`save_query_result`), Regeln und Konventionen bleiben.
     """
     client = await _client()
     parsed = _parse_uuid(table_id, "Tabellen")
@@ -218,16 +176,9 @@ async def delete_table(table_id: str) -> str:
 
 @with_tool_log("describe_table")
 async def describe_table(table_id: str) -> TableDescription:
-    """DER Einstieg vor jeder Query: Schema, Umfang, Wertebereiche, Konventionen.
+    """Schema, Zeilenzahl, Wertebereiche und Quell-Konventionen einer Tabelle.
 
-    Liefert die Spalten mit Typ und Nullable, die Zeilenzahl, je Spalte
-    Wertebereiche (z. B. min/max/distinct) und die Quell-Konventionen der
-    Area (Einheiten, Notation, Datumsformat). Damit formulierst du eine
-    Query, ohne Rohdaten zu laden.
-
-    Lade NIE Rohzeilen (`SELECT *`), nur um dich zu orientieren — das kostet
-    Kontext und verleitet dazu, Zahlen abzutippen. Danach `query_table`
-    (rechnen) bzw. `save_query_result` (Ergebnis belegen).
+    Vor jeder Query aufrufen, statt zur Orientierung Rohzeilen zu laden. Danach `query_table`.
     """
     client = await _client()
     return await tables_api.describe_table(client, _parse_uuid(table_id, "Tabellen"))
@@ -242,20 +193,11 @@ async def save_query_result(
     occurred_precision: OccurredPrecision = OccurredPrecision.day,
     limit: int = 200,
 ) -> ArtifactRead:
-    """Friert Query + Ergebnis als doc-Artifact ein — die belegbare Auswertung.
+    """Friert Query und Ergebnis als WorkArea-Dokument ein, als zitierbaren Beleg.
 
-    Der Server fuehrt das SQL read-only aus und schreibt Abfrage UND
-    Ergebnistabelle in ein doc-Artifact in der Area der Tabelle: die Zahlen
-    darin stammen aus der Engine, nicht aus deinem Text. Genau das nimmst du,
-    wenn ein Ergebnis zitiert, geteilt oder spaeter geprueft werden soll —
-    `query_table` allein hinterlaesst keinen Beleg.
-
-    Die Antwort traegt die Artifact-ID; ein KB-Node zu dieser Auswertung
-    referenziert sie als `source_ref=<artifact_id>` (`create_node`).
-    `occurred_at` ist der fachliche Zeitpunkt des ERGEBNISSES (z. B. der
-    ausgewertete Monat), nie der Aufruf-Zeitpunkt; `occurred_precision`
-    steht default auf `day`. Fehlerhaftes oder schreibendes SQL erzeugt KEIN
-    Artifact (400/403 vor dem Schreiben).
+    Fuer Ergebnisse, die zitiert oder geprueft werden; `query_table` hinterlaesst keinen Beleg.
+    Ein KB-Node verweist mit `source_ref=<artifact_id>` darauf. `occurred_at` ist der Zeitpunkt
+    des Ergebnisses.
     """
     client = await _client()
     try:
@@ -278,21 +220,12 @@ async def timeline(
     sources: list[str] | None = None,
     granularity: TimelineGranularity = TimelineGranularity.day,
 ) -> TimelineResult:
-    """Zeitscheiben ueber Artifacts, KB-Nodes und Tabellen-Zeilen.
+    """Zeitscheiben ueber Artifacts, KB-Nodes und Tabellenzeilen nach `occurred_at`.
 
-    Fenster `[from_, to)` — `to` exklusiv, max. 366 Tage —, gebuckelt nach
-    `granularity` (day|week|month). Jede Scheibe traegt Anker + Zaehlungen je
-    Quellenart; `sources` waehlt die Quellen: `artifacts`, `nodes`,
-    `table:<table_id>` (Default: artifacts + nodes).
-
-    Gebuckelt wird IMMER ueber `occurred_at` — den fachlichen Zeitpunkt, nie
-    das Erfassungsdatum. Eintraege mit unbekannter Zeit landen im separaten
-    `unknown`-Bucket und nie in einer Scheibe: nenne sie getrennt, statt sie
-    irgendwo einzusortieren.
-
-    Gleichzeitigkeit ist KEIN Zusammenhang. Aus einer gemeinsamen Zeitscheibe
-    folgt hoechstens eine `co_occurs_with`-Kante (`create_edge`) mit Fallzahl
-    n >= 20 — nie `supports`, `derived_from` oder eine Kausalaussage im Text.
+    Fenster `[from_, to)`, max. 366 Tage, `granularity` day, week oder month; `sources`:
+    `artifacts`, `nodes`, `table:<id>`. Unbekannte Zeiten stehen im eigenen `unknown`-Bucket;
+    nenne sie getrennt. Gleichzeitigkeit ist kein Zusammenhang: hoechstens `co_occurs_with` mit
+    n >= 20.
     """
     client = await _client()
     return await tables_api.timeline(client, from_, to, granularity, sources)
@@ -302,19 +235,11 @@ async def timeline(
 async def set_convention(
     area_id: str, source_name: str, convention: dict[str, object]
 ) -> SourceConventionRead:
-    """Legt Einheiten und Notation einer Datenquelle EINMAL fest, statt zu raten.
+    """Legt Einheiten und Notation einer Datenquelle einmal fest, statt zu raten.
 
-    `convention` ist ein flaches Objekt, z. B. {"currency": "EUR",
-    "decimal_separator": ",", "date_format": "DD.MM.YYYY", "amount_sign":
-    "Ausgaben negativ"} — alles, was du sonst pro Zeile erraten muesstest.
-    Rate solche Dinge nie im Einzelfall; frag im Zweifel nach und hinterlege
-    die Antwort hier.
-
-    `source_name` benennt die Quelle (z. B. `giro_export`). Ein Import mit
-    diesem `source_name` wird erst akzeptiert, wenn dazu eine Konvention
-    hinterlegt ist (sonst 422 `convention_missing`). Der Aufruf ersetzt eine
-    bestehende Konvention vollstaendig; `describe_table` zeigt die
-    Konventionen der Area mit an.
+    `convention` ist ein flaches Objekt (Waehrung, Dezimaltrenner, Datumsformat, Vorzeichen),
+    `source_name` benennt die Quelle. Ersetzt eine bestehende Konvention; Importe mit
+    `source_name` brauchen sie.
     """
     client = await _client()
     try:
@@ -328,19 +253,11 @@ async def set_convention(
 async def upsert_category_rule(
     area_id: str, pattern: str, category: str, confidence: float | None = None
 ) -> CategoryRuleRead:
-    """Setzt eine Kategorisierungs-Regel — Regeln sind die SSoT der Kategorien.
+    """Setzt eine Kategorisierungs-Regel; Kategorien entstehen nur aus Regeln.
 
-    Regel vor Modell: Kategorien entstehen NUR hieraus, nie aus deinem
-    Urteil pro Zeile. `pattern` matcht die `match_column` der Tabellen,
-    `category` ist das Ergebnis, `confidence` (0-1) optional deine
-    Modell-Konfidenz. Upsert-Schluessel ist (Area, Pattern) — dasselbe
-    `pattern` erneut gesetzt ERSETZT die bestehende Regel.
-
-    Ein Upsert kategorisiert die bestehenden Zeilen der Area rueckwirkend neu
-    (nur nicht-konfligierende) und wird protokolliert. Faellt eine unbekannte
-    Kategorie erst beim Import auf, kannst du die Regel auch direkt als
-    `new_rules` an `insert_rows` mitgeben. Vorher `list_category_rules`
-    lesen, damit du keine bestehende Zuordnung ueberschreibst.
+    `pattern` trifft die `match_column`, `category` ist das Ergebnis, `confidence` optional.
+    Dasselbe Pattern in derselben Area ersetzt die Regel und kategorisiert bestehende Zeilen
+    neu. Vorher `list_category_rules` lesen.
     """
     client = await _client()
     try:
@@ -352,12 +269,10 @@ async def upsert_category_rule(
 
 @with_tool_log("list_category_rules")
 async def list_category_rules(area_id: str) -> list[CategoryRuleRead]:
-    """Listet die Kategorisierungs-Regeln einer Area (inkl. inaktiver).
+    """Listet die Kategorisierungs-Regeln einer Area, auch inaktive.
 
-    Der Blick in die geltende Kategorien-SSoT: Pattern, Kategorie,
-    `confidence`, `active` und wer die Regel gesetzt hat. Lies das, bevor du
-    per `upsert_category_rule` eine Regel setzt — der Upsert laeuft auf
-    (Area, Pattern) und wuerde eine bestehende Zuordnung ersetzen.
+    Pattern, Kategorie, `confidence`, `active` und Urheber. Vor `upsert_category_rule` lesen:
+    dasselbe Pattern ersetzt die Regel.
     """
     client = await _client()
     return await tables_api.list_category_rules(client, _parse_uuid(area_id, "Area"))
