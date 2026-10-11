@@ -16,12 +16,15 @@ E2a-1, Mandant ueber `tenant_scope` (Fixture `_with_repo` aus
 - **in_progress-Automatik (W-E2 = a):** triaged und reopened gehen auf
   `in_progress` (Event mit `measure_id`), open mit Zuordnung ueber `triaged`,
   open ohne Zuordnung und alle anderen Status bleiben und stehen im Ergebnis.
+- **Fall-Sperre:** zwei gleichzeitige Protokolle auf denselben Fall ergeben
+  genau ein `in_progress` (Review E2b-1).
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID, uuid4
 
@@ -492,5 +495,45 @@ def test_protocol_without_measures_changes_no_case() -> None:
         assert (result.cases_started, result.cases_unchanged) == ([], [])
         assert result.detail.session.case_ids == [triaged]
         assert await w.status(triaged) is CaseStatus.triaged
+
+    _run(body)
+
+
+def test_concurrent_submits_start_a_case_exactly_once() -> None:
+    """Fall-Sperre (Review E2b-1): zwei gleichzeitige Protokolle, ein `in_progress`.
+
+    Beide Transaktionen haben geschrieben und warten an derselben Stelle, bevor
+    eine den Fallstatus liest. Ohne `_lock_case` in `start_cases` saehen beide
+    `triaged` und schrieben je ein Event.
+    """
+
+    async def body(w: _World) -> None:
+        triaged = await w.case_in(CaseStatus.triaged)
+        test_case = await w.test_case()
+        barrier = asyncio.Barrier(2)
+        original = w.repo.start_cases
+
+        async def gated(
+            conn: asyncpg.Connection,
+            workspace_id: UUID,
+            starts: Sequence[tuple[UUID, UUID]],
+            *,
+            actor_kind: CaseActorKind,
+            actor_id: UUID,
+        ) -> list[CaseStart]:
+            await barrier.wait()
+            return await original(
+                conn, workspace_id, starts, actor_kind=actor_kind, actor_id=actor_id
+            )
+
+        w.repo.start_cases = gated  # type: ignore[method-assign]
+        data = _protocol(w.seed.agent_a, [triaged], [_measure([triaged], test_case)])
+        first, second = await asyncio.gather(
+            w.svc.submit_protocol(w.editor, data), w.svc.submit_protocol(w.editor, data)
+        )
+        assert sorted([len(first.cases_started), len(second.cases_started)]) == [0, 1]
+        unchanged = first.cases_unchanged + second.cases_unchanged
+        assert [(c.case_id, c.status) for c in unchanged] == [(triaged, CaseStatus.in_progress)]
+        assert [e for e, _ in await w.events(triaged)].count("in_progress") == 1
 
     _run(body)

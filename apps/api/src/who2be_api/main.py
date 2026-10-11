@@ -342,6 +342,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "measure_test_case_required": "Massnahme ohne gueltigen Pruefall",
     "measure_not_found": "Massnahme nicht gefunden",
     "session_not_found": "Protokoll nicht gefunden",
+    "measure_transition_forbidden": "Schritt im Verlauf der Massnahme nicht erlaubt",
 }
 
 

@@ -51,16 +51,19 @@ import asyncpg
 # automatischer Uebergang (W-E2 = a) sieht genauso aus wie ein manueller.
 from who2be_api.repositories.case_repository import (
     _STATUS_SQL,
+    _VERSION_TABLES,
     _insert_event,
     _lock_case,
 )
 from who2be_models import (
+    MEASURE_TARGETS_WITHOUT_ENTITY,
     CaseActorKind,
     CaseEventKind,
     CaseStatus,
     EntityType,
     MeasureActorKind,
     MeasureEventCreate,
+    MeasureEventKind,
     MeasureEventRead,
     MeasureRead,
     SessionCreate,
@@ -112,6 +115,41 @@ class CaseStart:
     case_id: UUID
     status_before: CaseStatus
     started: bool
+
+
+@dataclass(frozen=True)
+class RunFigure:
+    """Juengster Prueflauf des Pruefalls einer Massnahme fuer eine Version (3.2)."""
+
+    runs_total: int
+    runs_passed: int
+    verdict: str
+    attestation: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class VersionFigures:
+    """Rohzahlen einer Version fuer die Nachschau (6.6, QE8 a).
+
+    `cases` ist None, solange es fuer diese Seite kein Zeitfenster gibt
+    (nachher: vor `activated`).
+    """
+
+    version_id: UUID | None
+    version: int
+    run: RunFigure | None
+    uses: int
+    cases: int | None
+
+
+@dataclass(frozen=True)
+class FollowUpFigures:
+    """Kennzahlen einer Massnahme: vorher, nachher, Wiederauftreten."""
+
+    before: VersionFigures | None
+    after: VersionFigures | None
+    recurrence: int | None
 
 
 def _json_list(value: object) -> list[Any]:
@@ -220,6 +258,28 @@ class SessionRepository(Protocol):
         actor_kind: CaseActorKind,
         actor_id: UUID,
     ) -> list[CaseStart]: ...
+
+    async def lock_measure(
+        self, conn: asyncpg.Connection, workspace_id: UUID, measure_id: UUID
+    ) -> tuple[MeasureRead, date] | None: ...
+
+    async def version_ref(
+        self, workspace_id: UUID, entity_type: EntityType, version_id: UUID
+    ) -> tuple[UUID, int] | None: ...
+
+    async def reset_cases_after_withdraw(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        measure_id: UUID,
+        case_ids: Sequence[UUID],
+        *,
+        note: str,
+    ) -> list[UUID]: ...
+
+    async def follow_up_figures(
+        self, workspace_id: UUID, measure: MeasureRead
+    ) -> FollowUpFigures: ...
 
 
 class PgSessionRepository:
@@ -577,6 +637,298 @@ class PgSessionRepository:
                 entity_type,
                 version_id,
             )
+
+    # --- Lebenszyklus der Massnahme (E2b-2) -----------------------------------
+
+    async def lock_measure(
+        self, conn: asyncpg.Connection, workspace_id: UUID, measure_id: UUID
+    ) -> tuple[MeasureRead, date] | None:
+        """Sperrt die Massnahme (Transaktion von `conn`) und liest sie samt Nachschau-Datum.
+
+        Die Sperre haelt die Event-Folge (QE4: `reviewed` genau einmal, nichts
+        nach `withdrawn`) gegen zwei gleichzeitige Aufrufe. Nachschau-Datum =
+        `measure.follow_up_at`, sonst das des Protokolls (wie
+        `count_due_measures`). None, wenn es die Massnahme nicht gibt.
+        """
+        await conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended('measure:' || $1::uuid::text, 0))",
+            measure_id,
+        )
+        measures = await _load_measures(conn, workspace_id, "m.id = $2", measure_id)
+        if not measures:
+            return None
+        due: date = await conn.fetchval(
+            "SELECT COALESCE(m.follow_up_at, s.follow_up_at) FROM measure m "
+            "JOIN feedback_session s ON s.workspace_id = m.workspace_id AND s.id = m.session_id "
+            "WHERE m.workspace_id = $1 AND m.id = $2",
+            workspace_id,
+            measure_id,
+        )
+        return measures[0], due
+
+    async def version_ref(
+        self, workspace_id: UUID, entity_type: EntityType, version_id: UUID
+    ) -> tuple[UUID, int] | None:
+        """`(entity_id, version)` einer Version dieses Workspace, sonst None.
+
+        Ueber die Identitaetstabelle geprueft (Muster
+        `PgCaseRepository.version_exists`). Liest nur — die Versions-Tabellen
+        bleiben unberuehrt (Weiche E2 = a).
+        """
+        table, version_table, fk = _VERSION_TABLES[entity_type]
+        row = await self._pool.fetchrow(
+            f"SELECT e.id, v.version FROM {version_table} v JOIN {table} e ON e.id = v.{fk} "
+            "WHERE v.id = $2 AND e.workspace_id = $1",
+            workspace_id,
+            version_id,
+        )
+        return (row["id"], row["version"]) if row is not None else None
+
+    async def reset_cases_after_withdraw(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        measure_id: UUID,
+        case_ids: Sequence[UUID],
+        *,
+        note: str,
+    ) -> list[UUID]:
+        """QE5 a: Faelle `in_progress` -> `triaged`, wenn keine andere offene Massnahme sie traegt.
+
+        Owner 2026-10-09: „Zurueckziehen einer Massnahme setzt ihre Faelle von
+        in_progress automatisch auf triaged zurueck, sofern keine andere offene
+        Massnahme sie enthaelt.“ Offen = juengstes Event weder `reviewed` noch
+        `withdrawn`. Akteur ist das System; das Event traegt die
+        `measure_id` und die Begruendung des Zurueckziehens. Unter der
+        Fall-Sperre, in fester Reihenfolge nach `case_id` (wie `start_cases`).
+        Ergebnis: die zurueckgesetzten Faelle.
+        """
+        reset: list[UUID] = []
+        for case_id in sorted(case_ids, key=lambda c: c.int):
+            await _lock_case(conn, case_id)
+            current = await conn.fetchval(
+                f"SELECT {_STATUS_SQL} FROM agent_case c WHERE c.workspace_id = $1 AND c.id = $2",
+                workspace_id,
+                case_id,
+            )
+            if current != CaseStatus.in_progress.value:
+                continue
+            other_open = await conn.fetchval(
+                "SELECT 1 FROM measure_case mc "
+                "LEFT JOIN LATERAL (SELECT e.event FROM measure_event e "
+                "    WHERE e.workspace_id = mc.workspace_id AND e.measure_id = mc.measure_id "
+                "    ORDER BY e.created_at DESC, e.id DESC LIMIT 1) last ON TRUE "
+                "WHERE mc.workspace_id = $1 AND mc.case_id = $2 AND mc.measure_id <> $3 "
+                "  AND (last.event IS NULL OR last.event NOT IN ('reviewed', 'withdrawn')) "
+                "LIMIT 1",
+                workspace_id,
+                case_id,
+                measure_id,
+            )
+            if other_open is not None:
+                continue
+            await _insert_event(
+                conn,
+                workspace_id,
+                case_id,
+                CaseEventKind.triaged,
+                CaseActorKind.system,
+                None,
+                note=note,
+                measure_id=measure_id,
+            )
+            reset.append(case_id)
+        return reset
+
+    async def follow_up_figures(self, workspace_id: UUID, measure: MeasureRead) -> FollowUpFigures:
+        """Rohzahlen der Nachschau (6.6: Pruefall-Quote vorher/nachher, Fallrate je
+        Nutzung alte gegen neue Version, Wiederauftreten; QE8 a: keine Raten).
+
+        - **nachher** = die juengst verknuepfte Version (`draft_linked`, QE4).
+        - **vorher** = die Version, die vor der Aktivierung (bzw. jetzt) zuletzt
+          aktiv war, laut `status_history`.
+        - **Quote**: juengster `test_run` des Pruefalls der Massnahme fuer die
+          Version (3.2: „Es zaehlt das letzte Ergebnis“).
+        - **Nutzungen**: `usage_event` mit `source='server'` und der
+          Versionsnummer (3.4: Nutzungen zaehlen nur `source='server'`).
+        - **Faelle**: Faelle aller Agenten mit Zuordnung zu diesem Element im
+          Zeitfenster der Version (vorher: ab ihrer Aktivierung bis zur
+          Aktivierung der neuen; nachher: ab `activated`). `agent_case` kennt
+          keine Version; das Zeitfenster ist die Naeherung.
+        - **Wiederauftreten**: neue Faelle des besprochenen Agenten am selben
+          Element nach `activated` — bei Zielen ohne Versionen (QE6 a) nach
+          Anlage der Massnahme. Ohne Aktivierung eines versionierten Ziels None.
+        """
+        async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):
+            activated_at = _last_event_at(measure, MeasureEventKind.activated)
+            linked = _last_event(measure, MeasureEventKind.draft_linked)
+            before: VersionFigures | None = None
+            after: VersionFigures | None = None
+            since: datetime | None
+            if not measure_target_versioned(measure.target):
+                since = measure.created_at
+            else:
+                since = activated_at
+                if linked is not None and linked.version_id is not None:
+                    entity_type = linked.version_entity_type
+                    assert entity_type is not None
+                    after, before = await _version_pair(
+                        conn, workspace_id, measure, entity_type, linked.version_id, activated_at
+                    )
+            recurrence: int | None = None
+            if since is not None:
+                recurrence = await _count_cases(
+                    conn, workspace_id, measure, since, None, agent_id=measure.agent_id
+                )
+        return FollowUpFigures(before=before, after=after, recurrence=recurrence)
+
+
+def measure_target_versioned(target: str) -> bool:
+    """Hat das Ziel Versionen? (QE6: `tool_policy`, `memory` haben keine.)
+
+    Eine Quelle mit der Versionspruefung: die Ziele aus `_VERSION_TABLES`.
+    """
+    return target in _VERSION_TABLES
+
+
+def _last_event(measure: MeasureRead, kind: MeasureEventKind) -> MeasureEventRead | None:
+    hits = [e for e in measure.events if e.event is kind]
+    return hits[-1] if hits else None
+
+
+def _last_event_at(measure: MeasureRead, kind: MeasureEventKind) -> datetime | None:
+    event = _last_event(measure, kind)
+    return event.created_at if event is not None else None
+
+
+async def _version_pair(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    measure: MeasureRead,
+    entity_type: str,
+    version_id: UUID,
+    activated_at: datetime | None,
+) -> tuple[VersionFigures | None, VersionFigures | None]:
+    """(nachher, vorher) fuer die verknuepfte Version; None, wenn es sie nicht mehr gibt."""
+    table, version_table, fk = _VERSION_TABLES[entity_type]
+    new = await conn.fetchrow(
+        f"SELECT e.id AS entity_id, v.version FROM {version_table} v "
+        f"JOIN {table} e ON e.id = v.{fk} WHERE v.id = $2 AND e.workspace_id = $1",
+        workspace_id,
+        version_id,
+    )
+    if new is None:
+        return None, None
+    entity_id: UUID = new["entity_id"]
+    after = VersionFigures(
+        version_id=version_id,
+        version=new["version"],
+        run=await _latest_run(conn, workspace_id, measure.test_case_id, version_id),
+        uses=await _count_uses(conn, workspace_id, entity_type, entity_id, new["version"]),
+        cases=(
+            await _count_cases(conn, workspace_id, measure, activated_at, None)
+            if activated_at is not None
+            else None
+        ),
+    )
+    # Juengste Aktivierung einer ANDEREN Versionsnummer vor dem Stichtag.
+    old = await conn.fetchrow(
+        "SELECT version, changed_at FROM status_history "
+        "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+        "  AND to_status = 'active' AND version IS NOT NULL AND version <> $4 "
+        "  AND changed_at <= COALESCE($5::timestamptz, now()) "
+        "ORDER BY changed_at DESC LIMIT 1",
+        workspace_id,
+        entity_type,
+        entity_id,
+        new["version"],
+        activated_at,
+    )
+    if old is None:
+        return after, None
+    old_version_id: UUID | None = await conn.fetchval(
+        f"SELECT v.id FROM {version_table} v JOIN {table} e ON e.id = v.{fk} "
+        f"WHERE v.{fk} = $1 AND v.version = $2 ORDER BY (v.locale = e.locale) DESC LIMIT 1",
+        entity_id,
+        old["version"],
+    )
+    before = VersionFigures(
+        version_id=old_version_id,
+        version=old["version"],
+        run=(
+            await _latest_run(conn, workspace_id, measure.test_case_id, old_version_id)
+            if old_version_id is not None
+            else None
+        ),
+        uses=await _count_uses(conn, workspace_id, entity_type, entity_id, old["version"]),
+        cases=await _count_cases(conn, workspace_id, measure, old["changed_at"], activated_at),
+    )
+    return after, before
+
+
+async def _latest_run(
+    conn: asyncpg.Connection, workspace_id: UUID, test_case_id: UUID, version_id: UUID
+) -> RunFigure | None:
+    row = await conn.fetchrow(
+        "SELECT runs_total, runs_passed, verdict, attestation, created_at FROM test_run "
+        "WHERE workspace_id = $1 AND test_case_id = $2 AND subject_version_id = $3 "
+        "ORDER BY created_at DESC, id DESC LIMIT 1",
+        workspace_id,
+        test_case_id,
+        version_id,
+    )
+    return RunFigure(**dict(row)) if row is not None else None
+
+
+async def _count_uses(
+    conn: asyncpg.Connection, workspace_id: UUID, entity_type: str, entity_id: UUID, version: int
+) -> int:
+    count = await conn.fetchval(
+        "SELECT COUNT(*)::int FROM usage_event "
+        "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 AND version = $4 "
+        "  AND source = 'server'",
+        workspace_id,
+        entity_type,
+        entity_id,
+        version,
+    )
+    return int(count or 0)
+
+
+async def _count_cases(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    measure: MeasureRead,
+    since: datetime | None,
+    until: datetime | None,
+    *,
+    agent_id: UUID | None = None,
+) -> int:
+    """Faelle mit Zuordnung zum Ziel der Massnahme, angelegt in `[since, until)`.
+
+    Ohne die Faelle der Massnahme selbst. `tool_policy` haengt am Agenten
+    (keine `entity_id`): dort zaehlt nur der Agent der Massnahme.
+    """
+    if measure.target in MEASURE_TARGETS_WITHOUT_ENTITY:
+        agent_id = measure.agent_id
+    count = await conn.fetchval(
+        "SELECT COUNT(DISTINCT c.id)::int FROM agent_case c "
+        "JOIN agent_case_element el ON el.workspace_id = c.workspace_id AND el.case_id = c.id "
+        "WHERE c.workspace_id = $1 AND el.target = $2 "
+        "  AND el.entity_id IS NOT DISTINCT FROM $3::uuid "
+        "  AND ($4::timestamptz IS NULL OR c.created_at >= $4) "
+        "  AND ($5::timestamptz IS NULL OR c.created_at < $5) "
+        "  AND ($6::uuid IS NULL OR c.agent_id = $6) "
+        "  AND NOT (c.id = ANY($7::uuid[]))",
+        workspace_id,
+        measure.target.value,
+        measure.entity_id,
+        since,
+        until,
+        agent_id,
+        list(measure.case_ids),
+    )
+    return int(count or 0)
 
 
 async def _load_session(
