@@ -2565,25 +2565,29 @@
       "list": {
         "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einem Fall kann ein Prüffall werden.",
         "descriptionViewer": "Fälle, die du gemeldet hast, und was daraus geworden ist.",
-        "emptyOpenTitle": "Keine offenen Fälle",
-        "emptyOpenDescription": "Fälle entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
-        "emptyViewerTitle": "Du hast noch keinen Fall gemeldet",
+        "emptyOpenTitle": "Keine offenen Rückmeldungen",
+        "emptyOpenDescription": "Rückmeldungen entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
+        "emptyViewerTitle": "Du hast noch keine Rückmeldung gegeben",
         "emptyViewerDescription": "Wenn ein Agent etwas anders machen soll, melde es hier. Du siehst dann, was daraus wird.",
-        "emptyFiltered": "Kein Fall passt zu diesen Filtern.",
-        "loadError": "Fälle konnten nicht geladen werden.",
+        "emptyFiltered": "Keine Rückmeldung passt zu diesen Filtern.",
+        "loadError": "Rückmeldungen konnten nicht geladen werden.",
         "loadMore": "Weitere laden",
-        "emptyOpenViewerDescription": "Alle Fälle, die du gemeldet hast, sind eingeordnet, umgesetzt oder verworfen.",
-        "showAll": "Alle meine Fälle anzeigen"
+        "emptyOpenViewerDescription": "Keine deiner Rückmeldungen ist mehr offen.",
+        "showAll": "Alle meine Rückmeldungen anzeigen"
       },
       "status": {
         "open": "Offen",
         "reopened": "Wieder offen",
         "triaged": "Eingeordnet",
-        "addressed": "Umgesetzt → {{element}} v{{version}}",
-        "addressedShort": "Umgesetzt",
+        "addressed": "Geändert → {{element}} v{{version}}",
+        "addressedShort": "Geändert",
         "dismissed": "Verworfen",
         "in_progress": "In Arbeit",
-        "verified": "Bestätigt"
+        "verified": "Hat gewirkt",
+        "explain": {
+          "in_progress": "Wird gerade über eine Änderung umgesetzt.",
+          "verified": "Die Änderung hat in der Nachkontrolle gewirkt."
+        }
       },
       "row": {
         "expected": "Erwartet: {{text}}",
@@ -2607,14 +2611,14 @@
         "model_limit": "Modellgrenze"
       },
       "detail": {
-        "title": "Fall · {{agent}}",
+        "title": "Rückmeldung · {{agent}}",
         "reported": "gemeldet am {{date}}",
-        "back": "Fälle",
-        "actions": "Aktionen zum Fall",
+        "back": "Rückmeldungen",
+        "actions": "Aktionen zur Rückmeldung",
         "copyId": "ID kopieren",
         "idCopied": "ID kopiert.",
-        "contentAria": "Inhalt des Falls",
-        "immutable": "Der Inhalt eines Falls bleibt, wie er gemeldet wurde. Ergänzungen stehen im Verlauf.",
+        "contentAria": "Inhalt der Rückmeldung",
+        "immutable": "Der Inhalt einer Rückmeldung bleibt, wie er gemeldet wurde. Ergänzungen stehen im Verlauf.",
         "block": {
           "situation": "Lage",
           "behavior": "Getan",
@@ -2641,22 +2645,22 @@
         },
         "next": "Nächster Schritt",
         "moreActions": "Weitere Aktionen",
-        "notFound": "Diesen Fall gibt es nicht (mehr).",
-        "toList": "Zu den Fällen"
+        "notFound": "Diese Rückmeldung gibt es nicht (mehr).",
+        "toList": "Zu den Rückmeldungen"
       },
       "action": {
         "assign": "Zuordnen…",
         "changeAssignment": "Zuordnung ändern…",
         "triage": "Als eingeordnet markieren",
         "createTestCase": "Prüffall daraus anlegen",
-        "address": "Als umgesetzt markieren…",
-        "addressUnavailable": "Umgesetzt braucht eine Version eines zugeordneten Bausteins.",
+        "address": "Als geändert markieren…",
+        "addressUnavailable": "Geändert braucht eine Version eines zugeordneten Bausteins.",
         "toVersion": "Zur Version",
         "dismiss": "Verwerfen…",
         "reopen": "Wieder öffnen…"
       },
       "assign": {
-        "title": "Fall zuordnen",
+        "title": "Rückmeldung zuordnen",
         "intro": "Woran liegt es? Wähle die Bausteine, die geändert werden müssten. Mehrfachauswahl möglich.",
         "group": {
           "persona": "Persona",
@@ -2668,31 +2672,31 @@
         "tool_policy": "Werkzeugrechte des Agenten",
         "memory": "Gedächtnis",
         "model_limit": "Modellgrenze – keine Änderung sinnvoll",
-        "model_limitHelp": "Das Modell kann es nicht besser, egal was wir ändern. Danach kannst du den Fall verwerfen.",
+        "model_limitHelp": "Das Modell kann es nicht besser, egal was wir ändern. Danach kannst du die Rückmeldung verwerfen.",
         "alsoTriage": "Danach als eingeordnet markieren",
-        "required": "Ordne den Fall mindestens einem Baustein zu oder wähle „Modellgrenze“.",
+        "required": "Ordne die Rückmeldung mindestens einem Baustein zu oder wähle „Modellgrenze“.",
         "save": "Zuordnung speichern"
       },
       "address": {
-        "title": "Als umgesetzt markieren",
-        "intro": "In welcher Version ist die Änderung? Der Fall verweist danach auf diese Version.",
+        "title": "Als geändert markieren",
+        "intro": "In welcher Version ist die Änderung? Die Rückmeldung verweist danach auf diese Version.",
         "element": "Baustein",
         "version": "Version",
         "activeTag": "aktiv",
         "choose": "Bitte wählen …",
         "note": "Notiz (optional)",
-        "submit": "Als umgesetzt markieren"
+        "submit": "Als geändert markieren"
       },
       "dismiss": {
-        "title": "Fall verwerfen",
+        "title": "Rückmeldung verwerfen",
         "reason": "Warum wird nichts geändert?",
         "reasonHelp": "Mindestens 10 Zeichen. Die meldende Person sieht die Begründung.",
         "modelLimitDefault": "Modellgrenze – keine Änderung sinnvoll.",
         "submit": "Verwerfen"
       },
       "reopen": {
-        "title": "Fall wieder öffnen",
-        "reason": "Warum wird der Fall wieder geöffnet?",
+        "title": "Rückmeldung wieder öffnen",
+        "reason": "Warum wird die Rückmeldung wieder geöffnet?",
         "submit": "Wieder öffnen"
       },
       "reason": {
@@ -2706,24 +2710,28 @@
         "event": {
           "reported": "Gemeldet",
           "triaged": "Eingeordnet",
-          "addressed": "Umgesetzt mit {{element}} v{{version}}",
+          "addressed": "Geändert mit {{element}} v{{version}}",
           "dismissed": "Verworfen: {{note}}",
           "reopened": "Wieder geöffnet: {{note}}",
           "element_assigned": "Zugeordnet: {{element}}",
           "element_unassigned": "Zuordnung entfernt: {{element}}",
           "statement": "Schilderung des Agenten eingegangen",
-          "unknown": "Änderung"
+          "unknown": "Änderung",
+          "in_progress": "In Arbeit: Änderung aus einem Review",
+          "verified": "Hat gewirkt laut Nachkontrolle",
+          "reopenedByFollowUp": "Wieder geöffnet nach Nachkontrolle „Hat nicht gewirkt“: {{note}}",
+          "addressedOnActivation": "Geändert mit {{element}} v{{version}} (bei Aktivierung)"
         }
       },
       "delete": {
-        "action": "Fall löschen…",
-        "title": "Fall löschen?",
-        "body": "Der Fall wird mit Inhalt, Verlauf, Zuordnung und der Schilderung des Agenten endgültig gelöscht. Zurück bleibt nur ein Protokolleintrag ohne Inhalt, der festhält, dass gelöscht wurde. Das lässt sich nicht rückgängig machen.",
-        "lesson": "Der Lernvorschlag, aus dem dieser Fall entstanden ist, wird mitgelöscht.",
-        "testCases": "Prüffälle, die aus diesem Fall angelegt wurden, bleiben erhalten.",
+        "action": "Rückmeldung löschen…",
+        "title": "Rückmeldung löschen?",
+        "body": "Die Rückmeldung wird mit Inhalt, Verlauf, Zuordnung und der Schilderung des Agenten endgültig gelöscht. Zurück bleibt nur ein Protokolleintrag ohne Inhalt, der festhält, dass gelöscht wurde. Das lässt sich nicht rückgängig machen.",
+        "lesson": "Der Lernvorschlag, aus dem diese Rückmeldung entstanden ist, wird mitgelöscht.",
+        "testCases": "Prüffälle, die aus dieser Rückmeldung angelegt wurden, bleiben erhalten.",
         "confirm": "Endgültig löschen",
-        "success": "Fall gelöscht.",
-        "error": "Der Fall konnte nicht gelöscht werden."
+        "success": "Rückmeldung gelöscht.",
+        "error": "Die Rückmeldung konnte nicht gelöscht werden."
       }
     },
     "patterns": {

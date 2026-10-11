@@ -2583,7 +2583,11 @@
         "addressedShort": "Addressed",
         "dismissed": "Dismissed",
         "in_progress": "In progress",
-        "verified": "Verified"
+        "verified": "Verified",
+        "explain": {
+          "in_progress": "Being worked on through a change.",
+          "verified": "The change worked in the follow-up check."
+        }
       },
       "row": {
         "expected": "Expected: {{text}}",
@@ -2712,7 +2716,11 @@
           "element_assigned": "Assigned: {{element}}",
           "element_unassigned": "Assignment removed: {{element}}",
           "statement": "Agent's account received",
-          "unknown": "Change"
+          "unknown": "Change",
+          "in_progress": "In progress: change from a review",
+          "verified": "Verified after follow-up check",
+          "reopenedByFollowUp": "Reopened after follow-up check \"didn't work\": {{note}}",
+          "addressedOnActivation": "Addressed with {{element}} v{{version}} (on activation)"
         }
       },
       "delete": {

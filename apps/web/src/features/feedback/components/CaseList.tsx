@@ -1,5 +1,5 @@
 import { Bot, Repeat, User, Wrench, type LucideIcon } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
@@ -18,34 +18,91 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/dates'
 import type { StatusChipOption } from '@/lib/listFilter'
 
-// Chip-Werte (Filter-Standard §3.2). „Offen“ ist ein Sammel-Chip aus `open`
-// und `reopened`; „In Arbeit“ und „Bestätigt“ gibt es in Phase D nicht.
-type StatusChip = 'all' | 'open' | 'triaged' | 'addressed' | 'dismissed'
-const STATUS_CHIPS: readonly StatusChip[] = ['all', 'open', 'triaged', 'addressed', 'dismissed']
+// Chip-Werte (Filter-Standard §3.2, E-Delta §6.1). „Offen“ ist ein
+// Sammel-Chip aus `open` und `reopened`. `in_progress` und `verified` setzt nur
+// der Server (W-E2 a, Einstufung), es gibt dafuer keinen Knopf.
+type StatusChip =
+  | 'all'
+  | 'open'
+  | 'triaged'
+  | 'in_progress'
+  | 'addressed'
+  | 'verified'
+  | 'dismissed'
+const STATUS_CHIPS: readonly StatusChip[] = [
+  'all',
+  'open',
+  'triaged',
+  'in_progress',
+  'addressed',
+  'verified',
+  'dismissed',
+]
 const DEFAULT_STATUS: StatusChip = 'open'
 
 const CHIP_STATUSES: Record<Exclude<StatusChip, 'all'>, readonly CaseStatus[]> = {
   open: ['open', 'reopened'],
   triaged: ['triaged'],
+  in_progress: ['in_progress'],
   addressed: ['addressed'],
+  verified: ['verified'],
   dismissed: ['dismissed'],
 }
 
 const CHIP_TOKEN: Record<Exclude<StatusChip, 'all'>, string> = {
   open: 'draft',
   triaged: 'review',
+  in_progress: 'review',
   addressed: 'active',
+  verified: 'active',
   dismissed: 'inactive',
 }
 
-// Punkt-Token je Fall-Status (Delta-Spec §0). `in_progress`/`verified` gibt es
-// in Phase D nicht; kommen sie doch, steht nur das Wort da.
-const STATUS_TOKEN: Partial<Record<CaseStatus, string>> = {
+// Punkt-Token je Fall-Status (D-Delta §0, E-Delta §6.1). `in_progress` teilt
+// sich `review` mit `triaged` und unterscheidet sich durch die Ringform.
+const STATUS_TOKEN: Record<CaseStatus, string> = {
   open: 'draft',
   reopened: 'draft',
   triaged: 'review',
+  in_progress: 'review',
   addressed: 'active',
+  verified: 'active',
   dismissed: 'inactive',
+}
+
+// Punktform je Status (E-Delta §6.1, §8): hohl bei „Geändert“, Ring bei „In
+// Arbeit“, sonst gefuellt. Die Form unterscheidet ohne Farbe; die Bedeutung
+// traegt das Wort daneben, der Punkt ist `aria-hidden`.
+type DotShape = 'filled' | 'hollow' | 'ring'
+const STATUS_SHAPE: Partial<Record<CaseStatus, DotShape>> = {
+  addressed: 'hollow',
+  in_progress: 'ring',
+}
+
+const SHAPE_CLASS: Record<DotShape, string> = {
+  filled: 'inline-block size-2 shrink-0 rounded-full',
+  hollow: 'inline-block size-2 shrink-0 rounded-full border-2',
+  ring: 'inline-block size-2 shrink-0 rounded-full ring-2 ring-offset-1 ring-offset-background',
+}
+
+/** Status-Punkt fuer Fall-Liste und Fall-Detail (gleiche Form an beiden Orten). */
+export function CaseStatusDot({ status }: { status: CaseStatus }) {
+  const token = STATUS_TOKEN[status]
+  const shape = STATUS_SHAPE[status] ?? 'filled'
+  const color = `var(--status-${token})`
+  const style: CSSProperties & Record<'--tw-ring-color', string> =
+    shape === 'hollow'
+      ? { borderColor: color, '--tw-ring-color': color }
+      : { backgroundColor: color, '--tw-ring-color': color }
+  return (
+    <span
+      className={SHAPE_CLASS[shape]}
+      style={style}
+      data-shape={shape}
+      data-testid="case-status-dot"
+      aria-hidden="true"
+    />
+  )
 }
 
 const TARGETS: readonly CaseTarget[] = [
@@ -213,27 +270,15 @@ function useCaseList(query: CaseQuery, enabled: boolean): CaseListData {
 
 function StatusLabel({ status }: { status: CaseStatus }) {
   const { t } = useTranslation('feedback')
-  const token = STATUS_TOKEN[status]
   // `CaseRead` traegt weder Element noch Version — die Liste zeigt bei
-  // „Umgesetzt“ nur das Wort, das Ziel steht im Fall-Detail (D6c).
+  // „Geändert“ nur das Wort, das Ziel steht im Fall-Detail (D6c).
   const label = status === 'addressed' ? t('cases.status.addressedShort') : t(`cases.status.${status}`)
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
-      {token ? (
-        <span
-          className={
-            status === 'addressed'
-              ? 'inline-block size-2 rounded-full border-2'
-              : 'inline-block size-2 rounded-full'
-          }
-          style={
-            status === 'addressed'
-              ? { borderColor: `var(--status-${token})` }
-              : { backgroundColor: `var(--status-${token})` }
-          }
-          aria-hidden="true"
-        />
-      ) : null}
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+      data-testid="case-row-status"
+    >
+      <CaseStatusDot status={status} />
       {label}
     </span>
   )
