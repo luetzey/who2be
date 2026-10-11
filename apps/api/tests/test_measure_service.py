@@ -23,6 +23,11 @@ Echte DB unter der Laufzeitrolle `who2be_app` (RLS aktiv), Fixtures aus
 - **Atomaritaet:** ein Fehler mitten in withdraw bzw. nach dem Insert in
   link-draft hinterlaesst weder Massnahmen- noch Fall-Events.
 - **Fremder Workspace:** alle vier Aktionen -> 404 `measure_not_found`.
+- **Statusfolgen (E3, 3.3/3.6):** Aktivierung durch einen Menschen ->
+  `activated` + `addressed` aus `triaged`/`in_progress` direkt, aus
+  `open`/`reopened` ueber `triaged` nur mit Zuordnung; durch einen Agent-Token
+  keine Folge. Einstufung `effective` -> `verified` nur aus `addressed`
+  (`in_progress` bleibt), `ineffective` -> `reopened`.
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
@@ -47,11 +52,18 @@ from test_session_service import _code, _reason, _World  # type: ignore[import-n
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.repositories.case_repository import apply_system_status
 from who2be_api.repositories.session_repository import PgSessionRepository
+from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.services.case_service import CaseTransitionRequest
 from who2be_api.services.measure_service import FOLLOW_UP_MIN_USES, MeasureService
+from who2be_api.services.status_history_service import StatusHistoryService
+from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
+    AgentToolPolicy,
+    CaseActorKind,
     CaseElementInput,
+    CaseEventKind,
     CaseStatus,
     CaseTarget,
     MeasureActorKind,
@@ -59,6 +71,7 @@ from who2be_models import (
     MeasureEventKind,
     MeasureState,
     MeasureVerdict,
+    VersionStatus,
     WorkspaceRole,
 )
 
@@ -70,8 +83,42 @@ class _MWorld(_World):  # type: ignore[misc]  # _World kommt aus einem Testmodul
 
     def __init__(self, repo: PgSessionRepository, pool: asyncpg.Pool, env: object) -> None:
         super().__init__(repo, pool, env)
+        self.pool = pool
         self.today = _FOLLOW_UP - timedelta(days=1)
         self.msvc = MeasureService(repo, today=lambda: self.today)
+        self.versions = VersionStatusService(
+            pool, StatusHistoryService(PgStatusHistoryRepository())
+        )
+        # Promote verlangt `admin` (ADR-0023) mit zweitem Faktor.
+        self.admin = WorkspaceContext(
+            self.seed.ws_a, self.seed.user, WorkspaceRole.admin, aal="aal2"
+        )
+
+    async def to_review(self, persona_id: UUID, version: int) -> None:
+        """Version direkt auf `review` (die Promote-Pflichtfelder sind hier nicht Thema)."""
+        await self.owner.execute(
+            "UPDATE persona_version SET status = 'review' WHERE persona_id = $1 AND version = $2",
+            persona_id,
+            version,
+        )
+
+    async def activate_version(
+        self, persona_id: UUID, version: int, ctx: WorkspaceContext | None = None
+    ) -> None:
+        """`review -> active` ueber den echten Versions-Service (E3-Ausloeser)."""
+        await self.versions.transition_persona_version(
+            ctx or self.admin, persona_id, version, VersionStatus.active, None
+        )
+
+    async def case_events(self, case_id: UUID) -> list[dict[str, Any]]:
+        rows = await self.owner.fetch(
+            "SELECT event, actor_kind, actor_id, version_entity_type, version_id, measure_id, "
+            "note FROM agent_case_event WHERE case_id = $1 "
+            "AND event NOT IN ('reported', 'element_assigned', 'element_unassigned') "
+            "ORDER BY created_at, id",
+            case_id,
+        )
+        return [dict(r) for r in rows]
 
     async def persona(self, versions: int = 2) -> tuple[UUID, list[UUID]]:
         persona_id: UUID = await self.owner.fetchval(
@@ -124,6 +171,22 @@ class _MWorld(_World):  # type: ignore[misc]  # _World kommt aus einem Testmodul
             ),
             actor_kind=MeasureActorKind.system,
             actor_id=None,
+        )
+
+    async def link_case(self, measure_id: UUID, case_id: UUID) -> None:
+        """Fall zusaetzlich an die Massnahme haengen (`measure_case`, Owner-Insert).
+
+        So steht ein Fall bei der Aktivierung bzw. Einstufung in einem Status,
+        den das Protokoll selbst nicht herstellt (triaged, open, reopened,
+        in_progress durch eine andere Massnahme).
+        """
+        await self.owner.execute(
+            "INSERT INTO measure_case (workspace_id, measure_id, agent_id, case_id) "
+            "VALUES ($1, $2, $3, $4)",
+            self.seed.ws_a,
+            measure_id,
+            self.seed.agent_a,
+            case_id,
         )
 
     async def state(self, measure_id: UUID) -> MeasureState:
@@ -690,5 +753,371 @@ def test_concurrent_reviews_write_exactly_one_event() -> None:
         assert isinstance(errors[0], ApiError)
         assert errors[0].reason == "measure_transition_forbidden"
         assert (await w.measure_events(measure_id)).count("reviewed") == 1
+
+    _run(body)
+
+
+# --- Statusfolgen (E3, ADR-0053 3.3/3.6) -------------------------------------------
+
+
+async def _activated_measure(w: _MWorld, cases: int = 1) -> tuple[UUID, list[UUID], UUID]:
+    """Massnahme an Entwurf v2, v2 durch einen Menschen aktiviert (echter Pfad)."""
+    persona_id, (_, v2) = await w.persona()
+    measure_id, case_ids = await w.measure(entity_id=persona_id, cases=cases)
+    await w.msvc.link_draft(w.editor, measure_id, "persona", v2)
+    await w.to_review(persona_id, 2)
+    await w.activate_version(persona_id, 2)
+    return measure_id, case_ids, v2
+
+
+def test_activation_writes_activated_and_addressed() -> None:
+    """F3 a: aktiv durch einen Menschen -> `activated` + `addressed` (System).
+
+    Mutationsprobe: ohne `_activate_measures` in `_transition` bleibt die
+    Massnahme `draft_linked` und der Fall `in_progress`.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, (_, v2) = await w.persona()
+        measure_id, (moved, done) = await w.measure(entity_id=persona_id, cases=2)
+        await w.case_svc.transition(
+            w.editor, done, CaseTransitionRequest(to=CaseStatus.dismissed, note="Kein Fehler.")
+        )
+        await w.msvc.link_draft(w.editor, measure_id, "persona", v2)
+        await w.to_review(persona_id, 2)
+        await w.activate_version(persona_id, 2)
+
+        assert await w.measure_events(measure_id) == ["draft_linked", "activated"]
+        activated = await w.owner.fetchrow(
+            "SELECT actor_kind, actor_id, version_entity_type, version_id FROM measure_event "
+            "WHERE measure_id = $1 AND event = 'activated'",
+            measure_id,
+        )
+        assert dict(activated) == {
+            "actor_kind": "system",
+            "actor_id": None,
+            "version_entity_type": "persona",
+            "version_id": v2,
+        }
+        assert await w.state(measure_id) is MeasureState.activated
+        assert await w.status(moved) is CaseStatus.addressed
+        last = (await w.case_events(moved))[-1]
+        assert last == {
+            "event": "addressed",
+            "actor_kind": CaseActorKind.system.value,
+            "actor_id": None,
+            "version_entity_type": "persona",
+            "version_id": v2,
+            "measure_id": measure_id,
+            "note": None,
+        }
+        # `dismissed` bleibt unveraendert (Karte: addressed/verified/dismissed bleiben).
+        assert await w.status(done) is CaseStatus.dismissed
+        assert [e["event"] for e in await w.case_events(done)] == [
+            "triaged",
+            "in_progress",
+            "dismissed",
+        ]
+
+    _run(body)
+
+
+def test_activation_of_unlinked_or_superseded_version_changes_nothing() -> None:
+    """Nur das JUENGSTE `draft_linked` zaehlt (QE4 a); andere Versionen loesen nichts aus."""
+
+    async def body(w: _MWorld) -> None:
+        persona_id, (_, _, v3) = await w.persona(versions=3)
+        measure_id, (case_id,) = await w.measure(entity_id=persona_id)
+        await w.msvc.link_draft(w.editor, measure_id, "persona", v3)
+        # v2 ist `inactive`: zurueck auf review und aktiv — nicht verknuepft.
+        await w.to_review(persona_id, 2)
+        await w.owner.execute(
+            "UPDATE persona_version SET status = 'inactive' WHERE persona_id = $1 AND version = 3",
+            persona_id,
+        )
+        await w.activate_version(persona_id, 2)
+        assert await w.measure_events(measure_id) == ["draft_linked"]
+        assert await w.status(case_id) is CaseStatus.in_progress
+
+    _run(body)
+
+
+def test_activation_twice_writes_activated_once() -> None:
+    """Eine schon aktivierte Massnahme loest bei erneuter Aktivierung nichts aus.
+
+    Mutationsprobe: ohne die `draft_linked`-Pruefung in `_activate_measures`
+    entsteht ein zweites `activated`.
+    """
+
+    async def body(w: _MWorld) -> None:
+        measure_id, (case_id,), v2 = await _activated_measure(w)
+        persona_id: UUID = await w.owner.fetchval(
+            "SELECT persona_id FROM persona_version WHERE id = $1", v2
+        )
+        # v1 wieder aktiv (v2 inactive), dann v2 erneut ueber review aktiv.
+        await w.owner.execute(
+            "UPDATE persona_version SET status = 'inactive' WHERE persona_id = $1", persona_id
+        )
+        await w.to_review(persona_id, 2)
+        await w.activate_version(persona_id, 2)
+        assert (await w.measure_events(measure_id)).count("activated") == 1
+        assert [e["event"] for e in await w.case_events(case_id)].count("addressed") == 1
+
+    _run(body)
+
+
+def test_system_status_goes_via_triage_only_with_element() -> None:
+    """`open`/`reopened` -> `triaged` -> `addressed` nur mit Zuordnung (3.3)."""
+
+    async def body(w: _MWorld) -> None:
+        with_element = await w.case_in(CaseStatus.open)
+        without = await w.case_in(CaseStatus.open, element=False)
+        reopened = await w.case_in(CaseStatus.reopened)
+        persona_id, (_, v2) = await w.persona()
+        measure_id, _ = await w.measure(entity_id=persona_id)
+        async with w.pool.acquire() as conn, conn.transaction():
+            moved = await apply_system_status(
+                conn,
+                w.seed.ws_a,
+                [without, with_element, reopened],
+                event=CaseEventKind.addressed,
+                sources=(CaseStatus.triaged, CaseStatus.in_progress),
+                via_triage=(CaseStatus.open, CaseStatus.reopened),
+                measure_id=measure_id,
+                version_entity_type="persona",
+                version_id=v2,
+            )
+        assert sorted(moved) == sorted([with_element, reopened])
+        assert await w.status(with_element) is CaseStatus.addressed
+        assert await w.status(reopened) is CaseStatus.addressed
+        assert await w.status(without) is CaseStatus.open
+        tail = [(e["event"], e["actor_kind"]) for e in await w.case_events(with_element)][-2:]
+        assert tail == [("triaged", "system"), ("addressed", "system")]
+
+    _run(body)
+
+
+def test_activation_moves_cases_from_every_source_edge() -> None:
+    """Echter Aktivierungspfad: jede Kante aus 3.3 nach `addressed` (System).
+
+    `triaged` direkt, `open`/`reopened` ueber `triaged` nur mit Zuordnung,
+    ohne Zuordnung bleiben sie. Mutationsproben: ohne `CaseStatus.triaged`
+    in `sources` bzw. mit `via_triage=()` in `_activate_measures` wird
+    dieser Test rot.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, (_, v2) = await w.persona()
+        measure_id, (held,) = await w.measure(entity_id=persona_id)
+        triaged = await w.case_in(CaseStatus.triaged)
+        open_with = await w.case_in(CaseStatus.open)
+        open_without = await w.case_in(CaseStatus.open, element=False)
+        reopened_with = await w.case_in(CaseStatus.reopened)
+        reopened_without = await w.case_in(CaseStatus.reopened)
+        await w.case_svc.set_elements(w.editor, reopened_without, [])
+        extra = [triaged, open_with, open_without, reopened_with, reopened_without]
+        for case_id in extra:
+            await w.link_case(measure_id, case_id)
+        await w.msvc.link_draft(w.editor, measure_id, "persona", v2)
+        await w.to_review(persona_id, 2)
+        await w.activate_version(persona_id, 2)
+
+        assert await w.measure_events(measure_id) == ["draft_linked", "activated"]
+        for case_id in (held, triaged, open_with, reopened_with):
+            assert await w.status(case_id) is CaseStatus.addressed
+            last = (await w.case_events(case_id))[-1]
+            assert (last["event"], last["actor_kind"], last["measure_id"], last["version_id"]) == (
+                "addressed",
+                "system",
+                measure_id,
+                v2,
+            )
+        # `triaged` direkt: kein zusaetzliches System-`triaged` davor.
+        assert [(e["event"], e["actor_kind"]) for e in await w.case_events(triaged)] == [
+            ("triaged", "human"),
+            ("addressed", "system"),
+        ]
+        # `open`/`reopened` mit Zuordnung: System-`triaged`, dann `addressed`.
+        for case_id in (open_with, reopened_with):
+            tail = [(e["event"], e["actor_kind"]) for e in await w.case_events(case_id)][-2:]
+            assert tail == [("triaged", "system"), ("addressed", "system")]
+        # Ohne Zuordnung bleiben sie, ohne jedes System-Event.
+        assert await w.status(open_without) is CaseStatus.open
+        assert await w.case_events(open_without) == []
+        assert await w.status(reopened_without) is CaseStatus.reopened
+        assert (await w.case_events(reopened_without))[-1]["event"] == "reopened"
+
+    _run(body)
+
+
+def test_activation_by_agent_token_triggers_nothing() -> None:
+    """ADR-0053 3.6 `activated` / 3.3 `-> addressed`: nur durch einen MENSCHEN.
+
+    Ein agent-gebundener Token mit `promote_retire` darf die Version
+    aktivieren, die Massnahme bleibt aber `draft_linked` und der Fall
+    `in_progress`. Mutationsprobe: ohne `and not is_agent_bound(ctx)` in
+    `VersionStatusService._transition` wird dieser Test rot.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, (_, v2) = await w.persona()
+        measure_id, (case_id,) = await w.measure(entity_id=persona_id)
+        await w.msvc.link_draft(w.editor, measure_id, "persona", v2)
+        await w.to_review(persona_id, 2)
+        agent_admin = WorkspaceContext(
+            w.seed.ws_a,
+            uuid4(),
+            WorkspaceRole.admin,
+            is_api_token=True,
+            agent_id=w.seed.agent_a2,
+            tool_policy=AgentToolPolicy(promote_retire=True),
+        )
+        await w.activate_version(persona_id, 2, agent_admin)
+
+        status = await w.owner.fetchval("SELECT status FROM persona_version WHERE id = $1", v2)
+        assert status == VersionStatus.active.value
+        assert await w.measure_events(measure_id) == ["draft_linked"]
+        assert await w.state(measure_id) is MeasureState.draft_linked
+        assert await w.status(case_id) is CaseStatus.in_progress
+        assert [e["event"] for e in await w.case_events(case_id)] == ["triaged", "in_progress"]
+
+    _run(body)
+
+
+def test_review_effective_sets_verified() -> None:
+    """Mutationsprobe: ohne `_REVIEW_CASE_EVENT` bleibt der Fall `addressed`."""
+
+    async def body(w: _MWorld) -> None:
+        measure_id, (case_id,), _ = await _activated_measure(w)
+        assert await w.status(case_id) is CaseStatus.addressed
+        await w.msvc.review(w.editor, measure_id, MeasureVerdict.effective)
+        assert await w.status(case_id) is CaseStatus.verified
+        last = (await w.case_events(case_id))[-1]
+        assert (last["event"], last["actor_kind"], last["actor_id"], last["measure_id"]) == (
+            "verified",
+            "system",
+            None,
+            measure_id,
+        )
+
+    _run(body)
+
+
+def test_review_ineffective_reopens_with_reason() -> None:
+    async def body(w: _MWorld) -> None:
+        measure_id, (case_id,), _ = await _activated_measure(w)
+        await w.msvc.review(
+            w.editor, measure_id, MeasureVerdict.ineffective, note="Frist fehlt weiter."
+        )
+        assert await w.status(case_id) is CaseStatus.reopened
+        last = (await w.case_events(case_id))[-1]
+        assert (last["event"], last["actor_kind"], last["note"], last["measure_id"]) == (
+            "reopened",
+            "system",
+            "Frist fehlt weiter.",
+            measure_id,
+        )
+
+    _run(body)
+
+
+def test_review_not_measurable_and_cases_outside_addressed_stay() -> None:
+    async def body(w: _MWorld) -> None:
+        measure_id, (case_id,), _ = await _activated_measure(w)
+        await w.msvc.review(w.editor, measure_id, MeasureVerdict.not_measurable)
+        assert await w.status(case_id) is CaseStatus.addressed
+
+        # Ein Fall, der nicht mehr `addressed` ist, bleibt auch bei `effective`.
+        other_id, (reopened,), _ = await _activated_measure(w)
+        await w.case_svc.transition(
+            w.editor, reopened, CaseTransitionRequest(to=CaseStatus.reopened, note="Noch da.")
+        )
+        await w.msvc.review(w.editor, other_id, MeasureVerdict.effective)
+        assert await w.status(reopened) is CaseStatus.reopened
+
+    _run(body)
+
+
+def test_review_effective_leaves_in_progress_case_untouched() -> None:
+    """3.3 kennt keine Kante `in_progress -> verified`; nur `addressed` folgt.
+
+    Ein zweiter Fall der Massnahme steht bei der Einstufung noch auf
+    `in_progress` (gehalten durch eine andere Massnahme) und bleibt dort.
+    Mutationsprobe: mit `in_progress` als weiterer Quelle in
+    `MeasureService.review` wird dieser Test rot.
+    """
+
+    async def body(w: _MWorld) -> None:
+        measure_id, (addressed,), _ = await _activated_measure(w)
+        persona_id, _ = await w.persona()
+        _, (held,) = await w.measure(entity_id=persona_id)
+        assert await w.status(held) is CaseStatus.in_progress
+        await w.link_case(measure_id, held)
+
+        await w.msvc.review(w.editor, measure_id, MeasureVerdict.effective)
+        assert await w.status(addressed) is CaseStatus.verified
+        assert await w.status(held) is CaseStatus.in_progress
+        assert [e["event"] for e in await w.case_events(held)] == ["triaged", "in_progress"]
+
+    _run(body)
+
+
+def test_manual_in_progress_needs_measure_holding_the_case() -> None:
+    """PM-5: `in_progress` von Hand nur mit einer Massnahme, die den Fall enthaelt.
+
+    Mutationsprobe: ohne `require_measure_case` geht die fremde Massnahme durch.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona()
+        measure_id, (case_id,) = await w.measure(entity_id=persona_id)
+        foreign_id, _ = await w.measure(entity_id=persona_id)
+        # Zurueckziehen setzt den Fall auf `triaged`; die Verknuepfung bleibt.
+        await w.msvc.withdraw(w.editor, measure_id, "Neu ansetzen.")
+        assert await w.status(case_id) is CaseStatus.triaged
+
+        for measure, params in (
+            (None, {"missing": "measure"}),
+            (foreign_id, {"invalid": "measure"}),
+            (uuid4(), {"invalid": "measure"}),
+        ):
+            with pytest.raises(ApiError) as exc:
+                await w.case_svc.transition(
+                    w.editor,
+                    case_id,
+                    CaseTransitionRequest(to=CaseStatus.in_progress, measure_id=measure),
+                )
+            assert (_reason(exc), _code(exc)) == ("case_transition_forbidden", 409)
+            assert exc.value.params is not None
+            assert params.items() <= exc.value.params.items()
+            assert await w.status(case_id) is CaseStatus.triaged
+
+        updated = await w.case_svc.transition(
+            w.editor,
+            case_id,
+            CaseTransitionRequest(to=CaseStatus.in_progress, measure_id=measure_id),
+        )
+        assert updated.status is CaseStatus.in_progress
+        assert (await w.case_events(case_id))[-1]["measure_id"] == measure_id
+
+    _run(body)
+
+
+def test_verified_by_hand_is_409_and_agents_never_judge() -> None:
+    """PM-5: `verified` nur per Einstufung; Agent-Tokens setzen nie addressed/verified."""
+
+    async def body(w: _MWorld) -> None:
+        _, (case_id,), _ = await _activated_measure(w)
+        with pytest.raises(ApiError) as exc:
+            await w.case_svc.transition(
+                w.editor, case_id, CaseTransitionRequest(to=CaseStatus.verified)
+            )
+        assert (_reason(exc), _code(exc)) == ("case_transition_forbidden", 409)
+        assert exc.value.params is not None and exc.value.params["requires"] == "review"
+        for target in (CaseStatus.addressed, CaseStatus.verified):
+            with pytest.raises(ApiGateError) as gate:
+                await w.case_svc.transition(w.builder, case_id, CaseTransitionRequest(to=target))
+            assert (gate.value.status, gate.value.reason) == (403, "case_transition_human_only")
+        assert await w.status(case_id) is CaseStatus.addressed
 
     _run(body)

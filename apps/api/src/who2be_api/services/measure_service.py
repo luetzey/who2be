@@ -20,8 +20,8 @@ Event-Folge (QE4 a, Owner/PM 2026-10-09):
 - **review** genau einmal und erst nach `activated` (`activated` oder
   `follow_up_prepared`). Ausnahme QE6 a: Ziele ohne Versionen (`tool_policy`,
   `memory`) duerfen ab dem Nachschau-Datum auch ohne `activated` eingestuft
-  werden. `not_measurable` schliesst ab. Die Fallstatus-Folgen
-  (effective -> verified, ineffective -> reopened) baut E3; hier nur das Event.
+  werden. `not_measurable` schliesst ab. Fallstatus-Folgen (E3, 3.6):
+  effective -> verified, ineffective -> reopened, je aus `addressed`.
 - **withdraw** in jedem offenen Zustand.
 - Nach `reviewed` oder `withdrawn` nur noch Lesen.
 
@@ -53,6 +53,7 @@ from who2be_api.core.security import (
     require_role,
     require_write_rate,
 )
+from who2be_api.repositories.case_repository import apply_system_status
 from who2be_api.repositories.session_repository import (
     FollowUpFigures,
     SessionRepository,
@@ -62,6 +63,8 @@ from who2be_api.repositories.session_repository import (
 from who2be_api.services.case_service import require_triage_right
 from who2be_models import (
     MEASURE_CLOSED_STATES,
+    CaseEventKind,
+    CaseStatus,
     EntityType,
     MeasureActorKind,
     MeasureEventCreate,
@@ -84,6 +87,11 @@ _LINKABLE: frozenset[MeasureState] = frozenset({MeasureState.agreed, MeasureStat
 _ACTIVE: frozenset[MeasureState] = frozenset(
     {MeasureState.activated, MeasureState.follow_up_prepared}
 )
+# Fallstatus-Folge einer Einstufung (3.6, E3); `not_measurable` hat keine.
+_REVIEW_CASE_EVENT: dict[MeasureVerdict, CaseEventKind] = {
+    MeasureVerdict.effective: CaseEventKind.verified,
+    MeasureVerdict.ineffective: CaseEventKind.reopened,
+}
 
 
 class RunRate(BaseModel):
@@ -370,7 +378,11 @@ class MeasureService:
         """`POST /measures/{id}/review` (6.6): Event `reviewed`, nur Mensch ab `editor`.
 
         `ineffective` verlangt eine Begruendung (`MeasureEventCreate`, CHECK
-        `measure_event_reason_check`).
+        `measure_event_reason_check`). Fallstatus-Folgen (3.6, E3) in derselben
+        Transaktion, Akteur System mit `measure_id`: `effective` setzt die
+        Faelle von `addressed` auf `verified`, `ineffective` auf `reopened`
+        (Begruendung = `note`), `not_measurable` aendert nichts. Nur ueber die
+        Kanten aus 3.3 — ein Fall ausserhalb von `addressed` bleibt.
         """
         require_human_editor(ctx, "review")
         today = self._today()
@@ -395,6 +407,17 @@ class MeasureService:
                 actor_id=ctx.user_id,
                 conn=conn,
             )
+            follow = _REVIEW_CASE_EVENT.get(verdict)
+            if follow is not None:
+                await apply_system_status(
+                    conn,
+                    ctx.workspace_id,
+                    measure.case_ids,
+                    event=follow,
+                    sources=(CaseStatus.addressed,),
+                    measure_id=measure_id,
+                    note=note if follow is CaseEventKind.reopened else None,
+                )
         assert event is not None
         return event
 

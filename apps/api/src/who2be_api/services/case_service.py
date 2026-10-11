@@ -25,16 +25,20 @@ Rechte (3.3, Tabelle „Rechte“; Weiche F2 = a):
 Agent-Tokens — auch der Builder — setzen nie `addressed`, `verified` oder
 `dismissed` (F-W7, „Partei, nicht Richter“). Das prueft `is_agent_bound`,
 bewusst KEINE Capability, damit es sich nicht freischalten laesst. `reopened`
-gehoert in D2 ebenfalls dazu: 3.3 nennt dafuer nur den Menschen und das
-System (Nachschau, Phase E).
+gehoert ebenfalls dazu: 3.3 nennt dafuer nur den Menschen und das System
+(Nachschau `ineffective`).
 
-Umfang in D2 (PM-Entscheidung zur Karte, innerhalb ADR 3.3): `in_progress`
-und `verified` verlangen eine Massnahme bzw. deren Nachschau-Ergebnis.
-Massnahmen gibt es erst mit Phase E (E2/E3); beide Ziele enden hier mit
-`case_transition_forbidden` und `params.requires = "phase_e"`. Damit
-`addressed` (und danach `reopened`) ohne Massnahme erreichbar ist, gilt
-uebergangsweise die Kante `triaged -> addressed` — der Mensch-Pfad aus 3.3
-(„sonst Mensch `editor`“, Pflicht Version). Phase E prueft, ob sie bleibt.
+Massnahmen (Phase E, E3; PM-5 und PM-8):
+
+- `in_progress` von Hand verlangt die `measure_id` einer Massnahme, die den
+  Fall enthaelt (unter der Fall-Sperre geprueft). Den automatischen Weg beim
+  Einreichen eines Protokolls (W-E2 = a) geht `session_repository.start_cases`.
+- `verified` von Hand ist immer 409 (`params.requires = "review"`): es folgt
+  nur aus der Einstufung `effective` (`MeasureService.review`).
+- `addressed` setzt das System, wenn die verknuepfte Version durch einen
+  Menschen aktiv wird (`VersionStatusService`). Die Kante `triaged ->
+  addressed` bleibt als Mensch-Pfad aus 3.3 („sonst Mensch `editor`“,
+  Pflicht Version) — der Knopf „Erledigt“ (D6) haengt daran.
 """
 
 from __future__ import annotations
@@ -83,12 +87,12 @@ from who2be_models import (
 )
 from who2be_models.case import CASE_NOTE_MAX_LENGTH, CaseConvertRequest
 
-# Erlaubte Kanten nach 3.3 (Zustandsdiagramm). `in_progress` und `verified`
-# stehen drin, sind in D2 aber gesperrt (`_PHASE_E_TARGETS`).
+# Erlaubte Kanten nach 3.3 (Zustandsdiagramm). `verified` steht drin, setzt
+# aber nur das System ueber die Einstufung der Nachschau (PM-5, `transition`).
 _EDGES: dict[CaseStatus, frozenset[CaseStatus]] = {
     CaseStatus.open: frozenset({CaseStatus.triaged, CaseStatus.dismissed}),
     CaseStatus.triaged: frozenset(
-        # `addressed` direkt: Uebergangskante bis Phase E (Modul-Docstring).
+        # `addressed` direkt: Mensch-Pfad aus 3.3 („sonst Mensch editor“, PM-8).
         {CaseStatus.in_progress, CaseStatus.addressed, CaseStatus.dismissed}
     ),
     CaseStatus.in_progress: frozenset({CaseStatus.addressed, CaseStatus.dismissed}),
@@ -97,9 +101,6 @@ _EDGES: dict[CaseStatus, frozenset[CaseStatus]] = {
     CaseStatus.verified: frozenset(),
     CaseStatus.dismissed: frozenset(),
 }
-
-# Ziele, die eine Massnahme (3.6) voraussetzen — kommen mit Phase E (E2/E3).
-_PHASE_E_TARGETS: frozenset[CaseStatus] = frozenset({CaseStatus.in_progress, CaseStatus.verified})
 
 # Ziele, die kein Agent-Token setzt (F-W7; `reopened` siehe Modul-Docstring).
 _HUMAN_ONLY_TARGETS: frozenset[CaseStatus] = frozenset(
@@ -125,8 +126,7 @@ _ELEMENT_NOT_FOUND: dict[CaseTarget, tuple[ProblemReason, str]] = {
 class CaseTransitionRequest(BaseModel):
     """`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.
 
-    `measure_id` ist Teil des Vertrags (6.5), wird in D2 aber abgewiesen —
-    Massnahmen gibt es erst mit Phase E.
+    `measure_id` gehoert nur zu `in_progress` (3.3, PM-5).
     """
 
     __test__: ClassVar[bool] = False
@@ -374,7 +374,8 @@ class CaseService:
 
         Reihenfolge: lesbar (404) -> kein Agent als Richter (403, vor jeder
         Kantenpruefung, damit die Regel nicht vom Status abhaengt) -> Rolle
-        bzw. Capability (403) -> Kante und Phase E (409) -> Pflichtfelder.
+        bzw. Capability (403) -> `verified` nur per Einstufung, Kante (409)
+        -> Pflichtfelder.
         """
         case = await self._get_readable(ctx, case_id)
         to = req.to
@@ -383,19 +384,34 @@ class CaseService:
         self._require_triage_right(ctx)
         current = case.status
 
-        if to in _PHASE_E_TARGETS or req.measure_id is not None:
-            # D2 ohne Massnahmen (PM-Entscheidung): `in_progress` und
-            # `verified` haengen an einer Massnahme bzw. deren Nachschau —
-            # beides kommt mit Phase E (E2/E3).
+        if to is CaseStatus.verified:
+            # PM-5: `verified` nur ueber die Einstufung der Nachschau
+            # (`POST /measures/{id}/review`, verdict `effective`).
             raise _transition_forbidden(
                 current,
                 to,
-                "Dieser Statuswechsel braucht eine Massnahme; Massnahmen kommen mit Phase E.",
-                requires="phase_e",
+                "'verified' setzt das System ueber die Einstufung der Nachschau.",
+                requires="review",
             )
         if to not in _EDGES[current]:
             raise _transition_forbidden(
                 current, to, f"Von '{current.value}' fuehrt kein Weg nach '{to.value}'."
+            )
+        if to is CaseStatus.in_progress:
+            # 3.3 Pflicht `measure_id`; PM-5: eine Massnahme, die den Fall enthaelt.
+            if req.measure_id is None:
+                raise _transition_forbidden(
+                    current,
+                    to,
+                    "'in_progress' braucht die Massnahme, die den Fall enthaelt.",
+                    missing="measure",
+                )
+        elif req.measure_id is not None:
+            raise _transition_forbidden(
+                current,
+                to,
+                "Eine Massnahme gehoert nur zu 'in_progress'.",
+                unexpected="measure",
             )
         if to in _NOTE_REQUIRED and req.note is None:
             raise _transition_forbidden(
@@ -427,23 +443,31 @@ class CaseService:
                 note=req.note,
                 version_entity_type=req.version_entity_type,
                 version_id=req.version_id,
+                measure_id=req.measure_id,
             ),
             expected_status=current,
             # Pflicht nach 3.3: Zuordnung zu >= 1 Element oder `model_limit`.
             # Unter der Fall-Sperre geprueft, nicht vorab (Check-then-act).
             require_element=to is CaseStatus.triaged,
+            # PM-5: die Massnahme enthaelt den Fall — ebenfalls unter der Sperre.
+            require_measure_case=to is CaseStatus.in_progress,
             actor_kind=actor_kind,
             actor_id=actor_id,
         )
         if event is None:
-            raise await self._stale_transition(ctx, case_id, current, to)
+            raise await self._stale_transition(ctx, case_id, current, to, req.measure_id)
         updated = await self._repo.get_case(ctx.workspace_id, case_id)
         if updated is None:
             raise _case_not_found()
         return updated
 
     async def _stale_transition(
-        self, ctx: WorkspaceContext, case_id: UUID, expected: CaseStatus, to: CaseStatus
+        self,
+        ctx: WorkspaceContext,
+        case_id: UUID,
+        expected: CaseStatus,
+        to: CaseStatus,
+        measure_id: UUID | None = None,
     ) -> ApiError:
         """Fehler, wenn `append_transition` nicht geschrieben hat: was galt nicht mehr?"""
         case = await self._repo.get_case(ctx.workspace_id, case_id)
@@ -452,6 +476,15 @@ class CaseService:
         if case.status is not expected:
             return _transition_forbidden(
                 case.status, to, "Der Fall hat inzwischen einen anderen Status."
+            )
+        if to is CaseStatus.in_progress and measure_id is not None:
+            # Unbekannt, fremder Workspace oder ohne diesen Fall: ein Bild,
+            # kein Enumerieren von Massnahmen.
+            return _transition_forbidden(
+                case.status,
+                to,
+                "Die genannte Massnahme enthaelt diesen Fall nicht.",
+                invalid="measure",
             )
         return _transition_forbidden(
             case.status,

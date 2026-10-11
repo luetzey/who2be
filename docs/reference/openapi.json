@@ -18726,7 +18726,7 @@
           "to"
         ],
         "title": "CaseTransitionRequest",
-        "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` ist Teil des Vertrags (6.5), wird in D2 aber abgewiesen —\nMassnahmen gibt es erst mit Phase E."
+        "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` gehoert nur zu `in_progress` (3.3, PM-5)."
       },
       "CaseUnchanged": {
         "properties": {
