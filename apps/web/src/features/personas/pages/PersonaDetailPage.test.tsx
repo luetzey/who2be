@@ -609,7 +609,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
       { me: meWithRole('admin') },
     )
 
-    expect(await screen.findByText(/Active: v1 · In Review: v2/)).toBeInTheDocument()
+    expect(await screen.findByText(/Active: v1 · Zur Freigabe: v2/)).toBeInTheDocument()
 
     const publish = screen.getByRole('button', { name: 'Veroeffentlichen' })
     expect(publish).toBeEnabled()

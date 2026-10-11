@@ -55,7 +55,7 @@
     },
     "status": {
       "draft": "Entwurf",
-      "review": "In Review",
+      "review": "Zur Freigabe",
       "active": "Aktiv",
       "inactive": "Inaktiv"
     },
@@ -194,7 +194,7 @@
       "consent_requires_session": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
       "invalid_cursor": "Ungueltiger Cursor.",
       "draft_conflict": "Es existiert bereits ein Draft. Promote oder verwirf den bestehenden Draft, bevor du erneut editierst.",
-      "review_conflict": "Diese Version steht in der Review — Auto-Save ist deaktiviert. Lehne die Review erst ab, bevor du weiter editierst.",
+      "review_conflict": "Diese Version liegt zur Freigabe — Auto-Save ist deaktiviert. Lehne die Version erst ab, bevor du weiter editierst.",
       "mfa_required": "Diese Admin-Aktion erfordert Zwei-Faktor-Anmeldung. Richte unter Einstellungen → Konto einen Authenticator ein; hast du schon einen, melde dich erneut an.",
       "area_id_required_for_human": "Ohne area_id kann nur ein agent-gebundener Token schreiben oder ingestieren (private Area). Menschen nutzen den area-spezifischen Endpunkt (POST /work-areas/{area_id}/...).",
       "template_version_inactive": "Das verlinkte System-Prompt-Template hat keine aktive Version — bitte erst veroeffentlichen.",
@@ -485,7 +485,7 @@
           },
           "editorNoApproval": {
             "label": "Editor ohne Freigabe",
-            "description": "Darf Inhalte anlegen/ändern und zur Review einreichen (Entwurf → Review), aber keine Version aktivieren oder zurückziehen."
+            "description": "Darf Inhalte anlegen/ändern und zur Freigabe einreichen (Entwurf → Zur Freigabe), aber keine Version aktivieren oder zurückziehen."
           },
           "editorWithApproval": {
             "label": "Editor mit Freigabe",
@@ -899,7 +899,7 @@
       },
       "events": {
         "promoted_to_active": "aktivierte",
-        "submitted_for_review": "reichte zur Review ein",
+        "submitted_for_review": "reichte zur Freigabe ein",
         "rejected": "lehnte ab",
         "returned_to_draft": "setzte zurück auf Entwurf",
         "deactivated": "deaktivierte",
@@ -1235,7 +1235,7 @@
       "back": "Personas",
       "description": {
         "activeDraft": " · Du arbeitest auf Draft v{{version}}",
-        "activeReview": " · In Review: v{{version}}",
+        "activeReview": " · Zur Freigabe: v{{version}}",
         "active": "Active: v{{version}}",
         "currentVersion": "Aktuelle Version: v{{version}} ({{status}})"
       },
@@ -1482,7 +1482,7 @@
       "back": "Playbooks",
       "activeBadge": "Active: v{{version}}",
       "draftNote": " · Du arbeitest auf Draft v{{version}}",
-      "reviewNote": " · In Review: v{{version}}",
+      "reviewNote": " · Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "triggerList": "Trigger-Liste",
       "triggerLabel": "Trigger",
@@ -1505,7 +1505,7 @@
       },
       "banner": {
         "activeNode": "Aktiv: v{{version}}",
-        "reviewWaiting": "v{{version}} wartet auf Review",
+        "reviewWaiting": "v{{version}} wartet auf Freigabe",
         "draftOpen": "Entwurf: v{{version}}",
         "inactiveCurrent": "Inaktiv: v{{version}}"
       },
@@ -1665,7 +1665,7 @@
     "detail": {
       "activeVersion": "Active: v{{version}}",
       "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "In Review: v{{version}}",
+      "inReview": "Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "linkedIn": "Verlinkt in",
       "block_one": "{{count}} Block",
@@ -1682,8 +1682,8 @@
       "usedByMeta": "Sub-Resource",
       "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
       "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
-      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
-      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerDraftDescription": "Reiche die Version zur Freigabe ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
       "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
       "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
       "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten.",
@@ -2101,7 +2101,7 @@
       },
       "detail": {
         "slugVersion": "Slug: {{slug}} · Aktuelle Version: v{{version}}",
-        "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+        "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
         "toast": {
           "restored": "v{{version}} als Entwurf wiederhergestellt."
         }
@@ -2806,12 +2806,12 @@
     "detail": {
       "activeVersion": "Active: v{{version}}",
       "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "In Review: v{{version}}",
+      "inReview": "Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
       "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
-      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
-      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerDraftDescription": "Reiche die Version zur Freigabe ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
       "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
       "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
       "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."

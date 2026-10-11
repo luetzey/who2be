@@ -87,7 +87,7 @@ describe('DashboardPage', () => {
     // Das Band „Braucht jetzt deine Aufmerksamkeit“ gibt es nicht mehr
     // (Navigation W1-c); Versionen zur Freigabe stehen auf „Zu erledigen“.
     expect(screen.queryByText(/Braucht jetzt deine Aufmerksamkeit/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/liegt zur Review|liegen zur Review/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/liegt zur Freigabe|liegen zur Freigabe/)).not.toBeInTheDocument()
     expect(screen.getByText(/Alice/)).toBeInTheDocument()
     expect(screen.getByText(/Coaching/)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /Personas:/ })).toBeInTheDocument()
@@ -139,7 +139,7 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Unbekannt')).toBeInTheDocument()
     })
-    expect(screen.getByText(/reichte zur Review ein/)).toBeInTheDocument()
+    expect(screen.getByText(/reichte zur Freigabe ein/)).toBeInTheDocument()
   })
 
   it('blaettert die Activity seitenbasiert und fragt page=2 an', async () => {

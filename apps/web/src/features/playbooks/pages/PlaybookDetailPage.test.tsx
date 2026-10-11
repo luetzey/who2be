@@ -675,7 +675,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     )
 
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
-    expect(screen.getByText('v2 wartet auf Review')).toBeInTheDocument()
+    expect(screen.getByText('v2 wartet auf Freigabe')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Veroeffentlichen' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
   })
