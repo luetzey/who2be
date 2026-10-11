@@ -179,7 +179,8 @@ async def convert_memory_to_case(
     service: Service,
 ) -> CaseRead:
     # Body ohne agent_id: der Agent kommt aus dem Lernvorschlag (PM-Weiche 1).
-    # Nur Mensch ab editor; zweites convert -> 409 memory_not_convertible.
+    # Mensch ab editor oder Builder mit case_triage (PM-4, Melder `pattern`);
+    # zweites convert -> 409 memory_not_convertible.
     return await service.convert_lesson(ctx, agent_id, memory_id, data)
 
 

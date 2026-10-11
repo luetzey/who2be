@@ -60,6 +60,7 @@ from who2be_api.repositories.memory_repository import (
 from who2be_api.repositories.memory_repository import (
     MEMORY_DELETED_AUDIT_ACTION,
     _insert_human_event,
+    _snapshot,
 )
 from who2be_models import (
     CASE_STATUS_EVENTS,
@@ -80,6 +81,7 @@ from who2be_models import (
     CaseTarget,
     EntityType,
     FeedbackResolution,
+    MemoryActorKind,
     MemoryEventKind,
     MemoryKind,
     MemoryRead,
@@ -237,6 +239,7 @@ class CaseRepository(Protocol):
         data: CaseConvertRequest,
         *,
         actor_id: UUID,
+        actor_agent_id: UUID | None = None,
     ) -> CaseRead | NotConvertible | None: ...
 
     async def promote_feedback(
@@ -374,6 +377,7 @@ class PgCaseRepository:
         data: CaseConvertRequest,
         *,
         actor_id: UUID,
+        actor_agent_id: UUID | None = None,
     ) -> CaseRead | NotConvertible | None:
         """Lernvorschlag -> Fall (ADR-0053 6.4), alles in EINER Transaktion.
 
@@ -383,6 +387,12 @@ class PgCaseRepository:
         Eintrag auf `converted` mit `converted_case_id` (CHECK aus 0091), und
         das Gedaechtnis-Event `converted` (3.1.2, Mensch, `before`/`after`).
         Bricht ein Schritt ab, bleibt nichts davon stehen.
+
+        `actor_agent_id` (PM-4): der Builder wandelt um. Dann ist der Fall
+        `reporter_kind='pattern'` (3.7) mit dem Builder als
+        `reporter_agent_id`, und das Gedaechtnis-Event traegt
+        `actor_kind='agent'` mit dem Builder in `agent_id` (0091: Agent ->
+        `actor_id` NULL).
 
         None: kein Eintrag dieses Agenten. `NotConvertible`: Eintrag da, aber
         kein offener Lernvorschlag (der Service antwortet 409).
@@ -400,13 +410,14 @@ class PgCaseRepository:
             before = MemoryRead.model_validate(dict(before_row))
             if before.kind is not MemoryKind.lesson or before.status is not MemoryStatus.pending:
                 return NotConvertible(kind=before.kind, status=before.status)
+            by_builder = actor_agent_id is not None
             case = await _create_case_in(
                 conn,
                 workspace_id,
                 data.for_agent(agent_id),
-                reporter_kind=CaseReporterKind.human,
-                reporter_user_id=actor_id,
-                reporter_agent_id=None,
+                reporter_kind=CaseReporterKind.pattern if by_builder else CaseReporterKind.human,
+                reporter_user_id=None if by_builder else actor_id,
+                reporter_agent_id=actor_agent_id,
                 source_memory_id=memory_id,
             )
             after_row = await conn.fetchrow(
@@ -419,9 +430,14 @@ class PgCaseRepository:
             )
             assert after_row is not None  # Zeile ist gesperrt
             after = MemoryRead.model_validate(dict(after_row))
-            await _insert_human_event(
-                conn, workspace_id, before, MemoryEventKind.converted, actor_id, None, after
-            )
+            if actor_agent_id is not None:
+                await _insert_agent_converted_event(
+                    conn, workspace_id, before, after, actor_agent_id
+                )
+            else:
+                await _insert_human_event(
+                    conn, workspace_id, before, MemoryEventKind.converted, actor_id, None, after
+                )
         return case
 
     async def promote_feedback(
@@ -1042,6 +1058,28 @@ async def _create_case_in(
     )
     assert row is not None  # in derselben Transaktion angelegt
     return _case(row)
+
+
+async def _insert_agent_converted_event(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    before: MemoryRead,
+    after: MemoryRead,
+    agent_id: UUID,
+) -> None:
+    """`converted` durch den Builder (PM-4): Agent-Akteur, `actor_id` NULL (0091)."""
+    await conn.execute(
+        "INSERT INTO agent_memory_event "
+        "(workspace_id, memory_id, event, actor_kind, agent_id, before, after) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)",
+        workspace_id,
+        before.id,
+        MemoryEventKind.converted.value,
+        MemoryActorKind.agent.value,
+        agent_id,
+        _snapshot(before),
+        _snapshot(after),
+    )
 
 
 async def _insert_resolution(

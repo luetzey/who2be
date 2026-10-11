@@ -19,8 +19,9 @@ Rechte (3.3, Tabelle „Rechte“; Weiche F2 = a):
   `case_triage`.
 - **Schilderung:** nur der betroffene Agent (`agent_id` des Falls).
 - **Loeschen:** Mensch ab `editor` (PM-Entscheidung Q6); Agent-Tokens nie.
-- **Umwandeln/Uebernehmen** (convert 6.4, promote 6.5): Mensch ab `editor`;
-  Agent-Tokens nie.
+- **Umwandeln** (convert 6.4): Mensch ab `editor`; dazu der Builder (Agent-
+  Token mit `case_triage`, PM-4), dann ist der Melder `pattern` (3.7).
+- **Uebernehmen** (promote 6.5): Mensch ab `editor`; Agent-Tokens nie.
 
 Agent-Tokens — auch der Builder — setzen nie `addressed`, `verified` oder
 `dismissed` (F-W7, „Partei, nicht Richter“). Das prueft `is_agent_bound`,
@@ -547,12 +548,13 @@ class CaseService:
 
     @staticmethod
     def _require_human_editor(ctx: WorkspaceContext, action: str) -> None:
-        """convert/promote: Mensch ab `editor`; Agent-Tokens nie (Muster `_require_human`).
+        """promote: Mensch ab `editor`; Agent-Tokens nie (Muster `_require_human`).
 
         Ueber `is_agent_bound`, bewusst KEINE Capability: aus einem
-        Lernvorschlag oder Alt-Feedback einen Fall zu machen, ist Kuration —
-        ein Agent wuerde sonst ueber die Einordnung seines eigenen Verhaltens
-        entscheiden („Partei, nicht Richter“).
+        Alt-Feedback einen Fall zu machen, ist Kuration — ein Agent wuerde
+        sonst ueber die Einordnung seines eigenen Verhaltens entscheiden
+        („Partei, nicht Richter“). convert hat seit PM-4 eine eigene Regel
+        (`_require_convert_right`).
         """
         if is_agent_bound(ctx):
             raise ApiGateError(
@@ -562,6 +564,26 @@ class CaseService:
                 detail=f"{action} ist Menschen ab der Rolle 'editor' vorbehalten.",
             )
         require_role(ctx, WorkspaceRole.editor)
+
+    @staticmethod
+    def _require_convert_right(ctx: WorkspaceContext) -> UUID | None:
+        """convert: Mensch ab `editor` oder Builder (Agent mit `case_triage`, PM-4).
+
+        Rueckgabe: die Agent-ID des Builders, `None` fuer einen Menschen. Ein
+        Agent-Token ohne Policy oder ohne `case_triage` bekommt 403
+        (`require_triage_right`, eine Quelle mit Triage und Mustern). Der
+        Builder ist dabei nie Partei: er formuliert den Fall, entscheidet aber
+        nicht ueber ihn (ADR-0053 E4 a); `reporter_kind` wird `pattern` (3.7).
+        """
+        if is_agent_bound(ctx):
+            require_triage_right(ctx)
+            if ctx.agent_id is None:
+                # Policy ohne gebundenen Agenten: kein Builder, den der Fall
+                # als Melder tragen koennte — und kein Mensch.
+                raise _triage_without_policy()
+            return ctx.agent_id
+        require_role(ctx, WorkspaceRole.editor)
+        return None
 
     async def convert_lesson(
         self,
@@ -575,13 +597,21 @@ class CaseService:
         Nur `lesson` mit `status='pending'`. Eine spaetere Wiederholung
         derselben Lektion trifft den `converted`-Eintrag und laesst ihn
         `converted` (3.1.6, `merge_lesson`); ein zweites convert endet mit
-        `memory_not_convertible`.
+        `memory_not_convertible`. Mensch ab `editor` (Melder `human`) oder
+        Builder mit `case_triage` (Melder `pattern`, PM-4).
         """
-        self._require_human_editor(ctx, "Einen Lernvorschlag in einen Fall umwandeln")
+        builder_id = self._require_convert_right(ctx)
         if not await self._repo.agent_exists(ctx.workspace_id, agent_id):
             raise _agent_not_found()
+        if builder_id is not None:
+            require_write_rate(ctx)
         result = await self._repo.convert_lesson(
-            ctx.workspace_id, agent_id, memory_id, data, actor_id=ctx.user_id
+            ctx.workspace_id,
+            agent_id,
+            memory_id,
+            data,
+            actor_id=ctx.user_id,
+            actor_agent_id=builder_id,
         )
         if result is None:
             raise ApiError(

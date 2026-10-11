@@ -32,6 +32,7 @@ from pydantic import JsonValue
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    is_agent_bound,
     require_memory_mode,
     require_role,
     require_write_rate,
@@ -45,6 +46,7 @@ from who2be_api.repositories.memory_repository import (
     MemoryRevokeSelection,
     MemoryVisibility,
 )
+from who2be_api.services.case_service import require_triage_right
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
     MEMORY_MAX_PER_USER,
@@ -1196,15 +1198,30 @@ class MemoryService:
         unsichtbaren Eintrag nicht von einer unbekannten ID (kein Enumerieren).
         Fremdes Nutzergedaechtnis filtert schon SQL heraus
         (`get_batch_targets`); die Rolle prueft der Service.
+
+        Agent-Token (PM-4): nur der Builder (`case_triage`, sonst 403 wie
+        bisher) und nur Lernvorschlaege (`kind=lesson`) eines beliebigen
+        Agenten im Workspace — Grundlage fuer `get_lesson` und
+        `convert_lesson_to_case`. Jeder andere Eintrag, auch das eigene
+        Gedaechtnis des Builders oder das Nutzergedaechtnis des Token-
+        Besitzers, ist `memory_not_found` wie eine unbekannte ID.
         """
-        require_role(ctx, WorkspaceRole.viewer)
-        self._require_human(ctx)
+        agent_bound = is_agent_bound(ctx)
+        if agent_bound:
+            require_triage_right(ctx)
+        else:
+            require_role(ctx, WorkspaceRole.viewer)
+            self._require_human(ctx)
         target = (
             await self._repo.get_batch_targets(ctx.workspace_id, ctx.user_id, [memory_id])
         ).get(memory_id)
         if target is None:
             raise _memory_not_found()
         memory = target.memory
+        if agent_bound:
+            if memory.kind is not MemoryKind.lesson or memory.scope != MemoryScope.agent:
+                raise _memory_not_found()
+            return memory
         if memory.scope == MemoryScope.agent and not role_satisfies(ctx.role, WorkspaceRole.editor):
             raise _memory_not_found()
         return memory
