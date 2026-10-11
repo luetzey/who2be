@@ -214,8 +214,10 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-06, Draht-Form auf FastMCP 4.0.11 | 86 | **142.295 Bytes** |
 | 2026-10-10, Draht-Form | 90 | **147.325 Bytes** |
 | 2026-10-10, mit `alwaysLoad` an fünf Werkzeugen (T4) | 90 | **147.475 Bytes** |
+| 2026-10-11, nach der Schema-Diaet (T2) | 90 | **138.060 Bytes** |
+| 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **103.833 Bytes** |
 
-Bis zur Grenze bleiben damit 12.525 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 56.167 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -233,16 +235,16 @@ neu erzeugen:
 uv run python -m who2be_mcp.payload_report
 ```
 
-Stand 2026-10-11, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4)
-und nach der Schema-Diaet (T2):
+Stand 2026-10-11, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4),
+nach Schema-Diaet (T2) und Beschreibungs-Diaet (T3):
 
 | Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
 | --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 38 | 45.938 | 4 / 6.582 | 8.774 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 51.410 | 5 / 7.924 | 10.173 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 138.060 | 5 / 7.924 | 11.154 |
-| Mensch/JWT, Rolle editor | 86 | 132.588 | 4 / 6.582 | 9.755 |
-| alle Werkzeuge (Guard) | 90 | 138.060 | 5 / 7.924 | 11.154 |
+| Agent, Default-Policy | 38 | 29.399 | 4 / 3.811 | 6.003 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 32.778 | 5 / 4.441 | 6.690 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 103.833 | 5 / 4.441 | 7.671 |
+| Mensch/JWT, Rolle editor | 86 | 100.454 | 4 / 3.811 | 6.984 |
+| alle Werkzeuge (Guard) | 90 | 103.833 | 5 / 4.441 | 7.671 |
 
 „Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
 die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
@@ -252,24 +254,35 @@ Definitionen der sofort geladenen (siehe „Start bei Tool Search“ unten).
 
 Die Profile sind keine Nachbildung: `test_reference_profiles_measure_the_
 middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
-echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht. Zielwerte je
-Profil gibt es noch nicht; sie kommen mit der Beschreibungs-Diaet (T3) als
-harter Test. Bis dahin ist die Tabelle eine Kennzahl, keine Grenze.
+echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
+
+**Zielwerte je Agent-Start (seit T3, harter Test):** Draht-Bytes der
+sichtbaren Werkzeuge plus Server-`instructions` (1.604 Bytes), die jeder
+Client beim Verbinden bekommt.
+
+| Profil | Ziel | Stand 2026-10-11 |
+| --- | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.003 |
+| Agent, Builder | 110.000 | 105.437 |
+
+`test_agent_start_meets_target_per_profile` haelt beide Ziele; das
+Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
+Beschreibungen kuerzen, nicht das Ziel anheben.
 
 Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
 
 | # | Werkzeug | gesamt | Beschreibung | Schema |
 | ---: | --- | ---: | ---: | ---: |
-| 1 | `create_persona` | 6.710 | 1.522 | 4.999 |
-| 2 | `update_agent` | 5.971 | 148 | 5.700 |
-| 3 | `create_agent` | 5.896 | 244 | 5.527 |
-| 4 | `update_persona` | 5.805 | 724 | 4.941 |
-| 5 | `create_external_tool` | 3.314 | 737 | 2.427 |
-| 6 | `create_playbook` | 3.284 | 1.465 | 1.628 |
-| 7 | `create_resource` | 2.995 | 1.195 | 1.621 |
-| 8 | `update_external_tool` | 2.827 | 375 | 2.305 |
-| 9 | `create_system_prompt` | 2.826 | 1.286 | 1.327 |
-| 10 | `get_persona` | 2.492 | 1.970 | 330 |
+| 1 | `update_agent` | 5.935 | 112 | 5.700 |
+| 2 | `create_agent` | 5.828 | 177 | 5.527 |
+| 3 | `create_persona` | 5.722 | 558 | 4.999 |
+| 4 | `update_persona` | 5.317 | 246 | 4.941 |
+| 5 | `create_external_tool` | 2.862 | 294 | 2.427 |
+| 6 | `update_external_tool` | 2.655 | 208 | 2.305 |
+| 7 | `create_playbook` | 2.412 | 616 | 1.628 |
+| 8 | `create_resource` | 2.198 | 418 | 1.621 |
+| 9 | `update_playbook` | 2.048 | 226 | 1.690 |
+| 10 | `create_system_prompt` | 2.037 | 523 | 1.327 |
 
 Bei den vier teuersten liegt das Gewicht im Schema, nicht in der
 Beschreibung: das `inputSchema` traegt das ganze Inhalts- bzw.
@@ -331,6 +344,37 @@ Beim Default-Agenten ist die Ersparnis klein, weil er keine Schreibwerkzeuge
 sieht; die Historie sass fast ganz in den Schemas von `create_*`/`update_*`.
 Fuer den Default-Agenten wirkt erst die Beschreibungs-Diaet (T3).
 
+### Beschreibungs-Diaet (T3)
+
+Die Werkzeugbeschreibung ist der Docstring der Funktion. Regeln:
+
+- **Erster Satz:** Zweck und Suchwoerter. Kurzkataloge zeigen nur ihn.
+- **Keine Wiederholung von Querschnittsregeln.** `format="full"` als
+  PUT-Vorlage, der Status-Ablauf und die Sprachregel stehen einmal in den
+  Server-`instructions`. Im Werkzeug bleibt hoechstens ein Kurzverweis; die
+  PUT-Werkzeuge behalten den Pflichtsatz aus ADR-0056.
+- **Kein Backward-Compat-Text.** Ein ignorierter Parameter bekommt einen
+  Halbsatz („`locale` wird ignoriert“), keine Geschichte.
+- **Lese-Umfang `assigned`** wird einmal erklaert, in `whoami`: Playbooks
+  der Persona und die Resources, die diese Playbooks erreichen; bei
+  `agent_read` nur der eigene Agent.
+- **Hoechstens 1.100 Zeichen** je Werkzeug, fuer alle
+  (`test_every_tool_description_stays_under_doc_cap`).
+
+**Wirkung (gemessen mit `payload_report`, Stand 2026-10-11):**
+
+| Größe | vorher | nachher |
+| --- | ---: | ---: |
+| Draht `tools/list`, alle Werkzeuge | 138.060 | 103.833 (−34.227) |
+| Agent, Default-Policy | 45.938 | 29.399 (−16.539) |
+| Agent, Default + Gedaechtnis `suggest` | 51.410 | 32.778 (−18.632) |
+| Mensch/JWT, Rolle editor | 132.588 | 100.454 (−32.134) |
+| Beschreibungen, alle Werkzeuge | 57.695 | 24.223 (−33.472) |
+| Beschreibungen, Default-Agent | 26.799 | 10.609 (−16.190) |
+
+Die Schemas bleiben unveraendert (67.381 Bytes); bei den vier teuersten
+Schreibwerkzeugen liegt das Gewicht weiter dort (Weiche W1, Markdown-Eingabe).
+
 ### Start bei Tool Search: `instructions` und `alwaysLoad`
 
 Claude Code (Tool Search, Default) und Hermes (`tool_search`) laden beim
@@ -368,7 +412,7 @@ oder mehrere Suchen in den Kontext, mit denselben Bytes plus Suchanfrage und
 Suchergebnis. Gespart wird der Suchschritt, gewonnen wird ein Boot-Text, der
 vorher fehlte. Beim Draht-Budget, an dem Claude Chat die Liste verwirft, ändert
 sich praktisch nichts (+150 Bytes). Senken lässt es sich nur über kürzere
-Beschreibungen und Schemas (T2, T3).
+Beschreibungen und Schemas (T2, T3; Ergebnis siehe oben).
 
 **Reihenfolge:** Die MCP-Spec verlangt eine deterministische Reihenfolge von
 `tools/list` (Client-Cache, Prompt-Cache). Sie folgt der Registrierung im Code.
