@@ -37,6 +37,7 @@ import { notify } from '@/lib/feedback'
 import { safeInternalPath } from '@/lib/safePath'
 
 import { MfaSection } from '../components/MfaSection'
+import { RoutinesPanel } from '../components/RoutinesPanel'
 
 
 // Ruecksprung nach der 2FA-Einrichtung (Audit A1/E5 = A): der MFA-Hinweis in
@@ -135,6 +136,9 @@ export function AccountPage() {
         </Card>
 
         <OverrideTokenSection />
+
+        {/* ADR-0057 §7: nur fuer Betreiber; rendert bei 403 gar nichts. */}
+        <RoutinesPanel />
 
         <Card>
           <CardHeader>
