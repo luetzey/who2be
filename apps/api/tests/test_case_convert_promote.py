@@ -12,8 +12,10 @@ Belegt:
   `converted`-Eintrag und laesst ihn `converted`.
 - **Eigene Fehlergruende:** `memory_not_convertible`,
   `feedback_not_promotable` (409).
-- **Rechte:** Agent-Token 403 (auch mit `case_triage`), viewer 403; fremder
-  Workspace ist nicht da (404).
+- **Rechte:** convert: Agent ohne `case_triage` bzw. ohne Policy 403,
+  viewer 403; der Builder (`case_triage`, PM-4) wandelt um, Melder
+  `pattern`. promote: Agent-Token 403 (auch mit `case_triage`), viewer 403.
+  Fremder Workspace ist nicht da (404).
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
@@ -255,14 +257,24 @@ def test_convert_only_pending_lessons() -> None:
 def test_convert_rights_and_scope() -> None:
     async def body(w: _World) -> None:
         memory_id = await w.lesson()
-        for ctx in (w.agent, w.triage):
+        # Agent ohne case_triage, Agent ohne geladene Policy (PM-4), viewer: 403.
+        no_policy = WorkspaceContext(
+            w.seed.ws_a,
+            uuid4(),
+            WorkspaceRole.admin,
+            is_api_token=True,
+            agent_id=w.seed.agent_a,
+            tool_policy=None,
+        )
+        for ctx, reason in (
+            (w.agent, "missing_capability"),
+            (no_policy, "missing_capability"),
+            (w.viewer, "insufficient_role"),
+        ):
             with pytest.raises(ApiGateError) as gate:
                 await w.svc.convert_lesson(ctx, w.seed.agent_a, memory_id, _convert_body())
             assert gate.value.status == 403
-            assert gate.value.reason == "missing_capability"
-        with pytest.raises(ApiGateError) as viewer:
-            await w.svc.convert_lesson(w.viewer, w.seed.agent_a, memory_id, _convert_body())
-        assert viewer.value.status == 403
+            assert gate.value.reason == reason
 
         # Eintrag gehoert einem anderen Agenten als im Pfad -> nicht da.
         with pytest.raises(ApiError) as other:
@@ -279,6 +291,71 @@ def test_convert_rights_and_scope() -> None:
         memory = await w.memory(memory_id)
         assert (memory["status"], memory["converted_case_id"]) == ("pending", None)
         assert await w.case_count() == 0
+
+    _run(body)
+
+
+def test_convert_by_builder_reports_as_pattern() -> None:
+    """PM-4: der Builder (case_triage) wandelt um; Melder `pattern` (3.7).
+
+    Lernvorschlag eines ANDEREN Agenten (agent_a2), damit belegt ist, dass der
+    Builder ueber fremde Lernvorschlaege des Workspace geht, nicht nur ueber
+    den eigenen. Fall, Status und Gedaechtnis-Event entstehen gemeinsam.
+    """
+
+    async def body(w: _World) -> None:
+        memory_id = await w.lesson(agent_id=w.seed.agent_a2)
+        case = await w.svc.convert_lesson(w.triage, w.seed.agent_a2, memory_id, _convert_body())
+
+        assert case.agent_id == w.seed.agent_a2
+        assert case.source_memory_id == memory_id
+        assert case.reporter_kind is CaseReporterKind.pattern
+        assert case.reporter_agent_id == w.seed.agent_a
+        assert case.reporter_user_id is None
+
+        memory = await w.memory(memory_id)
+        assert (memory["status"], memory["converted_case_id"]) == ("converted", case.id)
+        events = await w.owner.fetch(
+            "SELECT event, actor_kind, actor_id, agent_id, before, after "
+            "FROM agent_memory_event WHERE memory_id = $1",
+            memory_id,
+        )
+        assert [(e["event"], e["actor_kind"]) for e in events] == [("converted", "agent")]
+        assert events[0]["actor_id"] is None
+        assert events[0]["agent_id"] == w.seed.agent_a
+        assert _json(events[0]["before"])["status"] == "pending"
+        assert _json(events[0]["after"])["status"] == "converted"
+
+        detail = await w.svc.get_case(w.editor, case.id)
+        assert [(e.event.value, e.actor_kind.value) for e in detail.events] == [
+            ("reported", "system")
+        ]
+
+        # Zweites convert durch den Builder: 409, kein zweiter Fall.
+        with pytest.raises(ApiError) as again:
+            await w.svc.convert_lesson(w.triage, w.seed.agent_a2, memory_id, _convert_body())
+        assert (again.value.status_code, again.value.reason) == (409, "memory_not_convertible")
+        assert await w.case_count() == 1
+
+    _run(body)
+
+
+def test_convert_by_builder_aborted_in_last_step_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutationsprobe Builder-Pfad: Fehler beim Agent-Event -> nichts geaendert."""
+
+    async def body(w: _World) -> None:
+        memory_id = await w.lesson()
+        monkeypatch.setattr(case_repository, "_insert_agent_converted_event", _fail)
+        with pytest.raises(_Boom):
+            await w.svc.convert_lesson(w.triage, w.seed.agent_a, memory_id, _convert_body())
+        monkeypatch.undo()
+
+        assert await w.case_count() == 0
+        memory = await w.memory(memory_id)
+        assert (memory["status"], memory["converted_case_id"]) == ("pending", None)
+        assert await w.memory_events(memory_id) == []
 
     _run(body)
 
