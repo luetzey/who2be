@@ -96,7 +96,7 @@ export function CardsShowcase() {
         <div className="flex w-full flex-col gap-3">
           <AttentionBanner
             icon={Clock}
-            title="Version 3 liegt zur Review"
+            title="Version 3 liegt zur Freigabe"
             description="Von Max Berger eingereicht · wartet auf Freigabe durch einen Admin."
             actions={
               <>

@@ -587,7 +587,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+      expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
     })
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
@@ -644,7 +644,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+      expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
     })
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })

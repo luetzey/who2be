@@ -258,10 +258,10 @@ describe('ToolDetailPage — Status-Action-Bar', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zur Review einreichen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Freigabe einreichen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+      expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
     })
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
@@ -312,7 +312,7 @@ describe('ToolDetailPage — Status-Action-Bar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+      expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
     })
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })
@@ -353,7 +353,7 @@ describe('ToolDetailPage — Status-Action-Bar', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Zur Review einreichen' }),
+      await screen.findByRole('button', { name: 'Zur Freigabe einreichen' }),
     )
 
     await waitFor(() => {

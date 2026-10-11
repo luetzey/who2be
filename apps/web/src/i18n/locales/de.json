@@ -62,7 +62,7 @@
     "statusBar": {
       "ariaLabel": "Status-Aktionen",
       "promote": "Aktivieren",
-      "submit": "Zur Review einreichen",
+      "submit": "Zur Freigabe einreichen",
       "reject": "Ablehnen",
       "reactivate": "Reaktivieren als Draft",
       "adminOnly": "Nur Admins können aktivieren",
@@ -79,8 +79,8 @@
       },
       "toast": {
         "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
+        "submitted": "Zur Freigabe eingereicht.",
+        "rejected": "Freigabe abgelehnt.",
         "reactivated": "Reaktiviert als Entwurf."
       }
     },
@@ -519,7 +519,7 @@
           "playbook_write": "Playbooks erstellen/ändern/verknüpfen",
           "resource_write": "Resources erstellen/ändern/verknüpfen",
           "agent_write": "Agenten erstellen/ändern",
-          "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
+          "system_prompt_write": "System-Prompts verfassen (zur Freigabe einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
           "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
           "promote_retire": "Versionen aktivieren/deaktivieren",
@@ -1246,9 +1246,9 @@
         "reactivate": "Reaktivieren als Draft"
       },
       "toast": {
-        "submitted": "Zur Review eingereicht.",
+        "submitted": "Zur Freigabe eingereicht.",
         "activated": "Version aktiviert.",
-        "rejected": "Review abgelehnt.",
+        "rejected": "Freigabe abgelehnt.",
         "reactivated": "Reaktiviert als Entwurf.",
         "restored": "v{{version}} als Entwurf wiederhergestellt.",
         "actionFailed": "Aktion fehlgeschlagen."
@@ -1554,9 +1554,9 @@
     },
     "toast": {
       "created": "Playbook angelegt.",
-      "submitted": "Zur Review eingereicht.",
+      "submitted": "Zur Freigabe eingereicht.",
       "activated": "Version aktiviert.",
-      "reviewRejected": "Review abgelehnt.",
+      "reviewRejected": "Freigabe abgelehnt.",
       "reactivated": "Reaktiviert als Entwurf.",
       "actionFailed": "Aktion fehlgeschlagen."
     },
@@ -2151,13 +2151,13 @@
     },
     "statusBar": {
       "ariaLabel": "Status-Aktionen",
-      "submitForReview": "Zur Review einreichen",
+      "submitForReview": "Zur Freigabe einreichen",
       "activate": "Aktivieren",
       "backToDraft": "Zurück zu Draft",
       "reactivateAsDraft": "Als Draft reaktivieren",
       "adminOnlyTooltip": "Nur Admins können aktivieren",
       "toast": {
-        "submittedForReview": "Zur Review eingereicht.",
+        "submittedForReview": "Zur Freigabe eingereicht.",
         "activated": "Version aktiviert.",
         "backToDraft": "Zurück in den Entwurf.",
         "reactivatedAsDraft": "Als Draft reaktiviert.",

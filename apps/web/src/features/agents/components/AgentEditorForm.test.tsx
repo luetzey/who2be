@@ -180,7 +180,7 @@ describe('AgentEditorForm', () => {
     expect(playbookWrite).not.toBeChecked()
     // ADR-0040/0038: System-Prompt- + Feedback-Capability sind im Editor sichtbar;
     // Feedback ist secure-by-default AN, System-Prompt aus.
-    expect(screen.getByLabelText('System-Prompts verfassen (Review einreichen)')).not.toBeChecked()
+    expect(screen.getByLabelText('System-Prompts verfassen (zur Freigabe einreichen)')).not.toBeChecked()
     expect(screen.getByLabelText('Nutzung/Feedback melden')).toBeChecked()
     // WP-3: ExternalTool-Read-Scope-Select (Default 'all') + Write-Switch
     // (Default aus) sind im Editor sichtbar — Muster identisch zu
