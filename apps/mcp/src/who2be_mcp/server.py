@@ -667,8 +667,8 @@ async def fetch_resource(
     Sub-Resources stehen als Pointer mit fertigem `fetch_call` in `sub_resources`; nur
     `inline`-Kinder kommen gleich als Volldokument mit.
 
-    Ohne `resource_write` siehst du nur die aktive Version, mit auch Drafts. `locale` wird
-    ignoriert.
+    Ohne `resource_write` siehst du nur die aktive Version (ohne aktive: 404), mit auch Drafts.
+    `locale` wird ignoriert.
     """
     _validate_response_format(format)
     try:
@@ -921,7 +921,7 @@ async def _default_content_locale(client: ApiClient, locale: str | None) -> str 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_persona")
 async def create_persona(data: PersonaCreate) -> PersonaRead:
-    """Legt eine Persona an (Draft, Version 1).
+    """Legt eine Persona an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
     `data.content` traegt Beschreibung, Traits, Tags, Modi und Profil-Bloecke. Ein Modus in
     `content.modes` (max. 20): `name` (Pflicht, eindeutig), `trigger` (Komma-Stichworte),
@@ -996,7 +996,7 @@ async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> lis
 @mcp.tool(output_schema=None)
 @with_tool_log("create_playbook")
 async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
-    """Legt ein Playbook an (Draft, Version 1).
+    """Legt ein Playbook an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
     `data.content.body` ist ein BlockNote-JSON-Array als String; `type`, `tags` und `triggers`
     steuern die Auffindbarkeit. Platzhalter im Body werden beim Speichern synchronisiert: Art
@@ -1091,6 +1091,7 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
 async def create_resource(data: ResourceCreate) -> ResourceRead:
     """Legt eine Resource an (BlockNote-Dokument, Draft, Version 1).
 
+    Fuer MCP-Reads erst nach `active` sichtbar.
     `data.content.blocks`: max. 2000 Bloecke, max. 1 MB; jeder Block mit `id` (Anker, max. 100
     Zeichen) und `type`, weitere BlockNote-Felder frei. Ueberschriften sind verlinkbare Anker
     (`<resource-uuid>#<block_id>`). Beispiel:
@@ -1455,13 +1456,15 @@ async def save_memory(
 ) -> MemorySaveResult:
     """Schlaegt einen dauerhaften Gedaechtnis-Eintrag vor; ein Mensch gibt ihn frei.
 
-    PFLICHT `origin`: `user_stated` (der Nutzer hat es gesagt), `inferred` (selbst geschlossen)
-    oder `external_content` (aus Werkzeug, Web, Dokument). `kind`: `user_fact`, `agent_note`
+    PFLICHT `origin` (sonst `memory_origin_required`): `user_stated` (der Nutzer hat es gesagt),
+    `inferred` (selbst geschlossen) oder `external_content` (Werkzeug, Web, Dokument). `kind`:
+    `user_fact`, `agent_note`
     (Umgebung, Werkzeug-Eigenheiten) oder `lesson` (Lernvorschlag). `scope`: `agent` oder `user`
     (nur `user_fact`). `fact` in 3. Person, max. 300 Zeichen; `importance` 5-10.
 
     Nur, was in 3 Monaten noch nuetzt. Nie: Smalltalk, Repo- oder Code-Fakten, Geheimnisse,
-    Angaben ueber Dritte. Antwort `pending`: sag dem Nutzer, dass die Freigabe aussteht. 409
+    Angaben ueber Dritte, Gesundheits- oder Finanzdaten ohne ausdrueckliche Bestaetigung.
+    Antwort `pending`: sag dem Nutzer, dass die Freigabe aussteht. 409
     heisst Duplikat, nicht wiederholen.
     """
     client = await build_client()

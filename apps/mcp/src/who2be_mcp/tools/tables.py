@@ -239,7 +239,8 @@ async def set_convention(
 
     `convention` ist ein flaches Objekt (Waehrung, Dezimaltrenner, Datumsformat, Vorzeichen),
     `source_name` benennt die Quelle. Ersetzt eine bestehende Konvention; Importe mit
-    `source_name` brauchen sie.
+    `source_name` brauchen sie (sonst `convention_missing`). Nie im Einzelfall raten, im
+    Zweifel nachfragen.
     """
     client = await _client()
     try:

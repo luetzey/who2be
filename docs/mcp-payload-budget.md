@@ -215,9 +215,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-10, Draht-Form | 90 | **147.325 Bytes** |
 | 2026-10-10, mit `alwaysLoad` an fünf Werkzeugen (T4) | 90 | **147.475 Bytes** |
 | 2026-10-11, nach der Schema-Diaet (T2) | 90 | **138.060 Bytes** |
-| 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **103.833 Bytes** |
+| 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **104.290 Bytes** |
 
-Bis zur Grenze bleiben damit 56.167 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 55.710 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -240,11 +240,11 @@ nach Schema-Diaet (T2) und Beschreibungs-Diaet (T3):
 
 | Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
 | --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 38 | 29.399 | 4 / 3.811 | 6.003 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 32.778 | 5 / 4.441 | 6.690 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 103.833 | 5 / 4.441 | 7.671 |
-| Mensch/JWT, Rolle editor | 86 | 100.454 | 4 / 3.811 | 6.984 |
-| alle Werkzeuge (Guard) | 90 | 103.833 | 5 / 4.441 | 7.671 |
+| Agent, Default-Policy | 38 | 29.497 | 4 / 3.811 | 6.003 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 32.971 | 5 / 4.441 | 6.690 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 104.290 | 5 / 4.441 | 7.671 |
+| Mensch/JWT, Rolle editor | 86 | 100.816 | 4 / 3.811 | 6.984 |
+| alle Werkzeuge (Guard) | 90 | 104.290 | 5 / 4.441 | 7.671 |
 
 „Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
 die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
@@ -262,8 +262,8 @@ Client beim Verbinden bekommt.
 
 | Profil | Ziel | Stand 2026-10-11 |
 | --- | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.003 |
-| Agent, Builder | 110.000 | 105.437 |
+| Agent, Default-Policy | 35.000 | 31.101 |
+| Agent, Builder | 110.000 | 105.894 |
 
 `test_agent_start_meets_target_per_profile` haelt beide Ziele; das
 Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
@@ -275,12 +275,12 @@ Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
 | ---: | --- | ---: | ---: | ---: |
 | 1 | `update_agent` | 5.935 | 112 | 5.700 |
 | 2 | `create_agent` | 5.828 | 177 | 5.527 |
-| 3 | `create_persona` | 5.722 | 558 | 4.999 |
+| 3 | `create_persona` | 5.766 | 602 | 4.999 |
 | 4 | `update_persona` | 5.317 | 246 | 4.941 |
 | 5 | `create_external_tool` | 2.862 | 294 | 2.427 |
 | 6 | `update_external_tool` | 2.655 | 208 | 2.305 |
-| 7 | `create_playbook` | 2.412 | 616 | 1.628 |
-| 8 | `create_resource` | 2.198 | 418 | 1.621 |
+| 7 | `create_playbook` | 2.456 | 660 | 1.628 |
+| 8 | `create_resource` | 2.243 | 462 | 1.621 |
 | 9 | `update_playbook` | 2.048 | 226 | 1.690 |
 | 10 | `create_system_prompt` | 2.037 | 523 | 1.327 |
 
@@ -365,12 +365,12 @@ Die Werkzeugbeschreibung ist der Docstring der Funktion. Regeln:
 
 | Größe | vorher | nachher |
 | --- | ---: | ---: |
-| Draht `tools/list`, alle Werkzeuge | 138.060 | 103.833 (−34.227) |
-| Agent, Default-Policy | 45.938 | 29.399 (−16.539) |
-| Agent, Default + Gedaechtnis `suggest` | 51.410 | 32.778 (−18.632) |
-| Mensch/JWT, Rolle editor | 132.588 | 100.454 (−32.134) |
-| Beschreibungen, alle Werkzeuge | 57.695 | 24.223 (−33.472) |
-| Beschreibungen, Default-Agent | 26.799 | 10.609 (−16.190) |
+| Draht `tools/list`, alle Werkzeuge | 138.060 | 104.290 (−33.770) |
+| Agent, Default-Policy | 45.938 | 29.497 (−16.441) |
+| Agent, Default + Gedaechtnis `suggest` | 51.410 | 32.971 (−18.439) |
+| Mensch/JWT, Rolle editor | 132.588 | 100.816 (−31.772) |
+| Beschreibungen, alle Werkzeuge | 57.695 | 24.673 (−33.022) |
+| Beschreibungen, Default-Agent | 26.799 | 10.705 (−16.094) |
 
 Die Schemas bleiben unveraendert (67.381 Bytes); bei den vier teuersten
 Schreibwerkzeugen liegt das Gewicht weiter dort (Weiche W1, Markdown-Eingabe).

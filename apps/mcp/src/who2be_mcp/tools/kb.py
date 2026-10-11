@@ -122,7 +122,7 @@ async def update_node(
     """Aendert einen KB-Node; ein hoeherer `tier` braucht einen andersartigen Beleg.
 
     Nach `derived` nur mit `additional_source_ref` anderer Art; `verified` setzt nur ein Mensch
-    (422). Abstufen ist frei.
+    (422 `tier_upgrade_forbidden`). Abstufen ist frei.
     """
     client = await _client()
     try:
@@ -146,9 +146,10 @@ async def create_edge(
 ) -> KbEdgeRead:
     """Verbindet zwei Anker mit einer getypten, belegten Kante.
 
-    `evidence_from` und `evidence_to` je 1-20 Anker. Typen: supports, contradicts, supersedes,
-    derived_from, belongs_to, co_occurs_with. Gleichzeitigkeit ergibt nur `co_occurs_with`, dann
-    mit `co_query`, `co_n` (>= 20), `co_from` und `co_to`; andere Typen ohne `co_`-Felder.
+    `evidence_from` und `evidence_to` je 1-20 Anker (sonst `evidence_missing`). Typen: supports,
+    contradicts, supersedes, derived_from, belongs_to, co_occurs_with. Gleichzeitigkeit ergibt
+    nur `co_occurs_with`, dann mit `co_query`, `co_n` (>= 20), `co_from` und `co_to`; andere
+    Typen ohne `co_`-Felder.
     """
     client = await _client()
     try:

@@ -134,7 +134,8 @@ async def submit_test_results(
     """Meldet Prueffall-Ergebnisse fuer eine Elementversion (Selbstauskunft).
 
     Je Ergebnis `test_case_id`, `runs_total`, `runs_passed`, `verdict` und `output_excerpt`;
-    `pass` nur, wenn alle Laeufe bestanden. `human_rule`-Faelle nicht bewerten: Ausgabe
+    `pass` nur, wenn alle Laeufe bestanden (sonst `test_run_verdict_inconsistent`).
+    `human_rule`-Faelle nicht bewerten: Ausgabe
     mitschicken, `verdict='error'`. Alles oder nichts. Braucht `test_report`; nenne
     `model_provider` und `model_name`.
     """
@@ -301,7 +302,8 @@ async def submit_case_statement(
     """Gibt deine Schilderung zu einem Fall ab, in dem es um dich geht.
 
     `followed_instruction`, `missing_information`, `conflict`, je max. 2000 Zeichen.
-    Beschreiben, nicht bewerten. Nur der betroffene Agent darf; eine neue Schilderung ersetzt
+    Beschreiben, nicht bewerten. Nur der betroffene Agent darf (sonst
+    `case_statement_not_subject`); eine neue Schilderung ersetzt
     die alte in der Anzeige.
     """
     parsed = _parse_uuid(case_id, "Fall")
