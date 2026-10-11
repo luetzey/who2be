@@ -43,5 +43,6 @@ und `notConvertible`. Budget eingehalten, keine Ausweichregel nötig.
 ## Verifikation
 
 - `vitest run` (Node 22): 259 Dateien, 2236 Tests grün
-- lint/tsc/build, Fragment-Check
-- Fotos 1280/390 hell/dunkel: Muster-Liste + Sheet, Gedächtnis-Sheet, Feedback-Detail + Dialog
+- eslint 0 Errors, `tsc -b` ok, `npm run build` ok, `i18n:check` ok, Fragment check/guard ok
+- Fotos 1280/390 hell/dunkel (24): Muster-Liste + Sheet, Gedächtnis-Sheet (offen, umgewandelt),
+  Feedback-Detail + Dialog; measure: alle scrollWidth==clientWidth, Sheets 511/511 bzw. 390/390
