@@ -596,8 +596,14 @@ def test_list_due_filter_and_row_counters() -> None:
             )
 
         async def close(measure_id: UUID, data: MeasureEventCreate) -> None:
+            # `activated` setzt nur das System (CHECK), alles andere hier ein Mensch.
+            system = data.event is MeasureEventKind.activated
             event = await w.repo.append_measure_event(
-                s.ws_a, measure_id, data, actor_kind=MeasureActorKind.human, actor_id=uuid4()
+                s.ws_a,
+                measure_id,
+                data,
+                actor_kind=MeasureActorKind.system if system else MeasureActorKind.human,
+                actor_id=None if system else uuid4(),
             )
             assert event is not None
 
@@ -626,11 +632,26 @@ def test_list_due_filter_and_row_counters() -> None:
         s5, _, _ = await submit(s.agent_a, [], session_follow_up=day(-10))
         # S6 korrigiert S1.
         s6, _, _ = await submit(s.agent_a, [], session_follow_up=day(30), supersedes_id=s1)
+        # S7: Endzustand erst nach Zwischen-Events (realer Pfad). Massgeblich ist
+        # das JUENGSTE Event: activated -> reviewed und draft_linked -> withdrawn
+        # sind trotz ueberfaelligem Datum nie faellig.
+        s7, _, s7_m = await submit(s.agent_a, [day(-2), day(-2)], session_follow_up=day(-2))
+        version = await w.persona_version()
+
+        def linked(kind: MeasureEventKind) -> MeasureEventCreate:
+            return MeasureEventCreate(event=kind, version_entity_type="persona", version_id=version)
+
+        await close(s7_m[0], linked(MeasureEventKind.activated))
+        await close(s7_m[0], reviewed)
+        await close(s7_m[1], linked(MeasureEventKind.draft_linked))
+        await close(s7_m[1], withdrawn)
+        # S8 korrigiert S1 ein zweites Mal: superseded_by_id ist die juengste Korrektur.
+        s8, _, _ = await submit(s.agent_a, [], session_follow_up=day(30), supersedes_id=s1)
         # Fremder Workspace mit faelliger Massnahme (Nachschau = Stichtag).
         foreign = await _graph(w.owner, s.ws_b, s.agent_b)
 
         rows = {r.id: r for r in await svc.list_sessions(w.editor)}
-        assert set(rows) == {s1, s2, s3, s4, s5, s6}
+        assert set(rows) == {s1, s2, s3, s4, s5, s6, s7, s8}
         counters = {
             sid: (
                 r.case_count,
@@ -643,17 +664,21 @@ def test_list_due_filter_and_row_counters() -> None:
         }
         assert counters == {
             # Offen: gestern, heute, morgen -> fruehestes gestern; faellig: zwei.
-            s1: (2, 5, 2, today - timedelta(days=1), s6),
+            # Zwei Korrekturen (S6, dann S8): die juengere gewinnt.
+            s1: (2, 5, 2, today - timedelta(days=1), s8),
             s2: (1, 1, 0, today + timedelta(days=1), None),
             s3: (1, 1, 1, today, None),
             s4: (1, 1, 0, None, None),
             s5: (1, 0, 0, None, None),
             s6: (1, 0, 0, None, None),
+            # Beide Massnahmen nach Zwischen-Events abgeschlossen: nichts offen.
+            s7: (1, 2, 0, None, None),
+            s8: (1, 0, 0, None, None),
         }
-        # Dieselbe Faellig-Regel wie der Aufgaben-Zaehler.
-        assert sum(r.due_measure_count for r in rows.values()) == (
-            await w.repo.count_due_measures(s.ws_a, today=today)
-        )
+        # Dieselbe Faellig-Regel wie der Aufgaben-Zaehler: S1 zwei, S3 eine.
+        due_total = await w.repo.count_due_measures(s.ws_a, today=today)
+        assert due_total == 3
+        assert sum(r.due_measure_count for r in rows.values()) == due_total
 
         def ids(listed: Sequence[SessionListItem]) -> list[UUID]:
             return [r.id for r in listed]
