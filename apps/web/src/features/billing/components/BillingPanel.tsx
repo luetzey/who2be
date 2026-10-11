@@ -5,6 +5,7 @@ import '../i18n'
 
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { formatDate } from '@/lib/dates'
 
 import { useCheckout } from '../hooks/useCheckout'
 import { useEntitlement } from '../hooks/useEntitlement'
@@ -62,7 +63,7 @@ function formatEntityLimit(t: TFunction, tier: BillingTier | undefined): string 
 function formatExpiry(iso: string | null, unlimited: string): string {
   if (!iso) return unlimited
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString()
+  return Number.isNaN(date.getTime()) ? iso : formatDate(date)
 }
 
 /**
