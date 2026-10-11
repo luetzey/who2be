@@ -337,6 +337,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Lernschleife Phase D — Umwandeln/Uebernehmen (ADR-0053 6.4/6.5, D2c):
     "memory_not_convertible": "Eintrag laesst sich nicht in einen Fall umwandeln",
     "feedback_not_promotable": "Feedback laesst sich nicht in einen Fall uebernehmen",
+    # Lernschleife Phase E — Gespraechsprotokoll und Massnahme (ADR-0053 6.1/6.6, E2b-1):
+    "session_cases_invalid": "Faelle des Protokolls ungueltig",
+    "measure_test_case_required": "Massnahme ohne gueltigen Pruefall",
+    "measure_not_found": "Massnahme nicht gefunden",
+    "session_not_found": "Protokoll nicht gefunden",
 }
 
 

@@ -17028,7 +17028,11 @@
               "case_transition_human_only",
               "case_statement_not_subject",
               "memory_not_convertible",
-              "feedback_not_promotable"
+              "feedback_not_promotable",
+              "session_cases_invalid",
+              "measure_test_case_required",
+              "measure_not_found",
+              "session_not_found"
             ],
             "title": "Reason"
           },
