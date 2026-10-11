@@ -20,6 +20,9 @@ Echte DB unter der Laufzeitrolle `who2be_app` (RLS aktiv), Fixtures aus
   nur durch den Agenten und nur bei geaenderten Zahlen.
 - **Sperre je Massnahme:** zwei gleichzeitige Einstufungen ergeben genau ein
   `reviewed`.
+- **Atomaritaet:** ein Fehler mitten in withdraw bzw. nach dem Insert in
+  link-draft hinterlaesst weder Massnahmen- noch Fall-Events.
+- **Fremder Workspace:** alle vier Aktionen -> 404 `measure_not_found`.
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
@@ -27,8 +30,9 @@ Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart feh
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import date, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -44,6 +48,7 @@ from test_session_service import _code, _reason, _World  # type: ignore[import-n
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.session_repository import PgSessionRepository
+from who2be_api.services.case_service import CaseTransitionRequest
 from who2be_api.services.measure_service import FOLLOW_UP_MIN_USES, MeasureService
 from who2be_models import (
     CaseElementInput,
@@ -324,6 +329,38 @@ def test_unversioned_target_reviewable_from_due_date() -> None:
     _run(body)
 
 
+def test_unversioned_target_closed_is_not_reviewable_again() -> None:
+    """Ohne Versionen entscheidet nur der Abschluss, nicht die Faelligkeit.
+
+    Mutationsprobe: ohne die Pruefung auf abgeschlossene Zustaende in
+    `is_reviewable` liesse sich die Massnahme nach Faelligkeit erneut
+    einstufen bzw. nach withdraw noch einstufen.
+    """
+
+    async def body(w: _MWorld) -> None:
+        reviewed, _ = await w.measure(target="tool_policy", entity_id=None)
+        withdrawn, _ = await w.measure(target="tool_policy", entity_id=None)
+        w.today = _FOLLOW_UP
+        await w.msvc.review(w.editor, reviewed, MeasureVerdict.effective)
+        with pytest.raises(ApiError) as again:
+            await w.msvc.review(w.editor, reviewed, MeasureVerdict.not_measurable)
+        assert (_reason(again), _code(again)) == ("measure_transition_forbidden", 409)
+
+        await w.msvc.withdraw(w.editor, withdrawn, "weg")
+        with pytest.raises(ApiError) as after_withdraw:
+            await w.msvc.review(w.editor, withdrawn, MeasureVerdict.effective)
+        assert (_reason(after_withdraw), _code(after_withdraw)) == (
+            "measure_transition_forbidden",
+            409,
+        )
+        assert (await w.msvc.follow_up(w.builder, reviewed)).reviewable is False
+        assert (await w.msvc.follow_up(w.builder, withdrawn)).reviewable is False
+        assert await w.measure_events(reviewed) == ["reviewed"]
+        assert await w.measure_events(withdrawn) == ["withdrawn"]
+
+    _run(body)
+
+
 # --- Zurueckziehen (QE5 a) --------------------------------------------------------
 
 
@@ -370,6 +407,136 @@ def test_withdraw_resets_cases_unless_another_open_measure_holds_them() -> None:
         _, reset_second = await w.msvc.withdraw(w.editor, second_id, "Auch weg.")
         assert reset_second == [shared]
         assert await w.status(shared) is CaseStatus.triaged
+
+    _run(body)
+
+
+def test_withdraw_leaves_cases_outside_in_progress_untouched() -> None:
+    """Nur `in_progress` geht zurueck; ein inzwischen erledigter Fall bleibt.
+
+    Mutationsprobe: ohne die Status-Pruefung in `reset_cases_after_withdraw`
+    wird der verworfene Fall wieder `triaged` und dieser Test rot.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona()
+        measure_id, (kept, done) = await w.measure(entity_id=persona_id, cases=2)
+        await w.case_svc.transition(
+            w.editor,
+            done,
+            CaseTransitionRequest(to=CaseStatus.dismissed, note="Kein Fehler des Agenten."),
+        )
+        assert await w.status(done) is CaseStatus.dismissed
+
+        _, reset = await w.msvc.withdraw(w.editor, measure_id, "Wird anders geloest.")
+        assert reset == [kept]
+        assert await w.status(kept) is CaseStatus.triaged
+        assert await w.status(done) is CaseStatus.dismissed
+
+    _run(body)
+
+
+# --- Atomaritaet -------------------------------------------------------------------
+
+
+def test_withdraw_is_atomic_on_error_mid_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fehler nach dem Zuruecksetzen: weder `withdrawn` noch Fall-Events bleiben.
+
+    Mutationsprobe: schreibt withdraw das Event ohne `conn=conn`, liegt es
+    ausserhalb der Transaktion und `measure_events` ist nicht leer.
+    """
+
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona()
+        measure_id, cases = await w.measure(entity_id=persona_id, cases=2)
+        original = w.repo.reset_cases_after_withdraw
+        done: list[UUID] = []
+
+        async def boom(
+            conn: asyncpg.Connection,
+            workspace_id: UUID,
+            mid: UUID,
+            case_ids: Sequence[UUID],
+            *,
+            note: str,
+        ) -> list[UUID]:
+            done.extend(await original(conn, workspace_id, mid, case_ids, note=note))
+            raise RuntimeError("Fehler mitten in der Transaktion")
+
+        monkeypatch.setattr(w.repo, "reset_cases_after_withdraw", boom)
+        with pytest.raises(RuntimeError):
+            await w.msvc.withdraw(w.editor, measure_id, "weg")
+        assert sorted(done) == sorted(cases)  # beide waren in der Transaktion zurueckgesetzt
+        assert await w.measure_events(measure_id) == []
+        for case_id in cases:
+            assert await w.status(case_id) is CaseStatus.in_progress
+
+    _run(body)
+
+
+def test_link_draft_is_atomic_on_error_after_insert(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def body(w: _MWorld) -> None:
+        persona_id, (v1, _) = await w.persona()
+        measure_id, _ = await w.measure(entity_id=persona_id)
+        original = w.repo.append_measure_event
+
+        async def boom(*args: Any, **kwargs: Any) -> None:
+            await original(*args, **kwargs)
+            raise RuntimeError("nach dem Insert")
+
+        monkeypatch.setattr(w.repo, "append_measure_event", boom)
+        with pytest.raises(RuntimeError):
+            await w.msvc.link_draft(w.editor, measure_id, "persona", v1)
+        assert await w.measure_events(measure_id) == []
+
+    _run(body)
+
+
+# --- Fremder Workspace ------------------------------------------------------------
+
+
+def test_foreign_workspace_is_404_for_every_action() -> None:
+    async def body(w: _MWorld) -> None:
+        persona_id, (_, v2) = await w.persona()
+        measure_id, _ = await w.measure(entity_id=persona_id)
+        await w.msvc.link_draft(w.editor, measure_id, "persona", v2)
+        await w.activate(measure_id, v2)
+        other = WorkspaceContext(w.seed.ws_b, uuid4(), WorkspaceRole.editor)
+        calls: list[Callable[[], Awaitable[object]]] = [
+            lambda: w.msvc.link_draft(other, measure_id, "persona", v2),
+            lambda: w.msvc.follow_up(other, measure_id),
+            lambda: w.msvc.review(other, measure_id, MeasureVerdict.effective),
+            lambda: w.msvc.withdraw(other, measure_id, "x"),
+        ]
+        for call in calls:
+            with pytest.raises(ApiError) as exc:
+                await call()
+            assert (_reason(exc), _code(exc)) == ("measure_not_found", 404)
+        assert await w.measure_events(measure_id) == ["draft_linked", "activated"]
+
+    _run(body)
+
+
+def test_link_draft_rejects_version_from_other_workspace() -> None:
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona()
+        measure_id, _ = await w.measure(entity_id=persona_id)
+        foreign_persona: UUID = await w.owner.fetchval(
+            "INSERT INTO persona (workspace_id, owner_id, name) VALUES ($1, $2, $3) RETURNING id",
+            w.seed.ws_b,
+            w.seed.user,
+            f"p-{uuid4().hex[:6]}",
+        )
+        foreign_version: UUID = await w.owner.fetchval(
+            "INSERT INTO persona_version (persona_id, version, content, status, created_by) "
+            "VALUES ($1, 1, '{}'::jsonb, 'draft', $2) RETURNING id",
+            foreign_persona,
+            w.seed.user,
+        )
+        with pytest.raises(ApiError) as exc:
+            await w.msvc.link_draft(w.editor, measure_id, "persona", foreign_version)
+        assert (_reason(exc), _code(exc)) == ("test_subject_version_not_found", 404)
+        assert await w.measure_events(measure_id) == []
 
     _run(body)
 
