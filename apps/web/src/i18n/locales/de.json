@@ -2388,14 +2388,14 @@
       "showLess": "Weniger anzeigen",
       "showAll": "Alle {{count}} anzeigen",
       "tabs": {
-        "cases": "Fälle",
-        "myCases": "Meine Fälle",
+        "cases": "Rückmeldungen",
+        "myCases": "Meine Rückmeldungen",
         "signals": "Bausteine",
         "curation": "Kuration",
         "patterns": "Muster"
       },
       "tabsAria": "Bereiche des Feedbacks",
-      "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Verhalten eines Agenten meldest du als Fall."
+      "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Zum Verhalten eines Agenten gibst du eine Rückmeldung."
     },
     "tiles": {
       "mostUsed": "Meistgenutzt",
@@ -2505,13 +2505,13 @@
     },
     "cases": {
       "report": {
-        "title": "Fall melden",
+        "title": "Rückmeldung geben",
         "intro": "Beschreibe eine konkrete Situation. Daraus kann später ein Prüffall werden, der jede neue Version des Agenten testet.",
-        "privacy": "Keine Passwörter oder Kundendaten einfügen. Fälle fließen nie in einen Prompt, können aber als Prüffall-Beispiel gespeichert werden.",
+        "privacy": "Keine Passwörter oder Kundendaten einfügen. Rückmeldungen fließen nie in einen Prompt, können aber als Prüffall-Beispiel gespeichert werden.",
         "more": "Mehr angeben",
-        "submit": "Fall melden",
-        "success": "Fall gemeldet. Du findest ihn unter Fälle.",
-        "successViewer": "Fall gemeldet. Du siehst den Stand unter „Meine Fälle“.",
+        "submit": "Rückmeldung geben",
+        "success": "Rückmeldung gegeben. Du findest sie unter Rückmeldungen.",
+        "successViewer": "Rückmeldung gegeben. Du siehst den Stand unter „Meine Rückmeldungen“.",
         "successView": "Ansehen",
         "discardTitle": "Eingaben verwerfen?",
         "discardBody": "Was du eingegeben hast, wird nicht gespeichert.",
@@ -2520,7 +2520,7 @@
         "agent": "Agent",
         "agentPlaceholder": "Agent wählen …",
         "agentsLoading": "Agenten werden geladen …",
-        "noAgents": "Noch kein Agent im Workspace. Ein Fall gehört immer zu einem Agenten.",
+        "noAgents": "Noch kein Agent im Workspace. Eine Rückmeldung gehört immer zu einem Agenten.",
         "toAgents": "Zu den Agents",
         "situation": "Was war die Lage?",
         "situationHelp": "Was hast du gefragt oder was sollte der Agent tun?",
@@ -2563,8 +2563,8 @@
         }
       },
       "list": {
-        "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einem Fall kann ein Prüffall werden.",
-        "descriptionViewer": "Fälle, die du gemeldet hast, und was daraus geworden ist.",
+        "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einer Rückmeldung kann ein Prüffall werden.",
+        "descriptionViewer": "Rückmeldungen, die du gegeben hast, und was daraus geworden ist.",
         "emptyOpenTitle": "Keine offenen Rückmeldungen",
         "emptyOpenDescription": "Rückmeldungen entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
         "emptyViewerTitle": "Du hast noch keine Rückmeldung gegeben",

@@ -153,15 +153,15 @@ function fillRequired() {
   })
 }
 
-describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
+describe('Rückmeldung geben unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
   it('Ausloeser am Agenten ist ein Link auf die Seite mit ?agent, der Agent steht dort fest', async () => {
     const { container } = renderApp(['/w/ws-1/agents/a1'])
-    const trigger = screen.getByRole('link', { name: 'Fall melden' })
+    const trigger = screen.getByRole('link', { name: 'Rückmeldung geben' })
     expect(trigger).toHaveAttribute('href', '/w/ws-1/feedback/cases/new?agent=a1')
     fireEvent.click(trigger)
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1, name: 'Fall melden' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Rückmeldung geben' })).toBeInTheDocument()
     expect(screen.getByText('coder')).toBeInTheDocument()
     // Fester Agent: keine Auswahl, kein Abruf der Agentenliste.
     expect(screen.queryByRole('combobox', { name: /Agent/ })).not.toBeInTheDocument()
@@ -173,9 +173,9 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
 
   it('Absenden meldet mit dem festen Agenten und fuehrt zur Ausgangsseite zurueck', async () => {
     renderApp(['/w/ws-1/agents/a1'])
-    fireEvent.click(screen.getByRole('link', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Rückmeldung geben' }))
     fillRequired()
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
 
     await waitFor(() => expect(where()).toBe('/w/ws-1/agents/a1'))
     expect(createCase).toHaveBeenCalledWith(
@@ -193,14 +193,14 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
   it('aus der Fall-Liste: nach Erfolg zurueck zur Liste mit Filter, die Liste ist neu geladen', async () => {
     renderApp(['/w/ws-1/feedback?status=all'])
     await waitFor(() => expect(listCases).toHaveBeenCalledTimes(1))
-    const trigger = screen.getByRole('link', { name: 'Fall melden' })
+    const trigger = screen.getByRole('link', { name: 'Rückmeldung geben' })
     expect(trigger).toHaveAttribute('href', '/w/ws-1/feedback/cases/new')
     fireEvent.click(trigger)
 
     const select = await screen.findByRole('combobox', { name: /Agent/ })
     fireEvent.change(select, { target: { value: 'a2' } })
     fillRequired()
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
 
     await waitFor(() => expect(where()).toBe('/w/ws-1/feedback?status=all'))
     expect(createCase).toHaveBeenCalledWith(expect.objectContaining({ agent_id: 'a2' }))
@@ -209,8 +209,8 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
 
   it('Pflichtfelder fehlen: Seite bleibt, nichts wird gesendet', async () => {
     renderApp(['/w/ws-1/agents/a1'])
-    fireEvent.click(screen.getByRole('link', { name: 'Fall melden' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Rückmeldung geben' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
 
     await waitFor(() => expect(screen.getByLabelText(/Was war die Lage\?/)).toHaveFocus())
     expect(createCase).not.toHaveBeenCalled()
@@ -219,11 +219,11 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
 
   it('Abbrechen ohne Eingaben geht sofort zurueck, mit Eingaben erst nach „Verwerfen“', async () => {
     renderApp(['/w/ws-1/agents/a1'])
-    fireEvent.click(screen.getByRole('link', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Rückmeldung geben' }))
     fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
     expect(where()).toBe('/w/ws-1/agents/a1')
 
-    fireEvent.click(screen.getByRole('link', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Rückmeldung geben' }))
     fireEvent.change(screen.getByLabelText(/Was war die Lage\?/), { target: { value: 'Etwas' } })
     // Auch „Zurück“ fragt nach, statt Eingaben still zu verwerfen.
     fireEvent.click(screen.getByTestId('feedback-compose-back'))
@@ -252,7 +252,7 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
     const select = await screen.findByRole('combobox', { name: /Agent/ })
     expect(select).toHaveValue('')
     fillRequired()
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
     await waitFor(() => expect(select).toHaveFocus())
     expect(createCase).not.toHaveBeenCalled()
   })
@@ -263,23 +263,23 @@ describe('Fall melden unter md (Delta-Spec S6 „390 px“, D6c′)', () => {
   })
 
   it.each([
-    ['viewer', 'Fall gemeldet. Du siehst den Stand unter „Meine Fälle“.'],
-    ['editor', 'Fall gemeldet. Du findest ihn unter Fälle.'],
+    ['viewer', 'Rückmeldung gegeben. Du siehst den Stand unter „Meine Rückmeldungen“.'],
+    ['editor', 'Rückmeldung gegeben. Du findest sie unter Rückmeldungen.'],
   ])('Rechte: %s darf melden, die Bestaetigung passt zur Rolle', async (current, message) => {
     role.value = current
     renderApp(['/w/ws-1/agents/a1'])
-    fireEvent.click(screen.getByRole('link', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Rückmeldung geben' }))
     fillRequired()
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
     await waitFor(() => expect(createCase).toHaveBeenCalledTimes(1))
     expect(toast.success).toHaveBeenCalledWith(message, expect.anything())
   })
 
-  it('ab md bleibt „Fall melden“ ein Dialog, die Route wechselt nicht', async () => {
+  it('ab md bleibt „Rückmeldung geben“ ein Dialog, die Route wechselt nicht', async () => {
     mobile.value = false
     renderApp(['/w/ws-1/agents/a1'])
-    expect(screen.queryByRole('link', { name: 'Fall melden' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+    expect(screen.queryByRole('link', { name: 'Rückmeldung geben' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
     expect(await screen.findByTestId('report-case-dialog')).toBeInTheDocument()
     expect(where()).toBe('/w/ws-1/agents/a1')
   })

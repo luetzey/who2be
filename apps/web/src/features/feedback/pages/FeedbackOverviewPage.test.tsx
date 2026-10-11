@@ -112,12 +112,12 @@ function renderPage(search = '') {
 }
 
 describe('FeedbackOverviewPage — Hub-Tabs', () => {
-  it('oeffnet standardmaessig „Fälle“ mit vier Tabs fuer editor', async () => {
+  it('oeffnet standardmaessig „Rückmeldungen“ mit vier Tabs fuer editor', async () => {
     renderPage()
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Fälle', 'Muster', 'Bausteine', 'Kuration'])
-    expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Rückmeldungen', 'Muster', 'Bausteine', 'Kuration'])
+    expect(screen.getByRole('tab', { name: /Rückmeldungen/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tablist', { name: 'Bereiche des Feedbacks' })).toBeInTheDocument()
     expect(await screen.findByText('Keine offenen Rückmeldungen')).toBeInTheDocument()
     // Kuration laedt erst, wenn der Tab offen ist.
@@ -141,25 +141,25 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     expect(screen.getByRole('tab', { name: /Kuration/ })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('korrigiert einen unbekannten Tab still auf „Fälle“', async () => {
+  it('korrigiert einen unbekannten Tab still auf „Rückmeldungen“', async () => {
     renderPage('?tab=quatsch')
     await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
-    expect(screen.getByRole('tab', { name: /Fälle/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /Rückmeldungen/ })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('zeigt viewer nur „Meine Fälle“ ohne Tab-Leiste und ohne Kuration', async () => {
+  it('zeigt viewer nur „Meine Rückmeldungen“ ohne Tab-Leiste und ohne Kuration', async () => {
     role = 'viewer'
     renderPage('?tab=curation')
 
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Meine Fälle' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Meine Rückmeldungen' })).toBeInTheDocument()
     expect(await screen.findByText('Du hast noch keine Rückmeldung gegeben')).toBeInTheDocument()
     await waitFor(() => expect(currentSearch()).toBe('?tab=cases'))
     expect(getFeedbackOverview).not.toHaveBeenCalled()
     expect(getFeedbackItems).not.toHaveBeenCalled()
   })
 
-  it('leitet viewer von `?tab=patterns` still auf „Meine Fälle“ um', async () => {
+  it('leitet viewer von `?tab=patterns` still auf „Meine Rückmeldungen“ um', async () => {
     role = 'viewer'
     renderPage('?tab=patterns')
     expect(screen.queryByRole('tab', { name: /Muster/ })).not.toBeInTheDocument()
@@ -174,9 +174,9 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     expect(await screen.findByText('Noch keine Muster')).toBeInTheDocument()
   })
 
-  it('bietet „Fall melden“ und „Problem melden“ im Seitenkopf', () => {
+  it('bietet „Rückmeldung geben“ und „Problem melden“ im Seitenkopf', () => {
     renderPage()
-    expect(screen.getAllByRole('button', { name: 'Fall melden' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Rückmeldung geben' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Problem melden/ })).toBeInTheDocument()
   })
 
@@ -187,19 +187,19 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     renderPage()
     expect(screen.getByRole('heading', { level: 1, name: 'Feedback' })).toBeInTheDocument()
     expect(screen.getByTestId('feedback-hub-loading')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Meine Fälle' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Meine Rückmeldungen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     expect(listCases).not.toHaveBeenCalled()
   })
 
-  // D6b-Review Nit b: nach „Fall melden“ im Dialog laedt die Fall-Liste neu.
-  it('laedt die Fall-Liste nach erfolgreichem „Fall melden“ neu, Filter bleiben', async () => {
+  // D6b-Review Nit b: nach „Rückmeldung geben“ im Dialog laedt die Fall-Liste neu.
+  it('laedt die Fall-Liste nach erfolgreichem „Rückmeldung geben“ neu, Filter bleiben', async () => {
     listAgents.mockResolvedValue([{ id: 'a1', name: 'coder' }])
     createCase.mockResolvedValue({ id: 'case-9' })
     renderPage('?tab=cases&status=all')
     await waitFor(() => expect(listCases).toHaveBeenCalledTimes(1))
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Fall melden' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rückmeldung geben' })[0])
     const dialog = await screen.findByTestId('report-case-dialog')
     fireEvent.change(await within(dialog).findByRole('combobox', { name: /Agent/ }), {
       target: { value: 'a1' },
@@ -213,7 +213,7 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     fireEvent.change(within(dialog).getByLabelText(/Was hättest du erwartet\?/), {
       target: { value: 'Erwartet' },
     })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fall melden' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rückmeldung geben' }))
 
     await waitFor(() => expect(createCase).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(listCases).toHaveBeenCalledTimes(2))

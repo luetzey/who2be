@@ -93,7 +93,7 @@ function renderDialog(element: ReactElement = <ReportCaseDialog agent={agent} />
 }
 
 async function openDialog() {
-  fireEvent.click(screen.getByRole('button', { name: 'Fall melden' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Rückmeldung geben' }))
   return screen.findByTestId('report-case-dialog')
 }
 
@@ -108,7 +108,7 @@ function fillRequired() {
 }
 
 function submitButton(dialog: HTMLElement) {
-  return within(dialog).getByRole('button', { name: 'Fall melden' })
+  return within(dialog).getByRole('button', { name: 'Rückmeldung geben' })
 }
 
 beforeEach(() => {
@@ -125,7 +125,7 @@ describe('ReportCaseDialog', () => {
     renderDialog()
     const dialog = await openDialog()
 
-    expect(within(dialog).getByRole('heading', { name: 'Fall melden' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Rückmeldung geben' })).toBeInTheDocument()
     expect(within(dialog).getByText('coder')).toBeInTheDocument()
     expect(screen.getByLabelText(/Was war die Lage\?/)).toHaveAccessibleDescription(
       'Was hast du gefragt oder was sollte der Agent tun?',
@@ -259,14 +259,14 @@ describe('ReportCaseDialog', () => {
       },
     ])
     const [message, options] = vi.mocked(toast.success).mock.calls[0]
-    expect(message).toBe('Fall gemeldet. Du siehst den Stand unter „Meine Fälle“.')
+    expect(message).toBe('Rückmeldung gegeben. Du siehst den Stand unter „Meine Rückmeldungen“.')
     const action = options?.action as { label: string; onClick: () => void }
     expect(action.label).toBe('Ansehen')
     act(() => action.onClick())
     expect(await screen.findByTestId('case-target')).toBeInTheDocument()
   })
 
-  it('editor bekommt den Erfolgstext „unter Fälle“', async () => {
+  it('editor bekommt den Erfolgstext „unter Rückmeldungen“', async () => {
     role = 'editor'
     stubFetch({ [`POST ${WS}/cases`]: () => json(caseRead(), 201) })
     renderDialog()
@@ -276,7 +276,7 @@ describe('ReportCaseDialog', () => {
 
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
     expect(vi.mocked(toast.success).mock.calls[0][0]).toBe(
-      'Fall gemeldet. Du findest ihn unter Fälle.',
+      'Rückmeldung gegeben. Du findest sie unter Rückmeldungen.',
     )
   })
 
@@ -432,12 +432,12 @@ describe('ReportCaseDialog ohne festen Agenten (D6b0)', () => {
 
   it('Ausloeser: Default-Variante outline, Hub-Variante brand', () => {
     const { unmount } = renderDialog()
-    expect(screen.getByRole('button', { name: 'Fall melden' })).toHaveClass('border-input')
-    expect(screen.getByRole('button', { name: 'Fall melden' })).not.toHaveClass('bg-brand')
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toHaveClass('border-input')
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).not.toHaveClass('bg-brand')
     unmount()
 
     renderDialog(<ReportCaseDialog variant="brand" />)
-    expect(screen.getByRole('button', { name: 'Fall melden' })).toHaveClass('bg-brand')
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toHaveClass('bg-brand')
   })
 
   it('mit festem Agenten: Lesewert, kein Select und kein GET /agents', async () => {
@@ -514,10 +514,10 @@ describe('ReportCaseDialog ohne festen Agenten (D6b0)', () => {
 
     expect(
       await within(dialog).findByText(
-        'Noch kein Agent im Workspace. Ein Fall gehört immer zu einem Agenten.',
+        'Noch kein Agent im Workspace. Eine Rückmeldung gehört immer zu einem Agenten.',
       ),
     ).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: 'Fall melden' })).toBeNull()
+    expect(within(dialog).queryByRole('button', { name: 'Rückmeldung geben' })).toBeNull()
     expect(screen.queryByLabelText(/Was war die Lage\?/)).toBeNull()
     fireEvent.click(within(dialog).getByRole('link', { name: 'Zu den Agents' }))
     expect(await screen.findByTestId('agents-target')).toBeInTheDocument()
@@ -814,7 +814,7 @@ describe('CaseFromOriginDialog (D6e)', () => {
     expect(bodies[0]).toMatchObject({ agent_id: 'a2', expected_behavior: 'Changelog fehlt immer.' })
   })
 
-  it('pattern: Quelle „Muster: …“, Knopf „Fall melden“, sendet über POST /cases', async () => {
+  it('pattern: Quelle „Muster: …“, Knopf „Rückmeldung geben“, sendet über POST /cases', async () => {
     const bodies: Record<string, unknown>[] = []
     stubFetch({
       [`POST ${WS}/cases`]: (_url, init) => {
