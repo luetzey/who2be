@@ -11,7 +11,7 @@ describe('StatusBadge', () => {
 
   it('zeigt das lokalisierte Status-Label', () => {
     render(<StatusBadge status="review" />)
-    expect(screen.getByText('In Review')).toBeInTheDocument()
+    expect(screen.getByText('Zur Freigabe')).toBeInTheDocument()
   })
 
   it('zeigt den „Entwurf offen"-Marker bei pendingDraft', () => {

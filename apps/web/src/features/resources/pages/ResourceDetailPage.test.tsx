@@ -423,7 +423,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     })
 
     expect(
-      await screen.findByText('Aktuelle Version: v1 (In Review)'),
+      await screen.findByText('Aktuelle Version: v1 (Zur Freigabe)'),
     ).toBeInTheDocument()
     const activate = screen.getByRole('button', { name: 'Aktivieren' })
     expect(activate).toBeEnabled()
@@ -531,7 +531,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       }),
     )
 
-    expect(await screen.findByText(/Active: v2 · In Review: v3/)).toBeInTheDocument()
+    expect(await screen.findByText(/Active: v2 · Zur Freigabe: v3/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
   })
 
