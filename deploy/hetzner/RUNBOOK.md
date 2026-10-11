@@ -2165,7 +2165,7 @@ Tabelle in einem Feld derselben Zeile.
 ### Zeitplaene ueberschreiben, Routinen abschalten
 
 Der Code ist die Wahrheit; die Umgebung des Dienstes `worker` darf ohne
-Rebuild ueberschreiben
+Rebuild ueberschreiben, `api` liest dieselben Werte fuer die Anzeige
 (`apps/api/src/who2be_api/worker/schedule.py#effective_table`):
 
 - `WHO2BE_ROUTINE_<NAME>_SCHEDULE` — Cron-Ausdruck mit fuenf Feldern, Alias wie
@@ -2184,11 +2184,15 @@ Unterstrich: `WHO2BE_ROUTINE_PURGE_SCHEDULE`,
 > `…_ENABLED` einzeln durch, leer vorbelegt. Gesetzt wird der Wert in
 > `deploy/hetzner/.env` (Hetzner), in den Dokploy-Umgebungsvariablen bzw. in
 > der `.env` neben `docker-compose.yml` (lokal); danach
-> `$COMPOSE up -d worker`. Ein leerer Wert gilt als nicht gesetzt, es bleibt
+> `$COMPOSE up -d worker api`. Beide Dienste, weil `api` dieselben Variablen
+> fuer die Betreiber-Uebersicht `GET /v1/system/routines` liest: wird nur
+> `worker` neu erzeugt, laeuft er nach dem neuen Zeitplan, die Uebersicht
+> zeigt aber weiter den alten. Ein leerer Wert gilt als nicht gesetzt, es bleibt
 > der Code-Zeitplan. Belegen statt annehmen: `$COMPOSE exec worker
 > who2be-worker list` muss in der Spalte `SOURCE` `env` zeigen. Eine neue
-> Routine braucht neue Zeilen in allen Compose-Dateien, sonst ist der
-> Drift-Test (`apps/api/tests/test_single_writer_guard.py`) rot.
+> Routine braucht neue Zeilen fuer `worker` und `api` in allen
+> Compose-Dateien, sonst ist der Drift-Test
+> (`apps/api/tests/test_single_writer_guard.py`) rot.
 
 Kurzfristig anhalten, etwa fuer eine Fehlersuche: `$COMPOSE stop worker`. Der
 naechste Deploy startet ihn wieder (und `deploy.sh` verlangt genau einen
