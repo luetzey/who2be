@@ -17032,7 +17032,8 @@
               "session_cases_invalid",
               "measure_test_case_required",
               "measure_not_found",
-              "session_not_found"
+              "session_not_found",
+              "measure_transition_forbidden"
             ],
             "title": "Reason"
           },

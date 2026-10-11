@@ -216,6 +216,8 @@ ProblemReason = Literal[
     "measure_test_case_required",
     "measure_not_found",  # 404 — Massnahme unbekannt oder fuer den Aufrufer nicht lesbar
     "session_not_found",  # 404 — Protokoll unbekannt oder nicht lesbar (QE3; params: field)
+    # 409 — Event passt nicht zum Zustand der Massnahme (QE3/QE4; params: state, action)
+    "measure_transition_forbidden",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst
