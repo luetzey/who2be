@@ -422,16 +422,27 @@ services:
       # in ein 403.
       - ./scripts/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      # NICHT `8333/healthz`: der S3-Handler liest den Pfad als Bucket-Namen
-      # und antwortet 404 (seaweedfs#8243) — der Stack bliebe ewig unhealthy.
-      # Der Master-Port hat einen echten Status-Endpunkt.
+      # Zwei Stufen, beide muessen gruen sein:
+      # 1. Master `9333/cluster/status` — der echte Status-Endpunkt.
+      # 2. S3 auf 8333 antwortet UEBERHAUPT. Der Master ist frueher gesund als
+      #    das S3-Gateway; nur Stufe 1 liess blobstore-bootstrap nach 4.48 in
+      #    `Connection refused` laufen. Jede HTTP-Antwort zaehlt (anonym ist
+      #    das 403): busybox-wget endet bei 403 UND bei refused mit Exit 1,
+      #    deshalb entscheidet die Statuszeile aus `-S`, nicht der Exit-Code.
+      #    Pfad `/`, NICHT `/healthz`: der S3-Handler liest den Pfad als
+      #    Bucket-Namen (seaweedfs#8243).
       # `wget` statt `curl`: das Image ist alpine-basiert, busybox bringt wget
       # immer mit, curl nicht zwingend. 127.0.0.1 statt `localhost` aus dem
       # gleichen Grund wie beim auth-gateway oben (IPv6-::1 ohne Listener).
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO /dev/null http://127.0.0.1:9333/cluster/status
+          && wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 60s
 
   # One-Shot (Muster `set-app-role-password`, docker-compose.cloud.yml): legt
   # den Bucket `who2be-blobs` idempotent an und terminiert. Die App erstellt
