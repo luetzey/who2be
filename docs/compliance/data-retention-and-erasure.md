@@ -273,14 +273,19 @@ Workspace explizit, *bevor* die Organization-CASCADE die Agenten erreicht
 (`repositories/account_repository.py`, `_PURGE_ACCESS_LOG_SQL`).
 Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
-**Keine Zeitfrist (Stand Owner-Entscheidung E4b, 2026-10-10).** E4b befristet
-die rohen Nutzungsdaten (`usage_event`, 13 Monate, s. §6), nicht dieses Log.
-Sein Zweck ist die Rechenschaft, welche Elemente **je** an welchen externen
-Modell-Anbieter gegangen sind (VVT V20, Art. 5 Abs. 2); eine Frist naehme diese
-Auskunft fuer alles Aeltere weg und braucht eine eigene Owner-Entscheidung.
-Das Log enthaelt keine `actor_id` und ist je Agent, Element, Operation und Tag
-dedupliziert. Wird eine Frist beschlossen, nimmt die Routine
-`usage-retention` sie ohne neuen Dienst auf.
+**Frist: 13 Monate (Owner-Entscheidung E4c-b, 2026-10-11).** Zeilen, deren
+`access_date` vor dem Stichtag liegt, loescht die Worker-Routine
+`usage-retention` (taeglich 04:10 UTC, Owner-Connection, Zaehler
+`deleted_access_log`). Stichtag ist der UTC-Tag des Laufs minus 13
+Kalendermonate; eine Zeile genau von diesem Tag bleibt. E4c-b haelt die Frist
+bewusst gleich mit den Nutzungs-Rohdaten (`usage_event`, §6). Die Auskunft,
+welche Elemente an welchen externen Modell-Anbieter gegangen sind (VVT V20),
+reicht damit 13 Monate zurueck. Beide Loeschungen laufen im selben Lauf in
+getrennten Transaktionen; scheitert eine, laeuft die andere trotzdem, der
+Lauf endet `failed` mit beiden Zaehlern. Append-only fuer die App bleibt:
+`who2be_app` hat weiter nur SELECT/INSERT, eine Migration war nicht noetig.
+Ein Index auf `access_date` fehlt bewusst (Dedupe je Agent, Element,
+Operation und Tag haelt das Volumen klein).
 
 ---
 
@@ -549,7 +554,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
 | Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Org-/Workspace-Purge: **CASCADE** (0105) |
 | Inhaltspassagen (`content_chunk`, 0070) | abgeleitet aus der aktiven Version, bis Loeschung von Element bzw. Workspace | Element: Neuaufbau bzw. Waisen-Ernte (`core/chunk_backfill.py`); Org-/Workspace-Purge: **CASCADE** (0105) |
-| `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis); bewusst **ohne** die 13-Monats-Frist von `usage_event` (s. §4a Zugriffslog) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
+| `agent_access_log` | **13 Monate** ab `access_date`, dann geloescht (Routine `usage-retention`, Zaehler `deleted_access_log`, Owner E4c-b, aktiv; s. §4a Zugriffslog) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
 | Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
@@ -572,7 +577,8 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 - `apps/api/src/who2be_api/core/audit_retention.py` — Endloeschung des
   anonymen `audit_log`-Rests nach 12 Monaten (Owner E1a).
 - `apps/api/src/who2be_api/core/usage_retention.py` — Loeschung der
-  `usage_event`-Rohzeilen nach 13 Monaten (Owner E4b).
+  `usage_event`-Rohzeilen (Owner E4b) und der `agent_access_log`-Zeilen
+  (Owner E4c-b) nach 13 Monaten.
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
   (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.

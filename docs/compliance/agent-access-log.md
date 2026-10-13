@@ -1,7 +1,8 @@
 # Agent-Zugriffslog (`agent_access_log`)
 
 **Zweck (Spec F, ADR-0047):** Rückwirkend beantworten können, *welche Elemente
-je an einen externen Modell-Anbieter gegangen sind* — ohne auf die Disziplin
+an einen externen Modell-Anbieter gegangen sind* (für die letzten 13 Monate,
+siehe [Aufbewahrung](#aufbewahrung)) — ohne auf die Disziplin
 der Agenten-Runtimes angewiesen zu sein. Der Server protokolliert jeden
 erfolgreichen Zugriff eines agent-gebundenen Tokens auf WorkArea-/KB-Objekte
 automatisch; das verwendete Modell steht als betreiber-gepflegte Konfiguration
@@ -92,9 +93,18 @@ Frage der Betreiberdisziplin, nicht der Manipulierbarkeit.
 
 ## Aufbewahrung
 
+**Frist: 13 Monate ab `access_date`** (Owner-Entscheidung E4c-b, gleich wie
+die Nutzungs-Rohdaten `usage_event`). Die Worker-Routine `usage-retention`
+(täglich 04:10 UTC, Owner-Connection) löscht ältere Zeilen und meldet die
+Anzahl als Zähler `deleted_access_log` in der Betreiber-Übersicht
+(Einstellungen → Routinen). Stichtag ist der UTC-Tag des Laufs minus 13
+Kalendermonate; eine Zeile genau von diesem Tag bleibt. Die Betreiber-Query
+oben reicht damit 13 Monate zurück. Details:
+[`data-retention-and-erasure.md` §4a](./data-retention-and-erasure.md#zugriffslog-agent_access_log).
+
 Append-only wie die übrigen Audit-Journale (ADR-0031): keine Updates/Deletes
-durch die App; Löschung nur im Rahmen von GDPR-Erasure (Workspace-/
-Org-Purge, `docs/compliance/data-retention-and-erasure.md`).
+durch die App. Gelöscht wird nur über die Owner-Connection: von der
+Frist-Routine oder im Rahmen von GDPR-Erasure (Workspace-/Org-Purge).
 
 Seit Migration 0080 gilt das auch gegen **FK-Cascade**: `agent_access_log.
 agent_id` referenziert `agent` mit `ON DELETE NO ACTION`. Vorher hätte ein
@@ -111,5 +121,5 @@ Grant-Entzug. Konsequenzen im Betrieb:
   Workspace, Agenten und Protokoll bleiben unverändert. Kein Soft-Delete, kein
   Mitlöschen (Owner-Entscheidung 2026-10-01).
 - Der Purge-Job (`core/purge.py`, Owner-Connection) löscht die Log-Zeilen der
-  betroffenen Workspaces **explizit**, bevor die Organization-CASCADE greift
-  — der eine legitime Löschpfad.
+  betroffenen Workspaces **explizit**, bevor die Organization-CASCADE greift.
+  Neben der 13-Monats-Frist ist das der zweite legitime Löschpfad.
