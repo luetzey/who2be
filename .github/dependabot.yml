@@ -109,8 +109,12 @@ updates:
 
   # --- Compose-Images (Betriebs-Stacks) ------------------------------------
   # `docker` oben erfasst ausschliesslich Dockerfiles. Die Images, die den
-  # Betrieb tragen — Caddy, Postgres, GoTrue, nginx, Redis, SeaweedFS — stehen
+  # Betrieb tragen — Caddy, Postgres, GoTrue, nginx, Valkey, SeaweedFS — stehen
   # aber nicht in einem Dockerfile, sondern als `image:`-Pin in Compose-Dateien.
+  # Valkey (Rate-Limit-Speicher, ersetzt Redis, ADR-0033-Addendum 2026-10-11)
+  # steht als `valkey/valkey:<tag>@sha256:<digest>` in den drei Cloud-Overlays
+  # `/`, `/deploy/dokploy` und `/deploy/hetzner/who2be`; Dependabot hebt Tag und
+  # Digest gemeinsam an.
   # Ohne dieses Ecosystem laufen deren Updates durch kein Verfahren; der
   # CI-`audit`-Job prueft Python- und npm-Pakete, nicht Container-Tags.
   #
