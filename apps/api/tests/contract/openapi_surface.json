@@ -165,6 +165,11 @@
     "operationId": "copy_agent_v1_workspaces__workspace_id__agents__agent_id__copy_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/dossier",
+    "operationId": "get_dossier_v1_workspaces__workspace_id__agents__agent_id__dossier_get"
+  },
+  {
     "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/favorite",
     "operationId": "unfavorite_agent_v1_workspaces__workspace_id__agents__agent_id__favorite_delete"

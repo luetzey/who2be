@@ -474,6 +474,8 @@ PROBES: dict[str, Probe] = {
     # Gegenprobe: die Massnahme ist nicht aktiviert -> 409 nach dem Lookup.
     f"POST {_WS}/measures/{{measure_id}}/review": Probe(body={"verdict": "not_measurable"}),
     f"POST {_WS}/measures/{{measure_id}}/withdraw": Probe(body={"note": "iso"}),
+    # Dossier (E1): fremder Agent im Pfad -> 404 `agent_not_found` wie ein unbekannter.
+    f"GET {_WS}/agents/{{agent_id}}/dossier": Probe(),
     # --- Umwandeln / Uebernehmen (ADR-0053 6.4/6.5, D2c-2) ------------------
     # Seed-`memory_id` ist ein user_fact: die Gegenprobe als B endet fachlich
     # mit 409 memory_not_convertible — nach dem Lookup, also bestanden.

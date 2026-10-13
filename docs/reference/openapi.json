@@ -10259,6 +10259,81 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/dossier": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Dossier",
+        "operationId": "get_dossier_v1_workspaces__workspace_id__agents__agent_id__dossier_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dossier"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/feedback-sessions": {
       "post": {
         "tags": [
@@ -19158,6 +19233,521 @@
         ],
         "title": "DocBlockKind",
         "description": "Blocktyp eines doc-Artifacts (deterministischer Markdown-Split)."
+      },
+      "Dossier": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "min_uses": {
+            "type": "integer",
+            "title": "Min Uses"
+          },
+          "open_cases": {
+            "$ref": "#/components/schemas/DossierOpenCases"
+          },
+          "elements": {
+            "items": {
+              "$ref": "#/components/schemas/DossierElement"
+            },
+            "type": "array",
+            "title": "Elements"
+          },
+          "elements_total": {
+            "type": "integer",
+            "title": "Elements Total"
+          },
+          "access": {
+            "$ref": "#/components/schemas/DossierAccess"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/DossierMeasure"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "measures_total": {
+            "type": "integer",
+            "title": "Measures Total"
+          },
+          "generations": {
+            "items": {
+              "$ref": "#/components/schemas/DossierGeneration"
+            },
+            "type": "array",
+            "title": "Generations"
+          },
+          "generations_next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generations Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "agent_name",
+          "generated_at",
+          "min_uses",
+          "open_cases",
+          "elements",
+          "elements_total",
+          "access",
+          "measures",
+          "measures_total",
+          "generations",
+          "generations_next_cursor"
+        ],
+        "title": "Dossier",
+        "description": "`GET /agents/{agent_id}/dossier` (6.6): Vorbereitung eines Gespraechs.\n\nBausteine sind die HEUTIGEN Zuordnungen des Agenten (Persona, Template,\nPlaybooks und Resources samt Composite-Kindern) plus die Ziele seiner\nMassnahmen; Zuordnungen sind nicht historisiert. `*_total` nennt die\nGesamtzahl, wenn eine Liste gedeckelt ist. `cursor` blaettert nur\n`generations`; `generations_next_cursor` ist None auf der letzten Seite."
+      },
+      "DossierAccess": {
+        "properties": {
+          "since": {
+            "type": "string",
+            "format": "date",
+            "title": "Since"
+          },
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DossierAccessRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "since",
+          "window_days",
+          "total",
+          "rows"
+        ],
+        "title": "DossierAccess",
+        "description": "Zugriffslog des Agenten (WorkArea/KB) im Zeitfenster, nur Summen."
+      },
+      "DossierAccessRow": {
+        "properties": {
+          "ref_kind": {
+            "type": "string",
+            "title": "Ref Kind"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "sensitivity": {
+            "type": "string",
+            "title": "Sensitivity"
+          },
+          "entries": {
+            "type": "integer",
+            "title": "Entries"
+          },
+          "refs": {
+            "type": "integer",
+            "title": "Refs"
+          },
+          "last_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Last On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref_kind",
+          "operation",
+          "sensitivity",
+          "entries",
+          "refs",
+          "last_on"
+        ],
+        "title": "DossierAccessRow",
+        "description": "Eine Zeile der Zugriffslog-Zusammenfassung, ohne `ref_id`.\n\n`entries` zaehlt Eintraege des tagesweise deduplizierten Logs (je Objekt\nund Tag hoechstens einer), `refs` die verschiedenen Objekte."
+      },
+      "DossierCase": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CaseSeverity"
+          },
+          "situation": {
+            "type": "string",
+            "title": "Situation"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "title": "Expected Behavior"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "severity",
+          "situation",
+          "expected_behavior",
+          "created_at"
+        ],
+        "title": "DossierCase",
+        "description": "Ein offener Fall in Kurzform; Texte auf `DOSSIER_TEXT_MAX_LENGTH` gekuerzt."
+      },
+      "DossierElement": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/DossierVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "name",
+          "versions"
+        ],
+        "title": "DossierElement",
+        "description": "Ein Baustein des Agenten mit seinen juengsten Versionen."
+      },
+      "DossierGeneration": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "activated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activated At"
+          },
+          "measure_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Measure Ids"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shared_agent_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Agent Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "name",
+          "from_version",
+          "to_version",
+          "activated_at",
+          "measure_ids",
+          "verdict",
+          "shared_agent_count"
+        ],
+        "title": "DossierGeneration",
+        "description": "Eine Aktivierung eines Bausteins des Agenten (Weiche N2 a, Web-Verlauf E5k).\n\n- `from_version`: die zuvor aktivierte Version; None bei der ersten.\n- `measure_ids`: Massnahmen an diesem Baustein, die mit dieser Aktivierung\n  `activated` wurden; leer = direkt geaendert, ohne Review.\n- `verdict`: juengste Einstufung dieser Massnahmen.\n- `shared_agent_count`: wie viele ANDERE Agenten den Baustein heute\n  erreichen; None ohne Verweisindex (`external_tool`)."
+      },
+      "DossierMeasure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "title": "Change Summary"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "target",
+          "entity_id",
+          "change_summary",
+          "state",
+          "verdict",
+          "reviewed_at",
+          "follow_up_at",
+          "case_count",
+          "created_at"
+        ],
+        "title": "DossierMeasure",
+        "description": "Eine fruehere Massnahme mit Zustand und juengster Einstufung."
+      },
+      "DossierOpenCases": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/CaseStatus"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DossierCase"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "counts",
+          "total",
+          "items"
+        ],
+        "title": "DossierOpenCases",
+        "description": "Offene Faelle (open, triaged, in_progress, reopened): Zaehler plus juengste Faelle."
+      },
+      "DossierVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "uses": {
+            "type": "integer",
+            "title": "Uses"
+          },
+          "outcomes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Outcomes"
+          },
+          "signals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Signals"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases"
+          },
+          "insufficient": {
+            "type": "boolean",
+            "title": "Insufficient"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "active",
+          "activated_at",
+          "uses",
+          "outcomes",
+          "signals",
+          "cases",
+          "insufficient"
+        ],
+        "title": "DossierVersion",
+        "description": "Rohzahlen einer Version eines Bausteins (3.4: Nutzung nur `source='server'`).\n\n- `uses`: Auslieferungen (`usage_event.source='server'`).\n- `outcomes`: gemeldete Ergebnisse (`source='agent_report'`) je `outcome`.\n- `signals`: Alt-Feedback (`agent_feedback`) je Signal.\n- `cases`: Faelle aller Agenten mit Zuordnung zu diesem Baustein, angelegt,\n  waehrend die Version aktiv war; None, wenn es kein Aktivierungsdatum gibt.\n- `insufficient`: `uses` liegt unter `Dossier.min_uses`."
       },
       "EdgeType": {
         "type": "string",

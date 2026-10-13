@@ -1,6 +1,6 @@
 """Gespraechsprotokolle und Massnahmen: REST nach ADR-0053 6.6 (Paket E2b-3).
 
-Sieben Routen, Mount unter `/v1/workspaces/{ws_id}`:
+Acht Routen, Mount unter `/v1/workspaces/{ws_id}`:
 
 - `POST /feedback-sessions` — Protokoll einreichen (Sitzung, Faelle,
   Massnahmen in einer Transaktion; Faelle auf `in_progress`, W-E2 = a).
@@ -19,8 +19,8 @@ HTTP-Schicht ausmacht: `write_limit` an jeder schreibenden Route, die
 Keyset-Seite der Liste (Cursor im Header `X-Next-Cursor`, Muster
 `GET /cases`) und die Form der Request-Bodys.
 
-Der Dossier-Endpunkt `GET /agents/{agent_id}/dossier` aus derselben Tabelle
-gehoert nicht zu diesem Paket.
+Dazu `GET /agents/{agent_id}/dossier` (E1): das Dossier zur Vorbereitung
+eines Gespraechs (`DossierService`); `?cursor` blaettert nur die Generationen.
 """
 
 from typing import Annotated
@@ -34,7 +34,9 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import MAX_LIMIT, PageCursor
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.dossier_repository import PgDossierRepository
 from who2be_api.repositories.session_repository import PgSessionRepository
+from who2be_api.services.dossier_service import DossierService
 from who2be_api.services.measure_service import FollowUpReport, MeasureService
 from who2be_api.services.session_service import SessionService, SessionSubmitResult
 from who2be_models import (
@@ -46,7 +48,7 @@ from who2be_models import (
     SessionListItem,
     encode_cursor,
 )
-from who2be_models.session import MEASURE_EVENT_NOTE_MAX_LENGTH
+from who2be_models.session import MEASURE_EVENT_NOTE_MAX_LENGTH, Dossier
 
 router = APIRouter(tags=["feedback-sessions"])
 
@@ -112,9 +114,26 @@ def get_measure_service(
     return MeasureService(_repo(pool))
 
 
+def get_dossier_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> DossierService:
+    return DossierService(PgDossierRepository(pool))
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Sessions = Annotated[SessionService, Depends(get_session_service)]
 Measures = Annotated[MeasureService, Depends(get_measure_service)]
+Dossiers = Annotated[DossierService, Depends(get_dossier_service)]
+
+
+# --- Dossier ------------------------------------------------------------------
+
+
+@router.get("/agents/{agent_id}/dossier")
+async def get_dossier(agent_id: UUID, ctx: Ctx, service: Dossiers, cursor: PageCursor) -> Dossier:
+    # Nur Lesen, ohne `write_limit`. `cursor` = `generations_next_cursor` der
+    # vorigen Antwort; die uebrigen Bloecke sind davon unberuehrt.
+    return await service.dossier(ctx, agent_id, cursor=cursor)
 
 
 # --- Protokolle ---------------------------------------------------------------
