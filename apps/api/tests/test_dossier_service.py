@@ -17,6 +17,11 @@ Echte DB unter der Laufzeitrolle `who2be_app` (RLS aktiv), Fixtures aus
 - **Zugriffe:** Summen ohne `ref_id`, ausserhalb des Fensters nicht gezaehlt.
 - **Massnahmen und Generationen:** Einstufung an Massnahme und Generation;
   direkte Aktivierung ohne Massnahme; `shared_agent_count`; Cursor.
+- **Agent-Trennung:** Massnahmen und Zugriffslog eines anderen Agenten
+  erscheinen nicht.
+- **Groesse:** jeder Deckel (`DOSSIER_*`) greift, `*_total` bleibt vollstaendig.
+- **Abfragezahl:** konstant bei mehr Daten; nur `shared_agent_count` je
+  Baustein der Generationen-Seite.
 
 Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart fehl.
 """
@@ -24,20 +29,23 @@ Ohne DB greift der zentrale Skip; mit `WHO2BE_REQUIRE_DB=1` schlaegt er hart feh
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
+import asyncpg
 import pytest
+from test_feedback_session_schema import _measure, _protocol  # type: ignore[import-not-found]
 from test_measure_service import _MWorld, _run  # type: ignore[import-not-found]
 from test_session_service import _code, _reason  # type: ignore[import-not-found]
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.repositories.dossier_repository import PgDossierRepository
+from who2be_api.repositories.test_case_repository import _AFFECTED_SQL
 from who2be_api.services import dossier_service
 from who2be_api.services.dossier_service import DossierService, shorten
 from who2be_api.services.measure_service import FOLLOW_UP_MIN_USES
 from who2be_models import CaseCreate, CaseStatus, MeasureVerdict, decode_cursor
-from who2be_models.session import DOSSIER_TEXT_MAX_LENGTH, Dossier
+from who2be_models.session import DOSSIER_GENERATIONS_LIMIT, DOSSIER_TEXT_MAX_LENGTH, Dossier
 
 pytestmark = pytest.mark.integration
 
@@ -227,6 +235,173 @@ def test_versions_access_measures_and_generations(monkeypatch: pytest.MonkeyPatc
         page2 = await svc.dossier(w.editor, w.seed.agent_a, cursor=cursor)
         assert [g.to_version for g in page2.generations] == [2]
         assert page2.generations_next_cursor is None
+
+    _run(body)
+
+
+async def _access(w: Any, agent_id: UUID, ref_ids: list[str]) -> None:
+    for ref_id in ref_ids:
+        await w.owner.execute(
+            "INSERT INTO agent_access_log (workspace_id, agent_id, ref_kind, ref_id, "
+            " operation, sensitivity_at_access, access_date) "
+            "VALUES ($1, $2, 'artifact', $3, 'read', 'general', $4)",
+            w.seed.ws_a,
+            agent_id,
+            ref_id,
+            datetime.now(UTC).date(),
+        )
+
+
+async def _measure_with(
+    w: Any, entity_id: UUID, *, agent_id: UUID | None = None, change_summary: str | None = None
+) -> UUID:
+    """Massnahme an einer Persona ueber ein eingereichtes Protokoll (beliebiger Agent)."""
+    agent = agent_id or w.seed.agent_a
+    case_id = await w.case(agent)
+    test_case = await w.test_case(agent)
+    overrides: dict[str, object] = {"target": "persona", "entity_id": entity_id}
+    if change_summary is not None:
+        overrides["change_summary"] = change_summary
+    result = await w.svc.submit_protocol(
+        w.editor, _protocol(agent, [case_id], [_measure([case_id], test_case, **overrides)])
+    )
+    measure_id: UUID = result.detail.measures[0].id
+    return measure_id
+
+
+def test_other_agents_measures_and_access_are_excluded() -> None:
+    """Massnahmen und Zugriffslog eines anderen Agenten erscheinen nicht (M5/M6)."""
+
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona(versions=2)
+        own = await _measure_with(w, persona_id)
+        await _measure_with(w, persona_id, agent_id=w.seed.agent_a2)
+        await _measure_with(w, persona_id, agent_id=w.seed.agent_a2)
+        await _access(w, w.seed.agent_a, ["own-1"])
+        await _access(w, w.seed.agent_a2, ["foreign-1", "foreign-2", "foreign-3"])
+
+        dossier = await _service(w).dossier(w.editor, w.seed.agent_a)
+        assert dossier.measures_total == 1
+        assert [m.id for m in dossier.measures] == [own]
+        assert dossier.access.total == 1
+        assert [(r.entries, r.refs) for r in dossier.access.rows] == [(1, 1)]
+
+        # Gegenprobe: das Dossier von agent_a2 sieht genau seine eigenen Zeilen.
+        other = await _service(w).dossier(w.editor, w.seed.agent_a2)
+        assert other.measures_total == 2
+        assert own not in {m.id for m in other.measures}
+        assert other.access.total == 3
+
+    _run(body)
+
+
+def test_size_caps_keep_totals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jeder Deckel greift, `*_total` bleibt vollstaendig (M8 bis M12)."""
+
+    async def body(w: _MWorld) -> None:
+        first, _ = await w.persona(versions=3)  # v1 aktiv, v2 inaktiv, v3 Entwurf
+        second, _ = await w.persona(versions=1)
+        await _measure_with(w, first)
+        await _measure_with(w, second, change_summary="y" * 2_000)
+        await w.case()  # dritter offener Fall
+
+        svc = _service(w)
+        uncapped = await svc.dossier(w.editor, w.seed.agent_a)
+        assert uncapped.elements_total == 2
+        assert len(uncapped.elements) == 2
+        assert uncapped.measures_total == 2
+        assert uncapped.open_cases.total == 3
+        assert len(uncapped.open_cases.items) == 3
+        long_measure = next(m for m in uncapped.measures if m.entity_id == second)
+        assert len(long_measure.change_summary) == DOSSIER_TEXT_MAX_LENGTH
+        assert long_measure.change_summary.endswith("…")
+        uncapped_first = next(e for e in uncapped.elements if e.entity_id == first)
+        assert [v.version for v in uncapped_first.versions] == [3, 2, 1]
+
+        # Zwei Versionen je Baustein: die juengste und die aktive (v1) bleibt dabei.
+        monkeypatch.setattr(dossier_service, "DOSSIER_VERSIONS_PER_ELEMENT", 2)
+        few_versions = await svc.dossier(w.editor, w.seed.agent_a)
+        capped_first = next(e for e in few_versions.elements if e.entity_id == first)
+        assert [(v.version, v.active) for v in capped_first.versions] == [(3, False), (1, True)]
+
+        monkeypatch.setattr(dossier_service, "DOSSIER_ELEMENTS_LIMIT", 1)
+        monkeypatch.setattr(dossier_service, "DOSSIER_OPEN_CASES_LIMIT", 1)
+        monkeypatch.setattr(dossier_service, "DOSSIER_MEASURES_LIMIT", 1)
+        capped = await svc.dossier(w.editor, w.seed.agent_a)
+
+        assert len(capped.elements) == 1
+        assert capped.elements_total == 2
+        assert len(capped.open_cases.items) == 1
+        assert capped.open_cases.total == 3
+        assert len(capped.measures) == 1
+        assert capped.measures_total == 2
+
+    _run(body)
+
+
+class _CountingPool:
+    """Zaehlt die Abfragen des Repositories; `_AFFECTED_SQL` (shared_agent_count) getrennt."""
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+        self.fixed = 0
+        self.shared = 0
+
+    def _count(self, sql: str) -> None:
+        if sql in _AFFECTED_SQL.values():
+            self.shared += 1
+        else:
+            self.fixed += 1
+
+    async def fetch(self, sql: str, *args: Any) -> Any:
+        self._count(sql)
+        return await self._pool.fetch(sql, *args)
+
+    async def fetchval(self, sql: str, *args: Any) -> Any:
+        self._count(sql)
+        return await self._pool.fetchval(sql, *args)
+
+    async def fetchrow(self, sql: str, *args: Any) -> Any:
+        self._count(sql)
+        return await self._pool.fetchrow(sql, *args)
+
+
+def test_query_count_does_not_grow_with_data() -> None:
+    """Feste Abfragezahl; nur shared_agent_count je Baustein der Seite (N+1-Beleg)."""
+
+    async def body(w: _MWorld) -> None:
+        persona_id, _ = await w.persona(versions=3)
+        await w.to_review(persona_id, 2)
+        await w.activate_version(persona_id, 2)
+        await _assign_persona(w, w.seed.agent_a, persona_id)
+
+        async def count() -> tuple[int, int, Dossier]:
+            pool = _CountingPool(w.pool)
+            svc = DossierService(PgDossierRepository(cast(asyncpg.Pool, pool)))
+            dossier = await svc.dossier(w.editor, w.seed.agent_a)
+            return pool.fixed, pool.shared, dossier
+
+        fixed_before, shared_before, before = await count()
+
+        # Mehr von allem: Version + Aktivierung, Faelle, Massnahmen, Zugriffe.
+        await w.to_review(persona_id, 3)
+        await w.activate_version(persona_id, 3)
+        for _ in range(3):
+            await _measure_with(w, persona_id)
+            await w.case()
+        await _access(w, w.seed.agent_a, [f"r{i}" for i in range(5)])
+
+        fixed_after, shared_after, after = await count()
+
+        assert len(after.generations) > len(before.generations)
+        assert after.measures_total == 3 > before.measures_total
+        assert after.open_cases.total > before.open_cases.total
+        assert after.access.total == 5
+        assert fixed_after == fixed_before
+        # shared_agent_count: eine Abfrage je Baustein der Generationen-Seite.
+        on_page = {(g.entity_type, g.entity_id) for g in after.generations}
+        assert shared_after == shared_before == len(on_page) == 1
+        assert shared_after <= DOSSIER_GENERATIONS_LIMIT
 
     _run(body)
 
