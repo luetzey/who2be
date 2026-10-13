@@ -568,6 +568,13 @@ nicht offen sein":
 Ist nur `GOTRUE_DISABLE_SIGNUP=true` gesetzt (ohne Launch-Modus), bleibt die
 Web-UI beim Altverhalten: `/signup` leitet auf `/login` um, kein Hinweistext.
 
+**On-Prem mit `WHO2BE_BOOTSTRAP_ADMIN_EMAIL`:** Der erste Login dieser Adresse
+uebernimmt die beim ersten Boot angelegte Organisation nur, wenn
+`GOTRUE_MAILER_AUTOCONFIRM=false` oder `GOTRUE_DISABLE_SIGNUP=true` gilt — am
+auth-Dienst **und** in `deploy/hetzner/.env` fuer den `api`-Dienst. Sonst
+bekommt der Login eine eigene Organisation, und das API-Log zeigt dazu einen
+WARN mit beiden Variablen.
+
 ## Notfallpfad: Registry nicht erreichbar
 
 Regelweg fuer die Cloud-Edition ist der Registry-Pull: `api`+`migrate` ziehen
