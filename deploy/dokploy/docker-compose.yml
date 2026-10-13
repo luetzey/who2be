@@ -264,12 +264,18 @@ services:
     networks: [who2be]
     restart: unless-stopped
     healthcheck:
-      # NICHT `8333/healthz` (seaweedfs#8243, s. lokaler Stack) — Master-Port
-      # hat den echten Status-Endpunkt.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
+      # Master-Status UND „S3 auf 8333 antwortet" (jede HTTP-Antwort, auch
+      # 403) — Begruendung und seaweedfs#8243 s. lokaler Stack. Nur der
+      # Master-Port liess blobstore-bootstrap nach 4.48 ins Leere laufen.
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO /dev/null http://127.0.0.1:9333/cluster/status
+          && wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
 
   # Einmal-Service: legt den Bucket an (idempotent). Faehrt das API-Image statt
   # eines eigenen CLI-Images (das S3-SDK aus dem API-Code, Apache-2.0, ist dort
