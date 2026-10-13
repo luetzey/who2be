@@ -346,6 +346,25 @@ class SessionRead(BaseModel):
     created_at: datetime
 
 
+class SessionListItem(SessionRead):
+    """Eine Zeile der Protokoll-Liste (QE2 = a): Protokoll plus Zaehler.
+
+    - `case_count`, `measure_count`: Faelle bzw. Massnahmen des Protokolls.
+    - `due_measure_count`: Massnahmen, deren Nachschau-Datum (Massnahme,
+      sonst Protokoll) heute oder frueher liegt und die nicht abgeschlossen
+      sind (`reviewed`, `withdrawn`; PM-3).
+    - `next_follow_up_at`: fruehestes Nachschau-Datum der offenen
+      Massnahmen; None, wenn keine Massnahme mehr offen ist.
+    - `superseded_by_id`: das juengste Protokoll, das dieses korrigiert.
+    """
+
+    case_count: int
+    measure_count: int
+    next_follow_up_at: date | None
+    due_measure_count: int
+    superseded_by_id: UUID | None
+
+
 class SessionDetail(BaseModel):
     """Protokoll mit eingebetteten Massnahmen (QE1 = a)."""
 

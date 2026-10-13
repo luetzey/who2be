@@ -40,7 +40,8 @@ sind; das Ergebnis nennt sie mit ihrem Status (`cases_unchanged`).
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable
+from datetime import UTC, date, datetime
 from typing import ClassVar
 from uuid import UUID
 
@@ -56,7 +57,7 @@ from who2be_models import (
     CaseStatus,
     SessionCreate,
     SessionDetail,
-    SessionRead,
+    SessionListItem,
     SessionSubmitterKind,
 )
 
@@ -126,13 +127,19 @@ def _submitter(ctx: WorkspaceContext) -> tuple[SessionSubmitterKind, CaseActorKi
     return SessionSubmitterKind.human, CaseActorKind.human, ctx.user_id
 
 
+def _today_utc() -> date:
+    """Stichtag des due-Filters (Muster `measure_service._today_utc`)."""
+    return datetime.now(UTC).date()
+
+
 class SessionService:
     """Geschaeftslogik fuer Gespraechsprotokolle (ADR-0053 3.5, 3.6)."""
 
     __test__: ClassVar[bool] = False
 
-    def __init__(self, repo: SessionRepository) -> None:
+    def __init__(self, repo: SessionRepository, *, today: Callable[[], date] = _today_utc) -> None:
         self._repo = repo
+        self._today = today
 
     # --- Einreichen ----------------------------------------------------------
 
@@ -221,11 +228,23 @@ class SessionService:
         *,
         agent_id: UUID | None = None,
         case_id: UUID | None = None,
+        due: bool = False,
         limit: int = 50,
         cursor: tuple[datetime, UUID] | None = None,
-    ) -> list[SessionRead]:
-        """`GET /feedback-sessions?agent_id&case_id` (6.6, QE1/QE2): neueste zuerst."""
+    ) -> list[SessionListItem]:
+        """`GET /feedback-sessions?agent_id&case_id&due` (6.6, QE1/QE2): neueste zuerst.
+
+        Jede Zeile traegt die Zaehler aus QE2 = a. `due`: nur Protokolle mit
+        mindestens einer faelligen Massnahme; Stichtag ist heute (UTC), der
+        Server rechnet beim Aufruf, keine Routine (PM-3).
+        """
         require_triage_right(ctx)
         return await self._repo.list_sessions(
-            ctx.workspace_id, agent_id=agent_id, case_id=case_id, limit=limit, cursor=cursor
+            ctx.workspace_id,
+            agent_id=agent_id,
+            case_id=case_id,
+            limit=limit,
+            cursor=cursor,
+            today=self._today(),
+            due=due,
         )
