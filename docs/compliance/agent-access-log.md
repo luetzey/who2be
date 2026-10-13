@@ -43,7 +43,9 @@ am Agenten (`agent.model_provider` / `agent.model_name`).
 
 ## Betreiber-Query
 
-„Welche sensiblen Elemente sind je an einen externen Anbieter gegangen?"
+„Welche sensiblen Elemente sind in den letzten 13 Monaten an einen externen
+Anbieter gegangen?" (Ältere Zeilen löscht die Frist, siehe
+[Aufbewahrung](#aufbewahrung).)
 
 Maßgeblich sind die **gesnapshotteten** Spalten — sie beschreiben den Zustand
 zum Zugriffszeitpunkt und ändern sich nie nachträglich:

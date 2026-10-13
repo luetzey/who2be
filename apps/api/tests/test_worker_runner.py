@@ -279,6 +279,19 @@ def test_exception_and_non_counter_result_store_only_class_name() -> None:
             [raising, bad_result],
         )
         assert "example.com" not in dump
+        # Eine normale Exception (kein RoutinePartialFailure) schreibt keine
+        # Zaehler: result bleibt NULL, nur der Teilfehler-Pfad darf welche
+        # hinterlassen. Mutation „partial ≠ None ohne RoutinePartialFailure“
+        # (runner.execute setzt partial = {"x": 1} vor der isinstance-Pruefung)
+        # wird hier rot.
+        results = await conn.fetch(
+            "SELECT routine, status, result FROM routine_run WHERE routine = ANY($1::text[])",
+            [raising, bad_result],
+        )
+        assert len(results) == 2
+        for row in results:
+            assert row["status"] == "failed"
+            assert row["result"] is None, row["routine"]
 
     _in_schema(body)
 
