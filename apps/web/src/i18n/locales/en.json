@@ -3944,5 +3944,78 @@
     "sectionError": "Couldn't be loaded.",
     "loadError": "The tasks couldn't be loaded.",
     "retry": "Try again"
+  },
+  "sessions": {
+    "trigger": {
+      "threshold": "Threshold",
+      "scheduled": "Scheduled",
+      "manual": "Manual"
+    },
+    "supersede": {
+      "replacedBy": "Replaced by the review record from {{date}}",
+      "corrects": "Corrects the review record from {{date}}",
+      "toNew": "Go to the new review record",
+      "measuresStay": "This record's changes stay in effect until someone withdraws them."
+    },
+    "detail": {
+      "title": "Review on {{date}}",
+      "subtitle": "{{agent}} · {{trigger}}",
+      "subtitleClient": "{{agent}} · {{trigger}} · submitted by the client",
+      "back": "{{agent}} · Evolution",
+      "actions": "Review record actions",
+      "copyId": "Copy ID",
+      "idCopied": "ID copied.",
+      "followUpOn": "Follow-up check on {{date}}",
+      "fromClient": "Submitted by the client ({{who}}) on {{datetime}}. Can't be changed.",
+      "byHuman": "Submitted by {{name}} on {{datetime}}. Can't be changed.",
+      "participants": "Participants",
+      "participant": {
+        "builder": "Builder",
+        "formerMember": "Former member",
+        "deletedAgent": "Deleted agent"
+      },
+      "summary": "Summary",
+      "decisions": "Decisions",
+      "decisionsEmpty": "No decisions recorded.",
+      "standardRef": "Reference: {{ref}}",
+      "dissent": "Dissenting views",
+      "dissentEmpty": "No dissenting views recorded.",
+      "cases": "Cases",
+      "casesEmpty": "No cases linked anymore.",
+      "measures": "Changes",
+      "measuresEmpty": "No change was agreed in this review.",
+      "measureLabel": "M{{n}} · {{element}}",
+      "measureCases_one": "{{count}} case",
+      "measureCases_other": "{{count}} cases",
+      "testCase": "Test case: {{title}}",
+      "openMeasure": "Open change",
+      "openMeasureAria": "Open change: {{label}}",
+      "notFound": "This review doesn't exist (anymore).",
+      "toList": "Back to evolution",
+      "loadError": "The review record couldn't be loaded."
+    },
+    "measure": {
+      "state": {
+        "agreed": "Agreed",
+        "draft_linked": "Draft linked",
+        "activated": "Activated",
+        "follow_up_prepared": "Figures ready",
+        "effective": "Worked",
+        "ineffective": "Didn't work",
+        "not_measurable": "Not measurable",
+        "withdrawn": "Withdrawn"
+      },
+      "due": "Follow-up check due",
+      "dueNotActive": "Follow-up check due, change not active yet",
+      "followUpOn": "Follow-up check on {{date}}"
+    },
+    "copy": {
+      "label": "Paste into your client:",
+      "button": "Copy",
+      "copied": "Copied.",
+      "correctionTitle": "Submit a correction",
+      "correctionIntro": "A review record can't be changed. Have the Builder submit a new one that replaces it.",
+      "correction": "Correct review record {{sessionId}} for {{agent}} ({{agentId}}). Load it, check with me what is wrong, and submit a new record with submit_session_protocol and supersedes_id {{sessionId}}."
+    }
   }
 }

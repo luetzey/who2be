@@ -42,7 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CaseStatusDot } from '@/features/feedback/components/CaseList'
+import { CaseStatusDot } from '@/components/cases/CaseStatusDot'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
