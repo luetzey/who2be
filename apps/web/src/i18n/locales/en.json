@@ -2659,7 +2659,10 @@
         "addressUnavailable": "Addressed needs a version of an assigned building block.",
         "toVersion": "Go to version",
         "dismiss": "Dismiss…",
-        "reopen": "Reopen…"
+        "reopen": "Reopen…",
+        "prepareSession": "Prepare a review",
+        "toMeasure": "Go to change",
+        "toFollowUp": "Go to follow-up check"
       },
       "assign": {
         "title": "Assign case",
@@ -2687,7 +2690,8 @@
         "activeTag": "active",
         "choose": "Please choose …",
         "note": "Note (optional)",
-        "submit": "Mark as addressed"
+        "submit": "Mark as addressed",
+        "noFollowUp": "Without a change from a review there's no follow-up check. The case can't be closed as \"Verified\" then."
       },
       "dismiss": {
         "title": "Dismiss case",
