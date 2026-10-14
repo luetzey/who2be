@@ -176,6 +176,12 @@ const AgentDetailPage = lazy(() =>
     default: mod.AgentDetailPage,
   })),
 )
+// ADR-0053 Phase E (E5c): Review-Ergebnis am Agenten.
+const ReviewDetailPage = lazy(() =>
+  import('@/features/evolution/pages/ReviewDetailPage').then((mod) => ({
+    default: mod.ReviewDetailPage,
+  })),
+)
 const SystemPromptsPage = lazy(() =>
   import('@/features/system-prompts/pages/SystemPromptsPage').then((mod) => ({
     default: mod.SystemPromptsPage,
@@ -411,6 +417,12 @@ export function RouterRoot() {
                 />
                 <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
                 <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
+                {/* Review-Ergebnis am Agenten (ADR-0053 Phase E, Neuschnitt
+                    §2, Weiche N4 a). `prepare` (E5f) steht spaeter davor. */}
+                <Route
+                  path="/w/:workspaceId/agents/:agentId/reviews/:sessionId"
+                  element={<ReviewDetailPage />}
+                />
                 <Route
                   path="/w/:workspaceId/system-prompts"
                   element={<SystemPromptsPage />}

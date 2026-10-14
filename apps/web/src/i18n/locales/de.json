@@ -3944,5 +3944,78 @@
     "sectionError": "Konnte nicht geladen werden.",
     "loadError": "Die Aufgaben konnten nicht geladen werden.",
     "retry": "Erneut versuchen"
+  },
+  "sessions": {
+    "trigger": {
+      "threshold": "Schwelle",
+      "scheduled": "Termin",
+      "manual": "Manuell"
+    },
+    "supersede": {
+      "replacedBy": "Ersetzt durch das Review-Ergebnis vom {{date}}",
+      "corrects": "Korrigiert das Review-Ergebnis vom {{date}}",
+      "toNew": "Zum neuen Review-Ergebnis",
+      "measuresStay": "Die Änderungen dieses Review-Ergebnisses gelten weiter, bis jemand sie zurückzieht."
+    },
+    "detail": {
+      "title": "Review vom {{date}}",
+      "subtitle": "{{agent}} · {{trigger}}",
+      "subtitleClient": "{{agent}} · {{trigger}} · vom Client übermittelt",
+      "back": "{{agent}} · Weiterentwicklung",
+      "actions": "Aktionen zum Review-Ergebnis",
+      "copyId": "ID kopieren",
+      "idCopied": "ID kopiert.",
+      "followUpOn": "Nachkontrolle am {{date}}",
+      "fromClient": "Vom Client übermittelt ({{who}}) am {{datetime}}. Unveränderlich.",
+      "byHuman": "Eingereicht von {{name}} am {{datetime}}. Unveränderlich.",
+      "participants": "Teilnehmende",
+      "participant": {
+        "builder": "Builder",
+        "formerMember": "Ehemaliges Mitglied",
+        "deletedAgent": "Gelöschter Agent"
+      },
+      "summary": "Zusammenfassung",
+      "decisions": "Entscheidungen",
+      "decisionsEmpty": "Keine Entscheidungen festgehalten.",
+      "standardRef": "Verweis: {{ref}}",
+      "dissent": "Abweichende Meinungen",
+      "dissentEmpty": "Keine abweichenden Meinungen festgehalten.",
+      "cases": "Rückmeldungen",
+      "casesEmpty": "Keine Rückmeldungen mehr verknüpft.",
+      "measures": "Änderungen",
+      "measuresEmpty": "In diesem Review wurde keine Änderung vereinbart.",
+      "measureLabel": "M{{n}} · {{element}}",
+      "measureCases_one": "{{count}} Rückmeldung",
+      "measureCases_other": "{{count}} Rückmeldungen",
+      "testCase": "Prüffall: {{title}}",
+      "openMeasure": "Änderung öffnen",
+      "openMeasureAria": "Änderung öffnen: {{label}}",
+      "notFound": "Dieses Review gibt es nicht (mehr).",
+      "toList": "Zur Weiterentwicklung",
+      "loadError": "Das Review-Ergebnis konnte nicht geladen werden."
+    },
+    "measure": {
+      "state": {
+        "agreed": "Vereinbart",
+        "draft_linked": "Entwurf verknüpft",
+        "activated": "Aktiviert",
+        "follow_up_prepared": "Kennzahlen bereit",
+        "effective": "Hat gewirkt",
+        "ineffective": "Hat nicht gewirkt",
+        "not_measurable": "Nicht messbar",
+        "withdrawn": "Zurückgezogen"
+      },
+      "due": "Nachkontrolle fällig",
+      "dueNotActive": "Nachkontrolle fällig, Änderung noch nicht aktiv",
+      "followUpOn": "Nachkontrolle am {{date}}"
+    },
+    "copy": {
+      "label": "Im Client einfügen:",
+      "button": "Kopieren",
+      "copied": "Kopiert.",
+      "correctionTitle": "Korrektur einreichen",
+      "correctionIntro": "Ein Review-Ergebnis lässt sich nicht ändern. Lass den Builder ein neues einreichen, das dieses ersetzt.",
+      "correction": "Korrigiere das Review-Ergebnis {{sessionId}} zu {{agent}} ({{agentId}}). Lade es, kläre mit mir, was falsch ist, und reiche mit submit_session_protocol ein neues Protokoll mit supersedes_id {{sessionId}} ein."
+    }
   }
 }
