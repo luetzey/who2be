@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   CaseCounts,
+  Dossier,
   InboxCounts,
   MeasureEvent,
   MeasureRead,
@@ -25,6 +26,7 @@ const api = vi.hoisted(() => ({
   getResource: vi.fn(),
   getExternalTool: vi.fn(),
   getSystemPromptTemplate: vi.fn(),
+  getDossier: vi.fn(),
 }))
 
 vi.mock('@/api/useApi', () => ({ useApi: () => api }))
@@ -35,7 +37,7 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
 }))
 
 // Anfragen, die nur editor stellen darf (§3.7: viewer ohne Reviews/Muster).
-const EDITOR_ONLY = ['listSessions', 'getSession', 'listPatterns'] as const
+const EDITOR_ONLY = ['listSessions', 'getSession', 'listPatterns', 'getDossier'] as const
 
 const AGENT = { id: 'a1', name: 'Support-Assistent' }
 
@@ -143,6 +145,65 @@ const S1_MEASURES = [
   measure({ id: 'm3', events: [ev('withdrawn', '2026-09-28T10:00:00Z')], state: 'withdrawn' }),
 ]
 
+// Dossier fuer den Verlauf (E5k): eine Aktivierung aus Review s1, eine direkte.
+const MEASURE_ID = '6f1c2a3b-0000-4000-8000-0000000000a1'
+const SESSION_ID = '6f1c2a3b-0000-4000-8000-0000000000b1'
+
+function dossier(overrides: Partial<Dossier> = {}): Dossier {
+  return {
+    agent_id: 'a1',
+    agent_name: 'Support-Assistent',
+    generated_at: '2026-10-14T10:00:00Z',
+    min_uses: 20,
+    open_cases: { counts: {}, total: 0, items: [] },
+    elements: [],
+    elements_total: 0,
+    access: { since: '2026-07-16', window_days: 90, total: 0, rows: [] },
+    measures: [
+      {
+        id: MEASURE_ID,
+        session_id: SESSION_ID,
+        target: 'playbook',
+        entity_id: 'pb1',
+        change_summary: 'Frist aus Resource lesen',
+        state: 'activated',
+        verdict: null,
+        reviewed_at: null,
+        follow_up_at: '2026-10-24',
+        case_count: 3,
+        created_at: '2026-09-25T10:00:00Z',
+      },
+    ],
+    measures_total: 1,
+    generations: [
+      {
+        entity_type: 'playbook',
+        entity_id: 'pb1',
+        name: 'Erstattung',
+        from_version: 3,
+        to_version: 4,
+        activated_at: '2026-09-26T10:00:00Z',
+        measure_ids: [MEASURE_ID],
+        verdict: null,
+        shared_agent_count: 0,
+      },
+      {
+        entity_type: 'persona',
+        entity_id: 'p1',
+        name: 'Kundenservice',
+        from_version: 1,
+        to_version: 2,
+        activated_at: '2026-09-20T10:00:00Z',
+        measure_ids: [],
+        verdict: null,
+        shared_agent_count: null,
+      },
+    ],
+    generations_next_cursor: null,
+    ...overrides,
+  }
+}
+
 function renderTab(inbox: InboxCounts | null = inboxCounts(), failed = false) {
   return renderInRoutes(<AgentEvolutionTab agent={AGENT} inbox={{ counts: inbox, failed }} />, {
     path: '/w/:workspaceId/agents/:id',
@@ -195,6 +256,7 @@ beforeEach(() => {
   })
   api.getPlaybook.mockResolvedValue({ id: 'pb1', name: 'Erstattung' })
   api.getPersona.mockResolvedValue({ id: 'p1', name: 'Kundenservice' })
+  api.getDossier.mockResolvedValue(dossier())
   withData()
 })
 
@@ -557,6 +619,30 @@ describe('AgentEvolutionTab — Rechte', () => {
     renderTab()
     expect(await screen.findByTestId('agent-evolution')).toBeInTheDocument()
     expect(api.listSessions).toHaveBeenCalled()
+  })
+})
+
+describe('AgentEvolutionTab — Verlauf', () => {
+  it('zeigt den Verlauf unter den Reviews, eine Dossier-Anfrage für den Agenten', async () => {
+    renderTab()
+
+    const timeline = await screen.findByTestId('evolution-timeline')
+    expect(within(timeline).getByRole('heading', { level: 2, name: 'Verlauf' })).toBeInTheDocument()
+    const items = await within(timeline).findAllByTestId('evolution-generation')
+    expect(items).toHaveLength(2)
+    expect(items[0]).toHaveTextContent('Generation vom 26.09.2026 · Playbook Erstattung v3 → v4')
+    expect(items[0]).toHaveTextContent('Nachkontrolle am 24.10.2026')
+    expect(within(items[0]).getByRole('link', { name: 'Änderung ansehen: Playbook Erstattung' })).toHaveAttribute(
+      'href',
+      `/w/ws-1/agents/a1/reviews/${SESSION_ID}?change=${MEASURE_ID}`,
+    )
+    expect(items[1]).toHaveTextContent('Direkt geändert, ohne Review')
+
+    // Reihenfolge: Verlauf steht nach „Reviews“.
+    const reviews = screen.getByTestId('evolution-reviews')
+    expect(reviews.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(api.getDossier).toHaveBeenCalledTimes(1)
+    expect(api.getDossier).toHaveBeenCalledWith('a1', undefined)
   })
 })
 

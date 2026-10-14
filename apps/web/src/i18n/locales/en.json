@@ -4054,6 +4054,29 @@
           "dismissed": "{{count}} dismissed"
         },
         "explain": "Editors run reviews, changes and follow-up checks. You can see what becomes of your case from its status: In progress · Addressed · Verified."
+      },
+      "timeline": {
+        "title": "History",
+        "intro": "Every activated version of a building block is a new generation of the agent.",
+        "listAria": "Generations, newest first",
+        "generation": "Generation of {{date}}",
+        "versions": "v{{from}} → v{{to}}",
+        "firstVersion": "v{{to}}",
+        "direct": "Changed directly, without review",
+        "noFollowUp": "No follow-up check",
+        "why_one": "Why: 1 case",
+        "why_other": "Why: {{count}} cases",
+        "whyReview_one": "Why: 1 case (review of {{date}})",
+        "whyReview_other": "Why: {{count}} cases (review of {{date}})",
+        "fromReview": "From a review",
+        "shared_one": "also affects: 1 other agent",
+        "shared_other": "also affects: {{count}} other agents",
+        "open": "View change",
+        "openAria": "View change: {{element}}",
+        "more": "Show older generations",
+        "moreError": "Older generations could not be loaded.",
+        "loadError": "The history could not be loaded.",
+        "empty": "No generation yet. As soon as you activate a change, it appears here."
       }
     },
     "trigger": {
