@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import type { MeasureEvent, MeasureEventKind, MeasureVerdict } from '@/api/types'
 
@@ -120,9 +120,33 @@ describe('Faellig: Tagesvergleich ohne Uhrzeit', () => {
     expect(daysSince('2026-10-15', TODAY)).toBe(-1)
     expect(isOnOrBeforeToday('2026-10-15', new Date(2026, 9, 14, 23, 59))).toBe(false)
   })
-  it('zaehlt ueber die Zeitumstellung ganze Tage', () => {
-    // 25.10.2026: Ende der Sommerzeit in Mitteleuropa.
+})
+
+// Sommerzeit: Die Zeitzone wird fest auf Europe/Berlin gesetzt, damit der
+// Test auch in einer CI mit TZ=UTC eine Umstellung sieht. Der Waechter-Test
+// prueft, dass die Umstellung wirklich greift, sonst bewiese der Rest nichts.
+describe('Faellig: ganze Tage ueber die Zeitumstellung (Europe/Berlin)', () => {
+  let previousTz: string | undefined
+  beforeAll(() => {
+    previousTz = process.env.TZ
+    process.env.TZ = 'Europe/Berlin'
+  })
+  afterAll(() => {
+    if (previousTz === undefined) delete process.env.TZ
+    else process.env.TZ = previousTz
+  })
+
+  it('Waechter: die Zeitzone hat Sommer- und Winterzeit', () => {
+    expect(new Date(2026, 0, 15).getTimezoneOffset()).toBe(-60)
+    expect(new Date(2026, 6, 15).getTimezoneOffset()).toBe(-120)
+  })
+  it('Fruehjahr (29.03.2026, Tag mit 23 Stunden): kurz nach Mitternacht 10 Tage', () => {
+    expect(daysSince('2026-03-20', new Date(2026, 2, 30, 0, 30))).toBe(10)
+    expect(daysSince('2026-03-28', new Date(2026, 2, 29, 0, 30))).toBe(1)
+  })
+  it('Herbst (25.10.2026, Tag mit 25 Stunden): 10 Tage, auch kurz vor Mitternacht', () => {
     expect(daysSince('2026-10-20', new Date(2026, 9, 30, 8, 0))).toBe(10)
+    expect(daysSince('2026-10-24', new Date(2026, 9, 25, 23, 59))).toBe(1)
   })
 })
 

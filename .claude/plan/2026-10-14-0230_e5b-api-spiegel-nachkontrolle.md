@@ -9,7 +9,7 @@ Web kennt die Typen und Client-Methoden der Protokoll-/Maßnahmen-Routen auf
 main (E2b-3/E2b-4) und eine reine Funktion für Zustand, Nachkontroll-Datum,
 fällig (zwei Varianten) und „seit n Tagen“. Ohne UI.
 
-## Dateien (6 von max. 8)
+## Dateien (7 von max. 8)
 1. `apps/web/src/api/types.ts` — SessionRead, SessionListItem, SessionDetail,
    MeasureRead, MeasureEvent, MeasureVerdict, MeasureState, SessionFilters,
    SessionPage, FollowUpReport (+ VersionReport, RunRate). Quelle:
@@ -28,3 +28,11 @@ Query-/Cursor-Abbildung (Budget 8 bleibt eingehalten, 7 Dateien).
 ## Verifikation
 `npx tsc -b`, `npx vitest run src/features/evolution src/api`, `npm run lint`,
 volle Vitest-Suite. Fotos: entfallen, keine sichtbare UI-Änderung.
+
+## Review-Runde 1 (B1)
+Sommerzeit-Test: eigener Block mit fest gesetztem `process.env.TZ =
+'Europe/Berlin'` plus Wächter-Test (Offset Winter −60, Sommer −120), damit er
+auch in einer CI unter UTC eine Umstellung sieht. Frühjahr 29.03. und Herbst
+25.10. Mutation `Math.floor((to - from)/86_400_000)` muss unter TZ=UTC und
+TZ=Europe/Berlin rot sein. Dazu ein Satz in `followUp.ts`, dass der Server
+mit dem UTC-Kalendertag rechnet.

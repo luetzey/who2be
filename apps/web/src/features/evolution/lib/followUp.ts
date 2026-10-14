@@ -9,7 +9,9 @@
 // - Datum der Nachkontrolle: das der Aenderung, sonst das des Protokolls.
 // - Faellig: Datum heute oder frueher, im lokalen Kalender des Browsers ohne
 //   Uhrzeit, und die Aenderung ist nicht abgeschlossen. „Faellig“ ist kein
-//   Zustand, sondern eine berechnete Markierung.
+//   Zustand, sondern eine berechnete Markierung. Achtung: Der Server rechnet
+//   `due` und `due_measure_count` mit dem UTC-Kalendertag; wie die Abweichung zum
+//   lokalen Tag aufgeloest wird, ist noch offen.
 //
 // Nutzertexte stehen nicht hier: Die Funktionen liefern Tokens, die UI
 // uebersetzt sie (Keys nach den Begriffen „Aenderung“, „Nachkontrolle“).
