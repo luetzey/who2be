@@ -1261,13 +1261,71 @@ describe('CaseDetailPage – Verknüpft, Nachkontrolle, Verlauf-Links (E5h)', ()
     expect(within(bar).getByTestId('case-status-menu')).toBeInTheDocument()
   })
 
+  // AK5: axe je Zustand ein eigenes it(), jeweils als editor mit Hauptaktion.
   it.each([
     ['in_progress', 'Zur Änderung'],
     ['addressed', 'Zur Nachkontrolle'],
+    ['triaged', 'Review vorbereiten'],
+    ['verified', 'Zur Nachkontrolle'],
   ] as const)('a11y: Nächster Schritt %s ohne Violations', async (status, name) => {
-    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status } })
+    const base = withHistory()
+    if (status === 'triaged') {
+      api.listTestCases.mockResolvedValue([{ id: 'tc1', title: 'Push-Regel', agent_id: 'a1' }])
+    }
+    api.getCase.mockResolvedValue({
+      ...base,
+      case: { ...base.case, status },
+      events:
+        status === 'verified'
+          ? [
+              ...base.events,
+              event({
+                id: 'e9',
+                event: 'verified',
+                actor_kind: 'system',
+                actor_id: null,
+                measure_id: 'm2',
+                created_at: '2026-10-09T10:00:00Z',
+              }),
+            ]
+          : base.events,
+    })
     const { container } = renderPage()
-    expect(await primaryOf()).toHaveAccessibleName(name)
+    const primary = await primaryOf()
+    expect(primary).toHaveAccessibleName(name)
+    expect(primary.tagName).toBe('A')
     expect(await axe(container)).toHaveNoViolations()
   }, 15_000)
+
+  it('a11y: Dialog „Als geändert markieren“ mit noFollowUp-Satz ohne Violations', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'triaged' } })
+    api.listTestCases.mockResolvedValue([{ id: 'tc1', title: 'Push-Regel', agent_id: 'a1' }])
+    renderPage()
+    await primaryOf()
+    openStatusMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Als geändert markieren…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Als geändert markieren' })
+    expect(within(dialog).getByTestId('case-address-no-follow-up')).toBeInTheDocument()
+    await within(dialog).findByRole('option', { name: 'v3 · aktiv' })
+
+    expect(await axe(document.body)).toHaveNoViolations()
+  }, 15_000)
+
+  it('nach einer Aktion werden auch die Änderungen zum Fall neu geladen', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'in_progress' } })
+    renderPage()
+    await primaryOf()
+    expect(api.listSessions).toHaveBeenCalledTimes(1)
+
+    openStatusMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Verwerfen…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung verwerfen' })
+    fireEvent.change(within(dialog).getByLabelText('Warum wird nichts geändert?'), {
+      target: { value: 'Kein Fehler des Agenten.' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Verwerfen' }))
+
+    await waitFor(() => expect(api.transitionCase).toHaveBeenCalled())
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalledTimes(2))
+  })
 })
