@@ -263,14 +263,19 @@ echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 sichtbaren Werkzeuge plus Server-`instructions` (1.604 Bytes), die jeder
 Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 |
-| --- | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 |
-| Agent, Builder | 110.000 | 105.894 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) |
+| --- | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 |
+
+Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
+2026-10-14 auf 120.000 angehoben („1a“), weil die Gespraechs-Werkzeuge aus
+Phase E (E-MCP-1) den Builder-Start auf 111.567 Bytes bringen. Das Default-Ziel
+bleibt 35.000.
 
 `test_agent_start_meets_target_per_profile` haelt beide Ziele; das
 Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
-Beschreibungen kuerzen, nicht das Ziel anheben.
+Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an.
 
 Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
 

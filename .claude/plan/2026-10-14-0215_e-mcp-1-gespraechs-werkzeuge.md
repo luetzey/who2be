@@ -31,13 +31,14 @@ Payload vorher (origin/main 37d339ca): 90 Werkzeuge, 104 290 Bytes; Builder
 (Start mit `instructions` 111 567), Default 29 497 (unveraendert, die vier
 Werkzeuge brauchen `case_triage`).
 
-## Offen (needs_input an @pm)
+## Entschieden (Owner 2026-10-14, „1a, 2b“)
 
 1. `test_agent_start_meets_target_per_profile`: Builder-Start 111 567 >
-   Ziel 110 000 (`_START_TARGET_BYTES`, Test sagt „nicht das Ziel anheben“).
-   Die Karte regelt nur das Katalog-Budget. Schnitt erst nach Entscheidung.
-2. `test_doc_tool_count[CLAUDE.md]`: Zeile 98 „90 Tools gesamt“ -> „94“
-   (Owner-Handgriff laut Karte).
+   Ziel 110 000. Owner 1a: Builder-Ziel 110 000 -> 120 000 in
+   `_START_TARGET_BYTES` und `docs/mcp-payload-budget.md`, Default bleibt
+   35 000; der Test-Hinweis verweist jetzt auf die Owner-Entscheidung.
+2. `test_doc_tool_count[CLAUDE.md]`: Owner 2b, `CLAUDE.md` Zeile 98
+   „90 Tools gesamt“ -> „94“ als eigener Owner-Commit 3ef39af1 auf dem Branch.
 
 ## Drift-Schutz Spiegelmodelle
 
