@@ -36,6 +36,33 @@ function stub(counts: InboxCounts) {
       const url = String(input)
       const json = (payload: unknown) => new Response(JSON.stringify(payload), { status: 200 })
       if (url.includes('/inbox/counts')) return json(counts)
+      if (url.includes('/feedback-sessions'))
+        return new Response(
+          JSON.stringify([
+            {
+              id: 's1',
+              workspace_id: 'ws-1',
+              agent_id: 'a1',
+              trigger: 'manual',
+              participants: [],
+              summary: 'Zusammenfassung',
+              decisions: [],
+              dissent: [],
+              follow_up_at: '2026-09-01',
+              supersedes_id: null,
+              submitted_by_kind: 'agent',
+              submitted_by: 'b1',
+              case_ids: [],
+              created_at: '2026-08-25T10:00:00Z',
+              case_count: 1,
+              measure_count: 2,
+              next_follow_up_at: '2026-09-01',
+              due_measure_count: 2,
+              superseded_by_id: null,
+            },
+          ]),
+          { status: 200, headers: { 'X-Next-Cursor': 'c2' } },
+        )
       if (url.includes('/memories'))
         return json({
           items: [
@@ -109,6 +136,10 @@ describe('InboxPage a11y', () => {
     const { container } = renderPage('admin')
     await screen.findByRole('link', { name: 'Einordnen: Antwort auf Englisch statt Deutsch' })
     await screen.findByRole('link', { name: 'Erstattung Version 3 öffnen' })
+    // Nachkontroll-Zeile (E5j) mit Pill und „Weitere laden“.
+    await screen.findByRole('link', { name: /^Nachkontrolle öffnen: Review vom/ })
+    expect(screen.getByRole('button', { name: 'Weitere laden' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Nachkontrollen fällig, 1' })).toBeInTheDocument()
     // Jeder Abschnitt ist eine benannte Region mit Zahl im Namen (Spec §8).
     expect(screen.getByRole('region', { name: 'Gedächtnis zur Freigabe, 1' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Zum Anschauen' })).toBeInTheDocument()

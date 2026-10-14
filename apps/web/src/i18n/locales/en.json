@@ -3887,7 +3887,18 @@
       "toLookHint": "not counted in the bell"
     },
     "followUps": {
-      "pending": "You will open individual follow-ups on the agent under “Improvement”. Until then, this row only shows how many are due."
+      "row": "Review of {{date}} · {{agent}}",
+      "today": "due today",
+      "since_one": "due for 1 day",
+      "since_other": "due for {{count}} days",
+      "changes_one": "1 change to check",
+      "changes_other": "{{count}} changes to check",
+      "term": "Due {{date}}",
+      "open": "Open follow-up check",
+      "openAria": "Open follow-up check: {{title}}",
+      "loadMore": "Load more",
+      "loadingMore": "Loading …",
+      "atAgent": "View at {{agent}}"
     },
     "memory": {
       "userMemory": "Your user memory"

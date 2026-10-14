@@ -178,7 +178,7 @@ describe('AgentOverview (Navigation W2-b, Spec §3.2)', () => {
     )
 
     const cases = await screen.findByRole('link', { name: 'Rückmeldungen offen: 4' })
-    expect(cases).toHaveAttribute('href', '/w/ws-1/feedback?tab=cases&agent=a1')
+    expect(cases).toHaveAttribute('href', '/w/ws-1/agents/a1?tab=evolution')
     expect(cases).toHaveAccessibleDescription('1 wieder offen · 1 in Arbeit')
 
     const feedback = await screen.findByRole('link', { name: 'Feedback zu seinen Bausteinen: 5' })
