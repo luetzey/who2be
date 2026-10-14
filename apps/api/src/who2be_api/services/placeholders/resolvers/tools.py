@@ -654,6 +654,34 @@ _TOOLS: list[_ToolDoc] = [
             "an denen sie liegen. Die Zuordnung ersetzt die bisherige vollstaendig."
         ),
     ),
+    # --- Feedback-Gespraech (ADR-0053 6.6, E-MCP-1). Ein Gate (`case_triage`)
+    #     fuer alle vier; Einstufen und Zurueckziehen bleiben beim Menschen.
+    _ToolDoc(
+        signature=(
+            "get_dossier(agent_id, cursor?) / submit_session_protocol(agent_id, trigger, "
+            "participants, case_ids, summary, decisions, dissent, follow_up_at, measures, "
+            "supersedes_id?)"
+        ),
+        tool_names=("get_dossier", "submit_session_protocol"),
+        description=(
+            "Feedback-Gespraech: das Dossier bereitet es vor (offene Faelle, Rohzahlen je "
+            "Version, fruehere Massnahmen), das Protokoll haelt es fest. Jede Massnahme "
+            "braucht Faelle aus dem Protokoll und einen Prueffall; entscheiden und "
+            "einstufen tut ein Mensch."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "link_measure_draft(measure_id, version_entity_type, version_id) / "
+            "get_follow_up(measure_id)"
+        ),
+        tool_names=("link_measure_draft", "get_follow_up"),
+        description=(
+            "Massnahmen begleiten: einen Entwurf verknuepfen, bis die Version aktiv ist, "
+            "und die Nachschau als Rohzahlen vorher/nachher lesen. Die Einstufung hat "
+            "kein Werkzeug."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks

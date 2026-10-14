@@ -254,10 +254,30 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # Seit B3 (ADR-0053) + 2 Lernschleifen-Tools aus `tools/learning.py`,
     # seit C4b + `propose_memory_change` (ebenda), seit D4 + 4 Fall-Tools
     # (`report_case`, `submit_case_statement`, `list_cases`,
-    # `assign_case_elements`, ebenda).
-    assert len(MCP_TOOL_REQUIREMENTS) == 90
+    # `assign_case_elements`, ebenda), seit E-MCP-1 + 4 Gespraechs-Tools aus
+    # `tools/sessions.py`.
+    assert len(MCP_TOOL_REQUIREMENTS) == 94
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
+
+
+def test_session_tools_requirements() -> None:
+    """E-MCP-1 (ADR-0053 6.6/6.7): die Gespraechs-Werkzeuge nur mit `case_triage`.
+
+    Kein Werkzeug fuer Einstufen oder Zurueckziehen: das entscheidet ein Mensch.
+    """
+    session_tools = (
+        "get_dossier",
+        "submit_session_protocol",
+        "link_measure_draft",
+        "get_follow_up",
+    )
+    for name in session_tools:
+        req = MCP_TOOL_REQUIREMENTS[name]
+        assert set(req.capabilities) == {AgentCapability.case_triage}, name
+        assert req.read_domain is None and req.memory is None and not req.always
+    human_only = {"review_measure", "withdraw_measure", "review", "withdraw"}
+    assert not human_only & set(MCP_TOOL_REQUIREMENTS)
 
 
 def test_case_tools_requirements() -> None:

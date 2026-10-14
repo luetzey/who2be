@@ -86,8 +86,11 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 # inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
 # nachgezogenen `list_tables`/`delete_table`), mehr nicht. Seit 2026-10-06
 # misst der Test die Draht-Form (inkl. `title`/`_meta` aus fastmcp 4):
-# 86 Tools / 142_295 Bytes.
-_PAYLOAD_BUDGET_BYTES = 160_000
+# 86 Tools / 142_295 Bytes. Seit W-E1 b (Owner 2026-10-09: alle D7-
+# Werkzeugluecken in Phase E schliessen) 180_000: zehn neue Werkzeuge kommen
+# hinzu; die Token-Optimierung aller Werkzeuge ist ein eigenes, spaeteres
+# Vorhaben. Messung vor E-MCP-1: 90 Tools / 104_290 Bytes.
+_PAYLOAD_BUDGET_BYTES = 180_000
 _NEW_TOOL_DOC_CAP = 1_100
 
 # Die Schwelle der Konsumenten-Laufzeit fuer eine EINZELNE Tool-Antwort. Keine
