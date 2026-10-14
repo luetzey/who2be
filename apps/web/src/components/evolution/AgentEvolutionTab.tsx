@@ -28,6 +28,7 @@ import {
   parseDay,
   type FollowUpStatus,
 } from '@/features/evolution/lib/followUp'
+import { EvolutionTimeline } from '@/features/evolution/components/EvolutionTimeline'
 import { formatDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
@@ -48,7 +49,8 @@ import { cn } from '@/lib/utils'
 // Review-Zeile aus `due_measure_count`. `followUp.ts` rechnet nur an der
 // einzelnen Aenderung (Zustand, Pill), wo es keinen Serverwert gibt.
 //
-// Verlauf (Generationen, §3.6) baut E5k.
+// Verlauf (Generationen, §3.6, E5k): `EvolutionTimeline` unter den Reviews,
+// Daten aus dem Dossier-Block `generations` (eine Anfrage, Cursor).
 
 /** Reviews, deren Aenderungen der Tab hoechstens laedt (§3.4: 10 × `getSession`). */
 export const EVOLUTION_REVIEW_LIMIT = 10
@@ -486,6 +488,12 @@ function EditorEvolution({ agent, inbox }: AgentEvolutionTabProps) {
   const overdue =
     dueSession?.next_follow_up_at != null ? Math.max(daysSince(dueSession.next_follow_up_at), 0) : null
 
+  // Datum der geladenen Reviews fuer „Warum: … (Review vom …)“ im Verlauf.
+  const reviewDates = useMemo(
+    () => Object.fromEntries(reviews.items.map((row) => [row.id, row.created_at])),
+    [reviews.items],
+  )
+
   return (
     <div className="flex flex-col gap-8" data-testid="agent-evolution">
       <h2 className="sr-only">{t('evolution.title')}</h2>
@@ -697,6 +705,8 @@ function EditorEvolution({ agent, inbox }: AgentEvolutionTabProps) {
           </>
         )}
       </section>
+
+      <EvolutionTimeline agentId={agent.id} changeHref={reviewPath} reviewDates={reviewDates} />
     </div>
   )
 }

@@ -4054,6 +4054,29 @@
           "dismissed": "{{count}} verworfen"
         },
         "explain": "Reviews, Änderungen und Nachkontrollen führen Editoren. Was aus deiner Rückmeldung wird, siehst du an ihrem Status: In Arbeit · Geändert · Hat gewirkt."
+      },
+      "timeline": {
+        "title": "Verlauf",
+        "intro": "Jede aktivierte Version eines Bausteins ist eine neue Generation des Agenten.",
+        "listAria": "Generationen, neueste zuerst",
+        "generation": "Generation vom {{date}}",
+        "versions": "v{{from}} → v{{to}}",
+        "firstVersion": "v{{to}}",
+        "direct": "Direkt geändert, ohne Review",
+        "noFollowUp": "Keine Nachkontrolle",
+        "why_one": "Warum: 1 Rückmeldung",
+        "why_other": "Warum: {{count}} Rückmeldungen",
+        "whyReview_one": "Warum: 1 Rückmeldung (Review vom {{date}})",
+        "whyReview_other": "Warum: {{count}} Rückmeldungen (Review vom {{date}})",
+        "fromReview": "Aus einem Review",
+        "shared_one": "betrifft auch: 1 weiteren Agenten",
+        "shared_other": "betrifft auch: {{count}} weitere Agenten",
+        "open": "Änderung ansehen",
+        "openAria": "Änderung ansehen: {{element}}",
+        "more": "Ältere Generationen zeigen",
+        "moreError": "Ältere Generationen konnten nicht geladen werden.",
+        "loadError": "Der Verlauf konnte nicht geladen werden.",
+        "empty": "Noch keine Generation. Sobald du eine Änderung aktivierst, erscheint sie hier."
       }
     },
     "trigger": {
