@@ -2204,9 +2204,12 @@ export interface SessionListItem extends SessionRead {
 }
 
 // `GET /feedback-sessions/{id}`: Protokoll mit eingebetteten Aenderungen (QE1 a).
+// `superseded_by_id` wie an `SessionListItem`: das juengste Protokoll, das
+// dieses korrigiert; `null` = nicht ersetzt.
 export interface SessionDetail {
   session: SessionRead
   measures: MeasureRead[]
+  superseded_by_id: string | null
 }
 
 // Filter fuer `GET /feedback-sessions`. `due` = nur Protokolle mit mindestens

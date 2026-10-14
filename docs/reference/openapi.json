@@ -26693,6 +26693,18 @@
             },
             "type": "array",
             "title": "Measures"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
           }
         },
         "type": "object",
@@ -26701,7 +26713,7 @@
           "measures"
         ],
         "title": "SessionDetail",
-        "description": "Protokoll mit eingebetteten Massnahmen (QE1 = a)."
+        "description": "Protokoll mit eingebetteten Massnahmen (QE1 = a).\n\n`superseded_by_id`: das juengste Protokoll, das dieses korrigiert —\nderselbe Wert wie an `SessionListItem` (eine SQL-Quelle im Repository).\nNone, wenn es nicht ersetzt ist."
       },
       "SessionDissent": {
         "properties": {

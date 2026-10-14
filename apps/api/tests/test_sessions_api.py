@@ -471,6 +471,14 @@ def test_list_due_and_row_counters(world: _World) -> None:
         sid(due_new): (1, 1, 1, "2000-01-02", None),
         sid(withdrawn): (1, 1, 0, None, None),
     }
+    # GET /feedback-sessions/{id}: derselbe Nachfolger wie in der Liste,
+    # null fuer ein nicht ersetztes Protokoll (additives Feld neben session/measures).
+    for key, row in rows.items():
+        detail = w.get(f"/feedback-sessions/{key}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["superseded_by_id"] == row["superseded_by_id"], key
+    assert w.get(f"/feedback-sessions/{sid(due_old)}").json()["superseded_by_id"] == sid(due_new)
+    assert w.get(f"/feedback-sessions/{sid(later)}").json()["superseded_by_id"] is None
 
     def ids(res: Any) -> list[str]:
         assert res.status_code == 200, res.text

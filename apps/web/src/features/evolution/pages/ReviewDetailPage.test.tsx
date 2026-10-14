@@ -139,8 +139,12 @@ function measure(overrides: Partial<MeasureRead> = {}): MeasureRead {
   }
 }
 
-function detail(session: Partial<SessionRead> = {}, measures?: MeasureRead[]): SessionDetail {
-  return { session: sessionRead(session), measures: measures ?? [measure()] }
+function detail(
+  session: Partial<SessionRead> = {},
+  measures?: MeasureRead[],
+  superseded_by_id: string | null = null,
+): SessionDetail {
+  return { session: sessionRead(session), measures: measures ?? [measure()], superseded_by_id }
 }
 
 function listItem(session: SessionRead, superseded_by_id: string | null): SessionListItem {
@@ -152,6 +156,17 @@ function listItem(session: SessionRead, superseded_by_id: string | null): Sessio
     due_measure_count: 0,
     superseded_by_id,
   }
+}
+
+/** s1 ist durch `successorId` (angelegt `createdAt`) ersetzt; das Detail traegt den Verweis. */
+function replacedBy(successorId: string, createdAt: string) {
+  api.getSession.mockImplementation((id: string) => {
+    if (id === 's1') return Promise.resolve(detail({}, undefined, successorId))
+    if (id === successorId) {
+      return Promise.resolve(detail({ id: successorId, supersedes_id: 's1', created_at: createdAt }))
+    }
+    return Promise.reject(new ApiError(404, 'session_not_found'))
+  })
 }
 
 const caseRow = {
@@ -328,34 +343,60 @@ describe('ReviewDetailPage', () => {
   })
 
   it('Korrektur vorwärts: ersetztes Ergebnis zeigt Banner, verlinkt den Nachfolger und hat keinen Kopierblock', async () => {
-    const newer = sessionRead({ id: 's2', supersedes_id: 's1', created_at: '2026-10-02T10:00:00Z' })
-    api.listSessions.mockResolvedValue({
-      items: [listItem(newer, null), listItem(sessionRead(), 's2')],
-      next_cursor: null,
-    })
+    replacedBy('s2', '2026-10-02T10:00:00Z')
     renderPage()
     const banner = await screen.findByTestId('review-replaced')
-    expect(banner).toHaveTextContent('Ersetzt durch das Review-Ergebnis vom 02.10.2026')
+    await waitFor(() =>
+      expect(banner).toHaveTextContent('Ersetzt durch das Review-Ergebnis vom 02.10.2026'),
+    )
     expect(banner).toHaveTextContent('Die Änderungen dieses Review-Ergebnisses gelten weiter')
     expect(within(banner).getByRole('link', { name: 'Zum neuen Review-Ergebnis' })).toHaveAttribute(
       'href',
       '/w/ws-1/agents/a1/reviews/s2',
     )
     expect(screen.queryByTestId('review-correction')).toBeNull()
-    expect(api.listSessions).toHaveBeenCalledWith({ agent_id: 'a1' }, { cursor: undefined, limit: 200 })
+    // Der Nachfolger kommt aus dem Detail, nicht aus der Liste.
+    expect(api.listSessions).not.toHaveBeenCalled()
   })
 
-  it('Korrektur vorwärts: blättert, bis die eigene Zeile kommt', async () => {
-    api.listSessions
-      .mockResolvedValueOnce({
-        items: [listItem(sessionRead({ id: 's9', created_at: '2026-10-05T10:00:00Z' }), null)],
-        next_cursor: 'c2',
+  it('Korrektur vorwärts: ein Review hinter 1 000 anderen zeigt das Banner und keinen Kopierblock', async () => {
+    // Die Liste des Agenten liefert endlos fremde Zeilen; die eigene Zeile
+    // kaeme erst nach mehr als 1 000 Reviews. Das Detail kennt den Nachfolger.
+    let page = 0
+    api.listSessions.mockImplementation(() => {
+      page += 1
+      return Promise.resolve({
+        items: Array.from({ length: 200 }, (_, i) =>
+          listItem(sessionRead({ id: `other-${page}-${i}` }), null),
+        ),
+        next_cursor: `c${page + 1}`,
       })
-      .mockResolvedValueOnce({ items: [listItem(sessionRead(), 's9')], next_cursor: null })
+    })
+    replacedBy('s9', '2026-10-05T10:00:00Z')
     renderPage()
     const banner = await screen.findByTestId('review-replaced')
-    expect(banner).toHaveTextContent('vom 05.10.2026')
-    expect(api.listSessions).toHaveBeenLastCalledWith({ agent_id: 'a1' }, { cursor: 'c2', limit: 200 })
+    await waitFor(() => expect(banner).toHaveTextContent('vom 05.10.2026'))
+    expect(within(banner).getByRole('link', { name: 'Zum neuen Review-Ergebnis' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1/reviews/s9',
+    )
+    expect(screen.queryByTestId('review-correction')).toBeNull()
+  })
+
+  it('Korrektur vorwärts: Banner und kein Kopierblock auch, wenn der Nachfolger nicht ladbar ist', async () => {
+    api.getSession.mockImplementation((id: string) =>
+      id === 's1'
+        ? Promise.resolve(detail({}, undefined, 's2'))
+        : Promise.reject(new Error('boom')),
+    )
+    renderPage()
+    const banner = await screen.findByTestId('review-replaced')
+    expect(banner).toHaveTextContent('Ersetzt durch das Review-Ergebnis vom …')
+    expect(within(banner).getByRole('link', { name: 'Zum neuen Review-Ergebnis' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1/reviews/s2',
+    )
+    expect(screen.queryByTestId('review-correction')).toBeNull()
   })
 
   it('Korrektur rückwärts: Meta-Link auf den Vorgänger mit dessen Datum', async () => {
@@ -420,6 +461,7 @@ describe('ReviewDetailPage', () => {
     api.getSession.mockResolvedValue({
       session: sessionRead({ decisions: [], dissent: [], case_ids: [] }),
       measures: [],
+      superseded_by_id: null,
     })
     renderPage()
     expect(await screen.findByText('Keine Entscheidungen festgehalten.')).toBeInTheDocument()
@@ -436,10 +478,7 @@ describe('ReviewDetailPage', () => {
   })
 
   it('a11y: ersetztes Review-Ergebnis ohne Violations', async () => {
-    api.listSessions.mockResolvedValue({
-      items: [listItem(sessionRead({ id: 's2' }), null), listItem(sessionRead(), 's2')],
-      next_cursor: null,
-    })
+    replacedBy('s2', '2026-10-02T10:00:00Z')
     const { container } = renderPage()
     await screen.findByTestId('review-replaced')
     expect(await axe(container)).toHaveNoViolations()

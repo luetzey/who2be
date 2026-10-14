@@ -987,15 +987,17 @@ async def _load_session(
     conn: asyncpg.Connection, workspace_id: UUID, session_id: UUID
 ) -> SessionDetail | None:
     row = await conn.fetchrow(
-        f"SELECT {_SESSION_COLUMNS}, {_SESSION_CASES_SQL} FROM feedback_session s "
-        "WHERE s.workspace_id = $1 AND s.id = $2",
+        f"SELECT {_SESSION_COLUMNS}, {_SESSION_CASES_SQL}, {_SESSION_SUPERSEDED_BY_SQL} "
+        "FROM feedback_session s WHERE s.workspace_id = $1 AND s.id = $2",
         workspace_id,
         session_id,
     )
     if row is None:
         return None
     measures = await _load_measures(conn, workspace_id, "m.session_id = $2", session_id)
-    return SessionDetail(session=_session(row), measures=measures)
+    return SessionDetail(
+        session=_session(row), measures=measures, superseded_by_id=row["superseded_by_id"]
+    )
 
 
 async def _load_measures(
