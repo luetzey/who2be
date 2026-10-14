@@ -2659,7 +2659,10 @@
         "addressUnavailable": "Geändert braucht eine Version eines zugeordneten Bausteins.",
         "toVersion": "Zur Version",
         "dismiss": "Verwerfen…",
-        "reopen": "Wieder öffnen…"
+        "reopen": "Wieder öffnen…",
+        "prepareSession": "Review vorbereiten",
+        "toMeasure": "Zur Änderung",
+        "toFollowUp": "Zur Nachkontrolle"
       },
       "assign": {
         "title": "Rückmeldung zuordnen",
@@ -2687,7 +2690,8 @@
         "activeTag": "aktiv",
         "choose": "Bitte wählen …",
         "note": "Notiz (optional)",
-        "submit": "Als geändert markieren"
+        "submit": "Als geändert markieren",
+        "noFollowUp": "Ohne Änderung aus einem Review gibt es keine Nachkontrolle. Die Rückmeldung kann dann nicht als ‚Hat gewirkt‘ abgeschlossen werden."
       },
       "dismiss": {
         "title": "Rückmeldung verwerfen",

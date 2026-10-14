@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
@@ -462,6 +462,40 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     expect(api.getCase).toHaveBeenCalledTimes(2)
   })
 
+  it.each([409, 422])('Status %i ohne Grund: Hinweis und Neuladen statt Rohtext', async (status) => {
+    api.getCase.mockResolvedValue(caseDetail({ status: 'open' }))
+    api.transitionCase.mockRejectedValue(new ApiError(status, 'Rohtext vom Server', {}))
+    renderPage()
+
+    fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Als eingeordnet markieren' }))
+
+    await waitFor(() =>
+      expect(notifyError).toHaveBeenCalledWith(
+        'Dieser Schritt passt nicht zum aktuellen Stand. Die Seite wurde neu geladen.',
+      ),
+    )
+    expect(notifyError).not.toHaveBeenCalledWith('Rohtext vom Server')
+    expect(api.getCase).toHaveBeenCalledTimes(2)
+  })
+
+  it('Doppelklick auf „Als eingeordnet markieren“ sendet genau einmal', async () => {
+    api.getCase.mockResolvedValue(caseDetail({ status: 'open' }))
+    let resolve: (value: unknown) => void = () => {}
+    api.transitionCase.mockReturnValue(new Promise((done) => (resolve = done)))
+    renderPage()
+
+    const button = within(await nextStep()).getByRole('button', { name: 'Als eingeordnet markieren' })
+    // Beide Klicks im selben Takt: `disabled` greift erst nach dem Render,
+    // nur die Ref-Sperre haelt den zweiten auf.
+    act(() => {
+      button.click()
+      button.click()
+    })
+    expect(api.transitionCase).toHaveBeenCalledTimes(1)
+    resolve({})
+    await waitFor(() => expect(api.getCase).toHaveBeenCalledTimes(2))
+  })
+
   it('triaged ohne Prüffall: „Prüffall daraus anlegen“ füllt Eingabe, Erwartung und Herkunft vor', async () => {
     api.getCase.mockResolvedValue(caseDetail({ status: 'triaged' }))
     api.createTestCase.mockResolvedValue({ id: 'tc1', title: 'Push-Regel' })
@@ -491,7 +525,7 @@ describe('CaseDetailPage – Triage (D6d)', () => {
     await waitFor(() => expect(api.listTestCases).toHaveBeenCalledTimes(2))
   })
 
-  it('triaged mit Prüffall: „Als umgesetzt markieren…“ ist Hauptaktion, verlangt Version und sendet sie', async () => {
+  it('triaged mit Prüffall: „Review vorbereiten“ ist Link-Hauptaktion, „Geändert“ nur im Menü mit Satz', async () => {
     api.getCase.mockResolvedValue(caseDetail({ status: 'triaged' }))
     api.listTestCases.mockResolvedValue([{ id: 'tc1', title: 'Push-Regel', agent_id: 'a1' }])
     renderPage()
@@ -501,8 +535,22 @@ describe('CaseDetailPage – Triage (D6d)', () => {
       'href',
       '/w/ws-1/agents/a1#tests',
     )
-    fireEvent.click(within(await nextStep()).getByRole('button', { name: 'Als geändert markieren…' }))
+    const bar = await nextStep()
+    // E-Delta §6.3: Link mit Agent und diesem Fall, kein Uebergang.
+    expect(within(bar).getByRole('link', { name: 'Review vorbereiten' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1/reviews/prepare?cases=case-1',
+    )
+    expect(within(bar).queryByRole('button', { name: 'Als geändert markieren…' })).toBeNull()
+    expect(api.transitionCase).not.toHaveBeenCalled()
+
+    openStatusMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Als geändert markieren…' }))
     const dialog = await screen.findByRole('dialog', { name: 'Als geändert markieren' })
+    // Fussnote ¹ (QE7 a): manuell heisst ohne Nachkontrolle.
+    expect(within(dialog).getByTestId('case-address-no-follow-up')).toHaveTextContent(
+      'Ohne Änderung aus einem Review gibt es keine Nachkontrolle.',
+    )
     fireEvent.click(within(dialog).getByRole('button', { name: 'Als geändert markieren' }))
     expect(await within(dialog).findAllByText('Pflichtfeld.')).not.toHaveLength(0)
     expect(api.transitionCase).not.toHaveBeenCalled()
@@ -830,8 +878,12 @@ describe('CaseDetailPage – Status aus Phase E (E5a)', () => {
       await screen.findByRole('menuitem', { name: 'ID kopieren' })
       expect(screen.queryByRole('menuitem', { name: forbidden })).toBeNull()
       expect(api.transitionCase).not.toHaveBeenCalled()
-      // In Arbeit und Hat gewirkt haben keine eigene Aktion (E5i bringt Links).
+      // Ohne bekannte Änderung (keine Reviews geladen) gibt es fuer In Arbeit
+      // und Hat gewirkt keine Hauptaktion; die Links von E5i brauchen eine.
       if (status === 'in_progress' || status === 'verified') {
+        expect(screen.queryByTestId('case-next-primary')).not.toBeInTheDocument()
+      }
+      if (status === 'verified') {
         expect(screen.queryByTestId('case-next-step')).not.toBeInTheDocument()
       }
     },
@@ -1126,4 +1178,154 @@ describe('CaseDetailPage – Verknüpft, Nachkontrolle, Verlauf-Links (E5h)', ()
     await screen.findByTestId('case-to-evolution')
     expect(await axe(container)).toHaveNoViolations()
   }, 15_000)
+
+  // E5i (E-Delta §6.3): Hauptaktion je Zustand aus den Änderungen zum Fall.
+  async function primaryOf() {
+    return within(await nextStep()).findByTestId('case-next-primary')
+  }
+
+  it('in_progress: „Zur Änderung“ ist Link auf die offene Änderung, Menü ohne Übergang nach E', async () => {
+    renderPage()
+
+    const primary = await primaryOf()
+    // m1 (aktiviert, im Verlauf genannt) vor m2 (Entwurf, nicht im Verlauf).
+    expect(primary).toHaveAccessibleName('Zur Änderung')
+    expect(primary).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s1?change=m1')
+    openStatusMenu()
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual(['Als geändert markieren…', 'Verwerfen…'])
+    expect(api.transitionCase).not.toHaveBeenCalled()
+  })
+
+  it('addressed mit offener Änderung: „Zur Nachkontrolle“, sonst „Zur Version“', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'addressed' } })
+    const { unmount } = renderPage()
+    const primary = await primaryOf()
+    expect(primary).toHaveAccessibleName('Zur Nachkontrolle')
+    expect(primary).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s1?change=m1')
+    unmount()
+
+    // Alle Änderungen abgeschlossen: manueller Weg, zurück zur Version.
+    api.getSession.mockImplementation((id: string) =>
+      Promise.resolve({
+        ...details[id],
+        measures: details[id].measures.map((item) => ({ ...item, state: 'withdrawn' as const })),
+      }),
+    )
+    api.getCase.mockResolvedValue(caseDetail({ status: 'addressed' }))
+    renderPage()
+    await waitFor(async () => expect(await primaryOf()).toHaveAccessibleName('Zur Version'))
+  })
+
+  it('verified: „Zur Nachkontrolle“ zeigt auf die Änderung, die gewirkt hat; kein Menü', async () => {
+    const base = withHistory()
+    api.getCase.mockResolvedValue({
+      ...base,
+      case: { ...base.case, status: 'verified' },
+      events: [
+        ...base.events,
+        event({
+          id: 'e9',
+          event: 'verified',
+          actor_kind: 'system',
+          actor_id: null,
+          measure_id: 'm2',
+          created_at: '2026-10-09T10:00:00Z',
+        }),
+      ],
+    })
+    renderPage()
+
+    const primary = await primaryOf()
+    expect(primary).toHaveAccessibleName('Zur Nachkontrolle')
+    expect(primary).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s2?change=m2')
+    expect(screen.queryByTestId('case-status-menu')).toBeNull()
+  })
+
+  it('triaged ohne Prüffall: „Review vorbereiten“ als Link im Menü', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'triaged' } })
+    renderPage()
+
+    expect(await primaryOf()).toHaveAccessibleName('Prüffall daraus anlegen')
+    openStatusMenu()
+    const link = await screen.findByRole('menuitem', { name: 'Review vorbereiten' })
+    expect(link).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/prepare?cases=case-1')
+  })
+
+  it('Laden der Reviews scheitert: Aktionen bleiben, ohne Änderungs-Links', async () => {
+    api.listSessions.mockRejectedValue(new Error('boom'))
+    renderPage()
+
+    const bar = await nextStep()
+    expect(within(bar).queryByTestId('case-next-primary')).toBeNull()
+    expect(within(bar).getByTestId('case-status-menu')).toBeInTheDocument()
+  })
+
+  // AK5: axe je Zustand ein eigenes it(), jeweils als editor mit Hauptaktion.
+  it.each([
+    ['in_progress', 'Zur Änderung'],
+    ['addressed', 'Zur Nachkontrolle'],
+    ['triaged', 'Review vorbereiten'],
+    ['verified', 'Zur Nachkontrolle'],
+  ] as const)('a11y: Nächster Schritt %s ohne Violations', async (status, name) => {
+    const base = withHistory()
+    if (status === 'triaged') {
+      api.listTestCases.mockResolvedValue([{ id: 'tc1', title: 'Push-Regel', agent_id: 'a1' }])
+    }
+    api.getCase.mockResolvedValue({
+      ...base,
+      case: { ...base.case, status },
+      events:
+        status === 'verified'
+          ? [
+              ...base.events,
+              event({
+                id: 'e9',
+                event: 'verified',
+                actor_kind: 'system',
+                actor_id: null,
+                measure_id: 'm2',
+                created_at: '2026-10-09T10:00:00Z',
+              }),
+            ]
+          : base.events,
+    })
+    const { container } = renderPage()
+    const primary = await primaryOf()
+    expect(primary).toHaveAccessibleName(name)
+    expect(primary.tagName).toBe('A')
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
+
+  it('a11y: Dialog „Als geändert markieren“ mit noFollowUp-Satz ohne Violations', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'triaged' } })
+    api.listTestCases.mockResolvedValue([{ id: 'tc1', title: 'Push-Regel', agent_id: 'a1' }])
+    renderPage()
+    await primaryOf()
+    openStatusMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Als geändert markieren…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Als geändert markieren' })
+    expect(within(dialog).getByTestId('case-address-no-follow-up')).toBeInTheDocument()
+    await within(dialog).findByRole('option', { name: 'v3 · aktiv' })
+
+    expect(await axe(document.body)).toHaveNoViolations()
+  }, 15_000)
+
+  it('nach einer Aktion werden auch die Änderungen zum Fall neu geladen', async () => {
+    api.getCase.mockResolvedValue({ ...withHistory(), case: { ...withHistory().case, status: 'in_progress' } })
+    renderPage()
+    await primaryOf()
+    expect(api.listSessions).toHaveBeenCalledTimes(1)
+
+    openStatusMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Verwerfen…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Rückmeldung verwerfen' })
+    fireEvent.change(within(dialog).getByLabelText('Warum wird nichts geändert?'), {
+      target: { value: 'Kein Fehler des Agenten.' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Verwerfen' }))
+
+    await waitFor(() => expect(api.transitionCase).toHaveBeenCalled())
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalledTimes(2))
+  })
 })

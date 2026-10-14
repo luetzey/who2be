@@ -55,12 +55,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CaseStatusDot } from '@/components/cases/CaseStatusDot'
 import { MetaPill } from '@/components/data/MetaPill'
 import { copyToClipboard } from '@/lib/clipboard'
+import { type CaseMeasureRef, pickCaseMeasure } from '@/lib/caseNextStep'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 // Reine Nachkontroll-Logik, relativ importiert wie in `InboxPage` (E5j): das
 // Cross-Feature-Gate sperrt Komponenten/Seiten, die Lib ist bewusst geteilt.
-import { followUpStatusOf, formatDay, isDue } from '../../evolution/lib/followUp'
+import { followUpStatusOf, formatDay, isClosedState, isDue } from '../../evolution/lib/followUp'
 
 // Status mit Erklaersatz unter dem Kopf (E-Delta §6.1): beide setzt nur der
 // Server, fuer alle Rollen sichtbar, ohne Link (die Links von E5h stehen in
@@ -363,6 +364,7 @@ interface CaseChange {
 function useCaseChanges(caseId: string | undefined, agentId: string | undefined) {
   const api = useApi()
   const [changes, setChanges] = useState<CaseChange[] | null>(null)
+  const [nonce, setNonce] = useState(0)
   useEffect(() => {
     if (caseId === undefined || agentId === undefined) return
     let cancelled = false
@@ -395,9 +397,10 @@ function useCaseChanges(caseId: string | undefined, agentId: string | undefined)
     return () => {
       cancelled = true
     }
-  }, [api, caseId, agentId])
+  }, [api, caseId, agentId, nonce])
+  const reload = useCallback(() => setNonce((value) => value + 1), [])
   // Ohne Freigabe (viewer) nie alte Daten zeigen, auch nach Rollenwechsel.
-  return caseId === undefined || agentId === undefined ? null : changes
+  return { changes: caseId === undefined || agentId === undefined ? null : changes, reload }
 }
 
 /**
@@ -705,10 +708,11 @@ export function CaseDetailPage() {
   const linked = useLinkedTestCases(isEditor ? caseId : undefined)
   // Einzige Rollen-Sperre fuer E5h: viewer laden nichts, also gibt es fuer
   // sie weder Aenderungen noch Pill noch Verlauf-Links.
-  const changes = useCaseChanges(
+  const caseChanges = useCaseChanges(
     isEditor ? caseId : undefined,
     isEditor ? data.detail?.case.agent_id : undefined,
   )
+  const changes = caseChanges.changes
   // Aenderung je ID, nur aus den geladenen Reviews (Verlauf-Link „Zur Änderung“).
   const changeById = useMemo(
     () => new Map((changes ?? []).map((change) => [change.measure.id, change])),
@@ -742,6 +746,7 @@ export function CaseDetailPage() {
   const onChanged = (transitioned: boolean) => {
     if (transitioned) focusStatus.current = true
     data.reload()
+    caseChanges.reload()
   }
 
   // Rueckweg auf die Liste mit den Filtern, mit denen man gekommen ist.
@@ -784,6 +789,26 @@ export function CaseDetailPage() {
       : null
   const addressedTo =
     latestAddressed?.version_id != null ? (data.versions[latestAddressed.version_id] ?? null) : null
+
+  // Aenderung fuer den naechsten Schritt (E-Delta §6.3, E5i): nur aus den
+  // vom Server verknuepften Aenderungen (`useCaseChanges`), „offen“ aus dem
+  // Server-Zustand `measure.state`, nicht aus den Events nachgerechnet.
+  const caseMeasure = useMemo((): CaseMeasureRef | null => {
+    if (detail === null || changes === null) return null
+    const eventMeasureIds = [...detail.events]
+      .reverse()
+      .map((event) => event.measure_id)
+      .filter((id): id is string => id !== null)
+    return pickCaseMeasure(
+      detail.case.status,
+      eventMeasureIds,
+      changes.map(({ session, measure }) => ({
+        sessionId: session.id,
+        measureId: measure.id,
+        open: !isClosedState(measure.state),
+      })),
+    )
+  }, [detail, changes])
 
   const eventLabel = (event: CaseEvent): string => {
     if (!KNOWN_EVENTS.has(event.event)) return t('feedback:cases.history.event.unknown')
@@ -959,13 +984,17 @@ export function CaseDetailPage() {
           </p>
         ) : null}
 
-        {isEditor && linked.testCases !== null ? (
+        {/* Erst rendern, wenn Prueffaelle und Aenderungen da sind: sonst
+            springt die Hauptaktion nach dem Laden (z. B. Zur Version →
+            Zur Nachkontrolle). */}
+        {isEditor && linked.testCases !== null && changes !== null ? (
           <CaseActions
             detail={detail}
             agent={data.agents.find((agent) => agent.id === item.agent_id) ?? null}
             names={data.names}
             addressedPath={addressedTo?.path ?? null}
             hasTestCase={linked.testCases.length > 0}
+            measure={caseMeasure}
             onChanged={onChanged}
             onTestCaseCreated={linked.reload}
           />

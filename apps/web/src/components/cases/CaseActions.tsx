@@ -1,5 +1,5 @@
 import { ChevronDown, MoreHorizontal } from 'lucide-react'
-import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -13,6 +13,7 @@ import type {
   VersionedEntityType,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { TestCaseForm } from '@/components/testcases/TestCaseForm'
 import { Button } from '@/components/ui/button'
@@ -41,7 +42,13 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { type CaseAction, nextStep, versionedElements } from '@/lib/caseNextStep'
+import {
+  type CaseAction,
+  type CaseMeasureRef,
+  LINK_ACTIONS,
+  nextStep,
+  versionedElements,
+} from '@/lib/caseNextStep'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
@@ -62,10 +69,15 @@ const ENTITY_GROUPS = [
 ] as const satisfies readonly CaseTarget[]
 type EntityGroup = (typeof ENTITY_GROUPS)[number]
 
-function problemOf(cause: unknown): { reason: string | null; params: Record<string, unknown> } {
-  if (!(cause instanceof ApiError)) return { reason: null, params: {} }
+function problemOf(cause: unknown): {
+  status: number | null
+  reason: string | null
+  params: Record<string, unknown>
+} {
+  if (!(cause instanceof ApiError)) return { status: null, reason: null, params: {} }
   const body = cause.body as { reason?: unknown; params?: unknown } | null
   return {
+    status: cause.status,
     reason: typeof body?.reason === 'string' ? body.reason : null,
     params:
       body?.params !== null && typeof body?.params === 'object'
@@ -76,6 +88,24 @@ function problemOf(cause: unknown): { reason: string | null; params: Record<stri
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
+}
+
+/**
+ * Sperre gegen Doppel-Submit (Lehre E5e): `busy` sperrt erst nach dem
+ * naechsten Render, ein zweites Enter im selben Takt kaeme sonst durch.
+ * Die zurueckgegebene Funktion startet `job` nur, wenn keiner laeuft.
+ */
+function useSubmitGuard() {
+  const inflight = useRef(false)
+  return async (job: () => Promise<void>) => {
+    if (inflight.current) return
+    inflight.current = true
+    try {
+      await job()
+    } finally {
+      inflight.current = false
+    }
+  }
 }
 
 const FOOTER = 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'
@@ -284,6 +314,7 @@ function AssignPanel({
   const caseId = detail.case.id
   const offerTriage = detail.case.status === 'open' || detail.case.status === 'reopened'
   const { options, loading } = useAssignOptions(api, agent, open)
+  const guard = useSubmitGuard()
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(detail.elements.map((element) => keyOf(element.target, element.entity_id))),
   )
@@ -403,7 +434,7 @@ function AssignPanel({
       description={t('feedback:cases.assign.intro')}
       testId="case-assign-dialog"
       busy={busy}
-      onSubmit={() => void submit()}
+      onSubmit={() => void guard(submit)}
       footer={
         <PanelFooter
           busy={busy}
@@ -533,6 +564,7 @@ function AddressPanel({
   const { t } = useTranslation(['feedback', 'common'])
   const api = useApi()
   const baseId = useId()
+  const guard = useSubmitGuard()
   const candidates = versionedElements(detail.elements)
   const [element, setElement] = useState(() =>
     candidates.length === 1 ? (candidates[0].entity_id ?? '') : '',
@@ -604,7 +636,7 @@ function AddressPanel({
       description={t('feedback:cases.address.intro')}
       testId="case-address-dialog"
       busy={busy}
-      onSubmit={() => void submit()}
+      onSubmit={() => void guard(submit)}
       footer={
         <PanelFooter
           busy={busy}
@@ -614,6 +646,11 @@ function AddressPanel({
       }
     >
       {error !== null ? <ErrorAlert message={error} /> : null}
+      {/* E-Delta §6.3 Fussnote ¹ (QE7 a): der manuelle Weg hat keine
+          Nachkontrolle und endet nie bei „Hat gewirkt“. */}
+      <p className="text-sm text-muted-foreground" data-testid="case-address-no-follow-up">
+        {t('feedback:cases.address.noFollowUp')}
+      </p>
       <div className="flex min-w-0 flex-col gap-1">
         <Label htmlFor={`${baseId}-element`}>{t('feedback:cases.address.element')}</Label>
         <Select
@@ -704,6 +741,7 @@ function ReasonPanel({
   const { t } = useTranslation(['feedback', 'common'])
   const api = useApi()
   const baseId = useId()
+  const guard = useSubmitGuard()
   const [reason, setReason] = useState(initialReason)
   const [invalid, setInvalid] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -738,7 +776,7 @@ function ReasonPanel({
       title={t(`feedback:cases.${mode}.title`)}
       testId={`case-${mode}-dialog`}
       busy={busy}
-      onSubmit={() => void submit()}
+      onSubmit={() => void guard(submit)}
       footer={
         <PanelFooter
           busy={busy}
@@ -788,6 +826,11 @@ export interface CaseActionsProps {
   /** Ziel von „Zur Version“; `null`, solange die Version nicht aufgeloest ist. */
   addressedPath: string | null
   hasTestCase: boolean
+  /**
+   * Aenderung zum Fall (E5h-Daten, E-Delta §6.3): Ziel von „Zur Änderung“
+   * und „Zur Nachkontrolle“; `null` = keine bekannt, dann kein Link.
+   */
+  measure: CaseMeasureRef | null
   /** Nach jeder Aenderung; `transitioned` = der Status hat gewechselt. */
   onChanged: (transitioned: boolean) => void
   onTestCaseCreated: () => void
@@ -795,8 +838,11 @@ export interface CaseActionsProps {
 
 /**
  * „Nächster Schritt“ und Status-Menue im Fall-Detail (Spec S8, ADR-0053
- * D6d) mit den Dialogen Zuordnen, Als umgesetzt markieren, Verwerfen und
- * Wieder öffnen sowie „Prüffall daraus anlegen“ ueber `TestCaseForm`.
+ * D6d, E-Delta §6.3) mit den Dialogen Zuordnen, Als geändert markieren,
+ * Verwerfen und Wieder öffnen, „Prüffall daraus anlegen“ ueber
+ * `TestCaseForm` sowie den Links „Review vorbereiten“, „Zur Änderung“ und
+ * „Zur Nachkontrolle“. Die Links setzen keinen Status; `in_progress` und
+ * `verified` setzt nur der Server.
  */
 export function CaseActions({
   detail,
@@ -804,11 +850,14 @@ export function CaseActions({
   names,
   addressedPath,
   hasTestCase,
+  measure,
   onChanged,
   onTestCaseCreated,
 }: CaseActionsProps) {
   const { t } = useTranslation(['feedback', 'common'])
   const api = useApi()
+  const wsPath = useWorkspacePath()
+  const guard = useSubmitGuard()
   const [panel, setPanelState] = useState<Panel | null>(null)
   // Jede Oeffnung bekommt einen frischen Key: die Dialoge starten mit leerem
   // Zustand, ohne Reset-Effekte (react-hooks/set-state-in-effect).
@@ -823,7 +872,8 @@ export function CaseActions({
   }
   const [busy, setBusy] = useState(false)
   const item = detail.case
-  const step = nextStep(item.status, detail.elements, hasTestCase)
+  // Status vom Server (`detail.case.status`), nie aus dem Verlauf abgeleitet.
+  const step = nextStep(item.status, detail.elements, hasTestCase, measure)
   const modelLimit = detail.elements.some((element) => element.target === 'model_limit')
 
   const elementLabel = (target: CaseTarget, id: string | null): string => {
@@ -832,12 +882,14 @@ export function CaseActions({
     return name !== undefined ? `${kind}: ${name}` : kind
   }
 
-  // `case_transition_forbidden`: der Stand hat sich geaendert (oder die
-  // Zuordnung fehlt). Spec S8 „Zustände“: Text zeigen, Seite neu laden.
-  // Liefert den Text fuer einen offenen Dialog; `null` = Dialog schliessen.
+  // Der Server entscheidet ueber erlaubte Uebergaenge. 409/422 (u. a.
+  // `case_transition_forbidden`): der Stand hat sich geaendert oder passt
+  // nicht. Spec S8 „Zustände“: Text zeigen, Seite neu laden. Fehlt nur die
+  // Zuordnung, der Pflicht-Hinweis. Liefert den Text fuer einen offenen
+  // Dialog; `null` = Dialog schliessen.
   const refused = (cause: unknown, keepDialog: boolean): string | null => {
-    const { reason, params } = problemOf(cause)
-    if (reason === 'case_transition_forbidden') {
+    const { status, reason, params } = problemOf(cause)
+    if (reason === 'case_transition_forbidden' || status === 409 || status === 422) {
       if (params.missing === 'element') return t('feedback:cases.assign.required')
       const message = t('feedback:cases.error.transitionForbidden')
       // Ein offener Dialog laedt selbst neu (AssignPanel), sonst hier.
@@ -869,7 +921,7 @@ export function CaseActions({
         setPanel('assign')
         return
       case 'triage':
-        void triage()
+        void guard(triage)
         return
       case 'createTestCase':
         setPanel('testCase')
@@ -883,8 +935,35 @@ export function CaseActions({
       case 'reopen':
         setPanel('reopen')
         return
-      case 'toVersion':
+      default:
+        // Links (`LINK_ACTIONS`) navigieren selbst.
         return
+    }
+  }
+
+  // Ziele der Links. IDs nur aus Server-Daten (Fall, Aenderung zum Fall),
+  // nie aus der URL, und kodiert.
+  const reviewPath =
+    measure !== null
+      ? wsPath(
+          `/agents/${encodeURIComponent(item.agent_id)}/reviews/${encodeURIComponent(measure.sessionId)}?change=${encodeURIComponent(measure.measureId)}`,
+        )
+      : null
+  const hrefOf = (action: CaseAction): string | null => {
+    switch (action) {
+      case 'toVersion':
+        return addressedPath
+      case 'prepareSession':
+        // „Gespräch vorbereiten“ ist ein Link, kein Uebergang (E-Delta §6.3):
+        // Agent aus der Route, dieser Fall vorbelegt (Neuschnitt §2, N4 a).
+        return wsPath(
+          `/agents/${encodeURIComponent(item.agent_id)}/reviews/prepare?cases=${encodeURIComponent(item.id)}`,
+        )
+      case 'toMeasure':
+      case 'toFollowUp':
+        return reviewPath
+      default:
+        return null
     }
   }
 
@@ -893,6 +972,12 @@ export function CaseActions({
   if (step.primary === null && step.menu.length === 0) return null
 
   const firstVersioned = versionedElements(detail.elements)[0] ?? null
+  const primaryHref = step.primary !== null ? hrefOf(step.primary) : null
+  // `brand` fuer die eigentliche Aufgabe, `default` fuer Rueckwege (§6.3).
+  const primaryVariant =
+    step.primary === 'toVersion' || step.primary === 'toMeasure' || step.primary === 'toFollowUp'
+      ? 'default'
+      : 'brand'
 
   return (
     <section
@@ -904,19 +989,23 @@ export function CaseActions({
         {t('feedback:cases.detail.next')}
       </h2>
       <div className="flex flex-col gap-2 md:flex-row md:items-center">
-        {step.primary === 'toVersion' ? (
-          addressedPath !== null ? (
-            <Button asChild variant="default" className={cn(ACTION, 'w-full md:w-auto')}>
-              <Link to={addressedPath}>{label('toVersion')}</Link>
-            </Button>
-          ) : null
-        ) : step.primary !== null ? (
+        {step.primary === null ? null : primaryHref !== null ? (
+          <Button
+            asChild
+            variant={primaryVariant}
+            className={cn(ACTION, 'w-full md:w-auto')}
+            data-testid="case-next-primary"
+          >
+            <Link to={primaryHref}>{label(step.primary)}</Link>
+          </Button>
+        ) : !LINK_ACTIONS.has(step.primary) ? (
           <Button
             type="button"
             variant="brand"
             className={cn(ACTION, 'w-full md:w-auto')}
             disabled={busy}
             aria-busy={busy || undefined}
+            data-testid="case-next-primary"
             onClick={() => run(step.primary!)}
           >
             {label(step.primary)}
@@ -936,11 +1025,22 @@ export function CaseActions({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-w-[min(20rem,calc(100vw-2rem))]">
-              {step.menu.map((action) => (
-                <DropdownMenuItem key={action} className="min-h-11 md:min-h-8" onSelect={() => run(action)}>
-                  {label(action)}
-                </DropdownMenuItem>
-              ))}
+              {step.menu.map((action) => {
+                const href = hrefOf(action)
+                if (LINK_ACTIONS.has(action)) {
+                  // Link-Eintrag (z. B. „Review vorbereiten“): navigiert, setzt nichts.
+                  return href !== null ? (
+                    <DropdownMenuItem key={action} asChild className="min-h-11 md:min-h-8">
+                      <Link to={href}>{label(action)}</Link>
+                    </DropdownMenuItem>
+                  ) : null
+                }
+                return (
+                  <DropdownMenuItem key={action} className="min-h-11 md:min-h-8" onSelect={() => run(action)}>
+                    {label(action)}
+                  </DropdownMenuItem>
+                )
+              })}
               {step.addressUnavailable ? (
                 // Kein Knopf (Spec S8): ein Hinweis, warum „Umgesetzt“ fehlt.
                 <p
