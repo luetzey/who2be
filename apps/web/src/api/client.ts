@@ -44,6 +44,7 @@ import type {
   FeedbackSummary,
   FeedbackTarget,
   FeedbackUnused,
+  FollowUpReport,
   GdprExport,
   InboxCounts,
   Invitation,
@@ -101,6 +102,10 @@ import type {
   ResourceUsage,
   ResourceVersion,
   RoutinesOverview,
+  SessionDetail,
+  SessionFilters,
+  SessionListItem,
+  SessionPage,
   SubResource,
   SubResourceLinkInput,
   SystemFeedbackInput,
@@ -785,6 +790,18 @@ export interface Api {
   promoteFeedback: (feedbackId: string, input: CaseCreate) => Promise<CaseRead>
   // ADR-0053 3.7/6.5 (D5b) — berechnete Muster, ab editor bzw. `case_triage`.
   listPatterns: (agentId?: string) => Promise<PatternListRead>
+  // ADR-0053 6.6 (E2b-3/E2b-4) — Reviews (Protokolle) und Aenderungen, ab
+  // editor. Die Liste ist eine Keyset-Seite (`next_cursor` aus
+  // `X-Next-Cursor`), neueste zuerst; `due` filtert serverseitig auf
+  // Protokolle mit faelliger Nachkontrolle. Aenderungen kommen eingebettet
+  // mit `getSession` (QE1 a), eine eigene Route `GET /measures/{id}` gibt es nicht.
+  listSessions: (
+    filters?: SessionFilters,
+    options?: { cursor?: string; limit?: number },
+  ) => Promise<SessionPage>
+  getSession: (sessionId: string) => Promise<SessionDetail>
+  // Kennzahlen der Nachkontrolle als Rohzahlen (QE8 a).
+  getFollowUp: (measureId: string) => Promise<FollowUpReport>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -1415,6 +1432,19 @@ export function createApi(token: string, workspaceId: string): Api {
       if (agentId) params.set('agent_id', agentId)
       return request<PatternListRead>(token, withQuery(apiPath`${ws}/patterns`, params))
     },
+    listSessions: (filters, options) => {
+      const params = new URLSearchParams()
+      if (filters?.agent_id) params.set('agent_id', filters.agent_id)
+      if (filters?.case_id) params.set('case_id', filters.case_id)
+      if (filters?.due) params.set('due', 'true')
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      return requestPage<SessionListItem>(token, withQuery(apiPath`${ws}/feedback-sessions`, params))
+    },
+    getSession: (sessionId) =>
+      request<SessionDetail>(token, apiPath`${ws}/feedback-sessions/${sessionId}`),
+    getFollowUp: (measureId) =>
+      request<FollowUpReport>(token, apiPath`${ws}/measures/${measureId}/follow-up`),
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>

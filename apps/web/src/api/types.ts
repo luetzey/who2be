@@ -2087,6 +2087,177 @@ export interface PatternListRead {
   patterns: PatternRead[]
 }
 
+// --- Reviews und Aenderungen (ADR-0053 3.5/3.6/6.6, Lernschleife Phase E) ---
+// Spiegel von `who2be_models.session` (Code-Namen nach der API: Protokoll =
+// Session, Aenderung = Measure). Ein Protokoll ist nach dem Einreichen
+// unveraenderlich, eine Korrektur ist ein neues Protokoll mit `supersedes_id`.
+// Das Web reicht keine Protokolle ein (QE9 a), deshalb fehlt `SessionCreate`.
+
+export type SessionTrigger = 'threshold' | 'scheduled' | 'manual'
+export type SessionParticipantKind = 'human' | 'agent' | 'builder'
+export type SessionSubmitterKind = 'human' | 'agent'
+// Element einer Aenderung: wie `CaseTarget`, ohne `model_limit`. `tool_policy`
+// traegt keine `entity_id`.
+export type MeasureTarget = Exclude<CaseTarget, 'model_limit'>
+export type MeasureEventKind =
+  | 'draft_linked'
+  | 'activated'
+  | 'follow_up_prepared'
+  | 'reviewed'
+  | 'withdrawn'
+// Einstufung der Nachkontrolle („Hat es gewirkt?“), nur ein Mensch ab editor.
+export type MeasureVerdict = 'effective' | 'ineffective' | 'not_measurable'
+export type MeasureActorKind = 'human' | 'agent' | 'system'
+// Vom Server abgeleiteter Zustand (juengstes Event; ohne Event `agreed`).
+// Die Web-Ableitung steht in `features/evolution/lib/followUp.ts`.
+export type MeasureState =
+  | 'agreed'
+  | 'draft_linked'
+  | 'activated'
+  | 'follow_up_prepared'
+  | 'effective'
+  | 'ineffective'
+  | 'not_measurable'
+  | 'withdrawn'
+
+export interface SessionParticipant {
+  kind: SessionParticipantKind
+  id: string
+  // Freitext aus dem Client (z. B. „Moderation“), wird nicht uebersetzt.
+  role: string
+}
+
+export interface SessionDecision {
+  text: string
+  standard_ref: string | null
+}
+
+export interface SessionDissent {
+  participant_kind: SessionParticipantKind
+  participant_id: string
+  text: string
+}
+
+// Ein Event aus dem Verlauf einer Aenderung (append-only, aelteste zuerst).
+export interface MeasureEvent {
+  id: string
+  measure_id: string
+  event: MeasureEventKind
+  actor_kind: MeasureActorKind
+  actor_id: string | null
+  version_entity_type: VersionedEntityType | null
+  version_id: string | null
+  verdict: MeasureVerdict | null
+  metrics: Record<string, unknown> | null
+  note: string | null
+  created_at: string
+}
+
+export interface MeasureRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  session_id: string
+  case_ids: string[]
+  target: MeasureTarget
+  entity_id: string | null
+  change_summary: string
+  test_case_id: string
+  success_criterion: string
+  counterposition: string
+  // Datum ohne Uhrzeit (`YYYY-MM-DD`); `null` = es gilt das Datum des Protokolls.
+  follow_up_at: string | null
+  state: MeasureState
+  events: MeasureEvent[]
+  created_at: string
+}
+
+// Ein Protokoll ohne Aenderungen.
+export interface SessionRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  trigger: SessionTrigger
+  participants: SessionParticipant[]
+  summary: string
+  decisions: SessionDecision[]
+  dissent: SessionDissent[]
+  // Datum ohne Uhrzeit (`YYYY-MM-DD`), Pflicht am Protokoll.
+  follow_up_at: string
+  supersedes_id: string | null
+  submitted_by_kind: SessionSubmitterKind
+  submitted_by: string
+  case_ids: string[]
+  created_at: string
+}
+
+// Eine Zeile von `GET /feedback-sessions` (QE2 a): Protokoll plus Zaehler.
+// `due_measure_count` und `next_follow_up_at` zaehlen nur offene Aenderungen
+// (weder eingestuft noch zurueckgezogen); `superseded_by_id` ist das juengste
+// Protokoll, das dieses korrigiert.
+export interface SessionListItem extends SessionRead {
+  case_count: number
+  measure_count: number
+  next_follow_up_at: string | null
+  due_measure_count: number
+  superseded_by_id: string | null
+}
+
+// `GET /feedback-sessions/{id}`: Protokoll mit eingebetteten Aenderungen (QE1 a).
+export interface SessionDetail {
+  session: SessionRead
+  measures: MeasureRead[]
+}
+
+// Filter fuer `GET /feedback-sessions`. `due` = nur Protokolle mit mindestens
+// einer faelligen Aenderung (der Server rechnet mit seinem heutigen Datum).
+export interface SessionFilters {
+  agent_id?: string
+  case_id?: string
+  due?: boolean
+}
+
+// Eine Seite der Protokoll-Liste; `next_cursor` aus dem Header `X-Next-Cursor`.
+export interface SessionPage {
+  items: SessionListItem[]
+  next_cursor: string | null
+}
+
+// Juengster Prueffall-Lauf einer Version (3.2: es zaehlt das letzte Ergebnis).
+export interface FollowUpRunRate {
+  runs_total: number
+  runs_passed: number
+  verdict: string
+  attestation: string
+  created_at: string
+}
+
+// Rohzahlen einer Version (QE8 a: keine Raten, die UI rechnet „je 100“).
+export interface FollowUpVersionReport {
+  version_id: string | null
+  version: number
+  test_run: FollowUpRunRate | null
+  uses: number
+  // `null`: fuer diese Version gibt es (noch) kein Zeitfenster.
+  cases: number | null
+}
+
+// `GET /measures/{id}/follow-up` (6.6): Kennzahlen der Nachkontrolle.
+// `reviewable` = darf jetzt eingestuft werden (QE4 a); `recurrence` = neue
+// Rueckmeldungen am selben Element danach, `null` = noch nicht messbar.
+export interface FollowUpReport {
+  measure_id: string
+  state: MeasureState
+  follow_up_at: string
+  due: boolean
+  reviewable: boolean
+  before: FollowUpVersionReport | null
+  after: FollowUpVersionReport | null
+  recurrence: number | null
+  min_uses: number
+  insufficient: boolean
+}
+
 // ADR-0057 §7 (Paket P4c/P5) — Betreiber-Sicht auf die Hintergrund-Routinen
 // (`GET /v1/system/routines`). Spiegelt `RoutineLastRun`, `RoutineStatus` und
 // `RoutinesOverview` aus packages/models (`who2be_models/routine.py`). Nur fuer
