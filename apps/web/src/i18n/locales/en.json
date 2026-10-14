@@ -412,7 +412,6 @@
         "tests": "Test cases",
         "settings": "Settings"
       },
-      "evolutionPlaceholder": "This is where the agent's evolution will live: feedback, changes and follow-ups.",
       "tabsAria": "Agent settings",
       "tabs": {
         "config": "Configuration",
@@ -3946,6 +3945,98 @@
     "retry": "Try again"
   },
   "sessions": {
+    "evolution": {
+      "title": "Evolution",
+      "stepsAria": "Steps of the evolution",
+      "waiting_one": "1 waiting for you",
+      "waiting_other": "{{count}} waiting for you",
+      "unavailable": "Not available",
+      "prepare": "Prepare a review",
+      "guide": {
+        "summary": "How to evolve an agent",
+        "steps": "4 steps",
+        "body": "Your agent gets better when you say what is off and check whether the change works. ① Collect: report a case when the agent gets something wrong. ② Discuss: prepare a review and hold it in your client with the Builder; you decide. ③ Implement: check the draft of each change and activate it. ④ Check: on the due date the follow-up check appears under “To do”, where you answer “Did it work?”."
+      },
+      "collect": {
+        "title": "① Collect",
+        "head_one": "1 open case",
+        "head_other": "{{count}} open cases",
+        "triaged": "{{count}} triaged",
+        "reopened": "{{count}} reopened",
+        "patterns_one": "1 pattern",
+        "patterns_other": "{{count}} patterns",
+        "view": "View"
+      },
+      "discuss": {
+        "title": "② Discuss",
+        "last": "Last review {{date}}",
+        "none": "No review yet",
+        "ready_one": "1 triaged case is ready",
+        "ready_other": "{{count}} triaged cases are ready"
+      },
+      "implement": {
+        "title": "③ Implement",
+        "head_one": "1 open change",
+        "head_other": "{{count}} open changes",
+        "none": "No open changes",
+        "latest": {
+          "agreed": "Agreed, no draft linked yet",
+          "draft_linked": "Draft linked, not activated yet"
+        },
+        "view": "View"
+      },
+      "check": {
+        "title": "④ Check",
+        "due_one": "1 follow-up check due",
+        "due_other": "{{count}} follow-up checks due",
+        "next": "Next on {{date}}",
+        "none": "None scheduled",
+        "today": "due today",
+        "since_one": "due for 1 day",
+        "since_other": "due for {{count}} days",
+        "open": "Open follow-up check"
+      },
+      "changes": {
+        "title": "Changes",
+        "subtitle": "open and awaiting follow-up",
+        "activeSince": "active since {{date}}",
+        "fromReview": "from the review of {{date}}",
+        "view": "View",
+        "actionAria": "{{action}}: {{title}}",
+        "more": "Older changes are in the reviews."
+      },
+      "reviews": {
+        "title": "Reviews",
+        "cases_one": "1 case",
+        "cases_other": "{{count}} cases",
+        "measures_one": "1 change",
+        "measures_other": "{{count}} changes",
+        "fromClient": "submitted by the client",
+        "mark": {
+          "due": "Follow-up check due",
+          "replaced": "Replaced",
+          "corrects": "Correction"
+        },
+        "more": "Load more",
+        "loadError": "The reviews could not be loaded.",
+        "empty": "There has been no review with {{agent}} yet. A review brings cases together: you prepare it here, hold it in your client with the Builder, and the result lands here."
+      },
+      "viewer": {
+        "head_one": "1 of your cases",
+        "head_other": "{{count}} of your cases",
+        "mine": "My cases",
+        "status": {
+          "open": "{{count}} open",
+          "reopened": "{{count}} reopened",
+          "triaged": "{{count}} triaged",
+          "in_progress": "{{count}} in progress",
+          "addressed": "{{count}} addressed",
+          "verified": "{{count}} verified",
+          "dismissed": "{{count}} dismissed"
+        },
+        "explain": "Editors run reviews, changes and follow-up checks. You can see what becomes of your case from its status: In progress · Addressed · Verified."
+      }
+    },
     "trigger": {
       "threshold": "Threshold",
       "scheduled": "Scheduled",

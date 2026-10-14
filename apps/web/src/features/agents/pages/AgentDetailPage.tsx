@@ -17,6 +17,11 @@ import { AgentMemoryCard } from '@/components/memory/AgentMemoryCard'
 import { AgentTestCasesSection, TESTS_TAB } from '@/components/testcases/TestCasesTab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useVersionDeepLink } from '@/components/version/versionDeepLink'
+import {
+  AgentEvolutionTab,
+  EvolutionTabCount,
+} from '@/components/evolution/AgentEvolutionTab'
+import { useInboxCounts } from '@/hooks/useInboxCounts'
 
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
@@ -35,17 +40,14 @@ import { useAgentForm } from '../hooks/useAgentForm'
 const AGENT_TABS = ['overview', 'evolution', 'memory', TESTS_TAB, 'settings'] as const
 type AgentTab = (typeof AGENT_TABS)[number]
 
-// Tab „Weiterentwicklung“ ist nur Platz fuer W3 Option B (Spec §3.3, Owner
-// A3a); der Inhalt kommt mit Phase E. Bis dahin bleibt er aus — auch in der URL.
-const EVOLUTION_TAB_ENABLED = false
-
 // Alte Anker der Stapel-Seite → Tab (Spec §3.1). `#memory` und `#delegations`
 // bleiben als Hash stehen: die Gedaechtnis-Karte hebt sich darauf hervor, die
 // Delegation-Karte (Orchestrator-Spec 2.1) wird im Ueberblick angesprungen.
 const ANCHOR_TABS: Record<string, { tab: AgentTab; keepHash: boolean }> = {
   '#tests': { tab: TESTS_TAB, keepHash: false },
   '#memory': { tab: 'memory', keepHash: true },
-  '#sessions': { tab: EVOLUTION_TAB_ENABLED ? 'evolution' : 'overview', keepHash: false },
+  // Alter Abschnitt „Gespraeche“ (E5-Delta) → Tab „Weiterentwicklung“ (Neuschnitt §2).
+  '#sessions': { tab: 'evolution', keepHash: false },
   '#delegations': { tab: 'overview', keepHash: true },
 }
 
@@ -104,13 +106,13 @@ export function AgentDetailPage() {
   // der Tab ganz, ein `?tab=memory` faellt auf den Ueberblick zurueck.
   const canSeeMemory = role !== null && role !== 'viewer'
   const tabs = useMemo(
-    () =>
-      AGENT_TABS.filter(
-        (value) =>
-          (value !== 'evolution' || EVOLUTION_TAB_ENABLED) && (value !== 'memory' || canSeeMemory),
-      ),
+    () => AGENT_TABS.filter((value) => value !== 'memory' || canSeeMemory),
     [canSeeMemory],
   )
+  // Tab-Zaehler „Weiterentwicklung“ (Neuschnitt §3.1): dieselbe Quelle wie die
+  // Aufgaben-Zeile im Ueberblick; der Tab bekommt die Zahl fuer ④ mit.
+  const inbox = useInboxCounts(id)
+  const isEditor = role === 'editor' || role === 'admin'
   const { tab, setTab } = useVersionDeepLink(tabs, 'overview')
   useLegacyAnchorRedirect()
 
@@ -163,6 +165,10 @@ export function AgentDetailPage() {
                     {tabs.map((value) => (
                       <TabsTrigger key={value} value={value}>
                         {t(`detail.pageTabs.${value}`)}
+                        {/* Zaehler nur fuer editor (Neuschnitt §3.7: viewer ohne). */}
+                        {value === 'evolution' && isEditor ? (
+                          <EvolutionTabCount counts={inbox.counts} />
+                        ) : null}
                       </TabsTrigger>
                     ))}
                   </TabsList>
@@ -183,14 +189,10 @@ export function AgentDetailPage() {
                     />
                   </TabsContent>
 
-                  {EVOLUTION_TAB_ENABLED ? (
-                    <TabsContent value="evolution">
-                      {/* Platz fuer W3 Option B (Spec §3.3): Inhalt folgt mit Phase E. */}
-                      <p className="text-sm text-muted-foreground" data-testid="agent-evolution-placeholder">
-                        {t('detail.evolutionPlaceholder')}
-                      </p>
-                    </TabsContent>
-                  ) : null}
+                  <TabsContent value="evolution">
+                    {/* W3 Option B (Neuschnitt §3, E5g); Verlauf folgt mit E5k. */}
+                    <AgentEvolutionTab agent={{ id: agent.id, name: agent.name }} inbox={inbox} />
+                  </TabsContent>
 
                   <TabsContent value="memory">
                     <AgentMemoryCard agent={agent} framed={false} />

@@ -383,13 +383,17 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Carla Bot' })
     const outer = screen.getByRole('tablist', { name: 'Bereiche des Agenten' })
-    expect(tabNames()).toEqual(['Überblick', 'Gedächtnis', 'Prüffälle', 'Einstellungen'])
+    expect(tabNames()).toEqual([
+      'Überblick',
+      'Weiterentwicklung',
+      'Gedächtnis',
+      'Prüffälle',
+      'Einstellungen',
+    ])
     expect(within(outer).getByRole('tab', { name: 'Überblick' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    // Weiterentwicklung bleibt hinter der Modulkonstante aus (Inhalt kommt mit Phase E).
-    expect(within(outer).queryByRole('tab', { name: 'Weiterentwicklung' })).toBeNull()
     expect(await screen.findByTestId('agent-hierarchy')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Speichern' })).toBeNull()
     expect(screen.queryByTestId('agent-test-cases')).toBeNull()
@@ -434,22 +438,21 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
     } as Me)
 
     await screen.findByTestId('agent-hierarchy')
-    expect(tabNames()).toEqual(['Überblick', 'Prüffälle', 'Einstellungen'])
+    expect(tabNames()).toEqual(['Überblick', 'Weiterentwicklung', 'Prüffälle', 'Einstellungen'])
     expect(screen.queryByTestId('agent-memory-card')).toBeNull()
   })
 
-  it('unbekannter ?tab= und ?tab=evolution fallen auf den Überblick zurück', async () => {
+  it('unbekannter ?tab= fällt auf den Überblick zurück', async () => {
     stubTolerant()
-    renderPage('/w/ws-1/agents/a1?tab=evolution', editorMe)
+    renderPage('/w/ws-1/agents/a1?tab=unbekannt', editorMe)
     await screen.findByTestId('agent-hierarchy')
     expect(screen.getByRole('tab', { name: 'Überblick' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByTestId('agent-evolution-placeholder')).toBeNull()
   })
 
   it.each([
     ['#tests', '?tab=tests', 'Prüffälle'],
     ['#memory', '?tab=memory#memory', 'Gedächtnis'],
-    ['#sessions', '', 'Überblick'],
+    ['#sessions', '?tab=evolution', /^Weiterentwicklung/],
     ['#delegations', '#delegations', 'Überblick'],
   ])('alter Anker %s leitet auf „%s“ um', async (anchor, expected, tabName) => {
     stubTolerant()
@@ -475,5 +478,59 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
       'aria-selected',
       'true',
     )
+  })
+
+  // E5g (Neuschnitt §3.1/§3.7): Tab mit Zaehler aus /inbox/counts, Kopf-Aktionen
+  // bleiben wie sie sind.
+  function stubWithInbox(due: number, open: number) {
+    const tolerant = stubTolerant()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (new URL(String(input)).pathname.endsWith('/inbox/counts')) {
+        return jsonResponse({
+          follow_ups_due: due,
+          memory_approval: 0,
+          versions_review: 0,
+          system_prompts_review: 0,
+          cases_open: open,
+          patterns: 4,
+          total: due + open,
+        })
+      }
+      return tolerant(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  }
+
+  it('?tab=evolution zeigt den Tab mit Zähler, Kopf-Aktionen unverändert', async () => {
+    stubWithInbox(1, 2)
+    renderPage('/w/ws-1/agents/a1?tab=evolution', editorMe)
+
+    expect(await screen.findByTestId('agent-evolution')).toBeInTheDocument()
+    const tab = screen.getByRole('tab', { name: /^Weiterentwicklung/ })
+    expect(tab).toHaveAttribute('aria-selected', 'true')
+    // Zaehler = Rueckmeldungen + Nachkontrollen, Muster zaehlen nicht.
+    await waitFor(() =>
+      expect(within(tab).getByTestId('evolution-tab-count')).toHaveTextContent('3, 3 warten auf dich'),
+    )
+    expect(screen.queryByTestId('agent-hierarchy')).toBeNull()
+    for (const name of ['Duplizieren', 'Rückmeldung geben', 'Löschen']) {
+      expect(screen.getAllByRole('button', { name })[0]).toBeInTheDocument()
+    }
+  })
+
+  it('viewer: Tab ohne Zähler, nur der eigene Schritt', async () => {
+    stubWithInbox(1, 2)
+    renderPage('/w/ws-1/agents/a1?tab=evolution', {
+      ...editorMe,
+      organizations: [
+        {
+          ...editorMe.organizations[0],
+          workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role: 'viewer' }],
+        },
+      ],
+    } as Me)
+
+    expect(await screen.findByTestId('agent-evolution-viewer')).toBeInTheDocument()
+    expect(screen.queryByTestId('evolution-tab-count')).toBeNull()
   })
 })

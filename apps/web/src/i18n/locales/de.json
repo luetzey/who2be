@@ -412,7 +412,6 @@
         "tests": "Prüffälle",
         "settings": "Einstellungen"
       },
-      "evolutionPlaceholder": "Hier entsteht die Weiterentwicklung des Agenten: Rückmeldungen, Änderungen und Nachkontrollen.",
       "tabsAria": "Agent-Einstellungen",
       "tabs": {
         "config": "Konfiguration",
@@ -3946,6 +3945,98 @@
     "retry": "Erneut versuchen"
   },
   "sessions": {
+    "evolution": {
+      "title": "Weiterentwicklung",
+      "stepsAria": "Schritte der Weiterentwicklung",
+      "waiting_one": "1 wartet auf dich",
+      "waiting_other": "{{count}} warten auf dich",
+      "unavailable": "Nicht verfügbar",
+      "prepare": "Review vorbereiten",
+      "guide": {
+        "summary": "So entwickelst du einen Agenten weiter",
+        "steps": "4 Schritte",
+        "body": "Dein Agent wird besser, wenn du sagst, was nicht passt, und prüfst, ob die Änderung wirkt. ① Sammeln: Gib eine Rückmeldung, wenn der Agent etwas falsch macht. ② Besprechen: Bereite ein Review vor und führe es im Client mit dem Builder; entscheiden tust du. ③ Umsetzen: Prüfe den Entwurf jeder Änderung und aktiviere ihn. ④ Prüfen: Zum Termin erscheint die Nachkontrolle unter „Zu erledigen“, dort beantwortest du „Hat es gewirkt?“."
+      },
+      "collect": {
+        "title": "① Sammeln",
+        "head_one": "1 Rückmeldung offen",
+        "head_other": "{{count}} Rückmeldungen offen",
+        "triaged": "{{count}} eingeordnet",
+        "reopened": "{{count}} wieder offen",
+        "patterns_one": "1 Muster",
+        "patterns_other": "{{count}} Muster",
+        "view": "Ansehen"
+      },
+      "discuss": {
+        "title": "② Besprechen",
+        "last": "Letztes Review {{date}}",
+        "none": "Noch kein Review",
+        "ready_one": "1 eingeordnete Rückmeldung ist bereit",
+        "ready_other": "{{count}} eingeordnete Rückmeldungen sind bereit"
+      },
+      "implement": {
+        "title": "③ Umsetzen",
+        "head_one": "1 Änderung offen",
+        "head_other": "{{count}} Änderungen offen",
+        "none": "Keine offenen Änderungen",
+        "latest": {
+          "agreed": "Vereinbart, noch kein Entwurf verknüpft",
+          "draft_linked": "Entwurf verknüpft, noch nicht aktiviert"
+        },
+        "view": "Ansehen"
+      },
+      "check": {
+        "title": "④ Prüfen",
+        "due_one": "1 Nachkontrolle fällig",
+        "due_other": "{{count}} Nachkontrollen fällig",
+        "next": "Nächste am {{date}}",
+        "none": "Keine geplant",
+        "today": "heute fällig",
+        "since_one": "seit 1 Tag fällig",
+        "since_other": "seit {{count}} Tagen fällig",
+        "open": "Nachkontrolle öffnen"
+      },
+      "changes": {
+        "title": "Änderungen",
+        "subtitle": "offen und zur Nachkontrolle",
+        "activeSince": "aktiv seit {{date}}",
+        "fromReview": "aus dem Review vom {{date}}",
+        "view": "Ansehen",
+        "actionAria": "{{action}}: {{title}}",
+        "more": "Ältere Änderungen findest du in den Reviews."
+      },
+      "reviews": {
+        "title": "Reviews",
+        "cases_one": "1 Rückmeldung",
+        "cases_other": "{{count}} Rückmeldungen",
+        "measures_one": "1 Änderung",
+        "measures_other": "{{count}} Änderungen",
+        "fromClient": "vom Client übermittelt",
+        "mark": {
+          "due": "Nachkontrolle fällig",
+          "replaced": "Ersetzt",
+          "corrects": "Korrigiert"
+        },
+        "more": "Weitere laden",
+        "loadError": "Die Reviews konnten nicht geladen werden.",
+        "empty": "Mit {{agent}} gab es noch kein Review. Ein Review fasst Rückmeldungen zusammen: Du bereitest es hier vor, führst es im Client mit dem Builder, und das Ergebnis landet hier."
+      },
+      "viewer": {
+        "head_one": "1 deiner Rückmeldungen",
+        "head_other": "{{count}} deiner Rückmeldungen",
+        "mine": "Meine Rückmeldungen",
+        "status": {
+          "open": "{{count}} offen",
+          "reopened": "{{count}} wieder offen",
+          "triaged": "{{count}} eingeordnet",
+          "in_progress": "{{count}} in Arbeit",
+          "addressed": "{{count}} geändert",
+          "verified": "{{count}} hat gewirkt",
+          "dismissed": "{{count}} verworfen"
+        },
+        "explain": "Reviews, Änderungen und Nachkontrollen führen Editoren. Was aus deiner Rückmeldung wird, siehst du an ihrem Status: In Arbeit · Geändert · Hat gewirkt."
+      }
+    },
     "trigger": {
       "threshold": "Schwelle",
       "scheduled": "Termin",
