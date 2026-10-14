@@ -1,10 +1,17 @@
-import { Brain, CalendarClock, CircleCheck, ClipboardCheck, MessageSquareWarning } from 'lucide-react'
+import {
+  ArrowRight,
+  Brain,
+  CalendarClock,
+  CircleCheck,
+  ClipboardCheck,
+  MessageSquareWarning,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import type { Api } from '@/api/client'
-import type { Agent, InboxCounts, MemoryFilter, VersionStatus } from '@/api/types'
+import type { Agent, InboxCounts, MemoryFilter, SessionListItem, VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -12,6 +19,7 @@ import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LoadingState } from '@/components/data/LoadingState'
+import { MetaPill } from '@/components/data/MetaPill'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -19,6 +27,9 @@ import { Button } from '@/components/ui/button'
 import { versionDiffSearch } from '@/components/version/versionDeepLink'
 import { useInboxCounts } from '@/hooks/useInboxCounts'
 import type { StatusChipOption } from '@/lib/listFilter'
+import { cn } from '@/lib/utils'
+
+import { daysSince, formatDay } from '../../evolution/lib/followUp'
 
 import {
   INBOX_ROWS_PER_KIND,
@@ -141,6 +152,90 @@ function useSectionRows<T>(
   }
 }
 
+interface FollowUpPageState {
+  api: Api
+  key: string
+  items: SessionListItem[] | null
+  cursor: string | null
+  failed: boolean
+}
+
+/**
+ * Nachkontroll-Zeilen (Neuschnitt §5): Reviews mit faelliger Aenderung aus
+ * `listSessions({ due: true })`, je Seite hoechstens fuenf. Ob etwas faellig
+ * ist, entscheidet der Server (QE2 a, Leitplanke „eine Quelle je Ansicht“) —
+ * das Web filtert nicht nach. „Weitere laden“ haengt die naechste Seite an;
+ * solange sie laedt, loest ein zweiter Klick keinen zweiten Request aus.
+ */
+function useFollowUpRows(api: Api, enabled: boolean, key: string, agentId: string | undefined) {
+  const [state, setState] = useState<FollowUpPageState | null>(null)
+  const [nonce, setNonce] = useState(0)
+  const [more, setMore] = useState<{ key: string; loading: boolean; failed: boolean } | null>(null)
+  const moreInFlight = useRef(false)
+  const fullKey = `${key}#${nonce}`
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    api
+      .listSessions({ due: true, ...(agentId ? { agent_id: agentId } : {}) }, { limit: INBOX_ROWS_PER_KIND })
+      .then((page) => {
+        if (!cancelled)
+          setState({ api, key: fullKey, items: page.items, cursor: page.next_cursor, failed: false })
+      })
+      .catch(() => {
+        if (!cancelled) setState({ api, key: fullKey, items: null, cursor: null, failed: true })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, enabled, fullKey, agentId])
+
+  const sameApi = state !== null && state.api === api
+  const fresh = sameApi && state.key === fullKey
+  const cursor = fresh ? state.cursor : null
+
+  const loadMore = () => {
+    if (moreInFlight.current || cursor === null) return
+    moreInFlight.current = true
+    const forKey = fullKey
+    setMore({ key: forKey, loading: true, failed: false })
+    api
+      .listSessions(
+        { due: true, ...(agentId ? { agent_id: agentId } : {}) },
+        { cursor, limit: INBOX_ROWS_PER_KIND },
+      )
+      .then((page) => {
+        setState((prev) => {
+          if (prev === null || prev.api !== api || prev.key !== forKey || prev.items === null) return prev
+          const known = new Set(prev.items.map((item) => item.id))
+          return {
+            ...prev,
+            items: [...prev.items, ...page.items.filter((item) => !known.has(item.id))],
+            cursor: page.next_cursor,
+          }
+        })
+        setMore({ key: forKey, loading: false, failed: false })
+      })
+      .catch(() => setMore({ key: forKey, loading: false, failed: true }))
+      .finally(() => {
+        moreInFlight.current = false
+      })
+  }
+
+  const moreFresh = more !== null && more.key === fullKey
+  return {
+    items: enabled && sameApi ? state.items : null,
+    loading: enabled && !fresh,
+    failed: enabled && fresh && state.failed,
+    retry: () => setNonce((value) => value + 1),
+    hasMore: enabled && cursor !== null,
+    loadingMore: enabled && moreFresh && more.loading,
+    moreFailed: enabled && moreFresh && more.failed,
+    loadMore,
+  }
+}
+
 /** „vor 3 Stunden“ — kurz, in der Sprache der Oberflaeche. */
 function useAge(): (iso: string) => string {
   const { i18n } = useTranslation()
@@ -246,6 +341,15 @@ export function InboxPage() {
   const shows = (k: Kind) => (kind === 'all' || kind === k) && (count(k) ?? 0) > 0
 
   // --- Zeilen je Art -------------------------------------------------------
+  // Nachkontrollen: Zeilen sind Reviews (Server `due=true`), die Abschnittszahl
+  // bleibt `follow_ups_due` (Aenderungen). viewer fragt nie (ab editor).
+  const followUpsCount = count('followUps') ?? 0
+  const followUps = useFollowUpRows(
+    api,
+    canTriage && shows('followUps'),
+    `${agent}|${followUpsCount}`,
+    agentId,
+  )
   const memoryCount = count('memory') ?? 0
   const memory = useSectionRows(
     api,
@@ -282,6 +386,41 @@ export function InboxPage() {
   )
 
   // --- Darstellung ---------------------------------------------------------
+  const followUpRows: InboxRow[] | null =
+    followUps.items?.map((item) => {
+      const title = t('inbox:followUps.row', {
+        date: formatDay(item.created_at),
+        agent: agentName(item.agent_id),
+      })
+      // Nur die Pill rechnet lokal (Tage seit dem Server-Termin); ob die Zeile
+      // faellig ist, sagt allein der Server. Liegt sein Termin nach dem lokalen
+      // Kalendertag (UTC-Stichtag, PM 2026-10-14), heisst sie „heute fällig“.
+      const days =
+        item.next_follow_up_at !== null ? Math.max(daysSince(item.next_follow_up_at), 0) : null
+      return {
+        id: item.id,
+        title,
+        badge:
+          days !== null && !Number.isNaN(days) ? (
+            <MetaPill tone="brand" icon={CalendarClock} className="whitespace-normal">
+              {days === 0
+                ? t('inbox:followUps.today')
+                : t('inbox:followUps.since', { count: days })}
+            </MetaPill>
+          ) : null,
+        meta: [
+          t('inbox:followUps.changes', { count: item.due_measure_count }),
+          ...(item.next_follow_up_at !== null
+            ? [t('inbox:followUps.term', { date: formatDay(item.next_follow_up_at) })]
+            : []),
+        ].join(' · '),
+        actionLabel: t('inbox:followUps.open'),
+        actionAriaLabel: t('inbox:followUps.openAria', { title }),
+        href: wsPath(
+          `/agents/${encodeURIComponent(item.agent_id)}/reviews/${encodeURIComponent(item.id)}?change=first-due`,
+        ),
+      }
+    }) ?? null
   const memoryHref = () =>
     wsPath(`/memory?tab=approval${agent !== '' ? `&agent=${encodeURIComponent(agent)}` : ''}`)
   const memoryRows: InboxRow[] | null =
@@ -411,19 +550,59 @@ export function InboxPage() {
             ) : null}
 
             {shows('followUps') ? (
-              <InboxSection
-                kind="followUps"
-                icon={CalendarClock}
-                title={t('inbox:kind.followUps')}
-                count={count('followUps') ?? 0}
-                hint={t('inbox:kind.followUpsHint')}
-                rows={null}
-                loading={false}
-                failed={false}
-                onRetry={reloadCounts}
-                primary
-                note={t('inbox:followUps.pending')}
-              />
+              <div className="flex flex-col gap-3">
+                <InboxSection
+                  kind="followUps"
+                  icon={CalendarClock}
+                  title={t('inbox:kind.followUps')}
+                  count={followUpsCount}
+                  hint={t('inbox:kind.followUpsHint')}
+                  rows={followUpRows}
+                  loading={followUps.loading}
+                  failed={followUps.failed}
+                  onRetry={followUps.retry}
+                  primary
+                />
+                {followUps.hasMore || followUps.moreFailed || agentId !== undefined ? (
+                  <div
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2"
+                    data-testid="inbox-followups-more"
+                  >
+                    {followUps.hasMore ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11 md:min-h-0"
+                        disabled={followUps.loadingMore}
+                        aria-busy={followUps.loadingMore}
+                        onClick={followUps.loadMore}
+                      >
+                        {followUps.loadingMore
+                          ? t('inbox:followUps.loadingMore')
+                          : t('inbox:followUps.loadMore')}
+                      </Button>
+                    ) : null}
+                    {followUps.moreFailed ? (
+                      <p role="alert" className="text-sm text-destructive">
+                        {t('inbox:sectionError')}
+                      </p>
+                    ) : null}
+                    {agentId !== undefined ? (
+                      <Link
+                        to={wsPath(`/agents/${encodeURIComponent(agentId)}?tab=evolution`)}
+                        className={cn(
+                          'inline-flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium underline-offset-4 hover:underline md:min-h-0',
+                          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
+                        )}
+                      >
+                        {t('inbox:followUps.atAgent', { agent: agentName(agentId) })}
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
             {shows('memory') ? (

@@ -480,7 +480,7 @@ export function AgentOverview({ agent, composition }: AgentOverviewProps) {
             label={t('overview.kpi.cases')}
             icon={MessageSquareWarning}
             tone="playbook"
-            href={wsPath(`/feedback?tab=cases&agent=${agentParam}`)}
+            href={agentPath('evolution')}
             state={casesTile}
           />
           {isEditor ? (
