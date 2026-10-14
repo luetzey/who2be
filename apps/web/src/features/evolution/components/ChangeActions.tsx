@@ -290,6 +290,7 @@ function LinkDraftPanel({
   }, [api, type, entityId, open, nonce])
 
   const submit = async () => {
+    if (busy) return
     if (version === '') {
       setMissing(true)
       document.getElementById(`${baseId}-version`)?.focus()
@@ -418,6 +419,7 @@ function WithdrawPanel({
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
+    if (busy) return
     const note = reason.trim()
     if (note.length < NOTE_MIN) {
       setInvalid(true)
@@ -505,7 +507,9 @@ function ReviewForm({
   noteInvalid,
   noteRef,
   error,
+  onSubmit,
 }: {
+  onSubmit: () => void
   formId: string
   measure: MeasureRead
   cases: CaseRead[] | null
@@ -522,6 +526,14 @@ function ReviewForm({
   const effectId = `${baseId}-effect`
   const hintId = `${baseId}-hint`
   const noteId = `${baseId}-note`
+  const noteFieldRef = useRef<HTMLDivElement>(null)
+
+  // Unter md liegt die Leiste fixiert ueber dem Sheet-Ende: nach dem Fokus
+  // Feld UND Feldfehler ganz ins Bild holen. Der Scroller traegt dafuer ein
+  // `scroll-padding-bottom` in Leistenhoehe (E5-Delta §8).
+  useEffect(() => {
+    if (noteInvalid) noteFieldRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [noteInvalid])
 
   // Zaehlung: Rueckmeldungen der Aenderung auf „Geaendert“ (`addressed`);
   // nur von dort fuehren die Kanten nach `verified`/`reopened` (3.3).
@@ -545,7 +557,16 @@ function ReviewForm({
 
   return (
     <section className="flex min-w-0 flex-col gap-3" data-testid="change-review">
-      <form id={formId} noValidate className="flex min-w-0 flex-col gap-3" onSubmit={(event) => event.preventDefault()}>
+      {/* Jede Uebermittlung (Knopf, implizit) laeuft ueber denselben Guard. */}
+      <form
+        id={formId}
+        noValidate
+        className="flex min-w-0 flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSubmit()
+        }}
+      >
         <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
           <legend className="mb-2 text-base font-semibold">{t('review.legend')}</legend>
           <p id={hintId} className="text-xs text-muted-foreground" data-testid="change-review-human-only">
@@ -583,7 +604,7 @@ function ReviewForm({
         </fieldset>
 
         {verdict !== null ? (
-          <div className="flex min-w-0 flex-col gap-1">
+          <div ref={noteFieldRef} className="flex min-w-0 flex-col gap-1" data-testid="change-review-note-field">
             <Label htmlFor={noteId}>
               {verdict === 'ineffective' ? t('review.note') : t('review.noteOptional')}
             </Label>
@@ -784,6 +805,7 @@ export function ChangeActions({
           noteInvalid={noteInvalid}
           noteRef={noteRef}
           error={error}
+          onSubmit={() => void submitReview()}
         />
       ) : null}
 

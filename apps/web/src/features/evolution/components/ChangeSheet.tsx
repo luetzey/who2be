@@ -829,7 +829,9 @@ export function ChangeSheet({
         className={cn(
           // Der Schliessen-Knopf liegt absolut und muss ueber dem fixierten Kopf bleiben.
           'gap-0 overflow-x-hidden overflow-y-auto overscroll-contain p-0 [&>button]:z-20',
-          mobile ? 'h-[100svh] rounded-none' : 'w-full sm:max-w-[40rem]',
+          // Unter md: die fixierte Aktionsleiste (bis zu zwei 44-px-Knoepfe plus
+          // Rand, ~8 rem) verdeckt keinen fokussierten Inhalt (E5-Delta §8).
+          mobile ? 'h-[100svh] scroll-pb-36 rounded-none' : 'w-full sm:max-w-[40rem]',
         )}
         onOpenAutoFocus={(event) => {
           event.preventDefault()

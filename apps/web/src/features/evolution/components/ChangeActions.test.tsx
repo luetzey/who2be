@@ -608,6 +608,121 @@ describe('ChangeActions: Zurückziehen', () => {
   })
 })
 
+// --- Doppel-Submit und Abbrechen ----------------------------------------------
+
+describe('ChangeActions: Doppel-Submit und Abbrechen', () => {
+  /** Ein Request, der haengen bleibt, bis der Test ihn aufloest. */
+  function pending<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+    let resolve: (value: T) => void = () => undefined
+    const promise = new Promise<T>((done) => {
+      resolve = done
+    })
+    return { promise, resolve }
+  }
+
+  async function openWithdraw() {
+    renderSheet(data())
+    await screen.findByTestId('change-actions')
+    openMore()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Zurückziehen…' }))
+    const dialog = await screen.findByTestId('change-withdraw-dialog')
+    fireEvent.change(within(dialog).getByLabelText('Warum wird die Änderung aufgegeben?'), {
+      target: { value: 'Ziel hat sich erledigt.' },
+    })
+    return dialog
+  }
+
+  it('Zurückziehen: Knopf während des Requests gesperrt, genau ein Aufruf', async () => {
+    const request = pending<{ event: MeasureEvent; cases_reset: string[] }>()
+    api.withdrawMeasure.mockReturnValue(request.promise)
+    const dialog = await openWithdraw()
+    const submit = within(dialog).getByRole('button', { name: 'Zurückziehen' })
+    fireEvent.click(submit)
+    await waitFor(() => expect(submit).toBeDisabled())
+    expect(submit).toHaveAttribute('aria-busy', 'true')
+    expect(within(dialog).getByRole('button', { name: 'Abbrechen' })).toBeDisabled()
+    fireEvent.click(submit)
+    fireEvent.submit(submit.closest('form') as HTMLFormElement)
+    expect(api.withdrawMeasure).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      request.resolve({ event: ev('e4', 'withdrawn'), cases_reset: [] })
+      await request.promise
+    })
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('Antwort speichern: Knopf während des Requests gesperrt, genau ein Aufruf', async () => {
+    const request = pending<MeasureEvent>()
+    api.reviewMeasure.mockReturnValue(request.promise)
+    renderSheet(data())
+    const review = await screen.findByTestId('change-review')
+    fireEvent.click(within(review).getByRole('radio', { name: 'Ja, hat gewirkt' }))
+    const submit = screen.getByRole('button', { name: 'Antwort speichern' })
+    fireEvent.click(submit)
+    await waitFor(() => expect(submit).toBeDisabled())
+    expect(submit).toHaveAttribute('aria-busy', 'true')
+    // Zweiter Weg an der gesperrten Schaltflaeche vorbei: implizites Absenden.
+    fireEvent.click(submit)
+    fireEvent.submit(within(review).getByRole('group', { name: 'Hat es gewirkt?' }).closest('form') as HTMLFormElement)
+    expect(api.reviewMeasure).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      request.resolve(ev('e3', 'reviewed'))
+      await request.promise
+    })
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('Verknüpfen: Knopf während des Requests gesperrt, genau ein Aufruf', async () => {
+    const request = pending<MeasureEvent>()
+    api.linkMeasureDraft.mockReturnValue(request.promise)
+    renderSheet(data({ state: 'agreed', events: [] }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Entwurf verknüpfen…' }))
+    const dialog = await screen.findByTestId('change-link-draft-dialog')
+    const select = within(dialog).getByLabelText('Version')
+    await waitFor(() => expect(select).not.toBeDisabled())
+    fireEvent.change(select, { target: { value: 'v4' } })
+    const submit = within(dialog).getByRole('button', { name: 'Verknüpfen' })
+    fireEvent.click(submit)
+    await waitFor(() => expect(submit).toBeDisabled())
+    expect(submit).toHaveAttribute('aria-busy', 'true')
+    fireEvent.click(submit)
+    fireEvent.submit(submit.closest('form') as HTMLFormElement)
+    expect(api.linkMeasureDraft).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      request.resolve(linked)
+      await request.promise
+    })
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('Abbrechen im Dialog „Zurückziehen“ mit gültiger Begründung: Dialog zu, kein Request', async () => {
+    const dialog = await openWithdraw()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(screen.queryByTestId('change-withdraw-dialog')).toBeNull())
+    expect(api.withdrawMeasure).not.toHaveBeenCalled()
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('unter md: Feldfehler der Notiz wird nach dem Fokus ganz ins Bild geholt', async () => {
+    mockMobile(true)
+    const scroll = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scroll
+    try {
+      renderSheet(data())
+      expect(await screen.findByTestId('change-sheet')).toHaveClass('scroll-pb-36')
+      const review = await screen.findByTestId('change-review')
+      fireEvent.click(within(review).getByRole('radio', { name: 'Nein, hat nicht gewirkt' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Antwort speichern' }))
+      const field = within(review).getByTestId('change-review-note-field')
+      expect(within(field).getByTestId('change-review-note-error')).toBeInTheDocument()
+      expect(scroll.mock.contexts).toContain(field)
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
+})
+
 // --- viewer (Mutationsprobe) --------------------------------------------------
 
 describe('ChangeActions: viewer', () => {
