@@ -4172,7 +4172,61 @@
       }
     },
     "error": {
-      "measureNotFound": "This change doesn't exist (anymore)."
+      "measureNotFound": "This change doesn't exist (anymore).",
+      "versionNotFound": "This version no longer exists. Pick another one.",
+      "conflict": "This step doesn't fit the current state. The change has been reloaded."
+    },
+    "review": {
+      "legend": "Did it work?",
+      "humanOnly": "Only people answer this. The Builder prepares, but doesn't decide.",
+      "option": {
+        "effective": "Yes, it worked",
+        "ineffective": "No, it didn't work",
+        "not_measurable": "Not measurable"
+      },
+      "effect": {
+        "effective_one": "The 1 addressed case will count as verified. Verified is a final state.",
+        "effective_other": "The {{count}} addressed cases will count as verified. Verified is a final state.",
+        "ineffective_one": "The 1 addressed case goes back to \"Reopened\" and shows up in the list again. Your note becomes its reason.",
+        "ineffective_other": "The {{count}} addressed cases go back to \"Reopened\" and show up in the list again. Your note becomes their reason.",
+        "not_measurable": "The cases stay as they are. The change is closed. A new follow-up check needs a new review.",
+        "unaffected_one": "1 other case of this change doesn't change.",
+        "unaffected_other": "{{count}} other cases of this change don't change."
+      },
+      "note": "Note",
+      "noteOptional": "Note (optional)",
+      "noteRequired": "\"No, it didn't work\" needs a reason for the cases. At least 10 characters.",
+      "submit": "Save answer",
+      "done": "Answered: {{verdict}}",
+      "newSession": "Prepare a new review"
+    },
+    "action": {
+      "linkDraft": "Link draft…",
+      "relinkDraft": "Link another draft…",
+      "toDraft": "Go to draft",
+      "withdraw": "Withdraw…",
+      "more": "More actions",
+      "noVersions": "This target has no versions. A draft can't be linked."
+    },
+    "linkDraft": {
+      "title": "Link draft",
+      "element": "Building block",
+      "version": "Version",
+      "choose": "Choose a version",
+      "versionRequired": "Choose a version.",
+      "help": "The draft stays a draft. It only becomes active in review, after the test cases have run. The cases then count as addressed automatically.",
+      "none": "There's no draft for {{element}} yet. Create one in the versions tab or have the Builder create it.",
+      "open": "Open {{element}}",
+      "submit": "Link",
+      "done": "Draft linked."
+    },
+    "withdraw": {
+      "title": "Withdraw change",
+      "intro": "The change is dropped. A linked draft stays a draft.",
+      "cases": "Cases currently in progress go back to \"Triaged\" unless another open change contains them. All other cases keep their status.",
+      "reason": "Why is the change being dropped?",
+      "submit": "Withdraw",
+      "done": "Change withdrawn."
     }
   }
 }

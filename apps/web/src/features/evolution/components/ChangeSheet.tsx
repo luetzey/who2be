@@ -30,11 +30,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ChangeActions } from '@/features/evolution/components/ChangeActions'
 import {
   followUpDate,
   followUpStatusOf,
   formatDay,
   hasFollowUpFigures,
+  isClosedState,
   isDue,
   isKnownMeasureEvent,
 } from '@/features/evolution/lib/followUp'
@@ -161,8 +163,8 @@ type FollowUpData =
   | { kind: 'ready'; report: FollowUpReport }
   | { kind: 'error' }
 
-/** `GET /measures/{id}/follow-up` nur, wenn `enabled` (ab Aktiviert). */
-function useFollowUp(measureId: string, enabled: boolean, onGone: () => void) {
+/** `GET /measures/{id}/follow-up` nur, wenn `enabled`; `state` laedt nach einer Aktion neu. */
+function useFollowUp(measureId: string, enabled: boolean, state: string, onGone: () => void) {
   const api = useApi()
   const [data, setData] = useState<FollowUpData>({ kind: enabled ? 'loading' : 'idle' })
   const [nonce, setNonce] = useState(0)
@@ -187,7 +189,7 @@ function useFollowUp(measureId: string, enabled: boolean, onGone: () => void) {
     return () => {
       cancelled = true
     }
-  }, [api, measureId, enabled, nonce])
+  }, [api, measureId, enabled, state, nonce])
 
   const retry = () => {
     setData({ kind: 'loading' })
@@ -363,10 +365,17 @@ function FollowUpFigures({ report }: { report: FollowUpReport }) {
   )
 }
 
-function FollowUpSection({ measure, onGone }: { measure: MeasureRead; onGone: () => void }) {
+function FollowUpSection({
+  measure,
+  data,
+  retry,
+}: {
+  measure: MeasureRead
+  data: FollowUpData
+  retry: () => void
+}) {
   const { t } = useTranslation(['sessions', 'common'])
   const enabled = hasFollowUpFigures(measure)
-  const { data, retry } = useFollowUp(measure.id, enabled, onGone)
 
   let body: ReactNode
   if (!enabled) {
@@ -542,6 +551,8 @@ interface ChangeSheetProps {
   onClose: () => void
   /** Die Aenderung gibt es nicht (mehr): Sheet zu, Toast (E5-Delta §4.3). */
   onGone: () => void
+  /** Nach einer Aktion: Review-Ergebnis samt Rueckmeldungen neu laden (E5e). */
+  onChanged?: () => void
   /** Fokusziel beim Schliessen ohne Ausloeser (Deep-Link), je Aenderungs-ID. */
   fallbackFocus: (measureId: string) => HTMLElement | null
 }
@@ -550,15 +561,37 @@ function ChangeBody({
   data,
   titleRef,
   onGone,
+  onChanged,
 }: {
   data: ChangeSheetData
   titleRef: RefObject<HTMLHeadingElement>
   onGone: () => void
+  onChanged: () => void
 }) {
   const { t } = useTranslation(['sessions', 'feedback', 'common'])
   const wsPath = useWorkspacePath()
   const { measure, session } = data
   const versions = useLinkedVersions(measure)
+  const stateRef = useRef<HTMLSpanElement>(null)
+  const versioned = isVersionedTarget(measure.target)
+  const closed = isClosedState(measure.state)
+  // Kennzahlen ab Aktiviert; bei Zielen ohne Versionen offen auch vorher,
+  // weil nur der Bericht sagt, ob schon geantwortet werden darf (QE6).
+  const { data: followUp, retry } = useFollowUp(
+    measure.id,
+    hasFollowUpFigures(measure) || (!versioned && !closed),
+    measure.state,
+    onGone,
+  )
+  // QE6: eine Bedingung vom Server (`FollowUpReport.reviewable`). Ohne
+  // Bericht (Fehler, laedt) nur der Zustand: versioniert ab Aktiviert —
+  // die Antwort bleibt bei einem Kennzahlen-Fehler moeglich (E5-Delta §4.3).
+  const reviewable =
+    followUp.kind === 'ready'
+      ? followUp.report.reviewable
+      : followUp.kind === 'error' &&
+        versioned &&
+        (measure.state === 'activated' || measure.state === 'follow_up_prepared')
 
   const caseStatusWord = (status: CaseStatus) =>
     status === 'addressed'
@@ -618,18 +651,19 @@ function ChangeBody({
 
   // Entwurf: der juengste `draft_linked` (QE4 a) mit Version und Status.
   const linked = latest(measure.events, 'draft_linked')
+  const linkedType = linked?.version_entity_type ?? null
+  const draftPath =
+    linked !== null && linked.version_id !== null && linkedType !== null && measure.entity_id !== null
+      ? wsPath(
+          `/${VERSIONED[linkedType].segment}/${measure.entity_id}${VERSIONED[linkedType].versionsTab ? '?tab=versions' : ''}`,
+        )
+      : null
   let draft: ReactNode
   if (linked === null || linked.version_id === null) {
     draft = <span className="text-muted-foreground">{t('sessions:measure.noDraft')}</span>
   } else {
     const version = versions?.[linked.version_id]
-    const type = linked.version_entity_type
-    const path =
-      type !== null && measure.entity_id !== null
-        ? wsPath(
-            `/${VERSIONED[type].segment}/${measure.entity_id}${VERSIONED[type].versionsTab ? '?tab=versions' : ''}`,
-          )
-        : null
+    const path = draftPath
     const activatedAt = measure.events.find(
       (event) => event.event === 'activated' && event.version_id === linked.version_id,
     )?.created_at
@@ -675,7 +709,12 @@ function ChangeBody({
           {t('sessions:measure.from', { agent: data.agentName, date: formatDay(session.created_at) })}
         </SheetDescription>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-xs font-semibold" data-testid="change-state">
+          <span
+            ref={stateRef}
+            tabIndex={-1}
+            className="text-xs font-semibold outline-none"
+            data-testid="change-state"
+          >
             {t(`sessions:measure.state.${measure.state}`)}
           </span>
           <ChangeDueMark measure={measure} session={session} />
@@ -738,9 +777,26 @@ function ChangeBody({
           </Field>
         </dl>
 
-        <FollowUpSection measure={measure} onGone={onGone} />
+        <FollowUpSection measure={measure} data={followUp} retry={retry} />
 
-        <History measure={measure} element={data.element} versions={versions} people={data.people} />
+        <ChangeActions
+          measure={measure}
+          element={data.element}
+          versionedType={versioned ? (measure.target as VersionedEntityType) : null}
+          elementPath={
+            versioned && measure.entity_id !== null
+              ? wsPath(`/${VERSIONED[measure.target as VersionedEntityType].segment}/${measure.entity_id}`)
+              : null
+          }
+          draftPath={draftPath}
+          reviewable={reviewable}
+          cases={data.cases}
+          onChanged={onChanged}
+          onGone={onGone}
+          onReviewed={() => stateRef.current?.focus()}
+        >
+          <History measure={measure} element={data.element} versions={versions} people={data.people} />
+        </ChangeActions>
       </div>
     </>
   )
@@ -751,7 +807,13 @@ function ChangeBody({
  * rechts (max. 40 rem), darunter Bottom-Sheet in voller Hoehe. Fokus: beim
  * Oeffnen auf den Titel, beim Schliessen zurueck auf „Änderung öffnen“.
  */
-export function ChangeSheet({ data, onClose, onGone, fallbackFocus }: ChangeSheetProps) {
+export function ChangeSheet({
+  data,
+  onClose,
+  onGone,
+  onChanged = () => undefined,
+  fallbackFocus,
+}: ChangeSheetProps) {
   const mobile = useIsMobile()
   const titleRef = useRef<HTMLHeadingElement>(null)
   const open = data !== null
@@ -783,7 +845,13 @@ export function ChangeSheet({ data, onClose, onGone, fallbackFocus }: ChangeShee
         }}
       >
         {shown !== null ? (
-          <ChangeBody key={shown.measure.id} data={shown} titleRef={titleRef} onGone={onGone} />
+          <ChangeBody
+            key={shown.measure.id}
+            data={shown}
+            titleRef={titleRef}
+            onGone={onGone}
+            onChanged={onChanged}
+          />
         ) : null}
       </SheetContent>
     </Sheet>

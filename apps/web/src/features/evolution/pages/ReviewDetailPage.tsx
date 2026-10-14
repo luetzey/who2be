@@ -851,6 +851,7 @@ function ReviewDetailView() {
         data={sheetData}
         onClose={closeChange}
         onGone={goneChange}
+        onChanged={data.reload}
         fallbackFocus={fallbackFocus}
       />
     </Container>
