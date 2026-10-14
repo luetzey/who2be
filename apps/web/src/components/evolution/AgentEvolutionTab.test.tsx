@@ -1,4 +1,5 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -388,6 +389,108 @@ describe('AgentEvolutionTab — editor', () => {
     await waitFor(() =>
       expect(screen.getByTestId('evolution-step-check')).toHaveTextContent('Nächste am 24.10.2026'),
     )
+  })
+
+  // Eine Quelle je Wert (PM 2026-10-14): Server und lokale Rechnung laufen
+  // hier bewusst auseinander, damit ein lokales Nachrechnen auffaellt.
+  it('④ zeigt follow_ups_due vom Server, nicht die lokal fälligen Änderungen', async () => {
+    renderTab(inboxCounts({ follow_ups_due: 5 }))
+
+    // Lokal ist genau eine geladene Aenderung faellig (m1).
+    const section = await screen.findByTestId('evolution-changes')
+    await waitFor(() => expect(within(section).getAllByTestId('evolution-change-due')).toHaveLength(1))
+
+    const check = screen.getByTestId('evolution-step-check')
+    expect(within(check).getByTestId('evolution-step-check-head')).toHaveTextContent(
+      '5 Nachkontrollen fällig',
+    )
+    expect(within(check).getByTestId('evolution-step-check-waiting')).toHaveTextContent(
+      '5 warten auf dich',
+    )
+  })
+
+  it('Review-Markierung „Nachkontrolle fällig“ nur aus due_measure_count, nicht aus dem Datum', async () => {
+    api.listSessions.mockResolvedValue({
+      items: [
+        // Datum vorbei, Server sagt: nichts faellig.
+        review({ id: 's1', due_measure_count: 0, next_follow_up_at: '2026-10-01' }),
+        // Datum in der Zukunft, Server sagt: faellig.
+        review({
+          id: 's2',
+          due_measure_count: 2,
+          next_follow_up_at: '2026-11-20',
+          created_at: '2026-09-20T10:00:00Z',
+        }),
+      ],
+      next_cursor: null,
+    })
+    renderTab()
+
+    const section = screen.getByTestId('evolution-reviews')
+    const rows = await within(section).findAllByTestId('evolution-review')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).not.toHaveTextContent('Nachkontrolle fällig')
+    expect(rows[0]).toHaveTextContent('Nachkontrolle am 01.10.2026')
+    expect(rows[1]).toHaveTextContent('Nachkontrolle fällig')
+    expect(rows[1]).not.toHaveTextContent('Nachkontrolle am')
+  })
+
+  it('„Weitere laden“ verwirft eine Seite, die nach einem Agentwechsel ankommt', async () => {
+    let resolveOld: (page: { items: SessionListItem[]; next_cursor: string | null }) => void = () => {}
+    api.listSessions.mockImplementation(
+      (filter: { agent_id: string }, opts: { cursor?: string }) => {
+        if (filter.agent_id === 'a1' && opts.cursor === undefined) {
+          return Promise.resolve({ items: [review()], next_cursor: 'c-1' })
+        }
+        if (filter.agent_id === 'a1') {
+          return new Promise((resolve) => {
+            resolveOld = resolve
+          })
+        }
+        return Promise.resolve({
+          items: [review({ id: 'b1', agent_id: 'a2', created_at: '2026-09-10T10:00:00Z', due_measure_count: 0 })],
+          next_cursor: null,
+        })
+      },
+    )
+
+    function Switcher() {
+      const [agent, setAgent] = useState(AGENT)
+      return (
+        <>
+          <button type="button" onClick={() => setAgent({ id: 'a2', name: 'Zweiter' })}>
+            Agent wechseln
+          </button>
+          <AgentEvolutionTab agent={agent} inbox={{ counts: inboxCounts(), failed: false }} />
+        </>
+      )
+    }
+    renderInRoutes(<Switcher />, {
+      path: '/w/:workspaceId/agents/:id',
+      initialEntries: ['/w/ws-1/agents/a1?tab=evolution'],
+    })
+
+    const section = screen.getByTestId('evolution-reviews')
+    await within(section).findByRole('link', { name: 'Review vom 25.09.2026' })
+    fireEvent.click(within(section).getByRole('button', { name: 'Weitere laden' }))
+    expect(api.listSessions).toHaveBeenLastCalledWith({ agent_id: 'a1' }, { cursor: 'c-1', limit: 10 })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent wechseln' }))
+    await within(screen.getByTestId('evolution-reviews')).findByRole('link', {
+      name: 'Review vom 10.09.2026',
+    })
+
+    // Die alte Seite von a1 kommt erst jetzt an und darf nicht angehaengt werden.
+    await act(async () => {
+      resolveOld({
+        items: [review({ id: 's-old', created_at: '2026-07-01T10:00:00Z' })],
+        next_cursor: null,
+      })
+    })
+    const rows = within(screen.getByTestId('evolution-reviews')).getAllByTestId('evolution-review')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('Review vom 10.09.2026')
+    expect(screen.queryByText('Review vom 01.07.2026')).toBeNull()
   })
 
   it('Fehler je Karte: „–“ und „Nicht verfügbar“, die anderen bleiben', async () => {

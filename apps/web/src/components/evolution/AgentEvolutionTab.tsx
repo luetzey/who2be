@@ -1,5 +1,5 @@
 import { ArrowDown, CalendarClock, ChevronRight } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -191,6 +191,7 @@ function useAgentReviews(agentId: string, enabled: boolean) {
         items: page.items,
         nextCursor: page.next_cursor,
         loading: false,
+        loadingMore: false,
       }))
       // Ein Review, dessen Detail scheitert, fehlt still in „Aenderungen“.
       const details = await Promise.all(
@@ -233,19 +234,31 @@ function useAgentReviews(agentId: string, enabled: boolean) {
     }
   }, [api, agentId, enabled])
 
+  // Aktueller Agent/Client fuer „Weitere laden“: Eine Seite, die nach einem
+  // Agentwechsel ankommt, gehoert zum alten Agenten und wird verworfen.
+  const current = useRef({ api, agentId })
+  useEffect(() => {
+    current.current = { api, agentId }
+  }, [api, agentId])
+
   const loadMore = useCallback(() => {
     const cursor = state.nextCursor
     if (cursor === null) return
+    const stillCurrent = () => current.current.api === api && current.current.agentId === agentId
     setState((prev) => ({ ...prev, loadingMore: true }))
     api.listSessions({ agent_id: agentId }, { cursor, limit: EVOLUTION_REVIEW_LIMIT }).then(
-      (page) =>
+      (page) => {
+        if (!stillCurrent()) return
         setState((prev) => ({
           ...prev,
           items: [...prev.items, ...page.items],
           nextCursor: page.next_cursor,
           loadingMore: false,
-        })),
-      () => setState((prev) => ({ ...prev, loadingMore: false })),
+        }))
+      },
+      () => {
+        if (stillCurrent()) setState((prev) => ({ ...prev, loadingMore: false }))
+      },
     )
   }, [api, agentId, state.nextCursor])
 
