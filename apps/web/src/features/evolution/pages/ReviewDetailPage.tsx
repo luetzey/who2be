@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
 import type {
@@ -22,6 +22,7 @@ import type {
   SessionDetail,
   SessionParticipantKind,
   SessionRead,
+  TestCaseRead,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
@@ -40,10 +41,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BuilderPromptCopy } from '@/features/evolution/components/BuilderPromptCopy'
-import { followUpStatus, isDue, parseDay } from '@/features/evolution/lib/followUp'
+import {
+  ChangeDueMark,
+  ChangeSheet,
+  type ChangeSheetData,
+} from '@/features/evolution/components/ChangeSheet'
+import { followUpStatusOf, formatDay, isDue } from '@/features/evolution/lib/followUp'
 import { CaseStatusDot } from '@/components/cases/CaseStatusDot'
 import { copyToClipboard } from '@/lib/clipboard'
-import { formatDate, formatDateTime } from '@/lib/dates'
+import { formatDateTime } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { safeInternalPath } from '@/lib/safePath'
 import { cn } from '@/lib/utils'
@@ -61,18 +67,12 @@ import { cn } from '@/lib/utils'
 // steht damit mit dem Detail fest, egal wie viele Reviews der Agent hat.
 // Gezeigt werden nur direkter Vorgaenger und Nachfolger.
 
-// Kalendertag als „25.09.2026“ (Skizze `review-ergebnis-*`).
-const DAY_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
+// `?change=first-due`: nach dem Laden die erste faellige Aenderung oeffnen
+// (Neuschnitt §5: Links aus „Zu erledigen“ kennen keine Aenderungs-ID).
+const FIRST_DUE = 'first-due'
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
-}
-
-/** `YYYY-MM-DD` (lokal) bzw. ISO-Zeitstempel als Datum der Oberflaeche. */
-function formatDay(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? formatDate(parseDay(value), DAY_FORMAT)
-    : formatDate(value, DAY_FORMAT)
 }
 
 /** `standard_ref` nur bei http(s) als Link (E5-Delta §2). */
@@ -94,7 +94,8 @@ interface ReviewData {
   /** Datum des Nachfolgers (`superseded_by_id`), `null` = keiner oder nicht ladbar. */
   successorCreatedAt: string | null
   cases: CaseRead[] | null
-  testCaseTitles: Record<string, string>
+  /** Prueffall je ID; `null` = nicht ladbar, fehlt der Eintrag, laedt er noch. */
+  testCases: Record<string, TestCaseRead | null>
   elementNames: Record<string, string>
   loading: boolean
   notFound: boolean
@@ -117,7 +118,7 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
   const [predecessor, setPredecessor] = useState<SessionRead | null>(null)
   const [successorCreatedAt, setSuccessorCreatedAt] = useState<string | null>(null)
   const [cases, setCases] = useState<CaseRead[] | null>(null)
-  const [testCaseTitles, setTestCaseTitles] = useState<Record<string, string>>({})
+  const [testCases, setTestCases] = useState<Record<string, TestCaseRead | null>>({})
   const [elementNames, setElementNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -233,15 +234,12 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
     void Promise.all(
       testIds.map((id) =>
         api.getTestCase(id).then(
-          (testCase) => [id, testCase.title] as const,
-          () => null,
+          (testCase): readonly [string, TestCaseRead | null] => [id, testCase],
+          (): readonly [string, TestCaseRead | null] => [id, null],
         ),
       ),
     ).then((rows) => {
-      if (cancelled) return
-      const next: Record<string, string> = {}
-      for (const row of rows) if (row !== null) next[row[0]] = row[1]
-      setTestCaseTitles(next)
+      if (!cancelled) setTestCases(Object.fromEntries(rows))
     })
 
     const fetchName = (target: MeasureTarget, id: string): Promise<string> | null => {
@@ -301,7 +299,7 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
     predecessor,
     successorCreatedAt,
     cases,
-    testCaseTitles,
+    testCases,
     elementNames,
     loading,
     notFound,
@@ -360,33 +358,10 @@ function FreeText({ text, className }: { text: string; className?: string }) {
   return <p className={cn('text-sm break-words whitespace-pre-wrap', className)}>{text}</p>
 }
 
-/** Markierung der Nachkontrolle an einer Aenderung (Neuschnitt §1). */
-function FollowUpMark({ measure, session }: { measure: MeasureRead; session: SessionRead }) {
-  const { t } = useTranslation('sessions')
-  // Faellig nach lokalem Kalendertag ueber `followUp.ts` (PM 2026-10-14: an
-  // der einzelnen Aenderung gibt es keinen Serverwert).
-  const status = followUpStatus(measure, session)
-  if (status.kind === 'closed') return null
-  if (isDue(status)) {
-    return (
-      <MetaPill tone="brand" icon={CalendarClock} className="whitespace-normal">
-        <span data-testid="measure-due">
-          {t(status.kind === 'due_not_active' ? 'measure.dueNotActive' : 'measure.due')}
-        </span>
-      </MetaPill>
-    )
-  }
-  return (
-    <span className="text-xs text-muted-foreground">
-      <time dateTime={status.date}>{t('measure.followUpOn', { date: formatDay(status.date) })}</time>
-    </span>
-  )
-}
-
 /**
  * Review-Ergebnis am Agenten: `/w/:ws/agents/:agentId/reviews/:sessionId`
- * (Neuschnitt §2, Weiche N4 a). Nur lesend; das Aenderung-Sheet
- * (`?change=<id>`) rendert E5d.
+ * (Neuschnitt §2, Weiche N4 a). Nur lesend; `?change=<id>` oeffnet das
+ * Aenderung-Sheet (E5d), `?change=first-due` die erste faellige Aenderung.
  */
 export function ReviewDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -399,6 +374,8 @@ function ReviewDetailView() {
   const { agentId, sessionId } = useParams<{ agentId: string; sessionId: string }>()
   const location = useLocation()
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const changeParam = params.get('change')
   const wsPath = useWorkspacePath()
   const role = useCurrentWorkspaceRole()
   const isEditor = role === 'editor' || role === 'admin'
@@ -427,6 +404,56 @@ function ReviewDetailView() {
     () => new Map((data.members ?? []).map((member) => [member.user_id, member.email ?? null])),
     [data.members],
   )
+
+  // `?change=` schliessen: Parameter per `replace` entfernen (kein neuer Verlaufseintrag).
+  const closeChange = useCallback(() => {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('change')
+        return next
+      },
+      { replace: true, state: location.state as unknown },
+    )
+  }, [setParams, location.state])
+
+  const goneChange = useCallback(() => {
+    closeChange()
+    notify.error(t('sessions:error.measureNotFound'))
+  }, [closeChange, t])
+
+  // `first-due` nach dem Laden aufloesen: erste faellige Aenderung, sonst nur
+  // den Parameter entfernen. Unbekannte ID: Sheet zu + Toast (E5-Delta §4.3).
+  const measuresLoaded = data.detail?.measures ?? null
+  useEffect(() => {
+    if (changeParam === null || measuresLoaded === null || session === null) return
+    if (changeParam === FIRST_DUE) {
+      const due = measuresLoaded.find((measure) => isDue(followUpStatusOf(measure, session)))
+      if (due !== undefined) {
+        setParams(
+          (current) => {
+            const next = new URLSearchParams(current)
+            next.set('change', due.id)
+            return next
+          },
+          { replace: true, state: location.state as unknown },
+        )
+      } else {
+        closeChange()
+      }
+      return
+    }
+    if (!measuresLoaded.some((measure) => measure.id === changeParam)) goneChange()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeParam, measuresLoaded, session])
+
+  // Fokusziel nach dem Schliessen ohne Ausloeser (Deep-Link): „Änderung öffnen“.
+  const openButtonOf = useCallback((measureId: string): HTMLElement | null => {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-change-open]')) {
+      if (element.dataset.changeOpen === measureId) return element
+    }
+    return null
+  }, [])
 
   const evolutionHref = wsPath(`/agents/${session?.agent_id ?? agentId ?? ''}?tab=evolution`)
   const from = safeInternalPath((location.state as { from?: string } | null)?.from ?? null)
@@ -546,6 +573,24 @@ function ReviewDetailView() {
     status === 'addressed'
       ? t('feedback:cases.status.addressedShort')
       : t(`feedback:cases.status.${status}`)
+
+  const openIndex =
+    changeParam !== null ? measures.findIndex((measure) => measure.id === changeParam) : -1
+  const openMeasure = openIndex >= 0 ? measures[openIndex] : null
+  const sheetData: ChangeSheetData | null =
+    openMeasure !== null
+      ? {
+          measure: openMeasure,
+          index: openIndex + 1,
+          session,
+          agentName,
+          element: elementLabel(openMeasure),
+          testCase: data.testCases[openMeasure.test_case_id],
+          cases: data.cases,
+          people: { agentById, memberById },
+        }
+      : null
+  const fallbackFocus = openButtonOf
 
   return (
     <Container>
@@ -744,7 +789,8 @@ function ReviewDetailView() {
                   n: index + 1,
                   element: elementLabel(measure),
                 })
-                const title = data.testCaseTitles[measure.test_case_id]
+                const testCase = data.testCases[measure.test_case_id]
+                const title = testCase != null ? testCase.title : undefined
                 return (
                   <li
                     key={measure.id}
@@ -757,7 +803,7 @@ function ReviewDetailView() {
                         <span className="text-xs font-medium" data-testid="measure-state">
                           {t(`sessions:measure.state.${measure.state}`)}
                         </span>
-                        <FollowUpMark measure={measure} session={session} />
+                        <ChangeDueMark measure={measure} session={session} />
                       </p>
                       <FreeText text={measure.change_summary} className="line-clamp-2" />
                       <p className="text-xs break-words text-muted-foreground">
@@ -772,7 +818,9 @@ function ReviewDetailView() {
                     >
                       <Link
                         to={changeHref(measure.id)}
+                        state={location.state as unknown}
                         aria-label={t('sessions:detail.openMeasureAria', { label })}
+                        data-change-open={measure.id}
                       >
                         {t('sessions:detail.openMeasure')}
                       </Link>
@@ -798,6 +846,13 @@ function ReviewDetailView() {
           </details>
         ) : null}
       </div>
+
+      <ChangeSheet
+        data={sheetData}
+        onClose={closeChange}
+        onGone={goneChange}
+        fallbackFocus={fallbackFocus}
+      />
     </Container>
   )
 }

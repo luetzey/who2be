@@ -4098,7 +4098,27 @@
       },
       "due": "Follow-up check due",
       "dueNotActive": "Follow-up check due, change not active yet",
-      "followUpOn": "Follow-up check on {{date}}"
+      "followUpOn": "Follow-up check on {{date}}",
+      "title": "Change M{{n}} · {{element}}",
+      "from": "From the review with {{agent}} on {{date}}",
+      "field": {
+        "change": "Smallest change",
+        "target": "Target",
+        "testCase": "Test case",
+        "criterion": "Success criterion",
+        "counterposition": "Counterposition",
+        "followUp": "Follow-up check on",
+        "draft": "Draft",
+        "cases": "Cases"
+      },
+      "testCaseRetired": "retired",
+      "testCaseUnavailable": "Test case not available",
+      "noDraft": "No draft linked yet",
+      "versionState": {
+        "draft": "Draft",
+        "review": "in review",
+        "active": "active since {{date}}"
+      }
     },
     "copy": {
       "label": "Paste into your client:",
@@ -4107,6 +4127,52 @@
       "correctionTitle": "Submit a correction",
       "correctionIntro": "A review record can't be changed. Have the Builder submit a new one that replaces it.",
       "correction": "Correct review record {{sessionId}} for {{agent}} ({{agentId}}). Load it, check with me what is wrong, and submit a new record with submit_session_protocol and supersedes_id {{sessionId}}."
+    },
+    "followUp": {
+      "title": "Follow-up check",
+      "notYet": "Figures are available once the linked version is active.",
+      "caption": "Figures before and after the change",
+      "metric": "Metric",
+      "before": "before (v{{version}})",
+      "after": "after (v{{version}})",
+      "beforePlain": "before",
+      "afterPlain": "after",
+      "row": {
+        "passRate": "Test case passed",
+        "caseRate": "Cases per 100 uses",
+        "recurrence": "Came up again"
+      },
+      "runs": "{{passed}} of {{total}} runs",
+      "runsClient": "{{passed}} of {{total}} runs (per client)",
+      "rate": "{{rate}} ({{uses}} uses)",
+      "recurrenceCount_zero": "no new cases",
+      "recurrenceCount_one": "1 new case",
+      "recurrenceCount_other": "{{count}} new cases",
+      "direction": {
+        "lower": "lower",
+        "higher": "higher",
+        "same": "same"
+      },
+      "selfReport": "Test results reported by the client.",
+      "tooFewUses": "Only {{count}} uses since activation – too few for a comparison.",
+      "loadError": "The figures couldn't be loaded."
+    },
+    "history": {
+      "title": "History",
+      "empty": "No events yet.",
+      "event": {
+        "draft_linked": "Draft linked: {{element}} v{{version}}",
+        "activated_one": "Version became active, 1 case addressed",
+        "activated_other": "Version became active, {{count}} cases addressed",
+        "activatedNoCount": "Version became active",
+        "follow_up_prepared": "Figures prepared",
+        "reviewed": "Rated: {{verdict}}",
+        "withdrawn": "Withdrawn: {{note}}",
+        "unknown": "Event"
+      }
+    },
+    "error": {
+      "measureNotFound": "This change doesn't exist (anymore)."
     }
   }
 }

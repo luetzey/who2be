@@ -9,9 +9,10 @@
 // - Datum der Nachkontrolle: das der Aenderung, sonst das des Protokolls.
 // - Faellig: Datum heute oder frueher, im lokalen Kalender des Browsers ohne
 //   Uhrzeit, und die Aenderung ist nicht abgeschlossen. „Faellig“ ist kein
-//   Zustand, sondern eine berechnete Markierung. Achtung: Der Server rechnet
-//   `due` und `due_measure_count` mit dem UTC-Kalendertag; wie die Abweichung zum
-//   lokalen Tag aufgeloest wird, ist noch offen.
+//   Zustand, sondern eine berechnete Markierung. Der Server rechnet `due` und
+//   `due_measure_count` mit dem UTC-Kalendertag; die Abweichung ist akzeptiert
+//   (PM 2026-10-14). Wo der Server einen Wert liefert, zeigt die Ansicht ihn
+//   und rechnet nicht nach (`followUpStatusOf` nutzt `measure.state`).
 //
 // Nutzertexte stehen nicht hier: Die Funktionen liefern Tokens, die UI
 // uebersetzt sie (Keys nach den Begriffen „Aenderung“, „Nachkontrolle“).
@@ -23,6 +24,7 @@ import type {
   MeasureState,
   SessionRead,
 } from '@/api/types'
+import { formatDate } from '@/lib/dates'
 
 const KNOWN_EVENTS: ReadonlySet<string> = new Set<MeasureEventKind>([
   'draft_linked',
@@ -185,4 +187,57 @@ export function followUpStatus(
 /** Ist die Aenderung faellig (eine der beiden Faellig-Varianten)? */
 export function isDue(status: FollowUpStatus): boolean {
   return status.kind === 'due' || status.kind === 'due_not_active'
+}
+
+/**
+ * Wie `followUpStatus`, aber mit dem Zustand vom Server (`measure.state`)
+ * statt aus den Events abgeleitet. Leitplanke „eine Quelle je Ansicht“ (PM
+ * 2026-10-14): Wo die Ansicht den Server-Zustand zeigt, rechnet sie ihn nicht
+ * nach; lokal bleibt nur der Kalendertag (kein Serverwert an der Aenderung).
+ */
+export function followUpStatusOf(
+  measure: Pick<MeasureRead, 'follow_up_at' | 'state'>,
+  session: Pick<SessionRead, 'follow_up_at'>,
+  today: Date = new Date(),
+): FollowUpStatus {
+  const state = measure.state
+  const date = followUpDate(measure, session)
+  if (isClosedState(state)) return { kind: 'closed', state, date, daysOverdue: null }
+  const days = daysSince(date, today)
+  if (Number.isNaN(days) || days < 0) return { kind: 'scheduled', state, date, daysOverdue: null }
+  return {
+    kind: NOT_ACTIVE_STATES.has(state) ? 'due_not_active' : 'due',
+    state,
+    date,
+    daysOverdue: days,
+  }
+}
+
+// Ab hier gibt es Kennzahlen der Nachkontrolle: die verknuepfte Version ist
+// (oder war) aktiv. Davor fragt das Web nicht (QE4 a).
+const FIGURES_STATES: ReadonlySet<MeasureState> = new Set<MeasureState>([
+  'activated',
+  'follow_up_prepared',
+  'effective',
+  'ineffective',
+  'not_measurable',
+])
+
+/**
+ * Gibt es Kennzahlen? Nach dem Server-Zustand; eine zurueckgezogene Aenderung
+ * nur, wenn sie vorher aktiviert war.
+ */
+export function hasFollowUpFigures(measure: Pick<MeasureRead, 'state' | 'events'>): boolean {
+  if (FIGURES_STATES.has(measure.state)) return true
+  return measure.state === 'withdrawn' && measure.events.some((event) => event.event === 'activated')
+}
+
+// Kalendertag als „25.09.2026“ (Skizze `review-ergebnis-*`).
+const DAY_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
+
+/** `YYYY-MM-DD` (lokal) bzw. ISO-Zeitstempel als Datum der Oberflaeche. */
+export function formatDay(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? formatDate(parseDay(value), DAY_FORMAT)
+    : formatDate(value, DAY_FORMAT)
 }

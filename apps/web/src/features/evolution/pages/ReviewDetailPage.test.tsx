@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   getResource: vi.fn(),
   getExternalTool: vi.fn(),
   getSystemPromptTemplate: vi.fn(),
+  getFollowUp: vi.fn(),
+  listPlaybookVersions: vi.fn(),
 }))
 
 vi.mock('@/api/useApi', () => ({ useApi: () => api }))
@@ -206,6 +208,8 @@ beforeEach(() => {
   )
   api.getTestCase.mockResolvedValue({ id: 't1', title: 'Push ohne Tests' })
   api.getPlaybook.mockResolvedValue({ id: 'pb1', name: 'Release' })
+  api.getFollowUp.mockRejectedValue(new Error('nicht im Test'))
+  api.listPlaybookVersions.mockResolvedValue([])
   copySpy.mockResolvedValue(undefined)
 })
 
@@ -496,5 +500,79 @@ describe('ReviewDetailPage', () => {
     const { container } = renderPage()
     await screen.findByText('Dieses Review gibt es nicht (mehr).')
     expect(await axe(container)).toHaveNoViolations()
+  })
+
+  describe('Änderung-Sheet (?change=)', () => {
+    it('Deep-Link öffnet das Sheet mit Fokus auf dem Titel; Schließen entfernt den Parameter und fokussiert „Änderung öffnen“', async () => {
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=m1')
+      const title = await screen.findByTestId('change-title')
+      await waitFor(() => expect(title).toHaveTextContent('Änderung M1 · Playbook „Release“'))
+      await waitFor(() => expect(title).toHaveFocus())
+      expect(screen.getByTestId('change-sheet')).toHaveTextContent('Aus dem Review mit coder vom 25.09.2026')
+
+      fireEvent.click(within(screen.getByTestId('change-sheet')).getByRole('button', { name: /schließen/i }))
+      await waitFor(() => expect(screen.queryByTestId('change-sheet')).toBeNull())
+      const open = screen.getByRole('link', { name: 'Änderung öffnen: M1 · Playbook „Release“' })
+      await waitFor(() => expect(open).toHaveFocus())
+      // Der Parameter ist weg: der Link zeigt wieder auf `?change=m1` (aus der leeren Suche).
+      expect(open).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s1?change=m1')
+      expect(notifyError).not.toHaveBeenCalled()
+    })
+
+    it('„Änderung öffnen“ öffnet das Sheet der Änderung', async () => {
+      renderPage()
+      const open = await screen.findByRole('link', { name: 'Änderung öffnen: M1 · Playbook „Release“' })
+      fireEvent.click(open)
+      expect(await screen.findByTestId('change-title')).toHaveTextContent(/^Änderung M1/)
+    })
+
+    it('first-due öffnet die erste fällige Änderung', async () => {
+      api.getSession.mockResolvedValue(
+        detail({}, [
+          measure({ id: 'm1', follow_up_at: '2026-11-01' }),
+          measure({ id: 'm2', state: 'effective', follow_up_at: '2026-10-01' }),
+          measure({ id: 'm3', state: 'agreed', events: [], follow_up_at: '2026-10-10' }),
+        ]),
+      )
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=first-due')
+      await waitFor(() => expect(screen.getByTestId('change-title')).toHaveTextContent(/^Änderung M3/))
+      expect(notifyError).not.toHaveBeenCalled()
+    })
+
+    it('first-due ohne fällige Änderung: kein Sheet, kein Toast', async () => {
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=first-due')
+      await screen.findAllByTestId('review-measure')
+      await waitFor(() => expect(screen.queryByTestId('change-sheet')).toBeNull())
+      expect(notifyError).not.toHaveBeenCalled()
+    })
+
+    it('eine Quelle: first-due folgt dem Server-Zustand, nicht den Events', async () => {
+      // m1: Events sagen „aktiviert“, der Server sagt „Hat gewirkt“ → nicht fällig.
+      // m2: Events leer, der Server sagt „Aktiviert“ → fällig.
+      api.getSession.mockResolvedValue(
+        detail({}, [
+          measure({ id: 'm1', state: 'effective', follow_up_at: '2026-10-01' }),
+          measure({ id: 'm2', state: 'activated', events: [], follow_up_at: '2026-10-02' }),
+        ]),
+      )
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=first-due')
+      await waitFor(() => expect(screen.getByTestId('change-title')).toHaveTextContent(/^Änderung M2/))
+      const cards = screen.getAllByTestId('review-measure')
+      expect(within(cards[0]).queryByTestId('measure-due')).toBeNull()
+      expect(within(cards[1]).getByTestId('measure-due')).toHaveTextContent('Nachkontrolle fällig')
+    })
+
+    it('unbekannte Änderung: Sheet zu und Toast', async () => {
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=nope')
+      await waitFor(() => expect(notifyError).toHaveBeenCalledWith('Diese Änderung gibt es nicht (mehr).'))
+      expect(screen.queryByTestId('change-sheet')).toBeNull()
+      expect(screen.getByTestId('review-measure')).toBeInTheDocument()
+    })
+
+    it('a11y: Seite mit offenem Sheet ohne Violations', async () => {
+      renderPage('/w/ws-1/agents/a1/reviews/s1?change=m1')
+      await screen.findByTestId('follow-up-error')
+      expect(await axe(document.body)).toHaveNoViolations()
+    })
   })
 })
