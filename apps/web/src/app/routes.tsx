@@ -182,6 +182,12 @@ const ReviewDetailPage = lazy(() =>
     default: mod.ReviewDetailPage,
   })),
 )
+// ADR-0053 Phase E (E5f): Review vorbereiten am Agenten.
+const ReviewPreparePage = lazy(() =>
+  import('@/features/evolution/pages/ReviewPreparePage').then((mod) => ({
+    default: mod.ReviewPreparePage,
+  })),
+)
 const SystemPromptsPage = lazy(() =>
   import('@/features/system-prompts/pages/SystemPromptsPage').then((mod) => ({
     default: mod.SystemPromptsPage,
@@ -417,8 +423,13 @@ export function RouterRoot() {
                 />
                 <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
                 <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
-                {/* Review-Ergebnis am Agenten (ADR-0053 Phase E, Neuschnitt
-                    §2, Weiche N4 a). `prepare` (E5f) steht spaeter davor. */}
+                {/* Review vorbereiten und Review-Ergebnis am Agenten (ADR-0053
+                    Phase E, Neuschnitt §2, Weiche N4 a). `prepare` (E5f) steht
+                    VOR `:sessionId` und darf nie als Review-ID gelesen werden. */}
+                <Route
+                  path="/w/:workspaceId/agents/:agentId/reviews/prepare"
+                  element={<ReviewPreparePage />}
+                />
                 <Route
                   path="/w/:workspaceId/agents/:agentId/reviews/:sessionId"
                   element={<ReviewDetailPage />}

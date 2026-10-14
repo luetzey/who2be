@@ -2261,6 +2261,109 @@ export interface FollowUpReport {
   insufficient: boolean
 }
 
+// `GET /agents/{id}/dossier` (6.6, E1): Lage eines Agenten zur Vorbereitung
+// eines Reviews. Spiegel von `who2be_models.session.Dossier*`. Alle Listen
+// sind serverseitig gedeckelt (`DOSSIER_*`), `*_total` nennt die Gesamtzahl;
+// Freitexte sind gekuerzt. Rohzahlen (QE8 a): die UI rechnet nur „je 100“.
+
+export interface DossierCase {
+  id: string
+  status: CaseStatus
+  severity: CaseSeverity
+  situation: string
+  expected_behavior: string
+  created_at: string
+}
+
+// Offene Rueckmeldungen (open, triaged, in_progress, reopened): Zaehler je
+// Status (jeder Status, auch 0) plus die juengsten/schwersten.
+export interface DossierOpenCases {
+  counts: Partial<Record<CaseStatus, number>>
+  total: number
+  items: DossierCase[]
+}
+
+export interface DossierVersion {
+  version: number
+  active: boolean
+  activated_at: string | null
+  // Auslieferungen (`usage_event.source='server'`).
+  uses: number
+  outcomes: Record<string, number>
+  // Alt-Feedback je Signal.
+  signals: Record<string, number>
+  // `null`: die Version hat kein Aktivierungsdatum, also kein Zeitfenster.
+  cases: number | null
+  // `uses` liegt unter `Dossier.min_uses`.
+  insufficient: boolean
+}
+
+export interface DossierElement {
+  entity_type: VersionedEntityType
+  entity_id: string
+  name: string
+  versions: DossierVersion[]
+}
+
+// Eine Zeile der Zugriffslog-Zusammenfassung (nur Summen, ohne `ref_id`).
+export interface DossierAccessRow {
+  ref_kind: string
+  operation: string
+  sensitivity: string
+  entries: number
+  refs: number
+  last_on: string
+}
+
+export interface DossierAccess {
+  since: string
+  window_days: number
+  total: number
+  rows: DossierAccessRow[]
+}
+
+export interface DossierMeasure {
+  id: string
+  session_id: string
+  target: MeasureTarget
+  entity_id: string | null
+  change_summary: string
+  state: MeasureState
+  verdict: MeasureVerdict | null
+  reviewed_at: string | null
+  follow_up_at: string
+  case_count: number
+  created_at: string
+}
+
+// Eine Aktivierung eines Bausteins (Weiche N2 a, Verlauf E5k).
+export interface DossierGeneration {
+  entity_type: VersionedEntityType
+  entity_id: string
+  name: string
+  from_version: number | null
+  to_version: number
+  activated_at: string
+  measure_ids: string[]
+  verdict: MeasureVerdict | null
+  shared_agent_count: number | null
+}
+
+export interface Dossier {
+  agent_id: string
+  agent_name: string
+  generated_at: string
+  min_uses: number
+  open_cases: DossierOpenCases
+  elements: DossierElement[]
+  elements_total: number
+  access: DossierAccess
+  measures: DossierMeasure[]
+  measures_total: number
+  generations: DossierGeneration[]
+  generations_next_cursor: string | null
+}
+
 // ADR-0057 §7 (Paket P4c/P5) — Betreiber-Sicht auf die Hintergrund-Routinen
 // (`GET /v1/system/routines`). Spiegelt `RoutineLastRun`, `RoutineStatus` und
 // `RoutinesOverview` aus packages/models (`who2be_models/routine.py`). Nur fuer

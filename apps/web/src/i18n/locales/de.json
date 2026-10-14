@@ -4238,6 +4238,58 @@
       "reason": "Warum wird die Änderung aufgegeben?",
       "submit": "Zurückziehen",
       "done": "Änderung zurückgezogen."
+    },
+    "prepare": {
+      "title": "Review vorbereiten",
+      "step": {
+        "cases": "Rückmeldungen auswählen (1–3 empfohlen)",
+        "situation": "Lage (vom Server zusammengestellt, nur lesen)",
+        "start": "Im Client starten"
+      },
+      "group": {
+        "triaged": "Eingeordnet",
+        "untriaged": "Noch nicht eingeordnet",
+        "untriagedHelp": "Der Builder kann sie im Review zuordnen."
+      },
+      "tooMany": "Mehr als drei Rückmeldungen machen das Review lang. Die übrigen kannst du in ein nächstes Review nehmen.",
+      "noCases": "Für {{agent}} ist gerade keine Rückmeldung offen. Ein Review geht trotzdem, etwa für eine geplante Durchsicht.",
+      "casesLoadError": "Die Rückmeldungen konnten nicht geladen werden.",
+      "unresolved_one": "1 Rückmeldung aus dem Link ist hier nicht auswählbar und steht nicht im Startsatz.",
+      "unresolved_other": "{{count}} Rückmeldungen aus dem Link sind hier nicht auswählbar und stehen nicht im Startsatz.",
+      "loadMore": "Weitere laden",
+      "situation": {
+        "openCases": "Offene Rückmeldungen",
+        "total": "Gesamt",
+        "rates": "Rückmeldungen je Version",
+        "col": {
+          "element": "Baustein",
+          "version": "Version",
+          "cases": "Rückmeldungen",
+          "uses": "Nutzungen",
+          "rate": "Rückmeldungen je 100 Nutzungen",
+          "signals": "Signale"
+        },
+        "version": "v{{version}}",
+        "versionActive": "v{{version}} (aktiv)",
+        "tooFewUses": "zu wenig Nutzung",
+        "elementsMore": "{{shown}} von {{total}} Bausteinen gezeigt.",
+        "access": "Zugriffe",
+        "accessWindow": "Zeitraum",
+        "accessWindowValue": "{{days}} Tage, seit {{date}}",
+        "accessTotal": "Einträge",
+        "accessRow": "{{entries}} Einträge, {{refs}} Inhalte, zuletzt {{date}}",
+        "pastMeasures": "Frühere Änderungen",
+        "allReviews": "Alle Reviews mit {{agent}}",
+        "noData": "Keine Daten",
+        "loadError": "Die Lage konnte nicht geladen werden."
+      },
+      "startIntro": "Das Review führst du im Client mit dem Builder. Füge diesen Satz ein:",
+      "prompt": "Führe mit mir ein Review zu Agent {{agent}} ({{agentId}}). Lade die Lage mit get_dossier, moderiere, entscheide nichts selbst und reiche am Ende das Ergebnis mit submit_session_protocol ein.",
+      "promptCases": "Rückmeldungen: {{ids}}.",
+      "afterCopy": "Das Ergebnis erscheint unter {{link}}.",
+      "afterCopyLink": "{{agent}} → Weiterentwicklung",
+      "copySticky_one": "Startsatz kopieren (1 Rückmeldung)",
+      "copySticky_other": "Startsatz kopieren ({{count}} Rückmeldungen)"
     }
   }
 }

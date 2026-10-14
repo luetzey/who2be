@@ -4238,6 +4238,58 @@
       "reason": "Why is the change being dropped?",
       "submit": "Withdraw",
       "done": "Change withdrawn."
+    },
+    "prepare": {
+      "title": "Prepare a review",
+      "step": {
+        "cases": "Pick cases (1–3 recommended)",
+        "situation": "Situation (put together by the server, read only)",
+        "start": "Start in your client"
+      },
+      "group": {
+        "triaged": "Triaged",
+        "untriaged": "Not triaged yet",
+        "untriagedHelp": "The Builder can assign them during the review."
+      },
+      "tooMany": "More than three cases make the review long. You can take the rest into a later review.",
+      "noCases": "There's no open case for {{agent}} right now. You can still hold a review, for example a scheduled check-in.",
+      "casesLoadError": "The cases couldn't be loaded.",
+      "unresolved_one": "1 case from the link can't be selected here and isn't in the starting sentence.",
+      "unresolved_other": "{{count}} cases from the link can't be selected here and aren't in the starting sentence.",
+      "loadMore": "Load more",
+      "situation": {
+        "openCases": "Open cases",
+        "total": "Total",
+        "rates": "Case rate per version",
+        "col": {
+          "element": "Building block",
+          "version": "Version",
+          "cases": "Cases",
+          "uses": "Uses",
+          "rate": "Cases per 100 uses",
+          "signals": "Signals"
+        },
+        "version": "v{{version}}",
+        "versionActive": "v{{version}} (active)",
+        "tooFewUses": "too few uses",
+        "elementsMore": "Showing {{shown}} of {{total}} building blocks.",
+        "access": "Access",
+        "accessWindow": "Period",
+        "accessWindowValue": "{{days}} days, since {{date}}",
+        "accessTotal": "Entries",
+        "accessRow": "{{entries}} entries, {{refs}} items, last {{date}}",
+        "pastMeasures": "Past changes",
+        "allReviews": "All reviews with {{agent}}",
+        "noData": "No data",
+        "loadError": "The situation couldn't be loaded."
+      },
+      "startIntro": "You hold the review in your client with the Builder. Paste this sentence:",
+      "prompt": "Hold a review with me about agent {{agent}} ({{agentId}}). Load the situation with get_dossier, moderate, don't decide anything yourself, and submit the record with submit_session_protocol at the end.",
+      "promptCases": "Cases: {{ids}}.",
+      "afterCopy": "The record shows up under {{link}}.",
+      "afterCopyLink": "{{agent}} → Evolution",
+      "copySticky_one": "Copy starting sentence (1 case)",
+      "copySticky_other": "Copy starting sentence ({{count}} cases)"
     }
   }
 }
