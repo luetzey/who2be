@@ -55,16 +55,11 @@ import { cn } from '@/lib/utils'
 // dieselbe Darstellung wie ein unbekanntes Review (QE3 `session_not_found`).
 // Fuer ihn wird nichts geladen, damit kein Inhalt aufblitzt.
 //
-// Korrektur (ADR-0053 3.5): `supersedes_id` steht am Review-Ergebnis; den
-// umgekehrten Verweis `superseded_by_id` liefert nur die Liste (QE2 a,
-// `SessionListItem`). Die Seite liest ihn deshalb aus `listSessions` des
-// Agenten (neueste zuerst). Der Nachfolger ist neuer und steht damit vor der
-// eigenen Zeile. Gezeigt werden nur direkter Vorgaenger und Nachfolger.
-
-// Seiten der Liste, die fuer den Nachfolger hoechstens gelesen werden
-// (`limit` = Server-Hoechstwert 200): 1 000 Reviews eines Agenten.
-const SUCCESSOR_PAGE_LIMIT = 200
-const SUCCESSOR_MAX_PAGES = 5
+// Korrektur (ADR-0053 3.5): `supersedes_id` steht am Review-Ergebnis, den
+// umgekehrten Verweis `superseded_by_id` liefert `GET /feedback-sessions/{id}`
+// neben `session` (derselbe Wert wie in der Liste). Ob ein Review ersetzt ist,
+// steht damit mit dem Detail fest, egal wie viele Reviews der Agent hat.
+// Gezeigt werden nur direkter Vorgaenger und Nachfolger.
 
 // Kalendertag als „25.09.2026“ (Skizze `review-ergebnis-*`).
 const DAY_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
@@ -90,19 +85,14 @@ function safeHttpUrl(value: string): string | null {
   }
 }
 
-interface Successor {
-  id: string
-  created_at: string
-}
-
 interface ReviewData {
   detail: SessionDetail | null
   agents: Agent[] | null
   members: Member[] | null
   /** Direkter Vorgaenger (`supersedes_id`), `null` = keiner oder nicht ladbar. */
   predecessor: SessionRead | null
-  /** `undefined` = noch nicht ermittelt, `null` = nicht ersetzt. */
-  successor: Successor | null | undefined
+  /** Datum des Nachfolgers (`superseded_by_id`), `null` = keiner oder nicht ladbar. */
+  successorCreatedAt: string | null
   cases: CaseRead[] | null
   testCaseTitles: Record<string, string>
   elementNames: Record<string, string>
@@ -125,7 +115,7 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
   const [agents, setAgents] = useState<Agent[] | null>(null)
   const [members, setMembers] = useState<Member[] | null>(null)
   const [predecessor, setPredecessor] = useState<SessionRead | null>(null)
-  const [successor, setSuccessor] = useState<Successor | null | undefined>(undefined)
+  const [successorCreatedAt, setSuccessorCreatedAt] = useState<string | null>(null)
   const [cases, setCases] = useState<CaseRead[] | null>(null)
   const [testCaseTitles, setTestCaseTitles] = useState<Record<string, string>>({})
   const [elementNames, setElementNames] = useState<Record<string, string>>({})
@@ -200,46 +190,21 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
     }
   }, [api, session?.supersedes_id])
 
-  // Nachfolger aus der Liste des Agenten (s. Kopf).
+  // Nachfolger: ein Abruf, nur fuer sein Datum (wie der Vorgaenger).
+  const successorId = detail?.superseded_by_id ?? null
   useEffect(() => {
-    if (session === null) return
+    if (successorId === null) return
     let cancelled = false
-    const scan = async (): Promise<Successor | null> => {
-      const seen = new Map<string, string>()
-      let cursor: string | undefined
-      for (let page = 0; page < SUCCESSOR_MAX_PAGES; page += 1) {
-        const result = await api.listSessions(
-          { agent_id: session.agent_id },
-          { cursor, limit: SUCCESSOR_PAGE_LIMIT },
-        )
-        for (const row of result.items) {
-          seen.set(row.id, row.created_at)
-          if (row.id === session.id) {
-            const nextId = row.superseded_by_id
-            if (nextId === null) return null
-            return { id: nextId, created_at: seen.get(nextId) ?? row.created_at }
-          }
-        }
-        if (result.next_cursor === null) return null
-        cursor = result.next_cursor
-      }
-      return null
-    }
-    scan().then(
-      (found) => {
-        if (!cancelled) setSuccessor(found)
+    api.getSession(successorId).then(
+      (loaded) => {
+        if (!cancelled) setSuccessorCreatedAt(loaded.session.created_at)
       },
-      () => {
-        // Ohne Liste bleibt der Nachfolger unbekannt; der Korrektur-Block
-        // erscheint dann trotzdem (ein doppelter Auftrag an den Builder ist
-        // harmlos, ein fehlender Weg zur Korrektur nicht).
-        if (!cancelled) setSuccessor(null)
-      },
+      () => undefined,
     )
     return () => {
       cancelled = true
     }
-  }, [api, session])
+  }, [api, successorId])
 
   // Rueckmeldungen: geloeschte (404) fehlen still (PM-6 kappt die Verknuepfung).
   useEffect(() => {
@@ -334,7 +299,7 @@ function useReviewDetail(sessionId: string | undefined, enabled: boolean): Revie
     agents,
     members,
     predecessor,
-    successor,
+    successorCreatedAt,
     cases,
     testCaseTitles,
     elementNames,
@@ -545,8 +510,7 @@ function ReviewDetailView() {
       })
 
   const reviewPath = (id: string) => wsPath(`/agents/${session.agent_id}/reviews/${id}`)
-  const successor = data.successor
-  const replaced = successor !== undefined && successor !== null
+  const successorId = data.detail.superseded_by_id
 
   // Kopiertext nur mit IDs und Namen, nie mit Inhalten (D-Delta S5).
   const correctionPrompt = t('sessions:copy.correction', {
@@ -649,18 +613,20 @@ function ReviewDetailView() {
           <span className="min-w-0 break-words">{origin}</span>
         </p>
 
-        {replaced ? (
+        {successorId !== null ? (
           <div data-testid="review-replaced">
             <AttentionBanner
               variant="brand"
               icon={Replace}
               // 390 px: Text bekommt die Zeile, der Knopf bricht darunter um.
               className="[&>div:last-child]:w-full sm:[&>div:last-child]:w-auto [&>div:nth-child(2)]:basis-48"
-              title={t('sessions:supersede.replacedBy', { date: formatDay(successor.created_at) })}
+              title={t('sessions:supersede.replacedBy', {
+                date: data.successorCreatedAt !== null ? formatDay(data.successorCreatedAt) : '…',
+              })}
               description={t('sessions:supersede.measuresStay')}
               actions={
                 <Button asChild variant="outline" className="min-h-11 w-full sm:w-auto md:min-h-9">
-                  <Link to={reviewPath(successor.id)}>{t('sessions:supersede.toNew')}</Link>
+                  <Link to={reviewPath(successorId)}>{t('sessions:supersede.toNew')}</Link>
                 </Button>
               }
             />
@@ -819,9 +785,8 @@ function ReviewDetailView() {
         </Section>
 
         {/* Korrektur (QE9 a): Kopierblock an den Builder, zugeklappt. Bei
-            einem ersetzten Ergebnis entfaellt er; solange der Nachfolger
-            nicht ermittelt ist, ebenso. */}
-        {successor === null ? (
+            einem ersetzten Ergebnis entfaellt er. */}
+        {successorId === null ? (
           <details className="group min-w-0 rounded-xl border p-4" data-testid="review-correction">
             <summary className="flex min-h-11 cursor-pointer items-center md:min-h-9">
               <h2 className="text-lg font-semibold">{t('sessions:copy.correctionTitle')}</h2>

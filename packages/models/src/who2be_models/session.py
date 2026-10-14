@@ -367,10 +367,16 @@ class SessionListItem(SessionRead):
 
 
 class SessionDetail(BaseModel):
-    """Protokoll mit eingebetteten Massnahmen (QE1 = a)."""
+    """Protokoll mit eingebetteten Massnahmen (QE1 = a).
+
+    `superseded_by_id`: das juengste Protokoll, das dieses korrigiert —
+    derselbe Wert wie an `SessionListItem` (eine SQL-Quelle im Repository).
+    None, wenn es nicht ersetzt ist.
+    """
 
     session: SessionRead
     measures: list[MeasureRead]
+    superseded_by_id: UUID | None = None
 
 
 # --- Dossier (E1) --------------------------------------------------------------
