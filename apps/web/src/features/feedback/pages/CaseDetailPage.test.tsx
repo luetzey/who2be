@@ -2,7 +2,15 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import type { Agent, CaseDetail, CaseEvent, WorkspaceRole } from '@/api/types'
+import type {
+  Agent,
+  CaseDetail,
+  CaseEvent,
+  MeasureRead,
+  SessionDetail,
+  SessionListItem,
+  WorkspaceRole,
+} from '@/api/types'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
@@ -26,6 +34,8 @@ const api = vi.hoisted(() => ({
   listExternalTools: vi.fn(),
   listAgentMemories: vi.fn(),
   createTestCase: vi.fn(),
+  listSessions: vi.fn(),
+  getSession: vi.fn(),
 }))
 
 vi.mock('@/api/useApi', () => ({ useApi: () => api }))
@@ -178,6 +188,7 @@ beforeEach(() => {
   api.listResources.mockResolvedValue([])
   api.listExternalTools.mockResolvedValue([])
   api.listAgentMemories.mockResolvedValue([])
+  api.listSessions.mockResolvedValue({ items: [], next_cursor: null })
 })
 
 describe('CaseDetailPage', () => {
@@ -783,7 +794,7 @@ describe('CaseDetailPage – Status aus Phase E (E5a)', () => {
     expect(screen.queryByText('Änderung')).not.toBeInTheDocument()
     // Die Notiz steht im Wort, nicht doppelt darunter.
     expect(screen.getAllByText(/Fallrate unverändert/)).toHaveLength(1)
-    // Noch kein Link „Zur Änderung“ (E5h).
+    // Ohne geladenes Review kein Link „Zur Änderung“ (E5h verlinkt nur Aufloesbares).
     expect(screen.queryByRole('link', { name: /Zur Maßnahme|Zur Änderung/ })).toBeNull()
   })
 
@@ -841,6 +852,278 @@ describe('CaseDetailPage – Status aus Phase E (E5a)', () => {
     api.getCase.mockResolvedValue(phaseEDetail('verified'))
     const { container } = renderPage()
     await screen.findByTestId('case-status-explain')
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
+})
+
+describe('CaseDetailPage – Verknüpft, Nachkontrolle, Verlauf-Links (E5h)', () => {
+  // Vergangen bzw. weit in der Zukunft: unabhaengig vom Testdatum.
+  const PAST = '2020-01-01'
+  const FUTURE = '2099-01-01'
+
+  function sessionRow(overrides: Partial<SessionListItem>): SessionListItem {
+    return {
+      id: 's1',
+      workspace_id: 'ws-1',
+      agent_id: 'a1',
+      trigger: 'manual',
+      participants: [],
+      summary: 'Review',
+      decisions: [],
+      dissent: [],
+      follow_up_at: PAST,
+      supersedes_id: null,
+      submitted_by_kind: 'agent',
+      submitted_by: 'b1',
+      case_ids: ['case-1'],
+      created_at: '2026-09-25T10:00:00Z',
+      case_count: 1,
+      measure_count: 1,
+      next_follow_up_at: null,
+      due_measure_count: 0,
+      superseded_by_id: null,
+      ...overrides,
+    }
+  }
+
+  function measure(overrides: Partial<MeasureRead>): MeasureRead {
+    return {
+      id: 'm1',
+      workspace_id: 'ws-1',
+      agent_id: 'a1',
+      session_id: 's1',
+      case_ids: ['case-1'],
+      target: 'playbook',
+      entity_id: 'pb1',
+      change_summary: 'Tests vor dem Push',
+      test_case_id: 't1',
+      success_criterion: 'Kein roter Push',
+      counterposition: '',
+      follow_up_at: null,
+      state: 'activated',
+      // Absichtlich leer: lokal abgeleitet waere das „Vereinbart“. Die
+      // Ansicht muss den Server-Zustand zeigen (eine Quelle je Ansicht).
+      events: [],
+      created_at: '2026-09-25T10:00:00Z',
+      ...overrides,
+    }
+  }
+
+  function detailOf(row: SessionListItem, measures: MeasureRead[]): SessionDetail {
+    const { case_count, measure_count, next_follow_up_at, due_measure_count, superseded_by_id, ...session } = row
+    void case_count
+    void measure_count
+    void next_follow_up_at
+    void due_measure_count
+    return { session, measures, superseded_by_id }
+  }
+
+  // Zwei Reviews, zwei Aenderungen am Fall: m1 faellig (Review s1, Termin
+  // vorbei), m2 geplant (Review s2, Termin in der Zukunft). Dazu Rauschen,
+  // das nicht erscheinen darf: eine Aenderung zu einem anderen Fall und eine
+  // mit fremder `session_id`.
+  const s1 = sessionRow({ id: 's1', follow_up_at: PAST })
+  const s2 = sessionRow({ id: 's2', follow_up_at: FUTURE, created_at: '2026-10-10T10:00:00Z' })
+  const details: Record<string, SessionDetail> = {
+    s1: detailOf(s1, [
+      measure({ id: 'm1', session_id: 's1' }),
+      measure({ id: 'm-other-case', session_id: 's1', case_ids: ['case-9'] }),
+    ]),
+    s2: detailOf(s2, [
+      measure({ id: 'm2', session_id: 's2', state: 'draft_linked' }),
+      measure({ id: 'm-foreign', session_id: 's-foreign' }),
+    ]),
+  }
+
+  function withHistory(): CaseDetail {
+    const base = caseDetail({ status: 'in_progress' })
+    return {
+      ...base,
+      events: [
+        event({ id: 'e1', event: 'reported' }),
+        event({
+          id: 'e2',
+          event: 'in_progress',
+          actor_kind: 'system',
+          actor_id: null,
+          measure_id: 'm1',
+          created_at: '2026-10-08T12:00:00Z',
+        }),
+        // Aenderung, die in keinem geladenen Review steckt: kein Link.
+        event({
+          id: 'e3',
+          event: 'reopened',
+          actor_kind: 'system',
+          actor_id: null,
+          measure_id: 'm-unknown',
+          note: 'Fallrate unverändert',
+          created_at: '2026-10-08T13:00:00Z',
+        }),
+      ],
+    }
+  }
+
+  beforeEach(() => {
+    api.getCase.mockResolvedValue(withHistory())
+    api.listSessions.mockResolvedValue({ items: [s2, s1], next_cursor: null })
+    api.getSession.mockImplementation((id: string) => Promise.resolve(details[id]))
+  })
+
+  it('editor: zwei Zeilen je Änderung mit Server-Zustand, Fällig-Pill bzw. Termin', async () => {
+    renderPage()
+
+    const linked = await screen.findByTestId('case-linked')
+    await waitFor(() => expect(within(linked).getAllByTestId('case-linked-change')).toHaveLength(2))
+    const reviews = within(linked).getAllByTestId('case-linked-review')
+    const changes = within(linked).getAllByTestId('case-linked-change')
+
+    // Reihenfolge wie die Liste vom Server (neueste zuerst): s2/m2, dann s1/m1.
+    expect(within(reviews[0]).getByRole('link', { name: 'Review vom 10.10.2026' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1/reviews/s2',
+    )
+    expect(within(reviews[1]).getByRole('link', { name: 'Review vom 25.09.2026' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1/reviews/s1',
+    )
+    await waitFor(() =>
+      expect(
+        within(changes[1]).getByRole('link', {
+          name: 'Änderung: Playbook „Release“ · Aktiviert',
+        }),
+      ).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s1?change=m1'),
+    )
+    expect(
+      within(changes[0]).getByRole('link', { name: 'Änderung: Playbook „Release“ · Entwurf verknüpft' }),
+    ).toHaveAttribute('href', '/w/ws-1/agents/a1/reviews/s2?change=m2')
+
+    // m1 faellig und laut Server aktiviert: „Nachkontrolle fällig“, nicht
+    // „… noch nicht aktiv“ (das ergaebe die lokale Ableitung aus `events: []`).
+    expect(within(changes[1]).getByTestId('measure-due')).toHaveTextContent(/^Nachkontrolle fällig$/)
+    expect(within(changes[0]).queryByTestId('measure-due')).toBeNull()
+    expect(changes[0]).toHaveTextContent('Nachkontrolle am 01.01.2099')
+
+    // Rauschen erscheint nicht: kein Link auf m-other-case oder m-foreign.
+    expect(linked.querySelector('a[href*="m-other-case"]')).toBeNull()
+    expect(linked.querySelector('a[href*="m-foreign"]')).toBeNull()
+
+    // Kopf: Pill neben dem Status, Rueckweg zum Agenten.
+    expect(await screen.findByTestId('case-follow-up-due')).toHaveTextContent('Nachkontrolle fällig')
+    expect(screen.getByRole('link', { name: 'Zu coder → Weiterentwicklung' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1?tab=evolution',
+    )
+  })
+
+  it('editor: Verlauf verlinkt nur Ereignisse, deren Änderung in einem geladenen Review steckt', async () => {
+    renderPage()
+
+    await screen.findAllByTestId('case-linked-change')
+    const items = screen.getAllByTestId('case-history-item')
+    // Neueste zuerst: e3 (m-unknown), e2 (m1), e1.
+    await waitFor(() =>
+      expect(within(items[1]).getByRole('link', { name: 'Zur Änderung' })).toHaveAttribute(
+        'href',
+        '/w/ws-1/agents/a1/reviews/s1?change=m1',
+      ),
+    )
+    expect(within(items[0]).queryByRole('link', { name: 'Zur Änderung' })).toBeNull()
+    expect(within(items[2]).queryByRole('link', { name: 'Zur Änderung' })).toBeNull()
+    expect(screen.getAllByTestId('case-history-to-change')).toHaveLength(1)
+  })
+
+  it('editor: ohne fällige Änderung keine Pill im Kopf', async () => {
+    api.listSessions.mockResolvedValue({ items: [s2], next_cursor: null })
+    renderPage()
+
+    await screen.findAllByTestId('case-linked-change')
+    expect(screen.queryByTestId('case-follow-up-due')).toBeNull()
+  })
+
+  it('editor: ein Listen-Request mit Grenze, höchstens 10 Details, nichts je Ereignis', async () => {
+    const many = Array.from({ length: 12 }, (_, index) => sessionRow({ id: `s${index + 1}` }))
+    api.listSessions.mockResolvedValue({ items: many, next_cursor: 'c' })
+    api.getSession.mockImplementation((id: string) =>
+      Promise.resolve(detailOf(sessionRow({ id }), [measure({ id: `m-${id}`, session_id: id })])),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByTestId('case-linked-change')).toHaveLength(10))
+    expect(api.listSessions).toHaveBeenCalledTimes(1)
+    expect(api.listSessions).toHaveBeenCalledWith({ case_id: 'case-1' }, { limit: 10 })
+    expect(api.getSession).toHaveBeenCalledTimes(10)
+  })
+
+  it('editor: Reviews fremder Agenten oder ohne diesen Fall werden nicht geladen', async () => {
+    api.listSessions.mockResolvedValue({
+      items: [
+        s1,
+        sessionRow({ id: 's-other-agent', agent_id: 'a2' }),
+        sessionRow({ id: 's-other-case', case_ids: ['case-9'] }),
+      ],
+      next_cursor: null,
+    })
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByTestId('case-linked-change')).toHaveLength(1))
+    expect(api.getSession).toHaveBeenCalledTimes(1)
+    expect(api.getSession).toHaveBeenCalledWith('s1')
+  })
+
+  it('editor: Fehler beim Laden der Reviews lässt Verknüpft und Verlauf ohne Links', async () => {
+    api.listSessions.mockRejectedValue(new Error('boom'))
+    renderPage()
+
+    await screen.findAllByTestId('case-history-item')
+    await waitFor(() => expect(api.listSessions).toHaveBeenCalled())
+    expect(screen.queryByTestId('case-linked-change')).toBeNull()
+    expect(screen.queryByTestId('case-history-to-change')).toBeNull()
+    expect(screen.queryByTestId('case-follow-up-due')).toBeNull()
+  })
+
+  it('viewer: kein Review-Request, keine Links, keine Pill; Rückweg zum Agenten bleibt', async () => {
+    role = 'viewer'
+    renderPage()
+
+    await screen.findAllByTestId('case-history-item')
+    expect(screen.getByRole('link', { name: 'Zu coder → Weiterentwicklung' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/a1?tab=evolution',
+    )
+    // Warten, bis die uebrigen Effekte gelaufen sind, dann zaehlen.
+    await waitFor(() => expect(api.listAgents).toHaveBeenCalled())
+    expect(api.listSessions).not.toHaveBeenCalled()
+    expect(api.getSession).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('case-linked')).toBeNull()
+    expect(screen.queryByTestId('case-history-to-change')).toBeNull()
+    expect(screen.queryByTestId('case-follow-up-due')).toBeNull()
+  })
+
+  it('Rollenwechsel editor → viewer: geladene Änderungen, Pill und Links verschwinden', async () => {
+    renderPage()
+    await screen.findByTestId('case-follow-up-due')
+    await screen.findByTestId('case-history-to-change')
+
+    role = 'viewer'
+    // Irgendein Re-Render der Seite liest die Rolle neu.
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr anzeigen' }))
+
+    await waitFor(() => expect(screen.queryByTestId('case-follow-up-due')).toBeNull())
+    expect(screen.queryByTestId('case-history-to-change')).toBeNull()
+    expect(screen.queryByTestId('case-linked')).toBeNull()
+  })
+
+  it('a11y: editor mit Verknüpft, Pill und Verlauf-Link ohne Violations', async () => {
+    const { container } = renderPage()
+    await screen.findByTestId('case-follow-up-due')
+    await screen.findByTestId('case-history-to-change')
+    expect(await axe(container)).toHaveNoViolations()
+  }, 15_000)
+
+  it('a11y: viewer mit Rückweg ohne Violations', async () => {
+    role = 'viewer'
+    const { container } = renderPage()
+    await screen.findByTestId('case-to-evolution')
     expect(await axe(container)).toHaveNoViolations()
   }, 15_000)
 })
