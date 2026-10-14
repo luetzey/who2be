@@ -1,4 +1,9 @@
-"""Aufbewahrung der Nutzungs-Rohdaten (Owner-Entscheidung E4b, Paket U5).
+"""Aufbewahrung der Nutzungs-Rohdaten und des Zugriffslogs (Owner E4b, E4c-b).
+
+Zwei Fristen, eine Routine (`usage-retention`): `usage_event` (E4b, unten)
+und seit E4c-b auch `agent_access_log`, ebenfalls 13 Kalendermonate, hier ab
+`access_date` (`delete_expired_access_log`, Abschnitt am Ende). Der Worker
+ruft beide in getrennten Transaktionen auf (`worker/routines.py`).
 
 `usage_event` haelt jede Auslieferung an einen Agenten (`source='server'`,
 Migration 0101) und jede Selbstauskunft (`agent_report`) als eigene Zeile.
@@ -21,7 +26,10 @@ dem Auslieferungspfad mitpflegen (Plan
 `.claude/plan/2026-10-10-1930_nutzung-u5-usage-retention.md`).
 
 Laeuft als **Owner-Connection** (`DATABASE_URL`): `who2be_app` hat auf
-`usage_event` nur SELECT/INSERT (0053, append-only). Idempotent — ein zweiter
+`usage_event` und `agent_access_log` nur SELECT/INSERT (0053 bzw. 0079/0080,
+append-only); keine Migration, keine SECURITY-DEFINER-Funktion. Auch fuer das
+Zugriffslog kein Index auf `access_date`: es ist je Agent, Element, Operation
+und Tag dedupliziert (Messung im PR zu E4c). Idempotent — ein zweiter
 Lauf findet nichts mehr.
 """
 
@@ -50,4 +58,33 @@ async def delete_expired_usage_events(
     reference = now or datetime.now(UTC)
     status: str = await conn.execute(_DELETE_SQL, reference, USAGE_EVENT_RETENTION)
     # asyncpg liefert den Command-Tag, z. B. "DELETE 3".
+    return int(status.rsplit(" ", 1)[-1])
+
+
+# --- agent_access_log (Owner E4c, Option b) ----------------------------------
+
+#: Frist ab `access_date` (Owner E4c-b: „wie die Nutzungs-Rohdaten“).
+ACCESS_LOG_RETENTION = "13 months"
+
+_DELETE_ACCESS_LOG_SQL = """
+DELETE FROM agent_access_log
+WHERE access_date < (($1::timestamptz AT TIME ZONE 'UTC')::date - $2::text::interval)::date
+"""
+# `access_date` ist ein Kalendertag. Der Stichtag ist der UTC-Tag des Slots
+# minus 13 Kalendermonate; eine Zeile genau von diesem Tag bleibt, erst der
+# Tag davor faellt. Ein Monatsende rundet Postgres ab (31.03. → 28./29.02.).
+
+
+async def delete_expired_access_log(
+    conn: asyncpg.Connection,
+    now: datetime | None = None,
+) -> int:
+    """Loescht `agent_access_log`-Zeilen nach Fristablauf. Liefert die Anzahl.
+
+    Gleicher Weg wie `usage_event`: Owner-Connection, denn `who2be_app` hat
+    auf dem Log nur SELECT/INSERT (0079/0080, append-only). Grants bleiben
+    unveraendert; die App kann weiterhin nichts loeschen.
+    """
+    reference = now or datetime.now(UTC)
+    status: str = await conn.execute(_DELETE_ACCESS_LOG_SQL, reference, ACCESS_LOG_RETENTION)
     return int(status.rsplit(" ", 1)[-1])

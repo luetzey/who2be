@@ -2097,7 +2097,7 @@ nichts**, weder auf der Hetzner-Box noch in Dokploy.
 | `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace plus WorkArea-/KB-Sweeps (Ausgabe und Log-Meldungen: [Retention-Cron](#retention-cron-who2be-purge)) | ja, einmal beim Start |
 | `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Fristablauf auf `expired` (ADR-0053 3.1.3), loescht nichts | ja, einmal beim Start |
 | `audit-retention` | `0 4 * * *` | loescht `audit_log`-Zeilen geloeschter Workspaces/Orgs 12 Monate nach ihrer Anonymisierung (Owner E1a); Zaehler `deleted` | ja, einmal beim Start |
-| `usage-retention` | `10 4 * * *` | loescht `usage_event`-Rohzeilen (Nutzungszaehler) aelter als 13 Monate (Owner E4b); Zaehler `deleted` | ja, einmal beim Start |
+| `usage-retention` | `10 4 * * *` | loescht `usage_event`-Rohzeilen (Nutzungszaehler, Owner E4b) und `agent_access_log`-Zeilen (Zugriffslog, Owner E4c-b), jeweils aelter als 13 Monate, in getrennten Transaktionen; Zaehler `deleted` (usage_event) und `deleted_access_log`. Scheitert ein Teil, laeuft der andere, der Lauf endet `failed` mit beiden Zaehlern | ja, einmal beim Start |
 | `routine-run-retention` | `15 4 * * *` | loescht Laufprotokoll aelter als 90 Tage, meldet externe Zeitplaene | nein |
 
 Quelle der Tabelle ist die Registry

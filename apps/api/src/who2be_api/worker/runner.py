@@ -14,7 +14,9 @@ mit dem Timeout seiner Routine. Waehrend er laeuft, frischt eine Nebenaufgabe
 etwa alle `RUN_HEARTBEAT_INTERVAL` `routine_run.heartbeat_at` und den
 Worker-Heartbeat auf — sonst saehe der 2-min-Healthcheck einen einstuendigen
 Purge als toten Worker. Danach `succeeded` mit den Zaehlern oder `failed` mit
-**nur** dem Namen der Exception-Klasse.
+**nur** dem Namen der Exception-Klasse. Ausnahme Teilfehler: wirft die Routine
+`RoutinePartialFailure`, endet der Lauf `failed` mit der Klasse der Ursache
+**und** den Zaehlern der Teile, die gelaufen sind.
 
 Laeufe einer Routine sind strikt nacheinander; Routinen laufen ebenfalls
 nacheinander. Bei fuenf bis zehn Nachtlaeufen reicht das, und ein verspaeteter
@@ -85,6 +87,19 @@ class WorkerShutdown(Exception):  # noqa: N818 — Name landet als error_class i
 
 class InvalidRoutineResult(Exception):  # noqa: N818 — Name landet als error_class
     """Die Routine lieferte etwas anderes als Zaehler."""
+
+
+class RoutinePartialFailure(Exception):  # noqa: N818 — nie selbst als error_class
+    """Ein Teil der Routine ist gescheitert, die uebrigen Teile liefen.
+
+    Der Lauf endet `failed`; im Protokoll stehen trotzdem die Zaehler aller
+    Teile (`counters`) und als `error_class` die Klasse der Ursache (`cause`).
+    """
+
+    def __init__(self, counters: dict[str, int], cause: BaseException) -> None:
+        super().__init__(type(cause).__name__)
+        self.counters = counters
+        self.cause = cause
 
 
 @dataclass(frozen=True)
@@ -355,10 +370,21 @@ class Runner:
                     "Routine %s, Slot %s: succeeded %s.", routine.name, slot.isoformat(), result
                 )
                 return RunOutcome(routine.name, slot, trigger, "succeeded")
-            await store.finish_run(conn, run_id, "failed", error=error, now=self._clock())
+            partial: dict[str, int | float] | None = None
+            if isinstance(error, RoutinePartialFailure):
+                with suppress(InvalidRoutineResult):
+                    partial = _check_counters(error.counters)
+                error = error.cause
+            await store.finish_run(
+                conn, run_id, "failed", result=partial, error=error, now=self._clock()
+            )
             error_class = type(error).__name__
             logger.error(
-                "Routine %s, Slot %s: failed (%s).", routine.name, slot.isoformat(), error_class
+                "Routine %s, Slot %s: failed (%s)%s.",
+                routine.name,
+                slot.isoformat(),
+                error_class,
+                f" {partial}" if partial is not None else "",
             )
             return RunOutcome(routine.name, slot, trigger, "failed", error_class)
 

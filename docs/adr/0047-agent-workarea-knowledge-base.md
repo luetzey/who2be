@@ -396,3 +396,22 @@ erfasste Volumen unterzeichnet damit systematisch, wie viele Zeilen ein
 Zugriff tatsächlich bewegt hat. Für ein Compliance-Zählwerk auf
 Zugriffs-Ebene (nicht Zeilen-Ebene) ist das tolerierbar; für eine künftige
 Volumen-genaue Auswertung nicht.
+
+## Nachtrag 2026-10-14: Frist für `agent_access_log` (Owner E4c-b)
+
+Owner-Entscheidung E4c-b (2026-10-11): `agent_access_log`-Zeilen werden
+13 Kalendermonate nach `access_date` gelöscht, durch die Worker-Routine
+`usage-retention` (täglich 04:10 UTC, Owner-Connection, Zähler
+`deleted_access_log`). Der Text oben bleibt als historischer Stand stehen;
+zwei Stellen gelten damit nur noch eingeschränkt:
+
+- **Löschpfade:** Der Purge-Job ist nicht mehr „der eine legitime Löschpfad“
+  (Nachtrag 2026-08-16, H5). Die Frist ist der zweite. Beide laufen über die
+  Owner-Connection; für `who2be_app` bleibt die Tabelle append-only (nur
+  SELECT/INSERT), und `NO ACTION` auf `agent_id` bleibt unverändert.
+- **Auskunft:** Die Betreiber-Query „welche Elemente gingen an welchen
+  externen Anbieter“ (Option A oben, dort noch „je“) reicht 13 Monate zurück,
+  nicht mehr unbegrenzt.
+
+Details: `docs/compliance/agent-access-log.md` §Aufbewahrung und Löschkonzept
+§4a (`docs/compliance/data-retention-and-erasure.md`).

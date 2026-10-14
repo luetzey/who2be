@@ -159,7 +159,19 @@ und die Routine sofort bauen.“
   Auslieferung in 13 Monaten gilt als ungenutzt).
 - **Nicht betroffen:** `agent_feedback` und `feedback_resolution` (Kurations-
   Posteingang, keine Frist) sowie `agent_access_log` (ADR-0047, Begruendung im
-  Loeschkonzept §4a).
+  Loeschkonzept §4a). Fuer `agent_access_log` ueberholt, siehe Nachtrag E4c-b
+  unten.
 
 Kein neuer Index: ein Lauf am Tag, Seq Scan auf 2 Mio. Zeilen um 0,5 s;
 ein Index auf `created_at` muesste jeder Auslieferungs-INSERT mitpflegen.
+
+## Nachtrag 2026-10-14: `agent_access_log` hat dieselbe Frist (Owner E4c-b)
+
+Der Satz „Nicht betroffen: … `agent_access_log`“ im Nachtrag oben gilt nicht
+mehr. Mit der Owner-Entscheidung E4c-b (2026-10-11) loescht dieselbe Routine
+`usage-retention` auch `agent_access_log`-Zeilen, deren `access_date` aelter
+als 13 Kalendermonate ist (Zaehler `deleted_access_log`, eigene Transaktion je
+Tabelle). Nicht betroffen sind nur noch `agent_feedback` und
+`feedback_resolution`. Die Auskunft „welche Elemente gingen an welchen
+Anbieter“ (ADR-0047) reicht damit 13 Monate zurueck. Details: Loeschkonzept
+§4a, `docs/compliance/agent-access-log.md` §Aufbewahrung.
