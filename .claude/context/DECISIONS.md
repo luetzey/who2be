@@ -1616,6 +1616,8 @@ Sonderfall — Docker substituiert dort nichts. Dev mountet eine statische
 `s3.json`, Prod rendert sie beim Start aus ENV (`:?`-Guard, fail-closed).
 Und der Healthcheck liegt auf dem Master-Port `9333/cluster/status`, weil
 `8333/healthz` vom S3-Handler als Bucket-Name gelesen wird (seaweedfs#8243).
+_(Nachtrag: Der reine Master-Check reichte nicht; seit #956 prueft der
+Healthcheck zusaetzlich S3 auf 8333, siehe Eintrag vom 2026-10-14.)_
 
 ## 2026-09-19 — Ein gruener Deploy ist kein Beleg dafuer, dass sich etwas geaendert hat
 
@@ -1910,3 +1912,31 @@ die Karte schliesst deren Einfuehrung aus).
 - **Verworfen:** `pg_dump` (kein Zeilenfilter je Org); ID-Remap (s. o.);
   Klartext-Archiv (personenbezogene Daten unverschluesselt beim Betreiber und
   auf dem Uebergabeweg).
+
+## 2026-10-14 — SeaweedFS-Healthcheck in zwei Stufen: Master UND S3 (#956)
+
+- **Entscheidung:** Der Healthcheck des Dienstes `seaweedfs` verlangt in allen
+  drei Compose-Dateien (`docker-compose.yml`, `deploy/hetzner/who2be/`,
+  `deploy/dokploy/`) zwei gruene Stufen: (1) Master `9333/cluster/status`,
+  (2) eine beliebige HTTP-Antwort von S3 auf `8333/` (anonym `403`, auch das
+  zaehlt). `start_period: 60s`. Zusaetzlich wiederholt
+  `scripts/blobstore-bootstrap.py` den ersten Kontakt bei Verbindungsfehlern
+  mit Backoff 1/2/4/8 s, Budget etwa 60 s, danach Exit 1 mit klarer Meldung.
+  Revidiert den Healthcheck-Satz im Eintrag vom 2026-09-19 (SeaweedFS statt
+  MinIO); der Rest jenes Eintrags gilt weiter.
+- **Begruendung:** Der Master wird frueher gesund als das S3-Gateway. Nach dem
+  Update auf SeaweedFS 4.48 war der reine Master-Check gruen, waehrend 8333
+  noch `Connection refused` lieferte; `blobstore-bootstrap` scheiterte, und
+  ueber `service_completed_successfully` blieb `api` stehen. Gesund heisst
+  hier „die App kann S3 erreichen", nicht nur „der Master lebt".
+- **Detail:** Pfad `/`, nicht `/healthz` (seaweedfs#8243 gilt weiter: der
+  S3-Handler liest den Pfad als Bucket-Namen). busybox-`wget` endet bei 403
+  und bei `refused` gleichermassen mit Exit 1, deshalb entscheidet die
+  Statuszeile aus `wget -S` (`grep -q 'HTTP/'`), nicht der Exit-Code. Der
+  Bootstrap-Retry ist die zweite Leine; er wiederholt nur Verbindungsfehler,
+  eine Server-Antwort wie 403 bei falschen Keys scheitert sofort. Real liegt
+  das Budget bei etwa 66 s, weil das SDK intern selbst noch wiederholt.
+- **Verworfen:** Rueckkehr auf SeaweedFS 4.47 (urspruenglicher
+  Hotfix-Auftrag); SeaweedFS bleibt auf 4.48.
+- **Betrieb:** `deploy/hetzner/RUNBOOK.md`, Abschnitt zu den
+  Compose-Diensten, Punkt Healthcheck.

@@ -1847,8 +1847,9 @@ Der Dienst laeuft als Container `seaweedfs` (All-in-One `server -s3`,
 Apache-2.0 — Nachfolger von `minio`, #525/#528) + One-Shot
 `blobstore-bootstrap` (legt den Bucket idempotent an und terminiert,
 Nachfolger von `minio-bootstrap`); Daten liegen im Volume `seaweedfs-data`.
-S3-API intern auf **8333** (vorher MinIO: 9000), Master-/Health-Port auf
-**9333**. Credentials sind eine gemountete `s3.json`-Identitaetsdatei
+S3-API intern auf **8333** (vorher MinIO: 9000), Master-Port auf **9333**;
+der Healthcheck prueft beide (Master-Status und S3-Antwort). Credentials
+sind eine gemountete `s3.json`-Identitaetsdatei
 (Env `SEAWEEDFS_S3_ACCESS_KEY`/`SEAWEEDFS_S3_SECRET_KEY`) statt eines
 MinIO-Root-User/-Passworts — Details siehe „Betrieb der Compose-Dienste"
 unten.
@@ -2418,11 +2419,38 @@ gegen jeden S3-kompatiblen Endpoint.
   Trennung bleibt bestehen, gewechselt hat nur der Server dahinter. Der
   `api`-Dienst haengt per `service_completed_successfully` daran; ein
   fehlgeschlagener Bootstrap haelt also den Start auf — das ist Absicht.
-- **Healthcheck:** `http://127.0.0.1:9333/cluster/status` (Master-Port) —
-  **bewusst NICHT** `8333/healthz`: der S3-Handler liest den Pfad als
-  Bucket-Namen und antwortet 404 (bekannter Fallstrick, seaweedfs#8243), der
-  Stack bliebe damit dauerhaft unhealthy. Rot? → `$COMPOSE logs
-  seaweedfs`, meist ein Volume-/Rechteproblem auf `seaweedfs-data`.
+  Den ersten Kontakt zu S3 wiederholt der Bootstrap bei Verbindungsfehlern
+  (`Connection refused` und Verwandte) mit Backoff 1/2/4/8/8 … s, insgesamt
+  etwa 60 s (real rund 66 s, weil das SDK intern selbst noch wiederholt).
+  Danach bricht er mit Exit 1 und der Meldung `S3 unter '…' nach 60 s nicht
+  erreichbar — Abbruch` ab. Eine Antwort des Servers (z. B. 403 bei falschen
+  Keys) wird **nicht** wiederholt, sondern scheitert sofort.
+- **Healthcheck (zwei Stufen, beide muessen gruen sein):**
+  1. Master `http://127.0.0.1:9333/cluster/status` — der echte
+     Status-Endpunkt.
+  2. S3 auf `http://127.0.0.1:8333/` antwortet **ueberhaupt**. Jede
+     HTTP-Antwort zaehlt, anonym ist das `403 Forbidden`; entschieden wird
+     ueber die Statuszeile aus `wget -S`, nicht ueber den Exit-Code (busybox-
+     wget endet bei 403 und bei `Connection refused` gleichermassen mit 1).
+
+  `start_period: 60s`, `retries` 10 (Dev) bzw. 20 (Hetzner, Dokploy) — in
+  allen drei Compose-Dateien gleich aufgebaut.
+  **Warum Stufe 2:** Der Master wird frueher gesund als das S3-Gateway. Mit
+  SeaweedFS 4.48 war der reine Master-Check gruen, waehrend 8333 noch
+  `Connection refused` lieferte; `blobstore-bootstrap` scheiterte und hielt
+  `api` auf (#956). Pfad `/`, **bewusst NICHT** `8333/healthz`: der
+  S3-Handler liest den Pfad als Bucket-Namen und antwortet 404 (bekannter
+  Fallstrick, seaweedfs#8243), der Stack bliebe damit dauerhaft unhealthy.
+  Rot? → `$COMPOSE logs seaweedfs`: meist ein Volume-/Rechteproblem auf
+  `seaweedfs-data`; ist nur Stufe 2 rot, laeuft das S3-Gateway nicht
+  (`-s3` im `command` fehlt oder es startet noch). Von Hand pruefen:
+
+  ```bash
+  $COMPOSE exec seaweedfs wget -qO /dev/null http://127.0.0.1:9333/cluster/status && echo master-ok
+  $COMPOSE exec seaweedfs sh -c "wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep 'HTTP/'"
+  # -> HTTP/1.1 403 Forbidden (mit s3.json-Identitaet; jede HTTP-Statuszeile
+  #    heisst: S3 antwortet. Keine Zeile = S3 hoert nicht zu.)
+  ```
 - **Degradation:** ohne `WHO2BE_BLOBSTORE_*` in der API laeuft der Stack
   vollstaendig weiter; nur Ingest und Blob-Reads antworten 503
   `blobstore_unconfigured` (ADR-0048). Das ist ein gueltiger Betriebsmodus,
