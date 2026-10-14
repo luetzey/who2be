@@ -4172,7 +4172,61 @@
       }
     },
     "error": {
-      "measureNotFound": "Diese Änderung gibt es nicht (mehr)."
+      "measureNotFound": "Diese Änderung gibt es nicht (mehr).",
+      "versionNotFound": "Diese Version gibt es nicht mehr. Wähle eine andere.",
+      "conflict": "Dieser Schritt passt nicht zum aktuellen Stand. Die Änderung wurde neu geladen."
+    },
+    "review": {
+      "legend": "Hat es gewirkt?",
+      "humanOnly": "Nur Menschen beantworten das. Der Builder bereitet vor, entscheidet aber nicht.",
+      "option": {
+        "effective": "Ja, hat gewirkt",
+        "ineffective": "Nein, hat nicht gewirkt",
+        "not_measurable": "Nicht messbar"
+      },
+      "effect": {
+        "effective_one": "Die 1 geänderte Rückmeldung gilt danach als „Hat gewirkt“. Das ist ein Endzustand.",
+        "effective_other": "Die {{count}} geänderten Rückmeldungen gelten danach als „Hat gewirkt“. Das ist ein Endzustand.",
+        "ineffective_one": "Die 1 geänderte Rückmeldung geht auf „Wieder offen“ und erscheint wieder in der Liste. Deine Notiz wird ihre Begründung.",
+        "ineffective_other": "Die {{count}} geänderten Rückmeldungen gehen auf „Wieder offen“ und erscheinen wieder in der Liste. Deine Notiz wird ihre Begründung.",
+        "not_measurable": "Die Rückmeldungen bleiben, wie sie sind. Die Änderung ist damit abgeschlossen. Für eine neue Nachkontrolle braucht es ein neues Review.",
+        "unaffected_one": "1 weitere Rückmeldung dieser Änderung ändert sich nicht.",
+        "unaffected_other": "{{count}} weitere Rückmeldungen dieser Änderung ändern sich nicht."
+      },
+      "note": "Notiz",
+      "noteOptional": "Notiz (optional)",
+      "noteRequired": "Bei „Nein, hat nicht gewirkt“ brauchen die Rückmeldungen eine Begründung. Mindestens 10 Zeichen.",
+      "submit": "Antwort speichern",
+      "done": "Beantwortet: {{verdict}}",
+      "newSession": "Neues Review vorbereiten"
+    },
+    "action": {
+      "linkDraft": "Entwurf verknüpfen…",
+      "relinkDraft": "Anderen Entwurf verknüpfen…",
+      "toDraft": "Zum Entwurf",
+      "withdraw": "Zurückziehen…",
+      "more": "Weitere Aktionen",
+      "noVersions": "Für dieses Ziel gibt es keine Versionen. Ein Entwurf lässt sich nicht verknüpfen."
+    },
+    "linkDraft": {
+      "title": "Entwurf verknüpfen",
+      "element": "Baustein",
+      "version": "Version",
+      "choose": "Version wählen",
+      "versionRequired": "Wähle eine Version.",
+      "help": "Der Entwurf bleibt Entwurf. Aktiv wird er erst bei der Freigabe, nachdem die Prüffälle gelaufen sind. Dann gelten die Rückmeldungen automatisch als geändert.",
+      "none": "Für {{element}} gibt es noch keinen Entwurf. Lege ihn im Versions-Tab an oder lass ihn vom Builder anlegen.",
+      "open": "{{element}} öffnen",
+      "submit": "Verknüpfen",
+      "done": "Entwurf verknüpft."
+    },
+    "withdraw": {
+      "title": "Änderung zurückziehen",
+      "intro": "Die Änderung wird aufgegeben. Ein verknüpfter Entwurf bleibt Entwurf.",
+      "cases": "Rückmeldungen, die gerade in Arbeit sind, gehen zurück auf „Eingeordnet“, sofern keine andere offene Änderung sie enthält. Alle anderen behalten ihren Status.",
+      "reason": "Warum wird die Änderung aufgegeben?",
+      "submit": "Zurückziehen",
+      "done": "Änderung zurückgezogen."
     }
   }
 }

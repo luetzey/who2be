@@ -54,6 +54,8 @@ import type {
   KbNode,
   KbSearchHit,
   Me,
+  MeasureEvent,
+  MeasureVerdict,
   Member,
   MemberUpdateInput,
   MemoryAutoPolicy,
@@ -802,6 +804,20 @@ export interface Api {
   getSession: (sessionId: string) => Promise<SessionDetail>
   // Kennzahlen der Nachkontrolle als Rohzahlen (QE8 a).
   getFollowUp: (measureId: string) => Promise<FollowUpReport>
+  // Aktionen an einer Aenderung (6.6, E5e), ab editor. `review` und
+  // `withdraw` nur als Mensch — die Web-UI laeuft immer als Mensch.
+  linkMeasureDraft: (
+    measureId: string,
+    input: { version_entity_type: VersionedEntityType; version_id: string },
+  ) => Promise<MeasureEvent>
+  reviewMeasure: (
+    measureId: string,
+    input: { verdict: MeasureVerdict; note?: string },
+  ) => Promise<MeasureEvent>
+  withdrawMeasure: (
+    measureId: string,
+    input: { note: string },
+  ) => Promise<{ event: MeasureEvent; cases_reset: string[] }>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -1445,6 +1461,22 @@ export function createApi(token: string, workspaceId: string): Api {
       request<SessionDetail>(token, apiPath`${ws}/feedback-sessions/${sessionId}`),
     getFollowUp: (measureId) =>
       request<FollowUpReport>(token, apiPath`${ws}/measures/${measureId}/follow-up`),
+    linkMeasureDraft: (measureId, input) =>
+      request<MeasureEvent>(token, apiPath`${ws}/measures/${measureId}/link-draft`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    reviewMeasure: (measureId, input) =>
+      request<MeasureEvent>(token, apiPath`${ws}/measures/${measureId}/review`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    withdrawMeasure: (measureId, input) =>
+      request<{ event: MeasureEvent; cases_reset: string[] }>(
+        token,
+        apiPath`${ws}/measures/${measureId}/withdraw`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>
