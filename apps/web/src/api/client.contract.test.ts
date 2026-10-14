@@ -235,6 +235,8 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.listSessions({ agent_id: ID, case_id: ID, due: true }, { cursor: 'c', limit: 5 }),
     api.getSession(ID),
     api.getFollowUp(ID),
+    // ADR-0053 6.6 (E5f): Lage zur Review-Vorbereitung.
+    api.getDossier(ID, { cursor: 'c' }),
   ]
   await Promise.all(invocations)
 

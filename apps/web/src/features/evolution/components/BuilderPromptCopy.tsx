@@ -14,6 +14,14 @@ interface BuilderPromptCopyProps {
   /** Sichtbares Label der Textarea; ohne Angabe „Im Client einfügen:“. */
   label?: string
   testId?: string
+  /**
+   * Stil des Knopfs „Kopieren“. Default `outline` (Korrektur im
+   * Review-Ergebnis); `brand`, wo Kopieren der naechste Schritt der Seite
+   * ist (E5f, E5-Delta §3).
+   */
+  variant?: 'outline' | 'brand'
+  /** Wird nach erfolgreichem Kopieren gerufen (E5f: Satz „→ Weiterentwicklung“). */
+  onCopied?: () => void
 }
 
 /**
@@ -23,16 +31,25 @@ interface BuilderPromptCopyProps {
  *
  * Datenschutz (D-Delta S5): Der Aufrufer baut den Text nur aus IDs und
  * Namen. Freitexte aus Reviews oder Rueckmeldungen koennen personenbezogen
- * sein und gehoeren nicht in die Zwischenablage. Wird in E5f (Review
- * vorbereiten) wiederverwendet.
+ * sein und gehoeren nicht in die Zwischenablage. Wiederverwendet in E5f
+ * (Review vorbereiten).
  */
-export function BuilderPromptCopy({ prompt, label, testId }: BuilderPromptCopyProps) {
+export function BuilderPromptCopy({
+  prompt,
+  label,
+  testId,
+  variant = 'outline',
+  onCopied,
+}: BuilderPromptCopyProps) {
   const { t } = useTranslation(['sessions', 'common'])
   const id = useId()
 
   const onCopy = () => {
     void copyToClipboard(prompt)
-      .then(() => notify.success(t('sessions:copy.copied')))
+      .then(() => {
+        notify.success(t('sessions:copy.copied'))
+        onCopied?.()
+      })
       .catch((cause: unknown) => {
         notify.error(cause instanceof Error ? cause.message : t('common:error.generic'))
       })
@@ -53,7 +70,7 @@ export function BuilderPromptCopy({ prompt, label, testId }: BuilderPromptCopyPr
       {/* 390 px: volle Breite unter dem Text, 44 px hoch (D6g). */}
       <Button
         type="button"
-        variant="outline"
+        variant={variant}
         className="min-h-11 w-full sm:min-h-9 sm:w-auto sm:self-start"
         onClick={onCopy}
       >

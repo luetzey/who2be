@@ -27,6 +27,7 @@ import type {
   CheckoutInput,
   CheckoutResult,
   DashboardData,
+  Dossier,
   EntitlementInfo,
   EdgeType,
   EntityExport,
@@ -804,6 +805,9 @@ export interface Api {
   getSession: (sessionId: string) => Promise<SessionDetail>
   // Kennzahlen der Nachkontrolle als Rohzahlen (QE8 a).
   getFollowUp: (measureId: string) => Promise<FollowUpReport>
+  // Lage des Agenten zur Vorbereitung eines Reviews (6.6, E1), ab editor.
+  // Ein Request; `cursor` blaettert nur die Generationen.
+  getDossier: (agentId: string, options?: { cursor?: string }) => Promise<Dossier>
   // Aktionen an einer Aenderung (6.6, E5e), ab editor. `review` und
   // `withdraw` nur als Mensch — die Web-UI laeuft immer als Mensch.
   linkMeasureDraft: (
@@ -1461,6 +1465,11 @@ export function createApi(token: string, workspaceId: string): Api {
       request<SessionDetail>(token, apiPath`${ws}/feedback-sessions/${sessionId}`),
     getFollowUp: (measureId) =>
       request<FollowUpReport>(token, apiPath`${ws}/measures/${measureId}/follow-up`),
+    getDossier: (agentId, options) => {
+      const params = new URLSearchParams()
+      if (options?.cursor) params.set('cursor', options.cursor)
+      return request<Dossier>(token, withQuery(apiPath`${ws}/agents/${agentId}/dossier`, params))
+    },
     linkMeasureDraft: (measureId, input) =>
       request<MeasureEvent>(token, apiPath`${ws}/measures/${measureId}/link-draft`, {
         method: 'POST',
