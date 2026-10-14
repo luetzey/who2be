@@ -4098,7 +4098,27 @@
       },
       "due": "Nachkontrolle fällig",
       "dueNotActive": "Nachkontrolle fällig, Änderung noch nicht aktiv",
-      "followUpOn": "Nachkontrolle am {{date}}"
+      "followUpOn": "Nachkontrolle am {{date}}",
+      "title": "Änderung M{{n}} · {{element}}",
+      "from": "Aus dem Review mit {{agent}} vom {{date}}",
+      "field": {
+        "change": "Kleinste Änderung",
+        "target": "Ziel",
+        "testCase": "Prüffall",
+        "criterion": "Erfolgskriterium",
+        "counterposition": "Gegenposition",
+        "followUp": "Nachkontrolle am",
+        "draft": "Entwurf",
+        "cases": "Rückmeldungen"
+      },
+      "testCaseRetired": "zurückgezogen",
+      "testCaseUnavailable": "Prüffall nicht verfügbar",
+      "noDraft": "Noch kein Entwurf verknüpft",
+      "versionState": {
+        "draft": "Entwurf",
+        "review": "zur Freigabe",
+        "active": "aktiv seit {{date}}"
+      }
     },
     "copy": {
       "label": "Im Client einfügen:",
@@ -4107,6 +4127,52 @@
       "correctionTitle": "Korrektur einreichen",
       "correctionIntro": "Ein Review-Ergebnis lässt sich nicht ändern. Lass den Builder ein neues einreichen, das dieses ersetzt.",
       "correction": "Korrigiere das Review-Ergebnis {{sessionId}} zu {{agent}} ({{agentId}}). Lade es, kläre mit mir, was falsch ist, und reiche mit submit_session_protocol ein neues Protokoll mit supersedes_id {{sessionId}} ein."
+    },
+    "followUp": {
+      "title": "Nachkontrolle",
+      "notYet": "Kennzahlen gibt es, sobald die verknüpfte Version aktiv ist.",
+      "caption": "Kennzahlen vor und nach der Änderung",
+      "metric": "Kennzahl",
+      "before": "vorher (v{{version}})",
+      "after": "nachher (v{{version}})",
+      "beforePlain": "vorher",
+      "afterPlain": "nachher",
+      "row": {
+        "passRate": "Prüffall bestanden",
+        "caseRate": "Rückmeldungen je 100 Nutzungen",
+        "recurrence": "Wieder aufgetreten"
+      },
+      "runs": "{{passed}} von {{total}} Läufen",
+      "runsClient": "{{passed}} von {{total}} Läufen (laut Client)",
+      "rate": "{{rate}} ({{uses}} Nutzungen)",
+      "recurrenceCount_zero": "keine neuen Rückmeldungen",
+      "recurrenceCount_one": "1 neue Rückmeldung",
+      "recurrenceCount_other": "{{count}} neue Rückmeldungen",
+      "direction": {
+        "lower": "niedriger",
+        "higher": "höher",
+        "same": "gleich"
+      },
+      "selfReport": "Prüffall-Ergebnisse vom Client gemeldet.",
+      "tooFewUses": "Nur {{count}} Nutzungen seit Aktivierung – zu wenig für einen Vergleich.",
+      "loadError": "Die Kennzahlen konnten nicht geladen werden."
+    },
+    "history": {
+      "title": "Verlauf",
+      "empty": "Noch keine Ereignisse.",
+      "event": {
+        "draft_linked": "Entwurf verknüpft: {{element}} v{{version}}",
+        "activated_one": "Version aktiv geworden, 1 Rückmeldung geändert",
+        "activated_other": "Version aktiv geworden, {{count}} Rückmeldungen geändert",
+        "activatedNoCount": "Version aktiv geworden",
+        "follow_up_prepared": "Kennzahlen bereitgestellt",
+        "reviewed": "Eingestuft: {{verdict}}",
+        "withdrawn": "Zurückgezogen: {{note}}",
+        "unknown": "Ereignis"
+      }
+    },
+    "error": {
+      "measureNotFound": "Diese Änderung gibt es nicht (mehr)."
     }
   }
 }
