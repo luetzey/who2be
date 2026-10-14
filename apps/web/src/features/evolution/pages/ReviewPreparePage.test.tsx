@@ -43,6 +43,10 @@ const C2 = 'c0000000-0000-4000-8000-000000000002'
 const C3 = 'c0000000-0000-4000-8000-000000000003'
 const C4 = 'c0000000-0000-4000-8000-000000000004'
 const C5 = 'c0000000-0000-4000-8000-000000000005'
+// Gueltige UUIDs, die der Server fuer diesen Agenten nicht liefert.
+const FOREIGN = 'f0000000-0000-4000-8000-0000000000ff'
+const FOREIGN_2 = 'f0000000-0000-4000-8000-0000000000fe'
+const FOREIGN_3 = 'f0000000-0000-4000-8000-0000000000fd'
 // Freitext, der nie in die Zwischenablage darf (D-Delta S5).
 const SECRET = 'Kunde Müller wurde falsch beraten'
 
@@ -166,6 +170,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   role = 'editor'
   viewport.mobile = false
+  // Nicht verbrauchte Once-Antworten eines roten Tests duerfen nicht in den naechsten laufen.
+  api.listCases.mockReset()
   api.getAgent.mockResolvedValue(agent)
   api.listCases.mockResolvedValue({ items: firstPage, next_cursor: null })
   api.getDossier.mockResolvedValue(dossier())
@@ -280,6 +286,66 @@ describe('① Rückmeldungen', () => {
     const hint = await screen.findByTestId('prepare-too-many')
     expect(hint).toHaveAttribute('role', 'status')
     expect(screen.getByRole('checkbox', { name: /Erwartung 4/ })).toBeChecked()
+  })
+
+  it('uebernimmt keine fremden IDs aus ?cases in Startsatz, Leiste und Hinweis', async () => {
+    viewport.mobile = true
+    // Vier IDs im Link, aber nur C1 hat der Server geliefert: kein Hinweis „ab vier“.
+    renderPage(`?cases=${C1},${FOREIGN},${FOREIGN_2},${FOREIGN_3}`)
+    await screen.findByTestId('prepare-group-triaged')
+    await waitFor(() => expect(textarea().value).toContain(`Rückmeldungen: ${C1}.`))
+    expect(textarea().value).not.toContain(FOREIGN)
+    expect(
+      within(screen.getByTestId('prepare-sticky')).getByRole('button', {
+        name: 'Startsatz kopieren (1 Rückmeldung)',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('prepare-too-many')).not.toBeInTheDocument()
+    expect(screen.getByTestId('prepare-unresolved')).toHaveTextContent(
+      '3 Rückmeldungen aus dem Link sind hier nicht auswählbar',
+    )
+    // Keine Klaerung je ID (kein N+1): genau die eine Listen-Seite.
+    expect(api.listCases).toHaveBeenCalledTimes(1)
+  })
+
+  it('zaehlt nur Eintraege dieses Agenten mit auswaehlbarem Status', async () => {
+    api.listCases.mockResolvedValue({
+      items: [
+        ...firstPage,
+        caseRead(FOREIGN, { agent_id: 'other-agent', status: 'open' }),
+        caseRead(FOREIGN_2, { status: 'in_progress' }),
+      ],
+      next_cursor: null,
+    })
+    renderPage(`?cases=${FOREIGN},${FOREIGN_2},${C2}`)
+    await screen.findByTestId('prepare-group-triaged')
+    await waitFor(() => expect(textarea().value).toContain(`Rückmeldungen: ${C2}.`))
+    expect(textarea().value).not.toContain(FOREIGN)
+    expect(textarea().value).not.toContain(FOREIGN_2)
+  })
+
+  it('entfernt unbekannte IDs beim naechsten Toggle aus der URL', async () => {
+    renderPage(`?cases=${FOREIGN},${C1}`)
+    await screen.findByTestId('prepare-group-triaged')
+    fireEvent.click(screen.getByRole('checkbox', { name: /Erwartung 2/ }))
+    await waitFor(() => expect(textarea().value).toContain(`Rückmeldungen: ${C1}, ${C2}.`))
+    expect(screen.queryByTestId('prepare-unresolved')).not.toBeInTheDocument()
+  })
+
+  it('macht eine vorbelegte ID gueltig, sobald sie per „Weitere laden“ kommt', async () => {
+    api.listCases.mockResolvedValueOnce({ items: firstPage, next_cursor: 'cur-2' })
+    api.listCases.mockResolvedValueOnce({
+      items: [caseRead(C5, { status: 'open' })],
+      next_cursor: null,
+    })
+    renderPage(`?cases=${C5}`)
+    await screen.findByTestId('prepare-group-triaged')
+    expect(textarea().value).not.toContain(C5)
+    expect(screen.getByTestId('prepare-unresolved')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('prepare-load-more'))
+    await waitFor(() => expect(textarea().value).toContain(`Rückmeldungen: ${C5}.`))
+    expect(screen.getByRole('checkbox', { name: /Erwartung 5/ })).toBeChecked()
+    expect(screen.queryByTestId('prepare-unresolved')).not.toBeInTheDocument()
   })
 
   it('laedt weitere per Cursor und sperrt den Knopf waehrend des Ladens', async () => {

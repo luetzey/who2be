@@ -4254,6 +4254,8 @@
       "tooMany": "More than three cases make the review long. You can take the rest into a later review.",
       "noCases": "There's no open case for {{agent}} right now. You can still hold a review, for example a scheduled check-in.",
       "casesLoadError": "The cases couldn't be loaded.",
+      "unresolved_one": "1 case from the link can't be selected here and isn't in the starting sentence.",
+      "unresolved_other": "{{count}} cases from the link can't be selected here and aren't in the starting sentence.",
       "loadMore": "Load more",
       "situation": {
         "openCases": "Open cases",

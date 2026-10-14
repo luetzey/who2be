@@ -690,16 +690,34 @@ function ReviewPrepareView({ agentId }: { agentId: string }) {
   const cases = useSelectableCases(agentId, isEditor)
   const situation = useDossier(agentId, isEditor)
 
+  // Auswaehlbar ist nur, was der Server fuer diesen Agenten mit auswaehlbarem
+  // Status geliefert hat. IDs aus `?cases=`, die (noch) nicht in der Liste
+  // stehen, zaehlen weder im Startsatz noch in Leiste oder Hinweis; ein
+  // praeparierter Link schiebt so keine fremden IDs in den Builder-Auftrag.
+  // Nachgeladen wird je ID nichts (kein N+1): steht sie auf einer spaeteren
+  // Seite, wird sie mit „Weitere laden“ gueltig.
+  const knownIds = useMemo(
+    () =>
+      new Set(
+        (cases.items ?? [])
+          .filter((item) => item.agent_id === agentId && SELECTABLE.includes(item.status))
+          .map((item) => item.id.toLowerCase()),
+      ),
+    [cases.items, agentId],
+  )
   const rawCases = params.get('cases')
-  const selected = useMemo(() => parseCaseIds(rawCases), [rawCases])
+  const requested = useMemo(() => parseCaseIds(rawCases), [rawCases])
+  const selected = useMemo(() => requested.filter((id) => knownIds.has(id)), [requested, knownIds])
   const selectedSet = useMemo(() => new Set(selected), [selected])
+  const unresolved = cases.items === null ? 0 : requested.length - selected.length
 
   const toggle = useCallback(
     (id: string) => {
       setParams(
         (current) => {
           const next = new URLSearchParams(current)
-          const list = parseCaseIds(current.get('cases'))
+          // Unbekannte IDs fallen beim ersten Toggle aus der URL.
+          const list = parseCaseIds(current.get('cases')).filter((item) => knownIds.has(item))
           const updated = list.includes(id) ? list.filter((item) => item !== id) : [...list, id]
           if (updated.length === 0) next.delete('cases')
           else next.set('cases', updated.join(','))
@@ -708,7 +726,7 @@ function ReviewPrepareView({ agentId }: { agentId: string }) {
         { replace: true },
       )
     },
-    [setParams],
+    [setParams, knownIds],
   )
 
   // Fixierte Leiste unter md: der fokussierte Inhalt darf nicht darunter
@@ -867,6 +885,15 @@ function ReviewPrepareView({ agentId }: { agentId: string }) {
               ) : null}
             </div>
           )}
+          {unresolved > 0 ? (
+            <p
+              role="status"
+              className="text-sm text-muted-foreground"
+              data-testid="prepare-unresolved"
+            >
+              {t('prepare.unresolved', { count: unresolved })}
+            </p>
+          ) : null}
           {selected.length >= PREPARE_TOO_MANY ? (
             <p
               role="status"

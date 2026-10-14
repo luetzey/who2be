@@ -4254,6 +4254,8 @@
       "tooMany": "Mehr als drei Rückmeldungen machen das Review lang. Die übrigen kannst du in ein nächstes Review nehmen.",
       "noCases": "Für {{agent}} ist gerade keine Rückmeldung offen. Ein Review geht trotzdem, etwa für eine geplante Durchsicht.",
       "casesLoadError": "Die Rückmeldungen konnten nicht geladen werden.",
+      "unresolved_one": "1 Rückmeldung aus dem Link ist hier nicht auswählbar und steht nicht im Startsatz.",
+      "unresolved_other": "{{count}} Rückmeldungen aus dem Link sind hier nicht auswählbar und stehen nicht im Startsatz.",
       "loadMore": "Weitere laden",
       "situation": {
         "openCases": "Offene Rückmeldungen",
