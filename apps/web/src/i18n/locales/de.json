@@ -2640,8 +2640,11 @@
           "testCase": "Prüffall: {{title}}",
           "lesson": "Aus Lernvorschlag",
           "feedback": "Aus altem Feedback",
-          "sourceRef": "Link zum Lauf"
+          "sourceRef": "Link zum Lauf",
+          "session": "Review vom {{date}}",
+          "measure": "Änderung: {{element}} · {{state}}"
         },
+        "toEvolution": "Zu {{agent}} → Weiterentwicklung",
         "next": "Nächster Schritt",
         "moreActions": "Weitere Aktionen",
         "notFound": "Diese Rückmeldung gibt es nicht (mehr).",
@@ -2706,6 +2709,7 @@
       },
       "history": {
         "title": "Verlauf",
+        "toMeasure": "Zur Änderung",
         "event": {
           "reported": "Gemeldet",
           "triaged": "Eingeordnet",

@@ -1,4 +1,12 @@
-import { Bot, Copy, ExternalLink, MessageSquareWarning, MoreHorizontal, Trash2 } from 'lucide-react'
+import {
+  Bot,
+  CalendarClock,
+  Copy,
+  ExternalLink,
+  MessageSquareWarning,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { type Ref, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -11,6 +19,8 @@ import type {
   CaseEventKind,
   CaseStatus,
   CaseTarget,
+  MeasureRead,
+  SessionRead,
   TestCaseRead,
   VersionedEntityType,
 } from '@/api/types'
@@ -43,12 +53,18 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CaseStatusDot } from '@/components/cases/CaseStatusDot'
+import { MetaPill } from '@/components/data/MetaPill'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
+// Reine Nachkontroll-Logik, relativ importiert wie in `InboxPage` (E5j): das
+// Cross-Feature-Gate sperrt Komponenten/Seiten, die Lib ist bewusst geteilt.
+import { followUpStatusOf, formatDay, isDue } from '../../evolution/lib/followUp'
+
 // Status mit Erklaersatz unter dem Kopf (E-Delta §6.1): beide setzt nur der
-// Server, fuer alle Rollen sichtbar, ohne Link (der kommt mit E5h).
+// Server, fuer alle Rollen sichtbar, ohne Link (die Links von E5h stehen in
+// „Verknüpft“ und im Verlauf).
 const EXPLAINED_STATUSES: ReadonlySet<CaseStatus> = new Set<CaseStatus>(['in_progress', 'verified'])
 
 // Ereignisse mit eigenem Wort (Delta-Spec S8, E-Delta §6.1). Alles andere
@@ -327,6 +343,89 @@ function useLinkedTestCases(caseId: string | undefined) {
   return { testCases, reload }
 }
 
+// Reviews zum Fall (E5h, wie Agent-Tab §3.4): hoechstens 10, je eines ein
+// `getSession`, parallel. Kein Request je Element oder Ereignis.
+const CASE_REVIEW_LIMIT = 10
+
+/** Eine Aenderung, die diesen Fall enthaelt, mit ihrem Review. */
+interface CaseChange {
+  session: SessionRead
+  measure: MeasureRead
+}
+
+/**
+ * Aenderungen zum Fall aus `GET /feedback-sessions?case_id=` (QE1 a) und den
+ * eingebetteten Aenderungen. Nur editor (Spec §6.2); `undefined` laedt nichts.
+ * Uebernommen wird nur, was der Server selbst verknuepft: das Review gehoert
+ * zum Agenten des Falls und nennt den Fall, die Aenderung gehoert zu diesem
+ * Review und nennt den Fall. Scheitert ein Abruf, fehlt der Teil still.
+ */
+function useCaseChanges(caseId: string | undefined, agentId: string | undefined) {
+  const api = useApi()
+  const [changes, setChanges] = useState<CaseChange[] | null>(null)
+  useEffect(() => {
+    if (caseId === undefined || agentId === undefined) return
+    let cancelled = false
+    const run = async () => {
+      const page = await api.listSessions({ case_id: caseId }, { limit: CASE_REVIEW_LIMIT })
+      const rows = page.items
+        .slice(0, CASE_REVIEW_LIMIT)
+        .filter((row) => row.agent_id === agentId && row.case_ids.includes(caseId))
+      const details = await Promise.all(
+        rows.map((row) =>
+          api.getSession(row.id).then(
+            (detail) => (detail.session.id === row.id ? detail : null),
+            () => null,
+          ),
+        ),
+      )
+      const next: CaseChange[] = []
+      for (const detail of details) {
+        if (detail === null) continue
+        for (const measure of detail.measures) {
+          if (measure.session_id !== detail.session.id || !measure.case_ids.includes(caseId)) continue
+          next.push({ session: detail.session, measure })
+        }
+      }
+      if (!cancelled) setChanges(next)
+    }
+    run().catch(() => {
+      if (!cancelled) setChanges([])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api, caseId, agentId])
+  // Ohne Freigabe (viewer) nie alte Daten zeigen, auch nach Rollenwechsel.
+  return caseId === undefined || agentId === undefined ? null : changes
+}
+
+/**
+ * Faellig-Pill bzw. „Nachkontrolle am …“ einer Aenderung (wie `ChangeDueMark`
+ * im Review-Ergebnis, dieselben Texte und dieselbe Funktion `followUpStatusOf`
+ * mit dem Server-Zustand). Lokal, weil das Gate den Komponenten-Import aus
+ * `features/evolution` sperrt.
+ */
+function CaseChangeDueMark({ change }: { change: CaseChange }) {
+  const { t } = useTranslation('sessions')
+  const status = followUpStatusOf(change.measure, change.session)
+  if (status.kind === 'closed') return null
+  if (isDue(status)) {
+    return (
+      <MetaPill tone="brand" icon={CalendarClock} className="whitespace-normal">
+        <span data-testid="measure-due">
+          {t(status.kind === 'due_not_active' ? 'measure.dueNotActive' : 'measure.due')}
+        </span>
+      </MetaPill>
+    )
+  }
+  return (
+    <span className="text-xs text-muted-foreground">
+      <time dateTime={status.date}>{t('measure.followUpOn', { date: formatDay(status.date) })}</time>
+    </span>
+  )
+}
+
 /** `source_ref` nur als Link, wenn es eine http(s)-Adresse ist (Spec S8). */
 function safeHttpUrl(value: string): string | null {
   try {
@@ -452,21 +551,30 @@ function DeleteCaseDialog({
  */
 function LinkedSection({
   testCases,
+  changes,
+  changeElement,
   sourceMemoryId,
   sourceFeedbackId,
   sourceRef,
   agentId,
 }: {
   testCases: TestCaseRead[] | null
+  changes: CaseChange[] | null
+  changeElement: (measure: MeasureRead) => string
   sourceMemoryId: string | null
   sourceFeedbackId: string | null
   sourceRef: string | null
   agentId: string
 }) {
-  const { t } = useTranslation('feedback')
+  const { t } = useTranslation(['feedback', 'sessions'])
   const wsPath = useWorkspacePath()
   const refUrl = sourceRef !== null ? safeHttpUrl(sourceRef) : null
-  const rows = (testCases ?? []).length + (sourceMemoryId ? 1 : 0) + (sourceFeedbackId ? 1 : 0) + (sourceRef ? 1 : 0)
+  const rows =
+    (testCases ?? []).length +
+    (changes ?? []).length +
+    (sourceMemoryId ? 1 : 0) +
+    (sourceFeedbackId ? 1 : 0) +
+    (sourceRef ? 1 : 0)
   if (rows === 0) return null
   const link = 'font-medium break-words text-brand hover:underline'
   return (
@@ -476,6 +584,31 @@ function LinkedSection({
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col gap-2 text-sm">
+          {/* Je Aenderung zwei Zeilen (Spec §6.2): Review, dann Aenderung mit
+              Zustand vom Server und Faellig-Pill bzw. Termin. */}
+          {(changes ?? []).flatMap(({ session, measure }) => {
+            const reviewPath = wsPath(`/agents/${session.agent_id}/reviews/${session.id}`)
+            return [
+              <li key={`${measure.id}:review`} className="min-w-0" data-testid="case-linked-review">
+                <Link to={reviewPath} className={link}>
+                  {t('cases.detail.linked.session', { date: formatDay(session.created_at) })}
+                </Link>
+              </li>,
+              <li
+                key={`${measure.id}:change`}
+                className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                data-testid="case-linked-change"
+              >
+                <Link to={`${reviewPath}?change=${encodeURIComponent(measure.id)}`} className={link}>
+                  {t('cases.detail.linked.measure', {
+                    element: changeElement(measure),
+                    state: t(`sessions:measure.state.${measure.state}`),
+                  })}
+                </Link>
+                <CaseChangeDueMark change={{ session, measure }} />
+              </li>,
+            ]
+          })}
           {(testCases ?? []).map((testCase) => (
             <li key={testCase.id} className="min-w-0">
               <Link to={wsPath(`/agents/${agentId}#tests`)} className={link}>
@@ -570,6 +703,33 @@ export function CaseDetailPage() {
   const statusRef = useRef<HTMLSpanElement>(null)
   const focusStatus = useRef(false)
   const linked = useLinkedTestCases(isEditor ? caseId : undefined)
+  // Einzige Rollen-Sperre fuer E5h: viewer laden nichts, also gibt es fuer
+  // sie weder Aenderungen noch Pill noch Verlauf-Links.
+  const changes = useCaseChanges(
+    isEditor ? caseId : undefined,
+    isEditor ? data.detail?.case.agent_id : undefined,
+  )
+  // Aenderung je ID, nur aus den geladenen Reviews (Verlauf-Link „Zur Änderung“).
+  const changeById = useMemo(
+    () => new Map((changes ?? []).map((change) => [change.measure.id, change])),
+    [changes],
+  )
+  const followUpDue = (changes ?? []).some(({ measure, session }) =>
+    isDue(followUpStatusOf(measure, session)),
+  )
+  // Ziel von „Zur Änderung“ im Verlauf; `null` = kein Link, weil die Aenderung
+  // in keinem geladenen Review steckt. viewer laden keine Reviews und sehen
+  // deshalb nie einen Link; die Rollen-Sperre sitzt an genau einer Stelle
+  // (`useCaseChanges` oben).
+  const historyChangePath = (event: CaseEvent): string | null => {
+    if (event.measure_id === null) return null
+    const change = changeById.get(event.measure_id)
+    if (change === undefined) return null
+    const { session, measure } = change
+    return wsPath(
+      `/agents/${session.agent_id}/reviews/${session.id}?change=${encodeURIComponent(measure.id)}`,
+    )
+  }
 
   // Nach einem Uebergang: Fokus auf das Status-Wort, sobald der neue Stand da ist.
   const detailForFocus = data.detail
@@ -607,6 +767,15 @@ export function CaseDetailPage() {
     const kind = t(`feedback:cases.target.${target}`)
     const name = entityId !== null ? data.names[elementKey(target, entityId)] : undefined
     return name !== undefined ? `${kind}: ${name}` : kind
+  }
+
+  // Wie im Review-Ergebnis: Art und Name, Name nur aus den schon geladenen
+  // Namen des Falls (kein Request je Aenderung).
+  const changeElement = (measure: MeasureRead): string => {
+    const kind = t(`feedback:cases.target.${measure.target}`)
+    const name =
+      measure.entity_id !== null ? data.names[elementKey(measure.target, measure.entity_id)] : undefined
+    return name !== undefined ? `${kind} „${name}“` : kind
   }
 
   const latestAddressed =
@@ -729,7 +898,26 @@ export function CaseDetailPage() {
           backHref={backHref}
           backLabel={t('feedback:cases.detail.back')}
           status={
-            <StatusLabel status={item.status} addressedTo={addressedTo} statusRef={statusRef} />
+            <>
+              <StatusLabel status={item.status} addressedTo={addressedTo} statusRef={statusRef} />
+              {/* Spec §6.2: Nachkontrolle ist editor-Aufgabe. viewer laden keine
+                  Aenderungen (`useCaseChanges`), also auch keine Pill. */}
+              {followUpDue ? (
+                <MetaPill tone="brand" icon={CalendarClock}>
+                  <span data-testid="case-follow-up-due">{t('sessions:measure.due')}</span>
+                </MetaPill>
+              ) : null}
+            </>
+          }
+          badges={
+            // Rueckweg zum Agenten (Neuschnitt §6), fuer editor und viewer.
+            <Link
+              to={wsPath(`/agents/${item.agent_id}?tab=evolution`)}
+              className="text-xs font-medium break-words text-brand hover:underline"
+              data-testid="case-to-evolution"
+            >
+              {t('feedback:cases.detail.toEvolution', { agent: agentName })}
+            </Link>
           }
           description={t('feedback:cases.detail.reported', { date: reportedOn })}
           actions={
@@ -852,6 +1040,8 @@ export function CaseDetailPage() {
         {isEditor ? (
           <LinkedSection
             testCases={linked.testCases}
+            changes={changes}
+            changeElement={changeElement}
             sourceMemoryId={item.source_memory_id}
             sourceFeedbackId={item.source_feedback_id}
             sourceRef={item.source_ref}
@@ -905,6 +1095,17 @@ export function CaseDetailPage() {
                     ) : (
                       <span className="font-medium break-words">{eventLabel(event)}</span>
                     )}
+                    {/* E5h: nur editor und nur, wenn die Aenderung in den
+                        geladenen Reviews steckt; sonst kein toter Link. */}
+                    {historyChangePath(event) !== null ? (
+                      <Link
+                        to={historyChangePath(event) ?? ''}
+                        className="text-xs font-medium text-brand hover:underline"
+                        data-testid="case-history-to-change"
+                      >
+                        {t('feedback:cases.history.toMeasure')}
+                      </Link>
+                    ) : null}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     <Actor event={event} agents={data.agents} userId={me?.user_id ?? null} />
