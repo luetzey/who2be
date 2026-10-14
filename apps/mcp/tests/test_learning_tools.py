@@ -31,19 +31,26 @@ from fastmcp.exceptions import ToolError
 
 from who2be_mcp import policy_filter, server
 from who2be_mcp.client import ApiClient
+from who2be_mcp.clients.learning import CasePage
 from who2be_mcp.config import Settings
 from who2be_mcp.server import list_memories, mcp, save_memory, search_memory
 from who2be_mcp.tools.learning import (
     MEMORY_FRAMING,
     MEMORY_FRAMING_UNCONFIRMED,
     assign_case_elements,
+    convert_lesson_to_case,
+    create_test_case,
     frame_hits,
+    get_case,
+    get_lesson,
     list_cases,
+    list_patterns,
     list_test_cases,
     propose_memory_change,
     report_case,
     submit_case_statement,
     submit_test_results,
+    triage_case,
 )
 from who2be_models import (
     CaseElementInput,
@@ -53,6 +60,7 @@ from who2be_models import (
     CaseTarget,
     FeedbackSignal,
     MemoryHit,
+    TestCheckKind,
     TestRunCreate,
     TestVerdict,
 )
@@ -820,8 +828,9 @@ def test_list_cases_passes_filters_and_full_returns_models(
     result = asyncio.run(list_cases(str(agent_id), CaseStatus.open, format="full"))
     assert seen["path"] == f"{_PREFIX}/cases"
     assert seen["params"] == {"agent_id": str(agent_id), "status": "open"}
-    assert isinstance(result, list)
-    assert isinstance(result[0], CaseRead)
+    assert isinstance(result, CasePage)
+    assert isinstance(result.items[0], CaseRead)
+    assert result.next_cursor is None
 
 
 def test_list_cases_status_list_goes_out_as_repeated_param(
@@ -952,8 +961,8 @@ def test_list_cases_text_format_stays_under_response_limit(
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
     full = asyncio.run(list_cases(format="full"))
-    assert isinstance(full, list)
-    full_size = len(json.dumps([c.model_dump(mode="json") for c in full], ensure_ascii=False))
+    assert isinstance(full, CasePage)
+    full_size = len(json.dumps([c.model_dump(mode="json") for c in full.items], ensure_ascii=False))
     assert full_size > limit, "Fixture reisst die Grenze nicht — Probe misst nichts."
     text = asyncio.run(list_cases())
     assert isinstance(text, str)
@@ -1066,4 +1075,405 @@ def test_report_case_blocked_without_feedback_write(monkeypatch: pytest.MonkeyPa
                 {"situation": "S", "behavior": "B", "expected_behavior": "E"},
             )
         )
+    assert calls["api"] == 0
+
+
+# --- Werkzeugluecken D7 (E-MCP-2) ------------------------------------------------
+
+_D7_TOOLS = {
+    "get_case",
+    "triage_case",
+    "list_patterns",
+    "create_test_case",
+    "get_lesson",
+    "convert_lesson_to_case",
+}
+
+
+def test_list_cases_passes_cursor_and_returns_next_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cursor geht als Query raus, `X-Next-Cursor` kommt als `next_cursor` zurueck."""
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(
+            200, json=[_case_read_payload(_OWN_AGENT)], headers={"X-Next-Cursor": "c2"}
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    page = asyncio.run(list_cases(cursor="c1", format="full"))
+    assert seen["params"] == {"cursor": "c1"}
+    assert isinstance(page, CasePage)
+    assert page.next_cursor == "c2"
+    text = asyncio.run(list_cases(cursor="c1"))
+    assert isinstance(text, str)
+    assert text.endswith('Weitere Faelle: `cursor="c2"`')
+
+
+def test_list_cases_last_page_has_no_cursor_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[_case_read_payload(_OWN_AGENT)])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    text = asyncio.run(list_cases())
+    assert isinstance(text, str)
+    assert "cursor=" not in text
+
+
+def test_list_cases_signature_stays_backward_compatible() -> None:
+    """Die bisherigen Parameter behalten Reihenfolge und Defaults; `cursor` kommt hinten dran."""
+    params = list(inspect.signature(list_cases).parameters.values())
+    assert [p.name for p in params] == ["agent_id", "status", "format", "cursor"]
+    assert params[2].default == "text"
+    assert params[3].default is None
+
+
+def _case_detail_payload(case_id: UUID) -> dict[str, object]:
+    return {
+        "case": _case_read_payload(_OWN_AGENT, id=str(case_id), impact="i" * 600),
+        "events": [
+            {
+                "id": str(uuid4()),
+                "case_id": str(case_id),
+                "event": "triaged",
+                "actor_kind": "agent",
+                "actor_id": str(_OWN_AGENT),
+                "note": "Muster erkannt",
+                "version_entity_type": None,
+                "version_id": None,
+                "measure_id": None,
+                "element_target": None,
+                "element_entity_id": None,
+                "created_at": "2026-10-09T00:00:00Z",
+            }
+        ],
+        "elements": [
+            {
+                "id": str(uuid4()),
+                "case_id": str(case_id),
+                "target": "tool_policy",
+                "entity_id": None,
+                "assigned_by_kind": "agent",
+                "assigned_by": str(_OWN_AGENT),
+                "created_at": "2026-10-09T00:00:00Z",
+            }
+        ],
+        "statements": [
+            {
+                "id": str(uuid4()),
+                "case_id": str(case_id),
+                "agent_id": str(_OWN_AGENT),
+                "followed_instruction": "Playbook X",
+                "missing_information": "Frist",
+                "conflict": "",
+                "created_at": "2026-10-09T00:00:00Z",
+            }
+        ],
+    }
+
+
+def test_get_case_reads_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    case_id = uuid4()
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(f"{request.method} {request.url.path}")
+        return httpx.Response(200, json=_case_detail_payload(case_id))
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    detail = asyncio.run(get_case(str(case_id)))
+    assert seen == [f"GET {_PREFIX}/cases/{case_id}"]
+    assert detail.case.id == case_id
+    assert detail.case.impact == "i" * 600  # ungekuerzt, anders als list_cases
+    assert [e.target.value for e in detail.elements] == ["tool_policy"]
+    assert detail.statements[0].missing_information == "Frist"
+    assert detail.events[0].note == "Muster erkannt"
+
+
+def test_get_case_rejects_bad_uuid_before_network() -> None:
+    with pytest.raises(ToolError, match="Fall-UUID"):
+        asyncio.run(get_case("kein-uuid"))
+
+
+def test_triage_case_posts_only_triaged(monkeypatch: pytest.MonkeyPatch) -> None:
+    case_id = uuid4()
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_case_read_payload(_OWN_AGENT, status="triaged"))
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    case = asyncio.run(triage_case(str(case_id), note="Muster"))
+    assert seen["path"] == f"{_PREFIX}/cases/{case_id}/transition"
+    assert seen["body"] == {"to": "triaged", "note": "Muster"}
+    assert case.status is CaseStatus.triaged
+    asyncio.run(triage_case(str(case_id)))
+    assert seen["body"] == {"to": "triaged", "note": None}
+
+
+def test_triage_case_has_no_target_parameter() -> None:
+    """Das Werkzeug kennt kein anderes Ziel als `triaged` (PM-2)."""
+    assert set(inspect.signature(triage_case).parameters) == {"case_id", "note"}
+
+
+def test_triage_case_passes_transition_forbidden(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _problem(409, "case_transition_forbidden", "Von 'addressed' kein Weg.")
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="reason=case_transition_forbidden"):
+        asyncio.run(triage_case(str(uuid4())))
+
+
+def test_triage_case_rejects_empty_note_before_network() -> None:
+    with pytest.raises(ToolError, match="Ungueltige Eingabe"):
+        asyncio.run(triage_case(str(uuid4()), note=""))
+
+
+def test_list_patterns_returns_threshold_and_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent_id, evidence = uuid4(), uuid4()
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "threshold": 3,
+                "window_days": 90,
+                "patterns": [
+                    {
+                        "source": "lesson",
+                        "agent_id": str(agent_id),
+                        "element": None,
+                        "count": 3,
+                        "evidence_ids": [str(evidence)],
+                        "first_seen": "2026-10-01T00:00:00Z",
+                        "last_seen": "2026-10-09T00:00:00Z",
+                    }
+                ],
+            },
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_patterns(str(agent_id)))
+    assert seen == {"path": f"{_PREFIX}/patterns", "params": {"agent_id": str(agent_id)}}
+    assert (result.threshold, result.window_days) == (3, 90)
+    assert result.patterns[0].evidence_ids == [evidence]
+    asyncio.run(list_patterns())
+    assert seen["params"] == {}
+
+
+def _test_case_payload(agent_id: UUID, origin_case_id: UUID) -> dict[str, object]:
+    return {
+        "id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "agent_id": str(agent_id),
+        "entity_type": None,
+        "entity_id": None,
+        "title": "Frist nennen",
+        "input": "Wann ist die Abgabe?",
+        "expected_behavior": "Nennt die Frist.",
+        "check_kind": "must_contain",
+        "check_pattern": "Frist",
+        "origin_case_id": str(origin_case_id),
+        "origin_measure_id": None,
+        "status": "active",
+        "supersedes_id": None,
+        "created_by_kind": "agent",
+        "created_by": str(_OWN_AGENT),
+        "created_at": "2026-10-09T00:00:00Z",
+    }
+
+
+def test_create_test_case_posts_with_origin_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent_id, case_id = uuid4(), uuid4()
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(201, json=_test_case_payload(agent_id, case_id))
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(
+        create_test_case(
+            str(case_id),
+            str(agent_id),
+            "Frist nennen",
+            "Wann ist die Abgabe?",
+            "Nennt die Frist.",
+            check_kind=TestCheckKind.must_contain,
+            check_pattern="Frist",
+        )
+    )
+    assert seen["path"] == f"{_PREFIX}/test-cases"
+    assert seen["body"]["origin_case_id"] == str(case_id)
+    assert seen["body"]["agent_id"] == str(agent_id)
+    assert seen["body"]["check_kind"] == "must_contain"
+    # Urheber setzt der Server; eine Korrektur (`supersedes_id`) gibt es hier nicht.
+    assert not {"created_by", "created_by_kind", "supersedes_id"} & set(seen["body"])
+    assert result.origin_case_id == case_id
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"origin_case_id": "kein-uuid"}, "Fall-UUID"),
+        ({"check_kind": TestCheckKind.must_contain}, "check_pattern"),
+        ({"entity_type": "persona"}, "gemeinsam"),
+    ],
+)
+def test_create_test_case_rejects_bad_input_before_post(
+    monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, Any], match: str
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - darf nie laufen
+        raise AssertionError("kein POST bei ungueltiger Eingabe")
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    args: dict[str, Any] = {
+        "origin_case_id": str(uuid4()),
+        "agent_id": str(uuid4()),
+        "title": "T",
+        "input": "I",
+        "expected_behavior": "E",
+    }
+    args.update(kwargs)
+    with pytest.raises(ToolError, match=match):
+        asyncio.run(create_test_case(**args))
+
+
+def test_get_lesson_reads_workspace_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    memory_id = uuid4()
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200, json=_memory_payload(id=str(memory_id), kind="lesson"))
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    lesson = asyncio.run(get_lesson(str(memory_id)))
+    assert seen == [f"{_PREFIX}/memories/{memory_id}"]
+    assert lesson.id == memory_id and lesson.kind.value == "lesson"
+
+
+def test_get_lesson_passes_memory_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _problem(404, "memory_not_found", "Memory nicht gefunden.")
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="reason=memory_not_found"):
+        asyncio.run(get_lesson(str(uuid4())))
+    with pytest.raises(ToolError, match="Memory-UUID"):
+        asyncio.run(get_lesson("kein-uuid"))
+
+
+def test_convert_lesson_to_case_posts_without_agent_in_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent_id, memory_id = uuid4(), uuid4()
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            201,
+            json=_case_read_payload(
+                agent_id, reporter_kind="pattern", source_memory_id=str(memory_id)
+            ),
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    case = asyncio.run(
+        convert_lesson_to_case(
+            str(agent_id), str(memory_id), "S", "B", "E", severity=CaseSeverity.high
+        )
+    )
+    assert seen["path"] == f"{_PREFIX}/agents/{agent_id}/memories/{memory_id}/convert"
+    # Den Agenten traegt der Pfad, den Melder setzt der Server (`pattern`).
+    assert not {"agent_id", "reporter_kind", "reporter_agent_id"} & set(seen["body"])
+    assert seen["body"]["severity"] == "high"
+    assert case.reporter_kind.value == "pattern"
+
+
+def test_convert_lesson_to_case_not_convertible_gets_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _problem(409, "memory_not_convertible", "Nur ein offener Lernvorschlag.")
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError) as exc:
+        asyncio.run(convert_lesson_to_case(str(uuid4()), str(uuid4()), "S", "B", "E"))
+    assert "reason=memory_not_convertible" in str(exc.value)
+    assert "get_lesson" in str(exc.value)
+
+
+def test_convert_lesson_to_case_rejects_bad_input_before_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover - darf nie laufen
+        raise AssertionError("kein POST bei ungueltiger Eingabe")
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="Ungueltige Eingabe"):
+        asyncio.run(convert_lesson_to_case(str(uuid4()), str(uuid4()), "", "B", "E"))
+    with pytest.raises(ToolError, match="Memory-UUID"):
+        asyncio.run(convert_lesson_to_case(str(uuid4()), "kein-uuid", "S", "B", "E"))
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "visible"),
+    [([], False), (["feedback_write", "test_report"], False), (["case_triage"], True)],
+)
+def test_d7_tools_visible_only_with_case_triage(
+    monkeypatch: pytest.MonkeyPatch, capabilities: list[str], visible: bool
+) -> None:
+    """PM-2: alle sechs nur mit `case_triage` in `tools/list` (ADR-0042-Filter)."""
+    _install_agent(monkeypatch, capabilities)
+    names = asyncio.run(_tool_names())
+    assert (names & _D7_TOOLS) == (_D7_TOOLS if visible else set())
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("get_case", {"case_id": str(uuid4())}),
+        ("triage_case", {"case_id": str(uuid4())}),
+        ("list_patterns", {}),
+        (
+            "create_test_case",
+            {
+                "origin_case_id": str(uuid4()),
+                "agent_id": str(uuid4()),
+                "title": "T",
+                "input": "I",
+                "expected_behavior": "E",
+            },
+        ),
+        ("get_lesson", {"memory_id": str(uuid4())}),
+        (
+            "convert_lesson_to_case",
+            {
+                "agent_id": str(uuid4()),
+                "memory_id": str(uuid4()),
+                "situation": "S",
+                "behavior": "B",
+                "expected_behavior": "E",
+            },
+        ),
+    ],
+)
+def test_d7_tools_blocked_without_case_triage(
+    monkeypatch: pytest.MonkeyPatch, tool: str, arguments: dict[str, Any]
+) -> None:
+    calls = _install_agent(monkeypatch, ["feedback_write", "test_report"])
+    with pytest.raises(ToolError, match="nicht freigeschaltet"):
+        asyncio.run(_call_tool(tool, arguments))
     assert calls["api"] == 0

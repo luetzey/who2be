@@ -255,8 +255,9 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # seit C4b + `propose_memory_change` (ebenda), seit D4 + 4 Fall-Tools
     # (`report_case`, `submit_case_statement`, `list_cases`,
     # `assign_case_elements`, ebenda), seit E-MCP-1 + 4 Gespraechs-Tools aus
-    # `tools/sessions.py`.
-    assert len(MCP_TOOL_REQUIREMENTS) == 94
+    # `tools/sessions.py`, seit E-MCP-2 + 6 Werkzeugluecken D7 aus
+    # `tools/learning.py`.
+    assert len(MCP_TOOL_REQUIREMENTS) == 100
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 
@@ -278,6 +279,21 @@ def test_session_tools_requirements() -> None:
         assert req.read_domain is None and req.memory is None and not req.always
     human_only = {"review_measure", "withdraw_measure", "review", "withdraw"}
     assert not human_only & set(MCP_TOOL_REQUIREMENTS)
+
+
+def test_d7_gap_tools_requirements() -> None:
+    """E-MCP-2 (PM-2/PM-4): die sechs Werkzeugluecken D7 nur mit `case_triage`."""
+    for name in (
+        "get_case",
+        "triage_case",
+        "list_patterns",
+        "create_test_case",
+        "get_lesson",
+        "convert_lesson_to_case",
+    ):
+        req = MCP_TOOL_REQUIREMENTS[name]
+        assert set(req.capabilities) == {AgentCapability.case_triage}, name
+        assert req.read_domain is None and req.memory is None and not req.always
 
 
 def test_case_tools_requirements() -> None:

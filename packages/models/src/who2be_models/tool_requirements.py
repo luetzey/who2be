@@ -290,6 +290,13 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "submit_session_protocol": _CASE_TRIAGE,
     "link_measure_draft": _CASE_TRIAGE,
     "get_follow_up": _CASE_TRIAGE,
+    # Werkzeugluecken D7 (Phase E, E-MCP-2, PM-2/PM-4): nur mit `case_triage`.
+    "get_case": _CASE_TRIAGE,
+    "triage_case": _CASE_TRIAGE,
+    "list_patterns": _CASE_TRIAGE,
+    "create_test_case": _CASE_TRIAGE,
+    "get_lesson": _CASE_TRIAGE,
+    "convert_lesson_to_case": _CASE_TRIAGE,
 }
 
 

@@ -219,8 +219,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-11, nach der Schema-Diaet (T2) | 90 | **138.060 Bytes** |
 | 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **104.290 Bytes** |
 | 2026-10-14, Gespraechs-Werkzeuge (E-MCP-1) | 94 | **109.963 Bytes** |
+| 2026-10-14, Werkzeugluecken D7 (E-MCP-2) | 100 | **114.203 Bytes** |
 
-Bis zur Grenze bleiben damit 70.037 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 65.797 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -263,10 +264,10 @@ echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 sichtbaren Werkzeuge plus Server-`instructions` (1.604 Bytes), die jeder
 Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) |
-| --- | ---: | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 | 31.101 |
-| Agent, Builder | 120.000 | 105.894 | 111.567 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) |
+| --- | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 |
 
 Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
 2026-10-14 auf 120.000 angehoben („1a“), weil die Gespraechs-Werkzeuge aus
