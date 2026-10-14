@@ -199,7 +199,9 @@ Summary-Modell ist dafuer nicht mehr noetig.
 Kataloggroesse von `tools/list` (WP10, ADR-0047) und die Antwortgroesse je
 Werkzeug.
 
-**Katalog-Budget `tools/list`:** Grenze 160.000 Bytes. Gemessen wird die
+**Katalog-Budget `tools/list`:** Grenze 180.000 Bytes (bis 2026-10-14:
+160.000; angehoben nach Owner-Entscheidung W-E1 b vom 2026-10-09, weil Phase E
+zehn Werkzeuge ergaenzt). Gemessen wird die
 `tools`-Liste so, wie der Server sie auf den Draht legt: ein In-Memory-Client
 ruft `tools/list` durch den echten Handler samt Middleware auf, gezaehlt wird
 utf-8 mit `ensure_ascii=False`, ohne den JSON-RPC-Umschlag. Damit zaehlen auch
@@ -216,8 +218,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-10, mit `alwaysLoad` an fünf Werkzeugen (T4) | 90 | **147.475 Bytes** |
 | 2026-10-11, nach der Schema-Diaet (T2) | 90 | **138.060 Bytes** |
 | 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **104.290 Bytes** |
+| 2026-10-14, Gespraechs-Werkzeuge (E-MCP-1) | 94 | **109.963 Bytes** |
 
-Bis zur Grenze bleiben damit 55.710 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 70.037 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -260,14 +263,19 @@ echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 sichtbaren Werkzeuge plus Server-`instructions` (1.604 Bytes), die jeder
 Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 |
-| --- | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 |
-| Agent, Builder | 110.000 | 105.894 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) |
+| --- | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 |
+
+Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
+2026-10-14 auf 120.000 angehoben („1a“), weil die Gespraechs-Werkzeuge aus
+Phase E (E-MCP-1) den Builder-Start auf 111.567 Bytes bringen. Das Default-Ziel
+bleibt 35.000.
 
 `test_agent_start_meets_target_per_profile` haelt beide Ziele; das
 Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
-Beschreibungen kuerzen, nicht das Ziel anheben.
+Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an.
 
 Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
 

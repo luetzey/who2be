@@ -86,8 +86,11 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 # inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
 # nachgezogenen `list_tables`/`delete_table`), mehr nicht. Seit 2026-10-06
 # misst der Test die Draht-Form (inkl. `title`/`_meta` aus fastmcp 4):
-# 86 Tools / 142_295 Bytes.
-_PAYLOAD_BUDGET_BYTES = 160_000
+# 86 Tools / 142_295 Bytes. Seit W-E1 b (Owner 2026-10-09: alle D7-
+# Werkzeugluecken in Phase E schliessen) 180_000: zehn neue Werkzeuge kommen
+# hinzu; die Token-Optimierung aller Werkzeuge ist ein eigenes, spaeteres
+# Vorhaben. Messung vor E-MCP-1: 90 Tools / 104_290 Bytes.
+_PAYLOAD_BUDGET_BYTES = 180_000
 _NEW_TOOL_DOC_CAP = 1_100
 
 # Die Schwelle der Konsumenten-Laufzeit fuer eine EINZELNE Tool-Antwort. Keine
@@ -424,8 +427,10 @@ def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixtur
 # Was ein Agent beim Start bezahlt: Draht-Bytes seiner `tools/list` plus die
 # Server-`instructions`, die seit T4 jeder Client beim Verbinden bekommt. Das
 # Gesamt-Budget `_PAYLOAD_BUDGET_BYTES` bleibt die harte Obergrenze daneben.
-# Reisst ein Ziel: Beschreibungen kuerzen, nicht das Ziel anheben.
-_START_TARGET_BYTES = {"default": 35_000, "builder": 110_000}
+# Reisst ein Ziel: Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an;
+# Builder 110_000 -> 120_000 nach Owner-Entscheidung 2026-10-14 ("1a",
+# Gespraechs-Werkzeuge Phase E, siehe docs/mcp-payload-budget.md).
+_START_TARGET_BYTES = {"default": 35_000, "builder": 120_000}
 
 
 def _start_bytes(tools: list[dict[str, Any]], profile: payload_report.ReferenceProfile) -> int:
@@ -438,7 +443,7 @@ def _profile(key: str) -> payload_report.ReferenceProfile:
 
 
 def test_agent_start_meets_target_per_profile() -> None:
-    """Default-Agent <= 35.000 Bytes, Builder <= 110.000 Bytes beim Start.
+    """Default-Agent <= 35.000 Bytes, Builder <= 120.000 Bytes beim Start.
 
     Rot-Probe: eine aufgeblaehte Beschreibung an einem Werkzeug, das beide
     Profile sehen, traegt jedes Profil ueber sein Ziel.
@@ -460,7 +465,8 @@ def test_agent_start_meets_target_per_profile() -> None:
     }
     assert not over, (
         f"Agent-Start ueber dem Ziel (ist, Ziel): {over}. Beschreibungen kuerzen "
-        "(docs/mcp-payload-budget.md, Beschreibungs-Diaet), nicht das Ziel anheben."
+        "(docs/mcp-payload-budget.md, Beschreibungs-Diaet). Das Ziel hebt nur der "
+        "Owner an (zuletzt Builder 120.000, Owner-Entscheidung 2026-10-14)."
     )
 
 
