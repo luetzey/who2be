@@ -19,6 +19,11 @@ Faelle (D4, ADR-0053 6.5): `report_case` braucht `feedback_write`,
 `assign_case_elements` sind fuer `case_triage` (Sichtbarkeit in
 `tool_requirements`). Die Rechte prueft auch hier allein die API; die
 Werkzeuge haengen an die Problem-Antwort nur einen Korrektur-Hinweis.
+
+Werkzeugluecken D7 (Phase E, E-MCP-2): `get_case`, `triage_case` (nur nach
+`triaged`), `list_patterns`, `create_test_case` (aus einem Fall),
+`get_lesson` und `convert_lesson_to_case` — alle nur mit `case_triage`, alle
+auf bestehenden Routen. `list_cases` blaettert per `cursor`/`next_cursor`.
 """
 
 from __future__ import annotations
@@ -31,10 +36,11 @@ from pydantic import ValidationError
 
 from who2be_mcp.client import ApiClient
 from who2be_mcp.clients import learning as learning_api
-from who2be_mcp.clients.learning import CaseElementsBody, TestRunBatch
+from who2be_mcp.clients.learning import CaseElementsBody, CasePage, CaseTriageBody, TestRunBatch
 from who2be_mcp.core_logging import with_tool_log
 from who2be_models import (
     CaseCreate,
+    CaseDetail,
     CaseElementInput,
     CaseElementRead,
     CaseRead,
@@ -45,11 +51,16 @@ from who2be_models import (
     EntityType,
     FeedbackSignal,
     MemoryHit,
+    MemoryRead,
+    TestCaseCreate,
     TestCaseRead,
+    TestCheckKind,
     TestRunCreate,
     TestRunRead,
 )
+from who2be_models.case import CaseConvertRequest
 from who2be_models.memory import MemoryProposalAction, MemoryProposalCreate, MemoryProposalRead
+from who2be_models.pattern import PatternList
 
 # Zusatz zur Server-Meldung, damit der Agent weiss, wie er korrigiert.
 _VERDICT_HINT = (
@@ -197,6 +208,10 @@ _CASE_HINTS: dict[str, str] = {
         " Schildern darf nur der Agent, um den es im Fall geht. Siehst du ein "
         "eigenes Fehlverhalten, melde es per `report_case`."
     ),
+    "memory_not_convertible": (
+        " Nur ein offener Lernvorschlag wird ein Fall; den bestehenden Fall zeigt "
+        "`get_lesson` (`converted_case_id`)."
+    ),
 }
 
 # Feldkuerzung der Lesefassung von `list_cases`: die Liste dient dem Ueberblick
@@ -220,14 +235,16 @@ def _preview(value: str) -> str:
     return flat[: _CASE_FIELD_PREVIEW - 1].rstrip() + "…"
 
 
-def cases_text(cases: list[CaseRead]) -> str:
+def cases_text(cases: list[CaseRead], next_cursor: str | None = None) -> str:
     """Lesefassung von `list_cases` (ADR-0056, Option B): Markdown je Fall.
 
     Kopf mit dem, was ein Folgeaufruf braucht (`id`, Agent, Status), darunter
-    die Pflichtfelder gekuerzt. Kein JSON, kein Escaping.
+    die Pflichtfelder gekuerzt. Kein JSON, kein Escaping. Gibt es eine weitere
+    Seite, steht ihr Cursor in der letzten Zeile.
     """
+    more = "" if next_cursor is None else f'\n\nWeitere Faelle: `cursor="{next_cursor}"`'
     if not cases:
-        return "# Faelle (0)\n\nKeine Faelle gefunden."
+        return "# Faelle (0)\n\nKeine Faelle gefunden." + more
     parts = [
         f"# Faelle ({len(cases)})",
         '> Felder gekuerzt. Volltext und Melder: `format="full"`.',
@@ -246,7 +263,7 @@ def cases_text(cases: list[CaseRead]) -> str:
         if case.impact is not None:
             lines.append(f"- Folge: {_preview(case.impact)}")
         parts.append("\n".join(lines))
-    return "\n\n".join(parts)
+    return "\n\n".join(parts) + more
 
 
 @with_tool_log("report_case")
@@ -327,19 +344,142 @@ async def list_cases(
     agent_id: str | None = None,
     status: CaseStatus | list[CaseStatus] | None = None,
     format: str = "text",
-) -> list[CaseRead] | str:
+    cursor: str | None = None,
+) -> CasePage | str:
     """Listet Faelle, neueste zuerst (bis 50); braucht `case_triage`.
 
     `agent_id` und `status` (Wert oder Liste) filtern. Status: open, triaged, in_progress,
     addressed, verified, dismissed, reopened. Default `format="text"` mit gekuerzten Feldern.
+    Naechste Seite: `cursor` aus `next_cursor`.
     """
     from who2be_mcp.server import _validate_response_format
 
     _validate_response_format(format)
     parsed = None if agent_id is None else _parse_uuid(agent_id, "Agent")
     client = await _client()
-    cases = await learning_api.list_cases(client, agent_id=parsed, status=status)
-    return cases_text(cases) if format == "text" else cases
+    page = await learning_api.list_cases(client, agent_id=parsed, status=status, cursor=cursor)
+    return cases_text(page.items, page.next_cursor) if format == "text" else page
+
+
+@with_tool_log("get_case")
+async def get_case(case_id: str) -> CaseDetail:
+    """Ein Fall im Volltext mit Zuordnungen, Schilderungen und Verlauf.
+
+    Braucht `case_triage`.
+    """
+    parsed = _parse_uuid(case_id, "Fall")
+    client = await _client()
+    return await learning_api.get_case(client, parsed)
+
+
+@with_tool_log("triage_case")
+async def triage_case(case_id: str, note: str | None = None) -> CaseRead:
+    """Setzt einen Fall auf `triaged` (aus `open` oder `reopened`); `note` optional.
+
+    Andere Status setzt das Werkzeug nicht. Braucht `case_triage`.
+    """
+    parsed = _parse_uuid(case_id, "Fall")
+    try:
+        data = CaseTriageBody(note=note)
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    client = await _client()
+    return await learning_api.triage_case(client, parsed, data)
+
+
+@with_tool_log("list_patterns")
+async def list_patterns(agent_id: str | None = None) -> PatternList:
+    """Wiederkehrende Muster aus Faellen und Lernvorschlaegen, mit Schwelle und Zeitfenster.
+
+    `agent_id` filtert. `evidence_ids` sind die Belege. Braucht `case_triage`.
+    """
+    parsed = None if agent_id is None else _parse_uuid(agent_id, "Agent")
+    client = await _client()
+    return await learning_api.list_patterns(client, parsed)
+
+
+@with_tool_log("create_test_case")
+async def create_test_case(
+    origin_case_id: str,
+    agent_id: str,
+    title: str,
+    input: str,
+    expected_behavior: str,
+    check_kind: TestCheckKind = TestCheckKind.human_rule,
+    check_pattern: str | None = None,
+    entity_type: EntityType | None = None,
+    entity_id: str | None = None,
+) -> TestCaseRead:
+    """Legt einen Prueffall aus einem Fall an (`origin_case_id`), fuer den Agenten des Falls.
+
+    `check_pattern` nur bei must_contain/must_not_contain. `entity_type` und `entity_id`
+    nur gemeinsam. Braucht `case_triage`.
+    """
+    try:
+        data = TestCaseCreate(
+            agent_id=_parse_uuid(agent_id, "Agent"),
+            entity_type=entity_type,
+            entity_id=None if entity_id is None else _parse_uuid(entity_id, "Element"),
+            title=title,
+            input=input,
+            expected_behavior=expected_behavior,
+            check_kind=check_kind,
+            check_pattern=check_pattern,
+            origin_case_id=_parse_uuid(origin_case_id, "Fall"),
+        )
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    client = await _client()
+    return await learning_api.create_test_case(client, data)
+
+
+@with_tool_log("get_lesson")
+async def get_lesson(memory_id: str) -> MemoryRead:
+    """Liest einen Lernvorschlag (`kind=lesson`) eines Agenten im Workspace im Wortlaut.
+
+    Anderes Gedaechtnis ist `memory_not_found`. Braucht `case_triage`.
+    """
+    parsed = _parse_uuid(memory_id, "Memory")
+    client = await _client()
+    return await learning_api.get_lesson(client, parsed)
+
+
+@with_tool_log("convert_lesson_to_case")
+async def convert_lesson_to_case(
+    agent_id: str,
+    memory_id: str,
+    situation: str,
+    behavior: str,
+    expected_behavior: str,
+    impact: str | None = None,
+    severity: CaseSeverity = CaseSeverity.medium,
+    signal: FeedbackSignal | None = None,
+    source_ref: str | None = None,
+) -> CaseRead:
+    """Macht aus einem offenen Lernvorschlag einen Fall ueber dessen Agenten (`agent_id`).
+
+    Melder ist `pattern`. Nur einmal je Vorschlag (`memory_not_convertible`).
+    Braucht `case_triage`.
+    """
+    parsed_agent = _parse_uuid(agent_id, "Agent")
+    parsed_memory = _parse_uuid(memory_id, "Memory")
+    try:
+        data = CaseConvertRequest(
+            situation=situation,
+            behavior=behavior,
+            expected_behavior=expected_behavior,
+            impact=impact,
+            severity=severity,
+            signal=signal,
+            source_ref=source_ref,
+        )
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    client = await _client()
+    try:
+        return await learning_api.convert_lesson_to_case(client, parsed_agent, parsed_memory, data)
+    except ToolError as exc:
+        raise _with_case_hint(exc) from exc
 
 
 @with_tool_log("assign_case_elements")
@@ -370,5 +510,11 @@ def register(mcp: FastMCP) -> None:
         submit_case_statement,
         list_cases,
         assign_case_elements,
+        get_case,
+        triage_case,
+        list_patterns,
+        create_test_case,
+        get_lesson,
+        convert_lesson_to_case,
     ):
         mcp.tool(output_schema=None)(fn)

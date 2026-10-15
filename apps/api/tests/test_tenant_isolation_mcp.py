@@ -273,6 +273,31 @@ MCP_PROBES: dict[str, ToolProbe] = {
         }
     ),
     "get_follow_up": ToolProbe({"measure_id": "<<measure_id>>"}),
+    # Werkzeugluecken D7 (E-MCP-2). `lesson_id` ist ein offener Lernvorschlag
+    # des eigenen Agenten (`_seed_lesson`); `convert_lesson_to_case` steht nach
+    # `get_lesson`, weil die Gegenprobe ihn umwandelt.
+    "get_case": ToolProbe({"case_id": "<<agent_case_id>>"}),
+    "triage_case": ToolProbe({"case_id": "<<agent_case_id>>", "note": "iso"}),
+    "list_patterns": ToolProbe({"agent_id": "<<agent_id>>"}, filters=True),
+    "create_test_case": ToolProbe(
+        {
+            "origin_case_id": "<<agent_case_id>>",
+            "agent_id": "<<agent_id>>",
+            "title": "iso",
+            "input": "iso",
+            "expected_behavior": "iso",
+        }
+    ),
+    "get_lesson": ToolProbe({"memory_id": "<<lesson_id>>"}),
+    "convert_lesson_to_case": ToolProbe(
+        {
+            "agent_id": "<<agent_id>>",
+            "memory_id": "<<lesson_id>>",
+            "situation": "iso",
+            "behavior": "iso",
+            "expected_behavior": "iso",
+        }
+    ),
     # --- Arbeitsbereich ----------------------------------------------------------
     "create_artifact": ToolProbe(
         {"title": "iso", "content_md": "x", "occurred_at": _WHEN, "area_id": "<<area_id>>"}
@@ -587,6 +612,25 @@ def _seed_measure(t: Tenant) -> None:
     )
 
 
+def _seed_lesson(t: Tenant) -> None:
+    """Offener Lernvorschlag des eigenen Agenten mit Marker, direkt in der DB.
+
+    `get_lesson` liefert einem Agent-Token nur `kind=lesson` (PM-4); der
+    Eintrag aus `seed_tenant` ist ein Nutzerfakt und bliebe `memory_not_found`.
+    """
+    t.ids["lesson_id"] = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
+            " fact, kind, scope, origin, source) "
+            "VALUES ($1, $2::uuid, $2::uuid, 'pending', $3, 'lesson', 'agent', 'inferred', "
+            "        'agent') RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            f"{t.marker} Frist nennen",
+        )
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -601,6 +645,7 @@ def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> Non
             _seed_active_memory(t)
             _seed_case(t)
             _seed_measure(t)
+            _seed_lesson(t)
         report = asyncio.run(run_isolation(a, b, ghost_of(b)))
 
         assert not report.findings, f"{len(report.findings)} Befund(e):\n" + "\n".join(

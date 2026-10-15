@@ -11,7 +11,7 @@ Pfade: Router `test_cases.py`, `memory.py` und `cases.py` unter
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from who2be_mcp.client import ApiClient
 from who2be_models import (
     CaseCreate,
+    CaseDetail,
     CaseElementInput,
     CaseElementRead,
     CaseRead,
@@ -26,11 +27,15 @@ from who2be_models import (
     CaseStatementRead,
     CaseStatus,
     EntityType,
+    MemoryRead,
+    TestCaseCreate,
     TestCaseRead,
     TestRunCreate,
     TestRunRead,
 )
+from who2be_models.case import CASE_NOTE_MAX_LENGTH, CaseConvertRequest
 from who2be_models.memory import MemoryProposalCreate, MemoryProposalRead
+from who2be_models.pattern import PatternList
 
 
 class TestRunBatch(BaseModel):
@@ -129,19 +134,31 @@ async def submit_case_statement(
     return CaseStatementRead.model_validate(payload)
 
 
+class CasePage(BaseModel):
+    """Eine Seite von `GET /cases`; `next_cursor` ist `None` auf der letzten.
+
+    Die API traegt den Cursor im Header `X-Next-Cursor` (Repo-Konvention der
+    Keyset-Listen); das Werkzeug reicht ihn im Body weiter, wie `MemoryPage`.
+    """
+
+    items: list[CaseRead]
+    next_cursor: str | None = None
+
+
 async def list_cases(
     client: ApiClient,
     agent_id: UUID | None = None,
     status: CaseStatus | list[CaseStatus] | None = None,
-) -> list[CaseRead]:
-    """`GET .../cases?agent_id=&status=` — erste Seite, neueste zuerst.
+    cursor: str | None = None,
+) -> CasePage:
+    """`GET .../cases?agent_id=&status=&cursor=` — eine Seite, neueste zuerst.
 
     `status` geht als wiederholter Query-Parameter raus
     (`?status=open&status=reopened`), wie `GET /cases` ihn seit D6-API1 liest;
     ein Einzelwert bleibt ein einzelner Parameter, eine leere Liste filtert
     nicht. Die Sichtbarkeit entscheidet der Server: ohne `case_triage` nur
     Faelle ueber den eigenen Agenten, ein fremder `agent_id` endet in 403
-    `missing_capability`.
+    `missing_capability`. Ein kaputter `cursor` endet in 422 der API.
     """
     params: dict[str, str | list[str]] = {}
     if agent_id is not None:
@@ -150,8 +167,78 @@ async def list_cases(
     if statuses:
         # Reihenfolge erhalten, Dubletten raus — die API filtert per IN.
         params["status"] = list(dict.fromkeys(CaseStatus(s).value for s in statuses))
-    payload = await client._get(f"{client._workspace_prefix}/cases", params=params or None)
-    return [CaseRead.model_validate(item) for item in payload]
+    if cursor is not None:
+        params["cursor"] = cursor
+    response = await client._request(
+        "GET", f"{client._workspace_prefix}/cases", params=params or None
+    )
+    return CasePage(
+        items=[CaseRead.model_validate(item) for item in response.json()],
+        next_cursor=response.headers.get("X-Next-Cursor"),
+    )
+
+
+async def get_case(client: ApiClient, case_id: UUID) -> CaseDetail:
+    """`GET .../cases/{id}` — Fall mit Verlauf, Zuordnungen und Schilderungen."""
+    payload = await client._get(f"{client._workspace_prefix}/cases/{case_id}")
+    return CaseDetail.model_validate(payload)
+
+
+class CaseTriageBody(BaseModel):
+    """Body von `POST /cases/{id}/transition` fuer `triage_case`.
+
+    Teilmenge von `CaseTransitionRequest` der API: `to` ist fest `triaged`,
+    alles andere (Massnahme, Version) gehoert zu anderen Zielen. Welche Kante
+    erlaubt ist, entscheidet der Server (409 `case_transition_forbidden`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    to: Literal["triaged"] = "triaged"
+    note: str | None = Field(default=None, min_length=1, max_length=CASE_NOTE_MAX_LENGTH)
+
+
+async def triage_case(client: ApiClient, case_id: UUID, data: CaseTriageBody) -> CaseRead:
+    """`POST .../cases/{id}/transition` mit `to=triaged`."""
+    payload = await client._write(
+        "POST", f"{client._workspace_prefix}/cases/{case_id}/transition", data
+    )
+    return CaseRead.model_validate(payload)
+
+
+async def list_patterns(client: ApiClient, agent_id: UUID | None = None) -> PatternList:
+    """`GET .../patterns?agent_id=` — Muster samt `threshold` und `window_days`."""
+    params = {"agent_id": str(agent_id)} if agent_id is not None else None
+    payload = await client._get(f"{client._workspace_prefix}/patterns", params=params)
+    return PatternList.model_validate(payload)
+
+
+async def create_test_case(client: ApiClient, data: TestCaseCreate) -> TestCaseRead:
+    """`POST .../test-cases` — Urheber setzt der Server aus dem Token."""
+    payload = await client._write("POST", f"{client._workspace_prefix}/test-cases", data)
+    return TestCaseRead.model_validate(payload)
+
+
+async def get_lesson(client: ApiClient, memory_id: UUID) -> MemoryRead:
+    """`GET .../memories/{id}` — fuer Agent-Token nur `kind=lesson` (PM-4).
+
+    Alles andere, auch das eigene Gedaechtnis, beantwortet der Server mit 404
+    `memory_not_found` wie eine unbekannte ID.
+    """
+    payload = await client._get(f"{client._workspace_prefix}/memories/{memory_id}")
+    return MemoryRead.model_validate(payload)
+
+
+async def convert_lesson_to_case(
+    client: ApiClient, agent_id: UUID, memory_id: UUID, data: CaseConvertRequest
+) -> CaseRead:
+    """`POST .../agents/{agent_id}/memories/{id}/convert` — Melder `pattern` (3.7)."""
+    payload = await client._write(
+        "POST",
+        f"{client._workspace_prefix}/agents/{agent_id}/memories/{memory_id}/convert",
+        data,
+    )
+    return CaseRead.model_validate(payload)
 
 
 async def assign_case_elements(
