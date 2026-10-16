@@ -59,7 +59,7 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
 Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
-**Stand 2026-09-25 nach Aufbereitungslauf 31, gegen `main` @ `cee6478`
+**Stand 2026-10-05 nach Aufbereitungslauf 41, gegen `main` @ `54e48ee6`
 gemessen.**
 
 Der Cloud-Launch-Block und der Responsive-Block sind **durch**: alle Pakete aus
@@ -72,13 +72,14 @@ Abhängigkeit).
 |---|---|
 | **#632** Passkey registrieren (#435 W2a) | **Fundament vor Fläche:** öffnet #633. Einziges Paket, das heute ohne Owner-Antwort und ohne Docker startbar ist. Fasst `e2e/helpers/auth.ts` bewusst **nicht** an. |
 | **#633** Step-up mit Passkey (#435 W2b) | **Harte Abhängigkeit: nach #632** — ohne registrierbaren Faktor ist der Step-up nicht testbar. Zusätzlich nach PR #631 (beide ändern `LoginPage.tsx`). |
-| **#624** Statusaktionen auf dem Phone | **`needs-decision` — nicht starten.** Alle Felder stehen, die Design-Weiche (Bottom-Bar / Sticky / `DetailHeader`) ist Produktverhalten und nicht aus dem Repo belegbar. Drei Optionen mit Empfehlung stehen als Kommentar; nach der Antwort ohne weiteres Refinement startbar. |
-| **#540** Rate-Limit an der Kante | **`needs-decision` und umgebungsblockiert.** Letztes offenes Kind von #535. Braucht die Mechanismus-Entscheidung (A/B/C im Issue) **und** einen Docker-Daemon — in Cloud-Sessions seit neunzehn Läufen nicht vorhanden. Steht hinten wegen der Umgebung, nicht wegen geringer Bedeutung. |
+| **#540** Rate-Limit an der Kante | **`needs-decision` und umgebungsblockiert.** Letztes offenes Kind von #535. Braucht die Mechanismus-Entscheidung (A/B/C im Issue) **und** einen Docker-Daemon — in Cloud-Sessions durchgehend nicht vorhanden, in Lauf 41 erneut geprüft (`docker info` → Exit 1). Steht hinten wegen der Umgebung, nicht wegen geringer Bedeutung. |
 
 Erledigt und deshalb aus der Tabelle genommen: der gesamte Cloud-Launch-Block
 (#429, #449–#453), der Responsive-Block (#438, #500, #513, #561–#573 sowie die
-Welle-7-Pakete #615–#623) und die fünf Härtungs-Kinder von #535
-(#536–#539, #576).
+Welle-7-Pakete #615–#623), die fünf Härtungs-Kinder von #535 (#536–#539, #576)
+und **#624 Statusaktionen auf dem Phone** (geschlossen; die Design-Weiche ist
+entschieden, der E2E-Beleg liegt als `e2e/status-actions-viewport.spec.ts`
+auf `main`).
 
 Danach oder parallel, außerhalb der Warteschlange:
 
@@ -87,9 +88,9 @@ Danach oder parallel, außerhalb der Warteschlange:
   #535: fünf von sechs, offen nur #540. Beide warten auf je eine Owner-Antwort,
   die nichts blockiert.
 - **#435 Passkeys** (`size/M`) — Tracking. W1 (#499) ist gemergt: alle drei
-  Stacks pinnen `supabase/gotrue:v2.196.0` (`docker-compose.yml:63`,
-  `deploy/hetzner/supabase/docker-compose.yml:63`,
-  `deploy/dokploy/docker-compose.yml:81`), der WebAuthn-Faktor ist serverseitig
+  Stacks pinnen `supabase/gotrue:v2.197.0` (`docker-compose.yml:63`,
+  `deploy/hetzner/supabase/docker-compose.yml:92`,
+  `deploy/dokploy/docker-compose.yml:82`), der WebAuthn-Faktor ist serverseitig
   verfügbar. W2 ist am 2026-09-25 in **#632** und **#633** geschnitten.
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
