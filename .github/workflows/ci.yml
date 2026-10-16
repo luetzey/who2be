@@ -366,6 +366,15 @@ jobs:
         run: |
           docker pull caddy:2.8-alpine
           CADDY_IMAGE=caddy:2.8-alpine bash deploy/hetzner/tests/test_headers_ci.sh
+      - name: fail2ban-Filter (Rate-Limit an der Kante, #540)
+        # Filter und Jail-Vorlage unter deploy/hetzner/fail2ban/ laufen nur auf
+        # dem Host, nie in einem Container — ohne diesen Step wuerde sie keine
+        # Pruefung je ausfuehren. Echtes `fail2ban-regex` (Upstream 1.1.0,
+        # sha256-gepinnt, vom Test selbst geladen) gegen von Caddy 2.11
+        # geschriebene Beispielzeilen: Treffer, Nicht-Treffer (mcp., Health,
+        # 404/5xx), Header-Injektion und DOCKER-USER als Sperrkette. Braucht
+        # keinen Docker-Daemon; haengt hier, weil das der Deploy-Job ist.
+        run: bash deploy/hetzner/tests/test_fail2ban_filter.sh
       - name: Build runtime-cloud image (ADR-0029, build-only)
         # Cloud-Profil-Gegenprobe (LIC-4): das Docker-Target `runtime-cloud`
         # (inkl. who2be-billing) wurde in CI sonst nie gebaut — ein Bruch

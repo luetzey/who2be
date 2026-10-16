@@ -12,6 +12,7 @@ Aktive Sektionen:
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
 - [Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits) — Zugriffe nachvollziehen, `mem_limit` pruefen und anheben (W8/S1-S3)
+- [Rate-Limit an der Kante (fail2ban)](#rate-limit-an-der-kante-fail2ban) — Flut-IPs per Access-Log vor der App sperren: einrichten, pruefen, **entsperren**, abschalten (#540)
 - [Caddy-Version anheben](#caddy-version-anheben-reverse-proxy-update) — Reverse-Proxy-Update: Header-Gegenprobe VOR dem Deploy, Betroffenheitspruefung, Rueckweg (W8/S6)
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
@@ -800,6 +801,180 @@ Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
 Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
 anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
 OOM im Normalbetrieb waere schlechter als gar kein Limit.
+
+---
+
+## Rate-Limit an der Kante (fail2ban)
+
+**Wozu:** die App drosselt selbst (`slowapi`, `McpLimitService`) — aber erst,
+nachdem eine Anfrage geparst, eine DB-Session gezogen und das Entitlement
+aufgeloest ist. fail2ban liest Caddys Access-Log und sperrt eine IP, die sich
+an Anmelde- und Token-Routen oder an der API mit abgewiesenen Anfragen haeuft,
+per Firewall-Regel. Danach erreicht ihre Flut keinen Container mehr. Das Limit
+in der App bleibt unveraendert; das hier ist die Stufe davor (#540,
+Owner-Entscheidung Option A: kein eigenes Caddy-Image).
+
+**Was im Repo liegt** (Vorlagen, auf dem Host von Hand eingerichtet — `deploy.sh`
+fasst fail2ban nicht an):
+
+| Datei | Inhalt |
+| --- | --- |
+| `deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf` | Filter auf das JSON-Access-Log, zwei Modi `auth`/`edge` |
+| `deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf` | zwei Jails, Schwellen, Sperrkette `DOCKER-USER`, `logpath` |
+| `deploy/hetzner/tests/test_fail2ban_filter.sh` | Filtertest mit echten Caddy-Zeilen (laeuft in CI, `compose-smoke`) |
+
+| Jail | zaehlt | Schwelle | Sperre |
+| --- | --- | --- | --- |
+| `who2be-caddy-auth` | `supabase.<DOMAIN>/auth/v1/{token,signup,recover,otp,magiclink,verify,resend}` mit 400/401/403/422/429, `api.<DOMAIN>/oauth/{token,register,authorize}` mit 400/401/403/429 | 10 in 10 min | 1 h |
+| `who2be-caddy-edge` | jede Route auf `api.<DOMAIN>` mit 401/403/429 | 120 in 2 min | 15 min |
+
+**Nie gezaehlt:** `mcp.<DOMAIN>` (ein MCP-Client ist eine IP mit hoher
+legitimer Rate, seine Limits setzt die App), `/v1/health`, `app.<DOMAIN>`,
+404 und 5xx. Begruendung je Regel steht im Kopf des Filters.
+
+### Einrichten
+
+Einmalig, als root auf dem Host. Voraussetzung: der Stack laeuft und Caddy hat
+mindestens eine Anfrage protokolliert (vorher existiert `access.log` nicht).
+
+```bash
+# 1) Paket (Debian/Ubuntu). Bringt iptables-Aktionen und den Dienst mit.
+apt-get install -y fail2ban
+
+# 2) Wo liegt das Log auf dem Host? Caddy schreibt in das benannte Volume
+#    `caddy-logs`; der Name traegt den Compose-Projektnamen als Praefix.
+docker volume ls --format '{{.Name}}' | grep caddy-logs
+docker volume inspect -f '{{ .Mountpoint }}' who2be_caddy-logs
+#    → z. B. /var/lib/docker/volumes/who2be_caddy-logs/_data
+
+# 3) Vorlagen kopieren (aus dem Checkout unter /opt/who2be)
+install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf \
+  /etc/fail2ban/filter.d/who2be-caddy.conf
+install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf \
+  /etc/fail2ban/jail.d/who2be-caddy.conf
+
+# 4) logpath anpassen, falls Schritt 2 einen anderen Pfad geliefert hat
+$EDITOR /etc/fail2ban/jail.d/who2be-caddy.conf
+
+# 5) Filter gegen das ECHTE Log pruefen, bevor eine Jail scharf geht.
+#    Erwartung: einige "matched", keine Fehler, "Date template hits" > 0.
+fail2ban-regex /var/lib/docker/volumes/who2be_caddy-logs/_data/access.log \
+  '/etc/fail2ban/filter.d/who2be-caddy.conf[mode=auth]'
+fail2ban-regex /var/lib/docker/volumes/who2be_caddy-logs/_data/access.log \
+  '/etc/fail2ban/filter.d/who2be-caddy.conf[mode=edge]'
+
+# 6) Konfiguration testen, dann laden
+fail2ban-client -t
+systemctl enable --now fail2ban
+fail2ban-client reload
+```
+
+**Warum `DOCKER-USER` und nicht die Default-Kette:** Caddys Ports 80/443 sind
+von Docker veroeffentlicht; Docker leitet diese Pakete um, bevor `INPUT`
+greift — dieselbe Mechanik wie bei `ufw` in
+[§4 Firewall](#4--firewall-ports-80443-ssh-22). Eine Sperre in `INPUT` saehe in
+`fail2ban-client status` korrekt aus und wirkte nicht. `DOCKER-USER` ist die
+Kette, die Docker vor seinen eigenen Regeln auswertet.
+
+**Wenn der Pfad aus Schritt 2 nicht existiert:** Caddy hat noch keine Anfrage
+geschrieben, oder das Volume heisst anders (anderer Compose-Projektname). Mit
+fehlender Datei startet die Jail nicht (`Have not found any log file`).
+
+**Rotation:** der naechtliche Cron (`rotate-access-log.sh`,
+[§Access-Logs](#access-logs-lesen)) benennt die Datei um und startet Caddy neu;
+fail2ban (`backend = polling`) bemerkt den neuen Inode und liest die neue Datei
+von vorn. Die rotierten `.gz`-Generationen liest fail2ban bewusst nicht.
+
+### Pruefen
+
+```bash
+# Laufen beide Jails, und auf welche Datei schauen sie?
+fail2ban-client status
+fail2ban-client status who2be-caddy-auth
+fail2ban-client status who2be-caddy-edge
+#   → "File list:" zeigt den Log-Pfad, "Currently banned"/"Banned IP list" die Sperren
+
+# Sitzt die Sperrkette dort, wo Docker-Verkehr ankommt?
+iptables -S DOCKER-USER | grep f2b-who2be
+iptables -S f2b-who2be-caddy-auth
+
+# Was hat fail2ban zuletzt getan?
+grep -E 'who2be-caddy-(auth|edge)' /var/log/fail2ban.log | tail -n 20
+
+# Protokolliert Caddy echte Client-Adressen? Anfragen gesamt vs. Anfragen mit
+# remote_ip aus 172.16.0.0/12 (Docker-Netze, stehen in ignoreip).
+LOG=/var/lib/docker/volumes/who2be_caddy-logs/_data/access.log
+grep -c '"remote_ip":' "$LOG"
+grep -cE '"remote_ip":"172\.(1[6-9]|2[0-9]|3[01])\.' "$LOG"
+#   → Erwartung: zweite Zahl 0 (eigene Aufrufe vom Host selbst ausgenommen)
+```
+
+Ist die zweite Zahl bei Anfragen von aussen nicht 0, greift die Jail fuer
+diese Anfragen nicht. Das ist ein Befund fuer den Owner und wird ausserhalb des
+Repos geklaert, nicht durch Aenderung von `ignoreip`.
+
+Probe ohne Risiko fuer echte Nutzer: von einem Rechner **ausserhalb** der Box
+(eigene, wechselbare IP) elf fehlerhafte Anmeldungen schicken, danach muss die
+IP in `Banned IP list` stehen und `curl https://api.<DOMAIN>/v1/health` aus
+diesem Netz in den Timeout laufen. Im Anschluss entsperren (unten).
+
+```bash
+for i in $(seq 1 11); do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+    "https://supabase.<DOMAIN>/auth/v1/token?grant_type=password" \
+    -H 'Content-Type: application/json' -d '{"email":"probe@example.org","password":"falsch"}'
+done
+```
+
+### Entsperren
+
+Eine Fehlsperre ist fuer den Betroffenen ein Ausfall — deshalb zuerst:
+
+```bash
+# Ist die IP gesperrt, und in welcher Jail?
+fail2ban-client banned <IP>
+
+# Gezielt aus einer Jail nehmen
+fail2ban-client set who2be-caddy-auth unbanip <IP>
+fail2ban-client set who2be-caddy-edge unbanip <IP>
+
+# Aus allen Jails auf einmal
+fail2ban-client unban <IP>
+```
+
+Gehoert die IP dauerhaft zu einem legitimen Client (Buero-NAT, CI eines
+Kunden), traegt man sie in der Host-Kopie unter `ignoreip` ein
+(Leerzeichen-getrennt) und laedt neu: `fail2ban-client reload`. Sperrt die
+Jail wiederholt dieselbe legitime Quelle, ist die Schwelle zu knapp — Werte in
+`/etc/fail2ban/jail.d/who2be-caddy.conf` anheben, `fail2ban-client reload`,
+und die Aenderung in die Vorlage im Repo zurueckspielen, damit Host und Repo
+nicht auseinanderlaufen.
+
+### Abschalten
+
+```bash
+# Eine Jail sofort aus (gesperrte IPs werden dabei freigegeben)
+fail2ban-client stop who2be-caddy-edge
+
+# Dauerhaft: in der Host-Kopie `enabled = false` setzen, dann
+fail2ban-client reload
+
+# Komplett: beide Dateien entfernen und neu laden — die Kette
+# f2b-who2be-* verschwindet dabei aus DOCKER-USER
+rm /etc/fail2ban/jail.d/who2be-caddy.conf /etc/fail2ban/filter.d/who2be-caddy.conf
+fail2ban-client reload
+iptables -S DOCKER-USER | grep f2b-who2be || echo "keine who2be-Sperrkette mehr"
+```
+
+Die App laeuft ohne fail2ban unveraendert weiter; es entfaellt nur die Stufe
+vor ihr.
+
+**Wer den Filter aendert**, laesst zuerst
+`bash deploy/hetzner/tests/test_fail2ban_filter.sh` laufen — er prueft
+Treffer, Nicht-Treffer (`mcp.`, Health, 404/5xx), Header-Injektion und die
+Sperrkette. Wer das **Log-Format** in der Caddyfile aendert, bricht den Filter
+still; derselbe Test faengt das nur, wenn die Beispielzeilen neu aus Caddy
+erzeugt werden.
 
 ---
 
