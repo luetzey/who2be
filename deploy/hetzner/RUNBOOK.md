@@ -820,7 +820,7 @@ fasst fail2ban nicht an):
 | Datei | Inhalt |
 | --- | --- |
 | `deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf` | Filter auf das JSON-Access-Log, zwei Modi `auth`/`edge` |
-| `deploy/hetzner/fail2ban/jail.d/who2be-caddy.local` | zwei Jails, Schwellen, Sperrkette `DOCKER-USER`, `logpath` |
+| `deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf` | zwei Jails, Schwellen, Sperrkette `DOCKER-USER`, `logpath` |
 | `deploy/hetzner/tests/test_fail2ban_filter.sh` | Filtertest mit echten Caddy-Zeilen (laeuft in CI, `compose-smoke`) |
 
 | Jail | zaehlt | Schwelle | Sperre |
@@ -850,11 +850,11 @@ docker volume inspect -f '{{ .Mountpoint }}' who2be_caddy-logs
 # 3) Vorlagen kopieren (aus dem Checkout unter /opt/who2be)
 install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf \
   /etc/fail2ban/filter.d/who2be-caddy.conf
-install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/jail.d/who2be-caddy.local \
-  /etc/fail2ban/jail.d/who2be-caddy.local
+install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf \
+  /etc/fail2ban/jail.d/who2be-caddy.conf
 
 # 4) logpath anpassen, falls Schritt 2 einen anderen Pfad geliefert hat
-$EDITOR /etc/fail2ban/jail.d/who2be-caddy.local
+$EDITOR /etc/fail2ban/jail.d/who2be-caddy.conf
 
 # 5) Filter gegen das ECHTE Log pruefen, bevor eine Jail scharf geht.
 #    Erwartung: einige "matched", keine Fehler, "Date template hits" > 0.
@@ -935,7 +935,7 @@ Gehoert die IP dauerhaft zu einem legitimen Client (Buero-NAT, CI eines
 Kunden), traegt man sie in der Host-Kopie unter `ignoreip` ein
 (Leerzeichen-getrennt) und laedt neu: `fail2ban-client reload`. Sperrt die
 Jail wiederholt dieselbe legitime Quelle, ist die Schwelle zu knapp — Werte in
-`/etc/fail2ban/jail.d/who2be-caddy.local` anheben, `fail2ban-client reload`,
+`/etc/fail2ban/jail.d/who2be-caddy.conf` anheben, `fail2ban-client reload`,
 und die Aenderung in die Vorlage im Repo zurueckspielen, damit Host und Repo
 nicht auseinanderlaufen.
 
@@ -950,7 +950,7 @@ fail2ban-client reload
 
 # Komplett: beide Dateien entfernen und neu laden — die Kette
 # f2b-who2be-* verschwindet dabei aus DOCKER-USER
-rm /etc/fail2ban/jail.d/who2be-caddy.local /etc/fail2ban/filter.d/who2be-caddy.conf
+rm /etc/fail2ban/jail.d/who2be-caddy.conf /etc/fail2ban/filter.d/who2be-caddy.conf
 fail2ban-client reload
 iptables -S DOCKER-USER | grep f2b-who2be || echo "keine who2be-Sperrkette mehr"
 ```

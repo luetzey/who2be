@@ -32,7 +32,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 F2B_DIR="${SCRIPT_DIR}/../fail2ban"
 FILTER="${F2B_DIR}/filter.d/who2be-caddy.conf"
-JAIL="${F2B_DIR}/jail.d/who2be-caddy.local"
+JAIL="${F2B_DIR}/jail.d/who2be-caddy.conf"
 
 F2B_VERSION="1.1.0"
 F2B_SHA256="474fcc25afdaf929c74329d1e4d24420caabeea1ef2e041a267ce19269570bae"
