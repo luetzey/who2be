@@ -501,7 +501,12 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # v17: Schreiber-Regel „Vollstand vor update_*" in den Agent-Bau-Konventionen
 # (ADR-0056 Abschnitt 5, Schicht 3) — DE + EN. Muss vor dem Lese-Default
 # `format="text"` verteilt sein.
-BUILDER_CONTENT_VERSION = 17
+# v18: Lernschleife Phase E4b (ADR-0053 A.4, Weiche W-E3 a: ein Bump) — zwei
+# neue Builder-Playbooks „Fall aus Muster & Fall-Triage" (aus 4f6916c4 v3) und
+# „Feedback-Gespräch (Review) moderieren" (aus 212aca0d v1), DE + EN. Der
+# Insert-missing-Zweig (4) legt sie in Bestands-Workspaces an und verlinkt sie
+# additiv mit der Builder-Persona; bestehende Links bleiben unberuehrt.
+BUILDER_CONTENT_VERSION = 18
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

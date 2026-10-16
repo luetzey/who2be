@@ -54,6 +54,8 @@ _BUILDER_PLAYBOOK_NAMES = [
     "Konsistenz- & Drift-Check",
     "Library-Pflege & Feedback-Lauf",
     "External Tool anlegen & pflegen",
+    "Fall aus Muster & Fall-Triage",
+    "Feedback-Gespräch (Review) moderieren",
 ]
 
 # EN-Pack-Namen (Cross-Check fuer den EN-Workspace-Seed).
@@ -64,6 +66,8 @@ _BUILDER_PLAYBOOK_NAMES_EN = [
     "Consistency & Drift Check",
     "Library Maintenance & Feedback Run",
     "Create & Maintain External Tool",
+    "Case from Pattern & Case Triage",
+    "Moderate Feedback Conversation (Review)",
 ]
 
 
@@ -248,19 +252,19 @@ def test_builder_agent_seeded_complete() -> None:
         assert defaults[0]["name"] == "Architekt"
         assert defaults[0]["trigger"] is None, "Der Default-Modus traegt keinen Trigger."
 
-        assert data["playbooks_active"] == 6, "Es fehlen aktive Builder-Playbooks."
-        assert data["links"] == 6, "Persona<->Playbook-Links unvollstaendig."
+        assert data["playbooks_active"] == 8, "Es fehlen aktive Builder-Playbooks."
+        assert data["links"] == 8, "Persona<->Playbook-Links unvollstaendig."
         assert data["template_status"] == "active"
 
         # Managed-Resource „Agent-Bau-Konventionen": v1 active, verwaltet und
-        # von allen sechs Builder-Playbooks als Volldokument referenziert.
+        # von allen acht Builder-Playbooks als Volldokument referenziert.
         assert data["resource_present"] is True, "Managed-Resource wurde nicht geseedet."
         assert data["resource_managed"] is True
         assert data["resource_stamp"] == BUILDER_CONTENT_VERSION
         assert data["resource_v1_status"] == "active"
         assert data["resource_locale"] == "de"
-        assert data["resource_link_scopes"] == ["resource"] * 6, data["resource_link_scopes"]
-        assert data["resource_link_block_ids"] == [None] * 6
+        assert data["resource_link_scopes"] == ["resource"] * 8, data["resource_link_scopes"]
+        assert data["resource_link_block_ids"] == [None] * 8
 
         assert data["agent_present"] is True, "Agent 'Builder' wurde nicht geseedet."
         assert data["agent_status"] == "enabled"
@@ -472,11 +476,11 @@ def test_builder_seed_idempotent() -> None:
     try:
         counts = asyncio.run(_counts(ws))
         assert counts["personas"] == 1, "Persona dupliziert."
-        assert counts["playbooks"] == 6, "Playbooks dupliziert."
-        assert counts["links"] == 6, "Links dupliziert."
+        assert counts["playbooks"] == 8, "Playbooks dupliziert."
+        assert counts["links"] == 8, "Links dupliziert."
         assert counts["agents"] == 1, "Agent dupliziert."
         assert counts["resources"] == 1, "Managed-Resource dupliziert."
-        assert counts["resource_links"] == 6, "playbook_resource_links dupliziert."
+        assert counts["resource_links"] == 8, "playbook_resource_links dupliziert."
     finally:
         cleanup_workspaces([owner])
 

@@ -251,6 +251,45 @@ _DE_PLAYBOOKS: Final[tuple[PlaybookDef, ...]] = (
         ),
         sidecar="builder_playbook_external_tool_body.json",
     ),
+    # Lernschleife (ADR-0053, Phase E4b): uebernommen aus den vom Owner
+    # aktivierten Workspace-Fassungen 4f6916c4 v3 bzw. 212aca0d v1. Namen,
+    # Trigger, Tags und Beschreibung stehen dort woertlich so.
+    PlaybookDef(
+        key="cases",
+        name="Fall aus Muster & Fall-Triage",
+        type="workflow",
+        triggers=(
+            "aus dem Lernvorschlag einen Fall, Fall mit Lage Getan und Erwartet, "
+            "offenen Fälle zusammenfassen, offene Fälle vorbereiten, Fälle triagieren, "
+            "Fälle zuordnen, Muster der Lernschleife"
+        ),
+        tags=("lernschleife", "faelle", "muster", "triage", "agent-building"),
+        description=(
+            "Aus einem Muster der Lernschleife einen Fall machen (Lernvorschlag lesen "
+            "und umwandeln) bzw. Fälle zusammenfassen und eine Änderung vorschlagen "
+            "(Fall-Muster) und offene Fälle zuordnen und einordnen (triaged). "
+            "Entscheidet nie, schließt keine Fälle; Maßnahmen laufen über das "
+            "Feedback-Gespräch."
+        ),
+        sidecar="builder_playbook_cases_body.json",
+    ),
+    PlaybookDef(
+        key="feedback_session",
+        name="Feedback-Gespräch (Review) moderieren",
+        type="workflow",
+        triggers=(
+            "Review zu Agent, Review-Ergebnis korrigieren, Feedback-Gespräch, "
+            "Lage mit get_dossier, Nachkontrolle vorbereiten"
+        ),
+        tags=("lernschleife", "faelle", "feedback-gespraech", "agent-building"),
+        description=(
+            "Ein Feedback-Gespräch über einen Agenten moderieren (Web-UI: Review): "
+            "Dossier, Fälle, Schilderung ohne Selbstnote, Dissens, Prüffälle, "
+            "Protokoll in einem Aufruf, Entwurf verknüpfen, Nachschau-Kennzahlen. "
+            "Entscheidet nie, stuft nicht ein, schließt keine Fälle."
+        ),
+        sidecar="builder_playbook_feedback_session_body.json",
+    ),
 )
 
 _DE_RESOURCE: Final[ResourceDef] = ResourceDef(
@@ -407,6 +446,41 @@ _EN_PLAYBOOKS: Final[tuple[PlaybookDef, ...]] = (
             "grants to domain agents."
         ),
         sidecar="builder_playbook_external_tool_body.json",
+    ),
+    PlaybookDef(
+        key="cases",
+        name="Case from Pattern & Case Triage",
+        type="workflow",
+        triggers=(
+            "case from learning suggestion, case with situation behaviour and expectation, "
+            "summarise the open cases, prepare open cases, triage cases, assign cases, "
+            "learning loop pattern"
+        ),
+        tags=("learning-loop", "cases", "patterns", "triage", "agent-building"),
+        description=(
+            "Turn a pattern of the learning loop into a case (read and convert a "
+            "learning suggestion), or summarize cases and propose a change (case "
+            "pattern), and assign and classify open cases (triaged). Never decides, "
+            "closes no cases; measures run through the feedback conversation."
+        ),
+        sidecar="builder_playbook_cases_body.json",
+    ),
+    PlaybookDef(
+        key="feedback_session",
+        name="Moderate Feedback Conversation (Review)",
+        type="workflow",
+        triggers=(
+            "review about agent, correct review record, feedback conversation, "
+            "situation with get_dossier, prepare follow-up check"
+        ),
+        tags=("learning-loop", "cases", "feedback-conversation", "agent-building"),
+        description=(
+            "Moderate a feedback conversation about an agent (web UI: review): "
+            "dossier, cases, account without self-rating, dissent, test cases, "
+            "record in one call, link the draft, follow-up metrics. Never decides, "
+            "does not rate, closes no cases."
+        ),
+        sidecar="builder_playbook_feedback_session_body.json",
     ),
 )
 

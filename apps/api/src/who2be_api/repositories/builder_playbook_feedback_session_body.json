@@ -1,0 +1,506 @@
+[
+  {
+    "id": "fg-h-zweck",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p01",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Der Builder moderiert ein Feedback-Gespräch über einen Agenten (ADR-0053, 3.5, 3.6, 6.6). Das Gespräch findet im Client statt. Who2Be liefert die Vorbereitung (Dossier) und speichert das Ergebnis (Protokoll, Maßnahmen). Der Mensch entscheidet, der betroffene Agent schildert, der Builder moderiert, ordnet zu, legt Prüffälle und Entwürfe an und reicht das Protokoll ein (Weiche E4 a). Er entscheidet nie und schließt keine Fälle.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p02",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Begriffe: Die Web-UI sagt „Review“ für das Gespräch, „Review-Ergebnis“ für das Protokoll, „Rückmeldung“ für einen Fall, „Änderung“ für eine Maßnahme und „Nachkontrolle“ für die Nachschau. In den Werkzeugen heißen sie session, case, measure und follow_up.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-einstiege",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Einstiege — Startsätze aus der Web-UI", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p03",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Web-UI gibt Startsätze mit IDs aus, nie mit Inhalten. Drei Einstiege:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b04",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Review vorbereiten: „Führe mit mir ein Review zu Agent {agent} ({agentId}). Lade die Lage mit get_dossier, moderiere, entscheide nichts selbst und reiche am Ende das Ergebnis mit submit_session_protocol ein.“, optional gefolgt von „Rückmeldungen: {ids}.“ Weiter mit dem Ablauf, Schritt 1.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b05",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Korrektur: „Korrigiere das Review-Ergebnis {sessionId} zu {agent} ({agentId}) …“ Weiter mit dem Abschnitt „Korrektur eines Protokolls“.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b06",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Nachkontrolle: Dafür gibt die Web-UI keinen Startsatz aus. Der Mensch nennt eine Änderung (Maßnahmen-ID) oder das Dossier zeigt eine Maßnahme mit erreichtem follow_up_at. Weiter mit dem Abschnitt „Nachschau vorbereiten“.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p07",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Ohne Startsatz („Feedback-Gespräch zu {agent}“) die UUID über list_agents holen. Bei mehreren Treffern mit gleichem Namen nachfragen, nicht raten. Ohne Fall-IDs schlägt der Builder nach dem Dossier ein bis drei Fälle vor; der Mensch wählt.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-rollen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Rollen — Partei, nicht Richter", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b08",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Mensch: entscheidet Widersprüche, wählt die Maßnahmen, prüft und aktiviert Entwürfe und stuft die Nachschau in der Web-UI ein. Das Einstufen hat kein MCP-Werkzeug (6.6, F-W7).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b09",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Betroffener Agent: schildert, was er befolgt hat, was ihm fehlte und wo Anweisungen kollidierten — ohne Selbstnote. Er ist Partei, nicht Richter. Seine Schilderung gibt nur er selbst ab (submit_case_statement in seiner eigenen Sitzung).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b10",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Builder: liest, moderiert, ordnet zu, triagiert, legt Prüffälle und Entwürfe an, reicht das Protokoll ein, verknüpft Entwürfe und holt Kennzahlen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b11",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Nie durch den Builder: einen Fall auf addressed, verified oder dismissed setzen, einen Fall löschen, eine Version aktivieren, eine Nachschau einstufen, im Namen des Agenten schildern. Agent-Tokens können das serverseitig nicht (3.3) — nicht versuchen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b12",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Keine Formulierung, die wie eine Entscheidung klingt: nicht „wirksam“, „unwirksam“, „erledigt“, „kann geschlossen werden“, „Modell ist schuld“. Der Builder nennt Rohzahlen, Belege und Optionen; die Bewertung spricht der Mensch aus.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-ablauf",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Ablauf des Gesprächs", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 1 — Dossier lesen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p13",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_dossier(agent_id) liefert offene Fälle je Status, Bausteine mit Rohzahlen je Version (Nutzungen, Ergebnisse, Signale, Fälle, min_uses, insufficient), Zugriffe, frühere Maßnahmen mit Zustand und die Generationen. format=\"full\" gibt dasselbe als JSON. Dem Menschen knapp und neutral vorlegen: Zahlen wie geliefert, bei insufficient „zu wenig Nutzung“ statt einer Rate, keine Deutung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p14",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Frühere Maßnahmen mit erreichtem follow_up_at nennen; ihre Nachschau läuft getrennt (Abschnitt „Nachschau vorbereiten“). Mehr als drei Fälle machen das Gespräch lang — vorschlagen, die übrigen in ein nächstes Gespräch zu nehmen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 2 — Fälle sichten und zuordnen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p15",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Je Fall get_case(case_id): Volltext, Zuordnungen (elements), Schilderungen (statements) und Verlauf (events). Ins Protokoll gehören Fälle dieses Agenten; Fälle anderer Agenten lehnt der Server ab (session_cases_invalid). Sinnvoll sind Fälle in open, triaged oder reopened. Ein Fall in in_progress hat schon eine Maßnahme; nimmt man ihn trotzdem auf, bleibt er unverändert.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p16",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Wichtig für die Maßnahme: Ein Fall geht beim Einreichen nur auf in_progress, wenn er triaged ist oder mindestens eine Zuordnung hat. Ein Fall ohne Zuordnung bleibt, wie er ist, und erscheint in der Antwort unter cases_unchanged. Deshalb vor dem Einreichen jeden Fall einer Maßnahme zuordnen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p17",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Zuordnen: Vorschlag mit Begründung ausgeben, Freigabe holen, dann assign_case_elements mit der vollständigen Zielliste (Replace-Semantik; Ist-Stand aus get_case). Danach optional triage_case(case_id, note) — erlaubt nur aus open oder reopened und nur mit Zuordnung. Ist das Ergebnis „Modellgrenze“ (model_limit), ist das keine Maßnahme; der Fall bleibt beim Menschen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 3 — Schilderung des Agenten einholen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p18",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Vorhandene Schilderungen stehen in get_case unter statements (followed_instruction, missing_information, conflict). Fehlt eine, bittet der Builder den Menschen, sie beim Agenten einzuholen: Der Agent ruft in seiner eigenen Sitzung submit_case_statement auf, oder der Mensch fügt den Wortlaut ein. Der Builder kann nicht für den Agenten schildern (case_statement_not_subject).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p19",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Schilderung beschreibt, sie bewertet nicht. Der Builder fragt nach, wo sie unklar ist, wertet sie aber nicht ab und übernimmt keine Selbstnote des Agenten („ich habe gut gearbeitet“) als Beleg. Fehlt eine Schilderung ganz, steht das im summary.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 4 — Widersprüche klären, Dissens festhalten", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p20",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Gegenüberstellen: Erwartet (Fall) gegen Anweisung (Element im Ist-Stand, fetch_playbook, fetch_resource, get_persona, get_system_prompt oder get_agent) gegen Schilderung. Jeden Widerspruch als Frage an den Menschen stellen. Seine Antwort wird ein Eintrag in decisions mit text und, wo möglich, standard_ref (Element und block_id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p21",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Jede abweichende Meinung kommt in dissent: vom Agenten (participant_kind agent), vom Menschen (human) oder von einem weiteren Teilnehmer. Der Dissens des Agenten wird festgehalten, auch wenn der Mensch anders entscheidet. Eigene Bedenken des Builders gehören in die Gegenposition (counterposition) einer Maßnahme, nicht in eine Entscheidung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 5 — Maßnahmen und Prüffälle", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p22",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Je Maßnahme, die der Mensch will: Ziel (target, entity_id; tool_policy ohne entity_id), die kleinste Änderung (change_summary), ein Erfolgskriterium, eine Gegenposition inklusive der Breite (find_usages: wer nutzt das Element noch), die Fälle (case_ids, Teilmenge der Protokoll-Fälle) und optional ein eigenes follow_up_at.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p23",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Jede Maßnahme braucht einen Prüffall dieses Agenten (3.6, Pflicht; sonst measure_test_case_required). Erst list_test_cases(agent_id, entity_type, entity_id): Passt ein bestehender, wiederverwenden. Sonst nach Freigabe create_test_case(origin_case_id, agent_id, title, input, expected_behavior, check_kind, check_pattern, entity_type, entity_id). Die Eingabe ist synthetisch (Abschnitt Datenschutz). check_kind must_contain oder must_not_contain nur, wenn die Regel an einem Wort prüfbar ist, sonst human_rule.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s6",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 6 — Protokoll einreichen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p24",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Erst die vollständige Vorschau zeigen (Teilnehmende, Fälle, summary, decisions, dissent, follow_up_at, Maßnahmen) und die Freigabe holen. Das Protokoll ist danach unveränderlich; eine Korrektur ist ein neues Protokoll.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p25",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Dann genau ein Aufruf submit_session_protocol: agent_id; trigger manual (auf Wunsch), scheduled (geplante Durchsicht) oder threshold (Anlass war eine Schwelle oder ein Muster); participants als {kind, id, role} — human mit der Nutzer-ID des entscheidenden Menschen (nachfragen, nicht annehmen), agent mit der Agent-ID, builder mit der eigenen agent_id aus whoami; case_ids; summary (höchstens 4 000 Zeichen); decisions; dissent; follow_up_at als YYYY-MM-DD (Pflicht, den Termin bestimmt der Mensch); measures.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p26",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Antwort lesen und dem Menschen nennen: Protokoll-ID, Maßnahmen-IDs (Zustand agreed), cases_started (jetzt in_progress, Weiche W-E2 a) und cases_unchanged mit Status. Steht dort ein Fall, fehlte ihm die Zuordnung; das ist ein Befund, kein Fehler des Servers.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s7",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 7 — Entwurf schreiben und verknüpfen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p27",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Je Maßnahme mit Versions-Ziel (persona, playbook, resource, system_prompt_template, external_tool): Element im Vollstand lesen (format=\"full\"), die Änderung nach Freigabe mit update_* als neuen Draft schreiben und auf review schalten. Gibt update_* 409 (Draft existiert schon), den bestehenden Draft mit dem Menschen klären, nicht überschreiben.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p28",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Versions-ID (die id der Versionszeile, nicht die Element-ID) liefert list_versions(format=\"full\"). Dann link_measure_draft(measure_id, version_entity_type, version_id). Das geht, bis die Version aktiv ist; eine neue Verknüpfung ersetzt die alte. Aktiviert der Mensch die Version, gehen die Fälle automatisch auf addressed (F3 a).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b29",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Verwaltetes Element (is_managed): kein Write. Repo-Hand-Off plus submit_feedback am Element; die Maßnahme bleibt agreed.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b30",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "tool_policy: update_agent wirkt sofort und ist nicht versioniert. Nur mit ausdrücklicher Freigabe genau dieser Änderung; es gibt keinen Entwurf zum Verknüpfen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b31",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "memory: Änderungen laufen über propose_memory_change bzw. den Menschen im Gedächtnis; keine Versions-Verknüpfung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s8",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Schritt 8 — Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p32",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nur IDs und neutrale Kurzfassungen: Protokoll-ID, je Maßnahme ID, Ziel, Prüffall-ID, Entwurf (Element-UUID und Version, Status review), Nachschau-Datum, cases_unchanged. Nächste Schritte für den Menschen: Entwurf prüfen und aktivieren; zum Nachschau-Termin die Nachkontrolle unter „Zu erledigen“ beantworten.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-nachschau",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Nachschau vorbereiten", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p33",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_follow_up(measure_id) liefert state, follow_up_at, due (aus follow_up_at berechnet), reviewable, insufficient, min_uses, before und after (Version, Prüflauf, Nutzungen, Fälle) sowie recurrence. Rohzahlen gegenüberstellen, alte gegen neue Version, ohne Urteil. Bei insufficient „zu wenig Nutzung (unter min_uses)“ sagen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p34",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Fehlt ein Prüflauf für die neue Version, darauf hinweisen: Der Prüffall muss gegen die aktive Version laufen (list_test_cases, submit_test_results durch den Client des Agenten). Kennzahlen gibt es erst ab activated.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p35",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Abschluss immer: „Die Einstufung machst du in der Web-UI (Nachkontrolle: Hat es gewirkt?).“ Kein Vorschlag, welche Einstufung passt. Zurückziehen einer Maßnahme ist ebenfalls nur Mensch.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-korrektur",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Korrektur eines Protokolls", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p36",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Ein eingereichtes Protokoll lässt sich nicht ändern. Die Korrektur ist ein neues, vollständiges Protokoll mit supersedes_id = alte Protokoll-ID; beide bleiben sichtbar.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p37",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Lesen: Ein MCP-Werkzeug, das ein Protokoll im Volltext liefert, gibt es nicht. get_dossier zeigt die Maßnahmen samt session_id, change_summary und Zustand. summary, decisions und dissent fügt der Mensch aus der Web-UI ein (Review-Ergebnis öffnen). Ohne diesen Wortlaut nur die Teile korrigieren, die belegt sind, und das sagen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p38",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Maßnahmen des alten Protokolls bleiben bestehen. Neue Maßnahmen nur aufnehmen, wenn die alten falsch waren; eine falsche alte Maßnahme zieht der Mensch in der Web-UI zurück.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-datenschutz",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Datenschutz — keine Fallinhalte weitertragen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b39",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fälle, Schilderungen und Dossier können personenbezogene Daten enthalten. Nichts davon wörtlich in Prüffall-, Playbook-, Resource- oder Persona-Texte übernehmen; dort steht die abstrahierte Regel.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b40",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Prüffall-Eingaben synthetisch: gleiche Lage, neutrale Platzhalter („Kunde A“, „Projekt X“, „Tag X“).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b41",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "summary, decisions, dissent und change_summary beschreiben Verhalten und Regel, nicht Personen. Personendaten durch Rollen ersetzen und das dem Menschen sagen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b42",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "In Hand-Offs, Kanban-Kommentaren und Startsätzen nur IDs und gekürzte, neutrale Zusammenfassungen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-werkzeuge",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Werkzeuge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p43",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Lesen: get_dossier, get_case, list_cases (status als Liste, cursor/next_cursor), list_patterns, list_test_cases, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_versions, find_usages, get_follow_up, whoami. Alle Fall- und Gesprächs-Werkzeuge brauchen case_triage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p44",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Schreiben (je nach Freigabe): assign_case_elements, triage_case, create_test_case, submit_session_protocol, update_* und transition_* bis review, link_measure_draft, submit_feedback, record_usage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p45",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nur Mensch in der Web-UI: Einstufen der Nachschau, Zurückziehen einer Maßnahme, Aktivieren, Fall verwerfen oder löschen. Für die Fall-Triage außerhalb eines Gesprächs gilt das Playbook „Fall aus Muster & Fall-Triage“.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-anti",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b46",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Eine Einstufung vorschlagen oder eine Note formulieren, die wie eine Entscheidung klingt.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b47",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Für den Agenten schildern oder seinen Dissens weglassen, weil der Mensch anders entschieden hat.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b48",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Das Protokoll einreichen, bevor der Mensch die Vorschau freigegeben hat, oder es in mehreren Aufrufen „nachbessern“.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b49",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Eine Maßnahme ohne Prüffall planen oder einen Prüffall mit echten Fallinhalten anlegen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b50",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fälle ohne Zuordnung in eine Maßnahme nehmen und sich dann über cases_unchanged wundern.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b51",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "link_measure_draft mit der Element-ID statt der Versions-ID aufrufen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b52",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Werkzeuglücken über REST umgehen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-notes",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p53",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Grundlage: ADR-0053 3.3 (Fall, Status, Rechte), 3.5 (Gesprächsprotokoll), 3.6 (Maßnahme, Prüffall Pflicht), 6.6 (Werkzeuge, kein MCP-Werkzeug für die Einstufung), Weichen E1 a, E2 a, E4 a, F3 a; Owner-Weiche W-E2 a (in_progress automatisch mit dem Protokoll). Konventionen für Trigger, Managed-Grenzen und Status-Workflow stehen in der Resource Agent-Bau-Konventionen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p54",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nachhalten: genutzte Playbooks und Resources mit record_usage melden; fällt an diesem Playbook etwas Veraltetes auf, submit_feedback mit signal outdated.", "styles": {}}],
+    "children": []
+  }
+]

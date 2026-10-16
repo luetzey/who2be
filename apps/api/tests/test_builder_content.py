@@ -90,6 +90,8 @@ def test_playbook_keys_match_across_locales_in_order() -> None:
         "consistency",
         "maintenance",
         "external_tool",
+        "cases",
+        "feedback_session",
     ]
 
 
@@ -114,7 +116,7 @@ def test_sidecar_filenames_match_across_locales() -> None:
 
 def _assert_triggers_disjoint(pack: ContentPack) -> None:
     """Trigger-Disjunktheit je Pack (Plan WP7 §5): jede einzelne Trigger-Phrase
-    (kommasepariertes Item) darf in genau einem der sechs Builder-Playbooks
+    (kommasepariertes Item) darf in genau einem der Builder-Playbooks
     vorkommen — analog der DE-Hygiene (`workspace_repository.py` ~Zeile 410:
     keine domaenen-uebergreifend kollidierenden Trigger)."""
     seen: dict[str, str] = {}
@@ -163,6 +165,8 @@ def test_playbook_types_and_tags_present_for_all_playbooks() -> None:
         "builder_playbook_consistency_body.json",
         "builder_playbook_maintenance_body.json",
         "builder_playbook_external_tool_body.json",
+        "builder_playbook_cases_body.json",
+        "builder_playbook_feedback_session_body.json",
         "builder_resource_conventions_body.json",
     ],
 )
@@ -190,6 +194,8 @@ def test_de_sidecars_exist_and_parse(filename: str) -> None:
         "builder_playbook_consistency_body.json",
         "builder_playbook_maintenance_body.json",
         "builder_playbook_external_tool_body.json",
+        "builder_playbook_cases_body.json",
+        "builder_playbook_feedback_session_body.json",
         "builder_resource_conventions_body.json",
     ],
 )

@@ -152,12 +152,17 @@ def test_playbook_tags_only_seed_baseline_for_fresh_workspace(
                 "agent-building",
                 "crud",
                 "external-tool",
+                "faelle",
                 "feedback",
+                "feedback-gespraech",
                 "konsistenz",
+                "lernschleife",
+                "muster",
                 "persona",
                 "pflege",
                 "playbook",
                 "qa",
+                "triage",
             ]
     finally:
         cleanup_workspaces([owner])
