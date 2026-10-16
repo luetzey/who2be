@@ -900,7 +900,18 @@ iptables -S f2b-who2be-caddy-auth
 
 # Was hat fail2ban zuletzt getan?
 grep -E 'who2be-caddy-(auth|edge)' /var/log/fail2ban.log | tail -n 20
+
+# Protokolliert Caddy echte Client-Adressen? Anfragen gesamt vs. Anfragen mit
+# remote_ip aus 172.16.0.0/12 (Docker-Netze, stehen in ignoreip).
+LOG=/var/lib/docker/volumes/who2be_caddy-logs/_data/access.log
+grep -c '"remote_ip":' "$LOG"
+grep -cE '"remote_ip":"172\.(1[6-9]|2[0-9]|3[01])\.' "$LOG"
+#   → Erwartung: zweite Zahl 0 (eigene Aufrufe vom Host selbst ausgenommen)
 ```
+
+Ist die zweite Zahl bei Anfragen von aussen nicht 0, greift die Jail fuer
+diese Anfragen nicht. Das ist ein Befund fuer den Owner und wird ausserhalb des
+Repos geklaert, nicht durch Aenderung von `ignoreip`.
 
 Probe ohne Risiko fuer echte Nutzer: von einem Rechner **ausserhalb** der Box
 (eigene, wechselbare IP) elf fehlerhafte Anmeldungen schicken, danach muss die
