@@ -104,6 +104,14 @@
 #   * Dateirechte bleiben beim Writer-Default 0600 (nur der Caddy-Prozess).
 #     Ein expliziter `mode`-Unterbefehl waere ab 2.11 wirksam (unter 2.8 wurde
 #     er still verworfen), wuerde hier aber nur den Default wiederholen.
+#
+# Zweiter Leser: fail2ban auf dem Host (Rate-Limit an der Kante, #540) liest
+# dieselbe Datei ueber den Volume-Pfad (root darf 0600 lesen) — kein zweites
+# Logging. Der Filter (deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf)
+# haengt am JSON-Format und an der Feldreihenfolge dieses Writers: wer hier
+# `format` aendert (z. B. `console`), schaltet die Sperre still ab. Danach
+# `bash deploy/hetzner/tests/test_fail2ban_filter.sh` und RUNBOOK
+# §Rate-Limit an der Kante.
 (access_log) {
     log {
         output file /var/log/caddy/access.log {
