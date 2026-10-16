@@ -548,7 +548,11 @@ def test_backfill_fills_missing_vectors(monkeypatch: pytest.MonkeyPatch) -> None
                 params={"q": "wie wird der Kunde erreicht", "mode": "semantic"},
                 headers=auth,
             ).json()
-            assert [h["block_id"] for h in found] == ["h-kontakt"]
+            # Nur die Passagen dieser Resource zaehlen: der Backfill vektorisiert
+            # den ganzen Workspace, also auch die geseedeten Builder-Playbooks.
+            # Deren Lernschleifen-Texte (Content-Stand 18, „erreichtem
+            # follow_up_at") landen im Stub auf derselben Kontakt-Achse.
+            assert [h["block_id"] for h in found if h["entity_id"] == rid] == ["h-kontakt"]
     finally:
         cleanup_workspaces([owner])
 

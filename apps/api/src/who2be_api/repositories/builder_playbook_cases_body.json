@@ -1,0 +1,597 @@
+[
+  {
+    "id": "d7-h-zweck",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p02",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Aus einem Muster der Lernschleife (ADR-0053, 3.7) einen Fall formulieren und offene Fälle für den Menschen vorbereiten. Muster sind eine berechnete Sicht: der Server zählt deterministisch (Schwelle n = 3), der Builder deutet nicht nach, er formuliert. Der Builder moderiert, ordnet zu, triagiert, legt Prüffälle und Entwürfe an — er entscheidet nie und schließt keine Fälle. Wird aus den Fällen eine Maßnahme, läuft das über ein Feedback-Gespräch (Playbook „Feedback-Gespräch (Review) moderieren“).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-einstiege",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Einstiege — die beiden Kopierblöcke", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p04",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Muster-Seite im Feedback-Hub (Tab Muster) gibt je Muster einen Kopierblock aus. Er enthält nur IDs, nie Inhalte. Zwei Wortlaute lösen dieses Playbook aus:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b05",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Lernvorschlag-Muster: „Formuliere aus dem Lernvorschlag {id} von {agent} einen Fall mit Lage, Getan und Erwartet.“ — weiter mit Weg A.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b06",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fall-Muster: „Fasse die offenen Fälle {ids} zu {agent} zusammen und schlage eine Änderung an {element} vor.“ — weiter mit Weg B. „Offen“ meint hier jeden noch nicht abgeschlossenen Fall: open, triaged, in_progress und reopened (siehe B1).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b07",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Ohne Kopierblock („bereite die offenen Fälle vor“, „ordne die Fälle zu“, „zeig mir die Muster“) — Muster mit list_patterns lesen bzw. weiter mit Weg C.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p08",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "{agent} ist der Name des Agenten. Die UUID dazu liefert list_agents; bei mehreren Treffern mit gleichem Namen nachfragen, nicht raten. list_patterns(agent_id) liefert die aktuellen Muster mit Schwelle, Zeitfenster und evidence_ids (Belege); damit lassen sich die IDs eines Kopierblocks gegenprüfen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-grenzen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Rolle und Grenzen — Partei, nicht Richter", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b10",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Erlaubt über MCP (case_triage): Muster lesen (list_patterns), Fälle lesen (list_cases, get_case), Lernvorschläge im Wortlaut lesen (get_lesson, nur kind=lesson), Elemente zuordnen (assign_case_elements, inklusive model_limit), Fälle nach triaged setzen (triage_case), einen Lernvorschlag in einen Fall umwandeln (convert_lesson_to_case, nach Freigabe), Prüffälle anlegen (create_test_case) und lesen (list_test_cases), Entwürfe an Elementen anlegen (update_* erzeugt einen Draft).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b11",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Nie: einen Fall auf addressed, dismissed oder verified setzen, einen Fall löschen, eine Version aktivieren, einen Lernvorschlag ablehnen. Agent-Tokens können das serverseitig nicht (ADR-0053, 3.3, F-W7) — nicht versuchen. in_progress setzt der Server, wenn ein eingereichtes Protokoll eine Maßnahme zum Fall enthält (Weiche W-E2 a); dafür gibt es keinen eigenen Aufruf.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b12",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Nur Mensch in der Web-UI: Fall verwerfen oder löschen, Lernvorschlag ablehnen, Version aktivieren, Nachschau einstufen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b13",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Keine Umwege: keine REST-Aufrufe am MCP vorbei, keine Rohdaten aus anderen Quellen. Fehlt ein Werkzeug, sag „das macht der Mensch in der Web-UI“ und liefere den Text dafür.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-datenschutz",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Datenschutz — keine Fallinhalte weitertragen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p15",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Fälle und Lernvorschläge können personenbezogene Daten enthalten (Namen, Adressen, Kundendaten, Zitate aus Gesprächen). Deshalb:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b16",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fallinhalte nie wörtlich in Playbook-, Resource-, Persona- oder Prüffall-Texte übernehmen. Dort steht die abstrahierte Regel, nicht der Einzelfall.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b17",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Prüffall-Eingaben synthetisch formulieren: gleiche Lage, erfundene neutrale Daten (z. B. „Kunde A“, „Projekt X“).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b18",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fall-Texte, die du formulierst, auf das Verhalten beschränken. Enthält die Vorlage Personendaten, ersetze sie durch Rollen („die Nutzerin“, „ein Kunde“) und sag das dem Menschen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b19",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "In Hand-Offs und Kanban-Kommentaren nur IDs und gekürzte, neutrale Zusammenfassungen nennen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-a",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Weg A — Lernvorschlag-Muster: Fall formulieren und umwandeln", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A1 — Lernvorschlag lesen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p22",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_lesson(memory_id) liefert den Wortlaut des Lernvorschlags, auch wenn er einem anderen Agenten des Workspace gehört. Das Werkzeug liest nur Einträge mit kind=lesson; alles andere antwortet mit memory_not_found. Prüfe den Status: Nur ein offener (pending) Lernvorschlag lässt sich umwandeln. Ohne Wortlaut formulierst du nichts — aus der ID allein lässt sich kein Fall ableiten.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p23",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Optional als Kontext: list_cases(agent_id, status=[open, triaged, in_progress, reopened]) zeigt, ob es zum selben Thema schon Fälle gibt. Gibt es einen offenen Fall mit gleicher Erwartung, sag das: dann ist der Lernvorschlag eher ein Beleg für diesen Fall als ein neuer.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A2 — Lage, Getan, Erwartet formulieren", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b25",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Lage (situation): Wann tritt es auf? Auslöser und Kontext, ohne Personendaten.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b26",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Getan (behavior): Was hat der Agent getan? Beobachtbar, ohne Wertung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b27",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Erwartet (expected_behavior): Was wäre richtig gewesen? Als prüfbare Regel formulieren — sie wird später zur Erwartung eines Prüffalls.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b28",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Optional Folge (impact) und ein Vorschlag für die Schwere (low, medium, high), immer als Vorschlag gekennzeichnet.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p29",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nur formulieren, was der Wortlaut trägt. Der Zähler sagt, dass sich etwas wiederholt, nicht warum. Ursachen-Hypothesen gehören, als solche markiert, in eine eigene Zeile „Vermutung“ und nicht in den Fall-Text.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A3 — Nach Freigabe umwandeln", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p31",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Erst den Fall-Text zeigen und die Freigabe holen. Dann convert_lesson_to_case(agent_id, memory_id, situation, behavior, expected_behavior, impact, severity, signal, source_ref). agent_id ist der Agent, dem der Lernvorschlag gehört. Der neue Fall trägt reporter_kind pattern und source_memory_id, der Lernvorschlag geht auf converted, und das Muster verschwindet von selbst.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p31b",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Ein Lernvorschlag lässt sich nur einmal umwandeln (memory_not_convertible). Kommt dieser Fehler, prüfe mit list_cases, ob der Fall schon existiert, statt einen zweiten anzulegen. Lehnt der Mensch den Fall ab, bleibt der Lernvorschlag pending; ablehnen kann ihn nur der Mensch im Gedächtnis.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A4 — report_case ist nicht der Weg für Lernvorschläge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p33",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "report_case legt einen Fall mit reporter_kind builder an, ohne Verknüpfung zum Lernvorschlag. Der Lernvorschlag bliebe pending und das Muster sichtbar, ein zweiter Fall zum selben Muster droht. Für Lernvorschlag-Muster deshalb immer convert_lesson_to_case. report_case nur für eine eigene Beobachtung ohne Lernvorschlag und nur auf ausdrücklichen Wunsch.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A5 — Prüffall anlegen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p35",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Zum neuen Fall einen Prüffall vorschlagen: Titel, Eingabe (synthetisch), erwartetes Verhalten (= Erwartet), Prüfart (human_rule, oder must_contain / must_not_contain mit check_pattern, wenn die Regel an einem Wort prüfbar ist) und das betroffene Element (entity_type und entity_id, nur gemeinsam). Nach Freigabe create_test_case(origin_case_id, agent_id, …). Der Prüffall ist Voraussetzung für jede spätere Maßnahme (3.6).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-b",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Weg B — Fall-Muster: zusammenfassen und Änderung vorschlagen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p37",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Bei Fall-Mustern legst du keinen neuen Fall an — auch keinen Sammelfall. Die Fälle existieren schon. Deine Leistung ist die Zusammenfassung und ein Änderungsvorschlag am Element.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B1 — Fälle lesen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p39",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "„Offen“ im Kopierblock meint nicht nur den Status open, sondern jeden noch nicht abgeschlossenen Fall: open, triaged, in_progress und reopened (ADR-0053, 3.7). Ein Fall-Muster gruppiert Fälle mit gleicher Element-Zuordnung — diese Fälle sind also zugeordnet und stehen meist schon auf triaged. Wer nur status=open liest, übersieht genau sie.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p39b",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Deshalb: list_cases(agent_id, status=[open, triaged, in_progress, reopened], format=full) in einem Aufruf. Liefert die Antwort next_cursor, mit cursor weiterblättern, bis alle IDs aus dem Kopierblock gefunden sind. Fehlt eine ID danach, sag das ausdrücklich, statt sie zu übergehen. Zuordnungen, Schilderungen und Verlauf eines Falls liefert get_case(case_id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B2 — Element und Prüffälle lesen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p41",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Das Element im Ist-Stand lesen: fetch_playbook, fetch_resource, get_persona, get_system_prompt oder get_agent (für tool_policy). Dazu list_test_cases(agent_id, entity_type, entity_id) — welche Prüffälle gibt es schon? — und get_feedback für Element-Signale. Prüfe, ob is_managed gesetzt ist.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B3 — Zusammenfassen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p43",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Gemeinsamer Kern der Fälle in zwei bis vier Sätzen: Lage, wiederkehrendes Verhalten, gemeinsame Erwartung. Danach die Abweichungen zwischen den Fällen. Keine Zitate mit Personendaten, keine Nach-Deutung der Zählung. Widersprechen sich die Erwartungen, ist das ein Befund für den Menschen, keine Entscheidung für dich.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B4 — Änderungsvorschlag", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b45",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Die kleinste Änderung am Element, mit Ort (Abschnitt bzw. block_id) und Wortlaut vorher/nachher.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b46",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Erfolgskriterium: woran man in der Nachschau sieht, dass es wirkt (z. B. der Prüffall besteht, keine neuen Fälle zum Element).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b47",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Gegenposition: was gegen die Änderung spricht, inklusive der Breite — wie viele Agenten das Element nutzen (find_usages).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b48",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Mindestens eine Alternative mit Trade-off, z. B. Playbook-Schritt gegen Resource-Absatz, oder model_limit statt Änderung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b49",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Ein Prüffall wie in A5; fehlt einer, nach Freigabe mit create_test_case aus einem der Fälle anlegen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B5 — Weiter im Feedback-Gespräch", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p50",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Will der Mensch die Änderung, wird sie zur Maßnahme: Das läuft über das Playbook „Feedback-Gespräch (Review) moderieren“ (Protokoll mit submit_session_protocol, danach Entwurf und link_measure_draft). Nur so gehen die Fälle auf in_progress und die Nachschau misst die Wirkung. Einen Entwurf ohne Protokoll zu schreiben ist möglich, verliert aber die Verknüpfung zu den Fällen — das dem Menschen sagen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b52",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Verwaltetes Element (is_managed): kein Write, sondern Repo-Hand-Off plus submit_feedback am Element.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b53",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "tool_policy: update_agent wirkt sofort und ist nicht versioniert. Nur mit ausdrücklicher Freigabe genau dieser Policy-Änderung, sonst als Vorschlag stehen lassen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b54",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "model_limit: keine Änderung. Das ist ein Ergebnis, kein Auftrag.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-c",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Weg C — Offene Fälle für den Menschen vorbereiten", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C1 — Lesen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p57",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "list_cases(status=[open, reopened], format=full), bei Bedarf auf einen Agenten eingeschränkt (agent_id); mit next_cursor weiterblättern. Hier sind bewusst nur open und reopened gemeint: Fälle, die auf eine Zuordnung oder Neubewertung warten. Fälle auf triaged sind schon zugeordnet; sie gehören zu Weg B oder in ein Feedback-Gespräch. Je Fall Lage, Getan, Erwartet, Schwere und Melder notieren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C2 — Element bestimmen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p59",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_agent zeigt Persona, Template und tool_policy des betroffenen Agenten; get_persona dessen Playbooks; fetch_playbook bzw. fetch_resource die Stellen, die das Verhalten steuern. get_case zeigt eine Schilderung des Agenten, falls er eine abgegeben hat. Ordne dem Element zu, dessen Anweisung das Verhalten getragen hat oder hätte tragen müssen. Ziele: persona, playbook, resource, external_tool, system_prompt_template, memory (mit entity_id) sowie tool_policy und model_limit (ohne entity_id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p60",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "model_limit, wenn die Anweisung klar und vorhanden war und das Modell sie trotzdem nicht befolgt — „Modellgrenze, keine Änderung sinnvoll“. Das ist eine Einschätzung, die der Mensch bestätigt.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C3 — Zuordnen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p62",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Zuerst die Zuordnungs-Vorschläge mit Begründung als Liste ausgeben, dann die Freigabe einholen (einzeln oder als Batch), dann assign_case_elements. Achtung Replace-Semantik: der Aufruf ersetzt die gesamte bisherige Zuordnung. Lies den Ist-Stand vorher mit get_case (elements) und gib immer die vollständige Zielliste mit. Die Antwort des Aufrufs ist die neue Zuordnung — gegenlesen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C4 — Einordnen (triaged)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p64",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nach der Zuordnung und mit Freigabe triage_case(case_id, note). Das Werkzeug setzt nur triaged, nur aus open oder reopened und nur mit mindestens einer Zuordnung (sonst case_transition_forbidden). Die note ist optional und beschreibt die Zuordnung, nicht ein Urteil. Hältst du einen Fall für verwerfbar (Doppelung, kein Fehlverhalten), schreib das als Empfehlung mit Begründung in den Report — verwerfen kann nur der Mensch.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-vorlagen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Ausgabe-Vorlagen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p66",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Weg A — Fall: Agent {name} ({uuid}), Lernvorschlag {id}. Lage: … Getan: … Erwartet: … Folge (optional): … Schwere (Vorschlag): … Prüffall-Vorschlag: Titel, Eingabe, Erwartung, Prüfart. Freigabe: umwandeln ja/nein, Prüffall anlegen ja/nein. Nach dem Schreiben: Fall-ID, Prüffall-ID.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p67",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Weg B — Zusammenfassung: Fälle {ids} zu {agent}, Element {element}. Gefunden: je ID mit Status (open/triaged/in_progress/reopened) oder „fehlt“. Kern: … Abweichungen: … Änderungsvorschlag: Ort, vorher, nachher. Erfolgskriterium: … Gegenposition: … Alternative: … Prüffall: vorhanden (ID) oder Vorschlag. Nächster Schritt: Feedback-Gespräch ja/nein.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p68",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Weg C — Triage-Vorbereitung je Fall: Fall-ID, Kurzlage (neutral), vorgeschlagene Zuordnung, Begründung in einem Satz, Empfehlung (einordnen / Modellgrenze / Verwerfen prüfen). Danach: Freigabe für Zuordnungen und Einordnung (triage_case).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-werkzeuge",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Werkzeuge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p70",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Lesen: list_patterns, list_cases (status als Liste, cursor/next_cursor), get_case, get_lesson, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_test_cases, get_feedback, find_usages. Schreiben (nach Freigabe): assign_case_elements, triage_case, convert_lesson_to_case, create_test_case, report_case (nur eigene Beobachtung, auf Wunsch), update_* und transition_* bis review, submit_feedback, record_usage. Alle Fall-Werkzeuge außer report_case brauchen case_triage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p71",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nur Mensch in der Web-UI: Fall verwerfen oder löschen, Lernvorschlag ablehnen, Version aktivieren, Nachschau einstufen. Maßnahme, Protokoll und Entwurfs-Verknüpfung: Playbook „Feedback-Gespräch (Review) moderieren“.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-anti",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b73",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Aus einem Fall-Muster einen neuen Sammelfall anlegen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b74",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "report_case statt convert_lesson_to_case für Lernvorschlag-Muster nutzen — das lässt den Lernvorschlag pending und das Muster stehen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b75",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Fallinhalte wörtlich in Prüffälle oder Playbooks kopieren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b76",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Die Zählung deuten („weil das Modell X nicht kann“), ohne dass der Wortlaut es trägt.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b77",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "assign_case_elements ohne Freigabe, ohne vorheriges get_case oder mit nur dem Delta aufrufen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b78",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Status setzen oder es versuchen, der dem Builder nicht zusteht, oder Werkzeuglücken über REST umgehen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b79",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Bei einem Fall-Muster nur status=open lesen und zugeordnete (triaged, in_progress) Fälle als „fehlt“ melden.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b80",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "convert_lesson_to_case oder triage_case ohne Freigabe aufrufen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-notes",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p80",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Grundlage: ADR-0053 Abschnitte 3.3 (Fall, Status, Rechte), 3.6 (Maßnahme, Prüffall Pflicht), 3.7 (Muster, reporter_kind pattern), 3.8 (case_triage), 6.5 bis 6.7 (MCP-Werkzeuge); Phase-E-Werkzeuge nach W-E1 b und PM-2/PM-4; Delta-Spec Phase D, S5 (Kopierblöcke). Konventionen für Trigger, Managed-Grenzen und Status-Workflow stehen in der Resource Agent-Bau-Konventionen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p81",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Nachhalten: genutzte Playbooks und Resources mit record_usage melden; fällt an diesem Playbook etwas Veraltetes auf, submit_feedback mit signal outdated.", "styles": {}}],
+    "children": []
+  }
+]
