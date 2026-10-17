@@ -202,8 +202,9 @@ auf `:152` · `core/config.py` **271** Zeilen, `:83` = `rate_limit_write`, `:159
 `test_access_log_rotation.sh:43` (beide Default `caddy:2.8-alpine`) ·
 `RUNBOOK.md` **2502** Zeilen.
 
-**Regel 10 angewandt:** #540 trug noch die gestapelten Kopfblöcke der Läufe 51,
-48 und 47. Ersetzt durch **einen** aktuellen Kopfblock.
+**Regel 10 angewandt — zum ersten Mal an den beiden ältesten Bodies:** #540 trug noch die
+gestapelten Kopfblöcke der Läufe 51, 48 und 47, #535 die der Läufe 51, 48 und 47. Beide durch
+**einen** aktuellen Kopfblock ersetzt (#540: 22 329 → 18 779 Zeichen, #535: 21 951 → 13 133).
 
 ### 4.3 #949: die drei Basiswerte sind nach genau einem Fenster wieder verrottet
 
@@ -237,7 +238,25 @@ Akzeptanzkriteriums**, also kein Beiwerk (Regel 106).
   (`createUser` auf `:33`), `LoginPage.tsx` **394**, `SessionProvider.tsx`
   **267**, `api/types.ts` **2402**, alle im Fenster 0× bewegt.
 
-### 4.5 Die 44 axe-Stellen — unabhängig gegengemessen
+### 4.5 Die 18 `classnames-order`-Warnungen haben einen neuen Ort — und #435 nannte einen gelöschten
+
+🔴 **#435 führte `PlaybookListToolbar.tsx` als Ort aller `classnames-order`-Warnungen** — die
+Datei existiert seit **#895** (`961cedc2`, Playbook-Liste auf `ListFilterBar`) **nicht mehr.** Aus
+der Lint-Ausgabe dieses Laufs neu zugeordnet:
+
+| Datei | Warnungen |
+|---|---|
+| `src/components/ui/sheet.tsx` | **10** |
+| `src/components/ui/checkbox.tsx` | **4** |
+| `src/features/playbooks/components/LinkedBlocksList.tsx` | **2** |
+| `src/features/playbooks/components/ResourceBlockLinkPicker.tsx` | **2** |
+| **Summe** | **18** |
+
+**In #435 korrigiert und in #442 aus „ungemessen" in eine Messung überführt.** Nebenbefund für
+Weiche 8: von den **90** Warnungen sind nur **7** `--fix`-bar — diese 18 sind also **nicht**
+vollständig automatisch zu schneiden.
+
+### 4.6 Die 44 axe-Stellen — unabhängig gegengemessen
 
 Regel 124 a verlangte eine direkte Gegenmessung der Zahl, die aus einer Differenz
 entstanden war. **Durchgeführt mit einer zweiten, unabhängig geschriebenen Sonde**
@@ -319,6 +338,10 @@ vorherige Reparatur** (Regel 120):
 - 🔴 **Die `__dirname`-Deprecation in `apps/web/vite.config.ts:29`** _(hält,
   dreimal je Vitest-Lauf gemeldet)_ — gehört in denselben PR wie der
   Coverage-Boden und #975 Option A/C.
+- ⚠️ **Ein Mess-Wrapper kann fehlen und sieht aus wie ein gescheitertes Gate** _(NEU, Regel 49 am
+  eigenen Werkzeug)_: `/usr/bin/time -f …` vor `npm run test:coverage` endete mit **Exit 127** —
+  das Binary existiert in dieser Umgebung nicht. **Nicht die Suite ist gescheitert, sondern die
+  Messung.** Wiederholt ohne Wrapper, Dauer über `$SECONDS`.
 - 🟢 **Der MCP-Server-Ausfall ist der achte in Folge** — kein Kurations-Feedback
   (`record_usage`, `submit_feedback`) absetzbar, achter Lauf ohne Rückmeldung an
   die eigene AgentDB.
@@ -398,5 +421,18 @@ sind dort:
 - **#959**, **#632**, **#633** — Bestandszahl 16 → 18, Frist als Datum, Flächen
   und Zeiger neu gemessen.
 - **#977** — ein Kommentar: die Prämisse ist an neun Commits widerlegt.
+- **#535** — Kopfblöcke nach Regel 10 zusammengefasst; eingetragen, dass zwei der drei Sperren
+  seines letzten offenen Kindes weg sind und #980 merge-fertig vorliegt. Caddy-Pin `:439` →
+  `:452` nachgezogen.
+- **#975** — Kopfblock auf Lauf 53; die 44 offenen Stellen mit der zweiten Sonde als Tabelle
+  belegt, der Branch-Coverage-Wert gegen Lauf 52 korrigiert (83,67 statt 83,68).
+- **#435** — die `classnames-order`-Warnungen neu zugeordnet (gelöschte Datei).
 - **#442** — Body neu: Lage, Reihenfolge, Wellen, Kollisionen, Sammelpunkte,
-  Weichen 16/17.
+  Weichen 16/17, Regel-Vorschläge 125/126.
+
+**Schreibweg (Regel 111/114/117):** alle Bodies über REST-`PATCH` **aus einer Datei** geschrieben,
+Fußzeile im gesendeten Text, danach jeder Body **zurückgelesen und auf einen erwarteten
+Textbaustein geprüft**. ⚠️ **Eine Beobachtung dabei:** bei den Issue-Bodies bleibt die
+Attributions-Fußzeile stehen, bei **#442 entfernt die Gegenstelle sie** (dort trug der Body auch
+vorher keine) — der Schreibweg ist also nicht einmal gegenüber demselben Feldtyp einheitlich.
+Inhaltlich war die Differenz in allen Fällen genau die Fußzeile bzw. eine Leerzeile.
