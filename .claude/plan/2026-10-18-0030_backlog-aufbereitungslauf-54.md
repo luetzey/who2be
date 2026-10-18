@@ -222,9 +222,40 @@ expliziter Scope-„In" und es führt **7** Kriterien, wo die Norm 2–5 vorsieh
 |---|---|---|---|
 | **#975** | Titel und Body nennen seit Lauf 52 **44** axe-Stellen | **43** — der Wert des ursprünglichen Titels ist richtig | Sonde mit Positiv-Kontrolle, drei Struktur-Gegenproben (`70 − 2 = 68 = 25 + 43`), Verteilung über 20 Dateien einzeln aufgeführt |
 | **#949** | drei Bezugswerte nach 0-Commit-Fenster wieder verrottet | auf den heutigen Stand gesetzt **und in die dauerhafte Form gebracht** (Regel 110/128): Lauf-Zähler als Datum der ersten Beobachtung, Bestand offener PRs aus den Grenzen entfernt | heute gemessen; die drei Repo-Werte (324/1562/3648) halten unverändert |
-| **#959, #632, #633, #849, #923** | dieselben Lauf-Zähler in Kopf- und Grenz-Blöcken | gleiche Form-Korrektur, Positionen unverändert | Fenster 0 Commits, Flächen 0× bewegt |
+| **#633** | 🔴 **drei tragende Fehler**: Startbedingung 2 nennt `main`-HEAD **`979ef6d2`** und Lauf **38766629723** (beide überholt); der #975-Hinweis trägt die falsche **44**/69; §Verifikation trägt Lauf 52s Ausreißer **83,68** und Abstand **4,68** | alle drei korrigiert (`a6027b88` / **38953392933**, **43**/68, **83,67** / **4,67**) und die Zähler in die datierte Form gebracht; zusätzlich #980/#947 als Träger von `ci.yml` eingetragen, weil die `:423`/`:503`-Zeiger davon wandern | heute einzeln gemessen; der veraltete HEAD hätte einen ausführenden Agenten CI gegen den falschen Commit prüfen lassen |
+
+**Nicht nachgezogen, mit Begründung:** **#959, #632, #849, #923** tragen dieselbe Klasse verrotteter
+Zähler, aber **keinen** tragenden Fehler — ihre Positionen, Befunde und Zeiger sind unverändert
+richtig. Eine mechanische Korrektur der Zähler wäre genau der Fehler, den Regel 128 benennt: sie
+verrottet mit dem nächsten Lauf wieder. Die Stellen sind in #442 §Funde ohne Issue vollständig
+aufgeführt. **#435, #428, #535, #540, #542** bleiben ebenfalls unberührt, weil Regel 7 (ein `size/M`
+wird nicht durch Feldpflege startbar) und **Weiche 4** (gilt der Vertrag für Tracking-Issues?) genau
+das zur offenen Frage haben.
 
 Keine Weiche ist durch Beleg geschlossen oder neu aufgegangen (Regel 13).
+
+### Der Schreibweg hat selbst einen Befund produziert
+
+🔴 **Ein Body-Rewrite per `issue_write` verliert die Attributions-Fußzeile.** Die Nutzlast endete in
+beiden Fällen auf `---` plus Fußzeile; im gespeicherten Body von **#975** und **#949** kommt sie
+**0×** vor, während die in diesem Lauf unberührten **#959**, **#923** und **#632** sie je **1×**
+tragen. Die Entdedupe-Regel entfernt die vom Modell geschriebene Fußzeile, und auf einem
+Issue-**Body** hängt nichts eine neue an (Kommentare bekommen sie weiterhin). **Verschärfung von
+Regel 111.** Gefangen wurde das nur, weil nach Regel 114 c das **Ende** gegengelesen wurde.
+
+**Gegenlese der beiden großen Schreibvorgänge** (Regel 114/117), jeweils gegen die Quelle geprüft:
+
+- **#975** — 20 792 Zeichen, alle 13 Abschnitte je 1×, kein Abbruch, keine unsichtbaren Zeichen
+  (Regel 122), **44** kommt nur noch als Bericht über Lauf 52/53 vor, `43` 17× als eigenständige
+  Zahl, Partition `25 + 43 = 68` zweifach im Text.
+- **#442** — 331 Zeilen, alle 15 Abschnitte je 1×, Regeln 127 und 128 mit `NEU (Lauf 54)` vorhanden,
+  keine unsichtbaren Zeichen, kein BOM, kein `\r`. **Sechs Zeilen weichen von der lokalen
+  Entwurfsdatei ab** — fünf davon sind spätere, bessere Fassungen (u. a. die Body-Länge mit 74 000
+  statt 20 000 Zeichen und der auf vier Issues erweiterte Fußzeilen-Befund), **eine ist ein echter
+  Verlust**: der #633-Hinweis auf den veralteten HEAD fiel aus zwei Zeilen heraus. **Er ist dadurch
+  nicht verloren gegangen, sondern an die richtigere Stelle gewandert** — in den Body von #633 selbst
+  (Regel 38: der Body ist, was ein Agent lädt). Nach der Korrektur dort wäre der Satz in #442
+  sachlich falsch gewesen.
 
 ### Gegenprobe nach Regel 126 — in beide Richtungen
 
@@ -286,7 +317,9 @@ könnte.
    2026-09-19, seither durchgehend). ✅ Keine Datei-Sperre über die 19 PRs; die
    zweite Achse im Fenster vollständig ruhig. Zeiger: `helpers/auth.ts`
    **180**/`:33`, `LoginPage.tsx` **394**, `SessionProvider.tsx` **267**,
-   `api/types.ts` **2402**.
+   `api/types.ts` **2402**. 🔴 **Sein Body trug drei tragende Fehler** (veralteter
+   `main`-HEAD in Startbedingung 2, die falsche 44 aus #975, Lauf 52s
+   Ausreißer-Coverage) — **in diesem Lauf korrigiert**, siehe §Selbst entschieden.
 
 **#975 steht bewusst NICHT in der Reihenfolge** (Regel 8, Weiche 14). **Nach
 einer Antwort gehört es zwischen Position 1 und 2** — und in **denselben** PR
