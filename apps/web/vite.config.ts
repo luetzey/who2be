@@ -5,13 +5,18 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { configDefaults } from 'vitest/config'
 
-// Eigenes Timeout fuer die axe-Tests (`*.a11y.test.tsx`), NICHT global.
-// axe ueber eine ganze Seite in jsdom ist CPU-gebunden: ruhig 1–3 s, unter
-// fremder Last (Load-Avg ~10, parallele pytest/podman-Laeufe anderer Worktrees)
-// gemessen bis ~7 s — ueber dem 5-s-Default von Vitest. 15 s = ~2x Puffer.
-// Alle anderen Tests behalten den Default (5000 ms), damit haengende Tests
-// weiter schnell auffallen. Karte t_ef93f8e3, Befund aus Review von PR #814.
-const A11Y_TEST_TIMEOUT_MS = 15_000
+import { A11Y_TEST_TIMEOUT_MS } from './src/test/a11y-timeout.ts'
+
+// Eigenes Timeout fuer axe-Tests, NICHT global: alle Tests ohne axe behalten
+// den 5-s-Default von Vitest, damit haengende Tests weiter schnell auffallen.
+// Wert und Messung stehen in `src/test/a11y-timeout.ts` (eine Quelle).
+// Zwei Wege fuehren zu demselben Wert:
+//  - Projekt `a11y` (`*.a11y.test.tsx`) per `testTimeout` unten
+//    (Karte t_ef93f8e3, Befund aus Review von PR #814);
+//  - jede andere Testdatei, die den Helfer `@/test/a11y` importiert, per
+//    `vi.setConfig` im Helfer selbst (#975: 43 axe-Tests in gewoehnlichen
+//    `*.test.tsx` liefen mit 5 s und haben main rot gemacht).
+// Gehalten von `src/test/a11y.test.ts`.
 const A11Y_TEST_GLOB = 'src/**/*.a11y.test.tsx'
 
 // Build-Zeit-Edition-Flag (ADR-0029): steuert, ob die Billing-UI ins Bundle
