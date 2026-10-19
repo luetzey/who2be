@@ -9,9 +9,12 @@ eingebauten Schalter — Maintainer-Aussage aus pytest-dev/pytest#1364:
     "If you want the test to fail if a dependency is not installed then you
     shouldn't be using skip IMHO."
 
-Dieses Skript schliesst die Luecke auf der Auswertungsseite: es liest die
-JUnit-XML (``--junitxml``) statt die Textausgabe zu parsen — die XML nennt je
-Test den Skip-*Grund*, die Zusammenfassungszeile nur eine Zahl.
+Dieses Skript schliesst die Luecke auf der Auswertungsseite: es liest eine
+JUnit-XML statt die Textausgabe zu parsen — die XML nennt je Test den
+Skip-*Grund*, die Zusammenfassungszeile nur eine Zahl. Erzeuger ist je nach
+Aufruf pytest (``--junitxml``, Job ``python``) oder Vitest
+(``--reporter=junit``, Job ``web``); das Skript kennt nur den Pfad, nicht den
+Erzeuger, und nennt in seinen Meldungen deshalb kein Werkzeug.
 
 Zwei getrennte Budgets, weil zwei verschiedene Dinge gemeint sind:
 
@@ -108,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "junit_xml",
         type=Path,
-        help="Pfad zur JUnit-XML aus `pytest --junitxml=...`",
+        help="Pfad zur JUnit-XML des vorausgegangenen Testlaufs",
     )
     parser.add_argument(
         "--max-other-skips",
@@ -122,10 +125,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.junit_xml.is_file():
-        # Fail-closed: eine fehlende XML heisst, dass pytest gar nicht bis zum
-        # Schreiben kam. Das als "nichts zu beanstanden" zu werten, waere
-        # dieselbe Luege wie ein Skip als Pass zu werten.
-        print(f"::error::JUnit-XML nicht gefunden: {args.junit_xml} — lief pytest ueberhaupt?")
+        # Fail-closed: eine fehlende XML heisst, dass der Testlauf davor gar
+        # nicht bis zum Schreiben kam. Das als "nichts zu beanstanden" zu werten,
+        # waere dieselbe Luege wie ein Skip als Pass zu werten. Die Meldung nennt
+        # bewusst kein Werkzeug: das Skript laeuft hinter pytest UND Vitest und
+        # kennt nur den Pfad (Issue #949).
+        print(
+            f"::error::JUnit-XML nicht gefunden: {args.junit_xml} — "
+            "hat der Testlauf davor sie geschrieben?"
+        )
         return 2
 
     total_cases, reasons = _parse(args.junit_xml)
