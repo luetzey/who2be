@@ -308,7 +308,10 @@ der Darstellung, keine Datenänderung.
     `apps/api/src/who2be_api/services/wa_blocks.py#new_block_id`).
   - Anker mit einer ID, die es in der Basisversion nicht gibt → 422
     `anchor_unknown`. Ein Agent kann also keine ID erfinden, die stabil
-    aussieht, es aber nicht ist.
+    aussieht, es aber nicht ist. Bei `create_*` gibt es keine Basisversion;
+    dort ist jeder Anker unbekannt, also auch einer, der aus einem anderen
+    Element kopiert wurde → ebenfalls 422 `anchor_unknown`. Wer einen Abschnitt
+    übernimmt, entfernt dessen Anker; die Überschrift bekommt dann eine neue ID.
   - Dieselbe ID zweimal → 422 `anchor_duplicate`.
   - Eine Überschrift mit eingehenden Verweisen, die beim Schreiben fehlt, wird
     gelöscht wie heute im Web-Editor. Die Antwort nennt die betroffenen
@@ -347,7 +350,8 @@ Inhaltsfelder sind je ein eigenes Markdown-Dokument mit eigener Zuordnung.
     Render. Gerade den liest ein Agent beim Start, um zu arbeiten, nicht um
     zu schreiben. Danach bräuchte er für jeden Platzhalter einen Folgeaufruf.
 - **B — neuer Wert `format="source"`.** Er liefert Quell-Markdown: Kopf mit
-  `id`, `version` und `status` (die Basis für die Teiländerung), Inhalt in der
+  `id`, `version`, `status` und `base_rev` (Konflikt-Token aus 6.3, die Basis
+  für die Teiländerung), Inhalt in der
   Normalform aus 5.2, Anker, Tokens. `text` bleibt die Lesefassung zum
   Arbeiten. `full` (Editor-JSON) bleibt bitgleich, ist aber nicht mehr die
   Vorlage für `update_*`.
@@ -463,23 +467,25 @@ größerer Umbau), B die Teiländerung. Beide sprechen dieselbe Ankersprache.
   (Abschnitt 8):
 
   ```text
-  edit_content(entity_type, entity_id, base_version, op, anchor | field, markdown?)
+  edit_content(entity_type, entity_id, base_rev, op, anchor | field, markdown?)
   ```
 
   - `anchor`: Überschriften-ID wie in 4.2.
   - `field`: ein ganzes Markdown-Feld, für Dokumente ohne Überschrift und für
     die Modus-Felder. Beispiele: `body`, `profile`, `modes[Recherche].anti_patterns`.
-  - `base_version`: die gelesene Version aus dem `source`-Kopf. Weicht der
+  - `base_rev`: der Konflikt-Token aus dem `source`-Kopf (6.3). Weicht der
     Stand ab, antwortet der Server mit 409 `version_conflict` und nennt die
-    aktuelle Version. Das Muster ist `expected_rev` aus
-    `packages/models/src/who2be_models/workarea.py#ArtifactPatch`.
+    aktuelle Version und den aktuellen `base_rev`. Das Muster ist
+    `expected_rev` aus
+    `packages/models/src/who2be_models/workarea.py#ArtifactPatch`. Eine
+    Versionsnummer reicht dafür nicht (6.3).
 - **Versionsregeln wie heute** (`apps/api/src/who2be_api/services/persona_service.py#PersonaService.update`):
   - Auf einer aktiven Version entsteht ein Draft.
   - Ist schon ein Draft offen, arbeitet `edit_content` **auf diesem Draft**,
-    wenn `base_version` seine Versionsnummer ist. Heute antwortet `update_*`
-    dann mit 409, und das bleibt für den Vollstand so. Für Teiländerungen ist
-    „am offenen Draft weiterarbeiten“ der gewollte Fall. Sonst bräuchte jede
-    zweite Teiländerung einen Umweg über den Web-Editor.
+    wenn `base_rev` zum Draft passt. Heute antwortet `update_*` dann mit 409,
+    und das bleibt für den Vollstand so. Für Teiländerungen ist „am offenen
+    Draft weiterarbeiten“ der gewollte Fall. Sonst bräuchte jede zweite
+    Teiländerung einen Umweg über den Web-Editor.
   - Rechte, Tag-Scope, Rate-Limit und der Schutz verwalteter Inhalte gelten
     unverändert. `edit_content` ruft dieselben Service-Methoden.
 - **Rechte.** `edit_content` braucht die Schreib-Capability der jeweiligen
@@ -487,6 +493,72 @@ größerer Umbau), B die Teiländerung. Beide sprechen dieselbe Ankersprache.
   hat (Eintrag in
   `packages/models/src/who2be_models/tool_requirements.py#MCP_TOOL_REQUIREMENTS`).
   Die Prüfung je Aufruf macht der Service.
+
+### 6.3 Konflikt-Token `base_rev`: Schutz vor stillem Überschreiben
+
+Die Versionsnummer allein schützt den offenen Draft nicht. Der Autosave des
+Web-Editors (PATCH `…/draft`,
+`apps/api/src/who2be_api/services/persona_service.py#PersonaService.update_draft`)
+überschreibt den Draft in place und zählt **keine** Version hoch
+(`apps/api/src/who2be_api/repositories/versioned_repository.py#VersionedAggregateRepository._upsert_draft`).
+Ohne eigenen Token sähe der Ablauf so aus: Ein Agent liest `source` (Draft
+v5), ein Mensch speichert danach im Web-Editor, wieder als v5, dann schickt
+der Agent `edit_content(…, replace §X)`. Der Server sieht v5 = v5, und die
+Änderung des Menschen in §X ist still weg. Das verletzt G3 (5.2).
+
+Optionen:
+
+- **A — Content-Hash als `base_rev`.** Der Server bildet SHA-256 über die
+  kanonische JSON-Form (sortierte Schlüssel, ohne Leerraum) von Versions-Inhalt,
+  Name und Locale der Version, auf die geschrieben würde, und liefert die
+  ersten 16 Hex-Zeichen im `source`-Kopf (5.1 B). `edit_content` rechnet ihn
+  in derselben Transaktion unter der Zeilensperre neu, die die Schreibpfade
+  heute schon nehmen
+  (`apps/api/src/who2be_api/repositories/versioned_repository.py#VersionedAggregateRepository._current_version_sql`,
+  `FOR UPDATE OF e`), und vergleicht.
+  - Vorteil: ändert sich bei jedem inhaltlichen Schreiben, gleich über welchen
+    Pfad (Autosave, `update_*`, Wiederherstellen, künftige Pfade).
+    Keine Spalte, keine Migration. Kein Schreibpfad muss daran denken, einen
+    Zähler zu pflegen. Rein funktional testbar.
+  - Nachteil: Hash über das ganze Dokument je Schreibaufruf (bei 38 KB
+    vernachlässigbar). Ein Mensch, der ändert und zurückändert, erzeugt
+    denselben Hash; das ist kein Verlust, denn der Inhalt ist derselbe.
+- **B — `updated_at` als `base_rev`.** Der Autosave setzt `updated_at = now()`
+  auf der Entity-Zeile schon heute.
+  - Vorteil: kein Rechenaufwand, Wert steht in `PersonaRead.updated_at`.
+  - Nachteil: Der Schutz hängt daran, dass **jeder** künftige Schreibpfad den
+    Zeitstempel setzt. Ein vergessener Pfad öffnet die Lücke wieder, ohne dass
+    ein Test reißt. Metadaten-Schreibvorgänge ohne Inhaltsänderung erzeugen
+    Schein-Konflikte. Der Wert sitzt an der Entity, nicht an der Version.
+- **C — keine Teiländerung am offenen Draft.** `edit_content` antwortet bei
+  offenem Draft mit 409 wie `update_*`, nur auf einer aktiven Version entsteht
+  ein neuer Draft. Die Versionsnummer reicht dann, weil eine aktive Version
+  unveränderlich ist.
+  - Vorteil: kein neuer Token, kein neuer Konfliktfall.
+  - Nachteil: Jede zweite Teiländerung in Folge scheitert, bis ein Mensch den
+    Draft im Web-Editor veröffentlicht oder verwirft. Mehrschrittige
+    Überarbeitungen durch einen Agenten (der eigentliche Zweck von M1b) gehen
+    dann nur noch über den Vollstand.
+
+**Empfehlung A.** Der Token muss sich bei jedem Schreiben ändern, und das
+garantiert nur ein Wert, der aus dem Inhalt selbst entsteht. B verlagert die
+Garantie auf eine Konvention, C opfert den Kernfall. Das ist eine technische
+Folge aus G3, keine Owner-Weiche.
+
+Regeln:
+
+- `base_rev` ist bei `edit_content` **Pflicht**. `update_*` (Vollstand)
+  braucht ihn nicht: Es schreibt nie in einen offenen Draft (409
+  `draft_exists`, 6.2), sondern legt einen Draft auf einer unveränderlichen
+  aktiven Version an. Schreibt jemand dazwischen, entsteht dabei selbst ein
+  Draft, und der Vollstand scheitert laut.
+- Die Antwort jedes erfolgreichen Schreibens trägt den neuen `base_rev`.
+  Mehrere Teiländerungen nacheinander brauchen so keinen Zwischen-Lesevorgang.
+- Grenze: Der Web-Editor prüft den Token nicht. Schreibt ein Agent zwischen
+  zwei Autosaves, kann der nächste Autosave mit älterem Editor-Stand die
+  Agenten-Änderung überschreiben. Das ist dieselbe Lage wie heute bei zwei
+  offenen Browser-Tabs. Den Web-Editor anzupassen ist nicht Teil dieser ADR
+  (Karte: Out-of-Scope); es ist als Folgearbeit in Abschnitt 11 vermerkt.
 
 ## 7. Übergang: Editor-JSON als Eingabe (Frage 5, Weiche W58-3)
 
@@ -644,7 +716,9 @@ kennt (3.2). Das MCP bleibt ein dünner HTTP-Adapter (ADR-0005).
 4. `apps/api/src/who2be_api/main.py` (Router einhängen)
 5. `apps/api/tests/test_content_markdown_service.py` (neu)
 6. `apps/api/tests/test_content_markdown_router.py` (neu, inkl. RBAC,
-   Tag-Scope, verwaltete Inhalte, 409/422-Fälle)
+   Tag-Scope, verwaltete Inhalte, 409/422-Fälle; Pflichtfall: `source` lesen,
+   Autosave über PATCH `…/draft`, dann `edit_content` mit altem `base_rev` →
+   409 `version_conflict`, Draft unverändert)
 7. `docs/reference/openapi.json` (neue Routen)
 8. `changelog.d/<slug>.added.md`
 
@@ -703,7 +777,8 @@ Katalog-Gewinn aus 8.1 kommt erst mit P5.
 **Positiv.**
 
 - Agenten schreiben, was sie lesen, und kein Editor-JSON mehr.
-- Ein Vollstand kostet etwa 40 % der heutigen Argumentgröße (8.2).
+- Ein Vollstand kostet etwa 40 % der heutigen Argumentgröße (8.2, Schätzung
+  **[E]**, belegt erst mit M5 in P1).
 - Teiländerungen schicken nur noch den betroffenen Abschnitt.
 - Das PUT-Risiko aus ADR-0056 §5, nämlich eine Lesefassung als Vorlage zu
   nehmen und damit den Inhalt zu leeren, sinkt. Wer eine Teiländerung macht,
@@ -721,6 +796,11 @@ Katalog-Gewinn aus 8.1 kommt erst mit P5.
   braucht W2.
 - `edit_content` auf einem offenen Draft (6.2) ist eine bewusste Abweichung von
   der 409-Regel der `update_*`-Werkzeuge. Sie muss in der Beschreibung stehen.
+  Abgesichert ist sie über `base_rev` (6.3), nicht über die Versionsnummer.
+- Der Schutz wirkt nur in eine Richtung: Der Web-Autosave prüft `base_rev`
+  nicht und kann eine Agenten-Teiländerung überschreiben (6.3, Grenze).
+  Folgearbeit außerhalb dieser ADR: den Autosave auf denselben Token
+  umstellen.
 
 **Neutral.** Das Speicherformat, der Web-Editor, die REST-API für BlockNote,
 die Versionierung und alle gespeicherten Verweise bleiben unverändert. Es
