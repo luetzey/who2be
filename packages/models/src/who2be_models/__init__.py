@@ -17,6 +17,12 @@ from who2be_models.agent import (
     RenderFormat,
 )
 from who2be_models.agent_uuid import AGENT_UUID_PATTERN, AGENT_UUID_RE, is_canonical_agent_uuid
+from who2be_models.blocknote_markdown import (
+    MarkdownConversionError,
+    from_markdown,
+    normalize,
+    to_markdown,
+)
 from who2be_models.case import (
     CASE_STATUS_EVENTS,
     CASE_TARGETS_WITHOUT_ENTITY,
@@ -482,6 +488,7 @@ __all__ = [
     "LinkedBlockSection",
     "MAX_LIMIT",
     "MCP_TOOL_REQUIREMENTS",
+    "MarkdownConversionError",
     "MEMORY_CONTEXT_MAX_LENGTH",
     "MEMORY_EVENT_REASON_MAX_LENGTH",
     "MEMORY_FACT_MAX_LENGTH",
@@ -660,12 +667,15 @@ __all__ = [
     "canonical_resource",
     "decode_cursor",
     "encode_cursor",
+    "from_markdown",
     "is_allowed_transition",
     "is_canonical_agent_uuid",
     "is_tool_visible",
     "is_tool_visible_for",
     "issuer_base",
     "issuer_identifier",
+    "normalize",
     "status_for_event",
+    "to_markdown",
     "verdict_consistent",
 ]
