@@ -11,4 +11,7 @@
   gemessene Budgetwirkung. Entschieden sind: Pflicht-Anker nur an
   Überschriften, Schreibvorlage über `format="source"`, harter Schnitt der
   JSON-Eingabe mit P3 vor dem Cloud-Release und `usage_notes` in Markdown.
+  Tabellen gehen als GFM-Tabelle an den Agenten und werden nur im
+  Resource-Editor angeboten, Zellen tragen nur Inline-Markdown ohne Pills
+  (Owner-Entscheidung Editor-W1 vom 2026-10-20, BlockNote bleibt).
   Der Paketschnitt umfasst P1 bis P4. Es ändert sich noch kein Verhalten.

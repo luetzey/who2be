@@ -3,7 +3,8 @@
 - Status: **Accepted** (Owner, 2026-10-20). Die Richtung hat der Owner am
   2026-10-16 entschieden, die vier Weichen W58-1 bis W58-4 am 2026-10-20. Beide
   Entscheidungen stehen im Wortlaut in Abschnitt 2, die Übersicht in
-  Abschnitt 10.
+  Abschnitt 10. Ebenfalls am 2026-10-20 kam die Editor-Weiche W1 (Tabellen,
+  Abschnitt 3.4) dazu.
 - Datum: 2026-10-20
 - Gemessen gegen: `origin/main` @ `0ddb704a` (100 Werkzeuge, `tools/list`
   114.203 Bytes). Code-Aussagen tragen einen Symbolanker (Konvention
@@ -177,9 +178,20 @@ Das heißt:
 - **W58-4 = ja** (6.2): `usage_notes` des externen Tools wird ebenfalls
   Markdown.
 
+Owner, 2026-10-20, wörtlich zur Editor-Vorlage des PM (Weiche W1 Editor,
+Tabellen, Abschnitt 3.4):
+
+> „Mach es bitte, wie deine Empfehlungen sind. Blocknote können wir jetzt
+> behalten. Auch wenn wir in der Cloud-Version sind, brauchen wir diese
+> verbesserte teurere Version nicht, oder? Wir können damit so bleiben.“
+
+Für diese ADR heißt das: Tabellen sind GFM-Tabellen, angeboten nur im
+Resource-Editor, Zellen nur mit Inline-Markdown und ohne Pills. BlockNote
+bleibt der Editor.
+
 Die nicht gewählten Optionen sind in den Abschnitten 4.1, 5.1 und 7 als
-verworfen markiert. Abschnitte 3, 6, 8 und 9 hängen an keiner Owner-Weiche
-und gelten mit der Annahme dieser ADR.
+verworfen markiert. Abschnitte 3.1 bis 3.3, 6, 8 und 9 hängen an keiner
+Owner-Weiche und gelten mit der Annahme dieser ADR.
 
 W2 (Werkzeug-Profile) ist nicht Teil dieser ADR.
 
@@ -188,10 +200,10 @@ W2 (Werkzeug-Profile) ist nicht Teil dieser ADR.
 ### 3.1 Optionen
 
 - **A — CommonMark plus die GFM-Erweiterungen, die BlockNote abbildet.**
-  Durchgestrichen und Aufgabenlisten aus GFM, Platzhalter als
+  Durchgestrichen, Aufgabenlisten und Tabellen aus GFM, Platzhalter als
   `{{kind:target_id}}`, Anker als ` [#id]`. Vorteil: Das kennt jedes Modell,
-  und die Abbildung auf BlockNote ist eindeutig. Nachteil: GFM-Tabellen bleiben
-  draußen (Abschnitt 3.3).
+  und die Abbildung auf BlockNote ist eindeutig. Nachteil: Tabellen sind nur
+  in einer engen Form abbildbar (3.4), alles darüber hinaus endet in 3.3.
 - **B — der WorkArea-Split unverändert.** Der Server zerlegt nur in
   Überschrift, Absatz, Liste und Code, der Rest bleibt Markdown im Block
   (`apps/api/src/who2be_api/services/wa_blocks.py#split_markdown`). Vorteil:
@@ -222,6 +234,7 @@ Patch-Operationen, nicht den Split.
 | Inline-Link | `[Text](url)` |
 | Inline `placeholder` | `{{kind:target_id}}`, bei Resource-Abschnitten `{{resource:<uuid>#<block_id>}}` |
 | Zeilenumbruch im Block | harter Umbruch (`\` am Zeilenende) |
+| `table` (nur Resource, Editor-W1) | GFM-Tabelle, Regeln in 3.4 |
 
 Die Überschriftenebene 1–3 ist der heutige Schnitt der Bestandsmigration
 (`apps/api/src/who2be_api/migrations/0033_blocknote_only.sql@d6abcde3`, sie
@@ -239,8 +252,10 @@ läuft die Umwandlung in der API (9.2).
 Nicht abbildbar sind:
 
 - Blocktypen ohne Markdown-Gegenstück aus dem BlockNote-Default-Satz
-  (`@blocknote/core` laut `apps/web/package.json`), z. B. Tabelle, Bild,
-  Video, Audio, Datei;
+  (`@blocknote/core` laut `apps/web/package.json`), z. B. Bild, Video, Audio,
+  Datei;
+- Tabellen außerhalb der Form aus 3.4 und Tabellen in anderen Elementarten
+  als der Resource, sobald sie geändert oder neu angelegt werden (3.4);
 - Inline-Stile und Props ohne Gegenstück: Unterstreichung, Text- und
   Hintergrundfarbe, Ausrichtung ungleich links;
 - Überschriften ab Ebene 4.
@@ -264,9 +279,63 @@ Regel, nach Richtung getrennt:
   - Text eines `locked`-Blocks geändert, oder ein Marker mit unbekannter ID →
     **422** mit `reason="block_not_representable"` und der Block-ID. Der
     Hinweis im Fehler: Diesen Block ändert der Web-Editor.
-  - Markdown außerhalb des Dialekts, z. B. HTML oder eine GFM-Tabelle →
+  - Markdown außerhalb des Dialekts, z. B. HTML, eine Pill in einer
+    Tabellenzelle oder eine neue Tabelle außerhalb einer Resource →
     **422** `markdown_unsupported` mit Zeile und Konstrukt. Kein Abschneiden,
     kein „bestes Bemühen“.
+
+### 3.4 Tabellen (Owner-Entscheidung Editor-W1)
+
+Owner, 2026-10-20, wörtlich zur Editor-Vorlage des PM:
+
+> „Mach es bitte, wie deine Empfehlungen sind. Blocknote können wir jetzt
+> behalten. Auch wenn wir in der Cloud-Version sind, brauchen wir diese
+> verbesserte teurere Version nicht, oder? Wir können damit so bleiben.“
+
+Für diese ADR heißt das (Empfehlung Editor-W1 = Kompromiss aus C und B):
+
+- **Tabelle = GFM-Tabelle.** Ein BlockNote-Block `table` wird an den Agenten
+  als GFM-Tabelle ausgegeben und aus einer GFM-Tabelle zurückgebaut.
+- **Nur in der Resource.** Der Web-Editor bietet Tabellen nur im
+  Resource-Editor an. In System-Prompt, Persona-Profil, Playbook, Modi und
+  `usage_notes` des externen Tools legt niemand neue Tabellen oder Medien an,
+  weder im Web noch per Agent. Ein Bestand dort bleibt lesbar: Er erscheint
+  in `source` als GFM-Tabelle und bleibt beim Zurückschreiben bitgleich,
+  solange er unverändert ist (4.3 Schritt 1). Geändert oder neu angelegt →
+  422 `markdown_unsupported`.
+- **Zelleninhalt nur Inline-Markdown**: Text, `**fett**`, `*kursiv*`,
+  `~~durchgestrichen~~`, `` `Code` `` und `[Link](url)`. **Keine Pills** in
+  Zellen, keine Blöcke, kein harter Umbruch. `|` im Zelltext wird als `\|`
+  geschrieben.
+- **Abbildung.** Die erste GFM-Zeile ist die Kopfzeile, die Trennzeile trägt
+  keine Ausrichtung (`| --- |`). Spaltenzahl = längste Zeile, kürzere Zeilen
+  werden mit leeren Zellen aufgefüllt. Was GFM nicht zeigt (Spaltenbreiten,
+  Zahl der Kopfzeilen und -spalten), übernimmt der Server aus der
+  Basisversion, solange die Spaltenzahl gleich bleibt. Sonst setzt er den
+  BlockNote-Default.
+- **Gesperrte Tabellen.** Eine Tabelle mit Pills in Zellen, verbundenen
+  Zellen (`colspan`/`rowspan` > 1), Farben oder Ausrichtung ungleich links
+  hat keine GFM-Form. Sie läuft wie jeder nicht abbildbare Block über den
+  Marker `<!-- w2b:block <id> table -->` aus 3.3: unverändert bitgleich,
+  entfernt gelöscht, ein Änderungsversuch 422.
+
+**Rundlauf-Regel.** Für jede Tabelle in dieser Form gilt G1 (5.2):
+`from_markdown(to_markdown(B), base=B) == B`, bitgleich, auch für Breiten
+und Kopfzeilen. G2 gilt für jede GFM-Tabelle aus dem Dialekt: Die Normalform
+setzt genau ein Leerzeichen um jeden Zellinhalt und richtet nicht aus.
+
+**Golden-Fall.** Der verwaltete Bestand (1.5) enthält keine Tabelle. P1 legt
+deshalb einen eigenen Golden-Fall an: eine Resource mit einer Tabelle aus
+Kopfzeile und zwei Zeilen, Zellen mit Fett, Code, Link und `\|`, dazu
+gesetzten Spaltenbreiten. Er muss G1 und G2 bestehen und fällt unter die
+Rot-Probe (5.3). Daneben je ein Fall für eine gesperrte Tabelle (Pill in
+einer Zelle → Marker) und für eine Tabelle in einem Playbook (unverändert
+bitgleich, geändert 422).
+
+**Web-Seite.** Dass nur der Resource-Editor Tabellen anbietet, ist eine
+Einstellung des BlockNote-Schemas im Web und kein Teil von P1 bis P4. BlockNote
+bleibt der Editor. Es kommen nur die MPL-lizenzierten Kernpakete zum Einsatz,
+keine `@blocknote/xl-*`-Pakete (GPL oder kommerziell, ADR-0033).
 
 ## 4. Stabile Block-IDs bei Teiländerungen (Frage 3, Weiche W58-1)
 
@@ -730,7 +799,7 @@ API und MCP dieselbe Quelle nutzen.
    `to_markdown`, `from_markdown(md, base)`, `normalize`, Zuordnung 4.3,
    Darstellbarkeitsprüfung 3.3)
 2. `packages/models/tests/test_blocknote_markdown_golden.py` (neu: G1/G2 über
-   den Bestand, M5, Rot-Probe)
+   den Bestand, Tabellen-Golden-Fälle aus 3.4, M5, Rot-Probe)
 3. `packages/models/tests/test_blocknote_markdown_generated.py` (neu:
    Generator, Escaping-Tabelle)
 4. `packages/models/tests/test_blocknote_markdown_ids.py` (neu: 4.2/4.3,
@@ -811,8 +880,19 @@ Owner, 2026-10-20, wörtlich:
 | **W58-3** (7) | Wie lange nimmt das MCP noch Editor-JSON an? | **A**: harter Schnitt mit P3, vor dem Cloud-Release, Builder-Inhalte im selben Release, kein P5. | B (befristetes Doppelangebot mit P5), C (Doppelangebot ohne Frist) |
 | **W58-4** (6.2) | Gehört `usage_notes` des externen Tools mit zum Standard? | **Ja**: `usage_notes` wird ebenfalls Markdown. Ein Feld, kein neues Werkzeug. | Nein (ein BlockNote-Schreibfeld bliebe als Ausnahme) |
 
-Die Abschnitte 3, 6, 8 und 9 hängen an keiner Owner-Weiche und gelten mit der
-Annahme dieser ADR.
+Dazu kommt eine Weiche aus der Editor-Vorlage des PM, die in diese ADR
+hineinwirkt. Owner, 2026-10-20, wörtlich:
+
+> „Mach es bitte, wie deine Empfehlungen sind. Blocknote können wir jetzt
+> behalten. Auch wenn wir in der Cloud-Version sind, brauchen wir diese
+> verbesserte teurere Version nicht, oder? Wir können damit so bleiben.“
+
+| Weiche | Frage | Entscheidung | Verworfen |
+| --- | --- | --- | --- |
+| **W1 (Editor)** (3.4) | Wie gehen Tabellen in den Markdown-Standard ein? | **Kompromiss C+B**: Tabellen bietet nur der Resource-Editor an, an den Agenten gehen sie als GFM-Tabelle. Zellen nur Inline-Markdown, keine Pills. In System-Prompt, Persona-Profil, Playbook, Modi und Tool-Hinweisen keine neuen Tabellen oder Medien, der Bestand bleibt lesbar. BlockNote bleibt, nur MPL-Kern, keine `@blocknote/xl-*`-Pakete. | C und B je allein (Vorlage des PM, außerhalb des Repos); `@blocknote/xl-*` (GPL oder kommerziell) |
+
+Die Abschnitte 3.1 bis 3.3, 6, 8 und 9 hängen an keiner Owner-Weiche und
+gelten mit der Annahme dieser ADR. Abschnitt 3.4 folgt aus W1 (Editor).
 
 ## 11. Konsequenzen
 
