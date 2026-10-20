@@ -477,6 +477,14 @@ services:
       # GOTRUE_DISABLE_SIGNUP bleibt separat und wird gemeinsam gesetzt.
       WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
       WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
+      # Freitext pro Sprache (Karte t_27d7c6ad): Hinweisseite im Launch-Modus
+      # und Banner auf Login + App (Wartung, Neustart). Leer = fester Text bzw.
+      # kein Banner. Level: info|warning.
+      WHO2BE_LAUNCH_MESSAGE_DE: ${WHO2BE_LAUNCH_MESSAGE_DE:-}
+      WHO2BE_LAUNCH_MESSAGE_EN: ${WHO2BE_LAUNCH_MESSAGE_EN:-}
+      WHO2BE_NOTICE_DE: ${WHO2BE_NOTICE_DE:-}
+      WHO2BE_NOTICE_EN: ${WHO2BE_NOTICE_EN:-}
+      WHO2BE_NOTICE_LEVEL: ${WHO2BE_NOTICE_LEVEL:-info}
       # Absolute Obergrenze der "Angemeldet bleiben"-Sitzung in Stunden
       # (#430/#470, ADR-0052). Gueltig ist 1-24; die Web-App faellt bei
       # fehlendem/ungueltigem Wert fail-closed auf 12 zurueck. Muss wie

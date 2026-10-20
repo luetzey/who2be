@@ -569,6 +569,29 @@ nicht offen sein":
 Ist nur `GOTRUE_DISABLE_SIGNUP=true` gesetzt (ohne Launch-Modus), bleibt die
 Web-UI beim Altverhalten: `/signup` leitet auf `/login` um, kein Hinweistext.
 
+**Startreihenfolge:** eigenes Konto zuerst anlegen, dann sperren. Mit
+`GOTRUE_DISABLE_SIGNUP=true` legt auch ein Google-/GitHub-/Apple-Login kein
+neues Konto mehr an; ein solcher Versuch landet auf der Hinweisseite.
+
+**Freitext und Banner** (Runtime, kein Rebuild, Details in
+[`docs/signup-and-invites.md`](../../docs/signup-and-invites.md)):
+`WHO2BE_LAUNCH_MESSAGE_DE`/`_EN` ersetzt den Text der Hinweisseite,
+`WHO2BE_NOTICE_DE`/`_EN` + `WHO2BE_NOTICE_LEVEL` (info|warning) zeigt ein
+Banner auf Login und in der App, z. B. vor einer Wartung:
+
+```dotenv
+# deploy/hetzner/.env
+WHO2BE_NOTICE_DE="Heute ab 22 Uhr Wartung, etwa 30 Minuten."
+WHO2BE_NOTICE_LEVEL=warning
+```
+
+```sh
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env up -d web
+```
+
+Danach den Wert wieder leeren und `web` erneut starten.
+
 **On-Prem mit `WHO2BE_BOOTSTRAP_ADMIN_EMAIL`:** Der erste Login dieser Adresse
 uebernimmt die beim ersten Boot angelegte Organisation nur, wenn
 `GOTRUE_MAILER_AUTOCONFIRM=false` oder `GOTRUE_DISABLE_SIGNUP=true` gilt — am

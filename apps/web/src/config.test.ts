@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { resolveConfig, resolveLaunchMode, resolveSessionMaxAgeHours } from './config'
+import {
+  resolveConfig,
+  resolveLaunchMode,
+  resolveSessionMaxAgeHours,
+} from './config'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -197,5 +201,31 @@ describe('resolveSessionMaxAgeHours (Issue #430)', () => {
     expect(resolveConfig().sessionMaxAgeHours).toBe(12)
 
     warn.mockRestore()
+  })
+})
+
+describe('Betreiber-Freitext (Hinweisseite, Banner)', () => {
+  test('ohne Runtime-Werte bleiben Hinweis und Banner leer, Level info', () => {
+    const resolved = resolveConfig()
+
+    expect(resolved.launchMessage).toEqual({ de: '', en: '' })
+    expect(resolved.notice).toEqual({ de: '', en: '' })
+    expect(resolved.noticeLevel).toBe('info')
+  })
+
+  test('resolveConfig liest Texte und Level aus der Runtime-Config', () => {
+    window.__WHO2BE_CONFIG__ = {
+      launchMessageDe: '  Bald offen.  ',
+      launchMessageEn: 'Opening soon.',
+      noticeDe: 'Wartung ab 22 Uhr',
+      noticeEn: '',
+      noticeLevel: 'warning',
+    }
+
+    const resolved = resolveConfig()
+
+    expect(resolved.launchMessage).toEqual({ de: 'Bald offen.', en: 'Opening soon.' })
+    expect(resolved.notice).toEqual({ de: 'Wartung ab 22 Uhr', en: '' })
+    expect(resolved.noticeLevel).toBe('warning')
   })
 })

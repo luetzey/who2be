@@ -264,6 +264,9 @@
       "label": "Sprache",
       "switch": "Sprache umstellen"
     },
+    "notice": {
+      "dismiss": "Hinweis ausblenden"
+    },
     "theme": {
       "switch": "Theme umstellen",
       "light": "Hell",
