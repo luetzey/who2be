@@ -39,7 +39,17 @@ if [ -d "apps/web" ]; then
     elif [ -f "yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
       yarn install --frozen-lockfile || yarn install || true
     elif [ -f "package-lock.json" ]; then
-      npm ci || npm install || true
+      # Vorhandenes node_modules zuerst loeschen: `npm ci` in ein bestehendes
+      # Verzeichnis hinterliess (npm/cli#4828) eine Installation ohne das
+      # native Rolldown-Binding — Lint und tsc gruen, Vitest startet nicht
+      # (Issue #959). Fehlschlag laut melden, aber nie abbrechen (Issue #495).
+      rm -rf node_modules
+      if ! { npm ci || npm install; }; then
+        echo "Warnung: Web-Installation in apps/web fehlgeschlagen." >&2
+        echo "  -> 'npm run test:coverage' (Vitest) startet dann voraussichtlich nicht;" >&2
+        echo "     gruene Ergebnisse von 'npm run lint'/'npx tsc -b' sagen darueber nichts." >&2
+        echo "     Reparatur: cd apps/web && rm -rf node_modules && npm ci" >&2
+      fi
     elif [ -f "package.json" ]; then
       npm install || true
     fi

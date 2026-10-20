@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
 
-# Superseded Runs desselben Refs abbrechen, statt sie parallel zu Ende laufen
-# zu lassen. Spart GitHub-Actions-Minuten (relevant fuer das Minuten-Kontingent
-# privater Repos) und haelt die Run-Historie pro Branch sauber. main wird nicht
-# abgebrochen (push-Events auf main behalten ihren Lauf via run_id-Gruppe).
+# Eine Gruppe je PR bzw. je Ref (`group`): ein neuer Push bricht auf PR-Branches
+# den laufenden Lauf ab. Spart GitHub-Actions-Minuten (relevant fuer das
+# Minuten-Kontingent privater Repos) und haelt die Run-Historie pro Branch
+# sauber. Auf main wertet `cancel-in-progress` zu false aus: ein laufender
+# main-Lauf wird nicht abgebrochen. Alle main-Pushes teilen sich aber dieselbe
+# Gruppe — ein Spruch je main-Commit ist damit NICHT garantiert: bei drei
+# main-Pushes binnen ~2 min endete der mittlere Lauf ohne einen Job als
+# `cancelled` (gemessen: 38167426986, 37822973287, 38464644002; Issue #923).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -30,6 +34,7 @@ jobs:
     # diesem Gate (fragt eine Live-CVE-Datenbank ab, kann sich ohne
     # Datei-Aenderung aendern).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       code: ${{ steps.classify.outputs.code }}
     steps:
@@ -82,6 +87,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     services:
       postgres:
         # pgvector-Variante (ADR-0046) — Migration 0071 legt die
@@ -227,6 +233,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/web
@@ -327,6 +334,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -389,6 +397,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -452,6 +461,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -563,6 +573,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       # Ein rotes Profil darf die beiden anderen nicht abschneiden — sonst
       # fehlen genau die Zahlen, die diese Karte erheben soll.
@@ -636,6 +647,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: User-Namespaces freischalten (ubuntu-24.04 sperrt sie per AppArmor)
@@ -752,6 +764,7 @@ jobs:
     # keinem Test, die Funktion `guard_violation` schon
     # (`scripts/tests/test_changelog_fragments.py`).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -828,6 +841,7 @@ jobs:
     # SHA256 aus der `checksums.txt` des Releases geprueft; nachrechenbar mit
     #   curl -sSL <url> | sha256sum
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -917,6 +931,7 @@ jobs:
     # werden im RUNBOOK akzeptiert oder direkt gefixt. Triage-Pfad:
     # deploy/hetzner/RUNBOOK.md §CVE-Response.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
@@ -1100,6 +1115,7 @@ jobs:
       - changelog-guard
       - secrets
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Jeden Vorgaenger gegen sein ERWARTETES Ergebnis pruefen
         env:
