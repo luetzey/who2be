@@ -25,6 +25,7 @@ from typing import Any
 import asyncpg
 
 from who2be_api.services.placeholders.registry import REGISTRY, RenderContext
+from who2be_models.blocknote_text import format_table, table_cells, text_inline_only
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,12 @@ def _contains_memory_placeholder(blocks: list[dict[str, Any]]) -> bool:
         if not isinstance(block, dict):
             continue
         content = block.get("content")
-        for inline in content if isinstance(content, list) else []:
+        if isinstance(content, list):
+            inlines: list[Any] = content
+        else:
+            rows = table_cells(content) or []
+            inlines = [inline for row in rows for cell in row for inline in cell]
+        for inline in inlines:
             if (
                 isinstance(inline, dict)
                 and inline.get("type") == "placeholder"
@@ -140,18 +146,29 @@ async def _render_block(
     db: asyncpg.Connection,
     unresolved: list[str],
 ) -> str:
-    """Rendert einen einzelnen Block (inkl. seiner Inline-Content-Liste) zu Text."""
-    inline_parts: list[str] = []
-    inline_content: list[dict[str, Any]] = block.get("content", [])
-    for inline in inline_content:
-        inline_text = await _render_inline(inline, ctx, db, unresolved)
-        inline_parts.append(inline_text)
+    """Rendert einen einzelnen Block (inkl. seiner Inline-Content-Liste) zu Text.
 
-    block_text = "".join(inline_parts).strip()
+    Tabellen (`content` ist ein `tableContent`-Objekt) werden zellweise
+    aufgeloest und in derselben GFM-Form ausgegeben wie in
+    `who2be_models.blocknote_text`; unbekannte `content`-Formen ergeben keinen
+    Text statt eines Fehlers.
+    """
+    content = block.get("content")
+    if isinstance(content, list):
+        inline_parts: list[str] = []
+        for inline in content:
+            if isinstance(inline, dict):
+                inline_parts.append(await _render_inline(inline, ctx, db, unresolved))
+        block_text = "".join(inline_parts).strip()
+    else:
+        block_text = await _render_table(content, ctx, db, unresolved)
 
     # Kinder rekursiv prozessieren (z.B. verschachtelte Listeneintraege).
     child_parts: list[str] = []
-    for child in block.get("children", []):
+    children = block.get("children")
+    for child in children if isinstance(children, list) else []:
+        if not isinstance(child, dict):
+            continue
         child_text = await _render_block(child, ctx, db, unresolved)
         if child_text:
             child_parts.append(child_text)
@@ -163,6 +180,26 @@ async def _render_block(
     return "\n".join(all_parts)
 
 
+async def _render_table(
+    content: object,
+    ctx: RenderContext,
+    db: asyncpg.Connection,
+    unresolved: list[str],
+) -> str:
+    """Rendert ein `tableContent`-Objekt als GFM-Tabelle; sonst leerer String."""
+    rows = table_cells(content)
+    if rows is None:
+        return ""
+    rendered: list[list[str]] = []
+    for row in rows:
+        cells: list[str] = []
+        for cell in row:
+            parts = [await _render_inline(i, ctx, db, unresolved) for i in cell]
+            cells.append("".join(parts))
+        rendered.append(cells)
+    return format_table(rendered)
+
+
 async def _render_inline(
     inline: dict[str, Any],
     ctx: RenderContext,
@@ -172,6 +209,7 @@ async def _render_inline(
     """Rendert ein einzelnes Inline-Element zu Text.
 
     - `type='text'`: roher Text-String.
+    - `type='link'`: `Text (URL)` (`format_link`, wie in allen Klartext-Pfaden).
     - `type='placeholder'`: Resolver-Aufruf ueber REGISTRY.
     - Sonst: leerer String + Debug-Log.
 
@@ -180,8 +218,8 @@ async def _render_inline(
     """
     inline_type: str = inline.get("type", "")
 
-    if inline_type == "text":
-        return str(inline.get("text", ""))
+    if inline_type in ("text", "link"):
+        return text_inline_only(inline)
 
     if inline_type == "placeholder":
         props: dict[str, Any] = inline.get("props", {})

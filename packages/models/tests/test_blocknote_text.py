@@ -12,8 +12,11 @@ from who2be_models.blocknote_text import (
     block_plain_text,
     blocknote_body_text,
     blocks_plain_text,
+    format_link,
+    format_table,
     parse_blocknote_blocks,
     placeholder_token_inline,
+    table_cells,
     text_inline_only,
 )
 
@@ -106,3 +109,103 @@ def test_blocknote_body_text_accepts_other_inline_renderer() -> None:
 
 def test_blocknote_body_text_falls_back_to_raw_text() -> None:
     assert blocknote_body_text("kein json") == "kein json"
+
+
+# --- Tabellen und Links (Editor-Fix) ----------------------------------------
+
+
+def _txt(text: str) -> dict[str, object]:
+    return {"type": "text", "text": text, "styles": {}}
+
+
+def _link(text: str, href: str) -> dict[str, object]:
+    return {"type": "link", "href": href, "content": [_txt(text)]}
+
+
+def _table(block_id: str, rows: list[list[object]]) -> dict[str, object]:
+    return {
+        "id": block_id,
+        "type": "table",
+        "props": {},
+        "content": {
+            "type": "tableContent",
+            "columnWidths": [None, None],
+            "rows": [{"cells": cells} for cells in rows],
+        },
+        "children": [],
+    }
+
+
+def test_table_block_renders_as_gfm_table() -> None:
+    table = _table(
+        "t1",
+        [
+            [[_txt("Stufe")], [_txt("Frist")]],
+            [[_txt("Mahnung")], [_txt("14 "), _txt("Tage")]],
+            [[_txt("Pipe | drin")]],
+        ],
+    )
+    assert block_plain_text(table) == (
+        "| Stufe | Frist |\n| --- | --- |\n| Mahnung | 14 Tage |\n| Pipe \\| drin |  |"
+    )
+
+
+def test_table_accepts_tablecell_objects_and_flattens_newlines() -> None:
+    cell = {"type": "tableCell", "props": {}, "content": [_txt("zwei\nZeilen")]}
+    assert block_plain_text(_table("t1", [[cell]])) == "| zwei Zeilen |\n| --- |"
+
+
+def test_table_cells_render_links_and_pills_per_inline_renderer() -> None:
+    table = _table("t1", [[[_link("Doku", "https://x.de")], [_pill("resource", "r-1")]]])
+    assert block_plain_text(table) == "| Doku (https://x.de) |  |\n| --- | --- |"
+    assert block_plain_text(table, placeholder_token_inline) == (
+        "| Doku (https://x.de) | {{resource:r-1}} |\n| --- | --- |"
+    )
+
+
+def test_nested_table_in_children_and_in_block_list() -> None:
+    parent = _para("p1", "Vorher")
+    parent["children"] = [_table("t1", [[[_txt("A")], [_txt("B")]]])]
+    assert blocks_plain_text([parent, _para("p2", "Nachher")]) == (
+        "Vorher\n| A | B |\n| --- | --- |\n\nNachher"
+    )
+
+
+def test_empty_or_broken_table_and_unknown_content_yield_no_text() -> None:
+    assert block_plain_text(_table("t1", [])) == ""
+    broken: dict[str, object] = {
+        "id": "t2",
+        "type": "table",
+        "content": {"type": "tableContent", "rows": "x"},
+    }
+    assert block_plain_text(broken) == ""
+    assert block_plain_text({"id": "i", "type": "image", "content": "kaputt"}) == ""
+    assert block_plain_text({"id": "c", "type": "paragraph", "children": "kaputt"}) == ""
+
+
+def test_link_renders_as_text_with_url_in_both_inline_renderers() -> None:
+    block: dict[str, object] = {
+        "id": "b1",
+        "type": "paragraph",
+        "content": [_txt("Siehe "), _link("Doku", "https://x.de")],
+    }
+    assert block_plain_text(block) == "Siehe Doku (https://x.de)"
+    assert block_plain_text(block, placeholder_token_inline) == "Siehe Doku (https://x.de)"
+
+
+def test_link_edge_cases() -> None:
+    assert text_inline_only(_link("https://x.de", "https://x.de")) == "https://x.de"
+    empty_text: dict[str, object] = {"type": "link", "href": "https://x.de", "content": []}
+    assert text_inline_only(empty_text) == "https://x.de"
+    assert text_inline_only({"type": "link", "content": [_txt("ohne Ziel")]}) == "ohne Ziel"
+    string_content: dict[str, object] = {"type": "link", "href": "https://x.de", "content": "Kurz"}
+    assert text_inline_only(string_content) == "Kurz (https://x.de)"
+
+
+def test_format_helpers() -> None:
+    assert format_link(" Text ", " https://x.de ") == "Text (https://x.de)"
+    assert format_table([]) == ""
+    assert format_table([["a"], ["b", "c"]]) == "| a |  |\n| --- | --- |\n| b | c |"
+    assert table_cells([{"type": "text"}]) is None
+    broken_cell = {"type": "tableContent", "rows": [{"cells": [{"content": "x"}]}]}
+    assert table_cells(broken_cell) == [[[]]]

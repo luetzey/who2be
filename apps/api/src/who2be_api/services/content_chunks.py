@@ -17,7 +17,10 @@ den FTS-Index, aber nicht in die ausgelieferte Passage: Kontext ohne Duplikat.
 Die Klartext-Extraktion nutzt `placeholders._core.block_plain_text` — dieselbe
 Single-Source wie die Diff-Serialisierung (`content_text`), nicht die rohe
 jsonb-Serialisierung. Placeholder-Pills fallen dabei bewusst weg: ihr
-`{{kind:uuid}}`-Token traegt keinen suchbaren Text, nur Rauschen.
+`{{kind:uuid}}`-Token traegt keinen suchbaren Text, nur Rauschen. Links stehen
+als `Text (URL)`, Tabellen als GFM-Tabelle in der Passage
+(`who2be_models.blocknote_text`); eine Tabelle ist kein Heading und haengt an
+der Passage der Ueberschrift davor.
 """
 
 from __future__ import annotations
