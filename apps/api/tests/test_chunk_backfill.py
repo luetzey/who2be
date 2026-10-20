@@ -165,6 +165,102 @@ def test_backfill_materializes_passages_for_existing_active_versions(
         cleanup_workspaces([owner])
 
 
+def _table_and_link_blocks() -> list[dict[str, Any]]:
+    """Resource mit BlockNote-Tabelle (`content` ist ein Objekt) und Inline-Link."""
+    return [
+        {
+            "id": "h1",
+            "type": "heading",
+            "props": {"level": 1},
+            "content": [{"type": "text", "text": "Fristenuebersicht", "styles": {}}],
+        },
+        {
+            "id": "t1",
+            "type": "table",
+            "props": {},
+            "content": {
+                "type": "tableContent",
+                "columnWidths": [None, None],
+                "rows": [
+                    {"cells": [[{"type": "text", "text": "Stufe", "styles": {}}], []]},
+                    {
+                        "cells": [
+                            [{"type": "text", "text": "Mahnstufe", "styles": {}}],
+                            [{"type": "text", "text": "vierzehn Tage", "styles": {}}],
+                        ]
+                    },
+                ],
+            },
+        },
+        {
+            "id": "p1",
+            "type": "paragraph",
+            "content": [
+                {"type": "text", "text": "Siehe ", "styles": {}},
+                {
+                    "type": "link",
+                    "href": "https://example.org/fristen",
+                    "content": [{"type": "text", "text": "Fristenkatalog", "styles": {}}],
+                },
+            ],
+        },
+    ]
+
+
+@pytest.mark.integration
+def test_activating_a_resource_with_table_and_link_indexes_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vor dem Fix warf `block_plain_text` beim Aktivieren (`_sync_chunks`, selbe
+    Transaktion) einen AttributeError — die Transition antwortete 500."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    rbase = f"{prefix}/resources"
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            created = client.post(
+                rbase,
+                json={
+                    "name": "Fristen",
+                    "content": {
+                        "description": "Fristen",
+                        "blocks": _table_and_link_blocks(),
+                        "tags": [],
+                    },
+                },
+                headers=auth,
+            )
+            assert created.status_code == 201, created.text
+            rid = created.json()["id"]
+            for to in ("review", "active"):
+                resp = client.post(
+                    f"{rbase}/{rid}/versions/1/transition", json={"to": to}, headers=auth
+                )
+                assert resp.status_code == 200, resp.text
+
+            found = client.get(
+                f"{prefix}/search/content", params={"q": "Mahnstufe"}, headers=auth
+            ).json()
+            assert [h["entity_id"] for h in found] == [rid]
+            text = _sql(
+                "SELECT string_agg(text, E'\\n' ORDER BY ord) FROM content_chunk "
+                "WHERE entity_id = $1",
+                UUID(rid),
+            )
+            assert "| Stufe |  |\n| --- | --- |\n| Mahnstufe | vierzehn Tage |" in text
+            assert "Siehe Fristenkatalog (https://example.org/fristen)" in text
+    finally:
+        cleanup_workspaces([owner])
+
+
 @pytest.mark.integration
 def test_backfill_removes_orphaned_chunks() -> None:
     """Verwaiste Chunks (Entity geloescht) werden weggeraeumt.
