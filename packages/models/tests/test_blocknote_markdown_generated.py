@@ -374,6 +374,23 @@ def test_markdown_lookalike_text_stays_text(text: str) -> None:
         ("[{{date:}}](https://who2be.de)", "Platzhalter in Link"),
         ("| a |\n| :-- |", "Tabellen-Ausrichtung"),
         ("<https://who2be.de>", "HTML"),
+        # Review R1 (G3): gaengiges Markdown, das CommonMark/GFM als Struktur
+        # liest, darf nicht still zu Text werden.
+        ("a | b\n--- | ---\n1 | 2", "Tabellenzeile ohne aeussere Pipes"),
+        ("| a | b |\n| --- | --- |\n1 | 2", "Tabellenzeile ohne aeussere Pipes"),
+        ("| a | b |\n| --- | --- |\n| 1 | 2 |\nweiter", "Tabellenzeile ohne aeussere Pipes"),
+        ("| a | b |\n| --- |", "Tabellen-Trennzeile mit anderer Spaltenzahl als die Kopfzeile"),
+        ('[Doku](https://who2be.de "Titel")', "Link mit Titel oder Leerraum im Ziel"),
+        ("[Doku](https://who2be.de 'Titel')", "Link mit Titel oder Leerraum im Ziel"),
+        ("[Doku](<https://who2be.de>)", "Link-Ziel in spitzen Klammern"),
+        ("[Doku](https://who2be.de", "nicht geschlossenes Link-Ziel"),
+        ("![Bild](x.png 'Titel')", "Bild"),
+        ("_kursiv_", "Hervorhebung mit Unterstrich"),
+        ("__fett__ und mehr", "Hervorhebung mit Unterstrich"),
+        ("Text _kursiv?_ Ende", "Hervorhebung mit Unterstrich"),
+        ("    eingerueckter Code", "eingerueckter Code-Block"),
+        ("- Punkt\n\n      zu tief", "eingerueckter Code-Block"),
+        ("1. [ ] Aufgabe", "Checkbox in nummerierter Liste"),
     ],
 )
 def test_unsupported_markdown_is_an_error_not_a_loss(md: str, construct: str) -> None:
@@ -384,6 +401,76 @@ def test_unsupported_markdown_is_an_error_not_a_loss(md: str, construct: str) ->
     assert err.value.line is not None
 
 
+def test_gfm_table_without_outer_pipes_is_an_error_even_without_allow_tables() -> None:
+    # Ohne Tabellenerlaubnis darf die Struktur ebensowenig still verschwinden.
+    with pytest.raises(MarkdownConversionError) as err:
+        from_markdown("a | b\n--- | ---\n1 | 2")
+    assert err.value.reason == "markdown_unsupported"
+    assert err.value.line == 1
+
+
+@pytest.mark.parametrize(
+    ("md", "href"),
+    [
+        ("[Doku](https://who2be.de/a(b))", "https://who2be.de/a(b)"),
+        ("[Doku](https://who2be.de/a\\(b)", "https://who2be.de/a(b"),
+        ("[Doku](https://who2be.de/a_(b)_c)", "https://who2be.de/a_(b)_c"),
+    ],
+)
+def test_link_target_with_parentheses_is_kept(md: str, href: str) -> None:
+    # CommonMark: ausgeglichene Klammern gehoeren zum Ziel, maskierte ebenso.
+    blocks = from_markdown(md, new_id=lambda existing: "neu")
+    link = blocks[0]["content"][0]
+    assert link["type"] == "link"
+    assert link["href"] == href
+    assert from_markdown(to_markdown(blocks), base=blocks) == blocks
+
+
+def test_two_space_hard_break_is_a_line_break() -> None:
+    # Entscheidung: zwei Leerzeichen am Zeilenende sind in CommonMark ein
+    # harter Umbruch wie `\` (§3.2). Der Dialekt kennt den Umbruch, also wird
+    # er abgebildet statt abgelehnt; die Normalform schreibt `\`.
+    blocks = from_markdown("Zeile eins  \nZeile zwei", new_id=lambda existing: "neu")
+    assert blocks[0]["content"] == [
+        {"type": "text", "text": "Zeile eins\nZeile zwei", "styles": {}}
+    ]
+    assert to_markdown(blocks) == "Zeile eins\\\nZeile zwei"
+
+
+@pytest.mark.parametrize(
+    ("md", "text"),
+    [
+        ("## Titel ##", "Titel"),
+        ("## Titel #####   ", "Titel"),
+        ("## C#", "C#"),
+        ("## Titel \\#", "Titel #"),
+    ],
+)
+def test_heading_closing_hashes_follow_commonmark(md: str, text: str) -> None:
+    blocks = from_markdown(md, new_id=lambda existing: "h1")
+    assert blocks[0]["content"] == [{"type": "text", "text": text, "styles": {}}]
+    # Rundlauf: ein # am Textende bleibt Text und wird maskiert ausgegeben.
+    assert from_markdown(to_markdown(blocks), base=blocks) == blocks
+
+
+def test_heading_hash_before_anchor_stays_text() -> None:
+    # Mit Anker steht die #-Folge nicht am Zeilenende: sie bleibt Text.
+    assert normalize("## Titel # [#h1]") == "## Titel \\# [#h1]"
+
+
+@pytest.mark.parametrize("text", ["_x_", "__init__", "a _b_ c", "Ende_", "___"])
+def test_underscore_text_round_trips(text: str) -> None:
+    block = {
+        "id": "p1",
+        "type": "paragraph",
+        "props": dict(_DEFAULT),
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+    md = to_markdown([block])
+    assert from_markdown(md, new_id=lambda existing: "neu") == [{**block, "id": "neu"}], md
+
+
 def test_error_names_the_line() -> None:
     with pytest.raises(MarkdownConversionError) as err:
         from_markdown("## Kopf\n\nText\n\n<b>x</b>")
@@ -392,7 +479,11 @@ def test_error_names_the_line() -> None:
 
 
 def test_lenient_input_is_normalized() -> None:
-    md = "* eins\n+ zwei\n3) drei\n\n__fett?__ und _kursiv?_\n\n```\nx\n```"
+    md = (
+        "* eins\n+ zwei\n3) drei\n\nsnake_case und \\_\\_init\\_\\_\n\n```\nx\n```"
+        "\n\nZeile  \nweiter\n\n## Titel ##"
+    )
     assert normalize(md) == (
-        "- eins\n\n- zwei\n\n1. drei\n\n\\__fett?__ und _kursiv?_\n\n```text\nx\n```"
+        "- eins\n\n- zwei\n\n1. drei\n\nsnake_case und \\_\\_init__\n\n```text\nx\n```"
+        "\n\nZeile\\\nweiter\n\n## Titel"
     )

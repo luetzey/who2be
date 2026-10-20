@@ -120,6 +120,8 @@ _MARKER_RE = re.compile(
     r"<!-- w2b:(block|locked) (" + _ID_RE.pattern + r")(?: (" + _TYPE_RE.pattern + r"))? -->"
 )
 _HEADING_START_RE = re.compile(r"(#{1,6})(?=[ \t]|$)")
+_CLOSING_HASHES_RE = re.compile(r"(?:^|[ \t]+)#+[ \t]*$")
+_TRAILING_HASH_TEXT_RE = re.compile(r"(?:^|(?<=[ \t]))#+$")
 _ANCHOR_RE = re.compile(r"(?:^|[ \t])\[#(" + _ID_RE.pattern + r")\][ \t]*$")
 _TRAILING_ANCHOR_RE = re.compile(r"[ \t]\[#" + _ID_RE.pattern + r"\][ \t]*$")
 _CHECK_RE = re.compile(r"[-*+][ \t]+\[([ xX])\](?:[ \t]+(.*))?$")
@@ -412,11 +414,25 @@ def block_representability(block: Block) -> Representability:
 _RENDER_STYLES: tuple[str, ...] = ("bold", "italic", "strike")
 
 
+def _underscore_may_open(text: str, index: int) -> bool:
+    """Gehoert das `_` an `index` zu einer Folge, die nicht im Wort steht?
+
+    Solche Folgen koennte CommonMark als Hervorhebung lesen; der Parser
+    lehnt sie ab (§3.3), deshalb maskiert der Renderer sie.
+    """
+    start = index
+    while start > 0 and text[start - 1] == "_":
+        start -= 1
+    return start == 0 or not text[start - 1].isalnum()
+
+
 def _escape_text(text: str, *, line_start: bool, table_cell: bool) -> str:
     out: list[str] = []
     for index, char in enumerate(text):
         if char in "\\*`~[]{<":
             out.append("\\" + char)
+        elif char == "_" and _underscore_may_open(text, index):
+            out.append("\\_")
         elif char == "&" and _ENTITY_RE.match(text, index):
             out.append("\\&")
         else:
@@ -673,6 +689,10 @@ def _content_lines(block: Block, indent: str) -> list[str]:
     else:
         marker = ""
     text = _render_inlines(content, continuation=indent)
+    if block_type == "heading":
+        # Eine #-Folge am Textende laese CommonMark ohne Anker als schliessende
+        # Folge; maskiert bleibt sie Text.
+        text = _TRAILING_HASH_TEXT_RE.sub(lambda m: "\\" + m.group(0), text)
     if block_type == "heading" and block.get("id") is not None:
         text += f" [#{block['id']}]"
     return (indent + marker + text).split("\n")
@@ -809,8 +829,14 @@ class _Tok:
     inner: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _find_link(text: str, start: int) -> tuple[int, str, str] | None:
-    """`[inner](href)` ab `start`; liefert (Ende, inner, href) oder `None`."""
+def _find_link(text: str, start: int, line: int) -> tuple[int, str, str] | None:
+    """`[inner](href)` ab `start`; liefert (Ende, inner, href) oder `None`.
+
+    `None` heisst: an dieser Stelle steht kein Link (CommonMark liest den Text
+    ebenso als Text). Ein Link-Ziel, das CommonMark als Link liest, das der
+    Dialekt aber nicht abbildet (Titel, `<…>`-Ziel), ist ein Fehler (§3.3).
+    Ausgeglichene Klammern im Ziel gehoeren wie in CommonMark zum Ziel.
+    """
     depth = 0
     index = start
     while index < len(text):
@@ -837,19 +863,40 @@ def _find_link(text: str, start: int) -> tuple[int, str, str] | None:
         return None
     href_chars: list[str] = []
     cursor = index + 2
+    if text.startswith("<", cursor):
+        raise _unsupported(
+            "Link-Ziel in spitzen Klammern", line, "Das Ziel ohne <> schreiben: [Text](URL)."
+        )
+    parens = 0
     while cursor < len(text):
         char = text[cursor]
-        if char == "\\" and cursor + 1 < len(text) and text[cursor + 1] in "\\()<>":
+        if char == "\\" and cursor + 1 < len(text) and text[cursor + 1] in _ESCAPABLE:
             href_chars.append(text[cursor + 1])
             cursor += 2
             continue
-        if char == ")":
+        if char == ")" and parens == 0:
             return cursor + 1, text[start + 1 : index], "".join(href_chars)
-        if char.isspace() or char == "(":
-            return None
+        if char.isspace():
+            raise _unsupported(
+                "Link mit Titel oder Leerraum im Ziel",
+                line,
+                "Links nur als [Text](URL), ohne Titel und ohne Leerraum im Ziel.",
+            )
+        if char == "(":
+            parens += 1
+        elif char == ")":
+            parens -= 1
         href_chars.append(char)
         cursor += 1
-    return None
+    raise _unsupported("nicht geschlossenes Link-Ziel", line, "Das Ziel mit ) schliessen.")
+
+
+def _is_link_like(text: str, start: int, line: int) -> bool:
+    """Steht ab `start` etwas, das CommonMark als Link liest (auch ein nicht abbildbarer)?"""
+    try:
+        return _find_link(text, start, line) is not None
+    except MarkdownConversionError:
+        return True
 
 
 def _tokenize(text: str, line: int, *, allow_pills: bool, in_link: bool) -> list[_Tok]:
@@ -862,11 +909,29 @@ def _tokenize(text: str, line: int, *, allow_pills: bool, in_link: bool) -> list
             buf.clear()
 
     index = 0
+    underscore_open = False
     while index < len(text):
         char = text[index]
         if char == "\\" and index + 1 < len(text) and text[index + 1] in _ESCAPABLE:
             buf.append(text[index + 1])
             index += 2
+            continue
+        if char == "_":
+            # CommonMark liest `_x_`/`__x__` als Hervorhebung; der Dialekt kennt
+            # nur `*`. Wortinterne `_` (snake_case) bleiben Text.
+            run_end = index
+            while run_end < len(text) and text[run_end] == "_":
+                run_end += 1
+            before = text[index - 1] if index > 0 else " "
+            after = text[run_end] if run_end < len(text) else " "
+            if underscore_open and not before.isspace() and not after.isalnum():
+                raise _unsupported(
+                    "Hervorhebung mit Unterstrich", line, "Hervorhebung mit * bzw. ** schreiben."
+                )
+            if not after.isspace() and not before.isalnum():
+                underscore_open = True
+            buf.append(text[index:run_end])
+            index = run_end
             continue
         if char == "`":
             run = re.match(r"`+", text[index:])
@@ -907,10 +972,10 @@ def _tokenize(text: str, line: int, *, allow_pills: bool, in_link: bool) -> list
             )
             index += run_len
             continue
-        if char == "!" and text.startswith("[", index + 1) and _find_link(text, index + 1):
+        if char == "!" and text.startswith("[", index + 1) and _is_link_like(text, index + 1, line):
             raise _unsupported("Bild", line, "Bilder fuegt der Web-Editor ein.")
         if char == "[":
-            found = None if in_link else _find_link(text, index)
+            found = None if in_link else _find_link(text, index, line)
             if found is not None:
                 end, inner, href = found
                 flush()
@@ -918,7 +983,7 @@ def _tokenize(text: str, line: int, *, allow_pills: bool, in_link: bool) -> list
                 tokens.append(_Tok("link", target=href, inner=inner_inlines))
                 index = end
                 continue
-            if in_link and _find_link(text, index) is not None:
+            if in_link and _is_link_like(text, index, line):
                 raise _unsupported("verschachtelter Link", line)
         if char == "{" and text.startswith("{", index + 1):
             close = text.find("}}", index + 2)
@@ -1083,10 +1148,20 @@ def _is_delimiter_row(content: str) -> bool:
     return bool(cells) and all(_DELIMITER_CELL_RE.fullmatch(cell) for cell in cells)
 
 
+def _has_cell_pipe(content: str) -> bool:
+    """Enthaelt die Zeile ein unmaskiertes `|` (GFM: moegliche Tabellenzeile)?"""
+    return re.search(r"(?<!\\)\|", content) is not None
+
+
 def _is_table_start(lines: list[str], index: int) -> bool:
+    """GFM-Tabellenbeginn: Kopfzeile mit `|`, darunter eine Trennzeile.
+
+    Erkennt auch Tabellen ohne aeussere Pipes, damit `_parse_table` sie als
+    nicht unterstuetzt melden kann, statt sie still zu Absatztext zu machen.
+    """
     content = lines[index].strip()
     return (
-        content.startswith("|")
+        _has_cell_pipe(content)
         and index + 1 < len(lines)
         and _is_delimiter_row(lines[index + 1].strip())
     )
@@ -1153,7 +1228,12 @@ def _join_paragraph(lines: list[str], start: int, first: str) -> tuple[str, int]
             break
         previous = parts[-1]
         backslashes = len(previous) - len(previous.rstrip("\\"))
-        if backslashes % 2 == 1:
+        if lines[index - 1].endswith("  ") and "".join(parts):
+            # CommonMark: zwei Leerzeichen am Zeilenende sind ein harter
+            # Umbruch, dieselbe Bedeutung wie `\` (§3.2); die Normalform
+            # schreibt ihn als `\`.
+            parts.append("\n" + content)
+        elif backslashes % 2 == 1:
             parts[-1] = previous[:-1]
             parts.append("\n" + content)
         elif not "".join(parts):
@@ -1175,6 +1255,10 @@ def _parse_heading(content: str, line: int) -> Block:
     block_id = anchor.group(1) if anchor else None
     if anchor:
         rest = rest[: anchor.start()]
+    else:
+        # CommonMark: eine schliessende #-Folge (nach Leerraum) gehoert nicht
+        # zum Text. Mit Anker steht sie nicht am Zeilenende und bleibt Text.
+        rest = _CLOSING_HASHES_RE.sub("", rest)
     return _text_block(
         "heading", _parse_inline(rest.strip(), line), line, level=level, block_id=block_id
     )
@@ -1219,15 +1303,38 @@ def _parse_fence(lines: list[str], index: int, indent: int, content: str) -> tup
     return block, cursor + 1
 
 
+def _check_table_row(content: str, line: int) -> None:
+    body = content.strip()
+    if not body.startswith("|") or not body.endswith("|") or body.endswith("\\|"):
+        raise _unsupported(
+            "Tabellenzeile ohne aeussere Pipes",
+            line,
+            "Jede Tabellenzeile beginnt und endet mit |, nach der Tabelle folgt eine Leerzeile.",
+        )
+
+
 def _parse_table(lines: list[str], index: int) -> tuple[Block, int]:
+    _check_table_row(lines[index], index + 1)
+    _check_table_row(lines[index + 1], index + 2)
     rows: list[list[str]] = [_split_row(lines[index].strip())]
     delimiter = lines[index + 1].strip()
     if ":" in delimiter:
         raise _unsupported(
             "Tabellen-Ausrichtung", index + 2, "Die Trennzeile traegt keine Ausrichtung."
         )
+    if len(_split_row(delimiter)) != len(rows[0]):
+        raise _unsupported(
+            "Tabellen-Trennzeile mit anderer Spaltenzahl als die Kopfzeile",
+            index + 2,
+            "Die Trennzeile hat so viele Zellen wie die Kopfzeile.",
+        )
     cursor = index + 2
-    while cursor < len(lines) and lines[cursor].strip().startswith("|"):
+    while cursor < len(lines) and lines[cursor].strip():
+        # GFM: Die Tabelle endet erst an einer Leerzeile oder einem neuen
+        # Block; jede Zeile davor ist eine Tabellenzeile.
+        if not lines[cursor].strip().startswith("|") and _starts_block(lines, cursor):
+            break
+        _check_table_row(lines[cursor], cursor + 1)
         rows.append(_split_row(lines[cursor].strip()))
         cursor += 1
     width = max(len(row) for row in rows)
@@ -1287,6 +1394,12 @@ def _parse_nodes(md: str) -> list[_Node]:
         content = raw[indent:].rstrip()
         while stack and stack[-1][0] >= indent:
             stack.pop()
+        if indent - (stack[-1][0] if stack else 0) >= 4:
+            raise _unsupported(
+                "eingerueckter Code-Block",
+                line,
+                "Code als Fence (```) schreiben; Kinder um zwei Leerzeichen einruecken.",
+            )
         if stack and stack[-1][1].marker is not None:
             raise _unsupported(
                 "Inhalt unter einem geschuetzten Marker", line, "Marker haben keine Kinder."
@@ -1331,6 +1444,10 @@ def _parse_one(lines: list[str], index: int, indent: int, content: str) -> tuple
         block_type, first, extra = "bulletListItem", bullet.group(1) or "", {}
     elif numbered:
         block_type, first, extra = "numberedListItem", numbered.group(2) or "", {}
+        if re.match(r"\[[ xX]\](?:[ \t]|$)", first):
+            raise _unsupported(
+                "Checkbox in nummerierter Liste", line, "Aufgaben als - [ ] schreiben."
+            )
     else:
         block_type, first, extra = "paragraph", content, {}
     text, cursor = _join_paragraph(lines, index, first)

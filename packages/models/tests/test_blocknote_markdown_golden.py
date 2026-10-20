@@ -137,10 +137,11 @@ def test_m5_markdown_argument_is_smaller() -> None:
     assert ratios[worst] >= M5_MIN_RATIO, f"{worst}: {ratios[worst]:.2f}"
 
 
+# Haelt die Typlisten des Konverters an der installierten BlockNote-Version
+# fest (ADR-0058 §3.3). Ein Update reisst hier, bis jemand
+# REPRESENTABLE/NON_REPRESENTABLE_BLOCK_TYPES neu geprueft hat.
+# effect-exempt: Versions-Waechter gegen package-lock.json, hat keinen Prueflung
 def test_blocknote_version_matches_lockfile() -> None:
-    # effect-exempt: haelt die Typlisten des Konverters an der installierten
-    # BlockNote-Version fest (ADR-0058 §3.3). Ein Update reisst hier, bis
-    # jemand REPRESENTABLE/NON_REPRESENTABLE_BLOCK_TYPES neu geprueft hat.
     lock = json.loads((_REPO_ROOT / "apps/web/package-lock.json").read_text(encoding="utf-8"))
     assert lock["packages"]["node_modules/@blocknote/core"]["version"] == BLOCKNOTE_VERSION
 
