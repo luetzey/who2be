@@ -18,6 +18,13 @@
 //      PROD-Fehler bei fehlender Env entfaellt: „derselbe Origin" kann nicht
 //      die falsche Instanz sein.
 
+import {
+  type LocalizedText,
+  type NoticeLevel,
+  resolveFreeText,
+  resolveNoticeLevel,
+} from '@/lib/operatorText'
+
 interface Config {
   apiBaseUrl: string
   // Streamable-HTTP-Endpoint des MCP-Servers (ADR-0034). Optional via
@@ -42,6 +49,16 @@ interface Config {
   // Optionaler Kontakt (`WHO2BE_LAUNCH_CONTACT`, z. B. eine Mail-Adresse), der
   // auf der Hinweisseite angezeigt wird. Leerstring = kein Kontakt-Block.
   launchContact: string
+  // Freier Hinweistext pro Sprache (`WHO2BE_LAUNCH_MESSAGE_DE`/`_EN`, Karte
+  // t_27d7c6ad). Ersetzt den festen Fliesstext der Hinweisseite. Bereits
+  // getrimmt und auf `FREE_TEXT_MAX_LENGTH` gekappt; leer = fester Text.
+  // Auswahl nach Sprache: `pickLocalizedText`.
+  launchMessage: LocalizedText
+  // Optionales Banner (`WHO2BE_NOTICE_DE`/`_EN`, `WHO2BE_NOTICE_LEVEL`) auf
+  // Login und in der App, z. B. fuer Wartung oder Neustart. Beide leer = kein
+  // Banner. Level unbekannt → "info".
+  notice: LocalizedText
+  noticeLevel: NoticeLevel
   // Absolute Obergrenze fuer "Angemeldet bleiben" auf der Login-Seite (Issue
   // #430, ADR-0052): `WHO2BE_SESSION_MAX_AGE_HOURS`. Nur bei gesetztem Haken
   // relevant — die heutige Tab-Lifetime-Session (kein Haken) ist davon
@@ -66,6 +83,11 @@ export interface RuntimeConfig {
   signupDisabled?: boolean
   launchMode?: string
   launchContact?: string
+  launchMessageDe?: string
+  launchMessageEn?: string
+  noticeDe?: string
+  noticeEn?: string
+  noticeLevel?: string
   sessionMaxAgeHours?: number
   turnstileSiteKey?: string
 }
@@ -195,6 +217,12 @@ export function resolveConfig(): Config {
           'who2be-local-anon-key',
     launchMode,
     launchContact: rt.launchContact ?? '',
+    launchMessage: {
+      de: resolveFreeText(rt.launchMessageDe),
+      en: resolveFreeText(rt.launchMessageEn),
+    },
+    notice: { de: resolveFreeText(rt.noticeDe), en: resolveFreeText(rt.noticeEn) },
+    noticeLevel: resolveNoticeLevel(rt.noticeLevel),
     sessionMaxAgeHours: resolveSessionMaxAgeHours(rt.sessionMaxAgeHours),
     // Runtime (`/config.js`) → Build-Arg (`VITE_`) → leer. Bewusst OHNE
     // `read()`: dessen PROD-Fallback auf den eigenen Origin ergaebe hier

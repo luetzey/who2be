@@ -264,6 +264,9 @@
       "label": "Language",
       "switch": "Change language"
     },
+    "notice": {
+      "dismiss": "Dismiss notice"
+    },
     "theme": {
       "switch": "Change theme",
       "light": "Light",

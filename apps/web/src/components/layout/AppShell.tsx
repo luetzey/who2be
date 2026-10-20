@@ -35,6 +35,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 
 import { Footer } from './Footer'
+import { NoticeBanner } from './NoticeBanner'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 interface AppShellProps {
@@ -242,6 +243,8 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Betreiber-Hinweis, pro Sitzung wegklickbar (Karte t_27d7c6ad). */}
+        <NoticeBanner dismissible className="border-x-0 border-t-0" />
         <header className="flex h-14 items-center justify-between border-b px-4 sm:px-6">
           <Sheet open={navSheetOpen} onOpenChange={setNavSheetOpen}>
             <SheetTrigger asChild>

@@ -3,15 +3,19 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { mockConfig } = vi.hoisted(() => ({
-  mockConfig: { launchContact: '' },
+  mockConfig: { launchContact: '', launchMessage: { de: '', en: '' } },
 }))
 
 vi.mock('@/config', () => ({ config: mockConfig }))
 
+import i18n from '@/i18n'
+
 import { ComingSoonPage } from './ComingSoonPage'
 
-afterEach(() => {
+afterEach(async () => {
   mockConfig.launchContact = ''
+  mockConfig.launchMessage = { de: '', en: '' }
+  await i18n.changeLanguage('de')
 })
 
 function renderPage() {
@@ -67,5 +71,46 @@ describe('ComingSoonPage', () => {
     renderPage()
 
     expect(document.querySelector('main')?.className).toContain('break-words')
+  })
+
+  // Karte t_27d7c6ad: Betreiber-Freitext pro Sprache.
+  it('zeigt ohne Freitext den festen Text', () => {
+    renderPage()
+
+    expect(screen.getByText(/Die Registrierung ist im Moment noch nicht offen/)).toBeInTheDocument()
+  })
+
+  it('ersetzt den festen Text durch den Freitext der aktiven Sprache', async () => {
+    mockConfig.launchMessage = { de: 'Wir testen gerade allein.', en: 'Private test phase.' }
+
+    const { unmount } = renderPage()
+    expect(screen.getByText('Wir testen gerade allein.')).toBeInTheDocument()
+    expect(screen.queryByText(/Die Registrierung ist im Moment/)).not.toBeInTheDocument()
+    unmount()
+
+    await i18n.changeLanguage('en')
+    renderPage()
+    expect(screen.getByText('Private test phase.')).toBeInTheDocument()
+  })
+
+  it('faellt auf Englisch ohne EN-Text auf den deutschen Freitext zurueck', async () => {
+    mockConfig.launchMessage = { de: 'Nur DE gesetzt.', en: '' }
+    await i18n.changeLanguage('en')
+
+    renderPage()
+
+    expect(screen.getByText('Nur DE gesetzt.')).toBeInTheDocument()
+  })
+
+  it('rendert Freitext als reinen Text — kein HTML, keine Links', () => {
+    const hostile = '<a href="javascript:alert(1)">klick</a><img src=x onerror=alert(1)> [x](https://evil)'
+    mockConfig.launchMessage = { de: hostile, en: '' }
+
+    renderPage()
+
+    expect(screen.getByText(hostile)).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
+    // Einziger Link bleibt "Zurueck zur Anmeldung".
+    expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 })

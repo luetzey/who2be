@@ -4,16 +4,23 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { config } from '@/config'
+import { pickLocalizedText } from '@/lib/operatorText'
 
 // "Wir arbeiten noch"-Hinweisseite (Issue #429, WHO2BE_LAUNCH_MODE=coming_soon).
 // Ersetzt das Signup-Formular auf `/signup`, solange der Launch-Modus aktiv
-// ist — siehe der Gate in `SignupPage.tsx`. Folgt dem Marketing-Page-Pattern
+// ist — siehe der Gate in `SignupPage.tsx`. Zeigt sich ausserdem auf
+// `/auth/callback`, wenn GoTrue eine Provider-Anmeldung wegen gesperrter
+// Registrierung abweist (Karte t_27d7c6ad). Folgt dem Marketing-Page-Pattern
 // aus docs/frontend/design-language.md §10.2, mit einem echten `<h1>` statt
 // `CardTitle` (das rendert ein `<h2>`) — die a11y-Anforderung verlangt genau
 // eine H1 auf dieser Seite.
 export function ComingSoonPage() {
-  const { t } = useTranslation('auth')
+  const { t, i18n } = useTranslation('auth')
   const contact = config.launchContact
+  // Freitext des Betreibers (`WHO2BE_LAUNCH_MESSAGE_DE`/`_EN`) ersetzt den
+  // festen Fliesstext; ohne Wert bleibt `comingSoon.body`. Reiner Textknoten,
+  // Zeilenumbrueche per `whitespace-pre-line` — kein HTML, keine Links.
+  const message = pickLocalizedText(config.launchMessage, i18n.resolvedLanguage ?? i18n.language)
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
@@ -23,7 +30,9 @@ export function ComingSoonPage() {
             {t('brand')}
           </span>
           <h1 className="text-3xl font-semibold tracking-tight">{t('comingSoon.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('comingSoon.body')}</p>
+          <p className="text-sm whitespace-pre-line text-muted-foreground">
+            {message !== '' ? message : t('comingSoon.body')}
+          </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {contact !== '' ? (
