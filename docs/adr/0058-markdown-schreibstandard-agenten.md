@@ -1,8 +1,9 @@
 # ADR-0058 — Markdown ist der Schreibstandard für Agenten, auch bei Teiländerungen
 
-- Status: **Proposed** (2026-10-20). Die Richtung hat der Owner entschieden
-  (Abschnitt 2). Die Abschnitte 3 und 5 bis 9 sind ein Vorschlag. Vier Weichen
-  (W58-1 bis W58-4) liegen beim Owner, Übersicht in Abschnitt 10.
+- Status: **Accepted** (Owner, 2026-10-20). Die Richtung hat der Owner am
+  2026-10-16 entschieden, die vier Weichen W58-1 bis W58-4 am 2026-10-20. Beide
+  Entscheidungen stehen im Wortlaut in Abschnitt 2, die Übersicht in
+  Abschnitt 10.
 - Datum: 2026-10-20
 - Gemessen gegen: `origin/main` @ `0ddb704a` (100 Werkzeuge, `tools/list`
   114.203 Bytes). Code-Aussagen tragen einen Symbolanker (Konvention
@@ -16,7 +17,7 @@
   (Block-Anker, nur Überschriften), ADR-0053 (Fälle, Maßnahmen), ADR-0005
   (MCP als HTTP-Client ohne DB).
 - Umfang: **nur Dokumentation.** Diese ADR ändert keinen Code. Umsetzung in
-  den Paketen P1 bis P5 (Abschnitt 9).
+  den Paketen P1 bis P4 (Abschnitt 9).
 
 ## Inhalt
 
@@ -29,7 +30,7 @@
 7. Übergang: Editor-JSON als Eingabe (Frage 5, Weiche W58-3)
 8. Wirkung auf das Budget (Frage 6)
 9. Paketschnitt (Frage 7)
-10. Weichen für den Owner
+10. Weichen (entschieden)
 11. Konsequenzen
 
 ## 1. Kontext und Befund
@@ -148,11 +149,11 @@ Teiländerungen?):
 
 > „M1b lass uns bei einem Standard bleiben und diese pflegen und verbessern“
 
-Daraus folgt für diese ADR, und nur dieser Teil ist entschieden:
+Daraus folgt die Richtung dieser ADR:
 
 1. **Markdown ist der eine Standard**, über den Agenten Inhalte schreiben:
-   Persona, System-Prompt, Playbook, Resource. Das gilt auch für
-   Teiländerungen.
+   Persona, System-Prompt, Playbook, Resource und, mit W58-4, die
+   `usage_notes` des externen Tools. Das gilt auch für Teiländerungen.
 2. Lesend liefert ADR-0056 schon Markdown. Schreibend kommt dasselbe Format
    dazu.
 3. **BlockNote bleibt das Speicherformat** in der Datenbank und im
@@ -160,6 +161,25 @@ Daraus folgt für diese ADR, und nur dieser Teil ist entschieden:
    Datenmigration.
 4. „Ein Standard“ heißt: Editor-JSON als Agenten-Eingabe hat einen
    Auslaufplan, keinen Dauerzustand (Abschnitt 7).
+
+Owner, 2026-10-20, wörtlich zu den vier Weichen dieser ADR (Abschnitt 10):
+
+> „1D, 2B, 3A, 4 ja“
+
+Das heißt:
+
+- **W58-1 = D** (4.1): Pflicht-Anker ` [#id]` nur an Überschriften, die
+  übrigen Blöcke ordnet der Server je Abschnitt zu (4.3).
+- **W58-2 = B** (5.1): neuer Lesewert `format="source"`. `text` bleibt die
+  Lesefassung, `full` bleibt bitgleich.
+- **W58-3 = A** (7): harter Schnitt mit P3, vor dem Cloud-Release. Die
+  Builder-Inhalte ziehen im selben Release mit. Ein Paket P5 gibt es nicht.
+- **W58-4 = ja** (6.2): `usage_notes` des externen Tools wird ebenfalls
+  Markdown.
+
+Die nicht gewählten Optionen sind in den Abschnitten 4.1, 5.1 und 7 als
+verworfen markiert. Abschnitte 3, 6, 8 und 9 hängen an keiner Owner-Weiche
+und gelten mit der Annahme dieser ADR.
 
 W2 (Werkzeug-Profile) ist nicht Teil dieser ADR.
 
@@ -182,7 +202,8 @@ W2 (Werkzeug-Profile) ist nicht Teil dieser ADR.
   abgelehnt. Nachteil: HTML hat in BlockNote kein Gegenstück, und das wäre
   genau der stille Verlust, den die Karte ausschließt.
 
-**Empfehlung A.** Nur A liefert echte BlockNote-Struktur, und der Bestand
+**Entscheidung A** (mit Annahme dieser ADR). Nur A liefert echte
+BlockNote-Struktur, und der Bestand
 (1.5) braucht nichts darüber hinaus. Von B übernimmt A die Ankerform und die
 Patch-Operationen, nicht den Split.
 
@@ -254,7 +275,8 @@ per Markdown gültig, und der Versions-Diff bleibt lesbar.
 
 ### 4.1 Optionen
 
-- **A — ID-Marker an jedem Block.** Jeder Block trägt seinen Anker
+- **A — ID-Marker an jedem Block.** *Verworfen (Owner W58-1 = D,
+  2026-10-20).* Jeder Block trägt seinen Anker
   ` [#id]`, Code-Blöcke auf eigener Zeile nach der Fence. Das ist die Form der
   WorkArea (`apps/api/src/who2be_api/services/wa_blocks.py#render_markdown`).
   - Vorteil: exakt. Jeder Block behält seine ID, auch wenn er geändert oder
@@ -265,13 +287,15 @@ per Markdown gültig, und der Versions-Diff bleibt lesbar.
     dazu, beim Bestand aus 1.5 also +15–30 % auf das Markdown **[E]**. Dazu
     kommt: Ein Modell, das 600 Listenpunkte mit Markern umschreibt, verliert
     eher einen Marker. Das kostet dann still die ID, ohne Fehler.
-- **B — Anker über den Überschriftentext (Slug).** `## Prozedur` hat den
+- **B — Anker über den Überschriftentext (Slug).** *Verworfen (W58-1 = D).*
+  `## Prozedur` hat den
   Anker `prozedur`.
   - Vorteil: kein Marker im Text.
   - Nachteil: Jede Umbenennung bricht alle Verweise. Gleich lautende
     Überschriften brauchen Zähler. Es wäre eine zweite Ankersprache neben den
     bestehenden Block-IDs (ADR-0021).
-- **C — nur serverseitige Zuordnung.** Kein Marker. Der Server ordnet neue
+- **C — nur serverseitige Zuordnung.** *Verworfen (W58-1 = D).* Kein Marker.
+  Der Server ordnet neue
   und alte Blöcke per Diff (Inhalt, Position) zu.
   - Vorteil: sauberstes Markdown.
   - Nachteil: Bei Umbenennen und Verschieben zugleich ist die Zuordnung
@@ -279,6 +303,7 @@ per Markdown gültig, und der Versions-Diff bleibt lesbar.
     Resource-Links ins Leere (Zustand „Block gelöscht“, ADR-0021). Das ist der
     teure Fall.
 - **D — Hybrid: Pflicht-Anker an Überschriften, Zuordnung für den Rest.**
+  **Gewählt (Owner W58-1 = D, 2026-10-20).**
   - Überschriften tragen ` [#id]` am Zeilenende. Das ist dieselbe Form wie in
     der WorkArea.
   - Alle anderen Blöcke tragen keinen Marker. Der Server ordnet sie innerhalb
@@ -291,7 +316,8 @@ per Markdown gültig, und der Versions-Diff bleibt lesbar.
     ID. Der Diff zeigt ihn dann als „entfernt + hinzugefügt“ statt
     „geändert“. Einen gespeicherten Verweis bricht das nicht.
 
-**Empfehlung D.** Sie schützt alles, was heute gespeichert verweist, mit der
+**Entscheidung D** (Owner 2026-10-20, „1D“). Sie schützt alles, was heute
+gespeichert verweist, mit der
 Ankersprache, die es schon gibt (ADR-0021, ADR-0047). Der einzige Preis liegt
 in der Diff-Darstellung bei gleichzeitigem Ändern und Verschieben eines
 Absatzes. A bleibt die Rückfallposition, wenn sich zeigt, dass Fälle oder
@@ -343,13 +369,15 @@ Inhaltsfelder sind je ein eigenes Markdown-Dokument mit eigener Zuordnung.
 
 1.2 zeigt, dass die ADR-0056-Lesefassung keine Quelle ist. Drei Wege:
 
-- **A — `format="text"` wird zur Quelle.** Alle lesenden Werkzeuge liefern
+- **A — `format="text"` wird zur Quelle.** *Verworfen (Owner W58-2 = B,
+  2026-10-20).* Alle lesenden Werkzeuge liefern
   Quell-Markdown mit Ankern und Platzhalter-Tokens.
   - Vorteil: wörtlich „ein Format“.
   - Nachteil: `get_persona` und `fetch_playbook` verlieren den aufgelösten
     Render. Gerade den liest ein Agent beim Start, um zu arbeiten, nicht um
     zu schreiben. Danach bräuchte er für jeden Platzhalter einen Folgeaufruf.
-- **B — neuer Wert `format="source"`.** Er liefert Quell-Markdown: Kopf mit
+- **B — neuer Wert `format="source"`.** **Gewählt (Owner W58-2 = B,
+  2026-10-20).** Er liefert Quell-Markdown: Kopf mit
   `id`, `version`, `status` und `base_rev` (Konflikt-Token aus 6.3, die Basis
   für die Teiländerung), Inhalt in der
   Normalform aus 5.2, Anker, Tokens. `text` bleibt die Lesefassung zum
@@ -359,13 +387,15 @@ Inhaltsfelder sind je ein eigenes Markdown-Dokument mit eigener Zuordnung.
     seine Default-Antwort, kein ADR-0056-Vertrag bricht.
   - Nachteil: drei Werte statt zwei. Etwa 60 Bytes Beschreibung je
     betroffenem Werkzeug.
-- **C — die Schreibwerkzeuge liefern die Quelle mit.** Jedes
+- **C — die Schreibwerkzeuge liefern die Quelle mit.** *Verworfen
+  (W58-2 = B).* Jedes
   `create_*`/`update_*` antwortet mit dem gespeicherten Quell-Markdown.
   - Vorteil: kein neuer Lesewert.
   - Nachteil: Für die erste Änderung an einem bestehenden Element fehlt die
     Vorlage trotzdem.
 
-**Empfehlung B.** „Ein Standard“ meint das Format Markdown, nicht ein einziges
+**Entscheidung B** (Owner 2026-10-20, „2B“). „Ein Standard“ meint das Format
+Markdown, nicht ein einziges
 Dokument für zwei Zwecke. B hält beide ADR-0056-Werte bitgleich und ersetzt
 nur, was der Schreiber liest: heute `full` (JSON), künftig `source`
 (Markdown). Der Hinweis in jeder Text-Antwort und in jeder
@@ -451,14 +481,16 @@ nicht zeigt, solange der Block unverändert ist.
     scheitert an mehrdeutigen Treffern und berührt Anker-Marker, ohne es zu
     merken. Und es ist eine zweite Änderungssprache neben den Ankern.
 
-**Empfehlung A und B zusammen, C nicht.** A ist der Vollstand (Anlegen,
+**Entscheidung A und B zusammen, C nicht** (mit Annahme dieser ADR). A ist
+der Vollstand (Anlegen,
 größerer Umbau), B die Teiländerung. Beide sprechen dieselbe Ankersprache.
 
 ### 6.2 Werkzeuge
 
 - **Die `create_*`/`update_*`-Werkzeuge** für Persona, Playbook, Resource,
   System-Prompt und externes Tool behalten Name und PUT-Semantik. Ihre
-  BlockNote-Felder (1.1) werden zu Markdown-Strings. Strukturfelder bleiben
+  BlockNote-Felder (1.1) werden zu Markdown-Strings, beim externen Tool also
+  auch `usage_notes` (Owner W58-4 = ja, 2026-10-20). Strukturfelder bleiben
   typisiert: Name, Tags, Trigger, Typ, Locale, Modus-Name, `trigger`,
   `is_default`, `playbook_id`, Skills. Die Agent-Werkzeuge
   (`create_agent`/`update_agent`) tragen kein BlockNote und ändern sich nicht.
@@ -540,7 +572,8 @@ Optionen:
     Überarbeitungen durch einen Agenten (der eigentliche Zweck von M1b) gehen
     dann nur noch über den Vollstand.
 
-**Empfehlung A.** Der Token muss sich bei jedem Schreiben ändern, und das
+**Entscheidung A** (mit Annahme dieser ADR). Der Token muss sich bei jedem
+Schreiben ändern, und das
 garantiert nur ein Wert, der aus dem Inhalt selbst entsteht. B verlagert die
 Garantie auf eine Konvention, C opfert den Kernfall. Das ist eine technische
 Folge aus G3, keine Owner-Weiche.
@@ -570,10 +603,11 @@ Unstrittig ist:
 - **`format="full"`** bleibt lesend bitgleich (ADR-0056 §3.2), aber nur als
   Diagnose- und Strukturweg, nicht mehr als Schreibvorlage.
 
-Offen ist nur, wie lange die **MCP-Schreibwerkzeuge** Editor-JSON noch
-annehmen:
+Entschieden ist auch, wie lange die **MCP-Schreibwerkzeuge** Editor-JSON noch
+annehmen (Owner W58-3 = A, 2026-10-20, „3A“):
 
-- **A — harter Schnitt in einem Paket.** Mit P3 nehmen die MCP-Werkzeuge nur
+- **A — harter Schnitt in einem Paket.** **Gewählt.** Mit P3 nehmen die
+  MCP-Werkzeuge nur
   noch Markdown. Ein Aufruf mit Editor-JSON scheitert an der
   Schema-Validierung mit einer klaren Meldung, nie still. Die verwalteten
   Builder-Inhalte, die heute JSON-Schreibwege beschreiben, ziehen im selben
@@ -583,23 +617,26 @@ annehmen:
     gibt kein Doppel-Schema und keinen Abbau-Termin, den man vergessen kann.
   - Nachteil: Fremde Agenten mit altem Prompt scheitern ab dem Tag der
     Umstellung, bis jemand ihren Prompt anpasst.
-- **B — befristetes Doppelangebot.** Das Schema nimmt beides an (`anyOf`).
-  Jeder JSON-Schreibaufruf wird gezählt. Der Abbau (P5) kommt zu einem festen
+- **B — befristetes Doppelangebot.** *Verworfen (W58-3 = A).* Das Schema
+  nimmt beides an (`anyOf`).
+  Jeder JSON-Schreibaufruf würde gezählt, ein Abbau-Paket käme zu einem festen
   Datum oder nach 14 Tagen ohne JSON-Aufruf, je nachdem, was später eintritt.
   - Vorteil: kein Bruch für Bestandsagenten.
-  - Nachteil: Bis P5 wächst der Katalog, statt zu schrumpfen, denn beide
+  - Nachteil: Bis zum Abbau wächst der Katalog, statt zu schrumpfen, denn beide
     Schemas stehen im `tools/list`. Es gibt zwei Schreibwege mit zwei
     Fehlerbildern, und für die Zählung braucht es eine neue Quelle in der
     Nutzungserfassung.
-- **C — Doppelangebot ohne Frist.** Widerspricht dem Owner-Wortlaut („ein
+- **C — Doppelangebot ohne Frist.** *Verworfen.* Widerspricht dem
+  Owner-Wortlaut („ein
   Standard“) und ist nur der Vollständigkeit halber genannt.
 
-**Empfehlung A, vor dem Cloud-Release.** Vor dem Release gibt es keine
+**Entscheidung A, vor dem Cloud-Release** (Owner 2026-10-20, „3A“). Vor dem
+Release gibt es keine
 fremden Konsumenten mit Bestandsschutz. Die bekannten JSON-Schreiber sind die
 eigenen Builder-Inhalte, und die ziehen im selben Release mit. Der Bruch ist
 laut (Schema-Fehler) und nicht still. B kauft Rücksicht, die vor dem Release
-niemand braucht, und verschiebt die Ersparnis. Das ist eine Urteilsfrage über
-das Risiko für Agenten außerhalb des Repos, deshalb Weiche.
+niemand braucht, und verschiebt die Ersparnis. Das Risiko für Agenten
+außerhalb des Repos hat der Owner damit bewusst getragen.
 
 ## 8. Wirkung auf das Budget (Frage 6)
 
@@ -723,7 +760,7 @@ kennt (3.2). Das MCP bleibt ein dünner HTTP-Adapter (ADR-0005).
 8. `changelog.d/<slug>.added.md`
 
 **P3 — MCP-Umstellung** (Domäne `apps/mcp`, Hotspot `server.py`, deshalb
-allein). Mit W58-3 = A ist das der Schnitt.
+allein). Mit W58-3 = A ist das der harte Schnitt, vor dem Cloud-Release.
 
 1. `apps/mcp/src/who2be_mcp/server.py` (Schreibwerkzeuge auf Markdown,
    `format="source"`, Beschreibungen)
@@ -745,32 +782,37 @@ allein). Mit W58-3 = A ist das der Schnitt.
 4. `apps/api/src/who2be_api/repositories/workspace_repository.py`
    (`BUILDER_CONTENT_VERSION` +1)
 5. `docs/mcp-payload-budget.md`, `docs/mcp-claude-code.md`
-6. `CLAUDE.md` (Werkzeugzahl 100 → 101)
-7. `changelog.d/<slug>.changed.md`
+6. `changelog.d/<slug>.changed.md`
+
+Die Werkzeugzahl (100 → 101) zieht P4 nicht in `CLAUDE.md` nach. Sie steht
+künftig nur in `README.md` und `ROADMAP.md`; das regelt Kanban-Karte
+t_bf8ed54c.
 
 Zählt man DE und EN einzeln, sind es mehr als acht Dateien. Dann teilt sich
 P4 in P4a (Inhalte DE+EN, Version) und P4b (Doku). P4a muss vor oder mit P3
 auf `main` sein, sonst beschreiben die Builder-Playbooks einen Schreibweg,
 den es nicht mehr gibt.
 
-**P5 — nur bei W58-3 = B:** JSON-Eingabe entfernen, nach Ablauf der Frist.
+Ein Paket P5 (Abbau einer JSON-Eingabe nach Frist) entfällt mit W58-3 = A.
 
 **Werkzeugzahl:** 100 → 101 (`edit_content`). Budget: netto −1,6 bis
 −2,7 KB auf `tools/list` (8.1, geschätzt), bei 114.203 von 180.000 Bytes.
 
-## 10. Weichen für den Owner
+## 10. Weichen (entschieden)
 
-| Weiche | Frage | Empfehlung |
-| --- | --- | --- |
-| **W58-1** (4.1) | Wie bleiben Block-IDs bei Markdown-Änderungen stabil? | **D**: Pflicht-Anker ` [#id]` an Überschriften (WorkArea-Form), übrige Blöcke ordnet der Server je Abschnitt zu. |
-| **W58-2** (5.1) | Woher liest der Schreiber die Markdown-Vorlage? | **B**: neuer Wert `format="source"`; `text` bleibt Lesefassung, `full` bleibt bitgleich. |
-| **W58-3** (7) | Wie lange nimmt das MCP noch Editor-JSON an? | **A**: harter Schnitt mit P3, vor dem Cloud-Release, Builder-Inhalte im selben Release. |
-| **W58-4** (6.2) | Gehört `usage_notes` des externen Tools mit zum Standard? Die Karte nennt Persona, System-Prompt, Playbook, Resource. | **Ja.** Sonst bleibt genau ein BlockNote-Schreibfeld übrig, und „ein Standard“ hätte eine Ausnahme. Mehraufwand: ein Feld, kein neues Werkzeug. |
+Owner, 2026-10-20, wörtlich:
 
-Die Abschnitte 3, 6, 8 und 9 hängen nicht an einer Owner-Entscheidung und
-gehen mit der Annahme dieser ADR mit. Fällt W58-1 auf A, ändern sich nur 4.3
-und die Kostenschätzung. Fällt W58-3 auf B, kommt P5 hinzu, und der
-Katalog-Gewinn aus 8.1 kommt erst mit P5.
+> „1D, 2B, 3A, 4 ja“
+
+| Weiche | Frage | Entscheidung | Verworfen |
+| --- | --- | --- | --- |
+| **W58-1** (4.1) | Wie bleiben Block-IDs bei Markdown-Änderungen stabil? | **D**: Pflicht-Anker ` [#id]` nur an Überschriften (WorkArea-Form), übrige Blöcke ordnet der Server je Abschnitt zu. | A (Anker an jedem Block), B (Slug), C (nur Server-Zuordnung) |
+| **W58-2** (5.1) | Woher liest der Schreiber die Markdown-Vorlage? | **B**: neuer Lesewert `format="source"`; `text` bleibt Lesefassung, `full` bleibt bitgleich. | A (`text` wird Quelle), C (nur die Schreibantwort liefert die Quelle) |
+| **W58-3** (7) | Wie lange nimmt das MCP noch Editor-JSON an? | **A**: harter Schnitt mit P3, vor dem Cloud-Release, Builder-Inhalte im selben Release, kein P5. | B (befristetes Doppelangebot mit P5), C (Doppelangebot ohne Frist) |
+| **W58-4** (6.2) | Gehört `usage_notes` des externen Tools mit zum Standard? | **Ja**: `usage_notes` wird ebenfalls Markdown. Ein Feld, kein neues Werkzeug. | Nein (ein BlockNote-Schreibfeld bliebe als Ausnahme) |
+
+Die Abschnitte 3, 6, 8 und 9 hängen an keiner Owner-Weiche und gelten mit der
+Annahme dieser ADR.
 
 ## 11. Konsequenzen
 
@@ -790,7 +832,7 @@ Katalog-Gewinn aus 8.1 kommt erst mit P5.
 
 - Es gibt einen Konverter mehr, und er muss mit jeder BlockNote-Version
   Schritt halten. P1 macht einen neuen Blocktyp zu einem roten Test.
-- Bei W58-3 = A brechen Agenten außerhalb des Repos, die JSON schreiben, am
+- Mit W58-3 = A brechen Agenten außerhalb des Repos, die JSON schreiben, am
   Tag der Umstellung laut.
 - Der Katalog schrumpft durch W1 kaum (8.1). Wer die Builder-Last senken will,
   braucht W2.

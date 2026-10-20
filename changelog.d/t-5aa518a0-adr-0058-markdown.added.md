@@ -1,13 +1,14 @@
-- ADR-0058 (Proposed) legt fest, dass Agenten Inhalte künftig in Markdown
+- ADR-0058 (Accepted) legt fest, dass Agenten Inhalte künftig in Markdown
   schreiben, auch bei Teiländerungen. Das gilt für Persona, System-Prompt,
-  Playbook und Resource. Die Owner-Entscheidung vom 2026-10-16 („W1a“, „M1b“)
-  steht im Wortlaut darin. BlockNote bleibt das Speicherformat in der
-  Datenbank und im Web-Editor, es gibt keine Migration.
+  Playbook, Resource und die `usage_notes` des externen Tools. Die
+  Owner-Entscheidungen vom 2026-10-16 („W1a“, „M1b“) und vom 2026-10-20
+  („1D, 2B, 3A, 4 ja“) stehen im Wortlaut darin. BlockNote bleibt das
+  Speicherformat in der Datenbank und im Web-Editor, es gibt keine Migration.
 
   Die ADR beschreibt den Markdown-Umfang, Fehler statt stillem Verlust bei
   nicht abbildbaren Blöcken, die Rundlauf-Garantie mit Golden- und
   erzeugten Tests, Teiländerungen per Überschriften-Anker und die
-  gemessene Budgetwirkung. Dazu kommen der Paketschnitt P1 bis P5 und vier
-  Weichen für den Owner: Block-IDs, Schreibvorlage `format="source"`,
-  Auslauf der JSON-Eingabe und `usage_notes`. Es ändert sich noch kein
-  Verhalten.
+  gemessene Budgetwirkung. Entschieden sind: Pflicht-Anker nur an
+  Überschriften, Schreibvorlage über `format="source"`, harter Schnitt der
+  JSON-Eingabe mit P3 vor dem Cloud-Release und `usage_notes` in Markdown.
+  Der Paketschnitt umfasst P1 bis P4. Es ändert sich noch kein Verhalten.
