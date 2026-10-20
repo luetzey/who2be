@@ -74,7 +74,7 @@
       "viewChanges": "Änderungen und Prüffälle ansehen",
       "fallback": "Aktion fehlgeschlagen.",
       "error": {
-        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+        "promoteFill": "Vor dem Aktivieren ausfüllen: {{fields}}.",
         "promoteTitle": "Promote nicht möglich"
       },
       "toast": {
@@ -226,7 +226,7 @@
     },
     "toast": {
       "linksSaved": "Verknüpfungen gespeichert.",
-      "blockLinksSaved": "Block-Verknuepfungen gespeichert.",
+      "blockLinksSaved": "Block-Verknüpfungen gespeichert.",
       "compositionSaved": "Composition gespeichert.",
       "subResourcesSaved": "Sub-Resources gespeichert."
     }
@@ -760,7 +760,7 @@
     "signup": {
       "title": "Registrieren",
       "description": "Erstelle ein Konto, um deinen Workspace einzurichten.",
-      "descriptionPending": "Bestaetige deine E-Mail-Adresse ueber den Link, den wir dir geschickt haben.",
+      "descriptionPending": "Bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
       "submit": "Konto erstellen",
       "confirmPending": "Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung abzuschliessen.",
       "alreadyAccount": "Schon ein Konto?",
@@ -772,27 +772,27 @@
         "privacyLink": "Datenschutzerklaerung",
         "after": "."
       },
-      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklärung zu, um fortzufahren."
     },
     "captcha": {
-      "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+      "pending": "Bitte bestätige kurz, dass du kein Bot bist.",
       "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
-      "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau spaeter wieder vorbei.",
+      "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau später wieder vorbei.",
       "contact": "Fragen? Schreib uns an:"
     },
     "resetPassword": {
-      "title": "Passwort zuruecksetzen",
+      "title": "Passwort zurücksetzen",
       "description": "Wir senden dir einen Link, mit dem du ein neues Passwort setzen kannst.",
       "descriptionSent": "Wenn ein Konto zu dieser E-Mail existiert, ist eine Mail mit Reset-Link unterwegs.",
       "submit": "Reset-Link senden",
-      "checkInbox": "Pruefe dein Postfach und folge dem Link in der E-Mail."
+      "checkInbox": "Prüfe dein Postfach und folge dem Link in der E-Mail."
     },
     "setPassword": {
       "title": "Passwort setzen",
-      "description": "Lege ein Passwort fest, damit du dich beim naechsten Mal direkt anmelden kannst.",
+      "description": "Lege ein Passwort fest, damit du dich beim nächsten Mal direkt anmelden kannst.",
       "submit": "Passwort setzen",
       "success": "Passwort gesetzt."
     },
@@ -827,8 +827,8 @@
       "loadingTitle": "Anmeldung wird abgeschlossen…",
       "loadingDescription": "Einen Moment, wir richten deine Sitzung ein.",
       "errorTitle": "Anmeldung fehlgeschlagen",
-      "errorDescription": "Der Login ueber den externen Anbieter klappte nicht.",
-      "noSession": "Es kam keine gueltige Sitzung zurueck. Bitte erneut versuchen."
+      "errorDescription": "Der Login über den externen Anbieter klappte nicht.",
+      "noSession": "Es kam keine gültige Sitzung zurück. Bitte erneut versuchen."
     },
     "oauth": {
       "google": "Mit Google anmelden",
@@ -973,7 +973,7 @@
       "title": "Impressum",
       "sections": {
         "legalNotice": {
-          "heading": "Angaben gemaess § 5 DDG",
+          "heading": "Angaben gemäß § 5 DDG",
           "companyName": "Firmenname / Rechtsform",
           "street": "Strasse und Hausnummer",
           "city": "PLZ und Ort",
@@ -995,13 +995,13 @@
           "registryLabel": "Eintragung im",
           "registry": "Handels-/Vereinsregister",
           "courtLabel": "Registergericht:",
-          "court": "zustaendiges Registergericht",
+          "court": "zuständiges Registergericht",
           "numberLabel": "Registernummer:",
           "number": "Registernummer"
         },
         "vatId": {
           "heading": "Umsatzsteuer-ID",
-          "label": "Umsatzsteuer-Identifikationsnummer gemaess § 27a UStG:",
+          "label": "Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG:",
           "value": "USt-IdNr."
         },
         "responsible": {
@@ -1010,7 +1010,7 @@
         },
         "dispute": {
           "heading": "EU-Streitschlichtung",
-          "text1": "Die Europaeische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:",
+          "text1": "Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:",
           "platformLink": "Link zur OS-Plattform",
           "text2": "Wir sind",
           "participation": "bereit / nicht bereit / nicht verpflichtet",
@@ -1022,18 +1022,18 @@
       "title": "Allgemeine Geschaeftsbedingungen (AGB)",
       "intro": "Diese AGB regeln die Nutzung von Who2Be (SaaS-Mischvertrag aus Miet- und Dienstleistungselementen) durch",
       "introUserGroup": "Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)",
-      "introPeriod": ". Abschnitt A gilt fuer alle Nutzer, Abschnitt B nur fuer Verbraucher (B2C), Abschnitt C nur fuer Unternehmer (B2B).",
+      "introPeriod": ". Abschnitt A gilt für alle Nutzer, Abschnitt B nur für Verbraucher (B2C), Abschnitt C nur für Unternehmer (B2B).",
       "groups": {
         "general": {
           "heading": "A. Allgemeine Bestimmungen (alle Nutzer)"
         },
         "consumer": {
-          "heading": "B. Zusaetzliche Bestimmungen fuer Verbraucher (B2C)",
-          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die ueberwiegend weder seiner gewerblichen noch seiner selbstaendigen beruflichen Taetigkeit zugerechnet werden koennen."
+          "heading": "B. Zusätzliche Bestimmungen für Verbraucher (B2C)",
+          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die überwiegend weder seiner gewerblichen noch seiner selbständigen beruflichen Tätigkeit zugerechnet werden können."
         },
         "business": {
-          "heading": "C. Zusaetzliche Bestimmungen fuer Unternehmer (B2B)",
-          "note": "Unternehmer ist, wer den Vertrag in Ausuebung gewerblicher oder selbstaendiger beruflicher Taetigkeit abschliesst."
+          "heading": "C. Zusätzliche Bestimmungen für Unternehmer (B2B)",
+          "note": "Unternehmer ist, wer den Vertrag in Ausübung gewerblicher oder selbständiger beruflicher Tätigkeit abschliesst."
         }
       },
       "sections": {
@@ -1051,70 +1051,70 @@
         },
         "pricing": {
           "heading": "§ 4 Preise & Zahlungsbedingungen",
-          "body": "Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Faelligkeit, Verzug, Steuern"
+          "body": "Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Fälligkeit, Verzug, Steuern"
         },
         "termination": {
-          "heading": "§ 5 Laufzeit & Kuendigung",
-          "body": "Vertragslaufzeit, Verlaengerung, ordentliche/ausserordentliche Kuendigung, Kuendigung zum Periodenende"
+          "heading": "§ 5 Laufzeit & Kündigung",
+          "body": "Vertragslaufzeit, Verlängerung, ordentliche/ausserordentliche Kündigung, Kündigung zum Periodenende"
         },
         "obligations": {
-          "heading": "§ 6 Pflichten der Nutzer & zulaessige Nutzung",
-          "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung fuer eingestellte Daten"
+          "heading": "§ 6 Pflichten der Nutzer & zulässige Nutzung",
+          "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung für eingestellte Daten"
         },
         "availability": {
-          "heading": "§ 7 Verfuegbarkeit, Service-Level (SLA), Wartung & Aenderungen",
-          "body": "Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt",
+          "heading": "§ 7 Verfügbarkeit, Service-Level (SLA), Wartung & Änderungen",
+          "body": "Verfügbarkeitszusage, Wartungsfenster, Änderungsvorbehalt",
           "slaIntro": "Service-Level (verbindliche Werte folgen vom Betreiber):",
-          "slaUptimeLabel": "Verfuegbarkeit (Monatsmittel):",
-          "slaUptime": "Zielwert Verfuegbarkeit, z. B. 99,x %",
+          "slaUptimeLabel": "Verfügbarkeit (Monatsmittel):",
+          "slaUptime": "Zielwert Verfügbarkeit, z. B. 99,x %",
           "slaResponseLabel": "Reaktionszeiten Support:",
-          "slaResponse": "Reaktionszeiten je Prioritaet/Plan",
+          "slaResponse": "Reaktionszeiten je Priorität/Plan",
           "slaMaintenanceLabel": "Geplante Wartungsfenster:",
-          "slaMaintenance": "angekuendigte Wartungsfenster (Zeitraum/Vorlauf)",
+          "slaMaintenance": "angekündigte Wartungsfenster (Zeitraum/Vorlauf)",
           "slaCreditsLabel": "Service-Gutschriften:",
           "slaCredits": "Regelung zu Gutschriften bei SLA-Unterschreitung, falls zugesagt"
         },
         "liability": {
           "heading": "§ 8 Haftung",
-          "body": "Haftungsregelung (Vorsatz/grobe Fahrlaessigkeit, Kardinalpflichten, Begrenzung)"
+          "body": "Haftungsregelung (Vorsatz/grobe Fahrlässigkeit, Kardinalpflichten, Begrenzung)"
         },
         "privacy": {
           "heading": "§ 9 Datenschutz",
-          "body": "Verweis auf Datenschutzerklaerung und ggf. Auftragsverarbeitungsvertrag (DPA)"
+          "body": "Verweis auf Datenschutzerklärung und ggf. Auftragsverarbeitungsvertrag (DPA)"
         },
         "final": {
           "heading": "§ 10 Schlussbestimmungen",
-          "body": "Salvatorische Klausel, Aenderungen der AGB, Textform"
+          "body": "Salvatorische Klausel, Änderungen der AGB, Textform"
         }
       },
       "consumerSections": {
         "withdrawal": {
           "heading": "§ 11 Widerrufsrecht & Widerrufsbelehrung",
-          "body": "Widerrufsbelehrung fuer Verbraucher (Frist, Form, Rechtsfolgen, Beginn der Frist)",
+          "body": "Widerrufsbelehrung für Verbraucher (Frist, Form, Rechtsfolgen, Beginn der Frist)",
           "formLabel": "Muster-Widerrufsformular:",
-          "form": "Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlaegig (z. B. vorzeitiger Leistungsbeginn auf ausdruecklichen Wunsch)"
+          "form": "Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlägig (z. B. vorzeitiger Leistungsbeginn auf ausdrücklichen Wunsch)"
         },
         "einvoice": {
-          "heading": "§ 12 Elektronische Rechnung — Zustimmung des Empfaengers",
-          "body": "Hinweis: Rechnungen/Belege werden elektronisch bereitgestellt; gegenueber Verbrauchern ist hierfuer die Zustimmung des Empfaengers erforderlich",
+          "heading": "§ 12 Elektronische Rechnung — Zustimmung des Empfängers",
+          "body": "Hinweis: Rechnungen/Belege werden elektronisch bereitgestellt; gegenüber Verbrauchern ist hierfür die Zustimmung des Empfängers erforderlich",
           "consentLabel": "Zustimmung:",
-          "consent": "Formulierung der Empfaengerzustimmung zur elektronischen Rechnung (B2C)"
+          "consent": "Formulierung der Empfängerzustimmung zur elektronischen Rechnung (B2C)"
         }
       },
       "businessSections": {
         "deviations": {
-          "heading": "§ 13 Abweichende Regelungen fuer Unternehmer",
-          "body": "z. B. Ausschluss des Widerrufsrechts, abweichende Haftung/Gewaehrleistung, Aufrechnung/Zurueckbehaltung, Textform"
+          "heading": "§ 13 Abweichende Regelungen für Unternehmer",
+          "body": "z. B. Ausschluss des Widerrufsrechts, abweichende Haftung/Gewährleistung, Aufrechnung/Zurückbehaltung, Textform"
         },
         "jurisdiction": {
-          "heading": "§ 14 Gerichtsstand, Erfuellungsort & anwendbares Recht (B2B)",
-          "body": "Gerichtsstand, Erfuellungsort und anwendbares Recht fuer Unternehmer"
+          "heading": "§ 14 Gerichtsstand, Erfüllungsort & anwendbares Recht (B2B)",
+          "body": "Gerichtsstand, Erfüllungsort und anwendbares Recht für Unternehmer"
         }
       }
     },
     "privacy": {
       "title": "Datenschutzerklaerung",
-      "intro": "Diese Erklaerung informiert ueber die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
+      "intro": "Diese Erklärung informiert über die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
       "sections": {
         "controller": {
           "heading": "1. Verantwortlicher",
@@ -1133,12 +1133,12 @@
         },
         "cookies": {
           "heading": "4. Cookies & Einwilligung",
-          "text1": "Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von § 25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung fuer die Zukunft widerrufen werden.",
+          "text1": "Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von § 25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung für die Zukunft widerrufen werden.",
           "listPlaceholder": "Auflistung konkreter Cookies / Speicherdauer / Widerrufsweg"
         },
         "account": {
           "heading": "5. Registrierung & Konto",
-          "body": "verarbeitete Konto-/Stammdaten, Zweck (Vertragserfuellung Art. 6 Abs. 1 lit. b), Speicherdauer"
+          "body": "verarbeitete Konto-/Stammdaten, Zweck (Vertragserfüllung Art. 6 Abs. 1 lit. b), Speicherdauer"
         },
         "auth": {
           "heading": "6. Authentifizierung (Supabase/GoTrue)",
@@ -1146,7 +1146,7 @@
         },
         "payment": {
           "heading": "7. Zahlungsabwicklung",
-          "body": "Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des Anbieters, Rechtsgrundlage"
+          "body": "Zahlungsdienstleister (Mollie), übermittelte Daten, eigene Datenschutzerklärung des Anbieters, Rechtsgrundlage"
         },
         "captcha": {
           "heading": "8. Bot-Schutz bei der Registrierung",
@@ -1154,21 +1154,21 @@
         },
         "email": {
           "heading": "9. E-Mail-Versand (Transaktionsmails)",
-          "body": "SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage"
+          "body": "SMTP-/Mail-Provider, Anlässe (Verify/Invite/Reset), Rechtsgrundlage"
         },
         "processors": {
-          "heading": "10. Empfaenger & Auftragsverarbeiter",
-          "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig"
+          "heading": "10. Empfänger & Auftragsverarbeiter",
+          "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlägig"
         },
         "retention": {
           "heading": "11. Speicherdauer",
-          "body": "allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen"
+          "body": "allgemeine Löschkonzepte, gesetzliche Aufbewahrungsfristen"
         },
         "rights": {
           "heading": "12. Deine Rechte",
-          "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17), Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).",
-          "authorityLabel": "Zustaendige Aufsichtsbehoerde:",
-          "authorityPlaceholder": "zustaendige Datenschutzbehoerde"
+          "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehörde (Art. 77).",
+          "authorityLabel": "Zuständige Aufsichtsbehörde:",
+          "authorityPlaceholder": "zuständige Datenschutzbehörde"
         }
       }
     },
@@ -1178,11 +1178,11 @@
       "sections": {
         "subject": {
           "heading": "1. Gegenstand & Dauer",
-          "body": "Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kuendigung"
+          "body": "Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kündigung"
         },
         "purpose": {
           "heading": "2. Art & Zweck der Verarbeitung",
-          "body": "beschriebene Verarbeitungstaetigkeiten und Zweck der Auftragsverarbeitung"
+          "body": "beschriebene Verarbeitungstätigkeiten und Zweck der Auftragsverarbeitung"
         },
         "dataTypes": {
           "heading": "3. Art der personenbezogenen Daten",
@@ -1194,11 +1194,11 @@
         },
         "processorObligations": {
           "heading": "5. Pflichten des Auftragsverarbeiters",
-          "body": "Weisungsbindung, Vertraulichkeit, Unterstuetzung bei Betroffenenrechten, Meldepflichten"
+          "body": "Weisungsbindung, Vertraulichkeit, Unterstützung bei Betroffenenrechten, Meldepflichten"
         },
         "tom": {
           "heading": "6. Technische & organisatorische Massnahmen (TOM)",
-          "body": "Verweis auf TOM-Anlage (Verschluesselung, Zugriffskontrolle, RLS, Backups, Logging)"
+          "body": "Verweis auf TOM-Anlage (Verschlüsselung, Zugriffskontrolle, RLS, Backups, Logging)"
         },
         "subprocessors": {
           "heading": "7. Unterauftragsverarbeiter",
@@ -1206,15 +1206,15 @@
         },
         "transfers": {
           "heading": "8. Drittlandtransfers",
-          "body": "Angaben zu Uebermittlungen in Drittlaender und Garantien (SCC) sofern einschlaegig"
+          "body": "Angaben zu Übermittlungen in Drittländer und Garantien (SCC) sofern einschlägig"
         },
         "dataSubjectRights": {
-          "heading": "9. Betroffenenrechte & Unterstuetzung",
-          "body": "Unterstuetzung des Verantwortlichen bei Auskunft/Loeschung/Datenexport"
+          "heading": "9. Betroffenenrechte & Unterstützung",
+          "body": "Unterstützung des Verantwortlichen bei Auskunft/Löschung/Datenexport"
         },
         "deletion": {
-          "heading": "10. Loeschung & Rueckgabe nach Vertragsende",
-          "body": "Loesch-/Rueckgabekonzept nach Vertragsende inkl. Fristen"
+          "heading": "10. Löschung & Rückgabe nach Vertragsende",
+          "body": "Lösch-/Rückgabekonzept nach Vertragsende inkl. Fristen"
         },
         "audits": {
           "heading": "11. Nachweise & Audits",
@@ -1379,7 +1379,7 @@
     },
     "skills": {
       "empty": {
-        "text": "Noch keine Skills referenziert. Skills benennen Faehigkeiten, auf die sich die Persona stuetzt — mit einer kurzen Notiz, wofür sie zählen."
+        "text": "Noch keine Skills referenziert. Skills benennen Fähigkeiten, auf die sich die Persona stützt — mit einer kurzen Notiz, wofür sie zählen."
       },
       "addFirst": "Ersten Skill hinzufügen",
       "add": "Skill hinzufügen",
@@ -1490,8 +1490,8 @@
       "triggerLabel": "Trigger",
       "usedInTitle": "Verwendet in",
       "usedInEmpty": "Noch in keiner Persona verwendet",
-      "usedInEmptyDescription": "Verknuepfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen.",
-      "resourceLinksTitle": "Verknuepfte Resource-Bloecke",
+      "usedInEmptyDescription": "Verknüpfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen.",
+      "resourceLinksTitle": "Verknüpfte Resource-Blöcke",
       "resourceLinksBodyNote": "Resource-Verknüpfungen werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.",
       "subPlaybooksTitle": "Sub-Playbooks (Composes)",
       "subPlaybooksEmpty": "Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.",
@@ -1529,7 +1529,7 @@
       "contentDescription": "Das eigentliche Playbook und seine Auslöser.",
       "contentHelp": "Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität verifizieren; Schritt 3 — Reset-Link versenden. Änderungen erzeugen eine neue Version; alte Versionen bleiben erhalten.",
       "bodyLabel": "Inhalt",
-      "bodyHint": "Tippe / im Editor, um Playbook- oder Resource-Pills einzufügen. Verlinkte Relationen leben im Body.",
+      "bodyHint": "Tippe / für Blöcke und Verweise auf Playbooks, Resources und Werkzeuge.",
       "tagsPlaceholder": "Tag eingeben und Enter drücken",
       "triggersLabel": "Trigger",
       "triggersPlaceholder": "Trigger eingeben und Enter drücken",
@@ -1542,9 +1542,9 @@
     "typeHints": {
       "prompt": "Ein Einzel-Prompt mit klarem Outcome — z. B. „Fasse den Anruf in 3 Bullets zusammen\".",
       "instructions": "Mehrteilige Handlungsanweisung mit Schritt-Reihenfolge — z. B. Onboarding-Flow eines Agenten.",
-      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begruessung oder rechtliche Fussnote.",
+      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begrüßung oder rechtliche Fussnote.",
       "workflow": "Mehrstufiger Prozess mit Verzweigungen — z. B. Eskalation, wenn der Kunde unzufrieden bleibt.",
-      "checklist": "Pruefliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
+      "checklist": "Prüfliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
       "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
     },
     "actions": {
@@ -1585,32 +1585,32 @@
     },
     "linkedBlocks": {
       "empty": "Noch keine Bloecke verknuepft.",
-      "ariaLabel": "Verknuepfte Bloecke",
+      "ariaLabel": "Verknüpfte Blöcke",
       "statusActive": "Aktiv",
       "statusDraft": "Nur in Draft",
       "statusDeleted": "Block geloescht",
       "emptyActive": "(leer)",
       "emptyDraft": "(leer — Draft)",
-      "emptyDeleted": "Block nicht mehr verfuegbar",
+      "emptyDeleted": "Block nicht mehr verfügbar",
       "resourceScopeLabel": "Ganzes Dokument",
-      "resourceScopeEmpty": "Resource nicht mehr verfuegbar",
+      "resourceScopeEmpty": "Resource nicht mehr verfügbar",
       "sublinesLazy": "Vollstaendige Resource — Link (lazy), via fetch nachgeladen",
       "sublinesInline": "Vollstaendige Resource — fest eingebettet (inline)"
     },
     "resourcePicker": {
       "triggerButton": "Bloecke verknuepfen",
-      "dialogTitle": "Resource-Bloecke verknuepfen",
-      "dialogDescription": "Waehle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Bloecke sind als Anker erlaubt.",
+      "dialogTitle": "Resource-Blöcke verknüpfen",
+      "dialogDescription": "Wähle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Blöcke sind als Anker erlaubt.",
       "noResources": "Keine Resources.",
-      "selectResourceHint": "Resource waehlen, um Heading-Bloecke zu sehen.",
+      "selectResourceHint": "Resource wählen, um Heading-Blöcke zu sehen.",
       "wholeDocLabel": "Gesamtes Dokument",
       "wholeDocDescription": "Verlinkt die komplette Resource — exklusive zu einzelnen Block-Ankern.",
       "wholeDocAriaLabel": "Gesamtes Dokument verknuepfen",
-      "embedModeGroup": "Embed-Modus fuer das gesamte Dokument",
+      "embedModeGroup": "Embed-Modus für das gesamte Dokument",
       "embedLazy": "Link (lazy)",
       "embedInline": "Fest einbetten",
       "headingBlocksLabel": "Heading-Bloecke",
-      "noHeadings": "Diese Resource hat keine Heading-Bloecke.",
+      "noHeadings": "Diese Resource hat keine Heading-Blöcke.",
       "sectionAriaLabel": "Section {{heading}} verknuepfen",
       "emptySection": "(leere Section)",
       "loadFailed": "Laden fehlgeschlagen.",
@@ -1657,7 +1657,7 @@
       "descriptionPlaceholder": "z. B. Antworten auf die häufigsten Datenschutzfragen",
       "contentTitle": "Inhalt",
       "contentDescription": "Der eigentliche Inhalt der Resource.",
-      "contentHelp": "Einzelne Heading-Bloecke koennen per Block-Ref in Playbooks eingebunden werden. Aenderungen erzeugen eine neue Version.",
+      "contentHelp": "Einzelne Heading-Blöcke können per Block-Ref in Playbooks eingebunden werden. Änderungen erzeugen eine neue Version.",
       "contentLabel": "Inhalt",
       "tagsDescription": "Stichwörter zur Suche und Filterung.",
       "tagsHelp": "Beispiel: „datenschutz, faq, recht\". Enter zum Anlegen, Klick auf das X zum Entfernen. Tags ermöglichen das Filtern in der Resource-Liste und im MCP-Tool list_resources.",
@@ -1707,8 +1707,8 @@
       "title": "Sub-Resources (Composition)",
       "description": "Wähle Resources als Sub-Resources aus und ordne sie per Pfeil-Buttons. Agenten laden sie über fetch_resource nach — die Inhalte werden nicht expandiert.",
       "selectedCount": "Ausgewählt ({{count}})",
-      "selectedAriaLabel": "Ausgewaehlte Sub-Resources",
-      "embedModeFor": "Embed-Modus fuer {{name}}",
+      "selectedAriaLabel": "Ausgewählte Sub-Resources",
+      "embedModeFor": "Embed-Modus für {{name}}",
       "modeLazy": "Link (lazy)",
       "modeInline": "Fest einbetten",
       "moveUp": "{{name}} nach oben verschieben",
@@ -1824,10 +1824,10 @@
       "email": {
         "changeLabel": "E-Mail aendern",
         "changeButton": "E-Mail aendern",
-        "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss ueber einen Bestaetigungs-Link aktiviert werden.",
+        "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss über einen Bestätigungs-Link aktiviert werden.",
         "sameError": "Das ist bereits deine aktuelle E-Mail-Adresse.",
         "invalidError": "Bitte gueltige E-Mail eingeben.",
-        "sentToast": "Bestaetigungs-Mail an die neue Adresse gesendet."
+        "sentToast": "Bestätigungs-Mail an die neue Adresse gesendet."
       },
       "security": {
         "title": "Sicherheit",
@@ -1867,14 +1867,14 @@
         "confirmRequired": "Bitte wiederholen.",
         "mismatch": "Passwoerter stimmen nicht ueberein.",
         "magicLinkHint": "Du bist per Magic-Link oder Social-Login angemeldet. Mit einem Passwort kannst du dich auch direkt anmelden.",
-        "changedToast": "Passwort geaendert.",
+        "changedToast": "Passwort geändert.",
         "setToast": "Passwort gesetzt."
       },
       "signOutEverywhere": {
         "title": "Überall abmelden",
         "description": "Beendet alle aktiven Sitzungen auf allen Geräten.",
         "button": "Überall abmelden",
-        "successToast": "Auf allen Geraeten abgemeldet."
+        "successToast": "Auf allen Geräten abgemeldet."
       },
       "preferences": {
         "title": "Präferenzen",
@@ -1936,7 +1936,7 @@
         "slugRequired": "Slug erforderlich.",
         "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
         "contentLocaleLabel": "Inhalts-Sprache",
-        "contentLocaleDescription": "Sprache der Standard-Inhalte und Default fuer neu angelegte Elemente in diesem Workspace.",
+        "contentLocaleDescription": "Sprache der Standard-Inhalte und Default für neu angelegte Elemente in diesem Workspace.",
         "createButton": "Workspace anlegen",
         "createdToast": "Workspace „{{name}}\" angelegt.",
         "adminOnly": "Nur Admins können in dieser Organisation Workspaces anlegen."
@@ -2134,10 +2134,10 @@
         }
       },
       "promptBody": {
-        "title": "Prompt-Body",
-        "description": "Schreibe deinen Prompt im Editor. Mit / fügst du Placeholder ein.",
-        "help": "Tippe / im Editor um Playbook-, Resource-, Persona-Feld- oder Datum-Placeholder einzufuegen. Der Backend-Renderer expandiert diese beim MCP-Read zu echtem Text.",
-        "label": "Body"
+        "title": "Inhalt",
+        "description": "Was der Agent bei jedem Start liest. Tippe / für Blöcke und Verweise.",
+        "help": "Verweise auf Playbooks, Resources, Persona-Felder oder das Datum füllt der Server mit echtem Text, wenn der Agent die Vorlage abruft.",
+        "label": "Inhalt"
       },
       "saveVersion": "Neue Version speichern",
       "viewerTooltip": "Viewer können Inhalte nur ansehen",
@@ -2167,7 +2167,7 @@
       }
     },
     "placeholderHelp": {
-      "triggerLabel": "Verfügbare Placeholder",
+      "triggerLabel": "Welche Verweise gibt es?",
       "docsLink": "Mehr in der Doku →",
       "intro": {
         "heading": "Was ist ein Placeholder?",
@@ -3050,7 +3050,50 @@
   },
   "editor": {
     "slash": {
-      "group": "Placeholder",
+      "group": {
+        "text": "Text",
+        "refs": "Verweise",
+        "context": "Agent-Kontext"
+      },
+      "block": {
+        "heading": {
+          "title": "Titel",
+          "subtext": "Überschrift des ganzen Dokuments"
+        },
+        "heading2": {
+          "title": "Überschrift",
+          "subtext": "Abschnitt"
+        },
+        "heading3": {
+          "title": "Zwischenüberschrift",
+          "subtext": "Unterabschnitt"
+        },
+        "paragraph": {
+          "title": "Absatz",
+          "subtext": "Fließtext"
+        },
+        "bullet": {
+          "title": "Aufzählung",
+          "subtext": "Liste ohne Reihenfolge"
+        },
+        "numbered": {
+          "title": "Nummerierte Liste",
+          "subtext": "Schritte, Reihenfolge"
+        },
+        "quote": {
+          "title": "Zitat",
+          "subtext": "Zitat oder hervorgehobener Hinweis"
+        },
+        "code": {
+          "title": "Code",
+          "subtext": "JSON- oder Markdown-Beispiel"
+        }
+      },
+      "key": {
+        "ctrl": "Strg",
+        "shift": "Umschalt",
+        "alt": "Alt"
+      },
       "playbook": {
         "title": "Playbook",
         "subtext": "Playbook fest einbetten (immer geladen)"
@@ -3121,9 +3164,9 @@
       "fallbackTitle": "Vorschau",
       "errorTitle": "Vorschau fehlgeschlagen",
       "loadFailed": "Vorschau konnte nicht geladen werden.",
-      "personaFieldUnresolved": "Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
-      "personaUnresolved": "Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
-      "targetMissing": "Der Platzhalter konnte nicht aufgeloest werden — Ziel nicht gefunden oder (noch) nicht aktiv."
+      "personaFieldUnresolved": "Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgelöst. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "personaUnresolved": "Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgelöst. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "targetMissing": "Der Platzhalter konnte nicht aufgelöst werden — Ziel nicht gefunden oder (noch) nicht aktiv."
     },
     "picker": {
       "cancel": "Abbrechen",
@@ -3145,8 +3188,8 @@
         "listLabel": "Resource-Liste",
         "empty": "Keine Resources gefunden.",
         "blocksLabel": "Heading-Bloecke",
-        "blocksLoading": "Lade Bloecke…",
-        "noBlocks": "Keine Heading-Bloecke — die ganze Resource wird verlinkt."
+        "blocksLoading": "Lade Blöcke…",
+        "noBlocks": "Keine Heading-Blöcke — die ganze Resource wird verlinkt."
       },
       "tool": {
         "titleEdit": "Tool ändern",
@@ -3159,7 +3202,7 @@
         "titleEdit": "Persona-Feld ändern",
         "titleNew": "Persona-Feld einfuegen",
         "ariaLabel": "Persona-Feld einfuegen",
-        "listLabel": "Persona-Feld auswaehlen",
+        "listLabel": "Persona-Feld auswählen",
         "name": {
           "label": "Persona: Name",
           "description": "Der Name der Persona"
@@ -3197,8 +3240,8 @@
       },
       "resourcesCatalogScope": {
         "titleEdit": "Resource-Katalog ändern",
-        "titleNew": "Resource-Katalog einfuegen",
-        "ariaLabel": "Resource-Katalog einfuegen",
+        "titleNew": "Resource-Katalog einfügen",
+        "ariaLabel": "Resource-Katalog einfügen",
         "listLabel": "Resource-Auswahl für den Katalog",
         "all": "Alle Resources",
         "byTag": "Nach Tag",
@@ -3208,7 +3251,7 @@
         "titleEdit": "Datum ändern",
         "titleNew": "Datum einfuegen",
         "ariaLabel": "Datum einfuegen",
-        "listLabel": "Datumsformat auswaehlen",
+        "listLabel": "Datumsformat auswählen",
         "readable": {
           "label": "Datum (lesbar)",
           "description": "Wird als \"31. Mai 2026\" ausgegeben"
@@ -3218,6 +3261,10 @@
           "description": "Wird als \"2026-05-31\" ausgegeben"
         }
       }
+    },
+    "placeholder": {
+      "withReferences": "Schreibe oder tippe / für Blöcke und Verweise",
+      "plain": "Schreibe oder tippe / für Blöcke"
     }
   },
   "learning": {

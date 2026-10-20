@@ -6,6 +6,8 @@ import type { Block, PartialBlock } from '@blocknote/core'
 import { useTheme } from '@/app/theme-context'
 import type { ResourceBlock } from '@/api/types'
 
+import { buildEditorDictionary, LocalizedDefaultSlashMenu } from './system-prompt/slashMenu'
+
 interface BlockNoteEditorProps {
   initialBlocks: ResourceBlock[]
   editable?: boolean
@@ -26,6 +28,8 @@ export function BlockNoteEditor({
   const editor = useCreateBlockNote({
     initialContent:
       initialBlocks.length > 0 ? (initialBlocks as unknown as PartialBlock[]) : undefined,
+    // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+    dictionary: buildEditorDictionary({ withReferences: false }),
   })
   const portalElements = useMemo(() => ({ default: document.body }), [])
   // Welle 4-Fix: BlockNote normalisiert beim Mount sein Dokument (ergaenzt
@@ -58,7 +62,11 @@ export function BlockNoteEditor({
           }
           onChange?.(editor.document as unknown as ResourceBlock[])
         }}
-      />
+        // Standard-Slash-Menue mit Kuerzeln in der UI-Sprache („Strg Alt 1“).
+        slashMenu={false}
+      >
+        <LocalizedDefaultSlashMenu editor={editor} />
+      </BlockNoteView>
     </div>
   )
 }
