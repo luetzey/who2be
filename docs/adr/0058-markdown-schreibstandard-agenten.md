@@ -779,8 +779,13 @@ dasselbe Verhältnis für die Vorlage (`source` statt `full`).
   Budget-Wert.
 - **M5 Argumentgröße (neu, P1):** ein Test, der für alle verwalteten
   Inhaltsdateien die Bytes des Editor-JSON-Arguments und des
-  Markdown-Arguments misst und das Verhältnis ≥ 1,8 prüft, die kleinste
-  gemessene Datei. Er reißt, wenn die Normalform aufbläht.
+  Markdown-Arguments misst und das Verhältnis ≥ 1,7 prüft, die kleinste
+  gemessene Datei. Er reißt, wenn die Normalform aufbläht. Gemessen in P1
+  (2026-10-20): kleinster Wert 1,71 bei
+  `apps/api/src/who2be_api/repositories/builder_playbook_feedback_session_body.json`,
+  Mittel 2,3; die Schätzung 1,8 aus 8.2 lag knapp darüber, weil die
+  Normalform (5.2) zwischen Listenpunkten eine Leerzeile setzt. Schwelle im
+  Test: `packages/models/tests/test_blocknote_markdown_golden.py#M5_MIN_RATIO`.
 - **M6 Vorlagen-Antwort:** je Werkzeug mit `source` ein Budget-Test nach dem
   Muster aus ADR-0056 §6. `test_every_format_aware_tool_has_a_budget_test`
   erzwingt das schon.
