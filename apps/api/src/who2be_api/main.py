@@ -91,6 +91,7 @@ from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
 from who2be_api.worker.store import WorkerHealth, worker_health
 from who2be_models import ApiErrorBody, ApiProblem
+from who2be_models.error_tracking import init_error_tracking
 
 logger = logging.getLogger(__name__)
 
@@ -630,4 +631,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 configure_logging(get_settings().log_format)
+# Fehler-Tracking (Stabilitaet A2): nur aktiv mit SENTRY_DSN, sonst kein Init und
+# kein Netzwerk-Aufruf. Vor `create_app`, damit die FastAPI-Integration greift.
+init_error_tracking("who2be-api", __version__)
 app = create_app()
