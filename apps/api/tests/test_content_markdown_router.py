@@ -584,6 +584,22 @@ def test_system_prompt_create_and_patch(env: _Env) -> None:
     assert "## Ton [#" in res.json()["content"]["body"]
 
 
+def test_unknown_id_with_base_rev_is_404_not_500(env: _Env) -> None:
+    missing = "00000000-0000-0000-0000-000000000001"
+    patch = env.client.patch(
+        f"{env.base}/playbooks/{missing}/markdown",
+        json={"base_rev": "0" * 16, "op": "replace", "field": "body", "markdown": "x"},
+        headers=env.owner,
+    )
+    assert patch.status_code == 404, patch.text
+    put = env.client.put(
+        f"{env.base}/playbooks/{missing}/markdown",
+        json={"base_rev": "0" * 16, "content": {"body": "x"}},
+        headers=env.owner,
+    )
+    assert put.status_code == 404, put.text
+
+
 def test_unknown_entity_type_is_422(env: _Env) -> None:
     res = env.client.get(
         f"{env.base}/agents/00000000-0000-0000-0000-000000000000/markdown", headers=env.owner

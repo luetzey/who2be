@@ -839,12 +839,14 @@ class ContentMarkdownService:
         """Liest die Basis und prueft einen erwarteten `base_rev` frueh dagegen.
 
         Der Token wird vor und nach dem Lesen geholt; aendert er sich dazwischen,
-        ist die gelesene Basis nicht sicher die, die der Token beschreibt.
+        ist die gelesene Basis nicht sicher die, die der Token beschreibt. Gibt
+        es das Element im Workspace nicht, entscheidet das Lesen (404 bzw.
+        Sichtbarkeit wie im JSON-Weg), nicht die Token-Abfrage.
         """
-        before = await self._base_rev(ctx, et, entity_id) if expected is not None else None
-        read = await self._get(ctx, et, entity_id)
         if expected is None:
-            return read
+            return await self._get(ctx, et, entity_id)
+        before = await self._base_rev_repos[et].fetch_base_rev(ctx.workspace_id, entity_id)
+        read = await self._get(ctx, et, entity_id)
         after = await self._base_rev(ctx, et, entity_id)
         if before != after or after[1] != expected or after[0] != read.current_version:
             raise _version_conflict(after[0], after[1])
