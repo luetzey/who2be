@@ -133,6 +133,7 @@ export function PersonaDetailPage() {
                     />
                   }
                   description={persona.content.description}
+                  usage={{ entityType: 'persona', entityId: persona.id }}
                   collapseActionsBelowMd
                   actions={
                     <>

@@ -234,9 +234,9 @@ def test_sync_restores_outdated_builder() -> None:
     finally:
         cleanup_workspaces([owner])
 
-    # 12 Aggregate aktualisiert (Persona + 2 Templates + 6 Playbooks + 1 Resource
-    # + 2 Agenten seit Content-Stand 6); zweiter Lauf 0.
-    assert res["first"] == 12, res["first"]
+    # 14 Aggregate aktualisiert (Persona + 2 Templates + 8 Playbooks + 1 Resource
+    # + 2 Agenten seit Content-Stand 18); zweiter Lauf 0.
+    assert res["first"] == 14, res["first"]
     assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
     assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
     # Content-Stand 6: die kanonische Policy (inkl. feedback_resolve) und der
@@ -265,12 +265,17 @@ def test_sync_restores_outdated_builder() -> None:
     assert res["resource_tags"] == ["konventionen", "agent-building", "meta"]
     # Die vier klassischen Playbooks tragen die 0056-Feedback-Sektion; Pflege-
     # (Content-Stand 4) und External-Tool-Playbook (Content-Stand 11) haben
-    # eigene Feedback-Sektionen.
+    # eigene Feedback-Sektionen, die Lernschleifen-Playbooks (Content-Stand 18)
+    # eine Nachhalte-Zeile in den Notes.
     for name, ids in res["playbook_body_idsets"].items():
         if name == "Library-Pflege & Feedback-Lauf":
             assert "pb-maint-h-feedback" in ids
         elif name == "External Tool anlegen & pflegen":
             assert "pb-exttool-h-feedback" in ids
+        elif name == "Fall aus Muster & Fall-Triage":
+            assert "d7-p81" in ids
+        elif name == "Feedback-Gespräch (Review) moderieren":
+            assert "fg-p54" in ids
         else:
             assert "pb-feedback-h" in ids, name
     # WP-A (Content-Stand 3): die neuen Builder-Befaehigungs-Sektionen sind
@@ -582,7 +587,7 @@ def test_sync_inserts_missing_resource_in_existing_workspace() -> None:
     """Insert-missing (Content-Stand 5): ein v4-Bestands-Workspace (ohne die
     Managed-Resource) bekommt „Agent-Bau-Konventionen" per Sync nachgelegt —
     Row managed + gestempelt, v1 active (locale 'de', created_by = Owner der
-    Builder-Persona) und die sechs `playbook_resource_link`s
+    Builder-Persona) und die acht `playbook_resource_link`s
     (link_scope='resource') von allen Builder-Playbooks."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -655,7 +660,7 @@ def test_sync_inserts_missing_resource_in_existing_workspace() -> None:
     assert "res-conv-h-trigger" in {b["id"] for b in json.loads(row["blocks"])}
     assert json.loads(row["tags"]) == ["konventionen", "agent-building", "meta"]
     links = res["links"]
-    assert len(links) == 6, "Alle sechs Builder-Playbooks muessen verlinkt sein."
+    assert len(links) == 8, "Alle acht Builder-Playbooks muessen verlinkt sein."
     assert all(link["link_scope"] == "resource" for link in links)
     assert all(link["block_id"] is None for link in links)
     assert all(link["playbook_managed"] is True for link in links)
@@ -808,6 +813,121 @@ def test_sync_updates_agent_policy_of_existing_builder() -> None:
         # Content-Stand 11: External-Tool-Schreibrecht (ADR-0043).
         assert agent["external_tool_write"] is True, agent
         assert agent["agent_read"] == "all", agent
+
+
+@pytest.mark.integration
+def test_sync_v18_links_new_playbooks_and_keeps_existing_links() -> None:
+    """Content-Stand 18 (Lernschleife E4b, D7-Risiko): ein Bestands-Workspace
+    auf Stempel 17 kennt die beiden Lernschleifen-Playbooks noch nicht.
+
+    Der Sync muss sie anlegen (managed, v1 active, Body = Sidecar) und an die
+    Builder-Persona haengen — und zwar additiv: die sechs bisherigen
+    Builder-Links und ein vom Owner selbst gesetzter Link auf ein eigenes
+    Playbook bleiben mit identischen Playbook-IDs bestehen.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack, load_sidecar
+
+    pack = get_content_pack("de")
+    new_playbooks = [p for p in pack.playbooks if p.key in {"cases", "feedback_session"}]
+    assert len(new_playbooks) == 2
+    new_names = [p.name for p in new_playbooks]
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            # v17-Stand simulieren: die beiden neuen Playbooks fehlen
+            # (FK-Cascade raeumt Versionen + Links ab), alle Stempel auf 17.
+            await conn.execute(
+                "DELETE FROM playbook WHERE workspace_id = $1 AND name = ANY($2::text[])",
+                ws,
+                new_names,
+            )
+            for table in ("persona", "playbook", "resource", "agent"):
+                await conn.execute(
+                    f"UPDATE {table} SET managed_content_version = $2 "  # noqa: S608
+                    "WHERE workspace_id = $1 AND is_managed = true",
+                    ws,
+                    BUILDER_CONTENT_VERSION - 1,
+                )
+            await conn.execute(
+                "UPDATE system_prompt_template SET managed_content_version = $2 "
+                "WHERE workspace_id = $1 AND is_managed = true",
+                ws,
+                BUILDER_CONTENT_VERSION - 1,
+            )
+            persona_id = await conn.fetchval(
+                "SELECT id FROM persona WHERE workspace_id = $1 AND name = 'Builder'", ws
+            )
+            # Ein vom Owner selbst angelegtes, unverwaltetes Playbook, das er an
+            # den Builder gehaengt hat — der Sync darf diesen Link nicht kappen.
+            own_id = await conn.fetchval(
+                "INSERT INTO playbook (workspace_id, owner_id, name, type, tags, triggers) "
+                "VALUES ($1, $2, 'Eigenes Owner-Playbook', 'workflow', '{}', '') "
+                "RETURNING id",
+                ws,
+                owner,
+            )
+            await conn.execute(
+                "INSERT INTO persona_playbook (persona_id, playbook_id, workspace_id, owner_id) "
+                "VALUES ($1, $2, $3, $4)",
+                persona_id,
+                own_id,
+                ws,
+                owner,
+            )
+            before = {
+                r["playbook_id"]
+                for r in await conn.fetch(
+                    "SELECT playbook_id FROM persona_playbook WHERE persona_id = $1", persona_id
+                )
+            }
+
+            await sync_managed_builder_content(conn)
+
+            after_rows = await conn.fetch(
+                "SELECT pb.id, pb.name, pb.is_managed, pb.managed_content_version, "
+                "  pv.version, pv.status, pv.content ->> 'body' AS body "
+                "FROM persona_playbook pp "
+                "JOIN playbook pb ON pb.id = pp.playbook_id "
+                "LEFT JOIN playbook_version pv "
+                "  ON pv.playbook_id = pb.id AND pv.status = 'active' "
+                "WHERE pp.persona_id = $1",
+                persona_id,
+            )
+            return {
+                "before": before,
+                "own_id": own_id,
+                "after": [dict(r) for r in after_rows],
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    after_ids = {r["id"] for r in res["after"]}
+    # 6 bisherige Builder-Links + 1 Owner-Link, unveraendert erhalten.
+    assert len(res["before"]) == 7, res["before"]
+    assert res["before"] <= after_ids, "Der Sync hat bestehende Persona-Links entfernt."
+    assert res["own_id"] in after_ids
+    # Dazu genau die zwei neuen, verwalteten Playbooks.
+    assert len(after_ids) == 9, [r["name"] for r in res["after"]]
+    by_name = {r["name"]: r for r in res["after"]}
+    for playbook in new_playbooks:
+        row = by_name.get(playbook.name)
+        assert row is not None, f"{playbook.name!r} haengt nicht an der Builder-Persona."
+        assert row["is_managed"] is True
+        assert row["managed_content_version"] == BUILDER_CONTENT_VERSION
+        assert (row["version"], row["status"]) == (1, "active")
+        assert json.loads(row["body"]) == json.loads(load_sidecar(playbook.sidecar, "de"))
 
 
 @pytest.mark.integration

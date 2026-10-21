@@ -17,6 +17,9 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 
 import { useTheme } from '@/app/theme-context'
 import type { ResourceBlock } from '@/api/types'
+import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EditorFooter } from '@/components/editor/EditorFooter'
+import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
   type PlaceholderClickDetail,
@@ -26,7 +29,10 @@ import {
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
 import { PlaceholderPreviewPopover } from '@/components/editor/system-prompt/PlaceholderPreviewPopover'
 import { caretMeasurable } from '@/components/editor/system-prompt/caretAnchor'
-import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
+import {
+  buildEditorDictionary,
+  buildSlashMenuItems,
+} from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
 import { CatalogScopePicker } from '@/components/editor/system-prompt/pickers/CatalogScopePicker'
@@ -39,17 +45,12 @@ import { type Measurable } from '@/components/ui/popover'
 // auf den Persona-Satz reduziert.
 const personaProfileSchema = buildSystemPromptSchema()
 
-// Der volle Persona-Pill-Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools-
-// Uebersicht — die Persona referenziert nicht sich selbst). `tool-ref` (WP-5)
-// ist additiv: reine Alias-Referenz, kein Composition-/Link-Sync beim
-// Speichern.
-const ALLOWED_KINDS: Set<PlaceholderKind> = new Set([
-  'playbook',
-  'resource',
-  'playbooks-catalog',
-  'resources-catalog',
-  'tool-ref',
-])
+// Einsatzort (editorProfiles.ts): Basis ohne Tabelle, der volle Persona-Pill-
+// Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools-Uebersicht — die Persona
+// referenziert nicht sich selbst). `tool-ref` (WP-5) ist additiv: reine
+// Alias-Referenz, kein Composition-/Link-Sync beim Speichern.
+const PROFILE = EDITOR_PROFILES['persona-profile']
+const ALLOWED_KINDS = PROFILE.pillKinds
 
 export interface PersonaProfileEditorProps {
   /** Initial-Bloecke aus dem gespeicherten Persona-Profil (`content.content.blocks`). */
@@ -69,6 +70,8 @@ export function PersonaProfileEditor({
 }: PersonaProfileEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   const containerRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<Measurable | null>(null)
 
@@ -82,6 +85,10 @@ export function PersonaProfileEditor({
         initialBlocks !== undefined && initialBlocks.length > 0
           ? (initialBlocks as unknown as SystemPromptBlock[])
           : undefined,
+      // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+      dictionary: buildEditorDictionary({ withReferences: true }),
+      // Eingefuegte Tabellen/Medien werden zu Text (Editor-Paket P2).
+      pasteHandler: profilePasteHandler(PROFILE),
     },
     [],
   )
@@ -140,18 +147,25 @@ export function PersonaProfileEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(editor.document as unknown as ResourceBlock[])
           }}
+          // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
           slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(editor, handleOpenPicker, query, ALLOWED_KINDS)
+              buildSlashMenuItems(editor, handleOpenPicker, query, PROFILE)
             }
           />
+          <ProfileFormattingToolbar profile={PROFILE} />
+          <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

@@ -29,15 +29,38 @@ Who2Be loescht Konten und Organisationen **zweistufig**:
 2. **30-Tage-Grace:** Karenzzeit (Schutz vor versehentlicher Loeschung). Der
    `purge_after`-Zeitpunkt ist idempotent (mehrfacher Loeschwunsch behaelt den
    fruehesten Termin).
-3. **Hard-Purge (`who2be-purge`, Cron):** `purge_expired()` laeuft als **Owner**
+3. **Hard-Purge (Worker-Routine `purge`, taeglich 03:30 UTC; CLI `who2be-purge` als Notfallweg):** `purge_expired()` laeuft als **Owner**
    (RLS-Bypass) und entfernt alles, dessen `purge_after <= now()`:
    - **Organisationen:** `DELETE FROM organization …` — per `ON DELETE CASCADE`
      atomar inkl. Workspaces → Personas/Playbooks/Resources/Agents (+ Versionen),
      `org_entitlement`, `mcp_usage`, Agent-Telemetrie `usage_event` und
      `agent_feedback` samt `feedback_resolution` (FK auf `workspace` seit
      Migration 0104; vorher blieben die Zeilen verwaist zurueck, 0104 hat den
+     Bestand bereinigt), Knowledge Base `kb_node`/`kb_edge`/`kb_edge_evidence`/
+     `kb_conflict` und die Inhaltspassagen `content_chunk` (FK auf `workspace`
+     seit Migration 0105; vorher blieben auch sie verwaist zurueck, 0105 hat den
      Bestand bereinigt). Dieselbe CASCADE greift bei der Workspace-Loeschung
      (`DELETE /v1/workspaces/{id}`).
+   - **Nicht** mit dem Workspace faellt `audit_log`: die Tabelle hat keinen FK
+     auf `workspace`/`organization` und ist append-only (ADR-0031). Seit
+     Migration 0106 wird sie beim Loeschen **anonymisiert** (Owner-Entscheidung
+     E1a): ein `AFTER DELETE`-Trigger auf `workspace` und `organization` setzt
+     in jeder Zeile des geloeschten Scopes `actor_id` auf den Sentinel (§2),
+     leert `target` und kuerzt `detail` auf die Schluessel der Allowlist
+     `w2b_audit_detail_allowlist()` (Rollen, Fristen, Zaehler; keine Namen,
+     Freitexte oder IDs). Eine Aktion ohne Allowlist-Eintrag verliert `detail`
+     ganz. Es bleiben Aktion, Zeitpunkt (`created_at`) und Scope
+     (`org_id`/`workspace_id`); `anonymized_at` haelt den Zeitpunkt fest. Der
+     Trigger greift auf jedem Loeschweg, auch beim API-Workspace-Delete unter
+     der App-Rolle. Zeilen aus vor 0106 geloeschten Scopes hat die Migration
+     nachgezogen. **Frist (aktiv):** 12 Kalendermonate nach der
+     Anonymisierung (`anonymized_at`) loescht die Worker-Routine
+     `audit-retention` (taeglich 04:00 UTC, holt einen verpassten Lauf nach)
+     auch den anonymen Rest. Zeilen lebender Workspaces/Orgs
+     (`anonymized_at IS NULL`) beruehrt sie nie. Belegt in
+     `tests/test_kb_chunk_workspace_erasure.py`,
+     `tests/test_audit_log_anonymization.py` und
+     `tests/test_worker_routines.py`.
    - **Konten:** loescht `api_token`, `org_member`, `workspace_member`, die
      persoenliche Organisation des Nutzers und ruft die **GoTrue-Admin-API** zum
      Loeschen von `auth.users` (E-Mail/Auth-Daten). Erst nach bestaetigtem
@@ -62,7 +85,7 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | Tabelle | Feld | Behandlung beim Purge |
 |---|---|---|
 | `status_history` | `changed_by` | → Sentinel `00000000-0000-0000-0000-000000000000` |
-| `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `audit_log` (WP-A/B) | `actor_id`; `target`, wo es die User-ID ist (`account.deletion_requested`, `member.role_changed`, `member.removed`, `memory.user_purged`); `detail` von Zeilen ueber den User bzw. mit seiner ID als Wert | → Sentinel `00000000-0000-0000-0000-000000000000` (`target` als Sentinel, nicht NULL — Aktion und Zahl bleiben lesbar); `detail` → Allowlist aus 0106; ist der User nur Akteur, bleibt `detail`. `anonymized_at` bleibt NULL, der Scope lebt (E1-1b). Faellt der Workspace bzw. die Org, zusaetzlich `target` → NULL und `detail` → Allowlist (Migration 0106, §1) |
 | `usage_event` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `test_case` (Migration 0089, ADR-0053) | `created_by` — **nur** bei `created_by_kind = 'human'` (bei `'agent'` steht dort eine Agent-ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
@@ -72,6 +95,9 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 | `agent_case` (Migration 0100, ADR-0053) | `reporter_user_id` (NULL scheidet aus: der CHECK `agent_case_human_reporter_check` verlangt bei `reporter_kind = 'human'` eine ID) | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_case_event` (Migration 0100, ADR-0053) | `actor_id` — **nur** bei `actor_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_case_element` (Migration 0100, ADR-0053) | `assigned_by` — **nur** bei `assigned_by_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `feedback_session` (Migration 0103, ADR-0053) | `submitted_by` — **nur** bei `submitted_by_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `feedback_session` (Migration 0103, ADR-0053) | `participants[].id` — **nur** bei `kind = 'human'`; ebenso `dissent[].participant_id` bei `participant_kind = 'human'` (Rolle, Text und Reihenfolge bleiben) | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `measure_event` (Migration 0103, ADR-0053) | `actor_id` — **nur** bei `actor_kind = 'human'` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `agent_memory` mit `scope='user'` (Migration 0091) | ganze Zeile (`subject_user_id`-gebunden) | beim Account-Purge in allen Workspaces **geloescht** + je Zeile `audit_log` `memory.deleted` ohne Inhalt, s. §4c |
 | `workspace_invitation` | `email` (Klartext) | Bereinigung bei `accepted_at IS NOT NULL OR expires_at < now()` (`cleanup_expired_invitations`) |
 | `oauth_authorization_code` (Migration 0049) | ganze Zeile (`user_id`-gebunden) | beim Account-Purge **geloescht** (Codes sind nach Konto-Loeschung wertlos); zusaetzlich laufender Cleanup abgelaufener/konsumierter Codes (`cleanup_expired_oauth`) |
@@ -147,7 +173,8 @@ inkrementeller Snapshots ist nicht praktikabel.
 
 Der Agenten-Arbeitsbereich (ADR-0047/0048/0049) haelt Daten in **vier
 Speichern** statt nur in Postgres — Loeschung heisst hier deshalb: alle vier
-Wege gehen. Der `who2be-purge`-Lauf deckt sie ab (`core/purge.py`,
+Wege gehen. Der Purge-Lauf (Worker-Routine `purge` bzw. CLI `who2be-purge`)
+deckt sie ab (`core/purge.py`,
 Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
 
 | Objekt | Speicher | Loeschung beim Org-/Account-Purge | Laufende Retention |
@@ -159,7 +186,8 @@ Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
 | Blob-**Objekte** (Binaerinhalte) | SeaweedFS/S3, selbst gehostet (`blobs/{workspace_id}/{sha256}`) | nicht vom DB-CASCADE erfasst → `cleanup_orphan_blobs` | s. „Blob-Sweep" |
 | `wa_table` / `wa_category_rule` / `wa_source_convention` (Katalog) | Postgres | CASCADE ueber `work_area` | — |
 | Tabellen-**Zeilen** | SQLite-Datei je Area (`WHO2BE_TABLESTORE_DIR/{workspace_id}/{area_id}.sqlite`) | nicht vom DB-CASCADE erfasst → `cleanup_deleted_area_stores` bzw. Betreiber-Schritt | s. „SQLite-Dateien" |
-| `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_node_source_area` / `kb_conflict` | Postgres | `kb_node_source_area` CASCADE ueber `work_area`; die KB-Kerntabellen tragen **keinen** FK auf `workspace` und sind beim Workspace-Purge explizit zu loeschen | — |
+| `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_conflict` | Postgres | CASCADE ueber `workspace` (Migration 0105; vorher kein FK, die Bestands-Waisen hat 0105 entfernt) | — |
+| `kb_node_source_area` | Postgres | CASCADE ueber `kb_node` und `work_area` | — |
 | `agent_access_log` | Postgres | **explizites DELETE** im Purge (s. u.) | — |
 
 ### Retention-Semantik von `retention_days`
@@ -245,6 +273,20 @@ Workspace explizit, *bevor* die Organization-CASCADE die Agenten erreicht
 (`repositories/account_repository.py`, `_PURGE_ACCESS_LOG_SQL`).
 Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
 
+**Frist: 13 Monate (Owner-Entscheidung E4c-b, 2026-10-11).** Zeilen, deren
+`access_date` vor dem Stichtag liegt, loescht die Worker-Routine
+`usage-retention` (taeglich 04:10 UTC, Owner-Connection, Zaehler
+`deleted_access_log`). Stichtag ist der UTC-Tag des Laufs minus 13
+Kalendermonate; eine Zeile genau von diesem Tag bleibt. E4c-b haelt die Frist
+bewusst gleich mit den Nutzungs-Rohdaten (`usage_event`, §6). Die Auskunft,
+welche Elemente an welchen externen Modell-Anbieter gegangen sind (VVT V20),
+reicht damit 13 Monate zurueck. Beide Loeschungen laufen im selben Lauf in
+getrennten Transaktionen; scheitert eine, laeuft die andere trotzdem, der
+Lauf endet `failed` mit beiden Zaehlern. Append-only fuer die App bleibt:
+`who2be_app` hat weiter nur SELECT/INSERT, eine Migration war nicht noetig.
+Ein Index auf `access_date` fehlt bewusst (Dedupe je Agent, Element,
+Operation und Tag haelt das Volumen klein).
+
 ---
 
 ## 4b · Pruefaelle und Prueflaeufe (`test_case`, `test_run`)
@@ -304,7 +346,7 @@ dem des Workspace.
 
 | Was | Frist | Wirkung |
 |---|---|---|
-| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung (Freigabe in der Triage) setzt `confirmed_at` und `expires_at = NULL`. Lernvorschlaege (`kind = 'lesson'`) verfallen nicht. Verfallsjob: `who2be-memory-expire`, taeglich per Cron (`deploy/hetzner/RUNBOOK.md`), je Eintrag ein Historien-Ereignis `expired` |
+| unbestaetigte Eintraege (`pending`, automatisch aktivierte ohne `confirmed_at`) | **30 Tage** ab Anlage (`expires_at = created_at + 30 Tage`; gesetzte Annahme laut ADR-0053 Anhang B, in Phase F zu ueberpruefen) | Status `expired`, **keine** Loeschung: abgelaufene Eintraege bleiben Dublettenbasis (§3.1.3). Abrufe verlaengern nichts; nur eine menschliche Bestaetigung (Freigabe in der Triage) setzt `confirmed_at` und `expires_at = NULL`. Lernvorschlaege (`kind = 'lesson'`) verfallen nicht. Verfallsjob: Worker-Routine `memory-expire`, taeglich 03:45 UTC (`deploy/hetzner/RUNBOOK.md` §Hintergrund-Routinen; CLI `who2be-memory-expire` als Notfallweg), je Eintrag ein Historien-Ereignis `expired` |
 | bestaetigte Eintraege | bis zur Loeschung durch einen Menschen oder Purge | — |
 | Historie | so lange wie ihr Eintrag | faellt per FK-Cascade mit |
 
@@ -391,6 +433,67 @@ Alle Pfade sind belegt in `apps/api/tests/test_case_compliance.py`.
 
 ---
 
+## 4e · Gespraechsprotokolle und Massnahmen (`feedback_session`, `feedback_session_case`, `measure`, `measure_case`, `measure_event`)
+
+Ein Gespraechsprotokoll (ADR-0053 §3.5, Migration 0103) haelt das Ergebnis
+eines Feedback-Gespraechs ueber **einen** Agenten fest: Teilnehmer,
+Zusammenfassung, Entscheidungen, abweichende Meinungen, Nachschau-Termin und
+die besprochenen Faelle (`feedback_session_case`). Eine Massnahme (§3.6)
+gehoert zu genau einem Protokoll, deckt Faelle ab (`measure_case`), hat immer
+einen Pruefall und einen Verlauf (`measure_event`). Alle fuenf Tabellen sind
+fuer die App-Rolle unveraenderlich (nur `SELECT`/`INSERT`); eine Korrektur ist
+ein neues Protokoll mit `supersedes_id`.
+
+Personenbezug tragen `feedback_session.submitted_by` (bei
+`submitted_by_kind = 'human'`), die Eintraege in `participants` (bei
+`kind = 'human'`) und `dissent` (bei `participant_kind = 'human'`) sowie
+`measure_event.actor_id` (bei `actor_kind = 'human'`). Die Freitexte
+(`summary`, `decisions`, `dissent`, `change_summary`, `success_criterion`,
+`counterposition`, `note`) koennen Nutzerinhalte zitieren.
+
+**Fristen:** PM-Entscheidung PM-6 vom 2026-10-09: Protokolle und Massnahmen
+werden aufbewahrt wie Faelle (Owner-Entscheidung 2026-10-08, §4d), also
+**ohne** eigene Frist.
+
+**Loeschpfade:**
+
+- **Loeschen eines Falls** (§4d): nimmt per FK-Cascade nur die
+  Verknuepfungen `feedback_session_case` und `measure_case` mit. Protokoll
+  und Massnahme bleiben stehen.
+- **Kein Einzel-Loeschen:** kein API-Pfad loescht ein Protokoll oder eine
+  Massnahme (unveraenderlich, ADR-0053 §3.5).
+- **Agent-Delete und Org-/Workspace-Purge:** alle fuenf Tabellen haengen per
+  FK-Cascade am Agenten und am Workspace; `purge_organization` raeumt sie mit
+  der Organization ab.
+- **Account-Purge** (`purge_account_data`): in fremden Workspaces ueberleben
+  Protokolle und Massnahmen den Account. Die Personenverweise werden dort auf
+  den Sentinel gesetzt (§2): `submitted_by`, die ID jedes menschlichen
+  Eintrags in `participants` und `dissent` und `measure_event.actor_id`.
+  Eintraege von Agenten bleiben unberuehrt, ebenso Rolle, Text und
+  Reihenfolge der Listen. `dissent` gehoert dazu, weil dort dieselbe Person
+  als `participant_id` steht; ohne diesen Schritt liefe die Anonymisierung der
+  Teilnehmerliste ins Leere. Anonymisiert, nicht geloescht, aus demselben
+  Grund wie bei Faellen: das Protokoll handelt vom Verhalten eines Agenten
+  und gehoert dem Workspace. Die Freitexte bleiben stehen.
+
+**Auskunft:** der GDPR-Export liefert je Workspace `feedback_sessions`,
+jedes Protokoll mit `case_ids` und `measures`, jede Massnahme mit `case_ids`
+und `events`. Die Sichtregel folgt der Oberflaeche (ADR-0053 §6.6:
+`GET /feedback-sessions` ab `editor`): ab `editor` alle Protokolle des
+Workspace, darunter **nur die, an denen die Person beteiligt ist**:
+eingereicht, als Mensch in `participants` oder `dissent` genannt, oder als
+Mensch Akteur eines Events an einer Massnahme des Protokolls.
+`export_manifest.feedback_sessions.scope` sagt, welche Regel galt
+(`workspace` oder `own_participation`). Faelle-Verknuepfungen, Massnahmen und
+Verlauf werden nur fuer die exportierten Protokolle gelesen.
+
+Export und Account-Purge sind belegt in
+`apps/api/tests/test_feedback_session_compliance.py`, das Loeschen eines Falls
+sowie Agent- und Workspace-Purge in
+`apps/api/tests/test_feedback_session_schema.py`.
+
+---
+
 ## 5 · Server-Logs / Zugriffsdaten
 
 Reverse-Proxy-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB:
@@ -442,19 +545,21 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 |---|---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
-| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel) |
-| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
+| `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft; `audit_log` nach Loeschung des Scopes 12 Monate ab Anonymisierung, dann geloescht (Routine `audit-retention`) | beim Purge **anonymisiert** (Sentinel), beim Konto-Purge auch `audit_log.target` und `detail` mit der User-ID (§2); `audit_log` bei Org-/Workspace-Purge zusaetzlich `target` geleert und `detail` auf Allowlist gekuerzt (0106, s. §1) |
+| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | `usage_event`: **13 Monate** ab `created_at`, dann geloescht (Routine `usage-retention`, Owner E4b, aktiv); `agent_feedback`: Eintrag dauerhaft (Kurations-Aggregate) | Account-Purge: **anonymisiert** (Sentinel); Org-/Workspace-Purge: ganze Zeile per **CASCADE** (0104), `feedback_resolution` faellt mit |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
 | Blob-Katalog + Objekte (`wa_blob`, SeaweedFS/S3) | bis unreferenziert + 24 h | `cleanup_orphan_blobs` (Zeile → Objekt; Objekt-Sweep nur mit Storage-Zeitstempel) |
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
-| Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
-| `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
+| Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Org-/Workspace-Purge: **CASCADE** (0105) |
+| Inhaltspassagen (`content_chunk`, 0070) | abgeleitet aus der aktiven Version, bis Loeschung von Element bzw. Workspace | Element: Neuaufbau bzw. Waisen-Ernte (`core/chunk_backfill.py`); Org-/Workspace-Purge: **CASCADE** (0105) |
+| `agent_access_log` | **13 Monate** ab `access_date`, dann geloescht (Routine `usage-retention`, Zaehler `deleted_access_log`, Owner E4c-b, aktiv; s. §4a Zugriffslog) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | Pruefaelle + Prueflaeufe (`test_case`/`test_run`, 0089) | mit Agent bzw. Workspace (kein API-Delete; Laeufe append-only) | Org-/Workspace-Purge: **CASCADE**; Account-Purge: `created_by` (nur `human`) + `reported_by_user_id` **anonymisiert** (Sentinel), s. §4b |
 | Agent-Memory unbestaetigt (`agent_memory`, 0091) | **30 Tage** ab Anlage (gesetzte Annahme, ADR-0053 Anhang B) | Verfall auf `expired` (keine Loeschung, Job in C2b); menschliche Bestaetigung hebt den Verfall auf, s. §4c |
 | Nutzergedaechtnis (`agent_memory`, `scope='user'`, 0091) + Historie (`agent_memory_event`) | bis Loeschung durch den Menschen bzw. Account-/Workspace-Purge | Account-Purge: **Loeschung** in allen Workspaces + `memory.deleted` ohne Inhalt; Historie per CASCADE; `confirmed_by` + menschliche `actor_id` **anonymisiert** (Sentinel), s. §4c |
 | Faelle (`agent_case` + Verlauf, Zuordnung, Schilderung, 0100) | bis Loeschung durch einen Menschen (ab `editor`) bzw. Agent-/Workspace-Purge; Owner-Entscheidung 2026-10-08: keine eigene Frist | Einzel-Loeschung: Hard-Delete samt Verlauf + `case.deleted` ohne Inhalt, umgewandelter Lernvorschlag faellt mit; Org-/Workspace-Purge: **CASCADE**; Account-Purge: `reporter_user_id`, menschliche `actor_id` und `assigned_by` **anonymisiert** (Sentinel), s. §4d |
+| Gespraechsprotokolle + Massnahmen (`feedback_session`, `measure` + Faelle und Verlauf, 0103) | ohne eigene Frist wie Faelle (PM-6); kein Einzel-Loeschen (unveraenderlich) | Fall-Loeschung: nur die Verknuepfungen per **CASCADE**; Agent-/Org-/Workspace-Purge: **CASCADE**; Account-Purge: `submitted_by` (nur `human`), menschliche IDs in `participants`/`dissent` und menschliche `actor_id` **anonymisiert** (Sentinel), s. §4e |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
@@ -465,6 +570,15 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 
 - `apps/api/src/who2be_api/core/purge.py` — `purge_expired()`, `PurgeResult`,
   CLI-Entrypoint `who2be-purge`.
+- `apps/api/src/who2be_api/worker/routines.py` — Routinen `purge`,
+  `memory-expire`, `audit-retention` und `usage-retention` (Zeitplan,
+  Laufprotokoll
+  `routine_run`, ADR-0057).
+- `apps/api/src/who2be_api/core/audit_retention.py` — Endloeschung des
+  anonymen `audit_log`-Rests nach 12 Monaten (Owner E1a).
+- `apps/api/src/who2be_api/core/usage_retention.py` — Loeschung der
+  `usage_event`-Rohzeilen (Owner E4b) und der `agent_access_log`-Zeilen
+  (Owner E4c-b) nach 13 Monaten.
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
   (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.
@@ -476,6 +590,9 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
   `usage_event`/`agent_feedback` (append-only, `actor_id`);
   `0104_telemetry_workspace_fk.sql` — FK auf `workspace` mit CASCADE,
   Bestands-Waisen bereinigt.
+- `apps/api/src/who2be_api/migrations/0105_kb_chunk_workspace_fk.sql` —
+  `kb_node`/`kb_edge`/`kb_edge_evidence`/`kb_conflict`/`content_chunk`: FK auf
+  `workspace` mit CASCADE, Bestands-Waisen bereinigt.
 - `deploy/hetzner/scripts/backup.sh` — Backup-Retention.
 - ADR-0031 — Append-only/Anonymisierung/Aufbewahrungs-Abwaegung.
 
@@ -500,4 +617,6 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
   Verlauf, Zuordnung und Schilderung (§4d);
   `apps/api/src/who2be_api/repositories/case_repository.py#delete_case` —
   Einzel-Loeschung.
+- `apps/api/src/who2be_api/migrations/0103_feedback_session_measure.sql` —
+  Gespraechsprotokolle und Massnahmen (§4e).
 - ADR-0047/0048/0049 — WorkArea+KB, Blob-Storage, Tabellen-Store.

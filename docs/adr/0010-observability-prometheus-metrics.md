@@ -61,5 +61,34 @@ sichtbar sein.
   `GET /v1/internal/metrics` → 200 mit `text/plain; version=0.0.4`-
   Content-Type; ein Caddy-Smoke (`tests/test_headers.sh`) belegt 403
   von extern.
-</content>
-</invoke>
+
+## Nachtrag 2026-10-21 — Bisher nicht umgesetzt; Folge-ADR-0062
+
+**Stand der Umsetzung.** Diese ADR war bis 2026-10-21 nur in einem Punkt
+umgesetzt: der 403-Sperre für `/v1/internal/*` im Hetzner-Caddyfile. Es gab
+kein `core/metrics.py`, keine `prometheus-fastapi-instrumentator`-Abhängigkeit,
+keinen Prometheus- oder Grafana-Dienst und kein Dashboard. Die Beschreibung in
+`docs/architecture.md` stellte den Stack trotzdem als laufend dar; sie ist mit
+diesem Nachtrag korrigiert.
+
+**Revision durch ADR-0062** (Owner, 2026-10-20, „wie empfohlen, Sicherheitskarte
+ok“). Der Kern bleibt: RED-Metriken der API über den Instrumentator auf
+`GET /v1/internal/metrics`, nie öffentlich, dazu
+`who2be_auth_token_attempts_total`. Revidiert sind vier Punkte, Details in
+[ADR-0062](0062-stabilitaet-fehler-tracking-waechter-alarme.md) Abschnitt 4:
+
+1. **MCP einbezogen.** „Keine Python-Aenderung im MCP“ gilt nicht mehr; der
+   MCP-Server bekommt RED-Metriken je Werkzeug.
+2. **Push statt Prometheus/Grafana im Prod-Compose.** Auf Prod läuft nur ein
+   Metrik-Agent, der per `remote_write` an VictoriaMetrics + Grafana auf einem
+   zweiten Server (Wächter) schickt. Grafana unter `app.<DOMAIN>/grafana/`
+   entfällt.
+3. **Dokploy/Traefik.** Die `/v1/internal`-Sperre auf dem Stack ohne Caddy
+   regelt eine eigene Sicherheitskarte; ein Metrik-Endpunkt kommt erst, wenn
+   die Sperre auf jedem ausgelieferten Stack belegt ist.
+4. **Alarmierung im Umfang.** „Alerting bleibt out-of-scope MVP“ gilt nicht
+   mehr; Alarmwege Telegram + Mail.
+
+Zusätzlich führt ADR-0062 Fehler-Tracking (GlitchTip, Sentry-SDK,
+DSN-gesteuert), vorläufige SLOs und den Belastungstest ein. Die Umsetzung
+dieser ADR folgt als Paket B2 (API) und B3 (MCP) nach dem Cloud-Release.

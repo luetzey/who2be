@@ -34,12 +34,15 @@ from pydantic import JsonValue
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    is_agent_bound,
     require_capability,
     require_role,
     require_unmanaged,
 )
 from who2be_api.embeddings import build_embedding_port
+from who2be_api.repositories.case_repository import apply_system_status
 from who2be_api.repositories.content_chunk_repository import PgContentChunkRepository
+from who2be_api.repositories.session_repository import PgSessionRepository
 from who2be_api.repositories.test_case_repository import PgTestCaseRepository
 from who2be_api.services.content_chunks import ChunkDraft, chunk_version_content
 from who2be_api.services.promote_validation import (
@@ -52,8 +55,14 @@ from who2be_api.services.test_case_service import TestCaseService, TestReport
 from who2be_models import (
     ALLOWED_TRANSITIONS,
     AgentCapability,
+    CaseEventKind,
+    CaseStatus,
     EntityType,
     ExternalToolVersionRead,
+    MeasureActorKind,
+    MeasureEventCreate,
+    MeasureEventKind,
+    MeasureState,
     PersonaVersionRead,
     PlaybookVersionRead,
     ResourceVersionRead,
@@ -753,6 +762,12 @@ class VersionStatusService:
                 version=version,
             )
 
+            # Lernschleife E3 (ADR-0053 3.3/3.6, F3 a): wird eine mit einer
+            # Massnahme verknuepfte Version durch einen MENSCHEN aktiv, folgen
+            # `activated` und `addressed` in DIESER Transaktion.
+            if to_status == VersionStatus.active and not is_agent_bound(ctx):
+                await self._activate_measures(conn, ctx, entity_type, updated["id"])
+
             # Passage-Ebene nachziehen (ADR-0046). Nur die aktive Version ist
             # materialisiert: wird sie es, bauen wir auf; verlaesst sie den
             # Active-Status, raeumen wir weg. Der `_reactivate_previous`-Pfad
@@ -792,6 +807,58 @@ class VersionStatusService:
                     ctx.user_id,
                 )
             return updated
+
+    async def _activate_measures(
+        self,
+        conn: asyncpg.Connection,
+        ctx: WorkspaceContext,
+        entity_type: EntityType,
+        version_id: UUID,
+    ) -> None:
+        """E3 (ADR-0053 3.6 Event `activated`, 3.3 `-> addressed`; F3 a).
+
+        Massnahmen, deren juengstes `draft_linked` auf diese Version zeigt
+        (`measures_for_version`, QE4 a) und die noch in `draft_linked` stehen,
+        bekommen `activated` (System, mit Version). Ihre Faelle gehen auf
+        `addressed` (System, mit Version und `measure_id`) — nach den Kanten
+        aus 3.3: `triaged`/`in_progress` direkt, `open`/`reopened` ueber
+        `triaged` (nur mit Zuordnung). `addressed`, `verified` und `dismissed`
+        bleiben unveraendert. Alles in der Transaktion der Aktivierung; eine
+        zurueckgezogene, eingestufte oder schon aktivierte Massnahme loest
+        nichts aus.
+        """
+        sessions = PgSessionRepository(self._pool)
+        candidates = await sessions.measures_for_version(
+            ctx.workspace_id, entity_type, version_id, conn=conn
+        )
+        for candidate in candidates:
+            locked = await sessions.lock_measure(conn, candidate.workspace_id, candidate.id)
+            if locked is None or locked[0].state is not MeasureState.draft_linked:
+                continue
+            measure = locked[0]
+            await sessions.append_measure_event(
+                measure.workspace_id,
+                measure.id,
+                MeasureEventCreate(
+                    event=MeasureEventKind.activated,
+                    version_entity_type=entity_type,
+                    version_id=version_id,
+                ),
+                actor_kind=MeasureActorKind.system,
+                actor_id=None,
+                conn=conn,
+            )
+            await apply_system_status(
+                conn,
+                measure.workspace_id,
+                measure.case_ids,
+                event=CaseEventKind.addressed,
+                sources=(CaseStatus.triaged, CaseStatus.in_progress),
+                via_triage=(CaseStatus.open, CaseStatus.reopened),
+                measure_id=measure.id,
+                version_entity_type=entity_type,
+                version_id=version_id,
+            )
 
     async def _assert_composite_children_active(
         self, conn: asyncpg.Connection, parent_id: UUID

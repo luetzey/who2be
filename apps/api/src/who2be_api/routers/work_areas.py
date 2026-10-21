@@ -9,6 +9,8 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   Area (Grant-Editor der Web-UI), Menschen vorbehalten (Gate im Service).
 - ``PUT/DELETE /work-areas/{area_id}/grants/{agent_id}`` — Grant-Verwaltung,
   Menschen vorbehalten (Gate im Service).
+- ``GET /agents/{agent_id}/work-areas`` — Arbeitsbereiche eines Agenten fuer
+  den Agent-Ueberblick (Navigation A4), Menschen vorbehalten.
 
 Rate-Limit-Paritaet (Muster `memory.py`/`resources.py`): jede Mutation traegt
 `@limiter.limit(write_limit)` (+ `request` als erster Parameter), der
@@ -28,6 +30,7 @@ from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.work_areas import WorkAreaService
 from who2be_models import WorkAreaCreate, WorkAreaGrantRead, WorkAreaGrantSet, WorkAreaRead
+from who2be_models.workarea import AgentWorkAreaRead
 
 router = APIRouter(tags=["work-areas"])
 
@@ -63,6 +66,19 @@ async def list_work_area_grants(
 ) -> list[WorkAreaGrantRead]:
     """Grants einer shared Area (Mensch, ab viewer); Gate liegt im Service."""
     return await service.list_grants(ctx, area_id)
+
+
+@router.get("/agents/{agent_id}/work-areas", dependencies=[Depends(enforce_mcp_read_limit)])
+async def list_agent_work_areas(
+    agent_id: UUID, ctx: Ctx, service: Service
+) -> list[AgentWorkAreaRead]:
+    """Arbeitsbereiche eines Agenten mit Stufe, Owner-Kennung und Agentenzahl
+    (Agent-Ueberblick, Navigation A4). Nur Menschen; Gate liegt im Service.
+
+    Liegt bewusst in diesem Router (nicht in `agents.py`): so erbt die Route
+    die Sperre fuer ungebundene Maschinen-Tokens (`require_agent_bound_token`).
+    """
+    return await service.list_for_agent(ctx, agent_id)
 
 
 @router.put("/work-areas/{area_id}/grants/{agent_id}")

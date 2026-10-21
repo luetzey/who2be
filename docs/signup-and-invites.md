@@ -17,6 +17,7 @@ auch bei direktem API-Aufruf ohne die Web-UI).
 | `GOTRUE_DISABLE_SIGNUP=true` | Backend (GoTrue, Runtime) | **Echte Durchsetzung** — `signUp` liefert 422, auch bei direktem API-Aufruf. |
 | `WHO2BE_LAUNCH_MODE=coming_soon` | Web (Runtime, `/config.js`) | `/signup` zeigt eine Hinweisseite (DE/EN, "Wir arbeiten noch an Who2Be — bald verfügbar.") statt des Formulars; der Login-Link „Registrieren" führt dorthin statt zu verschwinden. |
 | `WHO2BE_LAUNCH_CONTACT=hello@who2be.dev` (optional) | Web (Runtime) | Zeigt einen Mail-Kontakt auf der Hinweisseite. Ohne Wert entfällt der Block. |
+| `WHO2BE_LAUNCH_MESSAGE_DE` / `_EN` (optional) | Web (Runtime) | Freier Text, ersetzt den festen Fließtext der Hinweisseite. Ohne Wert bleibt der feste Text. Fehlt die aktive Sprache, gilt die andere. |
 
 Beide Web-Variablen wirken über `/config.js`
 (`apps/web/docker/40-who2be-runtime-config.sh`, geschrieben bei jedem
@@ -24,6 +25,52 @@ Container-Start) — Umschalten braucht **keinen Rebuild**, nur Env ändern +
 Container neu starten. Unbekannte `WHO2BE_LAUNCH_MODE`-Werte fallen in der
 Web-UI fail-open auf `open` zurück (mit `console.warn`) — die harte Sperre
 bleibt ohnehin bei GoTrue.
+
+### Provider-Anmeldung bei gesperrter Registrierung
+
+Meldet sich jemand ohne Konto über Google, GitHub oder Apple an, während
+`GOTRUE_DISABLE_SIGNUP=true` gilt, lehnt GoTrue ab und schickt den Browser mit
+`error_code=signup_disabled` zurück auf `/auth/callback`. Die Web-App zeigt dann
+dieselbe Hinweisseite wie `/signup` (inklusive `WHO2BE_LAUNCH_MESSAGE_*`) statt
+des englischen Rohtexts „Signups not allowed for this instance“. Alle anderen
+Fehler beim Provider-Rückweg erscheinen unverändert.
+
+### Hinweis-Banner (Wartung, Neustart)
+
+| Variable | Ebene | Wirkung |
+|---|---|---|
+| `WHO2BE_NOTICE_DE` / `_EN` (optional) | Web (Runtime) | Banner auf der Login-Seite und oben in der App. Ohne Wert kein Banner. Fehlt die aktive Sprache, gilt die andere. |
+| `WHO2BE_NOTICE_LEVEL=info` | Web (Runtime) | `info` (neutral, Screenreader: `status`) oder `warning` (gelb, `alert`). Unbekannte Werte gelten als `info`. |
+
+Angemeldete können das Banner wegklicken; es bleibt dann bis zum Ende der
+Browser-Sitzung (Tab) weg. Ein neuer Text erscheint wieder. Auf der
+Login-Seite ist es nicht wegklickbar.
+
+Für alle Freitexte gilt: Sie werden als reiner Text angezeigt, HTML und
+Markdown werden nicht ausgewertet, Links sind nicht klickbar. Länger als 500
+Zeichen wird mit „…“ gekürzt. Ein Zeilenumbruch steht in der `.env` als `\n`
+in einem doppelt gequoteten Wert:
+
+```dotenv
+WHO2BE_NOTICE_DE="Heute ab 22 Uhr Wartung.\nWir sind gegen 23 Uhr zurück."
+WHO2BE_NOTICE_EN="Maintenance tonight from 10 pm.\nBack around 11 pm."
+WHO2BE_NOTICE_LEVEL=warning
+```
+
+Text ändern: `.env` anpassen, Web-Container neu starten. Kein Rebuild.
+
+### Startreihenfolge für einen Test allein
+
+Wer die Instanz zuerst allein testen will, legt **das eigene Konto an, bevor
+die Sperre greift**: Mit `GOTRUE_DISABLE_SIGNUP=true` kann auch ein
+Provider-Login kein neues Konto mehr anlegen, nur bestehende Konten melden
+sich an.
+
+1. Instanz mit `GOTRUE_DISABLE_SIGNUP=false` starten.
+2. Eigenes Konto anlegen (Registrieren oder Provider-Login) und einmal anmelden.
+3. `GOTRUE_DISABLE_SIGNUP=true` und `WHO2BE_LAUNCH_MODE=coming_soon` setzen,
+   optional `WHO2BE_LAUNCH_MESSAGE_*`, `auth` und `web` neu starten.
+4. Mit einem zweiten Provider-Konto prüfen: Es landet auf der Hinweisseite.
 
 ### Altschalter (deprecated)
 

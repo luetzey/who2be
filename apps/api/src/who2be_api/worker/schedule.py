@@ -25,7 +25,9 @@ Rebuild ueberschreiben:
   meldet Heartbeat, belegt aber keine Slots (§3).
 
 `<NAME>` ist der Routinen-Name in Grossbuchstaben, Bindestrich wird
-Unterstrich. Ein ungueltiger Override ist ein **Startfehler**
+Unterstrich. Eine leere Variable gilt als nicht gesetzt (die Compose-Stacks
+reichen alle mit leerem Default durch). Ein ungueltiger Override ist ein
+**Startfehler**
 (`ScheduleError`), es gibt keinen stillen Rueckfall auf den Code-Wert.
 `effective_table` sammelt dabei alle Fehler und meldet sie zusammen, damit ein
 Betreiber nicht Fehler fuer Fehler neu starten muss.
@@ -204,9 +206,23 @@ def _environ(env: Mapping[str, str] | None) -> Mapping[str, str]:
     return os.environ if env is None else env
 
 
+def _override(env: Mapping[str, str], key: str) -> str | None:
+    """Wert einer Override-Variable; fehlend oder leer heisst: nicht gesetzt.
+
+    Die Compose-Stacks reichen jede Variable mit leerem Default durch
+    (`${WHO2BE_ROUTINE_PURGE_SCHEDULE:-}`), damit ein Eintrag in `.env` den
+    Container erreicht. Ohne Eintrag kommt sie als leerer String an — das darf
+    weder ein Startfehler sein noch den Code-Zeitplan verdecken.
+    """
+    value = env.get(key)
+    if value is None or not value.strip():
+        return None
+    return value
+
+
 def worker_enabled(env: Mapping[str, str] | None = None) -> bool:
-    """Globaler Schalter `WHO2BE_WORKER_ENABLED` (Default an)."""
-    value = _environ(env).get(WORKER_ENABLED_ENV)
+    """Globaler Schalter `WHO2BE_WORKER_ENABLED` (Default an, leer = Default)."""
+    value = _override(_environ(env), WORKER_ENABLED_ENV)
     if value is None:
         return True
     return parse_bool(WORKER_ENABLED_ENV, value)
@@ -234,7 +250,7 @@ def _effective(routine: Routine, env: Mapping[str, str]) -> EffectiveRoutine:
     schedule = routine.schedule
     schedule_source: Source = "code"
     sched_key = schedule_env_key(routine.name)
-    if (raw := env.get(sched_key)) is not None:
+    if (raw := _override(env, sched_key)) is not None:
         try:
             schedule = parse_schedule(raw)
         except ScheduleError as exc:
@@ -243,7 +259,7 @@ def _effective(routine: Routine, env: Mapping[str, str]) -> EffectiveRoutine:
     enabled = True
     enabled_source: Source = "code"
     enabled_key = enabled_env_key(routine.name)
-    if (raw := env.get(enabled_key)) is not None:
+    if (raw := _override(env, enabled_key)) is not None:
         enabled, enabled_source = parse_bool(enabled_key, raw), "env"
     return EffectiveRoutine(
         name=routine.name,

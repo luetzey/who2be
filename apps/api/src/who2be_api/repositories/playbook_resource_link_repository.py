@@ -24,6 +24,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import ResourceLinkItem, ResourceLinkRead
+from who2be_models.blocknote_text import format_table, table_cells, text_inline_only
 
 _PREVIEW_LEN = 200
 _SECTION_PREVIEW_LEN = 400
@@ -38,11 +39,26 @@ def block_plain_text(block: dict[str, Any]) -> str:
     BlockNote-Inline-Content liegt unter `content`/`children` als verschachtelte
     Liste von `{type, text|content, …}`-Knoten. Wir ziehen nur die Klartext-
     Anteile heraus — kein HTML, keine Styles (kein Leak ueber die Vorschau).
+
+    Ein Tabellenblock (`content` ist ein `tableContent`-Objekt) wird ueber
+    `who2be_models.blocknote_text` (`table_cells`/`format_table`) als
+    GFM-Tabelle auf eigenen Zeilen ausgegeben — dieselbe Form wie in Renderer
+    und Passagen (Owner-Entscheidung W1). Diese Section-Texte erreichen ueber
+    den Resource-Resolver auch den Agenten.
     """
 
     parts: list[str] = []
+    after_table = False
+
+    def _append(text: str) -> None:
+        nonlocal after_table
+        if after_table and text:
+            parts.append("\n")
+            after_table = False
+        parts.append(text)
 
     def _walk(node: Any) -> None:
+        nonlocal after_table
         if isinstance(node, str):
             return
         if isinstance(node, list):
@@ -50,9 +66,18 @@ def block_plain_text(block: dict[str, Any]) -> str:
                 _walk(item)
             return
         if isinstance(node, dict):
+            rows = table_cells(node)
+            if rows is not None:
+                table = format_table(
+                    [["".join(text_inline_only(i) for i in cell) for cell in row] for row in rows]
+                )
+                if table:
+                    _append(("\n" if parts else "") + table)
+                    after_table = True
+                return
             text = node.get("text")
             if isinstance(text, str):
-                parts.append(text)
+                _append(text)
             _walk(node.get("content"))
             _walk(node.get("children"))
 

@@ -171,3 +171,59 @@ def test_chunk_version_content_accepts_a_json_string() -> None:
 def test_chunk_version_content_survives_garbage() -> None:
     assert chunk_version_content("resource", "nicht json") == []
     assert chunk_version_content("resource", None) == []
+
+
+def _table(block_id: str, rows: list[list[str]]) -> dict[str, object]:
+    return {
+        "id": block_id,
+        "type": "table",
+        "content": {
+            "type": "tableContent",
+            "rows": [
+                {"cells": [[{"type": "text", "text": c, "styles": {}}] for c in row]}
+                for row in rows
+            ],
+        },
+    }
+
+
+def test_table_and_link_land_in_the_passage_of_their_heading() -> None:
+    link_para = {
+        "id": "p1",
+        "type": "paragraph",
+        "content": [
+            {"type": "text", "text": "Siehe ", "styles": {}},
+            {
+                "type": "link",
+                "href": "https://x.de",
+                "content": [{"type": "text", "text": "Doku", "styles": {}}],
+            },
+        ],
+    }
+    nested = _para("p2", "Mit Kind")
+    nested["children"] = [_table("t2", [["X"], ["Y"]])]
+    content = {
+        "description": "",
+        "blocks": [
+            _heading("h1", "Fristen"),
+            _table("t1", [["Stufe", "Frist"], ["Mahnung", "14 Tage"]]),
+            link_para,
+            nested,
+        ],
+    }
+
+    chunks = chunk_content("resource", content)
+
+    assert [c.block_id for c in chunks] == ["h1"]
+    assert chunks[0].text == (
+        "Fristen\n\n| Stufe | Frist |\n| --- | --- |\n| Mahnung | 14 Tage |"
+        "\n\nSiehe Doku (https://x.de)\n\nMit Kind\n| X |\n| --- |\n| Y |"
+    )
+
+
+def test_table_in_a_playbook_body_does_not_break_chunking() -> None:
+    body = json.dumps([_heading("h1", "Ablauf"), _table("t1", [["A", "B"]])])
+
+    chunks = chunk_content("playbook", {"description": "", "body": body})
+
+    assert [c.text for c in chunks] == ["Ablauf\n\n| A | B |\n| --- | --- |"]

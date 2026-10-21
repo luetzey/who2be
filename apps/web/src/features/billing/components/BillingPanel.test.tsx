@@ -348,16 +348,23 @@ describe('BillingPanel', () => {
   })
 
   it('startet den Mollie-Checkout beim Upgrade-Klick', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
+    // URL-basiert: die Glocke in der Kopfleiste (Navigation W1) fragt nebenher
+    // `/inbox/counts` ab und darf die Reihenfolge nicht verschieben.
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/inbox/counts')) {
+        return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+      }
+      if (String(url).includes('/billing/checkout')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ checkout_url: 'https://mollie.test/checkout/abc' }), {
+            status: 200,
+          }),
+        )
+      }
+      return Promise.resolve(
         new Response(JSON.stringify({ ...cloudActive, features: ['core'] }), { status: 200 }),
       )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ checkout_url: 'https://mollie.test/checkout/abc' }), {
-          status: 200,
-        }),
-      )
+    })
     vi.stubGlobal('fetch', fetchMock)
     const hrefSpy = vi.fn()
     Object.defineProperty(window, 'location', {
@@ -376,18 +383,25 @@ describe('BillingPanel', () => {
     await waitFor(() => {
       expect(hrefSpy).toHaveBeenCalledWith('https://mollie.test/checkout/abc')
     })
-    const checkoutCall = fetchMock.mock.calls[1]
+    const checkoutCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/billing/checkout'),
+    )!
     expect(String(checkoutCall[0])).toContain('/billing/checkout')
     expect(checkoutCall[1]).toMatchObject({ method: 'POST' })
   })
 
   it('zeigt einen Fehler, wenn der Checkout fehlschlaegt', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/inbox/counts')) {
+        return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+      }
+      if (String(url).includes('/billing/checkout')) {
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }))
+      }
+      return Promise.resolve(
         new Response(JSON.stringify({ ...cloudActive, features: ['core'] }), { status: 200 }),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 500 }))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     renderPanel()

@@ -5,6 +5,7 @@ import { isStaleChunkError, reloadOnStaleChunk } from '@/app/stale-chunk'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
 import i18n from '@/i18n'
+import { reportBoundaryError } from '@/lib/errorTracking'
 
 interface BoundaryProps {
   children: ReactNode
@@ -29,7 +30,11 @@ class ErrorBoundaryImpl extends Component<BoundaryProps, BoundaryState> {
     // gehabt auf ErrorAlert zurueck.
     if (isStaleChunkError(error)) {
       reloadOnStaleChunk()
+      // Kein Fehler im Code, sondern ein Deploy-Wechsel: nicht melden.
+      return
     }
+    // An den Fehler-Tracker melden (no-op ohne DSN, Stabilitaet A3).
+    reportBoundaryError(error, info)
   }
 
   render(): ReactNode {

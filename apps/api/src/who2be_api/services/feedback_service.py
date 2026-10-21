@@ -11,14 +11,22 @@ Telemetrie fliesst NIE in einen gerenderten System-Prompt (kein Injection-Vektor
 
 from uuid import UUID
 
+import asyncpg
 from fastapi import status
 
-from who2be_api.core.errors import ApiError
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.errors import ApiError, ApiGateError
+from who2be_api.core.security import (
+    WorkspaceContext,
+    is_agent_bound,
+    require_capability,
+    require_role,
+)
+from who2be_api.core.workarea_scope import agent_not_found, area_not_found, readable_area_ids
 from who2be_api.repositories.feedback_repository import FeedbackRepository
 from who2be_models import (
     AgentCapability,
     AgentFeedbackRead,
+    AgentUsageStats,
     FeedbackCreate,
     FeedbackDetailRead,
     FeedbackEvents,
@@ -30,8 +38,12 @@ from who2be_models import (
     FeedbackTarget,
     FeedbackUnused,
     SystemFeedbackCreate,
+    UsageEntityType,
     UsageEventCreate,
     UsageEventRead,
+    UsageList,
+    UsageStats,
+    WorkAreaUsageStats,
     WorkspaceRole,
 )
 
@@ -52,8 +64,11 @@ def _entity_not_found() -> ApiError:
 class FeedbackService:
     """Schreibt Usage-/Feedback-Ereignisse und liefert das Kurations-Aggregat."""
 
-    def __init__(self, repo: FeedbackRepository) -> None:
+    def __init__(self, repo: FeedbackRepository, pool: asyncpg.Pool) -> None:
         self._repo = repo
+        # Nur fuer den Area-Scope (`readable_area_ids`) der Nutzungszaehler U2 —
+        # dieselbe Sichtbarkeitsregel wie `GET /work-areas`, keine Kopie.
+        self._pool = pool
 
     async def record_usage(self, ctx: WorkspaceContext, data: UsageEventCreate) -> UsageEventRead:
         require_capability(ctx, AgentCapability.feedback_write)
@@ -128,10 +143,17 @@ class FeedbackService:
             raise _entity_not_found()
         return await self._repo.list_events(ctx.workspace_id, entity_type, entity_id, _EVENTS_LIMIT)
 
-    async def get_overview(self, ctx: WorkspaceContext) -> FeedbackOverview:
+    async def get_overview(
+        self, ctx: WorkspaceContext, agent_id: UUID | None = None, days: int | None = None
+    ) -> FeedbackOverview:
         # Workspace-weite Kurations-Uebersicht (Dashboard-Kacheln + Feedback-Seite).
+        # Navigation A6: optional je Agent (`agent_id`) und Zeitraum (`days`).
+        # Rechte bleiben editor+ (PM-Weiche W2) — die Rolle wird VOR dem
+        # Agent-Lookup geprueft, damit ein viewer keine Agent-IDs enumeriert.
         require_role(ctx, WorkspaceRole.editor)
-        items = await self._repo.overview(ctx.workspace_id)
+        if agent_id is not None and not await self._repo.agent_exists(ctx.workspace_id, agent_id):
+            raise agent_not_found()
+        items = await self._repo.overview(ctx.workspace_id, agent_id=agent_id, days=days)
         return FeedbackOverview(items=items)
 
     async def get_unused(self, ctx: WorkspaceContext) -> FeedbackUnused:
@@ -193,3 +215,63 @@ class FeedbackService:
         if not await self._repo.feedback_belongs_to(ctx.workspace_id, feedback_id):
             raise _entity_not_found()
         await self._repo.delete_feedback(ctx.workspace_id, feedback_id)
+
+    async def get_usage(
+        self, ctx: WorkspaceContext, entity_type: UsageEntityType, entity_id: UUID
+    ) -> UsageStats:
+        # Nutzung U1: Zaehler je Element. Ab viewer (Spec §3.2 „Nutzung · ab
+        # viewer“) — reine Zaehler ohne Personenbezug. Agent-gebundene Tokens
+        # bleiben draussen: die Liste nennt alle Elemente des Workspace und
+        # umginge den Lese-Scope ihrer Policy; die Zaehler sind eine Web-Sicht.
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        if not await self._repo.entity_belongs_to(ctx.workspace_id, entity_type, entity_id):
+            raise _entity_not_found()
+        return await self._repo.usage_stats(ctx.workspace_id, entity_type, entity_id)
+
+    async def list_usage(
+        self, ctx: WorkspaceContext, entity_type: UsageEntityType | None = None
+    ) -> UsageList:
+        # Nutzung U1 fuer Listenspalten („Zuletzt genutzt“, „30 Tage“).
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        items = await self._repo.usage_list(ctx.workspace_id, entity_type)
+        return UsageList(items=items)
+
+    async def get_agent_usage(self, ctx: WorkspaceContext, agent_id: UUID) -> AgentUsageStats:
+        # Nutzung U2: Kennzahlen eines Agenten (Z2a). Rechte wie U1: ab viewer,
+        # agent-gebundene Tokens 403. Rolle vor dem Lookup, unbekannter oder
+        # fremder Agent → 404. Die Arbeitsbereiche folgen der Sichtbarkeit von
+        # `GET /work-areas` (viewer nur shared, editor+ auch private).
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        if not await self._repo.agent_exists(ctx.workspace_id, agent_id):
+            raise agent_not_found()
+        restrict = await readable_area_ids(self._pool, ctx)
+        return await self._repo.agent_usage(ctx.workspace_id, agent_id, restrict)
+
+    async def get_work_area_usage(self, ctx: WorkspaceContext, area_id: UUID) -> WorkAreaUsageStats:
+        # Nutzung U2: Zugriffe auf einen Arbeitsbereich (Zugriffslog, nur Datum).
+        # Ein fuer den Aufrufer unsichtbarer Bereich (viewer: private) ist wie
+        # ein unbekannter → 404 `area_not_found`, kein Existenz-Leak.
+        _deny_agent_bound_usage(ctx)
+        require_role(ctx, WorkspaceRole.viewer)
+        restrict = await readable_area_ids(self._pool, ctx)
+        visible = restrict is None or area_id in restrict
+        if not visible or not await self._repo.area_exists(ctx.workspace_id, area_id):
+            raise area_not_found()
+        return await self._repo.work_area_usage(ctx.workspace_id, area_id)
+
+
+def _deny_agent_bound_usage(ctx: WorkspaceContext) -> None:
+    """403 fuer agent-gebundene Tokens auf den Nutzungszaehlern (`is_agent_bound`)."""
+    if is_agent_bound(ctx):
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                "Nutzungszaehler sind eine Sicht fuer Menschen im Web — ein "
+                "agent-gebundener Token liest sie nicht."
+            ),
+        )

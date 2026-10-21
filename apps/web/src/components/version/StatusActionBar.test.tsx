@@ -80,7 +80,7 @@ describe('StatusActionBar', () => {
   it('zeigt im Draft nur den Submit-Button', () => {
     renderBar('draft')
     expect(
-      screen.getByRole('button', { name: 'Zur Review einreichen' }),
+      screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull()
@@ -91,7 +91,7 @@ describe('StatusActionBar', () => {
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeNull()
   })
 
@@ -118,7 +118,7 @@ describe('StatusActionBar', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
     expect(
-      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeNull()
   })
 
@@ -183,7 +183,7 @@ describe('StatusActionBar', () => {
     it('traegt branch-action-submit im Draft', () => {
       renderBar('draft')
       expect(screen.getByTestId('branch-action-submit')).toBe(
-        screen.getByRole('button', { name: 'Zur Review einreichen' }),
+        screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
       )
     })
 
@@ -275,7 +275,7 @@ describe('StatusActionBar', () => {
         submit: 'Draft abschliessen',
       })
 
-      expect(screen.queryByRole('button', { name: 'Zur Review einreichen' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Zur Freigabe einreichen' })).toBeNull()
       const button = screen.getByRole('button', { name: 'Draft abschliessen' })
       expect(button).toBe(screen.getByTestId('branch-action-submit'))
 
@@ -286,7 +286,7 @@ describe('StatusActionBar', () => {
       expect(onTransition).toHaveBeenCalledWith('review')
       // Toast bleibt der geteilte common:statusBar-Text — nur das Button-
       // Label wird ueberschrieben.
-      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+      expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
     })
 
     it('ueberschreibt Promote/Reject im Review, Admin-Gate bleibt unveraendert', () => {

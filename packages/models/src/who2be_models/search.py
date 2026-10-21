@@ -24,12 +24,14 @@ from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
 SearchType = Literal["persona", "playbook", "resource", "external_tool"]
 
 
+# Suchmodi nach ADR-0037 §35-38, eingeloest in ADR-0046. Der Tool-Vertrag
+# aendert sich NICHT, wenn eine Installation ohne die optionale
+# Embedding-Gruppe laeuft.
 class SearchMode(StrEnum):
-    """Wie gesucht wird (ADR-0037 §35-38, eingeloest in ADR-0046).
+    """Wie gesucht wird.
 
     - `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst
-      Volltext. Der Tool-Vertrag aendert sich dadurch NICHT, wenn eine
-      Installation ohne die optionale Embedding-Gruppe laeuft.
+      Volltext.
     - `text`: nur Volltext — deterministisch und reproduzierbar.
     - `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und
       sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).

@@ -9,7 +9,8 @@ Placeholder-Pills aus und uebersetzt sie in:
 
 Die Parser-Shape-Logik spiegelt `renderer.py` (Top-Level-Array ODER
 `{"content": [...]}`-Wrapper). Iteriert wird in Dokumentreihenfolge ueber
-Top-Level-Blocks, deren `content[]`-Inlines und rekursiv die `children`.
+Top-Level-Blocks, deren `content[]`-Inlines (bei Tabellen die Zellen ueber
+`who2be_models.blocknote_text.table_cells`) und rekursiv die `children`.
 
 Robust gegen kaputtes JSON: bei einem Parse-Fehler oder unbekannter Top-Level-
 Form liefert `extract_pills` leere Listen statt zu crashen.
@@ -23,6 +24,7 @@ from typing import Any
 from uuid import UUID
 
 from who2be_models import ResourceLinkItem
+from who2be_models.blocknote_text import table_cells
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +95,13 @@ def _walk_block(
         return
     content = block.get("content", [])
     if isinstance(content, list):
-        for inline in content:
-            _handle_inline(inline, playbook_ids, resource_links, counter)
+        inlines: list[Any] = content
+    else:
+        # Tabellenblock: Pills stehen in den Zellen (Zeile fuer Zeile, links nach rechts).
+        rows = table_cells(content) or []
+        inlines = [inline for row in rows for cell in row for inline in cell]
+    for inline in inlines:
+        _handle_inline(inline, playbook_ids, resource_links, counter)
     for child in block.get("children", []):
         _walk_block(child, playbook_ids, resource_links, counter)
 

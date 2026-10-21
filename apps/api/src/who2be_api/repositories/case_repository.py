@@ -60,6 +60,7 @@ from who2be_api.repositories.memory_repository import (
 from who2be_api.repositories.memory_repository import (
     MEMORY_DELETED_AUDIT_ACTION,
     _insert_human_event,
+    _snapshot,
 )
 from who2be_models import (
     CASE_STATUS_EVENTS,
@@ -80,6 +81,7 @@ from who2be_models import (
     CaseTarget,
     EntityType,
     FeedbackResolution,
+    MemoryActorKind,
     MemoryEventKind,
     MemoryKind,
     MemoryRead,
@@ -237,6 +239,7 @@ class CaseRepository(Protocol):
         data: CaseConvertRequest,
         *,
         actor_id: UUID,
+        actor_agent_id: UUID | None = None,
     ) -> CaseRead | NotConvertible | None: ...
 
     async def promote_feedback(
@@ -290,6 +293,7 @@ class CaseRepository(Protocol):
         require_element: bool,
         actor_kind: CaseActorKind,
         actor_id: UUID | None,
+        require_measure_case: bool = False,
     ) -> CaseEventRead | None: ...
 
     async def set_elements(
@@ -373,6 +377,7 @@ class PgCaseRepository:
         data: CaseConvertRequest,
         *,
         actor_id: UUID,
+        actor_agent_id: UUID | None = None,
     ) -> CaseRead | NotConvertible | None:
         """Lernvorschlag -> Fall (ADR-0053 6.4), alles in EINER Transaktion.
 
@@ -382,6 +387,12 @@ class PgCaseRepository:
         Eintrag auf `converted` mit `converted_case_id` (CHECK aus 0091), und
         das Gedaechtnis-Event `converted` (3.1.2, Mensch, `before`/`after`).
         Bricht ein Schritt ab, bleibt nichts davon stehen.
+
+        `actor_agent_id` (PM-4): der Builder wandelt um. Dann ist der Fall
+        `reporter_kind='pattern'` (3.7) mit dem Builder als
+        `reporter_agent_id`, und das Gedaechtnis-Event traegt
+        `actor_kind='agent'` mit dem Builder in `agent_id` (0091: Agent ->
+        `actor_id` NULL).
 
         None: kein Eintrag dieses Agenten. `NotConvertible`: Eintrag da, aber
         kein offener Lernvorschlag (der Service antwortet 409).
@@ -399,13 +410,14 @@ class PgCaseRepository:
             before = MemoryRead.model_validate(dict(before_row))
             if before.kind is not MemoryKind.lesson or before.status is not MemoryStatus.pending:
                 return NotConvertible(kind=before.kind, status=before.status)
+            by_builder = actor_agent_id is not None
             case = await _create_case_in(
                 conn,
                 workspace_id,
                 data.for_agent(agent_id),
-                reporter_kind=CaseReporterKind.human,
-                reporter_user_id=actor_id,
-                reporter_agent_id=None,
+                reporter_kind=CaseReporterKind.pattern if by_builder else CaseReporterKind.human,
+                reporter_user_id=None if by_builder else actor_id,
+                reporter_agent_id=actor_agent_id,
                 source_memory_id=memory_id,
             )
             after_row = await conn.fetchrow(
@@ -418,9 +430,14 @@ class PgCaseRepository:
             )
             assert after_row is not None  # Zeile ist gesperrt
             after = MemoryRead.model_validate(dict(after_row))
-            await _insert_human_event(
-                conn, workspace_id, before, MemoryEventKind.converted, actor_id, None, after
-            )
+            if actor_agent_id is not None:
+                await _insert_agent_converted_event(
+                    conn, workspace_id, before, after, actor_agent_id
+                )
+            else:
+                await _insert_human_event(
+                    conn, workspace_id, before, MemoryEventKind.converted, actor_id, None, after
+                )
         return case
 
     async def promote_feedback(
@@ -628,6 +645,7 @@ class PgCaseRepository:
         require_element: bool,
         actor_kind: CaseActorKind,
         actor_id: UUID | None,
+        require_measure_case: bool = False,
     ) -> CaseEventRead | None:
         """Status-Event nur, wenn der Fall noch im erwarteten Zustand ist (D2).
 
@@ -637,6 +655,8 @@ class PgCaseRepository:
         Uebergaenge nicht beide von demselben Ausgangsstatus ausgehen, und ein
         paralleles Leeren der Zuordnung kann ein `triaged` ohne Element nicht
         mehr unterlaufen. `require_element`: mindestens eine Zuordnung.
+        `require_measure_case`: die Massnahme `data.measure_id` enthaelt diesen
+        Fall (`measure_case`; PM-5 fuer `in_progress`, E3).
 
         None, wenn der Fall fehlt oder der Stand abweicht; der Aufrufer liest
         dann neu und meldet den passenden Fehler.
@@ -660,6 +680,16 @@ class PgCaseRepository:
                     case_id,
                 )
                 if has_element is None:
+                    return None
+            if require_measure_case:
+                linked = await conn.fetchval(
+                    "SELECT 1 FROM measure_case "
+                    "WHERE workspace_id = $1 AND measure_id = $2 AND case_id = $3",
+                    workspace_id,
+                    data.measure_id,
+                    case_id,
+                )
+                if linked is None:
                     return None
             return await _insert_event(
                 conn,
@@ -921,6 +951,70 @@ async def _lock_case(conn: asyncpg.Connection, case_id: UUID) -> None:
     await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))", case_id)
 
 
+async def apply_system_status(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    case_ids: Sequence[UUID],
+    *,
+    event: CaseEventKind,
+    sources: Collection[CaseStatus],
+    via_triage: Collection[CaseStatus] = (),
+    measure_id: UUID,
+    note: str | None = None,
+    version_entity_type: str | None = None,
+    version_id: UUID | None = None,
+) -> list[UUID]:
+    """Statusfolge einer Massnahme durch das System (ADR-0053 3.3/3.6, E3).
+
+    In der Transaktion von `conn`, unter der Fall-Sperre, in fester
+    Reihenfolge nach `case_id` (wie `start_cases`/`reset_cases_after_withdraw`).
+    Ein Fall in `sources` bekommt `event`. Ein Fall in `via_triage` geht nur
+    ueber `triaged` (3.3: `-> triaged` verlangt eine Zuordnung) — mit
+    Zuordnung entstehen beide Events, ohne bleibt er. Jeder andere Status
+    bleibt unveraendert. Akteur ist das System; `event` traegt die
+    `measure_id`, die Version und die Begruendung. Ergebnis: die Faelle, die
+    `event` bekommen haben.
+    """
+    moved: list[UUID] = []
+    for case_id in sorted(dict.fromkeys(case_ids), key=lambda c: c.int):
+        await _lock_case(conn, case_id)
+        raw = await conn.fetchval(
+            f"SELECT {_STATUS_SQL} FROM agent_case c WHERE c.workspace_id = $1 AND c.id = $2",
+            workspace_id,
+            case_id,
+        )
+        if raw is None:
+            continue
+        current = CaseStatus(raw)
+        if current in via_triage:
+            has_element = await conn.fetchval(
+                "SELECT 1 FROM agent_case_element WHERE workspace_id = $1 AND case_id = $2 LIMIT 1",
+                workspace_id,
+                case_id,
+            )
+            if has_element is None:
+                continue
+            await _insert_event(
+                conn, workspace_id, case_id, CaseEventKind.triaged, CaseActorKind.system, None
+            )
+        elif current not in sources:
+            continue
+        await _insert_event(
+            conn,
+            workspace_id,
+            case_id,
+            event,
+            CaseActorKind.system,
+            None,
+            note=note,
+            version_entity_type=version_entity_type,
+            version_id=version_id,
+            measure_id=measure_id,
+        )
+        moved.append(case_id)
+    return moved
+
+
 async def _create_case_in(
     conn: asyncpg.Connection,
     workspace_id: UUID,
@@ -964,6 +1058,28 @@ async def _create_case_in(
     )
     assert row is not None  # in derselben Transaktion angelegt
     return _case(row)
+
+
+async def _insert_agent_converted_event(
+    conn: asyncpg.Connection,
+    workspace_id: UUID,
+    before: MemoryRead,
+    after: MemoryRead,
+    agent_id: UUID,
+) -> None:
+    """`converted` durch den Builder (PM-4): Agent-Akteur, `actor_id` NULL (0091)."""
+    await conn.execute(
+        "INSERT INTO agent_memory_event "
+        "(workspace_id, memory_id, event, actor_kind, agent_id, before, after) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)",
+        workspace_id,
+        before.id,
+        MemoryEventKind.converted.value,
+        MemoryActorKind.agent.value,
+        agent_id,
+        _snapshot(before),
+        _snapshot(after),
+    )
 
 
 async def _insert_resolution(

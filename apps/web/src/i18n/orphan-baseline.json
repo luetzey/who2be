@@ -24,6 +24,7 @@
   "common.fields.title",
   "common.fields.type",
   "common.fields.updatedAt",
+  "data.filter.clearSearch",
   "feedback.inbox.filter.status",
   "feedback.inbox.kpi.addressed",
   "feedback.inbox.kpi.inProgress",

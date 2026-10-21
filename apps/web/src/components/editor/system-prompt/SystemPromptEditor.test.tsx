@@ -9,11 +9,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { PlaceholderProps } from './PlaceholderBlock'
+import i18n from '@/i18n'
 
 // Geteilte Spione: `insertInlineContent` wird vom `useCreateBlockNote`-Mock
 // zurueckgegeben, `slashItemsRef` faengt `getItems` aus dem
 // `SuggestionMenuController`-Mock ab — analog PlaybookBodyEditor.test.tsx.
 const insertInlineContent = vi.fn()
+// Faengt die Optionen von `useCreateBlockNote` ab (Dictionary-Pruefung).
+const createOptionsSpy = vi.fn()
 const slashItemsRef: { current: ((q: string) => Promise<unknown[]>) | null } = {
   current: null,
 }
@@ -22,10 +25,13 @@ const slashItemsRef: { current: ((q: string) => Promise<unknown[]>) | null } = {
 // createReactInlineContentSpec wird benoetigt weil PlaceholderBlock.tsx es
 // auf Modulebene aufruft (nicht lazy). Wir mocken es als Identity-Funktion.
 vi.mock('@blocknote/react', () => ({
-  useCreateBlockNote: () => ({
-    document: [],
-    insertInlineContent,
-  }),
+  useCreateBlockNote: (options: unknown) => {
+    createOptionsSpy(options)
+    return {
+      document: [],
+      insertInlineContent,
+    }
+  },
   SuggestionMenuController: ({
     getItems,
   }: {
@@ -36,12 +42,19 @@ vi.mock('@blocknote/react', () => ({
   },
   getDefaultReactSlashMenuItems: () => [
     { key: 'paragraph', title: 'Absatz', onItemClick: vi.fn() },
-    { key: 'heading_1', title: 'Heading 1', onItemClick: vi.fn() },
-    { key: 'heading_2', title: 'Heading 2', onItemClick: vi.fn() },
+    { key: 'heading', title: 'Heading 1', onItemClick: vi.fn() },
+    { key: 'heading_2', title: 'Heading 2', badge: 'Ctrl-Alt-2', onItemClick: vi.fn() },
     { key: 'heading_3', title: 'Heading 3', onItemClick: vi.fn() },
-    { key: 'bullet_list', title: 'Aufzaehlung', onItemClick: vi.fn() },
+    { key: 'quote', title: 'Zitat', onItemClick: vi.fn() },
+    { key: 'toggle_list', title: 'Aufklappliste', onItemClick: vi.fn() },
     { key: 'numbered_list', title: 'Nummeriert', onItemClick: vi.fn() },
+    { key: 'bullet_list', title: 'Aufzaehlung', onItemClick: vi.fn() },
+    { key: 'check_list', title: 'Checkliste', onItemClick: vi.fn() },
+    { key: 'code_block', title: 'Code', onItemClick: vi.fn() },
     { key: 'table', title: 'Tabelle', onItemClick: vi.fn() },
+    { key: 'image', title: 'Bild', onItemClick: vi.fn() },
+    { key: 'heading_4', title: 'Heading 4', onItemClick: vi.fn() },
+    { key: 'emoji', title: 'Emoji', onItemClick: vi.fn() },
   ],
   // Mockt die Spec-Erstellung — gibt ein einfaches Objekt zurueck, das den
   // Typ-Check besteht; BlockNote baut in jsdom keine ProseMirror-Node.
@@ -54,6 +67,11 @@ vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="blocknote-view">{children}</div>
   ),
+}))
+// Leiste und Seitenmenue des Einsatzorts (P2) brauchen den BlockNote-Kontext.
+vi.mock('../BlockNoteEditor', () => ({
+  ProfileFormattingToolbar: () => null,
+  ProfileSideMenu: () => null,
 }))
 vi.mock('@blocknote/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@blocknote/core')>()
@@ -109,13 +127,33 @@ const apiMock = {
 vi.mock('@/api/useApi', () => ({ useApi: () => apiMock }))
 
 import { SystemPromptEditor } from './SystemPromptEditor'
-import { buildSlashMenuItems } from './slashMenu'
+import { buildEditorDictionary, buildSlashMenuItems, formatShortcutBadge } from './slashMenu'
 import { buildSystemPromptSchema } from './PlaceholderBlock'
+import { EDITOR_PROFILES } from '../editorProfiles'
 
 describe('SystemPromptEditor', () => {
   it('rendert ohne Fehler', () => {
     render(<SystemPromptEditor />)
     expect(screen.getByTestId('system-prompt-editor')).toBeInTheDocument()
+  })
+
+  it('uebergibt BlockNote das Dictionary der UI-Sprache', async () => {
+    createOptionsSpy.mockClear()
+    render(<SystemPromptEditor />)
+    const options = createOptionsSpy.mock.calls[0][0] as {
+      dictionary?: { formatting_toolbar: { bold: { tooltip: string } } }
+    }
+    expect(options.dictionary?.formatting_toolbar.bold.tooltip).toBe('Fett')
+
+    await i18n.changeLanguage('en')
+    try {
+      createOptionsSpy.mockClear()
+      render(<SystemPromptEditor />)
+      const optionsEn = createOptionsSpy.mock.calls[0][0] as typeof options
+      expect(optionsEn.dictionary?.formatting_toolbar.bold.tooltip).toBe('Bold')
+    } finally {
+      await i18n.changeLanguage('de')
+    }
   })
 
   it('propagiert onChange nach Focus-Interact (kein Fehler)', () => {
@@ -207,11 +245,36 @@ describe('buildSlashMenuItems', () => {
     expect(titles).toContain('Gedächtnis')
   })
 
-  it('filtert Table und Numbered-List aus Default-Items heraus', () => {
+  it('bietet die Grundbloecke der Vorlage in Spec-Reihenfolge, ohne Tabelle und Medien (P2)', () => {
     const items = buildSlashMenuItems(editorStub, vi.fn(), '')
+    const blocks = items.filter((i) => (i as { key?: string }).key !== undefined)
+    expect(blocks.map((i) => (i as { key?: string }).key)).toEqual([
+      'paragraph',
+      'heading',
+      'heading_2',
+      'heading_3',
+      'bullet_list',
+      'numbered_list',
+      'quote',
+      'code_block',
+    ])
     const titles = items.map((i) => i.title)
-    expect(titles).not.toContain('Tabelle')
-    expect(titles).not.toContain('Nummeriert')
+    for (const missing of ['Tabelle', 'Bild', 'Checkliste', 'Aufklappliste', 'Heading 4', 'Emoji']) {
+      expect(titles).not.toContain(missing)
+    }
+  })
+
+  it('bietet Titel (H1) nur in der Vorlage, Tabelle nur in der Resource', () => {
+    const keys = (profile: (typeof EDITOR_PROFILES)[keyof typeof EDITOR_PROFILES]) =>
+      buildSlashMenuItems(editorStub, vi.fn(), '', profile).map(
+        (i) => (i as { key?: string }).key,
+      )
+    for (const id of ['persona-profile', 'playbook', 'plain'] as const) {
+      expect(keys(EDITOR_PROFILES[id])).not.toContain('heading')
+      expect(keys(EDITOR_PROFILES[id])).not.toContain('table')
+      expect(keys(EDITOR_PROFILES[id])).toContain('numbered_list')
+    }
+    expect(keys(EDITOR_PROFILES.resource)).toContain('table')
   })
 
   it('filtert nach Query (case-insensitive)', () => {
@@ -252,23 +315,114 @@ describe('buildSlashMenuItems', () => {
     expect(openPicker).toHaveBeenCalledWith('memory')
   })
 
-  it('allowedKinds filtert die Custom-Items (Persona-Pill-Satz)', () => {
-    const allowed = new Set([
-      'playbook',
-      'resource',
-      'playbooks-catalog',
-      'resources-catalog',
-    ] as const)
-    const items = buildSlashMenuItems(editorStub, vi.fn(), '', allowed)
+  it('der Pill-Satz des Profils filtert die Custom-Items (Persona-Profil)', () => {
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '', EDITOR_PROFILES['persona-profile'])
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Resource-Katalog')
     expect(titles).toContain('Playbook-Katalog')
+    expect(titles).toContain('Externes Tool')
     // Nicht erlaubte Kinds fehlen.
     expect(titles).not.toContain('Persona-Feld')
     expect(titles).not.toContain('Datum')
     expect(titles).not.toContain('MCP-Tools')
-    expect(titles).not.toContain('Externes Tool')
     expect(titles).not.toContain('Gedächtnis')
+  })
+
+  it('ordnet Verweise und Agent-Kontext je in eine zusammenhaengende Gruppe (Spec §3.3)', () => {
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '')
+    const custom = items.filter((i) => i.group === 'Verweise' || i.group === 'Agent-Kontext')
+    expect(custom.map((i) => [i.group, i.title])).toEqual([
+      ['Verweise', 'Playbook'],
+      ['Verweise', 'Resource'],
+      ['Verweise', 'Externes Tool'],
+      ['Agent-Kontext', 'Persona-Feld'],
+      ['Agent-Kontext', 'Persona laden (MCP)'],
+      ['Agent-Kontext', 'Datum'],
+      ['Agent-Kontext', 'Playbook-Katalog'],
+      ['Agent-Kontext', 'Resource-Katalog'],
+      ['Agent-Kontext', 'MCP-Tools'],
+      ['Agent-Kontext', 'Gedächtnis'],
+    ])
+    expect(items.some((i) => i.group === 'Placeholder')).toBe(false)
+  })
+
+  it('laesst eine leere Gruppe weg (Playbook-Satz ohne Agent-Kontext)', () => {
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '', EDITOR_PROFILES.playbook)
+    expect(items.some((i) => i.group === 'Agent-Kontext')).toBe(false)
+    expect(items.filter((i) => i.group === 'Verweise')).toHaveLength(3)
+  })
+
+  it('uebersetzt die Kuerzel der Grundbloecke in die UI-Sprache', () => {
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '')
+    const heading = items.find((i) => i.title === 'Heading 2')
+    expect(heading?.badge).toBe('Strg Alt 2')
+  })
+})
+
+describe('formatShortcutBadge', () => {
+  it('schreibt Strg/Umschalt auf Deutsch und laesst Englisch englisch', () => {
+    expect(formatShortcutBadge('Ctrl-Alt-2', 'de')).toBe('Strg Alt 2')
+    expect(formatShortcutBadge('Ctrl-Shift-7', 'de')).toBe('Strg Umschalt 7')
+    expect(formatShortcutBadge('Ctrl-Alt-2', 'en')).toBe('Ctrl Alt 2')
+  })
+
+  it('setzt auf macOS die Symbole in Apple-Reihenfolge', () => {
+    expect(formatShortcutBadge('⌘-Alt-2', 'de')).toBe('⌥⌘2')
+    expect(formatShortcutBadge('⌘-Shift-8', 'en')).toBe('⇧⌘8')
+  })
+})
+
+describe('buildEditorDictionary', () => {
+  it('liefert bei UI-Sprache DE die deutsche BlockNote-Oberflaeche', () => {
+    const dict = buildEditorDictionary({ withReferences: true }, 'de')
+    expect(dict.formatting_toolbar.bold.tooltip).toBe('Fett')
+    expect(dict.side_menu.add_block_label).toBe('Block hinzufügen')
+    expect(dict.suggestion_menu.no_items_title).toBe('Keine Elemente gefunden')
+    expect(dict.placeholders.default).toBe('Schreibe oder tippe / für Blöcke und Verweise')
+    expect(dict.placeholders.emptyDocument).toBe('Schreibe oder tippe / für Blöcke und Verweise')
+  })
+
+  it('setzt Gruppe und Texte der Grundbloecke nach Spec §3.3', () => {
+    const dict = buildEditorDictionary({ withReferences: true }, 'de')
+    expect(dict.slash_menu.heading_2).toMatchObject({
+      title: 'Überschrift',
+      subtext: 'Abschnitt',
+      group: 'Text',
+    })
+    expect(dict.slash_menu.heading_3.title).toBe('Zwischenüberschrift')
+    expect(dict.slash_menu.numbered_list.subtext).toBe('Schritte, Reihenfolge')
+    expect(dict.slash_menu.code_block).toMatchObject({
+      title: 'Code',
+      subtext: 'JSON- oder Markdown-Beispiel',
+    })
+    // Nur-Gruppe-Bloecke behalten den BlockNote-Titel, wechseln aber die Gruppe.
+    expect(dict.slash_menu.check_list).toMatchObject({ title: 'Checkliste', group: 'Text' })
+    // Aliase (Sucheingaben) bleiben aus BlockNote erhalten.
+    expect(dict.slash_menu.heading_2.aliases).toContain('h2')
+    // Tippfehler im BlockNote-DE-Dictionary angeglichen: eine Gruppe, nicht zwei.
+    expect(dict.slash_menu.toggle_heading.group).toBe(dict.slash_menu.toggle_heading_2.group)
+  })
+
+  it('bleibt bei UI-Sprache EN englisch', () => {
+    const dict = buildEditorDictionary({ withReferences: true }, 'en')
+    expect(dict.formatting_toolbar.bold.tooltip).toBe('Bold')
+    expect(dict.slash_menu.heading_2).toMatchObject({ title: 'Heading', group: 'Text' })
+    expect(dict.placeholders.default).toBe('Write or type / for blocks and references')
+  })
+
+  it('nennt ohne Verweise nur Bloecke im Platzhalter', () => {
+    expect(buildEditorDictionary({ withReferences: false }, 'de').placeholders.default).toBe(
+      'Schreibe oder tippe / für Blöcke',
+    )
+  })
+
+  it('folgt ohne Angabe der aktiven UI-Sprache, unbekannte Sprache faellt auf DE', () => {
+    expect(buildEditorDictionary({ withReferences: false }).formatting_toolbar.bold.tooltip).toBe(
+      'Fett',
+    )
+    expect(
+      buildEditorDictionary({ withReferences: false }, 'fr').formatting_toolbar.bold.tooltip,
+    ).toBe('Fett')
   })
 })
 

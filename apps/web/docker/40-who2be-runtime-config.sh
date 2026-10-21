@@ -18,6 +18,32 @@ sanitize() {
   printf '%s' "${1:-}" | tr -d '"\\'
 }
 
+# Freitext (Hinweis- und Bannertexte) darf Anfuehrungszeichen, Backslashes und
+# Zeilenumbrueche enthalten — `sanitize` wuerde sie verstuemmeln. `json_str`
+# escapt stattdessen JSON-/JS-sicher: `\` → `\\`, `"` → `\"`, Zeilenumbruch →
+# `\n`, `<`/`>` → `\u003c`/`\u003e` (kein `</script>` im Klartext), `\r`
+# entfaellt. Zeichenweise statt per gsub, weil Backslash-Ersetzungen in
+# gsub zwischen busybox-awk (nginx:alpine) und gawk unterschiedlich wirken.
+# Die Laengengrenze setzt `src/config.ts` (gerendert wird ohnehin nur Text).
+json_str() {
+  printf '%s' "${1:-}" | awk '
+    {
+      out = ""
+      n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (c == "\\") out = out "\\\\"
+        else if (c == "\"") out = out "\\\""
+        else if (c == "<") out = out "\\u003c"
+        else if (c == ">") out = out "\\u003e"
+        else if (c == "\r") out = out ""
+        else out = out c
+      }
+      if (NR > 1) printf "\\n"
+      printf "%s", out
+    }'
+}
+
 # "Wir arbeiten noch"-Modus (Issue #429). Nur "open"/"coming_soon" sind
 # gueltig — src/config.ts validiert das ohnehin nochmal fail-open (unbekannte
 # Werte -> "open" + console.warn), hier landet der Rohwert unveraendert.
@@ -55,8 +81,16 @@ window.__WHO2BE_CONFIG__ = {
   signupDisabled: ${SIGNUP_DISABLED_JS},
   launchMode: "$(sanitize "${LAUNCH_MODE}")",
   launchContact: "$(sanitize "${WHO2BE_LAUNCH_CONTACT:-}")",
+  launchMessageDe: "$(json_str "${WHO2BE_LAUNCH_MESSAGE_DE:-}")",
+  launchMessageEn: "$(json_str "${WHO2BE_LAUNCH_MESSAGE_EN:-}")",
+  noticeDe: "$(json_str "${WHO2BE_NOTICE_DE:-}")",
+  noticeEn: "$(json_str "${WHO2BE_NOTICE_EN:-}")",
+  noticeLevel: "$(sanitize "${WHO2BE_NOTICE_LEVEL:-info}")",
   sessionMaxAgeHours: ${SESSION_MAX_AGE_HOURS},
   turnstileSiteKey: "$(sanitize "${WHO2BE_TURNSTILE_SITE_KEY:-}")",
+  sentryDsn: "$(sanitize "${WHO2BE_SENTRY_DSN:-}")",
+  sentryEnvironment: "$(sanitize "${WHO2BE_SENTRY_ENVIRONMENT:-production}")",
+  sentryRelease: "$(sanitize "${WHO2BE_SENTRY_RELEASE:-}")",
 }
 EOF
 

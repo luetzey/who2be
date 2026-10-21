@@ -400,10 +400,10 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zur Review einreichen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Freigabe einreichen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+      expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
     })
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
@@ -423,7 +423,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     })
 
     expect(
-      await screen.findByText('Aktuelle Version: v1 (In Review)'),
+      await screen.findByText('Aktuelle Version: v1 (Zur Freigabe)'),
     ).toBeInTheDocument()
     const activate = screen.getByRole('button', { name: 'Aktivieren' })
     expect(activate).toBeEnabled()
@@ -457,7 +457,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+      expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
     })
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })
@@ -498,7 +498,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Zur Review einreichen' }),
+      await screen.findByRole('button', { name: 'Zur Freigabe einreichen' }),
     )
 
     await waitFor(() => {
@@ -519,7 +519,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       await screen.findByText(/Active: v2 · Du arbeitest auf Draft v3/),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Zur Review einreichen' }),
+      screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeInTheDocument()
   })
 
@@ -531,7 +531,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       }),
     )
 
-    expect(await screen.findByText(/Active: v2 · In Review: v3/)).toBeInTheDocument()
+    expect(await screen.findByText(/Active: v2 · Zur Freigabe: v3/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
   })
 

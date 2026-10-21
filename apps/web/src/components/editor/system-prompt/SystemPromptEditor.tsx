@@ -1,7 +1,8 @@
 // SystemPromptEditor — BlockNote-Insel fuer System-Prompt-Templates (Welle 5).
 //
-// Custom-Schema: Paragraph, Heading (h1-h3), BulletList + PlaceholderInlineBlock.
-// Custom-Slash-Menue: vier Placeholder-Items + essentielle Defaults.
+// Custom-Schema: voller BlockNote-Default + PlaceholderInlineBlock. Was der
+// Einsatzort neu anlegen darf, steht in `editorProfiles.ts` (P2).
+// Custom-Slash-Menue: Grundbloecke des Einsatzorts + Verweis-Items.
 // Focus-Gate: onChange wird erst propagiert, nachdem der User mindestens einmal
 // den Editor fokussiert hat (analog BlockNoteEditor.tsx, Welle-4-Fix).
 //
@@ -17,6 +18,9 @@ import type { PartialBlock } from '@blocknote/core'
 import { useTheme } from '@/app/theme-context'
 import { type Measurable } from '@/components/ui/popover'
 
+import { ProfileFormattingToolbar, ProfileSideMenu } from '../BlockNoteEditor'
+import { EditorFooter } from '../EditorFooter'
+import { EDITOR_PROFILES, profilePasteHandler } from '../editorProfiles'
 import { buildSystemPromptSchema, type SystemPromptSchema } from './PlaceholderBlock'
 import type {
   PlaceholderClickDetail,
@@ -24,7 +28,7 @@ import type {
   PlaceholderProps,
 } from './PlaceholderBlock'
 import { caretMeasurable } from './caretAnchor'
-import { buildSlashMenuItems } from './slashMenu'
+import { buildEditorDictionary, buildSlashMenuItems } from './slashMenu'
 import { PlaceholderPreviewPopover } from './PlaceholderPreviewPopover'
 import { PlaybookPicker } from './pickers/PlaybookPicker'
 import { ResourcePicker } from './pickers/ResourcePicker'
@@ -37,6 +41,9 @@ import { ToolPicker } from './pickers/ToolPicker'
 // Das Schema wird einmal pro Modul-Import gebaut; keine Hot-Reload-Probleme
 // weil BlockNote-Schemata statisch sind.
 const systemPromptSchema = buildSystemPromptSchema()
+
+// Einsatzort (editorProfiles.ts): Basis + Titel, alle Verweis-Pills, keine Tabelle.
+const PROFILE = EDITOR_PROFILES['system-prompt']
 
 export type SystemPromptBlock = PartialBlock<
   SystemPromptSchema['blockSchema'],
@@ -59,6 +66,8 @@ export function SystemPromptEditor({
 }: SystemPromptEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
   // Gemeinsamer Anker fuer die schwebenden Panels: Pill (Klick/Edit) oder
@@ -78,6 +87,10 @@ export function SystemPromptEditor({
         initialBlocks !== undefined && initialBlocks.length > 0
           ? initialBlocks
           : undefined,
+      // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+      dictionary: buildEditorDictionary({ withReferences: true }),
+      // Eingefuegte Tabellen/Medien werden zu Text (Editor-Paket P2).
+      pasteHandler: profilePasteHandler(PROFILE),
     },
     [],
   )
@@ -169,21 +182,27 @@ export function SystemPromptEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(
               editor.document as unknown as SystemPromptBlock[],
             )
           }}
-          // Slash-Menue wird ueberschrieben: nur die gefilterten + Custom-Items.
+          // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
           slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(editor, handleOpenPicker, query)
+              buildSlashMenuItems(editor, handleOpenPicker, query, PROFILE)
             }
           />
+          <ProfileFormattingToolbar profile={PROFILE} />
+          <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

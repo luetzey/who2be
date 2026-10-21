@@ -248,6 +248,56 @@ MCP_PROBES: dict[str, ToolProbe] = {
             "elements": [{"target": "playbook", "entity_id": "<<playbook_id>>"}],
         }
     ),
+    # Gespraech (E-MCP-1). `measure_id` ist eine Massnahme des eigenen Agenten
+    # (`_seed_measure`, am Pruefall `case_id` und an der Persona `persona_id`),
+    # damit Verknuepfen und Nachschau in der Gegenprobe den Lookup passieren.
+    "get_dossier": ToolProbe({"agent_id": "<<agent_id>>"}),
+    "submit_session_protocol": ToolProbe(
+        {
+            "agent_id": "<<agent_id>>",
+            "trigger": "manual",
+            "participants": [],
+            "case_ids": ["<<agent_case_id>>"],
+            "summary": "iso",
+            "decisions": [],
+            "dissent": [],
+            "follow_up_at": "2026-12-01",
+            "measures": [],
+        }
+    ),
+    "link_measure_draft": ToolProbe(
+        {
+            "measure_id": "<<measure_id>>",
+            "version_entity_type": "persona",
+            "version_id": "<<version_id>>",
+        }
+    ),
+    "get_follow_up": ToolProbe({"measure_id": "<<measure_id>>"}),
+    # Werkzeugluecken D7 (E-MCP-2). `lesson_id` ist ein offener Lernvorschlag
+    # des eigenen Agenten (`_seed_lesson`); `convert_lesson_to_case` steht nach
+    # `get_lesson`, weil die Gegenprobe ihn umwandelt.
+    "get_case": ToolProbe({"case_id": "<<agent_case_id>>"}),
+    "triage_case": ToolProbe({"case_id": "<<agent_case_id>>", "note": "iso"}),
+    "list_patterns": ToolProbe({"agent_id": "<<agent_id>>"}, filters=True),
+    "create_test_case": ToolProbe(
+        {
+            "origin_case_id": "<<agent_case_id>>",
+            "agent_id": "<<agent_id>>",
+            "title": "iso",
+            "input": "iso",
+            "expected_behavior": "iso",
+        }
+    ),
+    "get_lesson": ToolProbe({"memory_id": "<<lesson_id>>"}),
+    "convert_lesson_to_case": ToolProbe(
+        {
+            "agent_id": "<<agent_id>>",
+            "memory_id": "<<lesson_id>>",
+            "situation": "iso",
+            "behavior": "iso",
+            "expected_behavior": "iso",
+        }
+    ),
     # --- Arbeitsbereich ----------------------------------------------------------
     "create_artifact": ToolProbe(
         {"title": "iso", "content_md": "x", "occurred_at": _WHEN, "area_id": "<<area_id>>"}
@@ -531,6 +581,56 @@ def _seed_case(t: Tenant) -> None:
     )
 
 
+def _seed_measure(t: Tenant) -> None:
+    """Protokoll mit einer Massnahme ueber den eigenen Agenten, direkt in der DB.
+
+    Ziel ist die Persona des Mandanten, Pruefall der aus `seed_tenant`. Der
+    Marker steht in Zusammenfassung und Aenderung, damit ein Leck auffiele.
+    """
+    session_id = db_fetchval(
+        "INSERT INTO feedback_session (workspace_id, agent_id, trigger, summary, "
+        " follow_up_at, submitted_by_kind, submitted_by) "
+        "VALUES ($1, $2::uuid, 'manual', $3, DATE '2026-12-01', 'agent', $2::uuid) "
+        "RETURNING id",
+        t.workspace_id,
+        t.ids["agent_id"],
+        f"{t.marker} Gespraech",
+    )
+    t.ids["measure_id"] = str(
+        db_fetchval(
+            "INSERT INTO measure (workspace_id, agent_id, session_id, target, entity_id, "
+            " change_summary, test_case_id, success_criterion, counterposition) "
+            "VALUES ($1, $2::uuid, $3, 'persona', $4::uuid, $5, $6::uuid, 'iso', 'iso') "
+            "RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            session_id,
+            t.ids["persona_id"],
+            f"{t.marker} Massnahme",
+            t.ids["case_id"],
+        )
+    )
+
+
+def _seed_lesson(t: Tenant) -> None:
+    """Offener Lernvorschlag des eigenen Agenten mit Marker, direkt in der DB.
+
+    `get_lesson` liefert einem Agent-Token nur `kind=lesson` (PM-4); der
+    Eintrag aus `seed_tenant` ist ein Nutzerfakt und bliebe `memory_not_found`.
+    """
+    t.ids["lesson_id"] = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
+            " fact, kind, scope, origin, source) "
+            "VALUES ($1, $2::uuid, $2::uuid, 'pending', $3, 'lesson', 'agent', 'inferred', "
+            "        'agent') RETURNING id",
+            t.workspace_id,
+            t.ids["agent_id"],
+            f"{t.marker} Frist nennen",
+        )
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -544,6 +644,8 @@ def test_no_mcp_tool_crosses_the_tenant_boundary(patched_jwt_secret: str) -> Non
         for t in tenants:
             _seed_active_memory(t)
             _seed_case(t)
+            _seed_measure(t)
+            _seed_lesson(t)
         report = asyncio.run(run_isolation(a, b, ghost_of(b)))
 
         assert not report.findings, f"{len(report.findings)} Befund(e):\n" + "\n".join(

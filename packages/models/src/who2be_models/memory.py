@@ -416,8 +416,9 @@ class MemoryEventRead(BaseModel):
     created_at: datetime
 
 
+# Vorschlags-Arten nach ADR-0053 3.1.4.
 class MemoryProposalAction(StrEnum):
-    """Art eines Agenten-Vorschlags zu einem bestehenden Eintrag (ADR-0053 3.1.4)."""
+    """Art eines Agenten-Vorschlags zu einem bestehenden Eintrag."""
 
     change = "change"
     delete = "delete"

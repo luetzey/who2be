@@ -9,11 +9,10 @@ import {
   SlidersHorizontal,
   Star,
   Users,
-  X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import type { Agent } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -23,14 +22,13 @@ import { CountPill } from '@/components/data/CountPill'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { type StatusChipOption } from '@/lib/listFilter'
 import { cn } from '@/lib/utils'
 import { useAgents } from '@/hooks/useAgents'
 import { notify } from '@/lib/feedback'
@@ -76,50 +74,10 @@ function AgentStatusPill({ agent }: { agent: Agent }) {
   )
 }
 
-// Segmentierter Status-Chip — gleiche Optik wie ListFilterBar (rounded-full,
-// Status-Punkt + Zaehler), aber auf das Agent-Status-Modell zugeschnitten.
-function FilterChip({
-  label,
-  count,
-  token,
-  selected,
-  onClick,
-}: {
-  label: string
-  count: number
-  token?: string
-  selected: boolean
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant={selected ? 'default' : 'outline'}
-      aria-pressed={selected}
-      onClick={onClick}
-      // `min-h-10` hebt das Hit-Target unterhalb `md` auf 40 px, wie es
-      // AK 4 von #570 verlangt; `md:min-h-0` gibt ab `md` die gewollte
-      // Chip-Dichte (32 px) wieder frei. Gemessen bei 320 px: `size="sm"`
-      // (h-9) plus `h-8` ergibt 32 px, weil `h-8` in `tailwind-merge`
-      // gewinnt. Die Zahl 40 stammt aus AK 4, nicht aus der Norm —
-      // design-language.md §11 setzt den Floor auf >= 32 px und erklaert
-      // `size="sm"` ausdruecklich fuer zulaessig.
-      className="h-8 min-h-10 gap-1.5 rounded-full md:min-h-0"
-    >
-      {token ? (
-        <span
-          className="inline-block size-2 rounded-full"
-          style={{ backgroundColor: `var(--status-${token})` }}
-          aria-hidden="true"
-        />
-      ) : null}
-      <span>{label}</span>
-      <span className={cn('tabular-nums', selected ? 'opacity-90' : 'text-muted-foreground')}>
-        {count}
-      </span>
-    </Button>
-  )
+const STATUS_VALUES: readonly AgentFilter[] = ['all', 'active', 'disabled', 'incomplete']
+
+function isAgentFilter(value: string): value is AgentFilter {
+  return (STATUS_VALUES as readonly string[]).includes(value)
 }
 
 export function AgentsPage() {
@@ -133,8 +91,37 @@ export function AgentsPage() {
   // (ADR-0053 6.4.1); fuer viewer leer — kein Request, kein Pill.
   const pendingMemories = usePendingAgentMemories()
   const [creating, setCreating] = useState(false)
-  const [status, setStatus] = useState<AgentFilter>('all')
-  const [query, setQuery] = useState('')
+  // Filter-Standard §2.1 Punkt 9: Status und Suche stehen in der URL
+  // (`?status=`, `?q=`), per `replace` geschrieben; der Standard „Alle“ fehlt.
+  const [params, setParams] = useSearchParams()
+  const rawStatus = params.get('status') ?? 'all'
+  const status: AgentFilter = isAgentFilter(rawStatus) ? rawStatus : 'all'
+  const query = params.get('q') ?? ''
+  const setParam = useCallback(
+    (key: string, value: string) => {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (value === '' || (key === 'status' && value === 'all')) next.delete(key)
+          else next.set(key, value)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+  const resetFilters = useCallback(() => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('status')
+        next.delete('q')
+        return next
+      },
+      { replace: true },
+    )
+  }, [setParams])
 
   const counts = useMemo(() => {
     const acc = { all: agents.length, active: 0, disabled: 0, incomplete: 0 }
@@ -212,11 +199,18 @@ export function AgentsPage() {
     </Button>
   )
 
-  const chips: { key: AgentFilter; label: string; count: number; token?: string }[] = [
-    { key: 'all', label: t('filter.all'), count: counts.all },
-    { key: 'active', label: t('status.enabled'), count: counts.active, token: 'active' },
-    { key: 'disabled', label: t('status.disabled'), count: counts.disabled, token: 'inactive' },
-    { key: 'incomplete', label: t('status.incomplete'), count: counts.incomplete, token: 'draft' },
+  // Generische Status-Chips der ListFilterBar (E1). Chips mit 0 entfallen,
+  // ausser „Alle“ (Standardwert) oder der gewaehlte Chip (§2.1 Punkt 1).
+  const statusOptions: StatusChipOption[] = [
+    { value: 'all', label: t('data:filter.all'), count: counts.all, keepWhenZero: true },
+    { value: 'active', label: t('status.enabled'), count: counts.active, token: 'active' },
+    { value: 'disabled', label: t('status.disabled'), count: counts.disabled, token: 'inactive' },
+    {
+      value: 'incomplete',
+      label: t('status.incomplete'),
+      count: counts.incomplete,
+      token: 'draft',
+    },
   ]
 
   return (
@@ -257,68 +251,28 @@ export function AgentsPage() {
             />
           ) : (
             <>
-              <Card>
-                <CardContent className="flex flex-col gap-4 pt-6">
-                  <div
-                    className="flex flex-wrap items-center gap-2"
-                    role="group"
-                    aria-label={t('filter.statusGroup')}
-                  >
-                    {chips.map((chip) => (
-                      <FilterChip
-                        key={chip.key}
-                        label={chip.label}
-                        count={chip.count}
-                        token={chip.token}
-                        selected={status === chip.key}
-                        onClick={() => setStatus(chip.key)}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="agents-search">{t('filter.searchLabel')}</Label>
-                    <div className="relative">
-                      <Search
-                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      {/* pl-9 ist bewusst off-scale (funktionaler Icon-Inset):
-                          left-3 (12px) + size-4 (16px) + 8px Luft = 36px, damit der
-                          Eingabetext nicht unter dem Such-Icon liegt. */}
-                      <Input
-                        id="agents-search"
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder={t('filter.searchPlaceholder')}
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                  {filterActive ? (
-                    <div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 min-h-10 gap-1 px-2 text-xs md:min-h-0"
-                        onClick={() => {
-                          setStatus('all')
-                          setQuery('')
-                        }}
-                      >
-                        <X className="size-4" aria-hidden="true" />
-                        {t('filter.reset')}
-                      </Button>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+              <ListFilterBar
+                idPrefix="agents"
+                statusOptions={statusOptions}
+                status={status}
+                onStatusChange={(value) => setParam('status', value)}
+                query={query}
+                onQueryChange={(value) => setParam('q', value)}
+                searchPlaceholder={t('filter.searchPlaceholder')}
+                active={filterActive}
+                onReset={resetFilters}
+              />
 
               {filtered.length === 0 ? (
                 <EmptyState
                   icon={Search}
-                  title={t('filter.emptyTitle')}
+                  title={t('data:filter.emptyFilteredTitle')}
                   description={t('filter.emptyDescription')}
+                  action={
+                    <Button type="button" variant="outline" onClick={resetFilters}>
+                      {t('data:filter.reset')}
+                    </Button>
+                  }
                 />
               ) : (
                 <div className="flex flex-col gap-6">

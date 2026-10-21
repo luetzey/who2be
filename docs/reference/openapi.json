@@ -5666,6 +5666,45 @@
               "format": "uuid",
               "title": "Workspace Id"
             }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Ereignisse dieses Agenten (Nutzung und Feedback).",
+              "title": "Agent Id"
+            },
+            "description": "Nur Ereignisse dieses Agenten (Nutzung und Feedback)."
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 365,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Ereignisse der letzten N Tage (1..365).",
+              "title": "Days"
+            },
+            "description": "Nur Ereignisse der letzten N Tage (1..365)."
           }
         ],
         "responses": {
@@ -5675,6 +5714,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeedbackOverview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
                 }
               }
             }
@@ -6044,6 +6093,295 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AgentFeedbackRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "List Usage",
+        "operationId": "list_usage_v1_workspaces__workspace_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "persona",
+                    "playbook",
+                    "resource"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Nur Elemente dieses Typs; ohne Angabe alle drei.",
+              "title": "Entity Type"
+            },
+            "description": "Nur Elemente dieses Typs; ohne Angabe alle drei."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/usage/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Usage",
+        "operationId": "get_usage_v1_workspaces__workspace_id__usage__entity_type___entity_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "persona",
+                "playbook",
+                "resource"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: feedback_element_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Agent Usage",
+        "operationId": "get_agent_usage_v1_workspaces__workspace_id__agents__agent_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/work-areas/{area_id}/usage": {
+      "get": {
+        "tags": [
+          "feedback"
+        ],
+        "summary": "Get Work Area Usage",
+        "operationId": "get_work_area_usage_v1_workspaces__workspace_id__work_areas__area_id__usage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "area_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Area Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAreaUsageStats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: area_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
                 }
               }
             }
@@ -9921,6 +10259,584 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/dossier": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Dossier",
+        "operationId": "get_dossier_v1_workspaces__workspace_id__agents__agent_id__dossier_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dossier"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/feedback-sessions": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Submit Session Protocol",
+        "operationId": "submit_session_protocol_v1_workspaces__workspace_id__feedback_sessions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSubmitResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "List Sessions",
+        "operationId": "list_sessions_v1_workspaces__workspace_id__feedback_sessions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Nur Protokolle mit mindestens einer faelligen Massnahme: Nachschau-Datum heute oder frueher, weder eingestuft noch zurueckgezogen.",
+              "default": false,
+              "title": "Due"
+            },
+            "description": "Nur Protokolle mit mindestens einer faelligen Massnahme: Nachschau-Datum heute oder frueher, weder eingestuft noch zurueckgezogen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionListItem"
+                  },
+                  "title": "Response List Sessions V1 Workspaces  Workspace Id  Feedback Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/feedback-sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Session",
+        "operationId": "get_session_v1_workspaces__workspace_id__feedback_sessions__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/link-draft": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Link Measure Draft",
+        "operationId": "link_measure_draft_v1_workspaces__workspace_id__measures__measure_id__link_draft_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureLinkDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureEventRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/follow-up": {
+      "get": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Get Measure Follow Up",
+        "operationId": "get_measure_follow_up_v1_workspaces__workspace_id__measures__measure_id__follow_up_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/review": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Review Measure",
+        "operationId": "review_measure_v1_workspaces__workspace_id__measures__measure_id__review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureEventRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/measures/{measure_id}/withdraw": {
+      "post": {
+        "tags": [
+          "feedback-sessions"
+        ],
+        "summary": "Withdraw Measure",
+        "operationId": "withdraw_measure_v1_workspaces__workspace_id__measures__measure_id__withdraw_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measure_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measure Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasureWithdrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasureWithdrawResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/work-areas": {
       "post": {
         "tags": [
@@ -10076,6 +10992,69 @@
                     "$ref": "#/components/schemas/WorkAreaGrantRead"
                   },
                   "title": "Response List Work Area Grants V1 Workspaces  Workspace Id  Work Areas  Area Id  Grants Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/work-areas": {
+      "get": {
+        "tags": [
+          "work-areas"
+        ],
+        "summary": "List Agent Work Areas",
+        "description": "Arbeitsbereiche eines Agenten mit Stufe, Owner-Kennung und Agentenzahl\n(Agent-Ueberblick, Navigation A4). Nur Menschen; Gate liegt im Service.\n\nLiegt bewusst in diesem Router (nicht in `agents.py`): so erbt die Route\ndie Sperre fuer ungebundene Maschinen-Tokens (`require_agent_bound_token`).",
+        "operationId": "list_agent_work_areas_v1_workspaces__workspace_id__agents__agent_id__work_areas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentWorkAreaRead"
+                  },
+                  "title": "Response List Agent Work Areas V1 Workspaces  Workspace Id  Agents  Agent Id  Work Areas Get"
                 }
               }
             }
@@ -13314,6 +14293,474 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown": {
+      "get": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Get Markdown Source",
+        "description": "Quellfassung (`format=source`, ADR-0058 §5.1 B) mit `base_rev` im Kopf.\n\n`base_rev` ist `null`, wenn die gelieferte Version nicht das Schreibziel\nist (Leser sieht nur die aktive Version, waehrend ein Draft offen ist).",
+        "operationId": "get_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__markdown_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "const": "source",
+              "type": "string",
+              "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens.",
+              "default": "source",
+              "title": "Format"
+            },
+            "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Put Markdown",
+        "description": "Vollstand per Markdown; PUT-Semantik wie `update_*` (offener Draft = 409).\n\nIst `base_rev` gesetzt, wird er unter der Zeilensperre geprueft.",
+        "operationId": "put_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Patch Markdown",
+        "description": "Teilaenderung an einem Ueberschriften-Anker oder Feld (ADR-0058 §6.2).\n\nSchreibt in den offenen Draft, sonst entsteht einer. `base_rev` ist Pflicht.",
+        "operationId": "patch_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/versions/{version}/markdown": {
+      "get": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Get Version Markdown Source",
+        "description": "Quellfassung eines Versions-Snapshots (Vorlage fuer eine Wiederherstellung).",
+        "operationId": "get_version_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__versions__version__markdown_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "const": "source",
+              "type": "string",
+              "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens.",
+              "default": "source",
+              "title": "Format"
+            },
+            "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/system-prompts/markdown": {
+      "post": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Create System Prompt Markdown",
+        "description": "Legt einen System-Prompt aus Markdown an (ohne Entity-Kontingent wie der JSON-Weg).",
+        "operationId": "create_system_prompt_markdown_v1_workspaces__workspace_id__system_prompts_markdown_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/{entity_type}/markdown": {
+      "post": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Create Markdown",
+        "description": "Legt ein Element aus Markdown an. Anker sind beim Anlegen unbekannt.",
+        "operationId": "create_markdown_v1_workspaces__workspace_id___entity_type__markdown_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agents": {
       "get": {
         "tags": [
@@ -14008,6 +15455,71 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/inbox/counts": {
+      "get": {
+        "tags": [
+          "inbox"
+        ],
+        "summary": "Get Inbox Counts",
+        "operationId": "get_inbox_counts_v1_workspaces__workspace_id__inbox_counts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/whoami": {
       "get": {
         "tags": [
@@ -14541,6 +16053,282 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/v1/me/tutorials": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "List Tutorials",
+        "description": "Alle Tutorials des Katalogs mit dem Stand des eigenen Kontos.",
+        "operationId": "list_tutorials_v1_me_tutorials_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TutorialRead"
+                  },
+                  "title": "Response List Tutorials V1 Me Tutorials Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/tutorials/{tutorial_id}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Tutorial",
+        "operationId": "get_tutorial_v1_me_tutorials__tutorial_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Patch Tutorial",
+        "description": "Schritt abhaken, ueberspringen oder wieder oeffnen; Begruessung gesehen.",
+        "operationId": "patch_tutorial_v1_me_tutorials__tutorial_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorialPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/tutorials/{tutorial_id}/restart": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Restart Tutorial",
+        "description": "Setzt den Fortschritt genau dieses Tutorials zurueck.",
+        "operationId": "restart_tutorial_v1_me_tutorials__tutorial_id__restart_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/organizations": {
@@ -15142,6 +16930,33 @@
         }
       }
     },
+    "/v1/system/routines": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Routines",
+        "description": "Alle registrierten Routinen mit Zeitplan und Laufstand (nur Betreiber, MFA).",
+        "operationId": "get_routines_v1_system_routines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutinesOverview"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/oauth/register": {
       "post": {
         "tags": [
@@ -15482,6 +17297,27 @@
   },
   "components": {
     "schemas": {
+      "AccessDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "accesses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accesses",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "AccessDay",
+        "description": "Zugriffslog-Eintraege an einem Kalendertag."
+      },
       "AccountDeletionRead": {
         "properties": {
           "purge_after": {
@@ -16176,7 +18012,88 @@
         "additionalProperties": false,
         "type": "object",
         "title": "AgentUpdate",
-        "description": "Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.\n\n`tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet\n(analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.\n\n`model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config\n(User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,\nnicht pro Einzelaufruf. Sie sind das einzige Feld-Paar mit einer\nLEER-Semantik: `\"\"` setzt den Wert explizit auf NULL zurueck, weggelassen\nbzw. `None` laesst den Bestand unangetastet (analog `tool_policy`). Grund:\ndie Felder tragen die Compliance-Attribution — ein einmal falsch\neingetragener Anbieter muss entfernbar sein, sonst verfaelscht er die\nAuswertung „welche Daten gingen an wen\" dauerhaft. Aenderungen (auch das\nLeeren) protokolliert der Service im `audit_log`."
+        "description": "Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.\n\n`tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet\n(analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.\n\n`model_provider`/`model_name` gelten pro Agent-Konfiguration, nicht pro\nEinzelaufruf. Sie sind das einzige Feld-Paar mit einer LEER-Semantik: `\"\"`\nsetzt den Wert explizit auf NULL zurueck, weggelassen bzw. `None` laesst\nden Bestand unangetastet."
+      },
+      "AgentUsageStats": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "uses_7d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 7D",
+            "default": 0
+          },
+          "uses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 30D",
+            "default": 0
+          },
+          "uses_by_type_30d": {
+            "$ref": "#/components/schemas/UsageByType"
+          },
+          "active_days_30d": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Active Days 30D",
+            "default": 0
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_active_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Active At"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/UsageDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "work_areas": {
+            "items": {
+              "$ref": "#/components/schemas/AgentWorkAreaUsage"
+            },
+            "type": "array",
+            "title": "Work Areas"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id"
+        ],
+        "title": "AgentUsageStats",
+        "description": "Nutzungszaehler eines Agenten (`GET …/agents/{agent_id}/usage`).\n\nOwner-Weiche Z2a: nur aus vorhandenen Daten, kein `fetch_agent`-Zaehler.\n`uses_*`, `active_days_30d`, `last_used_at` und `daily` kommen aus den\nAuslieferungen an diesen Agenten (`usage_event`, `source='server'`),\nFenster wie bei `UsageStats`. `last_active_at` ist der juengste\nToken-Aufruf des Agenten (`max(api_token.last_used_at)`), auch wenn dabei\nnichts ausgeliefert wurde. `work_areas` nennt die fuer den Aufrufer\nsichtbaren Arbeitsbereiche mit Zugriffen dieses Agenten."
       },
       "AgentWithRenderedPrompt": {
         "properties": {
@@ -16227,6 +18144,78 @@
         ],
         "title": "AgentWithRenderedPrompt",
         "description": "Antwort des MCP-Tools `fetch_agent` (und des API-Endpoints `GET .../rendered`).\n\nLiefert den Agent zusammen mit seiner Persona und dem bereits expandierten\nSystem-Prompt als Plain-Text — alle Placeholder wurden bereits aufgeloest,\nsodass MCP-Konsumenten den fertigen Prompt direkt einsetzen koennen.\n\nHinweis: `persona` ist direkt inline (kein Wrapper-Objekt), damit der\nFrontend-Agent und der MCP-Konsument ohne zusaetzlichen Fetch auskommen.\n\n`unresolved_placeholders` enthaelt jeden Placeholder-Key, der beim Render\nnicht aufgeloest werden konnte (z. B. `\"playbook:abc-uuid\"` bei fehlender\naktiver Version). Default leere Liste fuer Backward-Compat.\n\n`locale` (WP5, „Ein Element, eine Sprache\"): die Sprache des System-Prompt-\nTemplates, MIT der `system_prompt_rendered` erzeugt wurde (inkl. der vom\nRenderer angehaengten Sprachanweisung, siehe `agent_language.py`). Default\n`DEFAULT_LOCALE` deckt Alt-Clients/Fixtures ohne das Feld ab."
+      },
+      "AgentWorkAreaRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/WorkAreaScope"
+          },
+          "level": {
+            "$ref": "#/components/schemas/WorkAreaGrantLevel"
+          },
+          "owner": {
+            "type": "boolean",
+            "title": "Owner"
+          },
+          "agent_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Agent Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "level",
+          "owner",
+          "agent_count"
+        ],
+        "title": "AgentWorkAreaRead",
+        "description": "Arbeitsbereich eines Agenten aus Menschen-Sicht (Navigation A4).\n\nAntwort von `GET .../agents/{agent_id}/work-areas` fuer den Block\n„Arbeitsbereiche\" im Agent-Ueberblick. Quelle sind die materialisierten\nGrants des Agenten (inkl. Owner-Grant der privaten Area).\n\n- `level`: Grant-Stufe DIESES Agenten.\n- `owner`: `True` fuer die private Area dieses Agenten („eigener\").\n- `agent_count`: Zahl der Agenten mit Grant an der Area, einschliesslich\n  dieses Agenten („geteilt · +n Agenten\" = `agent_count - 1`)."
+      },
+      "AgentWorkAreaUsage": {
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area Id"
+          },
+          "access_days_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Access Days 30D",
+            "default": 0
+          },
+          "last_access_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Access On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "area_id"
+        ],
+        "title": "AgentWorkAreaUsage",
+        "description": "Zugriffe eines Agenten auf einen Arbeitsbereich (aus `agent_access_log`).\n\nDas Log kennt je (Agent, Element, Operation) nur den Tag, darum ist\n`last_access_on` ein Datum ohne Uhrzeit."
       },
       "ApiErrorBody": {
         "properties": {
@@ -16361,7 +18350,17 @@
               "case_transition_human_only",
               "case_statement_not_subject",
               "memory_not_convertible",
-              "feedback_not_promotable"
+              "feedback_not_promotable",
+              "session_cases_invalid",
+              "measure_test_case_required",
+              "measure_not_found",
+              "session_not_found",
+              "measure_transition_forbidden",
+              "markdown_unsupported",
+              "block_not_representable",
+              "anchor_unknown",
+              "anchor_duplicate",
+              "version_conflict"
             ],
             "title": "Reason"
           },
@@ -17563,7 +19562,26 @@
           "to"
         ],
         "title": "CaseTransitionRequest",
-        "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` ist Teil des Vertrags (6.5), wird in D2 aber abgewiesen —\nMassnahmen gibt es erst mit Phase E."
+        "description": "`POST /cases/{id}/transition` (6.5): Zielstatus plus Pflichtfelder.\n\n`measure_id` gehoert nur zu `in_progress` (3.3, PM-5)."
+      },
+      "CaseUnchanged": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "status"
+        ],
+        "title": "CaseUnchanged",
+        "description": "Ein Fall einer Massnahme, der nicht auf `in_progress` ging, mit seinem Status."
       },
       "CategoryRuleRead": {
         "properties": {
@@ -17731,6 +19749,100 @@
         ],
         "title": "ContentChunkHit",
         "description": "Eine gefundene Passage aus der aktiven Version eines Elements.\n\n`block_id` ist der Heading-Anker aus ADR-0021 — zusammen mit `entity_id`\nergibt er die bestehende Referenzform `\"<entity_id>#<block_id>\"`, es gibt\nalso keine zweite Ankersprache. `None` bei Passagen ohne Anker\n(Beschreibung, Text vor dem ersten Heading, blocklose Aggregate).\n\n`heading_path` ist die Ueberschriften-Kette der Vorfahren (ohne die eigene\nUeberschrift — die steht als erste Zeile in `text`) und sagt dem Modell,\nwo im Dokument die Passage steht."
+      },
+      "ContentEdit": {
+        "properties": {
+          "base_rev": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Base Rev"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "insert_after",
+              "delete"
+            ],
+            "title": "Op"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "markdown": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Markdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "base_rev",
+          "op"
+        ],
+        "title": "ContentEdit",
+        "description": "Teilaenderung (`PATCH …/{entity_type}/{id}/markdown`, ADR-0058 §6.2).\n\nGenau eines von `anchor` (Ueberschriften-ID; der Abschnitt reicht bis vor\ndie naechste Ueberschrift gleicher oder hoeherer Ebene) und `field` (ein\nganzes Markdown-Feld: `body`, `usage_notes`, `profile`,\n`modes[<Name>].identity_add|output_style_override|anti_patterns`).\n`markdown` ist bei `replace`/`insert_after` Pflicht, bei `delete` verboten.\nGeschrieben wird in den offenen Draft, sonst entsteht einer."
+      },
+      "DanglingRef": {
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "playbook",
+              "resource"
+            ],
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_id",
+          "block_id"
+        ],
+        "title": "DanglingRef",
+        "description": "Ein gespeicherter Verweis auf eine Ueberschrift, die das Schreiben geloescht hat."
       },
       "DashboardActivity": {
         "properties": {
@@ -17965,6 +20077,521 @@
         "title": "DocBlockKind",
         "description": "Blocktyp eines doc-Artifacts (deterministischer Markdown-Split)."
       },
+      "Dossier": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "min_uses": {
+            "type": "integer",
+            "title": "Min Uses"
+          },
+          "open_cases": {
+            "$ref": "#/components/schemas/DossierOpenCases"
+          },
+          "elements": {
+            "items": {
+              "$ref": "#/components/schemas/DossierElement"
+            },
+            "type": "array",
+            "title": "Elements"
+          },
+          "elements_total": {
+            "type": "integer",
+            "title": "Elements Total"
+          },
+          "access": {
+            "$ref": "#/components/schemas/DossierAccess"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/DossierMeasure"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "measures_total": {
+            "type": "integer",
+            "title": "Measures Total"
+          },
+          "generations": {
+            "items": {
+              "$ref": "#/components/schemas/DossierGeneration"
+            },
+            "type": "array",
+            "title": "Generations"
+          },
+          "generations_next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generations Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "agent_name",
+          "generated_at",
+          "min_uses",
+          "open_cases",
+          "elements",
+          "elements_total",
+          "access",
+          "measures",
+          "measures_total",
+          "generations",
+          "generations_next_cursor"
+        ],
+        "title": "Dossier",
+        "description": "`GET /agents/{agent_id}/dossier` (6.6): Vorbereitung eines Gespraechs.\n\nBausteine sind die HEUTIGEN Zuordnungen des Agenten (Persona, Template,\nPlaybooks und Resources samt Composite-Kindern) plus die Ziele seiner\nMassnahmen; Zuordnungen sind nicht historisiert. `*_total` nennt die\nGesamtzahl, wenn eine Liste gedeckelt ist. `cursor` blaettert nur\n`generations`; `generations_next_cursor` ist None auf der letzten Seite."
+      },
+      "DossierAccess": {
+        "properties": {
+          "since": {
+            "type": "string",
+            "format": "date",
+            "title": "Since"
+          },
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DossierAccessRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "since",
+          "window_days",
+          "total",
+          "rows"
+        ],
+        "title": "DossierAccess",
+        "description": "Zugriffslog des Agenten (WorkArea/KB) im Zeitfenster, nur Summen."
+      },
+      "DossierAccessRow": {
+        "properties": {
+          "ref_kind": {
+            "type": "string",
+            "title": "Ref Kind"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "sensitivity": {
+            "type": "string",
+            "title": "Sensitivity"
+          },
+          "entries": {
+            "type": "integer",
+            "title": "Entries"
+          },
+          "refs": {
+            "type": "integer",
+            "title": "Refs"
+          },
+          "last_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Last On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref_kind",
+          "operation",
+          "sensitivity",
+          "entries",
+          "refs",
+          "last_on"
+        ],
+        "title": "DossierAccessRow",
+        "description": "Eine Zeile der Zugriffslog-Zusammenfassung, ohne `ref_id`.\n\n`entries` zaehlt Eintraege des tagesweise deduplizierten Logs (je Objekt\nund Tag hoechstens einer), `refs` die verschiedenen Objekte."
+      },
+      "DossierCase": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CaseSeverity"
+          },
+          "situation": {
+            "type": "string",
+            "title": "Situation"
+          },
+          "expected_behavior": {
+            "type": "string",
+            "title": "Expected Behavior"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "severity",
+          "situation",
+          "expected_behavior",
+          "created_at"
+        ],
+        "title": "DossierCase",
+        "description": "Ein offener Fall in Kurzform; Texte auf `DOSSIER_TEXT_MAX_LENGTH` gekuerzt."
+      },
+      "DossierElement": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/DossierVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "name",
+          "versions"
+        ],
+        "title": "DossierElement",
+        "description": "Ein Baustein des Agenten mit seinen juengsten Versionen."
+      },
+      "DossierGeneration": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "activated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activated At"
+          },
+          "measure_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Measure Ids"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shared_agent_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Agent Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "name",
+          "from_version",
+          "to_version",
+          "activated_at",
+          "measure_ids",
+          "verdict",
+          "shared_agent_count"
+        ],
+        "title": "DossierGeneration",
+        "description": "Eine Aktivierung eines Bausteins des Agenten (Weiche N2 a, Web-Verlauf E5k).\n\n- `from_version`: die zuvor aktivierte Version; None bei der ersten.\n- `measure_ids`: Massnahmen an diesem Baustein, die mit dieser Aktivierung\n  `activated` wurden; leer = direkt geaendert, ohne Review.\n- `verdict`: juengste Einstufung dieser Massnahmen.\n- `shared_agent_count`: wie viele ANDERE Agenten den Baustein heute\n  erreichen; None ohne Verweisindex (`external_tool`)."
+      },
+      "DossierMeasure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "title": "Change Summary"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "target",
+          "entity_id",
+          "change_summary",
+          "state",
+          "verdict",
+          "reviewed_at",
+          "follow_up_at",
+          "case_count",
+          "created_at"
+        ],
+        "title": "DossierMeasure",
+        "description": "Eine fruehere Massnahme mit Zustand und juengster Einstufung."
+      },
+      "DossierOpenCases": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/CaseStatus"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DossierCase"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "counts",
+          "total",
+          "items"
+        ],
+        "title": "DossierOpenCases",
+        "description": "Offene Faelle (open, triaged, in_progress, reopened): Zaehler plus juengste Faelle."
+      },
+      "DossierVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "uses": {
+            "type": "integer",
+            "title": "Uses"
+          },
+          "outcomes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Outcomes"
+          },
+          "signals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Signals"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases"
+          },
+          "insufficient": {
+            "type": "boolean",
+            "title": "Insufficient"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "active",
+          "activated_at",
+          "uses",
+          "outcomes",
+          "signals",
+          "cases",
+          "insufficient"
+        ],
+        "title": "DossierVersion",
+        "description": "Rohzahlen einer Version eines Bausteins (3.4: Nutzung nur `source='server'`).\n\n- `uses`: Auslieferungen (`usage_event.source='server'`).\n- `outcomes`: gemeldete Ergebnisse (`source='agent_report'`) je `outcome`.\n- `signals`: Alt-Feedback (`agent_feedback`) je Signal.\n- `cases`: Faelle aller Agenten mit Zuordnung zu diesem Baustein, angelegt,\n  waehrend die Version aktiv war; None, wenn es kein Aktivierungsdatum gibt.\n- `insufficient`: `uses` liegt unter `Dossier.min_uses`."
+      },
       "EdgeType": {
         "type": "string",
         "enum": [
@@ -17976,7 +20603,7 @@
           "co_occurs_with"
         ],
         "title": "EdgeType",
-        "description": "Kantentyp der Knowledge Base (ADR-0047)."
+        "description": "Kantentyp der Knowledge Base."
       },
       "EntitlementInfo": {
         "properties": {
@@ -18255,6 +20882,64 @@
         ],
         "title": "ExternalToolCreate",
         "description": "Eingabe fuer `POST /v1/workspaces/{ws}/external_tools` — legt Version 1 an.\n\nNur `name` ist Pflicht (spiegelt `ResourceCreate`/`SystemPromptTemplateCreate`).\n`alias` wird beim Create aus dem Namen abgeleitet, falls nicht gesetzt —\nworkspace-eindeutig (409 bei Kollision, partieller UNIQUE-Index Migration 0065)."
+      },
+      "ExternalToolMarkdownContent": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Display Name",
+            "default": ""
+          },
+          "mcp_server_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Mcp Server Name",
+            "default": ""
+          },
+          "tool_names": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Tool Names"
+          },
+          "usage_notes": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Usage Notes",
+            "default": ""
+          },
+          "fallback_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Note"
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExternalToolMarkdownContent",
+        "description": "Externes Tool: `usage_notes` als Markdown (Owner W58-4), sonst wie `ExternalToolContent`."
       },
       "ExternalToolRead": {
         "properties": {
@@ -18867,6 +21552,30 @@
               }
             ],
             "title": "Last Activity At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_feedback_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Feedback At"
           }
         },
         "type": "object",
@@ -18886,7 +21595,7 @@
           "dismissed"
         ],
         "title": "FeedbackResolution",
-        "description": "Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).\n\nKuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`\n(in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle\" Status\nist das juengste Resolution-Event — die Feedback-Zeile selbst bleibt\nunveraendert (append-only)."
+        "description": "Triage-Status eines Feedback-Eintrags.\n\nKuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`\n(in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle\" Status\nist das juengste Resolution-Event — die Feedback-Zeile selbst bleibt\nunveraendert (append-only)."
       },
       "FeedbackResolutionCreate": {
         "properties": {
@@ -19126,6 +21835,86 @@
         "title": "FeedbackUnusedItem",
         "description": "Ein veroeffentlichtes, aber ungenutztes Element.\n\n„Ungenutzt\" = das Element hat eine aktive Version (Agenten KOENNTEN es nutzen),\naber bisher kein einziges Usage- oder Feedback-Ereignis. Das ist das\nhandlungsrelevante Stale-Signal: publiziert, aber niemand greift darauf zu."
       },
+      "FollowUpReport": {
+        "properties": {
+          "measure_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Measure Id"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "due": {
+            "type": "boolean",
+            "title": "Due"
+          },
+          "reviewable": {
+            "type": "boolean",
+            "title": "Reviewable"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recurrence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence"
+          },
+          "min_uses": {
+            "type": "integer",
+            "title": "Min Uses"
+          },
+          "insufficient": {
+            "type": "boolean",
+            "title": "Insufficient"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "measure_id",
+          "state",
+          "follow_up_at",
+          "due",
+          "reviewable",
+          "before",
+          "after",
+          "recurrence",
+          "min_uses",
+          "insufficient"
+        ],
+        "title": "FollowUpReport",
+        "description": "`GET /measures/{id}/follow-up` (6.6): drei Kennzahlen als Rohzahlen (QE8 a)."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -19152,15 +21941,112 @@
           "db": {
             "type": "string",
             "title": "Db"
+          },
+          "worker": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "stale",
+              "unknown"
+            ],
+            "title": "Worker"
           }
         },
         "type": "object",
         "required": [
           "status",
           "version",
-          "db"
+          "db",
+          "worker"
         ],
         "title": "Health"
+      },
+      "InboxCounts": {
+        "properties": {
+          "follow_ups_due": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Ups Due"
+          },
+          "memory_approval": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Approval"
+          },
+          "versions_review": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versions Review"
+          },
+          "system_prompts_review": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompts Review"
+          },
+          "cases_open": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases Open"
+          },
+          "patterns": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patterns"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "InboxCounts",
+        "description": "Antwort von `GET /inbox/counts[?agent_id]`.\n\nJe Art eine Zahl. `None` heisst: diese Art gibt es fuer die Rolle des\nAufrufers nicht (Abschnitt entfaellt), `0` heisst: sichtbar, nichts offen.\n\n- `follow_ups_due`: faellige Nachkontrollen — Massnahmen, deren\n  Nachschau-Datum (`measure.follow_up_at`, sonst das des Protokolls)\n  heute oder frueher liegt und die weder eingestuft noch zurueckgezogen\n  sind. Ab `editor`.\n- `memory_approval`: Gedaechtnis zur Freigabe (`status=pending` ohne\n  Lernvorschlaege plus offene Aenderungsvorschlaege). Ab `viewer`; ein\n  viewer zaehlt nur das eigene Nutzergedaechtnis.\n- `versions_review`, `system_prompts_review`: Versionen bzw.\n  System-Prompts zur Freigabe. Ab `editor` sichtbar, in `total` nur fuer\n  `admin` (nur admin darf freigeben). Mit `agent_id` immer `None`: eine\n  Version gehoert keinem einzelnen Agenten.\n- `cases_open`: Rueckmeldungen, nicht eingeordnet (Faelle `open` und\n  `reopened`). Ab `editor`.\n- `patterns`: Zahl der Muster. Ab `editor`, nie in `total` (Muster haben\n  keinen Zustand „erledigt“, ADR-0053 3.7).\n- `total`: die Zahl an der Glocke (Spec §2.2, Spalte „zaehlt in Glocke“)."
       },
       "IngestRequest": {
         "properties": {
@@ -19921,6 +22807,295 @@
         "title": "KbSearchHit",
         "description": "Ein Treffer der KB-Suche — nie WorkArea-Inhalte (getrennte Indizes)."
       },
+      "MarkdownCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content",
+            "description": "Felder je Elementart, siehe die `*MarkdownContent`-Schemas."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MarkdownCreate",
+        "description": "Anlegen per Markdown (`POST …/{entity_type}/markdown`).\n\n`slug` gilt fuer Resource und System-Prompt, `alias` fuer das externe\nTool; bei den anderen Elementarten ist das Feld ein 422. Anker sind beim\nAnlegen immer unbekannt (ADR-0058 §4.2)."
+      },
+      "MarkdownSource": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "personas",
+              "playbooks",
+              "resources",
+              "system-prompts",
+              "external_tools"
+            ],
+            "title": "Entity Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 2,
+            "title": "Locale"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VersionStatus"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonaMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/PlaybookMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/SystemPromptMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalToolMarkdownContent"
+              }
+            ],
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "id",
+          "name",
+          "locale",
+          "version",
+          "status",
+          "base_rev",
+          "content"
+        ],
+        "title": "MarkdownSource",
+        "description": "Quellfassung (`format=source`): Vorlage fuer Vollstand und Teilaenderung.\n\n`base_rev` ist der Konflikt-Token der Version, auf die geschrieben wuerde\n(ADR-0058 §6.3). Er fehlt (`null`), wenn die gelieferte Version nicht das\nSchreibziel ist: bei Versions-Snapshots und bei Lesern, die nur die aktive\nVersion sehen, waehrend ein Draft offen ist."
+      },
+      "MarkdownWrite": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content",
+            "description": "Felder je Elementart, siehe die `*MarkdownContent`-Schemas."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "MarkdownWrite",
+        "description": "Vollstand per Markdown (`PUT …/{entity_type}/{id}/markdown`), PUT-Semantik wie `update_*`.\n\n`base_rev` ist optional: gesetzt prueft der Server ihn unter der\nZeilensperre (409 `version_conflict`)."
+      },
+      "MarkdownWriteResult": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "personas",
+              "playbooks",
+              "resources",
+              "system-prompts",
+              "external_tools"
+            ],
+            "title": "Entity Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 2,
+            "title": "Locale"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VersionStatus"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonaMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/PlaybookMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/SystemPromptMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalToolMarkdownContent"
+              }
+            ],
+            "title": "Content"
+          },
+          "dangling_refs": {
+            "items": {
+              "$ref": "#/components/schemas/DanglingRef"
+            },
+            "type": "array",
+            "title": "Dangling Refs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "id",
+          "name",
+          "locale",
+          "version",
+          "status",
+          "base_rev",
+          "content"
+        ],
+        "title": "MarkdownWriteResult",
+        "description": "Antwort eines Schreibens: der neue Stand samt neuem `base_rev`.\n\n`dangling_refs` nennt gespeicherte Verweise (Playbook- und\nSub-Resource-Links) auf Ueberschriften, die dieses Schreiben entfernt hat\n(ADR-0058 §4.2). Die Verweise bleiben stehen wie nach einem Loeschen im\nWeb-Editor."
+      },
       "MeOrganization": {
         "properties": {
           "id": {
@@ -20050,6 +23225,463 @@
         ],
         "title": "MeWorkspace",
         "description": "Workspace + Rolle des aktuellen Users."
+      },
+      "MeasureActorKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "system"
+        ],
+        "title": "MeasureActorKind",
+        "description": "Wer ein Massnahmen-Event ausgeloest hat."
+      },
+      "MeasureCreate": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Change Summary"
+          },
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "success_criterion": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Success Criterion"
+          },
+          "counterposition": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Counterposition"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_ids",
+          "target",
+          "change_summary",
+          "test_case_id",
+          "success_criterion",
+          "counterposition"
+        ],
+        "title": "MeasureCreate",
+        "description": "Eine Massnahme im Protokoll (6.6 `measures[]`).\n\n`case_ids` mindestens ein Eintrag (3.6 „>= 1“); dass die Faelle zum\nProtokoll gehoeren, prueft der Service."
+      },
+      "MeasureEventKind": {
+        "type": "string",
+        "enum": [
+          "draft_linked",
+          "activated",
+          "follow_up_prepared",
+          "reviewed",
+          "withdrawn"
+        ],
+        "title": "MeasureEventKind",
+        "description": "Ereignisse im Verlauf einer Massnahme (3.6, Tabelle)."
+      },
+      "MeasureEventRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "measure_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Measure Id"
+          },
+          "event": {
+            "$ref": "#/components/schemas/MeasureEventKind"
+          },
+          "actor_kind": {
+            "$ref": "#/components/schemas/MeasureActorKind"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "version_entity_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "persona",
+                  "playbook",
+                  "resource",
+                  "system_prompt_template",
+                  "external_tool"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasureVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "measure_id",
+          "event",
+          "actor_kind",
+          "actor_id",
+          "version_entity_type",
+          "version_id",
+          "verdict",
+          "metrics",
+          "note",
+          "created_at"
+        ],
+        "title": "MeasureEventRead",
+        "description": "Ein Event aus dem Verlauf einer Massnahme (append-only)."
+      },
+      "MeasureLinkDraftRequest": {
+        "properties": {
+          "version_entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource",
+              "system_prompt_template",
+              "external_tool"
+            ],
+            "title": "Version Entity Type"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version_entity_type",
+          "version_id"
+        ],
+        "title": "MeasureLinkDraftRequest",
+        "description": "`POST /measures/{id}/link-draft` (6.6): die Version des Entwurfs."
+      },
+      "MeasureRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "target": {
+            "$ref": "#/components/schemas/MeasureTarget"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "change_summary": {
+            "type": "string",
+            "title": "Change Summary"
+          },
+          "test_case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Test Case Id"
+          },
+          "success_criterion": {
+            "type": "string",
+            "title": "Success Criterion"
+          },
+          "counterposition": {
+            "type": "string",
+            "title": "Counterposition"
+          },
+          "follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeasureState"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureEventRead"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "session_id",
+          "case_ids",
+          "target",
+          "entity_id",
+          "change_summary",
+          "test_case_id",
+          "success_criterion",
+          "counterposition",
+          "follow_up_at",
+          "state",
+          "events",
+          "created_at"
+        ],
+        "title": "MeasureRead",
+        "description": "Eine Massnahme mit Faellen, abgeleitetem Zustand und Verlauf (aelteste zuerst)."
+      },
+      "MeasureReviewRequest": {
+        "properties": {
+          "verdict": {
+            "$ref": "#/components/schemas/MeasureVerdict"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "MeasureReviewRequest",
+        "description": "`POST /measures/{id}/review` (6.6): Einstufung, `ineffective` mit Begruendung."
+      },
+      "MeasureState": {
+        "type": "string",
+        "enum": [
+          "agreed",
+          "draft_linked",
+          "activated",
+          "follow_up_prepared",
+          "effective",
+          "ineffective",
+          "not_measurable",
+          "withdrawn"
+        ],
+        "title": "MeasureState",
+        "description": "Abgeleiteter Zustand einer Massnahme (juengstes Event).\n\n`agreed` heisst: beschlossen, noch kein Event. Die drei Einstufungen\nsind eigene Zustaende, damit eine Liste ohne zweites Feld filtern kann."
+      },
+      "MeasureTarget": {
+        "type": "string",
+        "enum": [
+          "persona",
+          "playbook",
+          "resource",
+          "external_tool",
+          "system_prompt_template",
+          "tool_policy",
+          "memory"
+        ],
+        "title": "MeasureTarget",
+        "description": "Element einer Massnahme (3.6): wie `CaseTarget`, ohne `model_limit`."
+      },
+      "MeasureVerdict": {
+        "type": "string",
+        "enum": [
+          "effective",
+          "ineffective",
+          "not_measurable"
+        ],
+        "title": "MeasureVerdict",
+        "description": "Einstufung der Nachschau (3.6 `reviewed`); nur ein Mensch."
+      },
+      "MeasureWithdrawRequest": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "MeasureWithdrawRequest",
+        "description": "`POST /measures/{id}/withdraw` (6.6): Zurueckziehen braucht eine Begruendung."
+      },
+      "MeasureWithdrawResult": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/MeasureEventRead"
+          },
+          "cases_reset": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cases Reset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "cases_reset"
+        ],
+        "title": "MeasureWithdrawResult",
+        "description": "Ergebnis des Zurueckziehens: das Event und die Faelle, die auf `triaged` zurueckgingen."
       },
       "MemoryActorKind": {
         "type": "string",
@@ -20387,7 +24019,7 @@
           "recommended"
         ],
         "title": "MemoryDirective",
-        "description": "Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt (ADR-0044).\n\nBestimmt NUR die Formulierung der tools-overview-Sektion („rufe zu\nGespraechsbeginn dein Gedaechtnis ab\" vs. „nutze es, wenn Kontext\nhilfreich ist\") — KEIN Recht, daher bewusst nicht Teil des\n`is_within`-Anti-Escalation-Vergleichs."
+        "description": "Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt.\n\nBestimmt NUR die Formulierung („rufe zu Gespraechsbeginn dein Gedaechtnis\nab\" vs. „nutze es, wenn Kontext hilfreich ist\") — kein Recht."
       },
       "MemoryEventKind": {
         "type": "string",
@@ -20786,7 +24418,7 @@
           "auto"
         ],
         "title": "MemoryMode",
-        "description": "Gedaechtnis-Modus eines Agenten (ADR-0044) — geordnete Stufen.\n\nSteuert BEIDE Seiten des Agent-Memorys: ob die Memory-MCP-Tools fuer den\nAgenten ueberhaupt existieren (tools/list-Filter, ADR-0042) und wie\n`save_memory` persistiert wird.\n\n- ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.\n- ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).\n- ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —\n  retrieval-sichtbar erst nach menschlicher Freigabe (Kurations-Schleuse,\n  Muster ADR-0038).\n- ``auto``: `save_memory` speichert direkt `active`; die serverseitigen\n  Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer."
+        "description": "Gedaechtnis-Modus eines Agenten — geordnete Stufen.\n\nSteuert, ob die Memory-Werkzeuge fuer den Agenten sichtbar sind und wie\n`save_memory` speichert.\n\n- ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.\n- ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).\n- ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —\n  sichtbar erst nach menschlicher Freigabe.\n- ``auto``: `save_memory` speichert direkt `active`; die serverseitigen\n  Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer."
       },
       "MemoryOrigin": {
         "type": "string",
@@ -20834,7 +24466,7 @@
           "delete"
         ],
         "title": "MemoryProposalAction",
-        "description": "Art eines Agenten-Vorschlags zu einem bestehenden Eintrag (ADR-0053 3.1.4)."
+        "description": "Art eines Agenten-Vorschlags zu einem bestehenden Eintrag."
       },
       "MemoryProposalCreate": {
         "properties": {
@@ -21729,7 +25361,7 @@
           "hypothesis"
         ],
         "title": "NodeTier",
-        "description": "Vertrauensstufe eines KB-Nodes (ADR-0047) — geordnete Leiter.\n\n- ``verified``: menschlich bestaetigt (Heben dorthin ist P2-UI-Thema).\n- ``derived``: aus mehreren Belegen abgeleitet.\n- ``hypothesis``: unbestaetigte Vermutung (Einstieg fuer Agenten)."
+        "description": "Vertrauensstufe eines KB-Nodes — geordnete Leiter.\n\n- ``verified``: menschlich bestaetigt.\n- ``derived``: aus mehreren Belegen abgeleitet.\n- ``hypothesis``: unbestaetigte Vermutung (Einstieg fuer Agenten)."
       },
       "OAuthClientRegistered": {
         "properties": {
@@ -22208,7 +25840,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PersonaContent",
-        "description": "BlockNote-strukturierter Persona-Profil-Inhalt (Phase 3-0).\n\nWird als optionales Feld an `PersonaVersionContent.content` haengen und\ntraegt Rolle, Tonfall, Beispiele als BlockNote-Dokument (ADR-0022). Gleiche\nObergrenze (`max_length=2000`) wie bei `ResourceContent.blocks` — gross\ngenug fuer eine Persona-Karte, klein genug zum Embedden in Listen."
+        "description": "Profil-Inhalt der Persona (Rolle, Tonfall, Beispiele) als BlockNote-Bloecke."
       },
       "PersonaCreate": {
         "properties": {
@@ -22242,7 +25874,53 @@
           "name"
         ],
         "title": "PersonaCreate",
-        "description": "Eingabe fuer `POST /v1/personas` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `PersonaVersionContent` eingesetzt. Promote-Validation (draft →\nreview/active) prueft im Transition-Endpunkt auf vollstaendige Pflichtfelder\n(description, body in `content.content.blocks`)."
+        "description": "Eingabe fuer `POST /v1/personas` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf; fuer\ndie Freigabe muessen Beschreibung und Profil-Inhalt gefuellt sein."
+      },
+      "PersonaMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          },
+          "profile": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Profile",
+            "default": ""
+          },
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/PersonaModeMarkdown"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Modes"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/SkillRef"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonaMarkdownContent",
+        "description": "Persona: `profile` ist der Profil-Inhalt, Modi werden ueber den Namen zugeordnet."
       },
       "PersonaMode": {
         "properties": {
@@ -22318,7 +25996,77 @@
           "name"
         ],
         "title": "PersonaMode",
-        "description": "Ein einzelner Modus einer Multi-Modus-Persona (Gap 3.4).\n\nEin Modus beschreibt, wie sich die Persona in einem bestimmten Kontext\nverhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne\nTrigger-Match greift der Default-Modus (`is_default=True`).\n\n`identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`\nbeschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`\nlistet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Dokumente\n(PR-A — vorher `str`; Alt-Daten werden per `_coerce_str_to_blocks` gelesen).\n\n`playbook_id` bindet einen Modus an ein zugehoeriges Playbook (Brainstormer:\n„Zugehoeriges Playbook\"); `playbook_name` ist ein denormalisierter Snapshot\nfuer das Rendering (der reine Profil-Resolver hat keinen DB-Zugriff). Der\n`playbook_id` bleibt die Wahrheit — der Name kann bei Umbenennung veralten."
+        "description": "Ein einzelner Modus einer Multi-Modus-Persona.\n\nEin Modus beschreibt, wie sich die Persona in einem bestimmten Kontext\nverhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne\nTrigger-Match greift der Default-Modus (`is_default=True`).\n\n`identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`\nbeschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`\nlistet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Bloecke.\n\n`playbook_id` bindet den Modus an ein zugehoeriges Playbook;\n`playbook_name` ist dessen Name zur Anzeige und kann bei Umbenennung\nveralten."
+      },
+      "PersonaModeMarkdown": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          },
+          "identity_add": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Identity Add",
+            "default": ""
+          },
+          "output_style_override": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Output Style Override",
+            "default": ""
+          },
+          "anti_patterns": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Anti Patterns",
+            "default": ""
+          },
+          "playbook_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playbook Id"
+          },
+          "playbook_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Playbook Name",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PersonaModeMarkdown",
+        "description": "Ein Persona-Modus; die drei Inhaltsfelder sind je ein Markdown-Dokument."
       },
       "PersonaPlaybookLinkSet": {
         "properties": {
@@ -22559,7 +26307,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PersonaVersionContent",
-        "description": "Typisierter Inhalt einer Persona-Version (`persona_version.content`).\n\nVor Phase 3-0 hiess diese Klasse `PersonaContent`. Der Name ist mit Phase\n3-0 an die neue BlockNote-Profil-Klasse uebergegangen; die per-Version\npersistierten Felder leben hier.\n\n`traits` ist mit Phase 3-0 als Persona-Strukturfeld deprecated — neue UIs\nliefern den strukturierten Profil-Inhalt ueber `content` (BlockNote). Das\nFeld bleibt mit Default `[]` als Wire-Schema-Backward-Compat (alte Clients\nschicken/erwarten es weiter)."
+        "description": "Inhalt einer Persona-Version.\n\nDen strukturierten Profil-Inhalt traegt `content` (BlockNote). `traits`\nist veraltet und kann leer bleiben."
       },
       "PersonaVersionRead": {
         "properties": {
@@ -22802,7 +26550,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PlaybookContent",
-        "description": "Typisierter Inhalt einer Playbook-Version (`playbook_version.content`).\n\nWelle 4: description, body und type haben Default \"\" — Create erlaubt\nunvollstaendige Drafts. Promote-Validation (draft → review/active) prueft\nim Transition-Endpunkt auf vollstaendige Pflichtfelder.\n\nTrack B (Nur-BlockNote): `body` ist immer ein stringifiziertes BlockNote-\nJSON-Dokument (`JSON.stringify(editor.document)`) mit Inline-Placeholder-\nPills. Der frueher gefuehrte `body_format`-Schalter ist entfallen; Migration\n`0030_blocknote_only.sql` hat Altbestaende markdown-aware konvertiert und den\n`body_format`-Key aus allen Versions-Snapshots entfernt."
+        "description": "Inhalt einer Playbook-Version.\n\n`body` ist ein stringifiziertes BlockNote-JSON-Dokument\n(`JSON.stringify(editor.document)`) mit Inline-Placeholder-Pills. Leere\nFelder sind im Entwurf erlaubt; die Freigabe verlangt sie gefuellt."
       },
       "PlaybookCreate": {
         "properties": {
@@ -22836,7 +26584,62 @@
           "name"
         ],
         "title": "PlaybookCreate",
-        "description": "Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `PlaybookContent` eingesetzt."
+        "description": "Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf."
+      },
+      "PlaybookMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaybookType"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ],
+            "title": "Type",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlaybookMarkdownContent",
+        "description": "Playbook: `body` als Markdown, sonst wie `PlaybookContent`."
       },
       "PlaybookRead": {
         "properties": {
@@ -23010,7 +26813,7 @@
           "faq"
         ],
         "title": "PlaybookType",
-        "description": "Kurierte Playbook-Typen (Phase 3-0, Master-Plan §Track 0).\n\nMigration `0020_playbook_type_check.sql` setzt den passenden CHECK-\nConstraint in der DB. `PlaybookContent.type` bleibt aus Backward-Compat-\nGruenden vorlaeufig `str`; Frontend/Service ziehen mit Track 3-A/B nach."
+        "description": "Kuratierte Playbook-Typen."
       },
       "PlaybookUpdate": {
         "properties": {
@@ -23191,7 +26994,7 @@
           "none"
         ],
         "title": "ReadScope",
-        "description": "Sichtbarkeitsumfang eines lesenden Tools.\n\n- ``all``: der gesamte Workspace („alles sehen\").\n- ``assigned``: nur die dem Agenten ueber seine Persona zugewiesenen\n  Playbooks bzw. die daraus erreichbaren Resources (Default — least\n  privilege/„secure by default\").\n- ``none``: das Tool ist fuer diesen Agenten gar nicht verfuegbar."
+        "description": "Lese-Umfang: `all` ganzer Workspace, `assigned` nur Zugewiesenes (Default), `none` aus."
       },
       "ResourceBlock": {
         "properties": {
@@ -23215,7 +27018,7 @@
           "type"
         ],
         "title": "ResourceBlock",
-        "description": "Ein Top-Level-Block eines BlockNote-Dokuments.\n\n`extra=\"allow\"`, weil das BlockNote-Schema (`props`, `content`, `children`,\n…) offen und versionsabhaengig ist. Verbindlich sind nur `id` (Anker fuer\nBlock-Refs) und `type`."
+        "description": "BlockNote-Block; Pflicht sind nur `id` (Anker) und `type`, weitere Felder frei."
       },
       "ResourceBlockAnchor": {
         "properties": {
@@ -23273,7 +27076,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ResourceContent",
-        "description": "Typisierter Inhalt einer Resource-Version (`resource_version.content`).\n\nE3 (Track E3, ADR-0009 additive jsonb-Evolution): `tags` ermoeglicht das\nFiltern ueber `GET /resources?tag=` ohne denormalisierte DB-Spalte.\nDefault `[]` — Backward-Compat: alte Versionen ohne Tags bleiben gueltig."
+        "description": "Inhalt einer Resource-Version: Beschreibung, BlockNote-Bloecke, Tags."
       },
       "ResourceCreate": {
         "properties": {
@@ -23321,7 +27124,7 @@
           "name"
         ],
         "title": "ResourceCreate",
-        "description": "Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.\n\nWelle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird\neine leere `ResourceContent` eingesetzt (description=\"\" + blocks=[])."
+        "description": "Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht eine leere Resource."
       },
       "ResourceLinkItem": {
         "properties": {
@@ -23374,7 +27177,7 @@
           "position"
         ],
         "title": "ResourceLinkItem",
-        "description": "Ein einzelner Playbook→Resource-Verweis (Eingabe).\n\nPhase-3-Fixes Track 4: `link_scope` unterscheidet zwischen Volldokument-\nReferenz (`'resource'`, kein `block_id`) und Block-Anker (`'block'`, mit\n`block_id`). Default `'block'` ist Backward-Compat fuer alte Clients;\nDefault `block_id=None` erzwingt im Validator die explizite Block-ID\nfuer 'block'-Items."
+        "description": "Ein einzelner Playbook→Resource-Verweis (Eingabe).\n\n`link_scope='resource'` verweist auf das ganze Dokument (ohne `block_id`),\n`link_scope='block'` (Default) auf einen Heading-Anker (mit `block_id`)."
       },
       "ResourceLinkRead": {
         "properties": {
@@ -23494,6 +27297,36 @@
         "type": "object",
         "title": "ResourceLinkSet",
         "description": "Eingabe fuer `PUT .../playbooks/{id}/resource_links`.\n\nSet-Replace-Semantik: die Liste ersetzt den bisherigen Stand vollstaendig\n(leere Liste loest alle Links). Obergrenze schuetzt vor Riesen-Arrays."
+      },
+      "ResourceMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResourceMarkdownContent",
+        "description": "Resource: `body` als Markdown (GFM-Tabellen erlaubt, ADR-0058 §3.4)."
       },
       "ResourceRead": {
         "properties": {
@@ -23732,6 +27565,187 @@
         "title": "ResourceVersionRead",
         "description": "Ein unveraenderlicher Versions-Snapshot einer Resource."
       },
+      "RoutineLastRun": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "schedule",
+              "cli",
+              "manual"
+            ],
+            "title": "Trigger"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Class"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "trigger",
+          "started_at"
+        ],
+        "title": "RoutineLastRun",
+        "description": "Der juengste Lauf einer Routine, gleich welcher Status."
+      },
+      "RoutineStatus": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "code",
+              "env"
+            ],
+            "title": "Source"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutineLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "external_schedule_detected": {
+            "type": "boolean",
+            "title": "External Schedule Detected",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "schedule",
+          "enabled",
+          "source"
+        ],
+        "title": "RoutineStatus",
+        "description": "Eine Routine mit wirksamem Zeitplan und Laufstand."
+      },
+      "RoutinesOverview": {
+        "properties": {
+          "routines": {
+            "items": {
+              "$ref": "#/components/schemas/RoutineStatus"
+            },
+            "type": "array",
+            "title": "Routines"
+          },
+          "worker_last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Last Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "routines"
+        ],
+        "title": "RoutinesOverview",
+        "description": "Alle registrierten Routinen plus „Worker zuletzt gesehen“."
+      },
       "RowsInsert": {
         "properties": {
           "rows": {
@@ -23802,6 +27816,41 @@
         ],
         "title": "RowsInsertResult",
         "description": "Bilanz eines Imports: wie viele Zeilen neu, wie viele Duplikate.\n\nLokales Antwort-Modell (Router-Ebene, wie `Health` in `main.py`) — das\nMCP-Tool `insert_rows` (WP19) reicht es unveraendert durch."
+      },
+      "RunRate": {
+        "properties": {
+          "runs_total": {
+            "type": "integer",
+            "title": "Runs Total"
+          },
+          "runs_passed": {
+            "type": "integer",
+            "title": "Runs Passed"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          },
+          "attestation": {
+            "type": "string",
+            "title": "Attestation"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs_total",
+          "runs_passed",
+          "verdict",
+          "attestation",
+          "created_at"
+        ],
+        "title": "RunRate",
+        "description": "Juengster Pruefall-Lauf einer Version (3.2: „Es zaehlt das letzte Ergebnis“)."
       },
       "SaveQueryResult": {
         "properties": {
@@ -23902,7 +27951,7 @@
           "hybrid"
         ],
         "title": "SearchMode",
-        "description": "Wie gesucht wird (ADR-0037 §35-38, eingeloest in ADR-0046).\n\n- `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst\n  Volltext. Der Tool-Vertrag aendert sich dadurch NICHT, wenn eine\n  Installation ohne die optionale Embedding-Gruppe laeuft.\n- `text`: nur Volltext — deterministisch und reproduzierbar.\n- `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und\n  sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).\n- `hybrid`: beide Raenge per Reciprocal Rank Fusion verschmolzen.\n\nOhne verfuegbaren Embedding-Port verhalten sich alle Stufen wie `text`."
+        "description": "Wie gesucht wird.\n\n- `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst\n  Volltext.\n- `text`: nur Volltext — deterministisch und reproduzierbar.\n- `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und\n  sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).\n- `hybrid`: beide Raenge per Reciprocal Rank Fusion verschmolzen.\n\nOhne verfuegbaren Embedding-Port verhalten sich alle Stufen wie `text`."
       },
       "Sensitivity": {
         "type": "string",
@@ -23912,6 +27961,512 @@
         ],
         "title": "Sensitivity",
         "description": "Sensibilitaets-Stufe eines Inhalts (Zugriffslog snapshottet sie)."
+      },
+      "SessionCreate": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureCreate"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_id",
+          "trigger",
+          "summary",
+          "follow_up_at"
+        ],
+        "title": "SessionCreate",
+        "description": "Protokoll samt Faellen und Massnahmen (6.6 `submit_session_protocol`).\n\nEinreicher (`submitted_by_*`) setzt der Server aus dem Aufrufweg."
+      },
+      "SessionDecision": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "standard_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standard Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SessionDecision",
+        "description": "Ein entschiedener Widerspruch `{text, standard_ref?}` (3.5)."
+      },
+      "SessionDetail": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SessionRead"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureRead"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session",
+          "measures"
+        ],
+        "title": "SessionDetail",
+        "description": "Protokoll mit eingebetteten Massnahmen (QE1 = a).\n\n`superseded_by_id`: das juengste Protokoll, das dieses korrigiert —\nderselbe Wert wie an `SessionListItem` (eine SQL-Quelle im Repository).\nNone, wenn es nicht ersetzt ist."
+      },
+      "SessionDissent": {
+        "properties": {
+          "participant_kind": {
+            "$ref": "#/components/schemas/SessionParticipantKind"
+          },
+          "participant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Participant Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "participant_kind",
+          "participant_id",
+          "text"
+        ],
+        "title": "SessionDissent",
+        "description": "Eine abweichende Meinung `{participant_kind, participant_id, text}` (3.5)."
+      },
+      "SessionListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "submitted_by_kind": {
+            "$ref": "#/components/schemas/SessionSubmitterKind"
+          },
+          "submitted_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Submitted By"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count"
+          },
+          "measure_count": {
+            "type": "integer",
+            "title": "Measure Count"
+          },
+          "next_follow_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Follow Up At"
+          },
+          "due_measure_count": {
+            "type": "integer",
+            "title": "Due Measure Count"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "trigger",
+          "participants",
+          "summary",
+          "decisions",
+          "dissent",
+          "follow_up_at",
+          "supersedes_id",
+          "submitted_by_kind",
+          "submitted_by",
+          "case_ids",
+          "created_at",
+          "case_count",
+          "measure_count",
+          "next_follow_up_at",
+          "due_measure_count",
+          "superseded_by_id"
+        ],
+        "title": "SessionListItem",
+        "description": "Eine Zeile der Protokoll-Liste (QE2 = a): Protokoll plus Zaehler.\n\n- `case_count`, `measure_count`: Faelle bzw. Massnahmen des Protokolls.\n- `due_measure_count`: Massnahmen, deren Nachschau-Datum (Massnahme,\n  sonst Protokoll) heute oder frueher liegt und die nicht abgeschlossen\n  sind (`reviewed`, `withdrawn`; PM-3).\n- `next_follow_up_at`: fruehestes Nachschau-Datum der offenen\n  Massnahmen; None, wenn keine Massnahme mehr offen ist.\n- `superseded_by_id`: das juengste Protokoll, das dieses korrigiert."
+      },
+      "SessionParticipant": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SessionParticipantKind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "role"
+        ],
+        "title": "SessionParticipant",
+        "description": "Ein Teilnehmer `{kind, id, role}` (3.5).\n\n`id`: Nutzer-ID bei `human`, Agent-ID bei `agent`/`builder`. `role` ist\nFreitext (z. B. „Moderation“) und wird nicht uebersetzt."
+      },
+      "SessionParticipantKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent",
+          "builder"
+        ],
+        "title": "SessionParticipantKind",
+        "description": "Wer am Gespraech teilnahm (3.5 `participants.kind`)."
+      },
+      "SessionRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/SessionTrigger"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/SessionParticipant"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "dissent": {
+            "items": {
+              "$ref": "#/components/schemas/SessionDissent"
+            },
+            "type": "array",
+            "title": "Dissent"
+          },
+          "follow_up_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Follow Up At"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "submitted_by_kind": {
+            "$ref": "#/components/schemas/SessionSubmitterKind"
+          },
+          "submitted_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Submitted By"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "agent_id",
+          "trigger",
+          "participants",
+          "summary",
+          "decisions",
+          "dissent",
+          "follow_up_at",
+          "supersedes_id",
+          "submitted_by_kind",
+          "submitted_by",
+          "case_ids",
+          "created_at"
+        ],
+        "title": "SessionRead",
+        "description": "Ein Protokoll ohne Massnahmen (Liste)."
+      },
+      "SessionSubmitResult": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/SessionDetail"
+          },
+          "cases_started": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cases Started"
+          },
+          "cases_unchanged": {
+            "items": {
+              "$ref": "#/components/schemas/CaseUnchanged"
+            },
+            "type": "array",
+            "title": "Cases Unchanged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "cases_started",
+          "cases_unchanged"
+        ],
+        "title": "SessionSubmitResult",
+        "description": "Ergebnis des Einreichens: das Protokoll und was mit den Faellen geschah (W-E2 = a)."
+      },
+      "SessionSubmitterKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "agent"
+        ],
+        "title": "SessionSubmitterKind",
+        "description": "Wer das Protokoll eingereicht hat: ein Mensch oder ein Agent (Builder)."
+      },
+      "SessionTrigger": {
+        "type": "string",
+        "enum": [
+          "threshold",
+          "scheduled",
+          "manual"
+        ],
+        "title": "SessionTrigger",
+        "description": "Anlass eines Gespraechs (3.5)."
       },
       "SkillRef": {
         "properties": {
@@ -23934,7 +28489,7 @@
           "name"
         ],
         "title": "SkillRef",
-        "description": "Referenz auf einen relevanten Skill der Persona (Gap 3.5).\n\nRein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis\n(z. B. „nuetzlich im Story-Crafter-Modus\"). Keine Ausfuehrungs-Bindung —\nder gerenderte Profil-Text teilt dem Agenten die relevanten Skills mit."
+        "description": "Referenz auf einen relevanten Skill der Persona.\n\nRein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis\n(z. B. „nuetzlich im Story-Crafter-Modus\"). Keine Ausfuehrungs-Bindung —\nder gerenderte Profil-Text teilt dem Agenten die relevanten Skills mit."
       },
       "SourceConventionRead": {
         "properties": {
@@ -24152,7 +28707,7 @@
           "child_id"
         ],
         "title": "SubResourceLinkItem",
-        "description": "Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource, Track E).\n\nSpiegelt `ResourceLinkItem`: `link_scope='resource'` referenziert das ganze\nKind-Dokument (kein `block_id`), `link_scope='block'` einen Heading-Anker\nim Kind (mit `block_id`). Default ist `'resource'` — bei Sub-Resources ist\ndie Volldokument-Referenz der Normalfall."
+        "description": "Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource).\n\n`link_scope='resource'` referenziert das ganze Kind-Dokument (kein\n`block_id`), `link_scope='block'` einen Heading-Anker im Kind (mit\n`block_id`). Default ist `'resource'` — bei Sub-Resources ist die\nVolldokument-Referenz der Normalfall."
       },
       "SubResourceLinkSet": {
         "properties": {
@@ -24282,6 +28837,26 @@
         ],
         "title": "SystemFeedbackCreate",
         "description": "Eingabe von `report_problem`: ein zielloses System-/MCP-Problem.\n\nKein `entity_*` — das Problem haengt an der Plattform, nicht an einem Inhalt.\n`category` klassifiziert es, `note` beschreibt es (Pflicht — ein Report ohne\nBeschreibung ist nutzlos)."
+      },
+      "SystemPromptMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SystemPromptMarkdownContent",
+        "description": "System-Prompt: `body` als Markdown mit Platzhalter-Tokens."
       },
       "SystemPromptTemplateContent": {
         "properties": {
@@ -25732,7 +30307,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "TransitionGrant",
-        "description": "Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).\n\nWirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent\n`promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die\nexplizit gewaehrten Richtungen erlaubt — so laesst sich „darf Playbooks\npromoten, aber keine Personas; nie retiren\" abbilden, ohne `promote_retire`\naufzuweiten. Fehlt der Domain-Eintrag, gilt die ungeteilte `promote_retire`."
+        "description": "Pro-Domain-Einschraenkung von `promote_retire`.\n\nWirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent\n`promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die\nexplizit gewaehrten Richtungen erlaubt — so laesst sich „darf Playbooks\npromoten, aber keine Personas; nie retiren\" abbilden, ohne `promote_retire`\naufzuweiten. Fehlt der Domain-Eintrag, gilt die ungeteilte `promote_retire`."
       },
       "TriggerOverview": {
         "properties": {
@@ -25755,6 +30330,228 @@
         ],
         "title": "TriggerOverview",
         "description": "Welle 5: ein deduplizierter Trigger mit den Playbooks, die ihn fuehren.\n\nQuelle: denormalisierte `playbook.triggers`-Spalte, kommagetrennt. Wird vom\nDiscovery-Endpoint `GET /v1/workspaces/{ws}/playbooks/triggers` und vom\nMCP-Tool `list_triggers` zurueckgegeben — der LLM nutzt die Tabelle, um\nfuer eine User-Anfrage das passende Playbook zu finden, ohne dass alle\nPlaybook-Bodies in den Systemprompt geladen werden muessen."
+      },
+      "TutorialPatch": {
+        "properties": {
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "done",
+                  "skipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "welcome_seen": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Seen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TutorialPatch",
+        "description": "Body von `PATCH /v1/me/tutorials/{tutorial_id}`.\n\n`step_id` und `state` kommen nur gemeinsam (`open` nimmt Haken oder\nUeberspringen zurueck). `welcome_seen: true` vermerkt die Begruessung."
+      },
+      "TutorialRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "audience": {
+            "type": "string",
+            "const": "everyone",
+            "title": "Audience"
+          },
+          "welcome": {
+            "type": "boolean",
+            "title": "Welcome"
+          },
+          "welcome_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Seen At"
+          },
+          "restarted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restarted At"
+          },
+          "completed": {
+            "type": "boolean",
+            "title": "Completed"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TutorialStepRead"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "audience",
+          "welcome",
+          "completed",
+          "steps"
+        ],
+        "title": "TutorialRead",
+        "description": "Antwort von `GET /v1/me/tutorials/{tutorial_id}` und Listeneintrag."
+      },
+      "TutorialStepRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "head_start",
+              "first_mcp_call",
+              "agent_created",
+              "own_agent_mcp_call",
+              "page_visited",
+              "manual"
+            ],
+            "title": "Type"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "automatic": {
+            "type": "boolean",
+            "title": "Automatic"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done",
+              "skipped"
+            ],
+            "title": "State"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "automatic",
+          "state"
+        ],
+        "title": "TutorialStepRead",
+        "description": "Zustand eines Schritts fuer den aktuellen Nutzer."
+      },
+      "UsageByType": {
+        "properties": {
+          "persona": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Persona",
+            "default": 0
+          },
+          "playbook": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Playbook",
+            "default": 0
+          },
+          "resource": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Resource",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "UsageByType",
+        "description": "Auslieferungen an einen Agenten im 30-Tage-Fenster je Elementart."
+      },
+      "UsageDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "UsageDay",
+        "description": "Auslieferungen an einem Kalendertag (UTC)."
       },
       "UsageEventCreate": {
         "properties": {
@@ -25876,6 +30673,26 @@
         "title": "UsageEventRead",
         "description": "Ein persistiertes Nutzungs-Ereignis (read-only)."
       },
+      "UsageList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UsageStats"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "title": "UsageList",
+        "description": "Nutzungszaehler fuer Listen (`GET …/usage`), je Element eine Zeile."
+      },
       "UsageOutcome": {
         "type": "string",
         "enum": [
@@ -25885,6 +30702,85 @@
         ],
         "title": "UsageOutcome",
         "description": "Ergebnis einer Nutzung — quantitatives Signal."
+      },
+      "UsageStats": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "persona",
+              "playbook",
+              "resource"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uses_7d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 7D",
+            "default": 0
+          },
+          "uses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Uses 30D",
+            "default": 0
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "distinct_agents_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Distinct Agents 30D",
+            "default": 0
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/UsageDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "counting_since": {
+            "type": "string",
+            "format": "date",
+            "title": "Counting Since",
+            "default": "2026-10-08"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
+        "title": "UsageStats",
+        "description": "Nutzungszaehler eines Elements (`GET …/usage/{entity_type}/{entity_id}`).\n\nGezaehlt werden nur Auslieferungen an agent-gebundene Tokens (Owner-Weiche\nZ1a). Die Fenster sind Kalendertage in UTC einschliesslich heute, darum gilt\n`uses_30d == sum(daily.uses)`. `last_used_at` ist die juengste Auslieferung\nueberhaupt, nicht nur im Fenster. `daily` traegt in der Einzelsicht genau 30\nTage (aeltester zuerst, Luecken mit 0) und bleibt in Listen leer."
       },
       "ValidationError": {
         "properties": {
@@ -26020,6 +30916,61 @@
         "title": "VersionDiffChange",
         "description": "Eine einzelne Aenderung im Versions-Diff.\n\n`path` ist ein punkt-/klammer-separierter Pfad in den Content-JSON\n(`description`, `tags`, `content.blocks[<block-id>]`). Block-Listen werden\nper stabiler Block-`id` gematcht, sodass das Verschieben eines Blocks nicht\nals Massen-Aenderung erscheint."
       },
+      "VersionReport": {
+        "properties": {
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "test_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunRate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uses": {
+            "type": "integer",
+            "title": "Uses"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "version",
+          "test_run",
+          "uses",
+          "cases"
+        ],
+        "title": "VersionReport",
+        "description": "Rohzahlen einer Version: Pruefall-Lauf, Nutzungen, Faelle (QE8 a, keine Raten)."
+      },
       "VersionStatus": {
         "type": "string",
         "enum": [
@@ -26072,7 +31023,7 @@
           "to"
         ],
         "title": "VersionTransitionRequest",
-        "description": "Eingabe fuer `POST .../versions/{v}/transition`.\n\n`acknowledge_test_report` und `override_reason` gehoeren zum\nAktivierungsvertrag (ADR-0053 6.3): Sind Pruefaelle der Zielversion rot\noder fehlen Ergebnisse, verlangt `to='active'` beides. Ist die\nPruefall-Menge leer oder alles `pass`, werden beide ignoriert.\n\n`override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein\nleerer Grund (auch nur Leerzeichen) ist hier zulaessig und wird erst vom\nService als 409 `test_override_reason_required` beantwortet — der\nVertrag unterscheidet „bestaetigt ohne Grund\" ausdruecklich von einem\nFormatfehler. Eine Mindestlaenge ueber ein Zeichen gibt es nicht."
+        "description": "Eingabe fuer `POST .../versions/{v}/transition`.\n\nSind Pruefaelle der Zielversion rot oder fehlen Ergebnisse, verlangt\n`to='active'` zusaetzlich `acknowledge_test_report=true` und einen\n`override_reason`. Ist die Pruefall-Menge leer oder alles `pass`, werden\nbeide ignoriert.\n\n`override_reason` wird getrimmt; danach gilt hoechstens 1 000 Zeichen. Ein\nleerer Grund wird mit 409 `test_override_reason_required` abgelehnt."
       },
       "WaTableCreate": {
         "properties": {
@@ -26554,6 +31505,71 @@
         ],
         "title": "WorkAreaSearchHit",
         "description": "Ein Suchtreffer der WorkArea-Suche — Anker + Snippet, nie das Dokument.\n\n`anchor` ist ``<artifact_id>#<block_id>`` (ADR-0021) und direkt\n`read_artifact(id, anchor)`-faehig."
+      },
+      "WorkAreaUsageStats": {
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area Id"
+          },
+          "access_days_30d": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Access Days 30D",
+            "default": 0
+          },
+          "accesses_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accesses 30D",
+            "default": 0
+          },
+          "reads_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads 30D",
+            "default": 0
+          },
+          "writes_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Writes 30D",
+            "default": 0
+          },
+          "distinct_agents_30d": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Distinct Agents 30D",
+            "default": 0
+          },
+          "last_access_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Access On"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/AccessDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "type": "object",
+        "required": [
+          "area_id"
+        ],
+        "title": "WorkAreaUsageStats",
+        "description": "Zugriffszaehler eines Arbeitsbereichs (`GET …/work-areas/{area_id}/usage`).\n\nQuelle ist das Zugriffslog (`agent_access_log`, ein Eintrag je Agent,\nElement, Operation und Tag) fuer Artifacts und Tabellen des Bereichs.\n`accesses_30d` zaehlt diese Eintraege, `access_days_30d` die Tage mit\nmindestens einem Eintrag. Keine Uhrzeit, keine Agent-Namen."
       },
       "WorkspaceCreate": {
         "properties": {

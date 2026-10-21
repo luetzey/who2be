@@ -40,6 +40,53 @@ _PURGE_USER_MEMORY_SQL = (
     f"SELECT workspace_id, NULL::uuid, '{MEMORY_DELETED_AUDIT_ACTION}', id::text FROM deleted"
 )
 
+# Personenbezug des Users in `audit_log` beim Konto-Purge (WP-D, E1-1b, Owner
+# E1a sinngemaess): Akteur, Ziel und `detail`. Die Workspaces bestehen weiter,
+# der 0106-Trigger greift hier nicht. `target` (`account.deletion_requested`,
+# `member.role_changed`, `member.removed`, `memory.user_purged`, ...) wird
+# Sentinel statt NULL, damit Aktion und Zahl lesbar bleiben. `detail` wird nur
+# dort auf die Allowlist aus 0106 gekuerzt, wo die Zeile vom User handelt
+# (Ziel) oder seine ID als Wert traegt — `strpos` statt jsonb-Pfad, damit auch
+# doppelt kodierter Altbestand (0081) erfasst ist. Ist der User nur Akteur,
+# bleibt `detail` (Scope lebt). Eine Anweisung, damit eine Zeile mit Akteur =
+# Ziel einmal zaehlt. `anonymized_at` bleibt NULL: es ist der Anker der
+# 12-Monats-Frist fuer geloeschte Scopes (E1-2). SET liest die alten Werte.
+_ANONYMIZE_AUDIT_LOG_SQL = (
+    "UPDATE audit_log SET "
+    "  actor_id = CASE WHEN actor_id = $1 THEN $2 ELSE actor_id END, "
+    "  target = CASE WHEN target = $1::text THEN $2::text ELSE target END, "
+    "  detail = CASE WHEN target = $1::text OR strpos(detail::text, $1::text) > 0 "
+    "    THEN w2b_audit_anonymized_detail(action, detail) ELSE detail END "
+    "WHERE actor_id = $1 OR target = $1::text OR strpos(detail::text, $1::text) > 0"
+)
+
+# jsonb-Listen eines Protokolls (`participants`, `dissent`, ADR-0053 3.5),
+# deren Eintraege einen Menschen per `{<kind_key>: 'human', <id_key>: <uuid>}`
+# nennen. Ersetzt nur die ID der passenden Eintraege durch den Sentinel ($2),
+# Reihenfolge und uebrige Felder bleiben. Die IDs liegen als kanonischer
+# UUID-Text vor (`SessionParticipant`/`SessionDissent`, mode="json"); der
+# WHERE-Filter beruehrt nur Zeilen, die den User wirklich nennen.
+_SESSION_LIST_COLUMNS: dict[str, tuple[str, str]] = {
+    "participants": ("kind", "id"),
+    "dissent": ("participant_kind", "participant_id"),
+}
+
+
+def _anonymize_session_list_sql(column: str, kind_key: str, id_key: str) -> str:
+    """UPDATE fuer eine Personenliste in `feedback_session` (Whitelist-Guard)."""
+    if _SESSION_LIST_COLUMNS.get(column) != (kind_key, id_key):
+        raise ValueError(f"Unbekannte Protokoll-Liste: {column!r}")
+    match = f"jsonb_build_object('{kind_key}', 'human', '{id_key}', $1::uuid::text)"
+    return (
+        f"UPDATE feedback_session SET {column} = ("  # noqa: S608 - Whitelist oben
+        "  SELECT jsonb_agg(CASE WHEN item @> " + match + " "
+        f"    THEN jsonb_set(item, '{{{id_key}}}', to_jsonb($2::uuid::text)) ELSE item END "
+        "    ORDER BY ord) "
+        f"  FROM jsonb_array_elements({column}) WITH ORDINALITY AS t(item, ord)"
+        ") "
+        f"WHERE {column} @> jsonb_build_array(" + match + ")"
+    )
+
 
 class AccountLifecycleRepository(Protocol):
     """Service-seitige Abstraktion fuer Lifecycle-Schreibzugriffe."""
@@ -216,7 +263,10 @@ class PgAccountPurgeRepository:
           * `oauth_authorization_code`-Zeilen des Users loeschen (CMP-1): die
             Tabelle traegt `user_id` ohne CASCADE auf den User; nach der
             Konto-Loeschung sind die Codes wertlos.
-          * `status_history.changed_by`, `audit_log.actor_id` sowie
+          * `audit_log`: `actor_id` und `target` des Users auf den Sentinel,
+            `detail` von Zeilen ueber den User auf die Allowlist (0106) —
+            s. `_ANONYMIZE_AUDIT_LOG_SQL`.
+          * `status_history.changed_by` sowie
             `usage_event.actor_id` und `agent_feedback.actor_id` (0053) des
             Users auf den Sentinel anonymisieren (Audit-/Telemetrie-Integritaet
             bleibt, PII weg).
@@ -234,6 +284,11 @@ class PgAccountPurgeRepository:
             `agent_case_event.actor_id` (nur `actor_kind = 'human'`) und
             `agent_case_element.assigned_by` (nur `assigned_by_kind = 'human'`)
             auf den Sentinel — der Fall bleibt als Inhalt des Workspace stehen.
+          * Gespraechsprotokolle und Massnahmen (0103, PM-6):
+            `feedback_session.submitted_by` (nur `submitted_by_kind =
+            'human'`), die IDs menschlicher Eintraege in `participants` und
+            `dissent` sowie `measure_event.actor_id` (nur `actor_kind =
+            'human'`) auf den Sentinel — Protokoll und Massnahme bleiben.
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -260,6 +315,10 @@ class PgAccountPurgeRepository:
             # Zeile ueberlebten die Sterne eines geloeschten Kontos in fremden
             # Workspaces, in denen der User Mitglied war.
             await self._conn.execute("DELETE FROM agent_favorite WHERE user_id = $1", user_id)
+            # Tutorial-Fortschritt (ADR-0060, Migration 0108): kontoweit, ohne
+            # Mandant und ohne FK — nur dieser Schritt entfernt ihn.
+            await self._conn.execute("DELETE FROM tutorial_progress WHERE user_id = $1", user_id)
+            await self._conn.execute("DELETE FROM tutorial_state WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
             sh_result = await self._conn.execute(
@@ -268,9 +327,7 @@ class PgAccountPurgeRepository:
                 ANONYMIZED_USER_ID,
             )
             al_result = await self._conn.execute(
-                "UPDATE audit_log SET actor_id = $2 WHERE actor_id = $1",
-                user_id,
-                ANONYMIZED_USER_ID,
+                _ANONYMIZE_AUDIT_LOG_SQL, user_id, ANONYMIZED_USER_ID
             )
             ue_result = await self._conn.execute(
                 "UPDATE usage_event SET actor_id = $2 WHERE actor_id = $1",
@@ -365,6 +422,37 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
+            # Gespraechsprotokolle und Massnahmen (ADR-0053 3.5/3.6, Migration
+            # 0103, PM-6): ohne Frist aufbewahrt wie Faelle, in FREMDEN
+            # Workspaces ueberleben sie den Account. Anonymisiert, nicht
+            # geloescht. Nur menschliche Verweise: bei `agent`/`builder`
+            # steht dort eine Agent-ID. In `participants` und `dissent` wird
+            # nur die ID des passenden Eintrags ersetzt; Rolle, Text und
+            # Reihenfolge bleiben. `dissent` gehoert dazu, weil dort dieselbe
+            # Person als `participant_id` steht — sonst liefe die
+            # Anonymisierung der Teilnehmerliste ins Leere.
+            ss_result = await self._conn.execute(
+                "UPDATE feedback_session SET submitted_by = $2 "
+                "WHERE submitted_by = $1 AND submitted_by_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            sp_result = await self._conn.execute(
+                _anonymize_session_list_sql("participants", "kind", "id"),
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            sd_result = await self._conn.execute(
+                _anonymize_session_list_sql("dissent", "participant_kind", "participant_id"),
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            mev_result = await self._conn.execute(
+                "UPDATE measure_event SET actor_id = $2 "
+                "WHERE actor_id = $1 AND actor_kind = 'human'",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
         return (
             _count(sh_result)
             + _count(al_result)
@@ -378,6 +466,10 @@ class PgAccountPurgeRepository:
             + _count(cr_result)
             + _count(ce_result)
             + _count(ca_result)
+            + _count(ss_result)
+            + _count(sp_result)
+            + _count(sd_result)
+            + _count(mev_result)
         )
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:

@@ -7,7 +7,11 @@ Belegt am Router (echte DB, echter Auth-Pfad):
   `agent_id`); Wiederholung 409 `memory_not_convertible`.
 - `POST /feedback/{feedback_id}/promote`: ein offenes Alt-Feedback wird ein
   Fall (201); Wiederholung 409 `feedback_not_promotable`.
-- Rechte: Agent-Token 403 (auch mit `case_triage`), viewer 403, editor 201.
+- Rechte: convert: Agent ohne `case_triage` 403, viewer 403, editor 201,
+  Builder (`case_triage`, PM-4) 201 mit Melder `pattern`. promote:
+  Agent-Token 403 (auch mit `case_triage`), viewer 403, editor 201.
+- `GET /memories/{memory_id}` fuer den Builder (PM-4): nur `kind=lesson`,
+  alles andere 404 wie eine unbekannte ID.
 - Fremder Workspace: Objekt aus B ist fuer A nicht da (404), Workspace B im
   Pfad mit A-Login wird abgewiesen.
 
@@ -123,13 +127,13 @@ def test_convert_rights_conflict_and_scope(world: _World) -> None:
     w = world
     base, auth = w.workspace()
     agent_id, agent_auth = agent_token(w.client, base, "Betroffen", {}, auth)
-    _t, triage_auth = agent_token(w.client, base, "Builder", {"case_triage": True}, auth)
+    builder, triage_auth = agent_token(w.client, base, "Builder", {"case_triage": True}, auth)
     viewer = w.member(base, WorkspaceRole.viewer)
     editor = w.member(base, WorkspaceRole.editor)
     memory_id = w.lesson(base, agent_id)
 
-    # Agent-Tokens nie (auch der Builder nicht), viewer nicht.
-    for headers in (agent_auth, triage_auth, viewer):
+    # Agent ohne case_triage und viewer nicht; der Builder darf (PM-4, unten).
+    for headers in (agent_auth, viewer):
         denied = w.convert(base, agent_id, memory_id, headers)
         assert denied.status_code == 403, denied.text
     # Body mit agent_id (oder Zuordnung) ist kein CaseConvertRequest (Q2, Weiche 1).
@@ -167,6 +171,97 @@ def test_convert_rights_conflict_and_scope(world: _World) -> None:
     assert w.convert(base, agent_id, memory_b, auth).status_code == 404
     assert w.convert(base_b, agent_b, memory_b, auth).status_code in (403, 404)
     assert w.convert(base_b, agent_b, memory_b, auth_b).status_code == 201
+
+    # Builder (case_triage, PM-4): Melder `pattern`, Builder als reporter_agent_id.
+    lesson2 = w.lesson(base, agent_id)
+    by_builder = w.convert(base, agent_id, lesson2, triage_auth)
+    assert by_builder.status_code == 201, by_builder.text
+    built = by_builder.json()
+    assert built["reporter_kind"] == "pattern"
+    assert built["reporter_agent_id"] == builder
+    assert built["reporter_user_id"] is None
+    assert built["source_memory_id"] == lesson2
+    again_builder = w.convert(base, agent_id, lesson2, triage_auth)
+    assert again_builder.status_code == 409
+    # Der Builder kommt nicht in einen fremden Workspace.
+    memory_b2 = w.lesson(base_b, agent_b)
+    assert w.convert(base, agent_b, memory_b2, triage_auth).status_code == 404
+    assert w.convert(base_b, agent_b, memory_b2, triage_auth).status_code in (401, 403, 404)
+
+
+def test_builder_reads_lessons_only(world: _World) -> None:
+    """PM-4: `GET /memories/{id}` liefert dem Builder genau Lernvorschlaege.
+
+    Lernvorschlag eines beliebigen Agenten im Workspace: 200. Jede andere Art
+    (agent_note, Nutzergedaechtnis), fremder Workspace und unbekannte ID: 404
+    `memory_not_found` mit derselben Antwort. Agent ohne case_triage: 403.
+    """
+    w = world
+    base, auth = w.workspace()
+    ws = UUID(base.rsplit("/", 1)[1])
+    agent_id, agent_auth = agent_token(w.client, base, "Betroffen", {}, auth)
+    builder_id, triage_auth = agent_token(w.client, base, "Builder", {"case_triage": True}, auth)
+    lesson = w.lesson(base, agent_id)
+    note = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, status, fact, kind, scope, "
+            " created_by_agent_id, origin, source) "
+            "VALUES ($1, $2::uuid, 'active', 'Interne Notiz', 'agent_note', 'agent', $2::uuid, "
+            " 'inferred', 'agent') RETURNING id",
+            ws,
+            agent_id,
+        )
+    )
+    own_note = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, status, fact, kind, scope, "
+            " created_by_agent_id, origin, source) "
+            "VALUES ($1, $2::uuid, 'pending', 'Builder-Notiz', 'agent_note', 'agent', $2::uuid, "
+            " 'inferred', 'agent') RETURNING id",
+            ws,
+            builder_id,
+        )
+    )
+    owner_id = db_fetchval("SELECT user_id FROM workspace_member WHERE workspace_id = $1", ws)
+    user_fact = str(
+        db_fetchval(
+            "INSERT INTO agent_memory (workspace_id, agent_id, created_by_agent_id, status, "
+            " fact, kind, scope, origin, source, subject_user_id) "
+            "VALUES ($1, NULL, $2::uuid, 'active', 'Mag Tee', 'user_fact', 'user', "
+            " 'user_stated', 'agent', $3) RETURNING id",
+            ws,
+            builder_id,
+            owner_id,
+        )
+    )
+    base_b, auth_b = w.workspace()
+    agent_b, _ = agent_token(w.client, base_b, "Fremd", {}, auth_b)
+    lesson_b = w.lesson(base_b, agent_b)
+
+    def get(memory_id: str, headers: dict[str, str]) -> Any:
+        return w.client.get(f"{base}/memories/{memory_id}", headers=headers)
+
+    ok = get(lesson, triage_auth)
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert (body["id"], body["kind"], body["agent_id"]) == (lesson, "lesson", agent_id)
+    assert body["fact"] == "Frist nennen"
+
+    unknown = get("00000000-0000-0000-0000-000000000000", triage_auth)
+    assert unknown.status_code == 404
+    assert unknown.json()["reason"] == "memory_not_found"
+    for hidden in (note, own_note, user_fact, lesson_b):
+        res = get(hidden, triage_auth)
+        assert res.status_code == 404, (hidden, res.text)
+        assert res.json()["reason"] == "memory_not_found"
+        assert res.json()["detail"] == unknown.json()["detail"]
+    assert "Interne Notiz" not in get(note, triage_auth).text
+
+    # Ohne case_triage bleibt es 403 (wie vor PM-4); der Mensch sieht wie bisher.
+    denied = get(lesson, agent_auth)
+    assert denied.status_code == 403
+    assert denied.json()["reason"] == "missing_capability"
+    assert get(note, auth).status_code == 200
 
 
 def test_promote_rights_conflict_and_scope(world: _World) -> None:

@@ -1042,14 +1042,14 @@
     "content": [
       {
         "type": "text",
-        "text": "Full state before update_*: ",
+        "text": "Template before writing: ",
         "styles": {
           "bold": true
         }
       },
       {
         "type": "text",
-        "text": "update_* has PUT semantics — content replaces the stored state completely. ALWAYS read the template in full: if the read tool offers a format parameter, use format=\"full\". The reading view (format=\"text\") carries no editor JSON; a PUT based on it empties the content.",
+        "text": "Agents write content as Markdown. ALWAYS read the template with format=\"source\": source Markdown with heading anchors [#id], placeholders as {{kind:target_id}}, and base_rev in the header. A partial change (one section by anchor, one field by field) goes through edit_content with that base_rev; if the state has moved on, you get 409 version_conflict — then read again, don't retry blindly. update_* has PUT semantics — content replaces the stored state completely; keep the anchors of existing headings, otherwise references lose their target. The reading view (format=\"text\") is not a template: it lacks anchors and block structure, and placeholders are partly resolved there; a PUT based on it destroys the content. format=\"full\" (editor JSON) is for diagnostics only.",
         "styles": {}
       }
     ],

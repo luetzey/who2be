@@ -1,0 +1,506 @@
+[
+  {
+    "id": "fg-h-zweck",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p01",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "The Builder moderates a feedback conversation about an agent (ADR-0053, 3.5, 3.6, 6.6). The conversation takes place in the client. Who2Be supplies the preparation (dossier) and stores the result (record, measures). The human decides, the affected agent gives its account, the Builder moderates, assigns, creates test cases and drafts, and submits the record (switch E4 a). It never decides and never closes cases.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p02",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Terms: the web UI says “review” for the conversation, “review record” for the record, “case” for a case, “change” for a measure and “follow-up check” for the follow-up. In the tools they are called session, case, measure and follow_up.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-einstiege",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Entry points — starting sentences from the web UI", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p03",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "The web UI hands out starting sentences with IDs, never with content. Three entry points:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b04",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Prepare a review: “Hold a review with me about agent {agent} ({agentId}). Load the situation with get_dossier, moderate, don't decide anything yourself, and submit the record with submit_session_protocol at the end.”, optionally followed by “Cases: {ids}.” Continue with the procedure, step 1.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b05",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Correction: “Correct review record {sessionId} for {agent} ({agentId}) …” Continue with the section “Correcting a record”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b06",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Follow-up check: the web UI hands out no starting sentence for this. The human names a change (measure ID) or the dossier shows a measure whose follow_up_at has been reached. Continue with the section “Preparing the follow-up”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p07",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Without a starting sentence (“feedback conversation about {agent}”) get the UUID via list_agents. If several agents share the name, ask, don't guess. Without case IDs the Builder proposes one to three cases after reading the dossier; the human chooses.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-rollen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Roles — party, not judge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b08",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Human: resolves contradictions, chooses the measures, reviews and activates drafts, and rates the follow-up in the web UI. Rating has no MCP tool (6.6, F-W7).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b09",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Affected agent: describes what it followed, what it was missing and where instructions collided — without rating itself. It is a party, not a judge. Only the agent itself submits its account (submit_case_statement in its own session).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b10",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Builder: reads, moderates, assigns, triages, creates test cases and drafts, submits the record, links drafts and fetches metrics.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b11",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Never by the Builder: setting a case to addressed, verified or dismissed, deleting a case, activating a version, rating a follow-up, giving an account on the agent's behalf. Agent tokens cannot do this server-side (3.3) — don't try.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b12",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "No wording that sounds like a decision: not “effective”, “ineffective”, “done”, “can be closed”, “the model is to blame”. The Builder states raw numbers, evidence and options; the human pronounces the assessment.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-ablauf",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Procedure of the conversation", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 1 — Read the dossier", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p13",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_dossier(agent_id) returns open cases per status, building blocks with raw numbers per version (uses, results, signals, cases, min_uses, insufficient), accesses, past measures with their state, and the generations. format=\"full\" returns the same as JSON. Present it to the human briefly and neutrally: numbers as delivered, “too little usage” instead of a rate when insufficient, no interpretation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p14",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Name past measures whose follow_up_at has been reached; their follow-up runs separately (section “Preparing the follow-up”). More than three cases make the conversation long — propose taking the rest into a next conversation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 2 — Review and assign cases", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p15",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Per case get_case(case_id): full text, assignments (elements), accounts (statements) and history (events). The record takes cases of this agent; the server rejects cases of other agents (session_cases_invalid). Cases in open, triaged or reopened make sense. A case in in_progress already has a measure; if you include it anyway, it stays unchanged.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p16",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Important for the measure: on submission a case only moves to in_progress if it is triaged or has at least one assignment. A case without an assignment stays as it is and appears in the response under cases_unchanged. So assign every case of a measure before submitting.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p17",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Assigning: output the proposal with reasoning, get approval, then assign_case_elements with the complete target list (replace semantics; current state from get_case). Afterwards optionally triage_case(case_id, note) — only allowed from open or reopened and only with an assignment. If the result is “model limit” (model_limit), that is not a measure; the case stays with the human.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 3 — Obtain the agent's account", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p18",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Existing accounts are listed in get_case under statements (followed_instruction, missing_information, conflict). If one is missing, the Builder asks the human to obtain it from the agent: the agent calls submit_case_statement in its own session, or the human pastes in the wording. The Builder cannot give an account for the agent (case_statement_not_subject).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p19",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "The account describes, it does not judge. The Builder asks follow-up questions where it is unclear, but does not discount it and does not accept a self-rating of the agent (“I did a good job”) as evidence. If an account is missing entirely, the summary says so.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 4 — Resolve contradictions, record dissent", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p20",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Compare: expected (case) against instruction (element in its current state, fetch_playbook, fetch_resource, get_persona, get_system_prompt or get_agent) against account. Put every contradiction to the human as a question. The answer becomes an entry in decisions with text and, where possible, standard_ref (element and block_id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p21",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Every dissenting opinion goes into dissent: from the agent (participant_kind agent), from the human (human) or from another participant. The agent's dissent is recorded even if the human decides otherwise. The Builder's own concerns belong in a measure's counterposition, not in a decision.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 5 — Measures and test cases", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p22",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Per measure the human wants: target (target, entity_id; tool_policy without entity_id), the smallest change (change_summary), a success criterion, a counterposition including the reach (find_usages: who else uses the element), the cases (case_ids, a subset of the record's cases) and optionally its own follow_up_at.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p23",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Every measure needs a test case of this agent (3.6, mandatory; otherwise measure_test_case_required). First list_test_cases(agent_id, entity_type, entity_id): if an existing one fits, reuse it. Otherwise, after approval, create_test_case(origin_case_id, agent_id, title, input, expected_behavior, check_kind, check_pattern, entity_type, entity_id). The input is synthetic (section Data protection). Use check_kind must_contain or must_not_contain only if the rule can be checked against a word, otherwise human_rule.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s6",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 6 — Submit the record", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p24",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "First show the complete preview (participants, cases, summary, decisions, dissent, follow_up_at, measures) and get approval. The record is immutable afterwards; a correction is a new record.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p25",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Then exactly one call to submit_session_protocol: agent_id; trigger manual (on request), scheduled (planned review) or threshold (the occasion was a threshold or a pattern); participants as {kind, id, role} — human with the user ID of the deciding human (ask, don't assume), agent with the agent ID, builder with its own agent_id from whoami; case_ids; summary (at most 4,000 characters); decisions; dissent; follow_up_at as YYYY-MM-DD (mandatory, the human sets the date); measures.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p26",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Read the response and tell the human: record ID, measure IDs (state agreed), cases_started (now in_progress, switch W-E2 a) and cases_unchanged with status. A case listed there was missing its assignment; that is a finding, not a server error.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s7",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 7 — Write and link the draft", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p27",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Per measure with a versioned target (persona, playbook, resource, system_prompt_template, external_tool): read the element as a template (format=\"source\", Markdown with base_rev), after approval write the change with edit_content (one section or field) or update_* (full state) as a draft and switch it to review. If update_* returns 409 (a draft already exists), clarify the existing draft with the human, don't overwrite it; edit_content writes into an open draft only with a matching base_rev.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p28",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "list_versions(format=\"full\") returns the version ID (the id of the version row, not the element ID). Then link_measure_draft(measure_id, version_entity_type, version_id). This works until the version is active; a new link replaces the old one. When the human activates the version, the cases move to addressed automatically (F3 a).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b29",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Managed element (is_managed): no write. Repo hand-off plus submit_feedback on the element; the measure stays agreed.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b30",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "tool_policy: update_agent takes effect immediately and is not versioned. Only with explicit approval of exactly this change; there is no draft to link.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b31",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "memory: changes go through propose_memory_change or the human in the memory; no version link.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-s8",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "Step 8 — Hand-off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p32",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Only IDs and neutral short summaries: record ID, per measure the ID, target, test case ID, draft (element UUID and version, status review), follow-up date, cases_unchanged. Next steps for the human: review and activate the draft; on the follow-up date answer the follow-up check under “To do”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-nachschau",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Preparing the follow-up", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p33",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_follow_up(measure_id) returns state, follow_up_at, due (computed from follow_up_at), reviewable, insufficient, min_uses, before and after (version, test run, uses, cases) as well as recurrence. Set the raw numbers side by side, old against new version, without judgement. When insufficient, say “too little usage (below min_uses)”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p34",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "If a test run for the new version is missing, point this out: the test case has to run against the active version (list_test_cases, submit_test_results by the agent's client). Metrics exist only from activated onwards.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p35",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Always close with: “You do the rating in the web UI (follow-up check: Did it work?).” No suggestion which rating fits. Withdrawing a measure is also human-only.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-korrektur",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Correcting a record", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p36",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "A submitted record cannot be changed. The correction is a new, complete record with supersedes_id = old record ID; both remain visible.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p37",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Reading: there is no MCP tool that returns a record in full text. get_dossier shows the measures with session_id, change_summary and state. The human pastes summary, decisions and dissent from the web UI (open the review record). Without that wording, correct only the parts that are backed by evidence, and say so.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p38",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Measures of the old record remain. Only add new measures if the old ones were wrong; the human withdraws a wrong old measure in the web UI.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-datenschutz",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Data protection — don't carry case content forward", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b39",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Cases, accounts and dossier can contain personal data. Don't copy any of it verbatim into test case, playbook, resource or persona texts; those carry the abstracted rule.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b40",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Test case inputs are synthetic: same situation, neutral placeholders (“Customer A”, “Project X”, “Day X”).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b41",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "summary, decisions, dissent and change_summary describe behavior and rule, not people. Replace personal data with roles and tell the human.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b42",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "In hand-offs, Kanban comments and starting sentences only IDs and shortened, neutral summaries.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-werkzeuge",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Tools", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p43",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Read: get_dossier, get_case, list_cases (status as a list, cursor/next_cursor), list_patterns, list_test_cases, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_versions, find_usages, get_follow_up, whoami. All case and conversation tools require case_triage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p44",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Write (subject to approval): assign_case_elements, triage_case, create_test_case, submit_session_protocol, update_* and transition_* up to review, link_measure_draft, submit_feedback, record_usage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p45",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Human-only in the web UI: rating the follow-up, withdrawing a measure, activating, dismissing or deleting a case. Case triage outside a conversation follows the playbook “Case from Pattern & Case Triage”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-anti",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Anti-patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b46",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Proposing a rating or phrasing a grade that sounds like a decision.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b47",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Giving an account for the agent or dropping its dissent because the human decided otherwise.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b48",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Submitting the record before the human approved the preview, or “patching” it in several calls.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b49",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Planning a measure without a test case or creating a test case with real case content.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b50",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Taking cases without an assignment into a measure and then being surprised by cases_unchanged.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b51",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Calling link_measure_draft with the element ID instead of the version ID.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-b52",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Working around tool gaps via REST.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-h-notes",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p53",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Basis: ADR-0053 3.3 (case, status, permissions), 3.5 (conversation record), 3.6 (measure, test case mandatory), 6.6 (tools, no MCP tool for rating), switches E1 a, E2 a, E4 a, F3 a; owner switch W-E2 a (in_progress automatically with the record). Conventions for triggers, managed boundaries and the status workflow are in the resource Agent-Building Conventions.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p54",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Follow-through: report the playbooks and resources used with record_usage; if something on this playbook looks outdated, submit_feedback with signal outdated.", "styles": {}}],
+    "children": []
+  }
+]

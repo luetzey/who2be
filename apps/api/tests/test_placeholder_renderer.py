@@ -2494,3 +2494,99 @@ class TestMemoryAutoAppendSuppression:
         )
         assert unresolved == []
         assert "Langzeit-Gedaechtnis" not in text
+
+
+# ---------------------------------------------------------------------------
+# Tabellen und Links (Editor-Fix: Tabelle liess den Renderer abstuerzen)
+# ---------------------------------------------------------------------------
+
+
+def _txt(text: str) -> dict[str, Any]:
+    return {"type": "text", "text": text, "styles": {}}
+
+
+def _table_block(block_id: str, rows: list[list[list[dict[str, Any]]]]) -> dict[str, Any]:
+    """BlockNote-Tabellenblock: `content` ist ein Objekt, keine Inline-Liste."""
+    return {
+        "id": block_id,
+        "type": "table",
+        "props": {},
+        "content": {
+            "type": "tableContent",
+            "columnWidths": [None] * max((len(r) for r in rows), default=0),
+            "rows": [{"cells": cells} for cells in rows],
+        },
+        "children": [],
+    }
+
+
+class TestRenderTablesAndLinks:
+    def test_table_renders_as_gfm_with_resolved_pills(self) -> None:
+        ctx = _ctx(now=datetime(2026, 5, 31, tzinfo=UTC))
+        pill = {"type": "placeholder", "props": {"kind": "date", "target_id": ""}}
+        table = _table_block(
+            "t1",
+            [
+                [[_txt("Feld")], [_txt("Wert")]],
+                [[_txt("Stand")], [pill]],
+                [[_txt("a|b")], []],
+            ],
+        )
+        doc = json.dumps([_blk("p0", "Vorher"), table])
+
+        text, unresolved = _async_run(render_template_body(doc, ctx, _make_db()))
+
+        assert text == (
+            "Vorher\n\n| Feld | Wert |\n| --- | --- |\n| Stand | 2026-05-31 |\n| a\\|b |  |"
+        )
+        assert unresolved == []
+
+    def test_nested_table_in_children_and_tablecell_objects(self) -> None:
+        cell_obj = {"type": "tableCell", "props": {}, "content": [_txt("Zelle")]}
+        parent = _blk("p1", "Liste")
+        parent["children"] = [
+            {
+                "id": "t1",
+                "type": "table",
+                "content": {"type": "tableContent", "rows": [{"cells": [cell_obj]}]},
+            }
+        ]
+
+        text, _ = _async_run(render_template_body(json.dumps([parent]), _ctx(), _make_db()))
+
+        assert text == "Liste\n| Zelle |\n| --- |"
+
+    def test_link_renders_as_text_with_url(self) -> None:
+        doc = json.dumps(
+            [
+                {
+                    "id": "p1",
+                    "type": "paragraph",
+                    "content": [
+                        _txt("Siehe "),
+                        {"type": "link", "href": "https://x.de", "content": [_txt("Doku")]},
+                    ],
+                }
+            ]
+        )
+
+        text, _ = _async_run(render_template_body(doc, _ctx(), _make_db()))
+
+        assert text == "Siehe Doku (https://x.de)"
+
+    def test_unknown_content_shape_yields_no_text_instead_of_error(self) -> None:
+        odd = {"id": "x", "type": "image", "content": {"url": "https://x.de/a.png"}}
+        doc = json.dumps([odd, _blk("p1", "Weiter")])
+
+        text, _ = _async_run(render_template_body(doc, _ctx(), _make_db()))
+
+        assert text == "Weiter"
+
+    def test_memory_pill_inside_a_table_counts_as_explicit(self) -> None:
+        pill = {"type": "placeholder", "props": {"kind": "memory", "target_id": ""}}
+        ctx = _ctx()
+        doc = json.dumps([_table_block("t1", [[[pill]]])])
+
+        _async_run(render_template_body(doc, ctx, _make_db()))
+
+        assert ctx.has_explicit_memory is True

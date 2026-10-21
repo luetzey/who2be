@@ -128,6 +128,11 @@ class Database:
             self._pool = None
 
     @property
+    def is_connected(self) -> bool:
+        """True, wenn der Pool aufgebaut ist (ohne erreichbare DB beim Start nicht)."""
+        return self._pool is not None
+
+    @property
     def pool(self) -> asyncpg.Pool:
         if self._pool is None:
             raise RuntimeError("Datenbank-Pool ist nicht initialisiert.")

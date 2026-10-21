@@ -370,12 +370,14 @@ async def count_workspace_memories(
     return await service.count_workspace_memories(ctx, filters, group_by or ())
 
 
-@router.get("/memories/{memory_id}")
+@router.get("/memories/{memory_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_workspace_memory(memory_id: UUID, ctx: Ctx, service: Service) -> MemoryRead:
     # Einzelabruf fuer Deep-Links (`?entry=<id>`), ohne den Besitzer kennen zu
     # muessen. Sichtbarkeit wie `GET /memories`; alles Unsichtbare — fremdes
     # Nutzergedaechtnis auch fuer admin, Agentengedaechtnis fuer viewer — ist
     # 404 `memory_not_found` wie eine unbekannte ID (kein Existenz-Leak).
+    # Agent-Token nur mit `case_triage` und nur `kind=lesson` (PM-4, MCP
+    # `get_lesson`); deshalb das Read-Limit wie jede agent-gerichtete Route.
     return await service.get_workspace_memory(ctx, memory_id)
 
 

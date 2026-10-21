@@ -18,6 +18,11 @@ vi.mock('@blocknote/mantine', () => ({
     <div data-testid="blocknote-view">{children}</div>
   ),
 }))
+// Leiste und Seitenmenue des Einsatzorts (P2) brauchen den BlockNote-Kontext.
+vi.mock('@/components/editor/BlockNoteEditor', () => ({
+  ProfileFormattingToolbar: () => null,
+  ProfileSideMenu: () => null,
+}))
 vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
 vi.mock('@/components/editor/system-prompt/PlaceholderPreviewPopover', () => ({
   PlaceholderPreviewPopover: () => null,

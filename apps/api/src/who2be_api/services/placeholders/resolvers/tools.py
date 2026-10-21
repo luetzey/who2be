@@ -647,11 +647,66 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
     _ToolDoc(
-        signature="list_cases(agent_id?, status?) / assign_case_elements(case_id, elements)",
+        signature=(
+            "list_cases(agent_id?, status?, cursor?) / assign_case_elements(case_id, elements)"
+        ),
         tool_names=("list_cases", "assign_case_elements"),
         description=(
             "Faelle triagieren: lesen (neueste zuerst) und den Elementen zuordnen, "
             "an denen sie liegen. Die Zuordnung ersetzt die bisherige vollstaendig."
+        ),
+    ),
+    # --- Feedback-Gespraech (ADR-0053 6.6, E-MCP-1). Ein Gate (`case_triage`)
+    #     fuer alle vier; Einstufen und Zurueckziehen bleiben beim Menschen.
+    _ToolDoc(
+        signature=(
+            "get_dossier(agent_id, cursor?) / submit_session_protocol(agent_id, trigger, "
+            "participants, case_ids, summary, decisions, dissent, follow_up_at, measures, "
+            "supersedes_id?)"
+        ),
+        tool_names=("get_dossier", "submit_session_protocol"),
+        description=(
+            "Feedback-Gespraech: das Dossier bereitet es vor (offene Faelle, Rohzahlen je "
+            "Version, fruehere Massnahmen), das Protokoll haelt es fest. Jede Massnahme "
+            "braucht Faelle aus dem Protokoll und einen Prueffall; entscheiden und "
+            "einstufen tut ein Mensch."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "link_measure_draft(measure_id, version_entity_type, version_id) / "
+            "get_follow_up(measure_id)"
+        ),
+        tool_names=("link_measure_draft", "get_follow_up"),
+        description=(
+            "Massnahmen begleiten: einen Entwurf verknuepfen, bis die Version aktiv ist, "
+            "und die Nachschau als Rohzahlen vorher/nachher lesen. Die Einstufung hat "
+            "kein Werkzeug."
+        ),
+    ),
+    # --- Werkzeugluecken D7 (Phase E, E-MCP-2). Ein Gate (`case_triage`) fuer
+    #     alle sechs; Erledigen, Verwerfen und Einstufen bleiben beim Menschen.
+    _ToolDoc(
+        signature=(
+            "get_case(case_id) / triage_case(case_id, note?) / create_test_case(origin_case_id, "
+            "agent_id, title, input, expected_behavior, check_kind?, check_pattern?)"
+        ),
+        tool_names=("get_case", "triage_case", "create_test_case"),
+        description=(
+            "Einen Fall im Volltext lesen, auf `triaged` setzen und daraus einen Prueffall "
+            "anlegen. Andere Status setzt ein Mensch."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "list_patterns(agent_id?) / get_lesson(memory_id) / convert_lesson_to_case("
+            "agent_id, memory_id, situation, behavior, expected_behavior, ...)"
+        ),
+        tool_names=("list_patterns", "get_lesson", "convert_lesson_to_case"),
+        description=(
+            "Wiederkehrendes erkennen: Muster aus Faellen und Lernvorschlaegen lesen, einen "
+            "Lernvorschlag im Wortlaut lesen und ihn in einen Fall umwandeln. Anderes "
+            "Gedaechtnis fremder Agenten bleibt verschlossen."
         ),
     ),
 ]

@@ -8,6 +8,7 @@ import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ReportCaseDialog } from '@/components/cases/ReportCaseForm'
+import { CaseStatusDot } from '@/components/cases/CaseStatusDot'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -15,37 +16,50 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate } from '@/lib/dates'
 import type { StatusChipOption } from '@/lib/listFilter'
 
-// Chip-Werte (Filter-Standard §3.2). „Offen“ ist ein Sammel-Chip aus `open`
-// und `reopened`; „In Arbeit“ und „Bestätigt“ gibt es in Phase D nicht.
-type StatusChip = 'all' | 'open' | 'triaged' | 'addressed' | 'dismissed'
-const STATUS_CHIPS: readonly StatusChip[] = ['all', 'open', 'triaged', 'addressed', 'dismissed']
+// Chip-Werte (Filter-Standard §3.2, E-Delta §6.1). „Offen“ ist ein
+// Sammel-Chip aus `open` und `reopened`. `in_progress` und `verified` setzt nur
+// der Server (W-E2 a, Einstufung), es gibt dafuer keinen Knopf.
+type StatusChip =
+  | 'all'
+  | 'open'
+  | 'triaged'
+  | 'in_progress'
+  | 'addressed'
+  | 'verified'
+  | 'dismissed'
+const STATUS_CHIPS: readonly StatusChip[] = [
+  'all',
+  'open',
+  'triaged',
+  'in_progress',
+  'addressed',
+  'verified',
+  'dismissed',
+]
 const DEFAULT_STATUS: StatusChip = 'open'
 
 const CHIP_STATUSES: Record<Exclude<StatusChip, 'all'>, readonly CaseStatus[]> = {
   open: ['open', 'reopened'],
   triaged: ['triaged'],
+  in_progress: ['in_progress'],
   addressed: ['addressed'],
+  verified: ['verified'],
   dismissed: ['dismissed'],
 }
 
 const CHIP_TOKEN: Record<Exclude<StatusChip, 'all'>, string> = {
   open: 'draft',
   triaged: 'review',
+  in_progress: 'review',
   addressed: 'active',
+  verified: 'active',
   dismissed: 'inactive',
 }
 
-// Punkt-Token je Fall-Status (Delta-Spec §0). `in_progress`/`verified` gibt es
-// in Phase D nicht; kommen sie doch, steht nur das Wort da.
-const STATUS_TOKEN: Partial<Record<CaseStatus, string>> = {
-  open: 'draft',
-  reopened: 'draft',
-  triaged: 'review',
-  addressed: 'active',
-  dismissed: 'inactive',
-}
+// Status-Punkt liegt in `@/components/cases` (geteilt mit dem Review-Ergebnis, E5c).
 
 const TARGETS: readonly CaseTarget[] = [
   'persona',
@@ -212,27 +226,15 @@ function useCaseList(query: CaseQuery, enabled: boolean): CaseListData {
 
 function StatusLabel({ status }: { status: CaseStatus }) {
   const { t } = useTranslation('feedback')
-  const token = STATUS_TOKEN[status]
   // `CaseRead` traegt weder Element noch Version — die Liste zeigt bei
-  // „Umgesetzt“ nur das Wort, das Ziel steht im Fall-Detail (D6c).
+  // „Geändert“ nur das Wort, das Ziel steht im Fall-Detail (D6c).
   const label = status === 'addressed' ? t('cases.status.addressedShort') : t(`cases.status.${status}`)
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
-      {token ? (
-        <span
-          className={
-            status === 'addressed'
-              ? 'inline-block size-2 rounded-full border-2'
-              : 'inline-block size-2 rounded-full'
-          }
-          style={
-            status === 'addressed'
-              ? { borderColor: `var(--status-${token})` }
-              : { backgroundColor: `var(--status-${token})` }
-          }
-          aria-hidden="true"
-        />
-      ) : null}
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+      data-testid="case-row-status"
+    >
+      <CaseStatusDot status={status} />
       {label}
     </span>
   )
@@ -280,7 +282,7 @@ function CaseRow({ item, agents, linkQuery }: { item: CaseRead; agents: Agent[];
           <MetaPill icon={SourceIcon}>
             {source}
             {selfReported ? ` ${t('feedback:cases.row.selfReported')}` : ''} ·{' '}
-            {new Date(item.created_at).toLocaleDateString()}
+            {formatDate(item.created_at)}
           </MetaPill>
           {item.signal !== null ? <MetaPill>{t(`feedback:signal.${item.signal}`)}</MetaPill> : null}
           {item.severity === 'high' ? (

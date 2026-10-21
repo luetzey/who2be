@@ -16,6 +16,8 @@ Gate-Stack (Plan 2026-08-13):
   der Web-UI braucht den Ist-Stand, und eine reine Anzeige veraendert nichts.
   Agent-gebundene Tokens bleiben aussen vor: welche ANDEREN Agenten Zugriff
   auf eine Area haben, ist keine Information fuer einen Agenten.
+- **Arbeitsbereiche je Agent** (Navigation A4): dieselbe Regel wie die
+  Grant-Liste (Mensch ab viewer), Sichtbarkeit wie die Liste.
 - **Liste**: sichtbare Areas gemaess `core/workarea_scope.readable_area_ids`;
   fuer agent-gebundene Tokens wird vorher die private Area auto-angelegt
   (erster Zugriff zaehlt — Plan-Entscheidung 5).
@@ -54,6 +56,7 @@ from who2be_models import (
     WorkAreaScope,
     WorkspaceRole,
 )
+from who2be_models.workarea import AgentWorkAreaRead
 
 _GRANT_WRITE_HUMAN_ONLY = (
     "Die Grant-Verwaltung von Work-Areas ist Menschen vorbehalten — "
@@ -63,6 +66,11 @@ _GRANT_WRITE_HUMAN_ONLY = (
 _GRANT_READ_HUMAN_ONLY = (
     "Die Grant-Liste einer Work-Area ist Menschen vorbehalten — ein Agent "
     "erfaehrt nicht, welche anderen Agenten Zugriff auf die Area haben."
+)
+
+_AGENT_AREAS_HUMAN_ONLY = (
+    "Die Arbeitsbereiche je Agent sind Menschen vorbehalten — die Agentenzahl "
+    "je Bereich verraet, welche anderen Agenten Zugriff haben."
 )
 
 
@@ -169,6 +177,23 @@ class WorkAreaService:
         self._require_human(ctx, _GRANT_READ_HUMAN_ONLY)
         await self._require_shared_area(ctx, area_id)
         return await self._repo.list_grants(ctx.workspace_id, area_id)
+
+    async def list_for_agent(
+        self, ctx: WorkspaceContext, agent_id: UUID
+    ) -> list[AgentWorkAreaRead]:
+        """Arbeitsbereiche eines Agenten fuer den Agent-Ueberblick (Navigation A4).
+
+        Nur Menschen (Muster Grant-Liste: `agent_count` verraet fremde
+        Agenten), ab `viewer`. Sichtbarkeit wie `GET /work-areas`
+        (`readable_area_ids`): viewer nur shared, editor+ auch die private
+        Area. Unbekannter/fremder Agent → 404. Keine Auto-Anlage: die private
+        Area entsteht erst beim ersten Zugriff DES Agenten.
+        """
+        self._require_human(ctx, _AGENT_AREAS_HUMAN_ONLY)
+        if not await self._repo.agent_exists(ctx.workspace_id, agent_id):
+            raise agent_not_found()
+        restrict = await readable_area_ids(self._pool, ctx)
+        return await self._repo.list_for_agent(ctx.workspace_id, agent_id, restrict)
 
     async def delete_grant(self, ctx: WorkspaceContext, area_id: UUID, agent_id: UUID) -> None:
         self._require_human_editor(ctx)

@@ -7,6 +7,7 @@ is_composite-Ableitung. Skippt ohne erreichbare Datenbank.
 """
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -473,6 +474,66 @@ def test_composite_promote_blocked_by_draft_child(
             # Parent ist nicht aktiv geworden.
             versions = client.get(f"{pbase}/{parent_id}/versions", headers=auth).json()
             assert next(v["status"] for v in versions if v["version"] == 1) == "review"
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_pill_in_table_cell_blocks_promote_of_draft_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Folge #994: eine Playbook-Pill in einer Tabellenzelle (verschachtelt in
+    `children`) landet per Save-Sync in der Composition und sperrt damit das
+    Aktivieren, solange das Ziel nur Draft ist. Vorher sah `extract_pills` die
+    Zelle nicht, das Aktivieren ging durch."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            draft_child = client.post(pbase, json=_pb_body("TableChild"), headers=auth).json()["id"]
+            pill = {
+                "type": "placeholder",
+                "props": {"kind": "playbook", "target_id": draft_child, "label": "Sub"},
+            }
+            table = {
+                "type": "table",
+                "content": {"type": "tableContent", "rows": [{"cells": [[pill]]}]},
+                "children": [],
+            }
+            body = [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "Schritte", "styles": {}}],
+                    "children": [table],
+                }
+            ]
+            parent = _pb_body("TableParent")
+            parent["content"]["body"] = json.dumps(body)  # type: ignore[index]
+            resp = client.post(pbase, json=parent, headers=auth)
+            assert resp.status_code == 201, resp.text
+            parent_id = resp.json()["id"]
+
+            composes = client.get(f"{pbase}/{parent_id}/composes", headers=auth)
+            assert [p["id"] for p in composes.json()] == [draft_child]
+
+            r1 = client.post(
+                f"{pbase}/{parent_id}/versions/1/transition", json={"to": "review"}, headers=auth
+            )
+            assert r1.status_code == 200, r1.text
+            resp = client.post(
+                f"{pbase}/{parent_id}/versions/1/transition", json={"to": "active"}, headers=auth
+            )
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["reason"] == "composite_child_inactive"
+            assert "TableChild" in resp.json()["detail"]
     finally:
         cleanup_workspaces([owner])
 

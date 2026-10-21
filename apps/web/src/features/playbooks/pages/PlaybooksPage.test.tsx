@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +7,11 @@ import type { Me, VersionStatus } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PlaybooksPage } from './PlaybooksPage'
+
+// jsdom kennt keine Breakpoints: ohne Mock (false) sieht der Test das
+// Facetten-Raster der ListFilterBar, mit `viewport.mobile = true` das Sheet.
+const viewport = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/hooks/useMediaQuery', () => ({ useIsMobile: () => viewport.mobile }))
 
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = {
@@ -41,9 +46,15 @@ function playbook(
 }
 
 function renderWith(list: unknown[]) {
+  // `/agents` (Agent-Facette) bekommt eine leere Liste, alles andere die
+  // Playbooks — sonst landen Playbook-Objekte als Agent-Optionen im Select.
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(new Response(JSON.stringify(list), { status: 200 })),
+    vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = /\/agents(\?|$)/.test(url) ? [] : list
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    }),
   )
   render(
     <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
@@ -56,21 +67,16 @@ function renderWith(list: unknown[]) {
   )
 }
 
-// Erweiterte Facetten (Tag/Typ/Agent/Gruppieren) leben hinter dem
-// „Filter"-Button in einem Popover — fuer Tests erst oeffnen.
-function openFacetPopover() {
-  fireEvent.click(screen.getByRole('button', { name: /^Filter/ }))
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
+  viewport.mobile = false
   // Filter-Zustand lebt in der URL (useSearchParams) — zwischen Tests
   // zuruecksetzen, sonst leakt ?tag/?status in den naechsten Render.
   window.history.pushState({}, '', '/')
 })
 
 describe('PlaybooksPage', () => {
-  it('filtert client-seitig nach Tag ueber das Tag-Select im Filter-Popover', async () => {
+  it('filtert client-seitig ueber das Tag-Select der Filterleiste und zeigt den Chip', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach', 'session'], 'how do i'),
       playbook('pb2', 'Brainstorming', ['brain'], null),
@@ -81,14 +87,20 @@ describe('PlaybooksPage', () => {
       expect(screen.getByText('Brainstorming')).toBeInTheDocument()
     })
 
-    openFacetPopover()
+    // Kein Popover mehr: ab `md` stehen die Facetten direkt im Raster.
     fireEvent.change(screen.getByLabelText('Tag'), { target: { value: 'brain' } })
 
     expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
+    expect(window.location.search).toContain('tag=brain')
+
+    // Aktive Facette als Chip „Tag: brain“; Entfernen hebt den Filter auf.
+    const chips = screen.getByRole('list', { name: 'Aktive Filter' })
+    fireEvent.click(within(chips).getByRole('button', { name: /Tag: brain/ }))
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
   })
 
-  it('filtert ueber das Status-Segment „Braucht Aufmerksamkeit"', async () => {
+  it('filtert ueber den Status-Chip „Braucht Aufmerksamkeit“', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach'], null, 'active'),
       playbook('pb2', 'Brainstorming', ['brain'], null, 'review'),
@@ -98,14 +110,36 @@ describe('PlaybooksPage', () => {
       expect(screen.getByText('Coaching')).toBeInTheDocument()
     })
 
-    // Segment traegt Zaehler 1 (nur die Review-Version braucht Aufmerksamkeit).
-    fireEvent.click(screen.getByRole('button', { name: /Braucht Aufmerksamkeit/ }))
+    // Chip traegt Zaehler 1 (nur die Review-Version braucht Aufmerksamkeit).
+    fireEvent.click(screen.getByRole('button', { name: /Braucht Aufmerksamkeit 1/ }))
 
     expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
-  it('filtert per Freitext nach Name und laesst sich per X leeren', async () => {
+  it('zeigt Status-Chips nach der 0er-Regel: „Alle“ immer, 0er-Status nicht', async () => {
+    renderWith([
+      playbook('pb1', 'Coaching', [], null, 'active'),
+      playbook('pb2', 'Brainstorming', [], null, 'active'),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+
+    const group = screen.getByRole('group', { name: 'Nach Status filtern' })
+    expect(within(group).getByRole('button', { name: 'Alle 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(group).getByRole('button', { name: 'Aktiv 2' })).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: /Entwurf/ })).not.toBeInTheDocument()
+    expect(
+      within(group).queryByRole('button', { name: /Braucht Aufmerksamkeit/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('filtert per Freitext nach Name und setzt per „Filter zurücksetzen“ zurueck', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach'], null),
       playbook('pb2', 'Brainstorming', ['brain'], null),
@@ -115,12 +149,16 @@ describe('PlaybooksPage', () => {
       expect(screen.getByText('Coaching')).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByLabelText('Suche'), { target: { value: 'coach' } })
+    const search = screen.getByLabelText('Suche')
+    expect(search).toHaveAttribute('placeholder', 'Nach Name oder Trigger suchen…')
+    fireEvent.change(search, { target: { value: 'coach' } })
 
     expect(screen.getByText('Coaching')).toBeInTheDocument()
     expect(screen.queryByText('Brainstorming')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Suche leeren' }))
+    // Suche bekommt keinen Chip; „Filter zurücksetzen“ steht in der Leiste.
+    expect(screen.queryByRole('list', { name: 'Aktive Filter' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }))
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
@@ -232,7 +270,7 @@ describe('PlaybooksPage', () => {
     expect(screen.getByRole('heading', { name: /Standalone\s?\(2\)/ })).toBeInTheDocument()
   })
 
-  it('Group-by-Selector im Popover schaltet auf Typ-Gruppen um', async () => {
+  it('Gruppieren-Select der Filterleiste schaltet auf Typ-Gruppen um, ohne Chip', async () => {
     renderWith([
       playbook('pb1', 'Coaching', [], null),
       playbook('pb2', 'Brainstorming', [], null, 'active', {
@@ -246,14 +284,16 @@ describe('PlaybooksPage', () => {
     })
     expect(screen.queryByRole('heading', { name: /workflow/ })).not.toBeInTheDocument()
 
-    openFacetPopover()
     fireEvent.change(screen.getByLabelText('Gruppieren'), { target: { value: 'type' } })
 
     expect(screen.getByRole('heading', { name: /prompt\s?\(1\)/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /workflow\s?\(1\)/ })).toBeInTheDocument()
-    // Beide Items bleiben sichtbar — Gruppierung filtert nicht.
+    // Beide Items bleiben sichtbar — Gruppierung filtert nicht und ist
+    // Anzeige: kein Chip, kein „Filter zurücksetzen“.
     expect(screen.getByText('Coaching')).toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Aktive Filter' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Filter zurücksetzen' })).not.toBeInTheDocument()
   })
 
   it('gruppiert via ?group=tag mit Sektions-Headern je Tag, Mehrfach-Tags in jeder Gruppe', async () => {
@@ -285,8 +325,8 @@ describe('PlaybooksPage', () => {
         screen.getByRole('heading', { name: 'Lege dein erstes Playbook an' }),
       ).toBeInTheDocument()
     })
-    // Kein Count-Pill, keine Toolbar im Onboarding-Zustand — dafuer spiegelt
-    // der Hero den Header-CTA (zwei „Neues Playbook"-Links).
+    // Kein Count-Pill, keine Filterleiste im Onboarding-Zustand — dafuer
+    // spiegelt der Hero den Header-CTA (zwei „Neues Playbook"-Links).
     expect(screen.queryByLabelText('Suche')).not.toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /Neues Playbook/ })).toHaveLength(2)
   })
@@ -304,7 +344,35 @@ describe('PlaybooksPage', () => {
     expect(
       screen.getByRole('heading', { name: /Keine Treffer für „nix“/ }),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Filter zurücksetzen/ }))
+    // Zwei Wege zurueck: Leiste (ghost) und Leerzustand — beide setzen zurueck.
+    const resets = screen.getAllByRole('button', { name: /Filter zurücksetzen/ })
+    expect(resets).toHaveLength(2)
+    fireEvent.click(resets[resets.length - 1])
     expect(screen.getByText('Coaching')).toBeInTheDocument()
+  })
+
+  it('legt unter md Tag, Typ, Sprache und Gruppieren ins Filter-Sheet', async () => {
+    viewport.mobile = true
+    renderWith([
+      playbook('pb1', 'Coaching', ['coach'], null),
+      playbook('pb2', 'Brainstorming', ['brain'], null),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+
+    // Kein Raster unter md: die Selects stehen erst im Sheet.
+    expect(screen.queryByLabelText('Tag')).not.toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Filter' })
+    fireEvent.click(toggle)
+
+    const sheet = await screen.findByRole('dialog', { name: 'Filter' })
+    for (const label of ['Typ', 'Tag', 'Sprache', 'Gruppieren']) {
+      expect(within(sheet).getByLabelText(label)).toBeInTheDocument()
+    }
+    fireEvent.change(within(sheet).getByLabelText('Tag'), { target: { value: 'brain' } })
+    expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: '1 Treffer zeigen' })).toBeInTheDocument()
   })
 })

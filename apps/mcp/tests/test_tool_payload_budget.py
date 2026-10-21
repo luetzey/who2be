@@ -15,10 +15,15 @@ sondern die GESAMTE Tool-Liste.
   Docstring-Inflation. Reisst der Guard, zuerst Beschreibungen kuerzen bzw.
   die Fold-Reihenfolge aus dem Plan ziehen (`list_category_rules` ->
   `set_convention`), NICHT das Budget anheben.
-- **Docstring-Cap fuer neue Domain-Module:** Die `tools/`-Module (WP8+)
-  halten je Tool <= 1100 Zeichen Beschreibung. Der Bestand in `server.py`
-  ist grandfathered (laengste Beschreibung 2047 Zeichen, transition-Tools
-  mit `TRANSITION_RULE_DOC`).
+- **Docstring-Cap:** Jedes Werkzeug haelt <= 1100 Zeichen Beschreibung,
+  seit der Beschreibungs-Diaet (T3) auch der Bestand in `server.py`
+  (`test_every_tool_description_stays_under_doc_cap`); darueber liegt die
+  2048-Zeichen-Kappung von Claude Code.
+- **Je Referenzprofil (MCP-Token T1, Ziele seit T3):** Kennzahl der
+  Teilliste, die ein Agent beim Start bekommt (`who2be_mcp.payload_report`),
+  mit harten Zielen fuer Default (35.000 B) und Builder (110.000 B), dazu
+  die Guards „erster Satz <= 100 Zeichen" und die Ratsche gegen
+  Entwickler-Historie im Draht-Schema.
 
 **Antwortgroesse je Werkzeug:** Die Laufzeit deckelt eine EINZELNE
 Tool-Antwort bei 50.000 Zeichen. Darueber sieht das Modell die Antwort nicht —
@@ -36,9 +41,14 @@ import asyncio
 import importlib
 import inspect
 import json
+import os
 import pathlib
 import pkgutil
+import re
+import subprocess
+import sys
 from collections.abc import Callable
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
@@ -47,9 +57,11 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ValidationError
 
-from who2be_mcp import server
+from who2be_mcp import payload_report, server
 from who2be_mcp import tools as tools_pkg
 from who2be_mcp.client import ApiClient
+from who2be_mcp.config import Settings
+from who2be_mcp.instructions import ALWAYS_LOAD_KEY, ALWAYS_LOAD_TOOLS, SERVER_INSTRUCTIONS
 from who2be_mcp.server import (
     _RESPONSE_FORMATS,
     PersonaWithPlaybooks,
@@ -66,7 +78,7 @@ from who2be_mcp.server import (
     list_versions,
     mcp,
 )
-from who2be_models import AgentWithRenderedPrompt
+from who2be_models import AgentToolPolicy, AgentWithRenderedPrompt, MemoryMode, WorkspaceRole
 from who2be_models.external_tool import ExternalToolContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
@@ -74,8 +86,11 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 # inputSchema). Budget ~x1,45 — trug den Ausbau auf 83 Tools (WP19 + die
 # nachgezogenen `list_tables`/`delete_table`), mehr nicht. Seit 2026-10-06
 # misst der Test die Draht-Form (inkl. `title`/`_meta` aus fastmcp 4):
-# 86 Tools / 142_295 Bytes.
-_PAYLOAD_BUDGET_BYTES = 160_000
+# 86 Tools / 142_295 Bytes. Seit W-E1 b (Owner 2026-10-09: alle D7-
+# Werkzeugluecken in Phase E schliessen) 180_000: zehn neue Werkzeuge kommen
+# hinzu; die Token-Optimierung aller Werkzeuge ist ein eigenes, spaeteres
+# Vorhaben. Messung vor E-MCP-1: 90 Tools / 104_290 Bytes.
+_PAYLOAD_BUDGET_BYTES = 180_000
 _NEW_TOOL_DOC_CAP = 1_100
 
 # Die Schwelle der Konsumenten-Laufzeit fuer eine EINZELNE Tool-Antwort. Keine
@@ -205,6 +220,502 @@ def test_new_domain_tool_docstrings_stay_capped(module_name: str) -> None:
         and len(inspect.getdoc(fn) or "") > _NEW_TOOL_DOC_CAP
     }
     assert not offenders, f"Docstrings ueber {_NEW_TOOL_DOC_CAP} Zeichen: {offenders}"
+
+
+# ---------------------------------------------------------------------------
+# Katalog je Referenzprofil und Text-Guards (MCP-Token T1)
+# ---------------------------------------------------------------------------
+
+# Claude Code kappt Werkzeugbeschreibungen bei 2 048 Zeichen; was danach steht,
+# kommt beim Agenten nicht an (Claude-Code-Doku „For MCP server authors").
+_DESCRIPTION_CHAR_CAP = 2_048
+# Kurzkataloge (Hermes `tool_search`, Claude Code Tool Search) zeigen ohne
+# Suche nur Namen und ersten Satz. Er soll den Zweck tragen, nicht erklaeren.
+_FIRST_SENTENCE_CHAR_CAP = 100
+
+# Ratsche fuer Entwickler-Historie im Draht-Schema: Anzahl der Schema-Texte je
+# Werkzeug, die ADR-, Phase-, Track-, Welle-, WP- oder Gap-Verweise tragen.
+# Die Schema-Diaet (T2, Stand 2026-10-11) hat sie geleert; die Historie steht
+# seitdem als `#`-Kommentar ueber der Klasse. Das Dict bleibt leer — ein
+# Eintrag hier waere eine neue Ausnahme und braucht eine Begruendung.
+_DEVELOPER_REF_BASELINE: dict[str, int] = {}
+
+
+def _wire_tools() -> list[dict[str, Any]]:
+    return asyncio.run(payload_report.wire_tools(mcp))
+
+
+def _long_descriptions(tools: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        tool["name"]: len(tool.get("description") or "")
+        for tool in tools
+        if len(tool.get("description") or "") > _DESCRIPTION_CHAR_CAP
+    }
+
+
+def _long_first_sentences(tools: list[dict[str, Any]]) -> dict[str, str]:
+    found = {tool["name"]: payload_report.first_sentence(tool.get("description")) for tool in tools}
+    return {name: s for name, s in found.items() if len(s) > _FIRST_SENTENCE_CHAR_CAP}
+
+
+def _developer_ref_counts(tools: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {tool["name"]: len(payload_report.developer_refs(tool)) for tool in tools}
+    return {name: count for name, count in counts.items() if count}
+
+
+def _with_description(tools: list[dict[str, Any]], description: str) -> list[dict[str, Any]]:
+    """Kopie der Liste, in der das erste Werkzeug `description` traegt."""
+    return [{**tools[0], "description": description}, *tools[1:]]
+
+
+def _respond_with(payload: dict[str, object]) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    return handler
+
+
+def test_reference_profiles_measure_the_middleware_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Profil-Kennzahl ist das, was die Middleware wirklich ausliefert.
+
+    Fuer jedes Agent-Profil wird ein `whoami` aus seiner Policy gebaut und
+    `tools/list` durch den echten `PolicyFilterMiddleware` geschickt. Weicht
+    die Simulation in `payload_report` davon ab (eigene Sichtbarkeitslogik,
+    vergessene Policy-Felder), misst die Kennzahl einen Agenten, den es nicht
+    gibt — dann faellt dieser Test.
+    """
+    from who2be_mcp import policy_filter
+
+    tools = _wire_tools()
+    for profile in payload_report.REFERENCE_PROFILES:
+        policy = profile.policy
+        payload: dict[str, object] = {
+            "user_id": str(uuid4()),
+            "workspace_id": str(_WORKSPACE_ID),
+            "role": profile.role.value,
+            "is_api_token": not profile.unrestricted,
+            "agent_id": None if profile.unrestricted else str(uuid4()),
+            "unrestricted": profile.unrestricted,
+            "capabilities": None if policy is None else policy.granted_capabilities(),
+            "read_scopes": None if policy is None else policy.read_scopes(),
+            "memory_mode": None if policy is None else policy.memory_mode,
+            "features": ["core"],
+        }
+        policy_filter._whoami_cache.clear()
+        monkeypatch.setattr(
+            policy_filter,
+            "get_settings",
+            lambda: Settings(api_base_url="http://test", api_token="w2b_t1", transport="stdio"),
+        )
+        monkeypatch.setattr(server, "build_client", _factory(_respond_with(payload)))
+        filtered = asyncio.run(_tools_payload_bytes())
+        simulated = payload_report.visible_tools(tools, profile)
+        assert filtered == payload_report.payload_bytes(simulated), profile.key
+    policy_filter._whoami_cache.clear()
+
+
+def test_reference_profiles_order_and_figures() -> None:
+    """Die Kennzahl je Profil: Teilmengen-Ordnung und Gegenprobe zum Gesamt-Guard.
+
+    Rot-Probe ist die Ordnung selbst: liefert ein Profil wegen eines
+    Filterfehlers alles oder nichts, faellt die strikte Ungleichung.
+    """
+    tools = _wire_tools()
+    sizes = {
+        profile.key: payload_report.payload_bytes(payload_report.visible_tools(tools, profile))
+        for profile in payload_report.REFERENCE_PROFILES
+    }
+    total = payload_report.payload_bytes(tools)
+    assert set(sizes) == {"default", "default_memory", "builder", "editor"}
+    assert 0 < sizes["default"] < sizes["default_memory"] < sizes["editor"] < sizes["builder"]
+    # Der Builder hat alle Rechte und sieht damit den ganzen Katalog: seine
+    # Kennzahl ist der Gesamt-Guard. Faellt ein Werkzeug fuer ihn heraus, ist
+    # die Builder-Policy unvollstaendig, nicht der Katalog kleiner geworden.
+    assert sizes["builder"] == total
+    assert total <= _PAYLOAD_BUDGET_BYTES
+
+
+def test_tool_descriptions_stay_under_client_cap() -> None:
+    """Keine Werkzeugbeschreibung ueber 2 048 Zeichen (Kappung bei Claude Code)."""
+    tools = _wire_tools()
+    # Rot-Probe: eine Beschreibung knapp ueber der Grenze wird gefunden.
+    assert _long_descriptions(_with_description(tools, "x" * (_DESCRIPTION_CHAR_CAP + 1)))
+    offenders = _long_descriptions(tools)
+    assert not offenders, (
+        f"Beschreibungen ueber {_DESCRIPTION_CHAR_CAP} Zeichen: {offenders}. Der Rest wird "
+        "bei Claude Code abgeschnitten — kuerzen, das Wichtige nach vorn."
+    )
+
+
+def test_tool_first_sentences_fit_short_catalogs() -> None:
+    """Der erste Satz jeder Beschreibung bleibt bei hoechstens 100 Zeichen."""
+    tools = _wire_tools()
+    long_sentence = "Wort " * 25 + "Ende. Zweiter Satz."
+    assert _long_first_sentences(_with_description(tools, long_sentence))
+    assert not _long_first_sentences(_with_description(tools, "Kurz. " + long_sentence))
+    offenders = _long_first_sentences(tools)
+    assert not offenders, (
+        f"Erste Saetze ueber {_FIRST_SENTENCE_CHAR_CAP} Zeichen: {offenders}. Kurzkataloge "
+        "zeigen nur diesen Satz — Zweck und Suchwoerter nach vorn, Details danach."
+    )
+
+
+def test_wire_schema_developer_refs_only_shrink() -> None:
+    """Keine Entwickler-Historie im Draht-Schema (Ratsche, seit T2 leer).
+
+    Ein neuer Verweis auf ADR, Phase, Track, Welle, WP oder Gap in einem
+    Pydantic-Docstring, der als Schema auf den Draht geht, faellt hier auf.
+    Die Historie gehoert in den Code-Kommentar oder die ADR, nicht in das
+    Schema, das jeder Agent bezahlt.
+    """
+    tools = _wire_tools()
+    probe = [
+        {**tools[0], "inputSchema": {"type": "object", "description": "Seit Phase 3 (ADR-0042)."}}
+    ]
+    assert _developer_ref_counts(probe) == {tools[0]["name"]: 1}
+    assert not _developer_ref_counts(
+        [{**tools[0], "inputSchema": {"description": "Phasenmodell und Trackpad"}}]
+    )
+
+    counts = _developer_ref_counts(tools)
+    grown = {
+        name: (count, _DEVELOPER_REF_BASELINE.get(name, 0))
+        for name, count in counts.items()
+        if count > _DEVELOPER_REF_BASELINE.get(name, 0)
+    }
+    assert not grown, (
+        f"Mehr Entwickler-Verweise im Draht-Schema als erlaubt (ist, Basis): {grown}. "
+        "Den Verweis aus dem Docstring des Modells nehmen (Kommentar statt Docstring)."
+    )
+    shrunk = {
+        name: (counts.get(name, 0), base)
+        for name, base in _DEVELOPER_REF_BASELINE.items()
+        if counts.get(name, 0) < base
+    }
+    assert not shrunk, (
+        f"Weniger Entwickler-Verweise als die Basis (ist, Basis): {shrunk}. "
+        "Gut so — `_DEVELOPER_REF_BASELINE` auf den neuen Stand absenken."
+    )
+
+
+def test_first_sentence_splits_on_sentence_end_and_paragraph() -> None:
+    assert payload_report.first_sentence("Liefert X: Y. Danach mehr.") == "Liefert X: Y."
+    assert payload_report.first_sentence("Ohne Punkt\n\nzweiter Absatz") == "Ohne Punkt"
+    assert payload_report.first_sentence("Zeile eins\n  Zeile zwei. Rest") == (
+        "Zeile eins Zeile zwei."
+    )
+    assert payload_report.first_sentence(None) == ""
+
+
+def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixture[str]) -> None:
+    """Der Bericht fuer die Doku nennt alle Profile und genau zehn Werkzeuge."""
+    payload_report.main()
+    out = capsys.readouterr().out
+    for profile in payload_report.REFERENCE_PROFILES:
+        assert f"| {profile.label} |" in out
+    costs = payload_report.tool_costs(_wire_tools())
+    assert f"| 1 | `{costs[0].name}` |" in out
+    assert f"| 10 | `{costs[9].name}` |" in out
+    assert "| 11 |" not in out
+    assert costs == sorted(costs, key=lambda c: -c.total)
+
+
+# ---------------------------------------------------------------------------
+# Zielwerte je Agent-Start und Sichtbarkeit (MCP-Token T3, Owner T4a)
+# ---------------------------------------------------------------------------
+
+# Was ein Agent beim Start bezahlt: Draht-Bytes seiner `tools/list` plus die
+# Server-`instructions`, die seit T4 jeder Client beim Verbinden bekommt. Das
+# Gesamt-Budget `_PAYLOAD_BUDGET_BYTES` bleibt die harte Obergrenze daneben.
+# Reisst ein Ziel: Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an;
+# Builder 110_000 -> 120_000 nach Owner-Entscheidung 2026-10-14 ("1a",
+# Gespraechs-Werkzeuge Phase E, siehe docs/mcp-payload-budget.md).
+_START_TARGET_BYTES = {"default": 35_000, "builder": 120_000}
+
+
+def _start_bytes(tools: list[dict[str, Any]], profile: payload_report.ReferenceProfile) -> int:
+    visible = payload_report.visible_tools(tools, profile)
+    return payload_report.payload_bytes(visible) + len((mcp.instructions or "").encode())
+
+
+def _profile(key: str) -> payload_report.ReferenceProfile:
+    return next(p for p in payload_report.REFERENCE_PROFILES if p.key == key)
+
+
+def test_agent_start_meets_target_per_profile() -> None:
+    """Default-Agent <= 35.000 Bytes, Builder <= 120.000 Bytes beim Start.
+
+    Rot-Probe: eine aufgeblaehte Beschreibung an einem Werkzeug, das beide
+    Profile sehen, traegt jedes Profil ueber sein Ziel.
+    """
+    tools = _wire_tools()
+    assert mcp.instructions, "instructions fehlen: der Start waere zu billig gemessen"
+    sizes = {key: _start_bytes(tools, _profile(key)) for key in _START_TARGET_BYTES}
+
+    shared = next(i for i, t in enumerate(tools) if t["name"] == "whoami")
+    pad = "x" * (_START_TARGET_BYTES["builder"] - sizes["default"] + 1)
+    padded = [*tools[:shared], {**tools[shared], "description": pad}, *tools[shared + 1 :]]
+    for key, target in _START_TARGET_BYTES.items():
+        assert _start_bytes(padded, _profile(key)) > target, key
+
+    over = {
+        key: (size, _START_TARGET_BYTES[key])
+        for key, size in sizes.items()
+        if size > _START_TARGET_BYTES[key]
+    }
+    assert not over, (
+        f"Agent-Start ueber dem Ziel (ist, Ziel): {over}. Beschreibungen kuerzen "
+        "(docs/mcp-payload-budget.md, Beschreibungs-Diaet). Das Ziel hebt nur der "
+        "Owner an (zuletzt Builder 120.000, Owner-Entscheidung 2026-10-14)."
+    )
+
+
+def test_every_tool_description_stays_under_doc_cap() -> None:
+    """Jede Werkzeugbeschreibung auf dem Draht hat hoechstens 1.100 Zeichen.
+
+    Seit der Beschreibungs-Diaet (T3) gilt der Cap der `tools/`-Module fuer
+    alle Werkzeuge, auch fuer `server.py` und die per `description=` gesetzten.
+    """
+    tools = _wire_tools()
+    probe = _with_description(tools, "x" * (_NEW_TOOL_DOC_CAP + 1))
+    assert any(len(t["description"]) > _NEW_TOOL_DOC_CAP for t in probe)
+    offenders = {
+        tool["name"]: len(tool.get("description") or "")
+        for tool in tools
+        if len(tool.get("description") or "") > _NEW_TOOL_DOC_CAP
+    }
+    assert not offenders, f"Beschreibungen ueber {_NEW_TOOL_DOC_CAP} Zeichen: {offenders}"
+
+
+def _whoami_for(profile: payload_report.ReferenceProfile) -> dict[str, object]:
+    policy = profile.policy
+    return {
+        "user_id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "role": profile.role.value,
+        "is_api_token": not profile.unrestricted,
+        "agent_id": None if profile.unrestricted else str(uuid4()),
+        "unrestricted": profile.unrestricted,
+        "capabilities": None if policy is None else policy.granted_capabilities(),
+        "read_scopes": None if policy is None else policy.read_scopes(),
+        "memory_mode": None if policy is None else policy.memory_mode,
+        "features": ["core"],
+    }
+
+
+def _middleware_names(
+    monkeypatch: pytest.MonkeyPatch, profile: payload_report.ReferenceProfile
+) -> tuple[set[str], set[str]]:
+    """Sichtbare und sofort geladene Werkzeuge, durch den echten Policy-Filter."""
+    from who2be_mcp import policy_filter
+
+    policy_filter._whoami_cache.clear()
+    monkeypatch.setattr(
+        policy_filter,
+        "get_settings",
+        lambda: Settings(api_base_url="http://test", api_token="w2b_t3", transport="stdio"),
+    )
+    monkeypatch.setattr(server, "build_client", _factory(_respond_with(_whoami_for(profile))))
+    tools = asyncio.run(payload_report.wire_tools(mcp))
+    policy_filter._whoami_cache.clear()
+    eager = {tool["name"] for tool in payload_report.always_loaded(tools)}
+    return {tool["name"] for tool in tools}, eager
+
+
+_NO_FEEDBACK = payload_report.ReferenceProfile(
+    key="no_feedback",
+    label="Agent ohne feedback_write",
+    unrestricted=False,
+    role=WorkspaceRole.editor,
+    policy=AgentToolPolicy(feedback_write=False),
+)
+
+
+def test_record_usage_and_memory_tools_hidden_without_rights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne `feedback_write` kein `record_usage`, bei `memory_mode=off` kein Gedaechtnis.
+
+    Geprueft durch die echte Middleware, nicht nur an der Simulation. Die
+    Gegenprobe (Default mit `feedback_write`, Gedaechtnis `suggest`) zeigt,
+    dass der Test die Werkzeuge ueberhaupt finden kann.
+    """
+    memory_tools = {"search_memory", "list_memories", "save_memory"}
+
+    no_feedback, _ = _middleware_names(monkeypatch, _NO_FEEDBACK)
+    default, _ = _middleware_names(monkeypatch, _profile("default"))
+    with_memory, _ = _middleware_names(monkeypatch, _profile("default_memory"))
+
+    assert "record_usage" not in no_feedback
+    assert "record_usage" in default
+    default_policy = _profile("default").policy
+    assert default_policy is not None
+    assert default_policy.memory_mode is MemoryMode.off
+    assert not memory_tools & default
+    assert memory_tools <= with_memory
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [*payload_report.REFERENCE_PROFILES, _NO_FEEDBACK],
+    ids=lambda p: p.key,
+)
+def test_always_load_is_subset_of_visible_tools(
+    profile: payload_report.ReferenceProfile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`alwaysLoad` macht kein Werkzeug sichtbar, das die Policy ausblendet.
+
+    Sofort geladen wird je Profil genau der Schnitt aus `ALWAYS_LOAD_TOOLS`
+    und den sichtbaren Werkzeugen.
+    """
+    visible, eager = _middleware_names(monkeypatch, profile)
+    assert eager <= visible
+    assert eager == ALWAYS_LOAD_TOOLS & visible
+
+
+# ---------------------------------------------------------------------------
+# Start bei Tool Search: instructions, alwaysLoad, Reihenfolge (MCP-Token T4)
+# ---------------------------------------------------------------------------
+
+# Begriffe in Backticks, die keine Werkzeuge sind: Felder und Werte, die die
+# instructions erklaeren. Alles andere in Backticks muss ein Werkzeugname sein.
+_INSTRUCTION_NON_TOOL_TERMS = frozenset({"agent_id", "content_locale", "promote_retire", "outcome"})
+_BACKTICK_WORD = re.compile(r"`([a-z][a-z_]*)`")
+
+
+async def _instructions_and_tools() -> tuple[str | None, list[dict[str, Any]]]:
+    async with Client(mcp) as client:
+        result = await client.list_tools_mcp()
+        instructions = client.instructions
+    tools = result.model_dump(mode="json", by_alias=True, exclude_none=True)["tools"]
+    return instructions, tools
+
+
+def _unknown_tool_refs(instructions: str, tool_names: set[str]) -> set[str]:
+    words = set(_BACKTICK_WORD.findall(instructions))
+    return words - tool_names - _INSTRUCTION_NON_TOOL_TERMS
+
+
+def test_server_instructions_reach_the_client_and_name_only_real_tools() -> None:
+    """Die instructions kommen beim Client an, passen in die Kappung und luegen nicht.
+
+    Ein Werkzeug, das umbenannt oder entfernt wird, faellt hier auf: die
+    instructions wuerden sonst einen Agenten beim Start auf ein Werkzeug
+    schicken, das es nicht gibt.
+    """
+    instructions, tools = asyncio.run(_instructions_and_tools())
+    names = {tool["name"] for tool in tools}
+
+    assert instructions == SERVER_INSTRUCTIONS
+    assert instructions is not None
+    assert len(instructions) <= _DESCRIPTION_CHAR_CAP, (
+        f"instructions {len(instructions)} Zeichen > {_DESCRIPTION_CHAR_CAP}: Claude Code "
+        "schneidet sie ab — kuerzen, Boot-Reihenfolge nach vorn."
+    )
+    # Rot-Probe: ein erfundener Werkzeugname wird gefunden.
+    assert _unknown_tool_refs(instructions + " `fetch_everything`", names) == {"fetch_everything"}
+    assert not _unknown_tool_refs(instructions, names)
+    # Die Querschnittsregeln stehen drin, nicht nur die Boot-Liste.
+    assert 'format="full"' in instructions
+    assert "draft -> active" in instructions
+    assert "data.locale" in instructions
+    # Keine Entwickler-Historie: die instructions bezahlt jeder Start.
+    assert not payload_report.developer_refs({"inputSchema": {"description": instructions}})
+
+
+def test_always_load_marks_exactly_the_boot_tools() -> None:
+    """Genau die Boot-Werkzeuge tragen `anthropic/alwaysLoad`, und sie stehen im Boot-Text.
+
+    Anthropic empfiehlt drei bis fuenf sofort geladene Werkzeuge; jedes
+    weitere kostet jeden Claude-Code-Start sein volles Schema.
+    """
+    instructions, tools = asyncio.run(_instructions_and_tools())
+    eager = {tool["name"] for tool in payload_report.always_loaded(tools)}
+
+    assert eager == ALWAYS_LOAD_TOOLS
+    assert 3 <= len(eager) <= 5
+    assert instructions is not None
+    assert all(f"`{name}`" in instructions for name in eager)
+    # Rot-Probe der Erkennung: nur ein echtes `True` zaehlt.
+    probe: list[dict[str, Any]] = [
+        {"name": "x", "_meta": {ALWAYS_LOAD_KEY: "true"}},
+        {"name": "y", "_meta": None},
+    ]
+    assert payload_report.always_loaded(probe) == []
+
+
+def test_tool_search_start_bytes_counts_instructions_names_and_eager_schemas() -> None:
+    eager = {"name": "a", "description": "A.", "_meta": {ALWAYS_LOAD_KEY: True}}
+    lazy = {"name": "bb", "description": "B." * 500}
+    size = payload_report.tool_search_start_bytes([eager, lazy], "Hallo")
+    assert size == 5 + len(b'["bb"]') + payload_report.payload_bytes([eager])
+    assert payload_report.tool_search_start_bytes([lazy], None) == len(b'["bb"]')
+
+
+_ORDER_PROBE = (
+    "import asyncio, json\n"
+    "from who2be_mcp import payload_report\n"
+    "from who2be_mcp.server import mcp\n"
+    "print(json.dumps([t['name'] for t in asyncio.run(payload_report.wire_tools(mcp))]))\n"
+)
+
+
+def test_tools_list_order_is_deterministic_across_processes() -> None:
+    """Die Reihenfolge haengt nicht am Hash-Seed (MCP-Spec: deterministisch, Prompt-Cache).
+
+    Zwei frische Prozesse mit verschiedenem `PYTHONHASHSEED` muessen dieselbe
+    Liste liefern. Entstuende die Reihenfolge aus einem `set`, wuerde sie hier
+    zwischen den Prozessen wechseln.
+    """
+
+    def names(seed: str) -> list[str]:
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        out = subprocess.run(
+            [sys.executable, "-c", _ORDER_PROBE],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+            timeout=120,
+        ).stdout
+        result: list[str] = json.loads(out.strip().splitlines()[-1])
+        return result
+
+    first, second = names("1"), names("4242")
+    assert first == second
+    assert first == [tool["name"] for tool in _wire_tools()]
+    assert len(first) == len(set(first))
+
+
+def test_policy_filter_keeps_the_catalog_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Filter nimmt Werkzeuge heraus, ordnet aber nicht um."""
+    from who2be_mcp import policy_filter
+
+    full = [tool["name"] for tool in _wire_tools()]
+    payload: dict[str, object] = {
+        "user_id": str(uuid4()),
+        "workspace_id": str(_WORKSPACE_ID),
+        "role": "editor",
+        "is_api_token": True,
+        "agent_id": str(uuid4()),
+        "unrestricted": False,
+        "capabilities": [],
+        "read_scopes": None,
+        "memory_mode": None,
+        "features": ["core"],
+    }
+    policy_filter._whoami_cache.clear()
+    monkeypatch.setattr(
+        policy_filter,
+        "get_settings",
+        lambda: Settings(api_base_url="http://test", api_token="w2b_t4", transport="stdio"),
+    )
+    monkeypatch.setattr(server, "build_client", _factory(_respond_with(payload)))
+    filtered = [tool["name"] for tool in asyncio.run(payload_report.wire_tools(mcp))]
+    policy_filter._whoami_cache.clear()
+
+    assert 0 < len(filtered) < len(full)
+    assert filtered == [name for name in full if name in set(filtered)]
 
 
 # ---------------------------------------------------------------------------

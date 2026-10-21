@@ -1,10 +1,14 @@
-import { ArrowLeft, Ellipsis, type LucideIcon } from 'lucide-react'
-import { useId, useState, type ReactNode } from 'react'
+import { Activity, ArrowLeft, Ellipsis, type LucideIcon } from 'lucide-react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import type { Api } from '@/api/client'
+import type { UsageEntityType, UsageStats } from '@/api/types'
+import { useApi } from '@/api/useApi'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 import { EntityIcon, type EntityTone } from './EntityIcon'
@@ -59,7 +63,126 @@ interface DetailHeaderProps {
    * Ab `md` wirkt der Prop nicht.
    */
   collapseActionsBelowMd?: boolean
+  /**
+   * Nutzung U4b: Element, dessen Nutzungszeile („n× in 30 Tagen · zuletzt
+   * vor …“) unter der Beschreibung steht. Die Zeile laedt ihre Daten selbst;
+   * ohne Prop entfaellt sie (und mit ihr jeder API-Aufruf).
+   */
+  usage?: { entityType: UsageEntityType; entityId: string }
   className?: string
+}
+
+// Fenster der Nutzungszeile — fest im Server (`uses_30d`, Konzept §5.2).
+const USAGE_WINDOW_DAYS = 30
+
+/**
+ * „vor 2 Stunden“ in der Sprache der Oberflaeche. Gleiche Regel wie die
+ * Kachel „Nutzung“ im Agent-Ueberblick: mindestens eine Minute, damit eine
+ * Uhrabweichung nie „in 1 Minute“ zeigt.
+ */
+function formatAge(iso: string, language: string, now: number = Date.now()): string {
+  const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
+  const seconds = Math.min((new Date(iso).getTime() - now) / 1000, -60)
+  if (Number.isNaN(seconds)) throw new Error('invalid date')
+  const abs = Math.abs(seconds)
+  if (abs < 3600) return format.format(Math.round(seconds / 60), 'minute')
+  if (abs < 86400) return format.format(Math.round(seconds / 3600), 'hour')
+  return format.format(Math.round(seconds / 86400), 'day')
+}
+
+/** Zaehlbeginn `YYYY-MM-DD` als Datum der Oberflaeche („08.10.2026“). */
+function formatCountingSince(day: string, language: string): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) throw new Error('invalid date')
+  return new Intl.DateTimeFormat(language, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
+}
+
+type UsageState = { status: 'loading' } | { status: 'ok'; text: string } | { status: 'error' }
+
+/**
+ * Nutzungszeile (U4b). Gezaehlt wird nur, was an Agenten ausgeliefert wurde
+ * (Owner Z1a). Der Zaehlbeginn steht immer dabei, sonst wirkt alles Aeltere
+ * ungenutzt (Konzept §5.1). Laden: Platzhalter; Fehler: die Zeile entfaellt
+ * still — sie ist Zusatzinformation, kein Seiteninhalt.
+ */
+function UsageLine({ entityType, entityId }: { entityType: UsageEntityType; entityId: string }) {
+  const { t, i18n } = useTranslation('common')
+  const language = i18n.language
+  const api = useApi()
+  const key = `${entityType}|${entityId}`
+  const [result, setResult] = useState<{ api: Api; key: string; stats: UsageStats | null } | null>(
+    null,
+  )
+
+  useEffect(() => {
+    let alive = true
+    // Ueber `Promise.resolve().then`: auch ein synchroner Wurf beim
+    // Anfragebau landet im Fehlerzweig, nie auf der Seite.
+    Promise.resolve()
+      .then(() => api.getUsage(entityType, entityId))
+      .then(
+        (stats) => {
+          if (alive) setResult({ api, key, stats })
+        },
+        () => {
+          if (alive) setResult({ api, key, stats: null })
+        },
+      )
+    return () => {
+      alive = false
+    }
+  }, [api, key, entityType, entityId])
+
+  let state: UsageState = { status: 'loading' }
+  if (result !== null && result.api === api && result.key === key) {
+    const stats = result.stats
+    try {
+      if (stats === null || typeof stats.uses_30d !== 'number') throw new Error('no usage')
+      const since = formatCountingSince(stats.counting_since, language)
+      state = {
+        status: 'ok',
+        text:
+          stats.last_used_at === null
+            ? t('usageLine.never', { date: since })
+            : t('usageLine.used', {
+                n: stats.uses_30d,
+                days: USAGE_WINDOW_DAYS,
+                age: formatAge(stats.last_used_at, language),
+                date: since,
+              }),
+      }
+    } catch {
+      state = { status: 'error' }
+    }
+  }
+
+  if (state.status === 'error') return null
+  if (state.status === 'loading') {
+    return (
+      <Skeleton
+        className="mt-1.5 h-4 w-56 max-w-full"
+        aria-hidden="true"
+        data-testid="detail-header-usage-loading"
+      />
+    )
+  }
+  return (
+    <p
+      className="mt-1.5 flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
+      data-testid="detail-header-usage"
+    >
+      <Activity className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 wrap-anywhere">
+        <span className="sr-only">{t('usageLine.label')}: </span>
+        {state.text}
+      </span>
+    </p>
+  )
 }
 
 export function DetailHeader({
@@ -77,6 +200,7 @@ export function DetailHeader({
   description,
   actions,
   collapseActionsBelowMd = false,
+  usage,
   className,
 }: DetailHeaderProps) {
   const { t } = useTranslation('common')
@@ -142,6 +266,18 @@ export function DetailHeader({
                 className="text-sm text-muted-foreground"
                 data-testid="detail-header-description"
               />
+            ) : null}
+            {usage !== undefined ? (
+              // #624 (Owner-Entscheidung C): auf mobile-320 kostet die Zeile
+              // genau den Platz, den „Publish" im ersten Viewport braucht.
+              // Unter `md` liegt sie daher mit den Sekundaeraktionen hinter
+              // „Mehr"; ab `md` steht sie immer.
+              <div
+                className={cn(collapsible && !actionsOpen && 'hidden md:block')}
+                data-testid="detail-header-usage-slot"
+              >
+                <UsageLine entityType={usage.entityType} entityId={usage.entityId} />
+              </div>
             ) : null}
           </div>
         </div>

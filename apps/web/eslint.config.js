@@ -54,6 +54,19 @@ const RAW_HTML_FORBIDDEN = [
   },
 ]
 
+// `toLocaleString()` & Co. ohne Argument formatieren nach der Browser-Locale,
+// nicht nach der UI-Sprache — mit en-US-Browser stand in deutscher UI
+// "10/9/2026, 7:11:53 AM". Datumsangaben laufen ueber `@/lib/dates`
+// (formatDate/formatDateTime), Zahlen ueber `Intl.NumberFormat(i18n.language)`.
+const LOCALE_FORMAT_FORBIDDEN = [
+  {
+    selector:
+      'CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/][arguments.length=0]',
+    message:
+      'toLocaleString()/toLocaleDateString()/toLocaleTimeString() ohne Sprachargument folgt der Browser-Locale statt der UI-Sprache. Verwende formatDate/formatDateTime aus @/lib/dates (bzw. i18n.language als Argument).',
+  },
+]
+
 const crossFeatureOverrides = FEATURES.map((name) => ({
   files: [`src/features/${name}/**/*.{ts,tsx}`],
   rules: {
@@ -130,6 +143,14 @@ export default tseslint.config(
     },
   },
   {
+    // Locale-Verbot fuer alle Quelldateien; die Bloecke darunter ersetzen
+    // `no-restricted-syntax` fuer ihre Dateien und nehmen es deshalb mit auf.
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': ['error', ...LOCALE_FORMAT_FORBIDDEN],
+    },
+  },
+  {
     // Roh-HTML-Verbot ueberall ausser den Primitiven selbst: features, app und
     // alle components/** (inkl. editor/, forms/, version/) — nur components/ui/**
     // (die Primitive-Quelle) ist ausgenommen (Override unten). So bricht eine
@@ -140,7 +161,7 @@ export default tseslint.config(
       'src/app/**/*.{ts,tsx}',
     ],
     rules: {
-      'no-restricted-syntax': ['error', ...RAW_HTML_FORBIDDEN],
+      'no-restricted-syntax': ['error', ...RAW_HTML_FORBIDDEN, ...LOCALE_FORMAT_FORBIDDEN],
     },
   },
   {
@@ -148,7 +169,8 @@ export default tseslint.config(
     rules: {
       // Die Primitive sind die einzige erlaubte Quelle roher HTML-Controls
       // (<Button>/<Input>/<Checkbox>/<RadioGroupItem> kapseln sie hier).
-      'no-restricted-syntax': 'off',
+      // Das Locale-Verbot gilt auch hier.
+      'no-restricted-syntax': ['error', ...LOCALE_FORMAT_FORBIDDEN],
       'react-refresh/only-export-components': 'off',
       // shadcn-Primitives nehmen Children via Spread an, jsx-a11y kann das
       // statisch nicht erkennen. Konsumenten setzen die Children — die

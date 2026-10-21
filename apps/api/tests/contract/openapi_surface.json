@@ -71,6 +71,26 @@
   },
   {
     "method": "GET",
+    "path": "/v1/me/tutorials",
+    "operationId": "list_tutorials_v1_me_tutorials_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/tutorials/{tutorial_id}",
+    "operationId": "get_tutorial_v1_me_tutorials__tutorial_id__get"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/me/tutorials/{tutorial_id}",
+    "operationId": "patch_tutorial_v1_me_tutorials__tutorial_id__patch"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/me/tutorials/{tutorial_id}/restart",
+    "operationId": "restart_tutorial_v1_me_tutorials__tutorial_id__restart_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/organizations",
     "operationId": "list_organizations_v1_organizations_get"
   },
@@ -93,6 +113,11 @@
     "method": "POST",
     "path": "/v1/organizations/{organization_id}/workspaces",
     "operationId": "create_organization_workspace_v1_organizations__organization_id__workspaces_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/routines",
+    "operationId": "get_routines_v1_system_routines_get"
   },
   {
     "method": "DELETE",
@@ -158,6 +183,11 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/copy",
     "operationId": "copy_agent_v1_workspaces__workspace_id__agents__agent_id__copy_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/dossier",
+    "operationId": "get_dossier_v1_workspaces__workspace_id__agents__agent_id__dossier_get"
   },
   {
     "method": "DELETE",
@@ -233,6 +263,16 @@
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/rendered",
     "operationId": "fetch_agent_rendered_v1_workspaces__workspace_id__agents__agent_id__rendered_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/usage",
+    "operationId": "get_agent_usage_v1_workspaces__workspace_id__agents__agent_id__usage_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/work-areas",
+    "operationId": "list_agent_work_areas_v1_workspaces__workspace_id__agents__agent_id__work_areas_get"
   },
   {
     "method": "POST",
@@ -366,6 +406,21 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions",
+    "operationId": "list_sessions_v1_workspaces__workspace_id__feedback_sessions_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions",
+    "operationId": "submit_session_protocol_v1_workspaces__workspace_id__feedback_sessions_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-sessions/{session_id}",
+    "operationId": "get_session_v1_workspaces__workspace_id__feedback_sessions__session_id__get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/feedback-unused",
     "operationId": "get_feedback_unused_v1_workspaces__workspace_id__feedback_unused_get"
   },
@@ -398,6 +453,11 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/feedback/{feedback_id}/resolution",
     "operationId": "set_feedback_resolution_v1_workspaces__workspace_id__feedback__feedback_id__resolution_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/inbox/counts",
+    "operationId": "get_inbox_counts_v1_workspaces__workspace_id__inbox_counts_get"
   },
   {
     "method": "POST",
@@ -488,6 +548,26 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/me/memories/{memory_id}/triage",
     "operationId": "triage_my_memory_v1_workspaces__workspace_id__me_memories__memory_id__triage_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/follow-up",
+    "operationId": "get_measure_follow_up_v1_workspaces__workspace_id__measures__measure_id__follow_up_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/link-draft",
+    "operationId": "link_measure_draft_v1_workspaces__workspace_id__measures__measure_id__link_draft_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/review",
+    "operationId": "review_measure_v1_workspaces__workspace_id__measures__measure_id__review_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/measures/{measure_id}/withdraw",
+    "operationId": "withdraw_measure_v1_workspaces__workspace_id__measures__measure_id__withdraw_post"
   },
   {
     "method": "GET",
@@ -905,6 +985,11 @@
     "operationId": "create_template_v1_workspaces__workspace_id__system_prompts_post"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/system-prompts/markdown",
+    "operationId": "create_system_prompt_markdown_v1_workspaces__workspace_id__system_prompts_markdown_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/system-prompts/{template_id}",
     "operationId": "get_template_v1_workspaces__workspace_id__system_prompts__template_id__get"
@@ -1005,9 +1090,19 @@
     "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/usage",
+    "operationId": "list_usage_v1_workspaces__workspace_id__usage_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/usage-events",
     "operationId": "record_usage_v1_workspaces__workspace_id__usage_events_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/usage/{entity_type}/{entity_id}",
+    "operationId": "get_usage_v1_workspaces__workspace_id__usage__entity_type___entity_id__get"
   },
   {
     "method": "GET",
@@ -1151,7 +1246,37 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/usage",
+    "operationId": "get_work_area_usage_v1_workspaces__workspace_id__work_areas__area_id__usage_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/workarea-search",
     "operationId": "search_workarea_v1_workspaces__workspace_id__workarea_search_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/markdown",
+    "operationId": "create_markdown_v1_workspaces__workspace_id___entity_type__markdown_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "get_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__markdown_get"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "patch_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_patch"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "put_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_put"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/versions/{version}/markdown",
+    "operationId": "get_version_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__versions__version__markdown_get"
   }
 ]

@@ -23,6 +23,8 @@ und alle DB- und netzfrei:
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -117,6 +119,117 @@ def test_real_s3_error_still_propagates(monkeypatch: pytest.MonkeyPatch) -> None
         _run_with(monkeypatch, client)
 
 
+# --- Erster Kontakt: S3 hoert noch nicht zu (Folge #932) ----------------------
+#
+# Nach SeaweedFS 4.48 war der Master gesund, das S3-Gateway auf 8333 aber noch
+# nicht offen: der Bootstrap brach mit `Connection refused` ab, `api` startete
+# nie. Der Bootstrap wartet jetzt mit Backoff (~60 s) und bricht danach klar ab.
+
+
+def _refused() -> Exception:
+    """Genau der Fehler, den das SDK bei geschlossenem Port wirft (urllib3)."""
+    from urllib3.exceptions import MaxRetryError, NewConnectionError
+
+    cause = NewConnectionError(cast("Any", None), "[Errno 111] Connection refused")
+    return MaxRetryError(cast("Any", None), "/who2be-blobs?location=", reason=cause)
+
+
+class _LateClient(_FakeClient):
+    """S3 antwortet erst nach `refusals` abgewiesenen Verbindungen."""
+
+    def __init__(self, *, refusals: int, exists: bool = False) -> None:
+        super().__init__(exists=exists)
+        self.refusals = refusals
+        self.calls = 0
+
+    def bucket_exists(self, bucket: str) -> bool:
+        self.calls += 1
+        if self.calls <= self.refusals:
+            raise _refused()
+        return super().bucket_exists(bucket)
+
+    def make_bucket(self, bucket: str) -> None:
+        # Auch das Anlegen darf erst nach dem ersten erfolgreichen Kontakt kommen.
+        assert self.calls > self.refusals, "make_bucket vor erreichbarem S3"
+        super().make_bucket(bucket)
+
+
+class _Clock:
+    """Virtuelle Uhr: `sleep` schiebt `now` vor, der Test wartet nie echt."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _run_late(monkeypatch: pytest.MonkeyPatch, client: _FakeClient) -> tuple[int, _Clock]:
+    module = _load_script()
+    clock = _Clock()
+    monkeypatch.setattr(module, "Minio", lambda *a, **k: client)
+    # Die Defaults von `_first_contact` sind beim Laden gebunden — deshalb
+    # die Funktion mit der virtuellen Uhr neu verdrahten.
+    original = module._first_contact
+    monkeypatch.setattr(
+        module,
+        "_first_contact",
+        lambda c, b: original(c, b, sleep=clock.sleep, clock=clock),
+    )
+    return int(module.main()), clock
+
+
+def test_bootstrap_survives_briefly_delayed_s3(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Der Vorfall: drei Verbindungen abgewiesen, dann ist S3 da.
+    client = _LateClient(refusals=3)
+    code, clock = _run_late(monkeypatch, client)
+    assert code == 0
+    assert client.made == ["who2be-blobs"]
+    # Exponentieller Backoff, keine Dauerschleife im Takt der CPU.
+    assert clock.sleeps == [1.0, 2.0, 4.0]
+
+
+def test_backoff_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _LateClient(refusals=6, exists=True)
+    code, clock = _run_late(monkeypatch, client)
+    assert code == 0
+    assert clock.sleeps == [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+
+
+def test_bootstrap_gives_up_clearly_after_budget(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # S3 kommt nie: kein Endlos-Warten, sondern Exit 1 mit lesbarer Ursache.
+    client = _LateClient(refusals=10_000)
+    code, clock = _run_late(monkeypatch, client)
+    assert code == 1
+    assert client.made == []
+    assert clock.now == pytest.approx(60.0)
+    err = capsys.readouterr().err
+    assert "nicht erreichbar" in err and "Abbruch" in err
+
+
+def test_s3_error_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ein 403 ist eine Antwort, kein „noch nicht da": sofort scheitern.
+    from minio.error import S3Error
+
+    class _Denied(_FakeClient):
+        calls = 0
+
+        def bucket_exists(self, bucket: str) -> bool:
+            _Denied.calls += 1
+            raise _s3_error("AccessDenied")
+
+    with pytest.raises(S3Error):
+        _run_late(monkeypatch, _Denied(exists=False))
+    assert _Denied.calls == 1
+
+
 # --- Compose-Verdrahtung ------------------------------------------------------
 
 
@@ -179,3 +292,78 @@ def test_bootstrap_waits_for_seaweedfs_healthy() -> None:
 
 def test_seaweedfs_s3_credentials_are_configured() -> None:
     _assert_s3_credentials_are_configured(_compose())
+
+
+# --- Healthcheck: S3-Port muss antworten (Folge #932) --------------------------
+#
+# Der Healthcheck-Befehl wird hier AUSGEFUEHRT, nicht nur gelesen: ein falsches
+# `wget` im PATH spielt die Lagen des Vorfalls nach (Master gruen, S3 refused /
+# S3 antwortet 403 / Master rot). busybox-wget endet bei 403 und bei refused
+# gleichermassen mit Exit 1 und schreibt mit `-S` die Statuszeile auf stderr —
+# genau das bildet das Double nach (gemessen am Image 4.48).
+
+_ALL_COMPOSES = (
+    _COMPOSE,
+    _REPO_ROOT / "deploy" / "dokploy" / "docker-compose.yml",
+    _REPO_ROOT / "deploy" / "hetzner" / "who2be" / "docker-compose.yml",
+)
+
+_FAKE_WGET = """#!/bin/sh
+for a in "$@"; do url="$a"; done
+case "$url" in
+  *:9333/*) state="$MASTER" ;;
+  *:8333/*) state="$S3" ;;
+  *) state=refused ;;
+esac
+case "$state" in
+  ok) echo '  HTTP/1.1 200 OK' >&2; exit 0 ;;
+  403) echo '  HTTP/1.1 403 Forbidden' >&2
+       echo 'wget: server returned error: HTTP/1.1 403 Forbidden' >&2; exit 1 ;;
+  404) echo '  HTTP/1.1 404 Not Found' >&2; exit 1 ;;
+  *) echo "wget: can't connect to remote host (127.0.0.1): Connection refused" >&2; exit 1 ;;
+esac
+"""
+
+
+def _healthcheck_shell(path: Path) -> str:
+    compose = yaml.safe_load(path.read_text(encoding="utf-8"))
+    test = compose["services"]["seaweedfs"]["healthcheck"]["test"]
+    assert test[0] == "CMD-SHELL", f"{path}: Healthcheck braucht eine Shell (Pipe): {test!r}"
+    return str(test[1])
+
+
+def _run_healthcheck(tmp_path: Path, command: str, *, master: str, s3: str) -> int:
+    fake = tmp_path / "wget"
+    fake.write_text(_FAKE_WGET, encoding="utf-8")
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "MASTER": master, "S3": s3}
+    return subprocess.run(["sh", "-c", command], env=env, check=False).returncode
+
+
+@pytest.mark.parametrize("path", _ALL_COMPOSES, ids=lambda p: str(p.relative_to(_REPO_ROOT)))
+@pytest.mark.parametrize(
+    ("master", "s3", "healthy"),
+    [
+        ("ok", "refused", False),  # der Vorfall nach 4.48
+        ("ok", "403", True),  # anonym gegen S3 mit Credentials: Antwort = bereit
+        ("ok", "ok", True),
+        ("refused", "403", False),
+    ],
+)
+def test_seaweedfs_healthcheck_requires_s3_answer(
+    tmp_path: Path, path: Path, master: str, s3: str, healthy: bool
+) -> None:
+    code = _run_healthcheck(tmp_path, _healthcheck_shell(path), master=master, s3=s3)
+    assert (code == 0) is healthy, f"{path}: master={master} s3={s3} -> exit {code}"
+
+
+@pytest.mark.parametrize("path", _ALL_COMPOSES, ids=lambda p: str(p.relative_to(_REPO_ROOT)))
+def test_seaweedfs_healthcheck_avoids_healthz_and_has_start_period(path: Path) -> None:
+    # effect-exempt: seaweedfs#8243 (`/healthz` = Bucket-Name -> 404) und die
+    # Anlaufzeit sind Konfigurationswerte ohne ausfuehrbares Subjekt.
+    health = yaml.safe_load(path.read_text(encoding="utf-8"))["services"]["seaweedfs"][
+        "healthcheck"
+    ]
+    assert "healthz" not in str(health["test"]), path
+    seconds = int(str(health["start_period"]).removesuffix("s"))
+    assert seconds >= 30, f"{path}: start_period {health['start_period']} zu knapp"

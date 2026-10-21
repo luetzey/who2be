@@ -146,6 +146,12 @@ eingeordnet werden müsste. Siehe auch das Addendum in ADR-0033.
   (seaweedfs#8243): der S3-Handler interpretiert `/healthz` als Bucket-Namen
   und antwortet 404. Funktionierend ist der Master-Port:
   `http://.../9333/cluster/status`.
+  _Nachtrag 2026-10-14 (#956):_ Der Master-Port allein reicht nicht, weil der
+  Master früher gesund wird als das S3-Gateway. Der Healthcheck verlangt
+  seither zusätzlich irgendeine HTTP-Antwort von `8333/` (anonym 403, Pfad
+  `/`, weiterhin nicht `/healthz`), mit `start_period: 60s`. Der Bootstrap
+  wiederholt den ersten Kontakt etwa 60 s lang mit Backoff. Details:
+  `.claude/context/DECISIONS.md` (2026-10-14) und RUNBOOK.
 - **Credentials sind ein Sicherheits-Gate, keine Kür.** SeaweedFS-Doku
   wörtlich: „By default, if no credentials are configured, SeaweedFS allows
   anonymous access to all S3 operations." Ohne `-s3.config` stünde der Store

@@ -142,16 +142,29 @@ services:
     pull_policy: build
 
   redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Valkey 8 (BSD-3) statt Redis (RSALv2/SSPLv1), ADR-0033-Addendum 2026-10-11.
+    # Dienstname `redis` und `redis://` bleiben: Valkey spricht das Protokoll
+    # unveraendert, ein Umbenennen haette nur API-Umgebung und Doku bewegt.
+    image: valkey/valkey:8-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
     networks: [who2be]
     restart: unless-stopped
     # Bewusst KEIN ports: — nur die API erreicht Redis im internen who2be-Netz.
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
+    # Haertung wie die Basis-Dienste (x-hardening der Basis ist in einem
+    # Overlay nicht referenzierbar, daher ausgeschrieben). Valkey haelt nur
+    # Rate-Limit-Zaehler (kein --save, kein AOF): wenige MB; 128m.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
 
   # One-Shot: setzt das Passwort der Rolle `who2be_app` (Migration 0036 legt die
   # Rolle an, das Secret liegt ausserhalb des Repos). Laeuft nach `migrate` und
@@ -175,3 +188,11 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt: ["no-new-privileges:true"]
+    # One-Shot: ein psql-Aufruf.
+    mem_limit: 128m

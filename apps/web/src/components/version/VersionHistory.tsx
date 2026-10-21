@@ -11,6 +11,7 @@ import type {
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDateTime } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 
 import { ProvenanceList } from './ProvenanceList'
@@ -190,7 +191,7 @@ export function VersionHistory({
                   <span className="flex items-center gap-2">
                     <span className="font-medium">v{version.version}</span>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(version.created_at).toLocaleString()}
+                      {formatDateTime(version.created_at)}
                     </span>
                     <StatusBadge status={version.status} />
                   </span>

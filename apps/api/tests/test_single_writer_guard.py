@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -51,8 +52,15 @@ from who2be_api.main import (
     _configured_worker_count,
     _guard_single_writer_process,
 )
-from who2be_api.worker.registry import REGISTRY
+from who2be_api.worker.registry import REGISTRY, Registry, Routine, RoutineContext
 from who2be_api.worker.routines import PURGE
+from who2be_api.worker.schedule import (
+    WORKER_ENABLED_ENV,
+    effective_table,
+    enabled_env_key,
+    schedule_env_key,
+    worker_enabled,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEPLOY_SCRIPT = _REPO_ROOT / "deploy" / "hetzner" / "scripts" / "deploy.sh"
@@ -397,6 +405,113 @@ def test_worker_dienst_ist_vollstaendig(relpath: str) -> None:
     assert _duration(str(worker["stop_grace_period"])) >= longest, (
         f"{relpath}: stop_grace_period kuerzer als der laengste Routinen-Timeout {longest}."
     )
+
+
+def _override_vars(routines: Iterable[Routine]) -> dict[str, str]:
+    """Soll-Durchreichung je Variable: `${NAME:-}` bzw. `${NAME:-true}` global.
+
+    Leerer Default heisst: ohne Eintrag in der `.env` gilt der Code-Zeitplan
+    (`schedule.py#_override` behandelt leer wie nicht gesetzt).
+    """
+    expected = {WORKER_ENABLED_ENV: f"${{{WORKER_ENABLED_ENV}:-true}}"}
+    for routine in routines:
+        for key in (schedule_env_key(routine.name), enabled_env_key(routine.name)):
+            expected[key] = f"${{{key}:-}}"
+    return expected
+
+
+def _missing_overrides(env: dict[str, Any], routines: Iterable[Routine]) -> list[str]:
+    return sorted(
+        f"{key} (ist {env.get(key)!r}, soll {want!r})"
+        for key, want in _override_vars(routines).items()
+        if env.get(key) != want
+    )
+
+
+# `worker` laeuft nach den Overrides, `api` zeigt sie in GET /v1/system/routines
+# an (ADR-0057 §7, `routine_overview_service`). Beide lesen die Tabelle aus der
+# eigenen Prozess-Umgebung — fehlt ein Paar an einem der beiden, weicht die
+# Anzeige still vom tatsaechlichen Lauf ab.
+_OVERRIDE_SERVICES = ("worker", "api")
+
+
+@pytest.mark.parametrize("service", _OVERRIDE_SERVICES)
+@pytest.mark.parametrize("stack", sorted(_STACKS), ids=str)
+# effect-exempt: Konfigurations-Drift, Env-Override erreicht den Container (ADR-0057 §4)
+def test_dienst_reicht_die_overrides_jeder_routine_durch(stack: str, service: str) -> None:
+    """Jede registrierte Routine hat ihre `_SCHEDULE`/`_ENABLED` an `worker` UND `api`.
+
+    Die Stacks nutzen kein `env_file`: was hier fehlt, setzt der Betreiber in
+    der `.env` und es passiert nichts (am `worker`) bzw. die Betreiber-Route
+    zeigt den Code-Zeitplan (an `api`). Eine neue Routine ohne neue Zeilen in
+    beiden Bloecken der Compose-Dateien macht diesen Test rot.
+    """
+    env = _merged_service(_STACKS[stack], service).get("environment") or {}
+    missing = _missing_overrides(env, REGISTRY)
+    assert not missing, f"{stack}: {service} reicht nicht durch: " + "; ".join(missing)
+
+
+@pytest.mark.parametrize("relpath", _BASE_COMPOSES)
+def test_api_traegt_dieselben_override_zeilen_wie_worker(relpath: str) -> None:
+    """Gleiche Namen, gleiche Vorgaben, kein Extra an einem der beiden Dienste.
+
+    Ergaenzt den Soll-Abgleich oben um den Fall einer Override-Zeile, die nur
+    an einem Dienst steht (z. B. ein Tippfehler-Paar am `worker`).
+    """
+    services = _services(relpath)
+
+    def _overrides(name: str) -> dict[str, Any]:
+        env = services[name].get("environment") or {}
+        return {
+            key: value
+            for key, value in env.items()
+            if key == WORKER_ENABLED_ENV or key.startswith("WHO2BE_ROUTINE_")
+        }
+
+    assert _overrides("api") == _overrides("worker"), relpath
+
+
+def test_override_drift_erkennt_eine_fehlende_api_zeile() -> None:
+    """Rot-Probe: fehlt eine Variable im api-Block, meldet der Drift-Test sie."""
+    env = dict(_merged_service(_STACKS["hetzner"], "api")["environment"])
+    assert not _missing_overrides(env, REGISTRY)
+    victim = schedule_env_key(next(iter(REGISTRY)).name)
+    del env[victim]
+    assert [m.split(" ")[0] for m in _missing_overrides(env, REGISTRY)] == [victim]
+
+
+def test_override_drift_erkennt_eine_neue_routine() -> None:
+    """Rot-Probe: eine Routine ohne Durchreichung wird gemeldet.
+
+    Ohne diese Probe koennte der Drift-Test still ueber eine leere Registry
+    oder einen falschen Schluesselnamen laufen.
+    """
+    assert len(list(REGISTRY)) >= 3
+    env = _merged_service(_STACKS["hetzner"], "worker")["environment"]
+    probe = Registry()
+
+    @probe.register("neue-routine", schedule="@daily", timeout=timedelta(minutes=1))
+    async def _neu(ctx: RoutineContext) -> dict[str, int]:  # pragma: no cover - nie gerufen
+        return {}
+
+    missing = _missing_overrides(env, [*REGISTRY, *probe])
+    assert [m.split(" ")[0] for m in missing] == [
+        "WHO2BE_ROUTINE_NEUE_ROUTINE_ENABLED",
+        "WHO2BE_ROUTINE_NEUE_ROUTINE_SCHEDULE",
+    ]
+
+
+def test_leere_durchreichung_laesst_den_code_zeitplan_stehen() -> None:
+    """Die Compose-Defaults (leer, `true`) ergeben exakt die Code-Tabelle.
+
+    Simuliert, was im Container ohne Eintrag in der `.env` ankommt.
+    """
+    env = {key: ("true" if key == WORKER_ENABLED_ENV else "") for key in _override_vars(REGISTRY)}
+    rows = effective_table(REGISTRY, env=env)
+    assert {row.source for row in rows} == {"code"}
+    in_code = sorted(REGISTRY, key=lambda r: r.name)
+    assert [r.schedule for r in rows] == [r.schedule for r in in_code]
+    assert worker_enabled(env) is True
 
 
 def test_hetzner_worker_ist_gehaertet() -> None:

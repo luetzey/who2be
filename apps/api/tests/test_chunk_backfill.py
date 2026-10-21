@@ -19,11 +19,12 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from who2be_api.core import security
+from who2be_api.core import chunk_backfill, security
 from who2be_api.core.chunk_backfill import backfill_chunks
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.repositories.content_chunk_repository import PgContentChunkRepository
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
@@ -164,17 +165,116 @@ def test_backfill_materializes_passages_for_existing_active_versions(
         cleanup_workspaces([owner])
 
 
+def _table_and_link_blocks() -> list[dict[str, Any]]:
+    """Resource mit BlockNote-Tabelle (`content` ist ein Objekt) und Inline-Link."""
+    return [
+        {
+            "id": "h1",
+            "type": "heading",
+            "props": {"level": 1},
+            "content": [{"type": "text", "text": "Fristenuebersicht", "styles": {}}],
+        },
+        {
+            "id": "t1",
+            "type": "table",
+            "props": {},
+            "content": {
+                "type": "tableContent",
+                "columnWidths": [None, None],
+                "rows": [
+                    {"cells": [[{"type": "text", "text": "Stufe", "styles": {}}], []]},
+                    {
+                        "cells": [
+                            [{"type": "text", "text": "Mahnstufe", "styles": {}}],
+                            [{"type": "text", "text": "vierzehn Tage", "styles": {}}],
+                        ]
+                    },
+                ],
+            },
+        },
+        {
+            "id": "p1",
+            "type": "paragraph",
+            "content": [
+                {"type": "text", "text": "Siehe ", "styles": {}},
+                {
+                    "type": "link",
+                    "href": "https://example.org/fristen",
+                    "content": [{"type": "text", "text": "Fristenkatalog", "styles": {}}],
+                },
+            ],
+        },
+    ]
+
+
+@pytest.mark.integration
+def test_activating_a_resource_with_table_and_link_indexes_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vor dem Fix warf `block_plain_text` beim Aktivieren (`_sync_chunks`, selbe
+    Transaktion) einen AttributeError — die Transition antwortete 500."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    rbase = f"{prefix}/resources"
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            created = client.post(
+                rbase,
+                json={
+                    "name": "Fristen",
+                    "content": {
+                        "description": "Fristen",
+                        "blocks": _table_and_link_blocks(),
+                        "tags": [],
+                    },
+                },
+                headers=auth,
+            )
+            assert created.status_code == 201, created.text
+            rid = created.json()["id"]
+            for to in ("review", "active"):
+                resp = client.post(
+                    f"{rbase}/{rid}/versions/1/transition", json={"to": to}, headers=auth
+                )
+                assert resp.status_code == 200, resp.text
+
+            found = client.get(
+                f"{prefix}/search/content", params={"q": "Mahnstufe"}, headers=auth
+            ).json()
+            assert [h["entity_id"] for h in found] == [rid]
+            text = _sql(
+                "SELECT string_agg(text, E'\\n' ORDER BY ord) FROM content_chunk "
+                "WHERE entity_id = $1",
+                UUID(rid),
+            )
+            assert "| Stufe |  |\n| --- | --- |\n| Mahnstufe | vierzehn Tage |" in text
+            assert "Siehe Fristenkatalog (https://example.org/fristen)" in text
+    finally:
+        cleanup_workspaces([owner])
+
+
 @pytest.mark.integration
 def test_backfill_removes_orphaned_chunks() -> None:
     """Verwaiste Chunks (Entity geloescht) werden weggeraeumt.
 
     `entity_id` ist polymorph ueber fuenf Tabellen und kann keinen FK tragen —
-    die Aufraeumung ist deshalb Aufgabe des Backfills.
+    die Aufraeumung ist deshalb Aufgabe des Backfills. Der Workspace dagegen
+    muss seit Migration 0105 existieren (FK mit CASCADE).
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
 
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
     ghost = uuid4()
 
     async def _insert() -> None:
@@ -184,16 +284,76 @@ def test_backfill_removes_orphaned_chunks() -> None:
                 "INSERT INTO content_chunk "
                 "(workspace_id, entity_type, entity_id, version, locale, ord, text) "
                 "VALUES ($1, 'resource', $2, 1, 'de', 0, 'verwaiste Passage')",
-                uuid4(),
+                ws,
                 ghost,
             )
         finally:
             await conn.close()
 
-    asyncio.run(_insert())
-    assert _sql("SELECT count(*) FROM content_chunk WHERE entity_id = $1", ghost) == 1
+    try:
+        asyncio.run(_insert())
+        assert _sql("SELECT count(*) FROM content_chunk WHERE entity_id = $1", ghost) == 1
 
-    _entities, _chunks, orphans = _run_backfill()
+        _entities, _chunks, orphans = _run_backfill()
 
-    assert orphans >= 1
-    assert _sql("SELECT count(*) FROM content_chunk WHERE entity_id = $1", ghost) == 0
+        assert orphans >= 1
+        assert _sql("SELECT count(*) FROM content_chunk WHERE entity_id = $1", ghost) == 0
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_backfill_skips_entity_whose_workspace_vanished_meanwhile() -> None:
+    """Wird ein Workspace zwischen Lesen und Schreiben geloescht, verletzt der
+    Insert den FK aus 0105. Der globale Lauf (CLI/Start-Sync) ueberspringt die
+    Entity, statt komplett abzubrechen.
+
+    Die Wettlaufsituation wird nachgestellt, indem `replace` die Passagen auf
+    einen nicht (mehr) existierenden Workspace schreibt — das ist genau die
+    echte FK-Verletzung, die der Lauf im Wettlauf saehe. Gescopet auf den
+    Test-Workspace; der globale Lauf nutzt dieselbe Schleife.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    class _VanishedWorkspaceRepo(PgContentChunkRepository):
+        async def replace(
+            self,
+            conn: asyncpg.Connection,
+            workspace_id: UUID,
+            entity_type: str,
+            entity_id: UUID,
+            version: int,
+            locale: str,
+            chunks: Any,
+            vectors: Any = None,
+        ) -> None:
+            # Bestand der Entity raeumen (sonst greift der Slot-Index vor dem
+            # FK), dann auf einen Workspace schreiben, den es "inzwischen"
+            # nicht mehr gibt.
+            await conn.execute(
+                "DELETE FROM content_chunk WHERE workspace_id = $1 AND entity_id = $2",
+                workspace_id,
+                entity_id,
+            )
+            await super().replace(
+                conn, uuid4(), entity_type, entity_id, version, locale, chunks, vectors
+            )
+
+    async def _run(ws: UUID) -> tuple[int, int, int]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            return await backfill_chunks(conn, ws)
+        finally:
+            await conn.close()
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)  # Seed: aktive Versionen im Bestand
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(chunk_backfill, "PgContentChunkRepository", _VanishedWorkspaceRepo)
+            entities, chunks, _orphans = asyncio.run(_run(ws))
+        assert (entities, chunks) == (0, 0)
+    finally:
+        cleanup_workspaces([owner])

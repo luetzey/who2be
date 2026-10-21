@@ -310,6 +310,40 @@ describe('createApi', () => {
     expect(url).toContain(`/v1/workspaces/${WS}/tokens/t1`)
     expect(init.method).toBe('DELETE')
   })
+
+  it('listSessions setzt Filter und Cursor und liest X-Next-Cursor (E5b)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('[]', { status: 200, headers: { 'X-Next-Cursor': 'next-1' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const page = await createApi('tok', WS).listSessions(
+      { agent_id: 'a1', case_id: 'c1', due: true },
+      { cursor: 'cur', limit: 5 },
+    )
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), 'http://x')
+    expect(url.pathname).toBe(`/v1/workspaces/${WS}/feedback-sessions`)
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      agent_id: 'a1',
+      case_id: 'c1',
+      due: 'true',
+      cursor: 'cur',
+      limit: '5',
+    })
+    expect(page).toEqual({ items: [], next_cursor: 'next-1' })
+  })
+
+  it('listSessions ohne Filter: kein due-Parameter, letzte Seite ohne Cursor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const page = await createApi('tok', WS).listSessions({ due: false })
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), 'http://x')
+    expect(url.search).toBe('')
+    expect(page.next_cursor).toBeNull()
+  })
 })
 
 describe('fetchMe', () => {

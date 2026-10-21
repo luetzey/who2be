@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { notify } from '@/lib/feedback'
+import { cn } from '@/lib/utils'
 
 import {
   ENTRY_FACETS,
@@ -120,13 +121,22 @@ function useAgentMemoryCounts(agentId: string, nonce: number): CardCounts {
  * verlinkt dorthin. Agentengedaechtnis sieht erst `editor` (ADR-0053 6.4.1) —
  * fuer viewer rendert die Karte nichts.
  */
-export function AgentMemoryCard({ agent }: { agent: Agent }) {
+export function AgentMemoryCard({ agent, framed = true }: { agent: Agent; framed?: boolean }) {
   const role = useCurrentWorkspaceRole()
   if (role === null || role === 'viewer') return null
-  return <AgentMemoryCardContent agent={agent} />
+  return <AgentMemoryCardContent agent={agent} framed={framed} />
 }
 
-function AgentMemoryCardContent({ agent }: { agent: Agent }) {
+// Ohne Rahmen (Tab „Gedächtnis“ der Agent-Seite, Navigation-Spec §3.1): kein
+// Kartenrand, kein Schatten, kein Innenabstand an der Seite — der Tab ist der
+// Rahmen. Inhalt und Verhalten bleiben identisch.
+const UNFRAMED = {
+  card: 'border-0 bg-transparent shadow-none',
+  header: 'px-0 pt-0',
+  content: 'px-0',
+}
+
+function AgentMemoryCardContent({ agent, framed }: { agent: Agent; framed: boolean }) {
   const { t, i18n } = useTranslation('agents')
   const wsPath = useWorkspacePath()
   const [facets, setFacets] = useState<FacetFilters>(NO_FILTERS)
@@ -223,9 +233,12 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
       id="memory"
       ref={cardRef}
       data-testid="agent-memory-card"
-      className="scroll-mt-6 transition-shadow duration-[var(--duration-fast)] ease-standard data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-brand/50"
+      className={cn(
+        'scroll-mt-6 transition-shadow duration-[var(--duration-fast)] ease-standard data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-brand/50',
+        !framed && UNFRAMED.card,
+      )}
     >
-      <CardHeader>
+      <CardHeader className={framed ? undefined : UNFRAMED.header}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1.5">
             <CardTitle tabIndex={-1} className="outline-none" data-memory-card-heading>
@@ -261,7 +274,7 @@ function AgentMemoryCardContent({ agent }: { agent: Agent }) {
           </p>
         ) : null}
       </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4">
+      <CardContent className={cn('flex min-w-0 flex-col gap-4', !framed && UNFRAMED.content)}>
         {memoryOff ? (
           <AttentionBanner
             icon={Brain}

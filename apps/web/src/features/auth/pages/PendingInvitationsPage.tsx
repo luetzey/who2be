@@ -12,6 +12,7 @@ import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LoadingState } from '@/components/data/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
@@ -205,7 +206,7 @@ export function PendingInvitationsPage() {
                   {t('pendingInvitations.role', { role: roleLabel(invitation.role) })}
                   {' · '}
                   {t('pendingInvitations.expires', {
-                    date: new Date(invitation.expires_at).toLocaleDateString(),
+                    date: formatDate(invitation.expires_at),
                   })}
                 </p>
               </div>

@@ -18,6 +18,13 @@
 //      PROD-Fehler bei fehlender Env entfaellt: „derselbe Origin" kann nicht
 //      die falsche Instanz sein.
 
+import {
+  type LocalizedText,
+  type NoticeLevel,
+  resolveFreeText,
+  resolveNoticeLevel,
+} from '@/lib/operatorText'
+
 interface Config {
   apiBaseUrl: string
   // Streamable-HTTP-Endpoint des MCP-Servers (ADR-0034). Optional via
@@ -42,6 +49,16 @@ interface Config {
   // Optionaler Kontakt (`WHO2BE_LAUNCH_CONTACT`, z. B. eine Mail-Adresse), der
   // auf der Hinweisseite angezeigt wird. Leerstring = kein Kontakt-Block.
   launchContact: string
+  // Freier Hinweistext pro Sprache (`WHO2BE_LAUNCH_MESSAGE_DE`/`_EN`, Karte
+  // t_27d7c6ad). Ersetzt den festen Fliesstext der Hinweisseite. Bereits
+  // getrimmt und auf `FREE_TEXT_MAX_LENGTH` gekappt; leer = fester Text.
+  // Auswahl nach Sprache: `pickLocalizedText`.
+  launchMessage: LocalizedText
+  // Optionales Banner (`WHO2BE_NOTICE_DE`/`_EN`, `WHO2BE_NOTICE_LEVEL`) auf
+  // Login und in der App, z. B. fuer Wartung oder Neustart. Beide leer = kein
+  // Banner. Level unbekannt → "info".
+  notice: LocalizedText
+  noticeLevel: NoticeLevel
   // Absolute Obergrenze fuer "Angemeldet bleiben" auf der Login-Seite (Issue
   // #430, ADR-0052): `WHO2BE_SESSION_MAX_AGE_HOURS`. Nur bei gesetztem Haken
   // relevant — die heutige Tab-Lifetime-Session (kein Haken) ist davon
@@ -55,6 +72,17 @@ interface Config {
   // Backend (`GOTRUE_SECURITY_CAPTCHA_*`); dieser Schluessel ist nur die
   // Client-Haelfte und bewusst oeffentlich (er steht im ausgelieferten HTML).
   turnstileSiteKey: string
+  // Fehler-Tracking (Stabilitaet A3, ADR-0062): DSN eines Sentry-kompatiblen
+  // Trackers (GlitchTip), `WHO2BE_SENTRY_DSN`. NUR zur Laufzeit aus
+  // `/config.js`, bewusst ohne Build-Arg und ohne Same-Origin-Fallback.
+  // Leerstring = aus: das SDK wird dann nicht geladen und schickt nichts
+  // (`src/lib/errorTracking.ts`).
+  sentryDsn: string
+  // `WHO2BE_SENTRY_ENVIRONMENT`, Default "production".
+  sentryEnvironment: string
+  // `WHO2BE_SENTRY_RELEASE`, leer = ohne Release (die Source-Maps werden per
+  // Debug-ID zugeordnet, nicht per Release).
+  sentryRelease: string
 }
 
 /** Von `/config.js` gesetzte Runtime-Werte. Leerstring = „nicht gesetzt". */
@@ -66,8 +94,16 @@ export interface RuntimeConfig {
   signupDisabled?: boolean
   launchMode?: string
   launchContact?: string
+  launchMessageDe?: string
+  launchMessageEn?: string
+  noticeDe?: string
+  noticeEn?: string
+  noticeLevel?: string
   sessionMaxAgeHours?: number
   turnstileSiteKey?: string
+  sentryDsn?: string
+  sentryEnvironment?: string
+  sentryRelease?: string
 }
 
 declare global {
@@ -195,6 +231,12 @@ export function resolveConfig(): Config {
           'who2be-local-anon-key',
     launchMode,
     launchContact: rt.launchContact ?? '',
+    launchMessage: {
+      de: resolveFreeText(rt.launchMessageDe),
+      en: resolveFreeText(rt.launchMessageEn),
+    },
+    notice: { de: resolveFreeText(rt.noticeDe), en: resolveFreeText(rt.noticeEn) },
+    noticeLevel: resolveNoticeLevel(rt.noticeLevel),
     sessionMaxAgeHours: resolveSessionMaxAgeHours(rt.sessionMaxAgeHours),
     // Runtime (`/config.js`) → Build-Arg (`VITE_`) → leer. Bewusst OHNE
     // `read()`: dessen PROD-Fallback auf den eigenen Origin ergaebe hier
@@ -204,6 +246,11 @@ export function resolveConfig(): Config {
     turnstileSiteKey:
       rt.turnstileSiteKey ??
       ((import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? ''),
+    // Nur Runtime: ein eingebackener DSN wuerde jedes Image an einen Tracker
+    // binden. Leer = Fehler-Tracking aus.
+    sentryDsn: (rt.sentryDsn ?? '').trim(),
+    sentryEnvironment: (rt.sentryEnvironment ?? '').trim() || 'production',
+    sentryRelease: (rt.sentryRelease ?? '').trim(),
     // Rueckwaerts-kompatibel (Issue #429, Weiche 2a): der Altschalter
     // (`VITE_WHO2BE_SIGNUP_DISABLED`) UND `launchMode === 'coming_soon'`
     // fuehren beide zu `signupDisabled`. `40-who2be-runtime-config.sh`

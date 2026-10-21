@@ -8,6 +8,7 @@ import i18n from '@/i18n'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { NoticeBanner } from '@/components/layout/NoticeBanner'
 import { AuthBrand } from '@/components/layout/Wordmark'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -201,7 +202,11 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 py-10 break-words">
+      {/* Betreiber-Hinweis (Wartung, Neustart …), Karte t_27d7c6ad. Hier nicht
+          wegklickbar: er erklaert, warum die Anmeldung gerade hakt. `mt-6`
+          unter sm haelt ihn unter der fixen Sprach-Insel (PublicLayout). */}
+      <NoticeBanner className="mt-6 max-w-md rounded-lg sm:mt-0" />
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <AuthBrand label={t('brand')} tagline={t('tagline')} />

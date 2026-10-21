@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} von {{total}} angezeigt"
     },
+    "usageLine": {
+      "label": "Nutzung",
+      "used": "{{n}}× in {{days}} Tagen · zuletzt {{age}} · gezählt seit {{date}}",
+      "never": "Noch keine Nutzung · gezählt seit {{date}}"
+    },
     "table": {
       "scrollHint": "Seitlich wischen für weitere Spalten"
     },
@@ -50,14 +55,14 @@
     },
     "status": {
       "draft": "Entwurf",
-      "review": "In Review",
+      "review": "Zur Freigabe",
       "active": "Aktiv",
       "inactive": "Inaktiv"
     },
     "statusBar": {
       "ariaLabel": "Status-Aktionen",
       "promote": "Aktivieren",
-      "submit": "Zur Review einreichen",
+      "submit": "Zur Freigabe einreichen",
       "reject": "Ablehnen",
       "reactivate": "Reaktivieren als Draft",
       "adminOnly": "Nur Admins können aktivieren",
@@ -69,13 +74,13 @@
       "viewChanges": "Änderungen und Prüffälle ansehen",
       "fallback": "Aktion fehlgeschlagen.",
       "error": {
-        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+        "promoteFill": "Vor dem Aktivieren ausfüllen: {{fields}}.",
         "promoteTitle": "Promote nicht möglich"
       },
       "toast": {
         "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
+        "submitted": "Zur Freigabe eingereicht.",
+        "rejected": "Freigabe abgelehnt.",
         "reactivated": "Reaktiviert als Entwurf."
       }
     },
@@ -189,7 +194,7 @@
       "consent_requires_session": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
       "invalid_cursor": "Ungueltiger Cursor.",
       "draft_conflict": "Es existiert bereits ein Draft. Promote oder verwirf den bestehenden Draft, bevor du erneut editierst.",
-      "review_conflict": "Diese Version steht in der Review — Auto-Save ist deaktiviert. Lehne die Review erst ab, bevor du weiter editierst.",
+      "review_conflict": "Diese Version liegt zur Freigabe — Auto-Save ist deaktiviert. Lehne die Version erst ab, bevor du weiter editierst.",
       "mfa_required": "Diese Admin-Aktion erfordert Zwei-Faktor-Anmeldung. Richte unter Einstellungen → Konto einen Authenticator ein; hast du schon einen, melde dich erneut an.",
       "area_id_required_for_human": "Ohne area_id kann nur ein agent-gebundener Token schreiben oder ingestieren (private Area). Menschen nutzen den area-spezifischen Endpunkt (POST /work-areas/{area_id}/...).",
       "template_version_inactive": "Das verlinkte System-Prompt-Template hat keine aktive Version — bitte erst veroeffentlichen.",
@@ -221,7 +226,7 @@
     },
     "toast": {
       "linksSaved": "Verknüpfungen gespeichert.",
-      "blockLinksSaved": "Block-Verknuepfungen gespeichert.",
+      "blockLinksSaved": "Block-Verknüpfungen gespeichert.",
       "compositionSaved": "Composition gespeichert.",
       "subResourcesSaved": "Sub-Resources gespeichert."
     }
@@ -249,9 +254,18 @@
       "memory": "Gedächtnis"
     },
     "signOut": "Abmelden",
+    "inbox": {
+      "label": "Zu erledigen",
+      "bell_zero": "Zu erledigen: nichts offen",
+      "bell_one": "Zu erledigen: {{count}} offen",
+      "bell_other": "Zu erledigen: {{count}} offen"
+    },
     "language": {
       "label": "Sprache",
       "switch": "Sprache umstellen"
+    },
+    "notice": {
+      "dismiss": "Hinweis ausblenden"
     },
     "theme": {
       "switch": "Theme umstellen",
@@ -393,6 +407,14 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Speichern",
+      "pageTabsAria": "Bereiche des Agenten",
+      "pageTabs": {
+        "overview": "Überblick",
+        "evolution": "Weiterentwicklung",
+        "memory": "Gedächtnis",
+        "tests": "Prüffälle",
+        "settings": "Einstellungen"
+      },
       "tabsAria": "Agent-Einstellungen",
       "tabs": {
         "config": "Konfiguration",
@@ -465,7 +487,7 @@
           },
           "editorNoApproval": {
             "label": "Editor ohne Freigabe",
-            "description": "Darf Inhalte anlegen/ändern und zur Review einreichen (Entwurf → Review), aber keine Version aktivieren oder zurückziehen."
+            "description": "Darf Inhalte anlegen/ändern und zur Freigabe einreichen (Entwurf → Zur Freigabe), aber keine Version aktivieren oder zurückziehen."
           },
           "editorWithApproval": {
             "label": "Editor mit Freigabe",
@@ -499,7 +521,7 @@
           "playbook_write": "Playbooks erstellen/ändern/verknüpfen",
           "resource_write": "Resources erstellen/ändern/verknüpfen",
           "agent_write": "Agenten erstellen/ändern",
-          "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
+          "system_prompt_write": "System-Prompts verfassen (zur Freigabe einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
           "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
           "promote_retire": "Versionen aktivieren/deaktivieren",
@@ -563,12 +585,51 @@
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
-      "noPlaybooks": "Keine Playbooks verknüpft.",
-      "summaryPlaybooks_one": "{{count}} Playbook",
-      "summaryPlaybooks_other": "{{count}} Playbooks",
-      "summaryNoPlaybooks": "keine Playbooks",
-      "summaryNoPersona": "Ohne Persona",
-      "summarySeparator": " · "
+      "noPlaybooks": "Keine Playbooks verknüpft."
+    },
+    "overview": {
+      "glance": "Auf einen Blick",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Rückmeldungen offen",
+        "casesReopened_one": "1 wieder offen",
+        "casesReopened_other": "{{count}} wieder offen",
+        "casesInProgress_one": "1 in Arbeit",
+        "casesInProgress_other": "{{count}} in Arbeit",
+        "feedback": "Feedback zu seinen Bausteinen",
+        "feedbackSub_one": "1 negativ · {{days}} Tage",
+        "feedbackSub_other": "{{count}} negativ · {{days}} Tage",
+        "memory": "Gedächtnis",
+        "memoryPending_one": "1 zur Freigabe",
+        "memoryPending_other": "{{count}} zur Freigabe",
+        "memoryExpiring_one": "1 läuft bald ab",
+        "memoryExpiring_other": "{{count}} laufen bald ab",
+        "patterns": "Muster",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Lernvorschlag",
+        "patternCase": "Rückmeldungen",
+        "tests": "Prüffälle",
+        "testsActive": "aktiv",
+        "usage": "Nutzung",
+        "usageLast": "zuletzt {{age}} · {{days}} Tage",
+        "usageNever": "Noch keine · gezählt seit {{date}}",
+        "none": "Noch keine",
+        "unavailable": "Nicht verfügbar"
+      },
+      "workAreas": {
+        "title": "Arbeitsbereiche",
+        "own": "eigener",
+        "shared": "geteilt · {{level}}",
+        "level": {
+          "read": "lesen",
+          "write": "lesen/schreiben"
+        },
+        "moreAgents_one": "+1 Agent",
+        "moreAgents_other": "+{{count}} Agenten",
+        "empty": "Dieser Agent hat noch keinen Arbeitsbereich. Der private entsteht beim ersten Zugriff.",
+        "hint": "Zugriff vergibst du am Arbeitsbereich unter „Zugriff“.",
+        "error": "Die Arbeitsbereiche konnten nicht geladen werden."
+      }
     },
     "copy": {
       "plain": "Kopieren",
@@ -618,12 +679,7 @@
       "error": "Kopieren fehlgeschlagen."
     },
     "filter": {
-      "all": "Alle",
-      "statusGroup": "Nach Status filtern",
-      "searchLabel": "Suche",
       "searchPlaceholder": "Agents durchsuchen…",
-      "reset": "Filter zurücksetzen",
-      "emptyTitle": "Keine Treffer",
       "emptyDescription": "Kein Agent passt zu Filter und Suche."
     },
     "memory": {
@@ -704,7 +760,7 @@
     "signup": {
       "title": "Registrieren",
       "description": "Erstelle ein Konto, um deinen Workspace einzurichten.",
-      "descriptionPending": "Bestaetige deine E-Mail-Adresse ueber den Link, den wir dir geschickt haben.",
+      "descriptionPending": "Bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
       "submit": "Konto erstellen",
       "confirmPending": "Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung abzuschliessen.",
       "alreadyAccount": "Schon ein Konto?",
@@ -716,27 +772,27 @@
         "privacyLink": "Datenschutzerklaerung",
         "after": "."
       },
-      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklärung zu, um fortzufahren."
     },
     "captcha": {
-      "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+      "pending": "Bitte bestätige kurz, dass du kein Bot bist.",
       "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
-      "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau spaeter wieder vorbei.",
+      "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau später wieder vorbei.",
       "contact": "Fragen? Schreib uns an:"
     },
     "resetPassword": {
-      "title": "Passwort zuruecksetzen",
+      "title": "Passwort zurücksetzen",
       "description": "Wir senden dir einen Link, mit dem du ein neues Passwort setzen kannst.",
       "descriptionSent": "Wenn ein Konto zu dieser E-Mail existiert, ist eine Mail mit Reset-Link unterwegs.",
       "submit": "Reset-Link senden",
-      "checkInbox": "Pruefe dein Postfach und folge dem Link in der E-Mail."
+      "checkInbox": "Prüfe dein Postfach und folge dem Link in der E-Mail."
     },
     "setPassword": {
       "title": "Passwort setzen",
-      "description": "Lege ein Passwort fest, damit du dich beim naechsten Mal direkt anmelden kannst.",
+      "description": "Lege ein Passwort fest, damit du dich beim nächsten Mal direkt anmelden kannst.",
       "submit": "Passwort setzen",
       "success": "Passwort gesetzt."
     },
@@ -771,8 +827,8 @@
       "loadingTitle": "Anmeldung wird abgeschlossen…",
       "loadingDescription": "Einen Moment, wir richten deine Sitzung ein.",
       "errorTitle": "Anmeldung fehlgeschlagen",
-      "errorDescription": "Der Login ueber den externen Anbieter klappte nicht.",
-      "noSession": "Es kam keine gueltige Sitzung zurueck. Bitte erneut versuchen."
+      "errorDescription": "Der Login über den externen Anbieter klappte nicht.",
+      "noSession": "Es kam keine gültige Sitzung zurück. Bitte erneut versuchen."
     },
     "oauth": {
       "google": "Mit Google anmelden",
@@ -845,7 +901,7 @@
       },
       "events": {
         "promoted_to_active": "aktivierte",
-        "submitted_for_review": "reichte zur Review ein",
+        "submitted_for_review": "reichte zur Freigabe ein",
         "rejected": "lehnte ab",
         "returned_to_draft": "setzte zurück auf Entwurf",
         "deactivated": "deaktivierte",
@@ -860,50 +916,24 @@
       "pageOf": "Seite {{page}} von {{totalPages}}",
       "next": "Weiter"
     },
-    "attention": {
-      "ariaLabel": "Braucht jetzt deine Aufmerksamkeit",
-      "eyebrow": "Braucht jetzt deine Aufmerksamkeit",
-      "reviews": {
-        "title_one": "1 Version liegt zur Review",
-        "title_other": "{{count}} Versionen liegen zur Review",
-        "description": "Prüfe die eingereichten Versionen und veröffentliche sie oder setze sie zurück auf Entwurf.",
-        "openVersion": "{{name}} v{{version}} prüfen",
-        "openList": {
-          "persona_one": "1 Persona prüfen",
-          "persona_other": "{{count}} Personas prüfen",
-          "playbook_one": "1 Playbook prüfen",
-          "playbook_other": "{{count}} Playbooks prüfen",
-          "resource_one": "1 Resource prüfen",
-          "resource_other": "{{count}} Resources prüfen"
-        }
-      },
-      "memories": {
-        "title_one": "1 Eintrag zur Freigabe",
-        "title_other": "{{count}} Einträge zur Freigabe",
-        "description": "Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab.",
-        "action": "Freigeben"
-      },
-      "patterns": {
-        "title_one": "1 Muster",
-        "title_other": "{{count}} Muster",
-        "description": "Lernvorschläge oder Fälle, die sich wiederholen.",
-        "action": "Ansehen"
-      },
-      "cases": {
-        "title_one": "1 offener Fall",
-        "title_other": "{{count}} offene Fälle",
-        "description": "Gemeldete Situationen, die noch niemand eingeordnet hat.",
-        "action": "Einordnen"
-      },
-      "systemPrompts": {
-        "title_one": "1 System-Prompt liegt zur Review",
-        "title_other": "{{count}} System-Prompts liegen zur Review",
-        "description": "Prüfe die eingereichten System-Prompt-Versionen.",
-        "action": "Zur Review"
-      },
-      "allClear": {
-        "title": "Alles erledigt",
-        "description": "Nichts wartet gerade auf dich — leg direkt los."
+    "inbox": {
+      "ariaLabel": "Zu erledigen",
+      "loading": "Aufgaben werden gezählt …",
+      "title_one": "1 Aufgabe wartet auf dich",
+      "title_other": "{{count}} Aufgaben warten auf dich",
+      "clear": "Nichts zu erledigen.",
+      "action": "Alle ansehen",
+      "more_one": "+ 1 weitere",
+      "more_other": "+ {{count}} weitere",
+      "kind": {
+        "followUps_one": "1 Nachkontrolle fällig",
+        "followUps_other": "{{count}} Nachkontrollen fällig",
+        "memory_one": "1 Gedächtnis-Eintrag",
+        "memory_other": "{{count}} Gedächtnis-Einträge",
+        "versions_one": "1 Version zur Freigabe",
+        "versions_other": "{{count}} Versionen zur Freigabe",
+        "cases_one": "1 Rückmeldung",
+        "cases_other": "{{count}} Rückmeldungen"
       }
     },
     "quickStart": {
@@ -943,7 +973,7 @@
       "title": "Impressum",
       "sections": {
         "legalNotice": {
-          "heading": "Angaben gemaess § 5 DDG",
+          "heading": "Angaben gemäß § 5 DDG",
           "companyName": "Firmenname / Rechtsform",
           "street": "Strasse und Hausnummer",
           "city": "PLZ und Ort",
@@ -965,13 +995,13 @@
           "registryLabel": "Eintragung im",
           "registry": "Handels-/Vereinsregister",
           "courtLabel": "Registergericht:",
-          "court": "zustaendiges Registergericht",
+          "court": "zuständiges Registergericht",
           "numberLabel": "Registernummer:",
           "number": "Registernummer"
         },
         "vatId": {
           "heading": "Umsatzsteuer-ID",
-          "label": "Umsatzsteuer-Identifikationsnummer gemaess § 27a UStG:",
+          "label": "Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG:",
           "value": "USt-IdNr."
         },
         "responsible": {
@@ -980,7 +1010,7 @@
         },
         "dispute": {
           "heading": "EU-Streitschlichtung",
-          "text1": "Die Europaeische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:",
+          "text1": "Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:",
           "platformLink": "Link zur OS-Plattform",
           "text2": "Wir sind",
           "participation": "bereit / nicht bereit / nicht verpflichtet",
@@ -992,18 +1022,18 @@
       "title": "Allgemeine Geschaeftsbedingungen (AGB)",
       "intro": "Diese AGB regeln die Nutzung von Who2Be (SaaS-Mischvertrag aus Miet- und Dienstleistungselementen) durch",
       "introUserGroup": "Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)",
-      "introPeriod": ". Abschnitt A gilt fuer alle Nutzer, Abschnitt B nur fuer Verbraucher (B2C), Abschnitt C nur fuer Unternehmer (B2B).",
+      "introPeriod": ". Abschnitt A gilt für alle Nutzer, Abschnitt B nur für Verbraucher (B2C), Abschnitt C nur für Unternehmer (B2B).",
       "groups": {
         "general": {
           "heading": "A. Allgemeine Bestimmungen (alle Nutzer)"
         },
         "consumer": {
-          "heading": "B. Zusaetzliche Bestimmungen fuer Verbraucher (B2C)",
-          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die ueberwiegend weder seiner gewerblichen noch seiner selbstaendigen beruflichen Taetigkeit zugerechnet werden koennen."
+          "heading": "B. Zusätzliche Bestimmungen für Verbraucher (B2C)",
+          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die überwiegend weder seiner gewerblichen noch seiner selbständigen beruflichen Tätigkeit zugerechnet werden können."
         },
         "business": {
-          "heading": "C. Zusaetzliche Bestimmungen fuer Unternehmer (B2B)",
-          "note": "Unternehmer ist, wer den Vertrag in Ausuebung gewerblicher oder selbstaendiger beruflicher Taetigkeit abschliesst."
+          "heading": "C. Zusätzliche Bestimmungen für Unternehmer (B2B)",
+          "note": "Unternehmer ist, wer den Vertrag in Ausübung gewerblicher oder selbständiger beruflicher Tätigkeit abschliesst."
         }
       },
       "sections": {
@@ -1021,70 +1051,70 @@
         },
         "pricing": {
           "heading": "§ 4 Preise & Zahlungsbedingungen",
-          "body": "Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Faelligkeit, Verzug, Steuern"
+          "body": "Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Fälligkeit, Verzug, Steuern"
         },
         "termination": {
-          "heading": "§ 5 Laufzeit & Kuendigung",
-          "body": "Vertragslaufzeit, Verlaengerung, ordentliche/ausserordentliche Kuendigung, Kuendigung zum Periodenende"
+          "heading": "§ 5 Laufzeit & Kündigung",
+          "body": "Vertragslaufzeit, Verlängerung, ordentliche/ausserordentliche Kündigung, Kündigung zum Periodenende"
         },
         "obligations": {
-          "heading": "§ 6 Pflichten der Nutzer & zulaessige Nutzung",
-          "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung fuer eingestellte Daten"
+          "heading": "§ 6 Pflichten der Nutzer & zulässige Nutzung",
+          "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung für eingestellte Daten"
         },
         "availability": {
-          "heading": "§ 7 Verfuegbarkeit, Service-Level (SLA), Wartung & Aenderungen",
-          "body": "Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt",
+          "heading": "§ 7 Verfügbarkeit, Service-Level (SLA), Wartung & Änderungen",
+          "body": "Verfügbarkeitszusage, Wartungsfenster, Änderungsvorbehalt",
           "slaIntro": "Service-Level (verbindliche Werte folgen vom Betreiber):",
-          "slaUptimeLabel": "Verfuegbarkeit (Monatsmittel):",
-          "slaUptime": "Zielwert Verfuegbarkeit, z. B. 99,x %",
+          "slaUptimeLabel": "Verfügbarkeit (Monatsmittel):",
+          "slaUptime": "Zielwert Verfügbarkeit, z. B. 99,x %",
           "slaResponseLabel": "Reaktionszeiten Support:",
-          "slaResponse": "Reaktionszeiten je Prioritaet/Plan",
+          "slaResponse": "Reaktionszeiten je Priorität/Plan",
           "slaMaintenanceLabel": "Geplante Wartungsfenster:",
-          "slaMaintenance": "angekuendigte Wartungsfenster (Zeitraum/Vorlauf)",
+          "slaMaintenance": "angekündigte Wartungsfenster (Zeitraum/Vorlauf)",
           "slaCreditsLabel": "Service-Gutschriften:",
           "slaCredits": "Regelung zu Gutschriften bei SLA-Unterschreitung, falls zugesagt"
         },
         "liability": {
           "heading": "§ 8 Haftung",
-          "body": "Haftungsregelung (Vorsatz/grobe Fahrlaessigkeit, Kardinalpflichten, Begrenzung)"
+          "body": "Haftungsregelung (Vorsatz/grobe Fahrlässigkeit, Kardinalpflichten, Begrenzung)"
         },
         "privacy": {
           "heading": "§ 9 Datenschutz",
-          "body": "Verweis auf Datenschutzerklaerung und ggf. Auftragsverarbeitungsvertrag (DPA)"
+          "body": "Verweis auf Datenschutzerklärung und ggf. Auftragsverarbeitungsvertrag (DPA)"
         },
         "final": {
           "heading": "§ 10 Schlussbestimmungen",
-          "body": "Salvatorische Klausel, Aenderungen der AGB, Textform"
+          "body": "Salvatorische Klausel, Änderungen der AGB, Textform"
         }
       },
       "consumerSections": {
         "withdrawal": {
           "heading": "§ 11 Widerrufsrecht & Widerrufsbelehrung",
-          "body": "Widerrufsbelehrung fuer Verbraucher (Frist, Form, Rechtsfolgen, Beginn der Frist)",
+          "body": "Widerrufsbelehrung für Verbraucher (Frist, Form, Rechtsfolgen, Beginn der Frist)",
           "formLabel": "Muster-Widerrufsformular:",
-          "form": "Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlaegig (z. B. vorzeitiger Leistungsbeginn auf ausdruecklichen Wunsch)"
+          "form": "Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlägig (z. B. vorzeitiger Leistungsbeginn auf ausdrücklichen Wunsch)"
         },
         "einvoice": {
-          "heading": "§ 12 Elektronische Rechnung — Zustimmung des Empfaengers",
-          "body": "Hinweis: Rechnungen/Belege werden elektronisch bereitgestellt; gegenueber Verbrauchern ist hierfuer die Zustimmung des Empfaengers erforderlich",
+          "heading": "§ 12 Elektronische Rechnung — Zustimmung des Empfängers",
+          "body": "Hinweis: Rechnungen/Belege werden elektronisch bereitgestellt; gegenüber Verbrauchern ist hierfür die Zustimmung des Empfängers erforderlich",
           "consentLabel": "Zustimmung:",
-          "consent": "Formulierung der Empfaengerzustimmung zur elektronischen Rechnung (B2C)"
+          "consent": "Formulierung der Empfängerzustimmung zur elektronischen Rechnung (B2C)"
         }
       },
       "businessSections": {
         "deviations": {
-          "heading": "§ 13 Abweichende Regelungen fuer Unternehmer",
-          "body": "z. B. Ausschluss des Widerrufsrechts, abweichende Haftung/Gewaehrleistung, Aufrechnung/Zurueckbehaltung, Textform"
+          "heading": "§ 13 Abweichende Regelungen für Unternehmer",
+          "body": "z. B. Ausschluss des Widerrufsrechts, abweichende Haftung/Gewährleistung, Aufrechnung/Zurückbehaltung, Textform"
         },
         "jurisdiction": {
-          "heading": "§ 14 Gerichtsstand, Erfuellungsort & anwendbares Recht (B2B)",
-          "body": "Gerichtsstand, Erfuellungsort und anwendbares Recht fuer Unternehmer"
+          "heading": "§ 14 Gerichtsstand, Erfüllungsort & anwendbares Recht (B2B)",
+          "body": "Gerichtsstand, Erfüllungsort und anwendbares Recht für Unternehmer"
         }
       }
     },
     "privacy": {
       "title": "Datenschutzerklaerung",
-      "intro": "Diese Erklaerung informiert ueber die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
+      "intro": "Diese Erklärung informiert über die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
       "sections": {
         "controller": {
           "heading": "1. Verantwortlicher",
@@ -1103,12 +1133,12 @@
         },
         "cookies": {
           "heading": "4. Cookies & Einwilligung",
-          "text1": "Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von § 25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung fuer die Zukunft widerrufen werden.",
+          "text1": "Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von § 25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung für die Zukunft widerrufen werden.",
           "listPlaceholder": "Auflistung konkreter Cookies / Speicherdauer / Widerrufsweg"
         },
         "account": {
           "heading": "5. Registrierung & Konto",
-          "body": "verarbeitete Konto-/Stammdaten, Zweck (Vertragserfuellung Art. 6 Abs. 1 lit. b), Speicherdauer"
+          "body": "verarbeitete Konto-/Stammdaten, Zweck (Vertragserfüllung Art. 6 Abs. 1 lit. b), Speicherdauer"
         },
         "auth": {
           "heading": "6. Authentifizierung (Supabase/GoTrue)",
@@ -1116,7 +1146,7 @@
         },
         "payment": {
           "heading": "7. Zahlungsabwicklung",
-          "body": "Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des Anbieters, Rechtsgrundlage"
+          "body": "Zahlungsdienstleister (Mollie), übermittelte Daten, eigene Datenschutzerklärung des Anbieters, Rechtsgrundlage"
         },
         "captcha": {
           "heading": "8. Bot-Schutz bei der Registrierung",
@@ -1124,21 +1154,21 @@
         },
         "email": {
           "heading": "9. E-Mail-Versand (Transaktionsmails)",
-          "body": "SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage"
+          "body": "SMTP-/Mail-Provider, Anlässe (Verify/Invite/Reset), Rechtsgrundlage"
         },
         "processors": {
-          "heading": "10. Empfaenger & Auftragsverarbeiter",
-          "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig"
+          "heading": "10. Empfänger & Auftragsverarbeiter",
+          "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlägig"
         },
         "retention": {
           "heading": "11. Speicherdauer",
-          "body": "allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen"
+          "body": "allgemeine Löschkonzepte, gesetzliche Aufbewahrungsfristen"
         },
         "rights": {
           "heading": "12. Deine Rechte",
-          "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17), Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).",
-          "authorityLabel": "Zustaendige Aufsichtsbehoerde:",
-          "authorityPlaceholder": "zustaendige Datenschutzbehoerde"
+          "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehörde (Art. 77).",
+          "authorityLabel": "Zuständige Aufsichtsbehörde:",
+          "authorityPlaceholder": "zuständige Datenschutzbehörde"
         }
       }
     },
@@ -1148,11 +1178,11 @@
       "sections": {
         "subject": {
           "heading": "1. Gegenstand & Dauer",
-          "body": "Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kuendigung"
+          "body": "Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kündigung"
         },
         "purpose": {
           "heading": "2. Art & Zweck der Verarbeitung",
-          "body": "beschriebene Verarbeitungstaetigkeiten und Zweck der Auftragsverarbeitung"
+          "body": "beschriebene Verarbeitungstätigkeiten und Zweck der Auftragsverarbeitung"
         },
         "dataTypes": {
           "heading": "3. Art der personenbezogenen Daten",
@@ -1164,11 +1194,11 @@
         },
         "processorObligations": {
           "heading": "5. Pflichten des Auftragsverarbeiters",
-          "body": "Weisungsbindung, Vertraulichkeit, Unterstuetzung bei Betroffenenrechten, Meldepflichten"
+          "body": "Weisungsbindung, Vertraulichkeit, Unterstützung bei Betroffenenrechten, Meldepflichten"
         },
         "tom": {
           "heading": "6. Technische & organisatorische Massnahmen (TOM)",
-          "body": "Verweis auf TOM-Anlage (Verschluesselung, Zugriffskontrolle, RLS, Backups, Logging)"
+          "body": "Verweis auf TOM-Anlage (Verschlüsselung, Zugriffskontrolle, RLS, Backups, Logging)"
         },
         "subprocessors": {
           "heading": "7. Unterauftragsverarbeiter",
@@ -1176,15 +1206,15 @@
         },
         "transfers": {
           "heading": "8. Drittlandtransfers",
-          "body": "Angaben zu Uebermittlungen in Drittlaender und Garantien (SCC) sofern einschlaegig"
+          "body": "Angaben zu Übermittlungen in Drittländer und Garantien (SCC) sofern einschlägig"
         },
         "dataSubjectRights": {
-          "heading": "9. Betroffenenrechte & Unterstuetzung",
-          "body": "Unterstuetzung des Verantwortlichen bei Auskunft/Loeschung/Datenexport"
+          "heading": "9. Betroffenenrechte & Unterstützung",
+          "body": "Unterstützung des Verantwortlichen bei Auskunft/Löschung/Datenexport"
         },
         "deletion": {
-          "heading": "10. Loeschung & Rueckgabe nach Vertragsende",
-          "body": "Loesch-/Rueckgabekonzept nach Vertragsende inkl. Fristen"
+          "heading": "10. Löschung & Rückgabe nach Vertragsende",
+          "body": "Lösch-/Rückgabekonzept nach Vertragsende inkl. Fristen"
         },
         "audits": {
           "heading": "11. Nachweise & Audits",
@@ -1207,7 +1237,7 @@
       "back": "Personas",
       "description": {
         "activeDraft": " · Du arbeitest auf Draft v{{version}}",
-        "activeReview": " · In Review: v{{version}}",
+        "activeReview": " · Zur Freigabe: v{{version}}",
         "active": "Active: v{{version}}",
         "currentVersion": "Aktuelle Version: v{{version}} ({{status}})"
       },
@@ -1218,9 +1248,9 @@
         "reactivate": "Reaktivieren als Draft"
       },
       "toast": {
-        "submitted": "Zur Review eingereicht.",
+        "submitted": "Zur Freigabe eingereicht.",
         "activated": "Version aktiviert.",
-        "rejected": "Review abgelehnt.",
+        "rejected": "Freigabe abgelehnt.",
         "reactivated": "Reaktiviert als Entwurf.",
         "restored": "v{{version}} als Entwurf wiederhergestellt.",
         "actionFailed": "Aktion fehlgeschlagen."
@@ -1349,7 +1379,7 @@
     },
     "skills": {
       "empty": {
-        "text": "Noch keine Skills referenziert. Skills benennen Faehigkeiten, auf die sich die Persona stuetzt — mit einer kurzen Notiz, wofür sie zählen."
+        "text": "Noch keine Skills referenziert. Skills benennen Fähigkeiten, auf die sich die Persona stützt — mit einer kurzen Notiz, wofür sie zählen."
       },
       "addFirst": "Ersten Skill hinzufügen",
       "add": "Skill hinzufügen",
@@ -1454,14 +1484,14 @@
       "back": "Playbooks",
       "activeBadge": "Active: v{{version}}",
       "draftNote": " · Du arbeitest auf Draft v{{version}}",
-      "reviewNote": " · In Review: v{{version}}",
+      "reviewNote": " · Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "triggerList": "Trigger-Liste",
       "triggerLabel": "Trigger",
       "usedInTitle": "Verwendet in",
       "usedInEmpty": "Noch in keiner Persona verwendet",
-      "usedInEmptyDescription": "Verknuepfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen.",
-      "resourceLinksTitle": "Verknuepfte Resource-Bloecke",
+      "usedInEmptyDescription": "Verknüpfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen.",
+      "resourceLinksTitle": "Verknüpfte Resource-Blöcke",
       "resourceLinksBodyNote": "Resource-Verknüpfungen werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.",
       "subPlaybooksTitle": "Sub-Playbooks (Composes)",
       "subPlaybooksEmpty": "Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.",
@@ -1477,7 +1507,7 @@
       },
       "banner": {
         "activeNode": "Aktiv: v{{version}}",
-        "reviewWaiting": "v{{version}} wartet auf Review",
+        "reviewWaiting": "v{{version}} wartet auf Freigabe",
         "draftOpen": "Entwurf: v{{version}}",
         "inactiveCurrent": "Inaktiv: v{{version}}"
       },
@@ -1499,7 +1529,7 @@
       "contentDescription": "Das eigentliche Playbook und seine Auslöser.",
       "contentHelp": "Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität verifizieren; Schritt 3 — Reset-Link versenden. Änderungen erzeugen eine neue Version; alte Versionen bleiben erhalten.",
       "bodyLabel": "Inhalt",
-      "bodyHint": "Tippe / im Editor, um Playbook- oder Resource-Pills einzufügen. Verlinkte Relationen leben im Body.",
+      "bodyHint": "Tippe / für Blöcke und Verweise auf Playbooks, Resources und Werkzeuge.",
       "tagsPlaceholder": "Tag eingeben und Enter drücken",
       "triggersLabel": "Trigger",
       "triggersPlaceholder": "Trigger eingeben und Enter drücken",
@@ -1512,9 +1542,9 @@
     "typeHints": {
       "prompt": "Ein Einzel-Prompt mit klarem Outcome — z. B. „Fasse den Anruf in 3 Bullets zusammen\".",
       "instructions": "Mehrteilige Handlungsanweisung mit Schritt-Reihenfolge — z. B. Onboarding-Flow eines Agenten.",
-      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begruessung oder rechtliche Fussnote.",
+      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begrüßung oder rechtliche Fussnote.",
       "workflow": "Mehrstufiger Prozess mit Verzweigungen — z. B. Eskalation, wenn der Kunde unzufrieden bleibt.",
-      "checklist": "Pruefliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
+      "checklist": "Prüfliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
       "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
     },
     "actions": {
@@ -1526,9 +1556,9 @@
     },
     "toast": {
       "created": "Playbook angelegt.",
-      "submitted": "Zur Review eingereicht.",
+      "submitted": "Zur Freigabe eingereicht.",
       "activated": "Version aktiviert.",
-      "reviewRejected": "Review abgelehnt.",
+      "reviewRejected": "Freigabe abgelehnt.",
       "reactivated": "Reaktiviert als Entwurf.",
       "actionFailed": "Aktion fehlgeschlagen."
     },
@@ -1555,32 +1585,32 @@
     },
     "linkedBlocks": {
       "empty": "Noch keine Bloecke verknuepft.",
-      "ariaLabel": "Verknuepfte Bloecke",
+      "ariaLabel": "Verknüpfte Blöcke",
       "statusActive": "Aktiv",
       "statusDraft": "Nur in Draft",
       "statusDeleted": "Block geloescht",
       "emptyActive": "(leer)",
       "emptyDraft": "(leer — Draft)",
-      "emptyDeleted": "Block nicht mehr verfuegbar",
+      "emptyDeleted": "Block nicht mehr verfügbar",
       "resourceScopeLabel": "Ganzes Dokument",
-      "resourceScopeEmpty": "Resource nicht mehr verfuegbar",
+      "resourceScopeEmpty": "Resource nicht mehr verfügbar",
       "sublinesLazy": "Vollstaendige Resource — Link (lazy), via fetch nachgeladen",
       "sublinesInline": "Vollstaendige Resource — fest eingebettet (inline)"
     },
     "resourcePicker": {
       "triggerButton": "Bloecke verknuepfen",
-      "dialogTitle": "Resource-Bloecke verknuepfen",
-      "dialogDescription": "Waehle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Bloecke sind als Anker erlaubt.",
+      "dialogTitle": "Resource-Blöcke verknüpfen",
+      "dialogDescription": "Wähle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Blöcke sind als Anker erlaubt.",
       "noResources": "Keine Resources.",
-      "selectResourceHint": "Resource waehlen, um Heading-Bloecke zu sehen.",
+      "selectResourceHint": "Resource wählen, um Heading-Blöcke zu sehen.",
       "wholeDocLabel": "Gesamtes Dokument",
       "wholeDocDescription": "Verlinkt die komplette Resource — exklusive zu einzelnen Block-Ankern.",
       "wholeDocAriaLabel": "Gesamtes Dokument verknuepfen",
-      "embedModeGroup": "Embed-Modus fuer das gesamte Dokument",
+      "embedModeGroup": "Embed-Modus für das gesamte Dokument",
       "embedLazy": "Link (lazy)",
       "embedInline": "Fest einbetten",
       "headingBlocksLabel": "Heading-Bloecke",
-      "noHeadings": "Diese Resource hat keine Heading-Bloecke.",
+      "noHeadings": "Diese Resource hat keine Heading-Blöcke.",
       "sectionAriaLabel": "Section {{heading}} verknuepfen",
       "emptySection": "(leere Section)",
       "loadFailed": "Laden fehlgeschlagen.",
@@ -1627,7 +1657,7 @@
       "descriptionPlaceholder": "z. B. Antworten auf die häufigsten Datenschutzfragen",
       "contentTitle": "Inhalt",
       "contentDescription": "Der eigentliche Inhalt der Resource.",
-      "contentHelp": "Einzelne Heading-Bloecke koennen per Block-Ref in Playbooks eingebunden werden. Aenderungen erzeugen eine neue Version.",
+      "contentHelp": "Einzelne Heading-Blöcke können per Block-Ref in Playbooks eingebunden werden. Änderungen erzeugen eine neue Version.",
       "contentLabel": "Inhalt",
       "tagsDescription": "Stichwörter zur Suche und Filterung.",
       "tagsHelp": "Beispiel: „datenschutz, faq, recht\". Enter zum Anlegen, Klick auf das X zum Entfernen. Tags ermöglichen das Filtern in der Resource-Liste und im MCP-Tool list_resources.",
@@ -1637,7 +1667,7 @@
     "detail": {
       "activeVersion": "Active: v{{version}}",
       "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "In Review: v{{version}}",
+      "inReview": "Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "linkedIn": "Verlinkt in",
       "block_one": "{{count}} Block",
@@ -1654,8 +1684,8 @@
       "usedByMeta": "Sub-Resource",
       "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
       "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
-      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
-      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerDraftDescription": "Reiche die Version zur Freigabe ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
       "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
       "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
       "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten.",
@@ -1677,8 +1707,8 @@
       "title": "Sub-Resources (Composition)",
       "description": "Wähle Resources als Sub-Resources aus und ordne sie per Pfeil-Buttons. Agenten laden sie über fetch_resource nach — die Inhalte werden nicht expandiert.",
       "selectedCount": "Ausgewählt ({{count}})",
-      "selectedAriaLabel": "Ausgewaehlte Sub-Resources",
-      "embedModeFor": "Embed-Modus fuer {{name}}",
+      "selectedAriaLabel": "Ausgewählte Sub-Resources",
+      "embedModeFor": "Embed-Modus für {{name}}",
       "modeLazy": "Link (lazy)",
       "modeInline": "Fest einbetten",
       "moveUp": "{{name}} nach oben verschieben",
@@ -1743,6 +1773,42 @@
       "workspace": "Workspace",
       "members": "Mitglieder"
     },
+    "routines": {
+      "title": "Hintergrund-Routinen",
+      "description": "Nur für Betreiber sichtbar und nur lesend. Zeiten in Ortszeit ({{timeZone}}), UTC in Klammern.",
+      "workerLastSeen": "Worker zuletzt gesehen:",
+      "listLabel": "Routinen",
+      "empty": "Keine Routinen registriert.",
+      "none": "—",
+      "neverRun": "Noch kein Lauf",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Zeitplan",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Letzter Lauf",
+      "nextRun": "Nächster Termin",
+      "lastSuccess": "Letzter Erfolg",
+      "counters": "Zähler:",
+      "errorClass": "Fehlerklasse:",
+      "enabled": "An",
+      "disabled": "Aus",
+      "source": {
+        "code": "Quelle: Code",
+        "env": "Quelle: Umgebung"
+      },
+      "status": {
+        "running": "Läuft",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "skipped": "Übersprungen"
+      },
+      "trigger": {
+        "schedule": "nach Zeitplan",
+        "cli": "per CLI",
+        "manual": "manuell"
+      },
+      "externalTitle": "Externer Zeitplan erkannt (Crontab/Dokploy).",
+      "externalDescription": "Kann entfernt werden."
+    },
     "account": {
       "title": "Konto",
       "description": "Dein persönliches Profil, Sicherheit und Anzeige-Präferenzen.",
@@ -1758,10 +1824,10 @@
       "email": {
         "changeLabel": "E-Mail aendern",
         "changeButton": "E-Mail aendern",
-        "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss ueber einen Bestaetigungs-Link aktiviert werden.",
+        "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss über einen Bestätigungs-Link aktiviert werden.",
         "sameError": "Das ist bereits deine aktuelle E-Mail-Adresse.",
         "invalidError": "Bitte gueltige E-Mail eingeben.",
-        "sentToast": "Bestaetigungs-Mail an die neue Adresse gesendet."
+        "sentToast": "Bestätigungs-Mail an die neue Adresse gesendet."
       },
       "security": {
         "title": "Sicherheit",
@@ -1801,14 +1867,14 @@
         "confirmRequired": "Bitte wiederholen.",
         "mismatch": "Passwoerter stimmen nicht ueberein.",
         "magicLinkHint": "Du bist per Magic-Link oder Social-Login angemeldet. Mit einem Passwort kannst du dich auch direkt anmelden.",
-        "changedToast": "Passwort geaendert.",
+        "changedToast": "Passwort geändert.",
         "setToast": "Passwort gesetzt."
       },
       "signOutEverywhere": {
         "title": "Überall abmelden",
         "description": "Beendet alle aktiven Sitzungen auf allen Geräten.",
         "button": "Überall abmelden",
-        "successToast": "Auf allen Geraeten abgemeldet."
+        "successToast": "Auf allen Geräten abgemeldet."
       },
       "preferences": {
         "title": "Präferenzen",
@@ -1870,7 +1936,7 @@
         "slugRequired": "Slug erforderlich.",
         "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
         "contentLocaleLabel": "Inhalts-Sprache",
-        "contentLocaleDescription": "Sprache der Standard-Inhalte und Default fuer neu angelegte Elemente in diesem Workspace.",
+        "contentLocaleDescription": "Sprache der Standard-Inhalte und Default für neu angelegte Elemente in diesem Workspace.",
         "createButton": "Workspace anlegen",
         "createdToast": "Workspace „{{name}}\" angelegt.",
         "adminOnly": "Nur Admins können in dieser Organisation Workspaces anlegen."
@@ -2037,7 +2103,7 @@
       },
       "detail": {
         "slugVersion": "Slug: {{slug}} · Aktuelle Version: v{{version}}",
-        "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+        "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
         "toast": {
           "restored": "v{{version}} als Entwurf wiederhergestellt."
         }
@@ -2068,10 +2134,10 @@
         }
       },
       "promptBody": {
-        "title": "Prompt-Body",
-        "description": "Schreibe deinen Prompt im Editor. Mit / fügst du Placeholder ein.",
-        "help": "Tippe / im Editor um Playbook-, Resource-, Persona-Feld- oder Datum-Placeholder einzufuegen. Der Backend-Renderer expandiert diese beim MCP-Read zu echtem Text.",
-        "label": "Body"
+        "title": "Inhalt",
+        "description": "Was der Agent bei jedem Start liest. Tippe / für Blöcke und Verweise.",
+        "help": "Verweise auf Playbooks, Resources, Persona-Felder oder das Datum füllt der Server mit echtem Text, wenn der Agent die Vorlage abruft.",
+        "label": "Inhalt"
       },
       "saveVersion": "Neue Version speichern",
       "viewerTooltip": "Viewer können Inhalte nur ansehen",
@@ -2087,13 +2153,13 @@
     },
     "statusBar": {
       "ariaLabel": "Status-Aktionen",
-      "submitForReview": "Zur Review einreichen",
+      "submitForReview": "Zur Freigabe einreichen",
       "activate": "Aktivieren",
       "backToDraft": "Zurück zu Draft",
       "reactivateAsDraft": "Als Draft reaktivieren",
       "adminOnlyTooltip": "Nur Admins können aktivieren",
       "toast": {
-        "submittedForReview": "Zur Review eingereicht.",
+        "submittedForReview": "Zur Freigabe eingereicht.",
         "activated": "Version aktiviert.",
         "backToDraft": "Zurück in den Entwurf.",
         "reactivatedAsDraft": "Als Draft reaktiviert.",
@@ -2101,7 +2167,7 @@
       }
     },
     "placeholderHelp": {
-      "triggerLabel": "Verfügbare Placeholder",
+      "triggerLabel": "Welche Verweise gibt es?",
       "docsLink": "Mehr in der Doku →",
       "intro": {
         "heading": "Was ist ein Placeholder?",
@@ -2278,16 +2344,16 @@
         "type": "Typ",
         "allSignals": "Alle Signale",
         "allTypes": "Alle Typen",
-        "statusGroup": "Nach Status filtern"
+        "searchPlaceholder": "Nach Element suchen…"
       },
       "status": {
         "open": "Offen",
         "in_progress": "In Arbeit",
         "addressed": "Erledigt",
-        "dismissed": "Ignoriert",
-        "all": "Alle"
+        "dismissed": "Ignoriert"
       },
-      "empty": "Keine Feedbacks für diese Auswahl.",
+      "emptyOpenTitle": "Kein offenes Feedback",
+      "emptyOpenDescription": "Alle Rückmeldungen sind eingeordnet. Neue erscheinen hier, sobald ein Agent oder ein Mensch Feedback gibt.",
       "openElement": "Element öffnen"
     },
     "overview": {
@@ -2324,14 +2390,14 @@
       "showLess": "Weniger anzeigen",
       "showAll": "Alle {{count}} anzeigen",
       "tabs": {
-        "cases": "Fälle",
-        "myCases": "Meine Fälle",
+        "cases": "Rückmeldungen",
+        "myCases": "Meine Rückmeldungen",
         "signals": "Bausteine",
         "curation": "Kuration",
         "patterns": "Muster"
       },
       "tabsAria": "Bereiche des Feedbacks",
-      "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Verhalten eines Agenten meldest du als Fall."
+      "signalsDescription": "Hinweise von Agenten und Mitgliedern zu einzelnen Bausteinen: veraltet, falsch, unklar oder hilfreich. Zum Verhalten eines Agenten gibst du eine Rückmeldung."
     },
     "tiles": {
       "mostUsed": "Meistgenutzt",
@@ -2411,8 +2477,8 @@
       "eventsEmpty": "Keine Einzel-Ereignisse."
     },
     "item": {
-      "promote": "In Fall übernehmen",
-      "promoteHelp": "Wenn es eigentlich um das Verhalten eines Agenten geht: Daraus wird ein Fall, dieses Feedback gilt dann als umgesetzt."
+      "promote": "In Rückmeldung übernehmen",
+      "promoteHelp": "Wenn es eigentlich um das Verhalten eines Agenten geht: Daraus wird eine Rückmeldung, dieses Feedback gilt dann als erledigt."
     },
     "itemDetail": {
       "description": "Alle Details zu dieser Rückmeldung — Bezug, Signal, Status und Verlauf.",
@@ -2441,13 +2507,13 @@
     },
     "cases": {
       "report": {
-        "title": "Fall melden",
+        "title": "Rückmeldung geben",
         "intro": "Beschreibe eine konkrete Situation. Daraus kann später ein Prüffall werden, der jede neue Version des Agenten testet.",
-        "privacy": "Keine Passwörter oder Kundendaten einfügen. Fälle fließen nie in einen Prompt, können aber als Prüffall-Beispiel gespeichert werden.",
+        "privacy": "Keine Passwörter oder Kundendaten einfügen. Rückmeldungen fließen nie in einen Prompt, können aber als Prüffall-Beispiel gespeichert werden.",
         "more": "Mehr angeben",
-        "submit": "Fall melden",
-        "success": "Fall gemeldet. Du findest ihn unter Fälle.",
-        "successViewer": "Fall gemeldet. Du siehst den Stand unter „Meine Fälle“.",
+        "submit": "Rückmeldung geben",
+        "success": "Rückmeldung gegeben. Du findest sie unter Rückmeldungen.",
+        "successViewer": "Rückmeldung gegeben. Du siehst den Stand unter „Meine Rückmeldungen“.",
         "successView": "Ansehen",
         "discardTitle": "Eingaben verwerfen?",
         "discardBody": "Was du eingegeben hast, wird nicht gespeichert.",
@@ -2456,7 +2522,7 @@
         "agent": "Agent",
         "agentPlaceholder": "Agent wählen …",
         "agentsLoading": "Agenten werden geladen …",
-        "noAgents": "Noch kein Agent im Workspace. Ein Fall gehört immer zu einem Agenten.",
+        "noAgents": "Noch kein Agent im Workspace. Eine Rückmeldung gehört immer zu einem Agenten.",
         "toAgents": "Zu den Agents",
         "situation": "Was war die Lage?",
         "situationHelp": "Was hast du gefragt oder was sollte der Agent tun?",
@@ -2487,9 +2553,9 @@
         },
         "error": {
           "agentGone": "Diesen Agenten gibt es nicht mehr. Wähle einen anderen.",
-          "notConvertible": "Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder schon zu einem Fall."
+          "notConvertible": "Dieser Lernvorschlag lässt sich nicht mehr umwandeln. Er wurde inzwischen abgelehnt oder ist schon eine Rückmeldung geworden."
         },
-        "create": "Fall anlegen",
+        "create": "Rückmeldung anlegen",
         "origin": {
           "title": "Ausgangspunkt",
           "lesson": "Lernvorschlag von {{agent}}, {{count}}× vorgeschlagen",
@@ -2499,27 +2565,31 @@
         }
       },
       "list": {
-        "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einem Fall kann ein Prüffall werden.",
-        "descriptionViewer": "Fälle, die du gemeldet hast, und was daraus geworden ist.",
-        "emptyOpenTitle": "Keine offenen Fälle",
-        "emptyOpenDescription": "Fälle entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
-        "emptyViewerTitle": "Du hast noch keinen Fall gemeldet",
+        "description": "Konkrete Situationen, in denen ein Agent anders handeln sollte. Aus einer Rückmeldung kann ein Prüffall werden.",
+        "descriptionViewer": "Rückmeldungen, die du gegeben hast, und was daraus geworden ist.",
+        "emptyOpenTitle": "Keine offenen Rückmeldungen",
+        "emptyOpenDescription": "Rückmeldungen entstehen, wenn jemand – du, ein Kollege oder ein Agent – eine konkrete Situation meldet.",
+        "emptyViewerTitle": "Du hast noch keine Rückmeldung gegeben",
         "emptyViewerDescription": "Wenn ein Agent etwas anders machen soll, melde es hier. Du siehst dann, was daraus wird.",
-        "emptyFiltered": "Kein Fall passt zu diesen Filtern.",
-        "loadError": "Fälle konnten nicht geladen werden.",
+        "emptyFiltered": "Keine Rückmeldung passt zu diesen Filtern.",
+        "loadError": "Rückmeldungen konnten nicht geladen werden.",
         "loadMore": "Weitere laden",
-        "emptyOpenViewerDescription": "Alle Fälle, die du gemeldet hast, sind eingeordnet, umgesetzt oder verworfen.",
-        "showAll": "Alle meine Fälle anzeigen"
+        "emptyOpenViewerDescription": "Keine deiner Rückmeldungen ist mehr offen.",
+        "showAll": "Alle meine Rückmeldungen anzeigen"
       },
       "status": {
         "open": "Offen",
         "reopened": "Wieder offen",
         "triaged": "Eingeordnet",
-        "addressed": "Umgesetzt → {{element}} v{{version}}",
-        "addressedShort": "Umgesetzt",
+        "addressed": "Geändert → {{element}} v{{version}}",
+        "addressedShort": "Geändert",
         "dismissed": "Verworfen",
         "in_progress": "In Arbeit",
-        "verified": "Bestätigt"
+        "verified": "Hat gewirkt",
+        "explain": {
+          "in_progress": "Wird gerade über eine Änderung umgesetzt.",
+          "verified": "Die Änderung hat in der Nachkontrolle gewirkt."
+        }
       },
       "row": {
         "expected": "Erwartet: {{text}}",
@@ -2543,14 +2613,14 @@
         "model_limit": "Modellgrenze"
       },
       "detail": {
-        "title": "Fall · {{agent}}",
+        "title": "Rückmeldung · {{agent}}",
         "reported": "gemeldet am {{date}}",
-        "back": "Fälle",
-        "actions": "Aktionen zum Fall",
+        "back": "Rückmeldungen",
+        "actions": "Aktionen zur Rückmeldung",
         "copyId": "ID kopieren",
         "idCopied": "ID kopiert.",
-        "contentAria": "Inhalt des Falls",
-        "immutable": "Der Inhalt eines Falls bleibt, wie er gemeldet wurde. Ergänzungen stehen im Verlauf.",
+        "contentAria": "Inhalt der Rückmeldung",
+        "immutable": "Der Inhalt einer Rückmeldung bleibt, wie er gemeldet wurde. Ergänzungen stehen im Verlauf.",
         "block": {
           "situation": "Lage",
           "behavior": "Getan",
@@ -2573,26 +2643,32 @@
           "testCase": "Prüffall: {{title}}",
           "lesson": "Aus Lernvorschlag",
           "feedback": "Aus altem Feedback",
-          "sourceRef": "Link zum Lauf"
+          "sourceRef": "Link zum Lauf",
+          "session": "Review vom {{date}}",
+          "measure": "Änderung: {{element}} · {{state}}"
         },
+        "toEvolution": "Zu {{agent}} → Weiterentwicklung",
         "next": "Nächster Schritt",
         "moreActions": "Weitere Aktionen",
-        "notFound": "Diesen Fall gibt es nicht (mehr).",
-        "toList": "Zu den Fällen"
+        "notFound": "Diese Rückmeldung gibt es nicht (mehr).",
+        "toList": "Zu den Rückmeldungen"
       },
       "action": {
         "assign": "Zuordnen…",
         "changeAssignment": "Zuordnung ändern…",
         "triage": "Als eingeordnet markieren",
         "createTestCase": "Prüffall daraus anlegen",
-        "address": "Als umgesetzt markieren…",
-        "addressUnavailable": "Umgesetzt braucht eine Version eines zugeordneten Bausteins.",
+        "address": "Als geändert markieren…",
+        "addressUnavailable": "Geändert braucht eine Version eines zugeordneten Bausteins.",
         "toVersion": "Zur Version",
         "dismiss": "Verwerfen…",
-        "reopen": "Wieder öffnen…"
+        "reopen": "Wieder öffnen…",
+        "prepareSession": "Review vorbereiten",
+        "toMeasure": "Zur Änderung",
+        "toFollowUp": "Zur Nachkontrolle"
       },
       "assign": {
-        "title": "Fall zuordnen",
+        "title": "Rückmeldung zuordnen",
         "intro": "Woran liegt es? Wähle die Bausteine, die geändert werden müssten. Mehrfachauswahl möglich.",
         "group": {
           "persona": "Persona",
@@ -2604,31 +2680,32 @@
         "tool_policy": "Werkzeugrechte des Agenten",
         "memory": "Gedächtnis",
         "model_limit": "Modellgrenze – keine Änderung sinnvoll",
-        "model_limitHelp": "Das Modell kann es nicht besser, egal was wir ändern. Danach kannst du den Fall verwerfen.",
+        "model_limitHelp": "Das Modell kann es nicht besser, egal was wir ändern. Danach kannst du die Rückmeldung verwerfen.",
         "alsoTriage": "Danach als eingeordnet markieren",
-        "required": "Ordne den Fall mindestens einem Baustein zu oder wähle „Modellgrenze“.",
+        "required": "Ordne die Rückmeldung mindestens einem Baustein zu oder wähle „Modellgrenze“.",
         "save": "Zuordnung speichern"
       },
       "address": {
-        "title": "Als umgesetzt markieren",
-        "intro": "In welcher Version ist die Änderung? Der Fall verweist danach auf diese Version.",
+        "title": "Als geändert markieren",
+        "intro": "In welcher Version ist die Änderung? Die Rückmeldung verweist danach auf diese Version.",
         "element": "Baustein",
         "version": "Version",
         "activeTag": "aktiv",
         "choose": "Bitte wählen …",
         "note": "Notiz (optional)",
-        "submit": "Als umgesetzt markieren"
+        "submit": "Als geändert markieren",
+        "noFollowUp": "Ohne Änderung aus einem Review gibt es keine Nachkontrolle. Die Rückmeldung kann dann nicht als ‚Hat gewirkt‘ abgeschlossen werden."
       },
       "dismiss": {
-        "title": "Fall verwerfen",
+        "title": "Rückmeldung verwerfen",
         "reason": "Warum wird nichts geändert?",
         "reasonHelp": "Mindestens 10 Zeichen. Die meldende Person sieht die Begründung.",
         "modelLimitDefault": "Modellgrenze – keine Änderung sinnvoll.",
         "submit": "Verwerfen"
       },
       "reopen": {
-        "title": "Fall wieder öffnen",
-        "reason": "Warum wird der Fall wieder geöffnet?",
+        "title": "Rückmeldung wieder öffnen",
+        "reason": "Warum wird die Rückmeldung wieder geöffnet?",
         "submit": "Wieder öffnen"
       },
       "reason": {
@@ -2639,41 +2716,46 @@
       },
       "history": {
         "title": "Verlauf",
+        "toMeasure": "Zur Änderung",
         "event": {
           "reported": "Gemeldet",
           "triaged": "Eingeordnet",
-          "addressed": "Umgesetzt mit {{element}} v{{version}}",
+          "addressed": "Geändert mit {{element}} v{{version}}",
           "dismissed": "Verworfen: {{note}}",
           "reopened": "Wieder geöffnet: {{note}}",
           "element_assigned": "Zugeordnet: {{element}}",
           "element_unassigned": "Zuordnung entfernt: {{element}}",
           "statement": "Schilderung des Agenten eingegangen",
-          "unknown": "Änderung"
+          "unknown": "Änderung",
+          "in_progress": "In Arbeit: Änderung aus einem Review",
+          "verified": "Hat gewirkt laut Nachkontrolle",
+          "reopenedByFollowUp": "Wieder geöffnet nach Nachkontrolle „Hat nicht gewirkt“: {{note}}",
+          "addressedOnActivation": "Geändert mit {{element}} v{{version}} (bei Aktivierung)"
         }
       },
       "delete": {
-        "action": "Fall löschen…",
-        "title": "Fall löschen?",
-        "body": "Der Fall wird mit Inhalt, Verlauf, Zuordnung und der Schilderung des Agenten endgültig gelöscht. Zurück bleibt nur ein Protokolleintrag ohne Inhalt, der festhält, dass gelöscht wurde. Das lässt sich nicht rückgängig machen.",
-        "lesson": "Der Lernvorschlag, aus dem dieser Fall entstanden ist, wird mitgelöscht.",
-        "testCases": "Prüffälle, die aus diesem Fall angelegt wurden, bleiben erhalten.",
+        "action": "Rückmeldung löschen…",
+        "title": "Rückmeldung löschen?",
+        "body": "Die Rückmeldung wird mit Inhalt, Verlauf, Zuordnung und der Schilderung des Agenten endgültig gelöscht. Zurück bleibt nur ein Protokolleintrag ohne Inhalt, der festhält, dass gelöscht wurde. Das lässt sich nicht rückgängig machen.",
+        "lesson": "Der Lernvorschlag, aus dem diese Rückmeldung entstanden ist, wird mitgelöscht.",
+        "testCases": "Prüffälle, die aus dieser Rückmeldung angelegt wurden, bleiben erhalten.",
         "confirm": "Endgültig löschen",
-        "success": "Fall gelöscht.",
-        "error": "Der Fall konnte nicht gelöscht werden."
+        "success": "Rückmeldung gelöscht.",
+        "error": "Die Rückmeldung konnte nicht gelöscht werden."
       }
     },
     "patterns": {
-      "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
-      "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Fälle; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
-      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Fälle umgesetzt oder verworfen sind. Einordnen allein reicht nicht. Ein Fall-Muster verschwindet auch, wenn das Zeitfenster ohne neue Fälle abläuft.",
+      "description": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Rückmeldungen; ab {{threshold}} Treffern erscheint hier ein Muster. Gedeutet wird nichts.",
+      "descriptionNoThreshold": "Was sich wiederholt. Der Server zählt ähnliche Lernvorschläge und Rückmeldungen; ab einer festen Zahl ähnlicher Einträge erscheint hier ein Muster. Gedeutet wird nichts.",
+      "vanishHint": "Ein Muster verschwindet, sobald der Lernvorschlag entschieden ist oder die Rückmeldungen geändert oder verworfen sind. Einordnen allein reicht nicht. Ein Rückmeldungs-Muster verschwindet auch, wenn das Zeitfenster ohne neue Rückmeldungen abläuft.",
       "kind": {
         "lesson": {
           "title": "Dieselbe Korrektur {{count}}×",
           "text": "Ein Lernvorschlag von {{agent}} kam {{count}}-mal mit ähnlichem Wortlaut."
         },
         "case": {
-          "title": "Ähnliche Fälle {{count}}×",
-          "text": "{{count}} offene Fälle zu {{agent}}, alle zugeordnet zu {{element}}, in {{days}} Tagen."
+          "title": "Ähnliche Rückmeldungen {{count}}×",
+          "text": "{{count}} offene Rückmeldungen zu {{agent}}, alle zugeordnet zu {{element}}, in {{days}} Tagen."
         }
       },
       "detail": {
@@ -2683,8 +2765,8 @@
         "deleted": "Gelöschter Eintrag"
       },
       "action": {
-        "createCase": "Fall anlegen",
-        "viewCases": "Fälle ansehen"
+        "createCase": "Rückmeldung anlegen",
+        "viewCases": "Rückmeldungen ansehen"
       },
       "builder": {
         "label": "Oder vom Builder formulieren lassen – im Client einfügen:",
@@ -2693,8 +2775,8 @@
         "promptCase": "Fasse die offenen Fälle {{ids}} zu {{agent}} zusammen und schlage eine Änderung an {{element}} vor."
       },
       "emptyTitle": "Noch keine Muster",
-      "emptyDescription": "Sobald sich Lernvorschläge oder Fälle ähneln, zählt der Server sie hier zusammen. Ab {{threshold}} Treffern erscheint ein Muster.",
-      "emptyNoData": "Muster brauchen Lernvorschläge oder Fälle. Es gibt noch keine.",
+      "emptyDescription": "Sobald sich Lernvorschläge oder Rückmeldungen ähneln, zählt der Server sie hier zusammen. Ab {{threshold}} Treffern erscheint ein Muster.",
+      "emptyNoData": "Muster brauchen Lernvorschläge oder Rückmeldungen. Es gibt noch keine.",
       "loadError": "Muster konnten nicht berechnet werden.",
       "gone": "Dieses Muster gilt nicht mehr."
     }
@@ -2742,12 +2824,12 @@
     "detail": {
       "activeVersion": "Active: v{{version}}",
       "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "In Review: v{{version}}",
+      "inReview": "Zur Freigabe: v{{version}}",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
       "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
-      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
-      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerDraftDescription": "Reiche die Version zur Freigabe ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Freigabe",
       "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
       "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
       "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."
@@ -2968,7 +3050,50 @@
   },
   "editor": {
     "slash": {
-      "group": "Placeholder",
+      "group": {
+        "text": "Text",
+        "refs": "Verweise",
+        "context": "Agent-Kontext"
+      },
+      "block": {
+        "heading": {
+          "title": "Titel",
+          "subtext": "Überschrift des ganzen Dokuments"
+        },
+        "heading2": {
+          "title": "Überschrift",
+          "subtext": "Abschnitt"
+        },
+        "heading3": {
+          "title": "Zwischenüberschrift",
+          "subtext": "Unterabschnitt"
+        },
+        "paragraph": {
+          "title": "Absatz",
+          "subtext": "Fließtext"
+        },
+        "bullet": {
+          "title": "Aufzählung",
+          "subtext": "Liste ohne Reihenfolge"
+        },
+        "numbered": {
+          "title": "Nummerierte Liste",
+          "subtext": "Schritte, Reihenfolge"
+        },
+        "quote": {
+          "title": "Zitat",
+          "subtext": "Zitat oder hervorgehobener Hinweis"
+        },
+        "code": {
+          "title": "Code",
+          "subtext": "JSON- oder Markdown-Beispiel"
+        }
+      },
+      "key": {
+        "ctrl": "Strg",
+        "shift": "Umschalt",
+        "alt": "Alt"
+      },
       "playbook": {
         "title": "Playbook",
         "subtext": "Playbook fest einbetten (immer geladen)"
@@ -3039,9 +3164,9 @@
       "fallbackTitle": "Vorschau",
       "errorTitle": "Vorschau fehlgeschlagen",
       "loadFailed": "Vorschau konnte nicht geladen werden.",
-      "personaFieldUnresolved": "Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
-      "personaUnresolved": "Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
-      "targetMissing": "Der Platzhalter konnte nicht aufgeloest werden — Ziel nicht gefunden oder (noch) nicht aktiv."
+      "personaFieldUnresolved": "Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgelöst. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "personaUnresolved": "Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgelöst. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "targetMissing": "Der Platzhalter konnte nicht aufgelöst werden — Ziel nicht gefunden oder (noch) nicht aktiv."
     },
     "picker": {
       "cancel": "Abbrechen",
@@ -3063,8 +3188,8 @@
         "listLabel": "Resource-Liste",
         "empty": "Keine Resources gefunden.",
         "blocksLabel": "Heading-Bloecke",
-        "blocksLoading": "Lade Bloecke…",
-        "noBlocks": "Keine Heading-Bloecke — die ganze Resource wird verlinkt."
+        "blocksLoading": "Lade Blöcke…",
+        "noBlocks": "Keine Heading-Blöcke — die ganze Resource wird verlinkt."
       },
       "tool": {
         "titleEdit": "Tool ändern",
@@ -3077,7 +3202,7 @@
         "titleEdit": "Persona-Feld ändern",
         "titleNew": "Persona-Feld einfuegen",
         "ariaLabel": "Persona-Feld einfuegen",
-        "listLabel": "Persona-Feld auswaehlen",
+        "listLabel": "Persona-Feld auswählen",
         "name": {
           "label": "Persona: Name",
           "description": "Der Name der Persona"
@@ -3115,8 +3240,8 @@
       },
       "resourcesCatalogScope": {
         "titleEdit": "Resource-Katalog ändern",
-        "titleNew": "Resource-Katalog einfuegen",
-        "ariaLabel": "Resource-Katalog einfuegen",
+        "titleNew": "Resource-Katalog einfügen",
+        "ariaLabel": "Resource-Katalog einfügen",
         "listLabel": "Resource-Auswahl für den Katalog",
         "all": "Alle Resources",
         "byTag": "Nach Tag",
@@ -3126,7 +3251,7 @@
         "titleEdit": "Datum ändern",
         "titleNew": "Datum einfuegen",
         "ariaLabel": "Datum einfuegen",
-        "listLabel": "Datumsformat auswaehlen",
+        "listLabel": "Datumsformat auswählen",
         "readable": {
           "label": "Datum (lesbar)",
           "description": "Wird als \"31. Mai 2026\" ausgegeben"
@@ -3136,6 +3261,18 @@
           "description": "Wird als \"2026-05-31\" ausgegeben"
         }
       }
+    },
+    "placeholder": {
+      "withReferences": "Schreibe oder tippe / für Blöcke und Verweise",
+      "plain": "Schreibe oder tippe / für Blöcke"
+    },
+    "footer": {
+      "length": "≈ {{chars}} Zeichen · ≈ {{tokens}} Token (geschätzt)",
+      "long": "· lang",
+      "helpLabel": "Wie wird die Länge geschätzt?",
+      "tooltip": "Schätzung: etwa {{perToken}} Zeichen je Token. Eingebettete Verweise sind nicht eingerechnet.",
+      "longTooltip": "Sehr lange Anweisungen werden oft schlechter befolgt.",
+      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)"
     }
   },
   "learning": {
@@ -3183,7 +3320,7 @@
         "meta": "Prüfart: {{checkKind}} · angelegt {{date}}",
         "byAgent": "vom Builder angelegt",
         "revision": "neue Fassung",
-        "fromCase": "aus Fall {{id}}",
+        "fromCase": "aus Rückmeldung {{id}}",
         "actions": "Aktionen für Prüffall „{{title}}“"
       },
       "retired": {
@@ -3339,7 +3476,7 @@
         "instruction": "Einträge der Kategorie „Anweisung“ sagen dem Agenten, wie er arbeiten soll. Das behandeln wir wie eine Verhaltensänderung.",
         "agent_note": "Notizen über Werkzeuge und Umgebung steuern, wie der Agent arbeitet. Das behandeln wir wie eine Verhaltensänderung.",
         "proposal": "Ein Vorschlag, freigegebene Inhalte zu ändern, braucht immer einen Menschen – sonst könnte ein Agent Geprüftes still überschreiben.",
-        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden.",
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Rückmeldung, Prüffall und deine Freigabe zu einer neuen Version werden.",
         "generic": "Diese Kombination gibt der Server nie automatisch frei."
       },
       "humanChannel": "Was ein Mensch selbst einträgt, gilt sofort als bestätigt.",
@@ -3652,13 +3789,13 @@
         "pending": "Zur Freigabe",
         "expired": "Abgelaufen",
         "rejected": "Abgelehnt",
-        "converted": "Zu Fall geworden"
+        "converted": "Zur Rückmeldung geworden"
       },
       "intro": "Hier steht, was sich jeder Agent merkt:",
       "kindIntro": {
         "agent_note": "Was sich ein Agent über seine Umgebung und Werkzeuge merkt. Gilt nur für diesen Agenten.",
         "user_fact_agent": "Fakten über Menschen, die nur dieser Agent kennt. Das gemeinsame Nutzergedächtnis steht unter „Mein Gedächtnis“.",
-        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Fall, Prüffall und deine Freigabe zu einer neuen Version werden."
+        "lesson": "Lernvorschläge fließen nie in einen Prompt. Sie werden gezählt und können über Rückmeldung, Prüffall und deine Freigabe zu einer neuen Version werden."
       },
       "sort": {
         "newest": "Neueste zuerst",
@@ -3674,8 +3811,8 @@
         "reactivate": "Wieder aktivieren",
         "approve": "Freigeben",
         "decideInQueue": "In der Warteschlange entscheiden",
-        "convert": "Fall daraus machen",
-        "toCase": "Zum Fall"
+        "convert": "Rückmeldung daraus machen",
+        "toCase": "Zur Rückmeldung"
       },
       "done": {
         "confirm": "Bestätigt.",
@@ -3767,7 +3904,7 @@
         "proposal_accepted": "Vorschlag übernommen",
         "proposal_rejected": "Vorschlag abgelehnt",
         "rolled_back": "Früheren Stand wiederhergestellt",
-        "converted": "Zu Fall geworden",
+        "converted": "Zur Rückmeldung geworden",
         "merged": "Erneut vorgeschlagen",
         "auto_revoked": "Automatische Freigabe zurückgenommen"
       },
@@ -3786,6 +3923,462 @@
       "categoryChange": "Kategorie: {{from}} → {{to}}",
       "importanceChange": "Wichtigkeit: {{from}} → {{to}}",
       "restored": "Früheren Stand wiederhergestellt."
+    }
+  },
+  "inbox": {
+    "page": {
+      "title": "Zu erledigen",
+      "description": "Alles, was auf eine Entscheidung von dir wartet. Erledigtes verschwindet von selbst."
+    },
+    "chip": {
+      "followUps": "Fällig",
+      "memory": "Gedächtnis",
+      "versions": "Freigaben",
+      "cases": "Rückmeldungen"
+    },
+    "kind": {
+      "followUps": "Nachkontrollen fällig",
+      "followUpsHint": "Hat die Änderung gewirkt? Nur ein Mensch stuft ein.",
+      "memory": "Gedächtnis zur Freigabe",
+      "memoryHint": "Einträge werden erst nach deiner Freigabe wirksam.",
+      "versions": "Versionen zur Freigabe",
+      "versionsHint": "Erst nach deiner Freigabe nutzen die Agenten die neue Version.",
+      "versionsEditorHint": "Warten auf Freigabe durch einen Admin. Du kannst sie zurück auf Entwurf setzen.",
+      "cases": "Rückmeldungen, nicht eingeordnet",
+      "casesHint": "Gemeldete Situationen, die noch niemand eingeordnet hat."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Zum Anschauen",
+      "toLookHint": "zählt nicht in die Glocke"
+    },
+    "followUps": {
+      "row": "Review vom {{date}} · {{agent}}",
+      "today": "heute fällig",
+      "since_one": "seit 1 Tag fällig",
+      "since_other": "seit {{count}} Tagen fällig",
+      "changes_one": "1 Änderung zur Nachkontrolle",
+      "changes_other": "{{count}} Änderungen zur Nachkontrolle",
+      "term": "Termin {{date}}",
+      "open": "Nachkontrolle öffnen",
+      "openAria": "Nachkontrolle öffnen: {{title}}",
+      "loadMore": "Weitere laden",
+      "loadingMore": "Lädt …",
+      "atAgent": "Bei {{agent}} ansehen"
+    },
+    "memory": {
+      "userMemory": "Dein Nutzergedächtnis"
+    },
+    "cases": {
+      "reopened": "wieder offen"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System-Prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} Persona",
+        "persona_other": "{{count}} Personas",
+        "playbook_one": "{{count}} Playbook",
+        "playbook_other": "{{count}} Playbooks",
+        "resource_one": "{{count}} Resource",
+        "resource_other": "{{count}} Resources",
+        "systemPrompt_one": "{{count}} System-Prompt",
+        "systemPrompt_other": "{{count}} System-Prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} Muster",
+      "patterns_other": "{{count}} Muster",
+      "patternsHint": "Rückmeldungen oder Lernvorschläge, die sich wiederholen",
+      "versions_one": "{{count}} Version wartet auf Freigabe durch einen Admin",
+      "versions_other": "{{count}} Versionen warten auf Freigabe durch einen Admin",
+      "open": "Ansehen",
+      "openAria": "Ansehen: {{title}}"
+    },
+    "action": {
+      "review": "Prüfen",
+      "reviewAria": "Prüfen: {{text}}",
+      "triage": "Einordnen",
+      "triageAria": "Einordnen: {{text}}",
+      "open": "Öffnen",
+      "openVersionAria": "{{name}} Version {{version}} öffnen"
+    },
+    "quoted": "„{{text}}“",
+    "unknownAgent": "Unbekannter Agent",
+    "showAll_one": "Alle {{count}} ansehen",
+    "showAll_other": "Alle {{count}} ansehen",
+    "empty": {
+      "title": "Alles erledigt",
+      "description": "Neue Aufgaben erscheinen hier und an der Glocke.",
+      "filtered": "Für diese Auswahl ist nichts offen."
+    },
+    "sectionError": "Konnte nicht geladen werden.",
+    "loadError": "Die Aufgaben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen"
+  },
+  "sessions": {
+    "evolution": {
+      "title": "Weiterentwicklung",
+      "stepsAria": "Schritte der Weiterentwicklung",
+      "waiting_one": "1 wartet auf dich",
+      "waiting_other": "{{count}} warten auf dich",
+      "unavailable": "Nicht verfügbar",
+      "prepare": "Review vorbereiten",
+      "guide": {
+        "summary": "So entwickelst du einen Agenten weiter",
+        "steps": "4 Schritte",
+        "body": "Dein Agent wird besser, wenn du sagst, was nicht passt, und prüfst, ob die Änderung wirkt. ① Sammeln: Gib eine Rückmeldung, wenn der Agent etwas falsch macht. ② Besprechen: Bereite ein Review vor und führe es im Client mit dem Builder; entscheiden tust du. ③ Umsetzen: Prüfe den Entwurf jeder Änderung und aktiviere ihn. ④ Prüfen: Zum Termin erscheint die Nachkontrolle unter „Zu erledigen“, dort beantwortest du „Hat es gewirkt?“."
+      },
+      "collect": {
+        "title": "① Sammeln",
+        "head_one": "1 Rückmeldung offen",
+        "head_other": "{{count}} Rückmeldungen offen",
+        "triaged": "{{count}} eingeordnet",
+        "reopened": "{{count}} wieder offen",
+        "patterns_one": "1 Muster",
+        "patterns_other": "{{count}} Muster",
+        "view": "Ansehen"
+      },
+      "discuss": {
+        "title": "② Besprechen",
+        "last": "Letztes Review {{date}}",
+        "none": "Noch kein Review",
+        "ready_one": "1 eingeordnete Rückmeldung ist bereit",
+        "ready_other": "{{count}} eingeordnete Rückmeldungen sind bereit"
+      },
+      "implement": {
+        "title": "③ Umsetzen",
+        "head_one": "1 Änderung offen",
+        "head_other": "{{count}} Änderungen offen",
+        "none": "Keine offenen Änderungen",
+        "latest": {
+          "agreed": "Vereinbart, noch kein Entwurf verknüpft",
+          "draft_linked": "Entwurf verknüpft, noch nicht aktiviert"
+        },
+        "view": "Ansehen"
+      },
+      "check": {
+        "title": "④ Prüfen",
+        "due_one": "1 Nachkontrolle fällig",
+        "due_other": "{{count}} Nachkontrollen fällig",
+        "next": "Nächste am {{date}}",
+        "none": "Keine geplant",
+        "today": "heute fällig",
+        "since_one": "seit 1 Tag fällig",
+        "since_other": "seit {{count}} Tagen fällig",
+        "open": "Nachkontrolle öffnen"
+      },
+      "changes": {
+        "title": "Änderungen",
+        "subtitle": "offen und zur Nachkontrolle",
+        "activeSince": "aktiv seit {{date}}",
+        "fromReview": "aus dem Review vom {{date}}",
+        "view": "Ansehen",
+        "actionAria": "{{action}}: {{title}}",
+        "more": "Ältere Änderungen findest du in den Reviews."
+      },
+      "reviews": {
+        "title": "Reviews",
+        "cases_one": "1 Rückmeldung",
+        "cases_other": "{{count}} Rückmeldungen",
+        "measures_one": "1 Änderung",
+        "measures_other": "{{count}} Änderungen",
+        "fromClient": "vom Client übermittelt",
+        "mark": {
+          "due": "Nachkontrolle fällig",
+          "replaced": "Ersetzt",
+          "corrects": "Korrigiert"
+        },
+        "more": "Weitere laden",
+        "loadError": "Die Reviews konnten nicht geladen werden.",
+        "empty": "Mit {{agent}} gab es noch kein Review. Ein Review fasst Rückmeldungen zusammen: Du bereitest es hier vor, führst es im Client mit dem Builder, und das Ergebnis landet hier."
+      },
+      "viewer": {
+        "head_one": "1 deiner Rückmeldungen",
+        "head_other": "{{count}} deiner Rückmeldungen",
+        "mine": "Meine Rückmeldungen",
+        "status": {
+          "open": "{{count}} offen",
+          "reopened": "{{count}} wieder offen",
+          "triaged": "{{count}} eingeordnet",
+          "in_progress": "{{count}} in Arbeit",
+          "addressed": "{{count}} geändert",
+          "verified": "{{count}} hat gewirkt",
+          "dismissed": "{{count}} verworfen"
+        },
+        "explain": "Reviews, Änderungen und Nachkontrollen führen Editoren. Was aus deiner Rückmeldung wird, siehst du an ihrem Status: In Arbeit · Geändert · Hat gewirkt."
+      },
+      "timeline": {
+        "title": "Verlauf",
+        "intro": "Jede aktivierte Version eines Bausteins ist eine neue Generation des Agenten.",
+        "listAria": "Generationen, neueste zuerst",
+        "generation": "Generation vom {{date}}",
+        "versions": "v{{from}} → v{{to}}",
+        "firstVersion": "v{{to}}",
+        "direct": "Direkt geändert, ohne Review",
+        "noFollowUp": "Keine Nachkontrolle",
+        "why_one": "Warum: 1 Rückmeldung",
+        "why_other": "Warum: {{count}} Rückmeldungen",
+        "whyReview_one": "Warum: 1 Rückmeldung (Review vom {{date}})",
+        "whyReview_other": "Warum: {{count}} Rückmeldungen (Review vom {{date}})",
+        "fromReview": "Aus einem Review",
+        "shared_one": "betrifft auch: 1 weiteren Agenten",
+        "shared_other": "betrifft auch: {{count}} weitere Agenten",
+        "open": "Änderung ansehen",
+        "openAria": "Änderung ansehen: {{element}}",
+        "more": "Ältere Generationen zeigen",
+        "moreError": "Ältere Generationen konnten nicht geladen werden.",
+        "loadError": "Der Verlauf konnte nicht geladen werden.",
+        "empty": "Noch keine Generation. Sobald du eine Änderung aktivierst, erscheint sie hier."
+      }
+    },
+    "trigger": {
+      "threshold": "Schwelle",
+      "scheduled": "Termin",
+      "manual": "Manuell"
+    },
+    "supersede": {
+      "replacedBy": "Ersetzt durch das Review-Ergebnis vom {{date}}",
+      "corrects": "Korrigiert das Review-Ergebnis vom {{date}}",
+      "toNew": "Zum neuen Review-Ergebnis",
+      "measuresStay": "Die Änderungen dieses Review-Ergebnisses gelten weiter, bis jemand sie zurückzieht."
+    },
+    "detail": {
+      "title": "Review vom {{date}}",
+      "subtitle": "{{agent}} · {{trigger}}",
+      "subtitleClient": "{{agent}} · {{trigger}} · vom Client übermittelt",
+      "back": "{{agent}} · Weiterentwicklung",
+      "actions": "Aktionen zum Review-Ergebnis",
+      "copyId": "ID kopieren",
+      "idCopied": "ID kopiert.",
+      "followUpOn": "Nachkontrolle am {{date}}",
+      "fromClient": "Vom Client übermittelt ({{who}}) am {{datetime}}. Unveränderlich.",
+      "byHuman": "Eingereicht von {{name}} am {{datetime}}. Unveränderlich.",
+      "participants": "Teilnehmende",
+      "participant": {
+        "builder": "Builder",
+        "formerMember": "Ehemaliges Mitglied",
+        "deletedAgent": "Gelöschter Agent"
+      },
+      "summary": "Zusammenfassung",
+      "decisions": "Entscheidungen",
+      "decisionsEmpty": "Keine Entscheidungen festgehalten.",
+      "standardRef": "Verweis: {{ref}}",
+      "dissent": "Abweichende Meinungen",
+      "dissentEmpty": "Keine abweichenden Meinungen festgehalten.",
+      "cases": "Rückmeldungen",
+      "casesEmpty": "Keine Rückmeldungen mehr verknüpft.",
+      "measures": "Änderungen",
+      "measuresEmpty": "In diesem Review wurde keine Änderung vereinbart.",
+      "measureLabel": "M{{n}} · {{element}}",
+      "measureCases_one": "{{count}} Rückmeldung",
+      "measureCases_other": "{{count}} Rückmeldungen",
+      "testCase": "Prüffall: {{title}}",
+      "openMeasure": "Änderung öffnen",
+      "openMeasureAria": "Änderung öffnen: {{label}}",
+      "notFound": "Dieses Review gibt es nicht (mehr).",
+      "toList": "Zur Weiterentwicklung",
+      "loadError": "Das Review-Ergebnis konnte nicht geladen werden."
+    },
+    "measure": {
+      "state": {
+        "agreed": "Vereinbart",
+        "draft_linked": "Entwurf verknüpft",
+        "activated": "Aktiviert",
+        "follow_up_prepared": "Kennzahlen bereit",
+        "effective": "Hat gewirkt",
+        "ineffective": "Hat nicht gewirkt",
+        "not_measurable": "Nicht messbar",
+        "withdrawn": "Zurückgezogen"
+      },
+      "due": "Nachkontrolle fällig",
+      "dueNotActive": "Nachkontrolle fällig, Änderung noch nicht aktiv",
+      "followUpOn": "Nachkontrolle am {{date}}",
+      "title": "Änderung M{{n}} · {{element}}",
+      "from": "Aus dem Review mit {{agent}} vom {{date}}",
+      "field": {
+        "change": "Kleinste Änderung",
+        "target": "Ziel",
+        "testCase": "Prüffall",
+        "criterion": "Erfolgskriterium",
+        "counterposition": "Gegenposition",
+        "followUp": "Nachkontrolle am",
+        "draft": "Entwurf",
+        "cases": "Rückmeldungen"
+      },
+      "testCaseRetired": "zurückgezogen",
+      "testCaseUnavailable": "Prüffall nicht verfügbar",
+      "noDraft": "Noch kein Entwurf verknüpft",
+      "versionState": {
+        "draft": "Entwurf",
+        "review": "zur Freigabe",
+        "active": "aktiv seit {{date}}"
+      }
+    },
+    "copy": {
+      "label": "Im Client einfügen:",
+      "button": "Kopieren",
+      "copied": "Kopiert.",
+      "correctionTitle": "Korrektur einreichen",
+      "correctionIntro": "Ein Review-Ergebnis lässt sich nicht ändern. Lass den Builder ein neues einreichen, das dieses ersetzt.",
+      "correction": "Korrigiere das Review-Ergebnis {{sessionId}} zu {{agent}} ({{agentId}}). Lade es, kläre mit mir, was falsch ist, und reiche mit submit_session_protocol ein neues Protokoll mit supersedes_id {{sessionId}} ein."
+    },
+    "followUp": {
+      "title": "Nachkontrolle",
+      "notYet": "Kennzahlen gibt es, sobald die verknüpfte Version aktiv ist.",
+      "caption": "Kennzahlen vor und nach der Änderung",
+      "metric": "Kennzahl",
+      "before": "vorher (v{{version}})",
+      "after": "nachher (v{{version}})",
+      "beforePlain": "vorher",
+      "afterPlain": "nachher",
+      "row": {
+        "passRate": "Prüffall bestanden",
+        "caseRate": "Rückmeldungen je 100 Nutzungen",
+        "recurrence": "Wieder aufgetreten"
+      },
+      "runs": "{{passed}} von {{total}} Läufen",
+      "runsClient": "{{passed}} von {{total}} Läufen (laut Client)",
+      "rate": "{{rate}} ({{uses}} Nutzungen)",
+      "recurrenceCount_zero": "keine neuen Rückmeldungen",
+      "recurrenceCount_one": "1 neue Rückmeldung",
+      "recurrenceCount_other": "{{count}} neue Rückmeldungen",
+      "direction": {
+        "lower": "niedriger",
+        "higher": "höher",
+        "same": "gleich"
+      },
+      "selfReport": "Prüffall-Ergebnisse vom Client gemeldet.",
+      "tooFewUses": "Nur {{count}} Nutzungen seit Aktivierung – zu wenig für einen Vergleich.",
+      "loadError": "Die Kennzahlen konnten nicht geladen werden."
+    },
+    "history": {
+      "title": "Verlauf",
+      "empty": "Noch keine Ereignisse.",
+      "event": {
+        "draft_linked": "Entwurf verknüpft: {{element}} v{{version}}",
+        "activated_one": "Version aktiv geworden, 1 Rückmeldung geändert",
+        "activated_other": "Version aktiv geworden, {{count}} Rückmeldungen geändert",
+        "activatedNoCount": "Version aktiv geworden",
+        "follow_up_prepared": "Kennzahlen bereitgestellt",
+        "reviewed": "Eingestuft: {{verdict}}",
+        "withdrawn": "Zurückgezogen: {{note}}",
+        "unknown": "Ereignis"
+      }
+    },
+    "error": {
+      "measureNotFound": "Diese Änderung gibt es nicht (mehr).",
+      "versionNotFound": "Diese Version gibt es nicht mehr. Wähle eine andere.",
+      "conflict": "Dieser Schritt passt nicht zum aktuellen Stand. Die Änderung wurde neu geladen."
+    },
+    "review": {
+      "legend": "Hat es gewirkt?",
+      "humanOnly": "Nur Menschen beantworten das. Der Builder bereitet vor, entscheidet aber nicht.",
+      "option": {
+        "effective": "Ja, hat gewirkt",
+        "ineffective": "Nein, hat nicht gewirkt",
+        "not_measurable": "Nicht messbar"
+      },
+      "effect": {
+        "effective_one": "Die 1 geänderte Rückmeldung gilt danach als „Hat gewirkt“. Das ist ein Endzustand.",
+        "effective_other": "Die {{count}} geänderten Rückmeldungen gelten danach als „Hat gewirkt“. Das ist ein Endzustand.",
+        "ineffective_one": "Die 1 geänderte Rückmeldung geht auf „Wieder offen“ und erscheint wieder in der Liste. Deine Notiz wird ihre Begründung.",
+        "ineffective_other": "Die {{count}} geänderten Rückmeldungen gehen auf „Wieder offen“ und erscheinen wieder in der Liste. Deine Notiz wird ihre Begründung.",
+        "not_measurable": "Die Rückmeldungen bleiben, wie sie sind. Die Änderung ist damit abgeschlossen. Für eine neue Nachkontrolle braucht es ein neues Review.",
+        "unaffected_one": "1 weitere Rückmeldung dieser Änderung ändert sich nicht.",
+        "unaffected_other": "{{count}} weitere Rückmeldungen dieser Änderung ändern sich nicht."
+      },
+      "note": "Notiz",
+      "noteOptional": "Notiz (optional)",
+      "noteRequired": "Bei „Nein, hat nicht gewirkt“ brauchen die Rückmeldungen eine Begründung. Mindestens 10 Zeichen.",
+      "submit": "Antwort speichern",
+      "done": "Beantwortet: {{verdict}}",
+      "newSession": "Neues Review vorbereiten"
+    },
+    "action": {
+      "linkDraft": "Entwurf verknüpfen…",
+      "relinkDraft": "Anderen Entwurf verknüpfen…",
+      "toDraft": "Zum Entwurf",
+      "withdraw": "Zurückziehen…",
+      "more": "Weitere Aktionen",
+      "noVersions": "Für dieses Ziel gibt es keine Versionen. Ein Entwurf lässt sich nicht verknüpfen."
+    },
+    "linkDraft": {
+      "title": "Entwurf verknüpfen",
+      "element": "Baustein",
+      "version": "Version",
+      "choose": "Version wählen",
+      "versionRequired": "Wähle eine Version.",
+      "help": "Der Entwurf bleibt Entwurf. Aktiv wird er erst bei der Freigabe, nachdem die Prüffälle gelaufen sind. Dann gelten die Rückmeldungen automatisch als geändert.",
+      "none": "Für {{element}} gibt es noch keinen Entwurf. Lege ihn im Versions-Tab an oder lass ihn vom Builder anlegen.",
+      "open": "{{element}} öffnen",
+      "submit": "Verknüpfen",
+      "done": "Entwurf verknüpft."
+    },
+    "withdraw": {
+      "title": "Änderung zurückziehen",
+      "intro": "Die Änderung wird aufgegeben. Ein verknüpfter Entwurf bleibt Entwurf.",
+      "cases": "Rückmeldungen, die gerade in Arbeit sind, gehen zurück auf „Eingeordnet“, sofern keine andere offene Änderung sie enthält. Alle anderen behalten ihren Status.",
+      "reason": "Warum wird die Änderung aufgegeben?",
+      "submit": "Zurückziehen",
+      "done": "Änderung zurückgezogen."
+    },
+    "prepare": {
+      "title": "Review vorbereiten",
+      "step": {
+        "cases": "Rückmeldungen auswählen (1–3 empfohlen)",
+        "situation": "Lage (vom Server zusammengestellt, nur lesen)",
+        "start": "Im Client starten"
+      },
+      "group": {
+        "triaged": "Eingeordnet",
+        "untriaged": "Noch nicht eingeordnet",
+        "untriagedHelp": "Der Builder kann sie im Review zuordnen."
+      },
+      "tooMany": "Mehr als drei Rückmeldungen machen das Review lang. Die übrigen kannst du in ein nächstes Review nehmen.",
+      "noCases": "Für {{agent}} ist gerade keine Rückmeldung offen. Ein Review geht trotzdem, etwa für eine geplante Durchsicht.",
+      "casesLoadError": "Die Rückmeldungen konnten nicht geladen werden.",
+      "unresolved_one": "1 Rückmeldung aus dem Link ist hier nicht auswählbar und steht nicht im Startsatz.",
+      "unresolved_other": "{{count}} Rückmeldungen aus dem Link sind hier nicht auswählbar und stehen nicht im Startsatz.",
+      "loadMore": "Weitere laden",
+      "situation": {
+        "openCases": "Offene Rückmeldungen",
+        "total": "Gesamt",
+        "rates": "Rückmeldungen je Version",
+        "col": {
+          "element": "Baustein",
+          "version": "Version",
+          "cases": "Rückmeldungen",
+          "uses": "Nutzungen",
+          "rate": "Rückmeldungen je 100 Nutzungen",
+          "signals": "Signale"
+        },
+        "version": "v{{version}}",
+        "versionActive": "v{{version}} (aktiv)",
+        "tooFewUses": "zu wenig Nutzung",
+        "elementsMore": "{{shown}} von {{total}} Bausteinen gezeigt.",
+        "access": "Zugriffe",
+        "accessWindow": "Zeitraum",
+        "accessWindowValue": "{{days}} Tage, seit {{date}}",
+        "accessTotal": "Einträge",
+        "accessRow": "{{entries}} Einträge, {{refs}} Inhalte, zuletzt {{date}}",
+        "pastMeasures": "Frühere Änderungen",
+        "allReviews": "Alle Reviews mit {{agent}}",
+        "noData": "Keine Daten",
+        "loadError": "Die Lage konnte nicht geladen werden."
+      },
+      "startIntro": "Das Review führst du im Client mit dem Builder. Füge diesen Satz ein:",
+      "prompt": "Führe mit mir ein Review zu Agent {{agent}} ({{agentId}}). Lade die Lage mit get_dossier, moderiere, entscheide nichts selbst und reiche am Ende das Ergebnis mit submit_session_protocol ein.",
+      "promptCases": "Rückmeldungen: {{ids}}.",
+      "afterCopy": "Das Ergebnis erscheint unter {{link}}.",
+      "afterCopyLink": "{{agent}} → Weiterentwicklung",
+      "copySticky_one": "Startsatz kopieren (1 Rückmeldung)",
+      "copySticky_other": "Startsatz kopieren ({{count}} Rückmeldungen)"
     }
   }
 }

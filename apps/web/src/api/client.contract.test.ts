@@ -153,6 +153,7 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.deleteAccount(),
     api.deleteOrganization('__ORG__'),
     api.exportMyData(),
+    api.getSystemRoutines(),
     api.listSystemPromptTemplates(),
     api.getSystemPromptTemplate(ID),
     api.createSystemPromptTemplate({} as never),
@@ -199,6 +200,9 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.kbNeighbors({ anchor: `node:${ID}` }),
     api.getEntitlement(),
     api.createCheckout({} as never),
+    // Navigation & Transparenz W1 — Aufgaben-Zaehler (Glocke).
+    api.getInboxCounts(),
+    api.getInboxCounts(ID),
     // ADR-0053 C5a: workspace-weite Gedaechtnis-Warteschlange.
     api.listMemories({ status: 'pending' }),
     api.countMemories({ status: 'pending' }, ['agent']),
@@ -227,6 +231,12 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     // ADR-0053 C5c-2: Not-Aus (Vorschau und Ausführung).
     api.previewRevokeAuto({ since: '2026-10-01T00:00:00Z' }),
     api.revokeAuto({ since: '2026-10-01T00:00:00Z', expected_count: 1 }),
+    // ADR-0053 6.6 (E5b): Reviews und Nachkontrolle.
+    api.listSessions({ agent_id: ID, case_id: ID, due: true }, { cursor: 'c', limit: 5 }),
+    api.getSession(ID),
+    api.getFollowUp(ID),
+    // ADR-0053 6.6 (E5f): Lage zur Review-Vorbereitung.
+    api.getDossier(ID, { cursor: 'c' }),
   ]
   await Promise.all(invocations)
 

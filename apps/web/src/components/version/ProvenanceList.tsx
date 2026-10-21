@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { ProvenanceEntry } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
+import { formatDateTime } from '@/lib/dates'
 
 import { statusBadgeVariant, statusLabel } from './versionStatus'
 
@@ -39,7 +40,7 @@ export function ProvenanceList({ entries }: ProvenanceListProps) {
               {statusLabel(entry.to_status)}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              {new Date(entry.changed_at).toLocaleString()}
+              {formatDateTime(entry.changed_at)}
             </span>
           </div>
           {entry.note !== null && entry.note !== '' ? (

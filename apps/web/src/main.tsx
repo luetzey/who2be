@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { reloadOnStaleChunk } from './app/stale-chunk'
+import { initErrorTracking } from './lib/errorTracking'
 
 // Mantine-Baseline fuer BlockNote-Insel (ADR-0022) — MUSS vor globals.css
 // stehen. Sonst fehlen Slash-Menu-Layout (Item-Body/Title/Subtitle/Section),
@@ -25,6 +26,11 @@ window.addEventListener('vite:preloadError', (event) => {
     event.preventDefault()
   }
 })
+
+// Fehler-Tracking (Stabilitaet A3): nur mit Runtime-DSN aus /config.js. Ohne
+// DSN wird das SDK nicht geladen. Laeuft parallel zum ersten Render, damit der
+// SDK-Chunk den Start nicht verzoegert.
+void initErrorTracking()
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {

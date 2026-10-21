@@ -7,7 +7,8 @@ D1a, Mandant ueber `tenant_scope` (Fixture `_with_repo` aus
 - **Kanten:** jede erlaubte Kante geht, jede andere endet mit
   `case_transition_forbidden` — von jedem Zustand aus, auch von den in D2
   nur per Repository erreichbaren `in_progress` und `verified`.
-  `in_progress`/`verified` als Ziel: Phase E.
+  `verified` als Ziel: nur ueber die Einstufung (`requires = "review"`);
+  `in_progress` nur mit Massnahme, die den Fall enthaelt (PM-5, E3).
 - **Pflichtfelder:** Begruendung bei `dismissed`/`reopened`, Version bei
   `addressed` (auch: Version aus fremdem Workspace), Zuordnung bei `triaged`.
 - **Rechte je Rolle:** viewer, editor, Agent ohne und mit `case_triage`,
@@ -52,7 +53,7 @@ from who2be_models import (
 
 pytestmark = pytest.mark.integration
 
-# Erlaubte Kanten in D2 (3.3 plus Uebergangskante triaged -> addressed).
+# Ohne Massnahme erlaubte Kanten (3.3, inkl. Mensch-Pfad triaged -> addressed, PM-8).
 _ALLOWED: set[tuple[CaseStatus, CaseStatus]] = {
     (CaseStatus.open, CaseStatus.triaged),
     (CaseStatus.open, CaseStatus.dismissed),
@@ -305,8 +306,13 @@ def test_every_forbidden_edge() -> None:
                 assert err.value.params is not None
                 assert err.value.params["from"] == source.value
                 assert err.value.params["to"] == target.value
-                if target in (CaseStatus.in_progress, CaseStatus.verified):
-                    assert err.value.params["requires"] == "phase_e"
+                if target is CaseStatus.verified:
+                    # PM-5: nur ueber die Einstufung der Nachschau.
+                    assert err.value.params["requires"] == "review"
+                elif (source, target) == (CaseStatus.triaged, CaseStatus.in_progress):
+                    # Kante da, aber ohne `measure_id` (PM-5); mit Massnahme:
+                    # test_measure_service.py.
+                    assert err.value.params["missing"] == "measure"
                 assert await _status(w, case_id) is source  # nichts geschrieben
                 checked += 1
         assert checked == len(CaseStatus) ** 2 - len(_ALLOWED)
@@ -381,11 +387,16 @@ def test_required_fields_per_transition() -> None:
             ),
         )
         assert err.params is not None and err.params["unexpected"] == "version"
-        # Eine Massnahme gibt es in D2 nicht, auch nicht als Beigabe.
+        # Eine Massnahme gehoert nur zu `in_progress` (3.3), nicht als Beigabe.
         err = await refused(
             triaged, CaseTransitionRequest(to=CaseStatus.dismissed, note="x", measure_id=uuid4())
         )
-        assert err.params is not None and err.params["requires"] == "phase_e"
+        assert err.params is not None and err.params["unexpected"] == "measure"
+        # `in_progress` mit unbekannter Massnahme: enthaelt den Fall nicht (PM-5).
+        err = await refused(
+            triaged, CaseTransitionRequest(to=CaseStatus.in_progress, measure_id=uuid4())
+        )
+        assert err.params is not None and err.params["invalid"] == "measure"
         assert await _status(w, triaged) is CaseStatus.triaged
 
     _run(body)

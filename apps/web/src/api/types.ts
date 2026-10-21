@@ -1415,6 +1415,14 @@ export interface FeedbackOverview {
   items: FeedbackOverviewItem[]
 }
 
+// Navigation A6 — optionale Filter von `GET /feedback-overview`. Ohne Filter
+// unveraendert die Gesamtsumme des Workspace.
+export interface FeedbackOverviewFilter {
+  agent_id?: string
+  // 1..365 (Server validiert).
+  days?: number
+}
+
 // Veroeffentlichte, aber ungenutzte Elemente (`GET …/feedback-unused`): aktive
 // Version vorhanden, aber kein einziges Usage-/Feedback-Ereignis (Stale).
 export interface FeedbackUnusedItem {
@@ -1457,6 +1465,66 @@ export interface WorkArea {
   retention_days: number | null
   created_at: string
   updated_at: string
+}
+
+// Navigation A4 — `GET /agents/{id}/work-areas`, Spiegel von
+// `who2be_models.workarea.AgentWorkAreaRead`. `level` ist die Stufe DIESES
+// Agenten, `owner` markiert seine private Area, `agent_count` zaehlt ihn mit.
+export interface AgentWorkArea {
+  id: string
+  name: string
+  scope: WorkAreaScope
+  level: WorkAreaGrantLevel
+  owner: boolean
+  agent_count: number
+}
+
+// Nutzung U1/U2 — Spiegel von `who2be_models.feedback.UsageStats` und
+// `AgentUsageStats`. Gezaehlt werden nur Auslieferungen an Agenten (Z1a),
+// Fenster in UTC-Kalendertagen einschliesslich heute. `counting_since` ist
+// der Zaehlbeginn (Datum, `YYYY-MM-DD`); davor gibt es keine Zahlen.
+export type UsageEntityType = 'persona' | 'playbook' | 'resource'
+
+export interface UsageDay {
+  day: string
+  uses: number
+}
+
+export interface UsageStats {
+  entity_type: UsageEntityType
+  entity_id: string
+  name: string | null
+  uses_7d: number
+  uses_30d: number
+  last_used_at: string | null
+  distinct_agents_30d: number
+  daily: UsageDay[]
+  counting_since: string
+}
+
+export interface UsageByType {
+  persona: number
+  playbook: number
+  resource: number
+}
+
+export interface AgentWorkAreaUsage {
+  area_id: string
+  access_days_30d: number
+  last_access_on: string | null
+}
+
+export interface AgentUsageStats {
+  agent_id: string
+  uses_7d: number
+  uses_30d: number
+  uses_by_type_30d: UsageByType
+  active_days_30d: number
+  last_used_at: string | null
+  last_active_at: string | null
+  daily: UsageDay[]
+  work_areas: AgentWorkAreaUsage[]
+  counting_since: string
 }
 
 export interface WorkAreaGrant {
@@ -1973,6 +2041,20 @@ export interface CasePage {
 // `GET /cases/counts`: Zaehler je Status (auch 0).
 export type CaseCounts = Record<CaseStatus, number>
 
+// Navigation & Transparenz W1 (Spec §2.2/§2.6 a) — `GET /inbox/counts`.
+// Je Art eine Zahl; `null` = diese Art gibt es fuer die Rolle nicht
+// (Abschnitt entfaellt), `0` = sichtbar, nichts offen. `total` ist die Zahl
+// an der Glocke (Versionen nur fuer admin, Muster nie).
+export interface InboxCounts {
+  follow_ups_due: number | null
+  memory_approval: number | null
+  versions_review: number | null
+  system_prompts_review: number | null
+  cases_open: number | null
+  patterns: number | null
+  total: number
+}
+
 // ADR-0053 3.7/6.5 (D5b) — Muster: berechnete Sicht ohne Zustand und ohne ID.
 // Quelle `lesson` (aehnliche offene Lernvorschlaege eines Agenten) oder `case`
 // (offene Faelle eines Agenten mit derselben Zuordnung im Zeitfenster).
@@ -2003,4 +2085,318 @@ export interface PatternListRead {
   threshold: number
   window_days: number
   patterns: PatternRead[]
+}
+
+// --- Reviews und Aenderungen (ADR-0053 3.5/3.6/6.6, Lernschleife Phase E) ---
+// Spiegel von `who2be_models.session` (Code-Namen nach der API: Protokoll =
+// Session, Aenderung = Measure). Ein Protokoll ist nach dem Einreichen
+// unveraenderlich, eine Korrektur ist ein neues Protokoll mit `supersedes_id`.
+// Das Web reicht keine Protokolle ein (QE9 a), deshalb fehlt `SessionCreate`.
+
+export type SessionTrigger = 'threshold' | 'scheduled' | 'manual'
+export type SessionParticipantKind = 'human' | 'agent' | 'builder'
+export type SessionSubmitterKind = 'human' | 'agent'
+// Element einer Aenderung: wie `CaseTarget`, ohne `model_limit`. `tool_policy`
+// traegt keine `entity_id`.
+export type MeasureTarget = Exclude<CaseTarget, 'model_limit'>
+export type MeasureEventKind =
+  | 'draft_linked'
+  | 'activated'
+  | 'follow_up_prepared'
+  | 'reviewed'
+  | 'withdrawn'
+// Einstufung der Nachkontrolle („Hat es gewirkt?“), nur ein Mensch ab editor.
+export type MeasureVerdict = 'effective' | 'ineffective' | 'not_measurable'
+export type MeasureActorKind = 'human' | 'agent' | 'system'
+// Vom Server abgeleiteter Zustand (juengstes Event; ohne Event `agreed`).
+// Die Web-Ableitung steht in `features/evolution/lib/followUp.ts`.
+export type MeasureState =
+  | 'agreed'
+  | 'draft_linked'
+  | 'activated'
+  | 'follow_up_prepared'
+  | 'effective'
+  | 'ineffective'
+  | 'not_measurable'
+  | 'withdrawn'
+
+export interface SessionParticipant {
+  kind: SessionParticipantKind
+  id: string
+  // Freitext aus dem Client (z. B. „Moderation“), wird nicht uebersetzt.
+  role: string
+}
+
+export interface SessionDecision {
+  text: string
+  standard_ref: string | null
+}
+
+export interface SessionDissent {
+  participant_kind: SessionParticipantKind
+  participant_id: string
+  text: string
+}
+
+// Ein Event aus dem Verlauf einer Aenderung (append-only, aelteste zuerst).
+export interface MeasureEvent {
+  id: string
+  measure_id: string
+  event: MeasureEventKind
+  actor_kind: MeasureActorKind
+  actor_id: string | null
+  version_entity_type: VersionedEntityType | null
+  version_id: string | null
+  verdict: MeasureVerdict | null
+  metrics: Record<string, unknown> | null
+  note: string | null
+  created_at: string
+}
+
+export interface MeasureRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  session_id: string
+  case_ids: string[]
+  target: MeasureTarget
+  entity_id: string | null
+  change_summary: string
+  test_case_id: string
+  success_criterion: string
+  counterposition: string
+  // Datum ohne Uhrzeit (`YYYY-MM-DD`); `null` = es gilt das Datum des Protokolls.
+  follow_up_at: string | null
+  state: MeasureState
+  events: MeasureEvent[]
+  created_at: string
+}
+
+// Ein Protokoll ohne Aenderungen.
+export interface SessionRead {
+  id: string
+  workspace_id: string
+  agent_id: string
+  trigger: SessionTrigger
+  participants: SessionParticipant[]
+  summary: string
+  decisions: SessionDecision[]
+  dissent: SessionDissent[]
+  // Datum ohne Uhrzeit (`YYYY-MM-DD`), Pflicht am Protokoll.
+  follow_up_at: string
+  supersedes_id: string | null
+  submitted_by_kind: SessionSubmitterKind
+  submitted_by: string
+  case_ids: string[]
+  created_at: string
+}
+
+// Eine Zeile von `GET /feedback-sessions` (QE2 a): Protokoll plus Zaehler.
+// `due_measure_count` und `next_follow_up_at` zaehlen nur offene Aenderungen
+// (weder eingestuft noch zurueckgezogen); `superseded_by_id` ist das juengste
+// Protokoll, das dieses korrigiert.
+export interface SessionListItem extends SessionRead {
+  case_count: number
+  measure_count: number
+  next_follow_up_at: string | null
+  due_measure_count: number
+  superseded_by_id: string | null
+}
+
+// `GET /feedback-sessions/{id}`: Protokoll mit eingebetteten Aenderungen (QE1 a).
+// `superseded_by_id` wie an `SessionListItem`: das juengste Protokoll, das
+// dieses korrigiert; `null` = nicht ersetzt.
+export interface SessionDetail {
+  session: SessionRead
+  measures: MeasureRead[]
+  superseded_by_id: string | null
+}
+
+// Filter fuer `GET /feedback-sessions`. `due` = nur Protokolle mit mindestens
+// einer faelligen Aenderung (der Server rechnet mit seinem heutigen Datum).
+export interface SessionFilters {
+  agent_id?: string
+  case_id?: string
+  due?: boolean
+}
+
+// Eine Seite der Protokoll-Liste; `next_cursor` aus dem Header `X-Next-Cursor`.
+export interface SessionPage {
+  items: SessionListItem[]
+  next_cursor: string | null
+}
+
+// Juengster Prueffall-Lauf einer Version (3.2: es zaehlt das letzte Ergebnis).
+export interface FollowUpRunRate {
+  runs_total: number
+  runs_passed: number
+  verdict: string
+  attestation: string
+  created_at: string
+}
+
+// Rohzahlen einer Version (QE8 a: keine Raten, die UI rechnet „je 100“).
+export interface FollowUpVersionReport {
+  version_id: string | null
+  version: number
+  test_run: FollowUpRunRate | null
+  uses: number
+  // `null`: fuer diese Version gibt es (noch) kein Zeitfenster.
+  cases: number | null
+}
+
+// `GET /measures/{id}/follow-up` (6.6): Kennzahlen der Nachkontrolle.
+// `reviewable` = darf jetzt eingestuft werden (QE4 a); `recurrence` = neue
+// Rueckmeldungen am selben Element danach, `null` = noch nicht messbar.
+export interface FollowUpReport {
+  measure_id: string
+  state: MeasureState
+  follow_up_at: string
+  due: boolean
+  reviewable: boolean
+  before: FollowUpVersionReport | null
+  after: FollowUpVersionReport | null
+  recurrence: number | null
+  min_uses: number
+  insufficient: boolean
+}
+
+// `GET /agents/{id}/dossier` (6.6, E1): Lage eines Agenten zur Vorbereitung
+// eines Reviews. Spiegel von `who2be_models.session.Dossier*`. Alle Listen
+// sind serverseitig gedeckelt (`DOSSIER_*`), `*_total` nennt die Gesamtzahl;
+// Freitexte sind gekuerzt. Rohzahlen (QE8 a): die UI rechnet nur „je 100“.
+
+export interface DossierCase {
+  id: string
+  status: CaseStatus
+  severity: CaseSeverity
+  situation: string
+  expected_behavior: string
+  created_at: string
+}
+
+// Offene Rueckmeldungen (open, triaged, in_progress, reopened): Zaehler je
+// Status (jeder Status, auch 0) plus die juengsten/schwersten.
+export interface DossierOpenCases {
+  counts: Partial<Record<CaseStatus, number>>
+  total: number
+  items: DossierCase[]
+}
+
+export interface DossierVersion {
+  version: number
+  active: boolean
+  activated_at: string | null
+  // Auslieferungen (`usage_event.source='server'`).
+  uses: number
+  outcomes: Record<string, number>
+  // Alt-Feedback je Signal.
+  signals: Record<string, number>
+  // `null`: die Version hat kein Aktivierungsdatum, also kein Zeitfenster.
+  cases: number | null
+  // `uses` liegt unter `Dossier.min_uses`.
+  insufficient: boolean
+}
+
+export interface DossierElement {
+  entity_type: VersionedEntityType
+  entity_id: string
+  name: string
+  versions: DossierVersion[]
+}
+
+// Eine Zeile der Zugriffslog-Zusammenfassung (nur Summen, ohne `ref_id`).
+export interface DossierAccessRow {
+  ref_kind: string
+  operation: string
+  sensitivity: string
+  entries: number
+  refs: number
+  last_on: string
+}
+
+export interface DossierAccess {
+  since: string
+  window_days: number
+  total: number
+  rows: DossierAccessRow[]
+}
+
+export interface DossierMeasure {
+  id: string
+  session_id: string
+  target: MeasureTarget
+  entity_id: string | null
+  change_summary: string
+  state: MeasureState
+  verdict: MeasureVerdict | null
+  reviewed_at: string | null
+  follow_up_at: string
+  case_count: number
+  created_at: string
+}
+
+// Eine Aktivierung eines Bausteins (Weiche N2 a, Verlauf E5k).
+export interface DossierGeneration {
+  entity_type: VersionedEntityType
+  entity_id: string
+  name: string
+  from_version: number | null
+  to_version: number
+  activated_at: string
+  measure_ids: string[]
+  verdict: MeasureVerdict | null
+  shared_agent_count: number | null
+}
+
+export interface Dossier {
+  agent_id: string
+  agent_name: string
+  generated_at: string
+  min_uses: number
+  open_cases: DossierOpenCases
+  elements: DossierElement[]
+  elements_total: number
+  access: DossierAccess
+  measures: DossierMeasure[]
+  measures_total: number
+  generations: DossierGeneration[]
+  generations_next_cursor: string | null
+}
+
+// ADR-0057 §7 (Paket P4c/P5) — Betreiber-Sicht auf die Hintergrund-Routinen
+// (`GET /v1/system/routines`). Spiegelt `RoutineLastRun`, `RoutineStatus` und
+// `RoutinesOverview` aus packages/models (`who2be_models/routine.py`). Nur fuer
+// Betreiber (`WHO2BE_OPERATORS`, MFA); alle anderen bekommen 403.
+export type RoutineRunStatus = 'running' | 'succeeded' | 'failed' | 'skipped'
+export type RoutineRunTrigger = 'schedule' | 'cli' | 'manual'
+export type RoutineConfigSource = 'code' | 'env'
+
+export interface RoutineLastRun {
+  status: RoutineRunStatus
+  trigger: RoutineRunTrigger
+  started_at: string
+  /** `null`, solange der Lauf noch `running` ist. */
+  duration_ms: number | null
+  /** Nur Zaehler, nie Inhalte. */
+  result: Record<string, number> | null
+  /** Nur der Klassenname der Exception bzw. `Abandoned`. */
+  error_class: string | null
+}
+
+export interface RoutineStatus {
+  name: string
+  /** Cron-Ausdruck (UTC) oder `@every …`. */
+  schedule: string
+  enabled: boolean
+  source: RoutineConfigSource
+  last_run: RoutineLastRun | null
+  next_run_at: string | null
+  last_success_at: string | null
+  external_schedule_detected: boolean
+}
+
+export interface RoutinesOverview {
+  routines: RoutineStatus[]
+  worker_last_seen_at: string | null
 }

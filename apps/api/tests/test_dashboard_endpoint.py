@@ -167,7 +167,7 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
             body = resp.json()
             assert body["kpis"] == {
                 "active_personas": 1,
-                "active_playbooks": 6,
+                "active_playbooks": 8,
                 "active_resources": 1,
                 "pending_reviews": 0,
                 "pending_system_prompts": 0,
@@ -175,7 +175,7 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
             assert body["activity"] == []
             empty_dist = {"draft": 0, "review": 0, "active": 0, "inactive": 0}
             assert body["status_distribution"]["persona"] == {**empty_dist, "active": 1}
-            assert body["status_distribution"]["playbook"] == {**empty_dist, "active": 6}
+            assert body["status_distribution"]["playbook"] == {**empty_dist, "active": 8}
             assert body["status_distribution"]["resource"] == {**empty_dist, "active": 1}
     finally:
         cleanup_workspaces([owner])

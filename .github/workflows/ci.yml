@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
 
-# Superseded Runs desselben Refs abbrechen, statt sie parallel zu Ende laufen
-# zu lassen. Spart GitHub-Actions-Minuten (relevant fuer das Minuten-Kontingent
-# privater Repos) und haelt die Run-Historie pro Branch sauber. main wird nicht
-# abgebrochen (push-Events auf main behalten ihren Lauf via run_id-Gruppe).
+# Eine Gruppe je PR bzw. je Ref (`group`): ein neuer Push bricht auf PR-Branches
+# den laufenden Lauf ab. Spart GitHub-Actions-Minuten (relevant fuer das
+# Minuten-Kontingent privater Repos) und haelt die Run-Historie pro Branch
+# sauber. Auf main wertet `cancel-in-progress` zu false aus: ein laufender
+# main-Lauf wird nicht abgebrochen. Alle main-Pushes teilen sich aber dieselbe
+# Gruppe — ein Spruch je main-Commit ist damit NICHT garantiert: bei drei
+# main-Pushes binnen ~2 min endete der mittlere Lauf ohne einen Job als
+# `cancelled` (gemessen: 38167426986, 37822973287, 38464644002; Issue #923).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -30,6 +34,7 @@ jobs:
     # diesem Gate (fragt eine Live-CVE-Datenbank ab, kann sich ohne
     # Datei-Aenderung aendern).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       code: ${{ steps.classify.outputs.code }}
     steps:
@@ -82,6 +87,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     services:
       postgres:
         # pgvector-Variante (ADR-0046) — Migration 0071 legt die
@@ -110,7 +116,7 @@ jobs:
           # stillschweigend nicht mehr prueft, ist ein leeres Versprechen.
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Sync dependencies
         # `--group billing` installiert das optionale Cloud-Billing-Paket, damit
         # dessen Tests + Typecheck laufen. Die Build-Zeit-Isolation (kein Mollie
@@ -210,14 +216,14 @@ jobs:
         run: python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
       - name: Upload Python JUnit-XML
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: junit-python
           path: junit-python.xml
           if-no-files-found: ignore
       - name: Upload Python coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-python
           path: coverage.xml
@@ -227,12 +233,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -268,14 +275,14 @@ jobs:
         run: python3 scripts/ci/assert_skips_within_budget.py apps/web/junit-web.xml
       - name: Upload web JUnit-XML
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: junit-web
           path: apps/web/junit-web.xml
           if-no-files-found: ignore
       - name: Upload web coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-web
           path: apps/web/coverage
@@ -327,6 +334,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -366,6 +374,15 @@ jobs:
         run: |
           docker pull caddy:2.8-alpine
           CADDY_IMAGE=caddy:2.8-alpine bash deploy/hetzner/tests/test_headers_ci.sh
+      - name: fail2ban-Filter (Rate-Limit an der Kante, #540)
+        # Filter und Jail-Vorlage unter deploy/hetzner/fail2ban/ laufen nur auf
+        # dem Host, nie in einem Container — ohne diesen Step wuerde sie keine
+        # Pruefung je ausfuehren. Echtes `fail2ban-regex` (Upstream 1.1.0,
+        # sha256-gepinnt, vom Test selbst geladen) gegen von Caddy 2.11
+        # geschriebene Beispielzeilen: Treffer, Nicht-Treffer (mcp., Health,
+        # 404/5xx), Header-Injektion und DOCKER-USER als Sperrkette. Braucht
+        # keinen Docker-Daemon; haengt hier, weil das der Deploy-Job ist.
+        run: bash deploy/hetzner/tests/test_fail2ban_filter.sh
       - name: Build runtime-cloud image (ADR-0029, build-only)
         # Cloud-Profil-Gegenprobe (LIC-4): das Docker-Target `runtime-cloud`
         # (inkl. who2be-billing) wurde in CI sonst nie gebaut — ein Bruch
@@ -389,6 +406,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -397,7 +415,7 @@ jobs:
         run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -423,7 +441,7 @@ jobs:
         run: npm run e2e -- --project=chromium
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report
@@ -452,6 +470,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
@@ -473,7 +492,7 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.cloud.yml
           -f docker-compose.e2e-cloud.yml
           up -d --build --wait --wait-timeout 240
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -503,7 +522,7 @@ jobs:
         run: npx playwright test e2e/billing.spec.ts --project=chromium
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report-billing-cloud
           path: apps/web/playwright-report
@@ -563,6 +582,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       # Ein rotes Profil darf die beiden anderen nicht abschneiden — sonst
       # fehlen genau die Zahlen, die diese Karte erheben soll.
@@ -580,7 +600,7 @@ jobs:
         run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -602,7 +622,7 @@ jobs:
         run: npm run e2e -- --project=${{ matrix.project }}
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report-${{ matrix.project }}
           path: apps/web/playwright-report
@@ -636,6 +656,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: User-Namespaces freischalten (ubuntu-24.04 sperrt sie per AppArmor)
@@ -752,6 +773,7 @@ jobs:
     # keinem Test, die Funktion `guard_violation` schon
     # (`scripts/tests/test_changelog_fragments.py`).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -759,7 +781,7 @@ jobs:
           # muss beide Historie da sein, ein flacher Checkout reicht nicht.
           fetch-depth: 0
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: CHANGELOG.md nicht direkt bearbeiten (Fragment-Verfahren)
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -828,6 +850,7 @@ jobs:
     # SHA256 aus der `checksums.txt` des Releases geprueft; nachrechenbar mit
     #   curl -sSL <url> | sha256sum
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -917,17 +940,18 @@ jobs:
     # werden im RUNBOOK akzeptiert oder direkt gefixt. Triage-Pfad:
     # deploy/hetzner/RUNBOOK.md §CVE-Response.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Export non-workspace deps
         # Editable Workspace-Members (apps/api, apps/mcp, packages/models)
         # filtern, weil pip-audit fuer sie keinen Hash aufloesen kann.
         run: uv export --format requirements-txt --no-emit-workspace --no-hashes --group billing > /tmp/who2be-reqs.txt
       - name: pip-audit (Python)
         run: uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -1100,6 +1124,7 @@ jobs:
       - changelog-guard
       - secrets
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Jeden Vorgaenger gegen sein ERWARTETES Ergebnis pruefen
         env:

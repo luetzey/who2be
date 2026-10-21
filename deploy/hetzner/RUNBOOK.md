@@ -12,6 +12,7 @@ Aktive Sektionen:
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
 - [Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits) — Zugriffe nachvollziehen, `mem_limit` pruefen und anheben (W8/S1-S3)
+- [Rate-Limit an der Kante (fail2ban)](#rate-limit-an-der-kante-fail2ban) — Flut-IPs per Access-Log vor der App sperren: einrichten, pruefen, **entsperren**, abschalten (#540)
 - [Caddy-Version anheben](#caddy-version-anheben-reverse-proxy-update) — Reverse-Proxy-Update: Header-Gegenprobe VOR dem Deploy, Betroffenheitspruefung, Rueckweg (W8/S6)
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
@@ -20,7 +21,9 @@ Aktive Sektionen:
 - [Provisioning-Nachweise](#provisioning-nachweise) — Protokoll fuer SSH-Zustand und Host-Update-Automatik (W8/S4)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
-- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) — Host-Crons fuer DSGVO-Purge und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **einmalig eintragen**, sonst laeuft keiner der Jobs (Dokploy: [Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen))
+- [Wächter-Server (Monitoring, ADR-0062)](#waechter-server-monitoring-adr-0062) — zweiter Server mit GlitchTip, Uptime Kuma, Beszel: nummerierte Einrichtung, Alarmwege Telegram + Mail, Backup-Heartbeat, Beszel-Agent auf Prod
+- [Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker) — DSGVO-Purge, Verfall unbestaetigten Gedaechtnisses und Protokoll-Aufraeumen laufen im Compose-Dienst `worker` (ADR-0057); **nichts einzutragen**, nur pruefen, dass er gesund ist
+- [Retention-Cron (`who2be-purge`)](#retention-cron-who2be-purge) und [Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire) — **entfallen**: alte Crontab-Zeilen entfernen; die CLIs bleiben als manueller Ausloeser und Notfallweg
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
@@ -49,7 +52,7 @@ ist „mehr API-Kapazitaet" **keine** Konfigurationsfrage.
 |---|---|---|
 | Start-Guard | `apps/api/.../main.py` | `WEB_CONCURRENCY` / `--workers N` im API-Prozess |
 | Compose-Drift-Tests | `apps/api/tests/test_single_writer_guard.py` | `replicas`, `scale`, `--workers`, `update_config`/`start-first` in **jeder** Compose-Datei mit `api`-Dienst |
-| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`-Container nach dem `up` → Abbruch mit Exit 3 |
+| Deploy-Assertion | `deploy/hetzner/scripts/deploy.sh` | mehr (oder kein) laufender `api`- bzw. `worker`-Container nach dem `up` → Abbruch mit Exit 3 |
 
 **Der Start-Guard ist kein Beleg.** Er sieht nur den eigenen Prozessbaum;
 mehrere *Container* kann kein In-Process-Check erkennen. Dass er schweigt, sagt
@@ -122,13 +125,25 @@ aus dem letzten Snapshot (§Tabellen-Store-Backup).
 
 ### Legitime zweite Prozesse
 
-Zwei dokumentierte Betriebspfade oeffnen die Area-Dateien schreibend, **waehrend**
-die API laeuft: der Retention-Cron (`docker compose … run --rm --no-deps api who2be-purge`,
-Zeile siehe [Retention-Cron](#retention-cron-who2be-purge))
-und der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`). Beide sind
-kurz und gewollt; sie sind **kein** zweiter API-Container und werden von der
-Deploy-Assertion nicht erfasst. Beide nicht parallel zueinander und nicht
-waehrend eines Deploys starten.
+Zwei dokumentierte Betriebspfade fassen die Area-Dateien an, **waehrend** die
+API laeuft:
+
+- der Purge-Sweep im Dienst `worker` (Routine `purge`, siehe
+  [Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)). Er loescht
+  nur Dateien geloeschter Areas und nur nach 24 h ohne Schreibaktivitaet
+  (`apps/api/src/who2be_api/core/purge.py#cleanup_deleted_area_stores`).
+  Ein manueller `who2be-purge` nimmt denselben Lock und laeuft nie parallel
+  zum Worker-Lauf.
+- der Backup-Snapshot (`… exec api … snapshot_to`, `VACUUM INTO`).
+
+Beide sind gewollt und **kein** zweiter API-Container. Fuer `worker` gilt
+dieselbe Grenze wie fuer `api`: **genau ein** laufender Container, kein
+`replicas`, kein `--scale worker=2` (ADR-0057 §10). Die Deploy-Assertion
+misst deshalb beide Dienste und bricht bei einer anderen Zahl als 1 mit Exit 3
+ab; Meldung und Vorgehen sind dieselben wie oben, mit `worker` statt `api` in
+den Befehlen. Ein zweiter Worker verursacht keinen doppelten Lauf (die
+Exklusivitaet liegt in Postgres), waere aber ein zweiter Prozess auf demselben
+Volume.
 
 ---
 
@@ -498,27 +513,34 @@ und der Abnahme. Reihenfolge einhalten:
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
       `push: main` via `deploy/hetzner/scripts/deploy.sh <sha>`; Rollback identisch
       mit altem SHA.
-- [ ] **7b — Host-Crons eintragen (Backup, Purge, Memory-Verfall):** in der Crontab des
-      Deploy-Users je eine Zeile fuer den
-      [Backup-Lauf](#trigger-routine), den
-      [Retention-Cron `who2be-purge`](#retention-cron-who2be-purge) und den
-      [Verfall unbestaetigten Gedaechtnisses `who2be-memory-expire`](#verfall-unbestaetigten-gedaechtnisses-who2be-memory-expire)
-      — jeweils die Zeile der **Cloud-Edition** (mit Overlay und `--env-file`),
-      vorher die Log-Dateien unter `/var/log` per `install` anlegen (steht bei
-      jeder Zeile). Ohne diese Eintraege laeuft keiner der Jobs: es gibt kein
-      Backup, es wird nichts gepurgt, und unbestaetigtes Gedaechtnis verfaellt
-      nie. Verifikation:
+- [ ] **7b — Backup-Cron eintragen, Worker healthy, erster Lauf sichtbar:**
+      In der Crontab des Deploy-Users steht die Zeile des
+      [Backup-Laufs](#trigger-routine) — die Zeile der **Cloud-Edition**
+      (mit Overlay und `--env-file`), vorher die Log-Datei unter `/var/log`
+      per `install` anlegen (steht bei der Zeile). Ohne sie gibt es kein
+      Backup. (Die [Access-Log-Rotation](#access-logs--ressourcen-limits)
+      ist ein eigener Host-Cron, siehe dort.) Purge und Gedaechtnis-Verfall
+      traegst du **nicht** mehr ein:
+      sie laufen im Dienst `worker`, der mit dem Stack startet
+      ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)).
+      Abgehakt ist der Punkt erst, wenn der Worker gesund ist und seinen
+      ersten Lauf protokolliert hat. Verifikation:
       ```bash
-      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup'
-      # → je eine Zeile (drei insgesamt), jede mit
-      #   -f deploy/hetzner/who2be/docker-compose.yml -f …cloud.yml --env-file
-      crontab -l | grep -E 'who2be-(purge|memory-expire)|run --rm backup' | grep -vc -- '--env-file'
-      # → 0   (sonst laeuft eine Zeile gegen die Root-Compose = Dev-Stack)
-      # am Folgetag:
-      tail -2 /var/log/who2be-purge.log
-      # → Purge: … / Retention: …
-      tail -1 /var/log/who2be-memory-expire.log
-      # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
+      crontab -l | grep -E 'who2be-(purge|memory-expire)'
+      # → keine Zeile (Altbestand: siehe Retention-Cron, "entfaellt")
+      crontab -l | grep 'run --rm backup' | grep -c -- '--env-file'
+      # → 1   (sonst laeuft die Zeile gegen die Root-Compose = Dev-Stack)
+      COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+      $COMPOSE ps worker
+      # → genau ein Container, Status "Up … (healthy)"
+      $COMPOSE exec worker who2be-worker list
+      # → Tabelle mit audit-retention, purge, memory-expire, routine-run-retention,
+      # usage-retention, alle "on"
+      # nach dem ersten Lauf (catch_up startet purge/memory-expire/audit-retention/
+      # usage-retention beim ersten Start sofort, danach taeglich
+      # 03:30 / 03:45 / 04:00 / 04:10 / 04:15 UTC):
+      $COMPOSE logs worker | grep -E 'Routine (purge|memory-expire|audit-retention|usage-retention), Slot .*: succeeded'
+      # → je Routine mindestens eine Zeile
       ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -1
       # → Dump vom heutigen Tag (weitere Pruefung: Backup & Restore, Verifikation)
       ```
@@ -547,6 +569,36 @@ nicht offen sein":
 
 Ist nur `GOTRUE_DISABLE_SIGNUP=true` gesetzt (ohne Launch-Modus), bleibt die
 Web-UI beim Altverhalten: `/signup` leitet auf `/login` um, kein Hinweistext.
+
+**Startreihenfolge:** eigenes Konto zuerst anlegen, dann sperren. Mit
+`GOTRUE_DISABLE_SIGNUP=true` legt auch ein Google-/GitHub-/Apple-Login kein
+neues Konto mehr an; ein solcher Versuch landet auf der Hinweisseite.
+
+**Freitext und Banner** (Runtime, kein Rebuild, Details in
+[`docs/signup-and-invites.md`](../../docs/signup-and-invites.md)):
+`WHO2BE_LAUNCH_MESSAGE_DE`/`_EN` ersetzt den Text der Hinweisseite,
+`WHO2BE_NOTICE_DE`/`_EN` + `WHO2BE_NOTICE_LEVEL` (info|warning) zeigt ein
+Banner auf Login und in der App, z. B. vor einer Wartung:
+
+```dotenv
+# deploy/hetzner/.env
+WHO2BE_NOTICE_DE="Heute ab 22 Uhr Wartung, etwa 30 Minuten."
+WHO2BE_NOTICE_LEVEL=warning
+```
+
+```sh
+docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env up -d web
+```
+
+Danach den Wert wieder leeren und `web` erneut starten.
+
+**On-Prem mit `WHO2BE_BOOTSTRAP_ADMIN_EMAIL`:** Der erste Login dieser Adresse
+uebernimmt die beim ersten Boot angelegte Organisation nur, wenn
+`GOTRUE_MAILER_AUTOCONFIRM=false` oder `GOTRUE_DISABLE_SIGNUP=true` gilt — am
+auth-Dienst **und** in `deploy/hetzner/.env` fuer den `api`-Dienst. Sonst
+bekommt der Login eine eigene Organisation, und das API-Log zeigt dazu einen
+WARN mit beiden Variablen.
 
 ## Notfallpfad: Registry nicht erreichbar
 
@@ -773,6 +825,345 @@ Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
 Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
 anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
 OOM im Normalbetrieb waere schlechter als gar kein Limit.
+
+### Dokploy-Stack
+
+Der Dokploy-Stack (`deploy/dokploy/docker-compose.yml` + `docker-compose.cloud.yml`,
+Auto-Deploy auf main) traegt seit t_68b3121e dieselben drei Bloecke wie der
+Hetzner-Stack an **jedem** Dienst: Log-Rotation (`json-file`, 3 x 10 MB),
+`no-new-privileges` und ein `mem_limit` mit denselben Werten je Dienst. Dokploy
+setzt keinen dieser Deckel von sich aus. `test_compose_hardening.py` zaehlt
+auch diesen Stack ab (Basis und Overlay zusammengefuehrt) und prueft, dass
+kein Dienst einen Host-Port veroeffentlicht.
+
+Budget: Die Dauerdienste summieren sich auf genau 7 GiB (db 3g, api 1g,
+seaweedfs 1g, auth/worker/mcp-http je 512m, web 256m, auth-gateway und
+redis je 128m). Auf demselben Host laufen zusaetzlich Dokploy selbst und
+Traefik ohne Deckel aus dem Repo. Das geht, weil die Deckel Obergrenzen sind:
+ein lokaler Lauf des kompletten Stacks (2026-10-21, podman) brauchte im
+Leerlauf zusammen rund 470 MB, kein Dienst ueber 18 % seines Deckels, alle
+One-Shots mit Exit 0, kein `OOMKilled`. Waechst ein Dienst dazu, schlaegt der
+Budget-Test an und die Summe muss neu begruendet werden.
+
+**Interner Bereich `/v1/internal` (ADR-0010).** Vor diesem Stack steht
+Traefik ohne Sperr-Regel; eine Probe von aussen bekam auf `/v1/internal/*`
+ein 404 von uvicorn, die Anfrage erreichte also die App. Seitdem sperrt die
+API den Bereich selbst (`InternalAreaGuard`, `core/middleware.py`), in jeder
+Schreibweise (`//`, Gross/Klein, `%69`, `;`): `403`, solange ein Proxy-Header
+(`X-Forwarded-For`, `X-Real-IP`, `Forwarded`, `X-Forwarded-Host`) gesetzt ist
+oder die Gegenstelle nicht aus Loopback/RFC 1918 kommt. Durchgelassen wird nur
+der direkte Zugriff aus dem Container-Netz (z. B. ein kuenftiger Metrik-Agent
+auf `api:8000`). Pruefen nach einem Deploy, von aussen:
+
+```bash
+for p in /v1/internal/metrics /v1//internal/x /v1/%69nternal/x; do
+  curl -s -o /dev/null -w "$p %{http_code}\n" "https://api.<DOMAIN>$p"
+  curl -s -o /dev/null -w "app$p %{http_code}\n" "https://app.<DOMAIN>$p"
+done   # erwartet: ueberall 403
+```
+
+`/V1/INTERNAL/...` auf `app.<DOMAIN>` liefert `200` mit der SPA: der nginx im
+Web-Container leitet nur `/v1/` (klein) an die API, alles andere ist das
+statische Bundle — die Anfrage erreicht die API nicht (gemessen im lokalen
+Stack-Lauf 2026-10-21: SPA-HTML, kein Eintrag im API-Access-Log).
+
+#### Vergleich Hetzner/Caddy-Stack und Dokploy-Stack
+
+Was der jeweilige Stack aus dem Repo mitbringt. Belege als Datei + Anker
+(Dienst, Snippet, Symbol), siehe CONTRIBUTING §Referencing code. „Kante" heisst
+beim Hetzner-Stack Caddy, beim Dokploy-Stack Traefik, das Dokploy selbst
+betreibt und dessen Konfiguration nicht im Repo liegt.
+
+| Schutz | Hetzner/Caddy-Stack | Dokploy-Stack | Soll im Dokploy-Stack |
+| --- | --- | --- | --- |
+| Security-Header (HSTS, nosniff, XFO, Referrer, Permissions, COOP, X-Robots-Tag, Server-Banner aus) | `deploy/hetzner/Caddyfile#(security_headers)`, an allen vier Hosts importiert | Nicht im Repo. `apps/web/nginx.conf` setzt nur `Cache-Control`, keine Security-Header | Traefik-Middleware, Schritt 1 unten |
+| CSP API/MCP/Auth | `deploy/hetzner/Caddyfile#api.{$DOMAIN}`, `#mcp.{$DOMAIN}`, `#supabase.{$DOMAIN}` (`default-src 'none'` …) | Nicht im Repo | Traefik-Middleware je Host, Schritt 1 |
+| CSP Web | `deploy/hetzner/Caddyfile#app.{$DOMAIN}` | Nicht im Repo | Traefik-Middleware je Host, Schritt 1 |
+| `Cache-Control: no-store` (API/MCP, nur wenn die App keinen setzt) | `deploy/hetzner/Caddyfile#(no_store)` | Nicht im Repo; die OAuth-Endpunkte setzen `no-store` selbst | Bedingtes Setzen kann Traefik nicht, siehe Hinweis zu Schritt 1 |
+| `/v1/internal`-Sperre | Kante: `deploy/hetzner/Caddyfile#@internal`, `#@internal_alt`. App: `InternalAreaGuard` | App: `apps/api/src/who2be_api/core/middleware.py#InternalAreaGuard`, registriert in `apps/api/src/who2be_api/main.py#create_app` | Erfuellt durch die App; eine Sperre an der Kante ist optional |
+| Body-Limit vor der App | `deploy/hetzner/Caddyfile#api.{$DOMAIN}` (`request_body max_size`) | Web-Pfad: `apps/web/nginx.conf#client_max_body_size`; fuer `api.<DOMAIN>` nicht im Repo | Traefik-Middleware `buffering` (`maxRequestBodyBytes` wie im Caddyfile), Repo-Label wie Schritt 1.3 |
+| Rate-Limit an der Kante | fail2ban auf Caddys Access-Log: `deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf` | Nicht im Repo; die App drosselt selbst (`slowapi`, `McpLimitService`) | Traefik-`rateLimit` und/oder fail2ban/CrowdSec, Schritte 2 und 3 |
+| Zugriffslog fuer fail2ban/CrowdSec | `deploy/hetzner/Caddyfile#(access_log)`, Volume `caddy-logs` in `deploy/hetzner/who2be/docker-compose.yml#caddy` | Nicht im Repo | Traefik-Access-Log, Schritt 2 |
+| `mem_limit` | jeder Dienst, `deploy/hetzner/who2be/docker-compose.yml` + `deploy/hetzner/supabase/docker-compose.yml` | jeder Dienst, `deploy/dokploy/docker-compose.yml` + `docker-compose.cloud.yml#redis`, `#set-app-role-password`; Test `apps/api/tests/test_compose_hardening.py` | erfuellt |
+| `cpus` | nicht gesetzt | nicht gesetzt | bewusst offen: ohne Lastmessung (Stufe A, Lasttest) waere jeder Wert geraten |
+| `no-new-privileges` | `deploy/hetzner/who2be/docker-compose.yml#x-hardening` | `deploy/dokploy/docker-compose.yml#x-hardening`, Overlay-Dienste einzeln | erfuellt |
+| `read_only` / `cap_drop` | nicht gesetzt | nicht gesetzt | gleiches Niveau; Einfuehrung braucht je Image eine Pruefung der Schreibpfade und ist eine eigene Aenderung |
+| Log-Rotation der Container | `deploy/hetzner/who2be/docker-compose.yml#x-logging` | `deploy/dokploy/docker-compose.yml#x-logging` | erfuellt |
+| Veroeffentlichte Host-Ports | nur `caddy` (80/443), `deploy/hetzner/who2be/docker-compose.yml#caddy` | keine; Traefik erreicht die Dienste ueber `dokploy-network` (`expose:`), Test `test_compose_hardening.py` | erfuellt |
+| Healthchecks | Compose: `api`, `worker`, `seaweedfs`, `web`, `mcp`, `db`, `auth`, `auth-gateway`, `redis` | Compose: `db`, `auth`, `auth-gateway`, `seaweedfs`, `api`, `worker`, `redis`; `web` und `mcp-http` ueber `HEALTHCHECK` in `apps/web/Dockerfile`, `apps/mcp/Dockerfile` | erfuellt |
+
+#### Einrichtung an der Kante (Owner, Dokploy-Oberflaeche)
+
+Diese Schritte gehen nur in Dokploy bzw. in Traefik und liegen deshalb nicht im
+Repo. Reihenfolge einhalten: Ein Router-Label, das auf eine noch nicht
+definierte `@file`-Middleware zeigt, nimmt Traefik den ganzen Router aus dem
+Betrieb, der Host waere dann nicht erreichbar.
+
+**Schritt 1: Header-Middleware (Angleichung an `(security_headers)` und die CSP
+im Caddyfile).**
+
+1. In Dokploy unter *Traefik → File System* im Verzeichnis `dynamic/` eine Datei
+   `who2be-headers.yml` anlegen:
+
+   ```yaml
+   http:
+     middlewares:
+       who2be-security-headers:
+         headers:
+           stsSeconds: 31536000
+           stsIncludeSubdomains: true
+           contentTypeNosniff: true
+           frameDeny: true
+           referrerPolicy: "no-referrer"
+           permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), microphone=()"
+           customResponseHeaders:
+             Cross-Origin-Opener-Policy: "same-origin"
+             X-Robots-Tag: "noindex, nofollow, noarchive"
+             Server: ""          # leerer Wert entfernt den Header
+       who2be-csp-strict:     # api., mcp., supabase.
+         headers:
+           contentSecurityPolicy: "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
+       who2be-csp-web:        # app.
+         headers:
+           contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.<DOMAIN> https://supabase.<DOMAIN>; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
+   ```
+
+   `<DOMAIN>` durch die eigene Domain ersetzen. Die CSP-Werte sind die aus
+   `deploy/hetzner/Caddyfile`. Aendert sich dort eine CSP (etwa W7,
+   Tracker-Domain in `connect-src`), wird diese Datei im selben Zug angepasst.
+2. Pruefen, dass Traefik die Datei geladen hat: Im Traefik-Log (Dokploy →
+   *Traefik → Logs*) darf kein Fehler zu `who2be-headers.yml` stehen.
+   Liegt am Entrypoint `websecure` bereits eine globale Header-Middleware, wird
+   sie durch `who2be-security-headers` ersetzt und nicht mit ihr kombiniert,
+   damit kein Header doppelt oder mit zwei Werten ankommt.
+3. Erst danach die Middlewares an die Router haengen. Das sind Labels in
+   `deploy/dokploy/docker-compose.yml` und damit eine Repo-Aenderung, die nach
+   dem Merge sofort live geht. Sie laeuft als eigene Karte mit Owner-Go:
+
+   ```text
+   traefik.http.routers.who2be-api.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-mcp.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-supabase.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-web.middlewares=who2be-security-headers@file,who2be-csp-web@file
+   ```
+4. Nach dem Deploy pruefen, an allen vier Hosts:
+
+   ```bash
+   for h in api app supabase mcp; do
+     echo "== $h"; curl -sI "https://$h.<DOMAIN>/" | grep -iE \
+       'strict-transport|x-content-type|x-frame|referrer-policy|permissions-policy|cross-origin-opener|x-robots|content-security|^server:'
+   done   # erwartet: Werte wie oben, keine server:-Zeile
+   ```
+
+Hinweis zu `Cache-Control: no-store`: Caddy setzt ihn nur, wenn die App keinen
+eigenen liefert. Traefik ueberschreibt Antwort-Header immer und wuerde damit
+die bewusst cachebaren MCP-Metadaten (`/.well-known/*`) ebenfalls auf
+`no-store` setzen. Deshalb hier nicht an der Kante; der richtige Ort ist die
+App selbst (eigene Karte).
+
+**Schritt 2: Access-Log fuer fail2ban oder CrowdSec.**
+
+1. In Dokploy das Traefik-Access-Log einschalten (*Traefik →
+   Konfiguration* `traefik.yml`, Block `accessLog` mit `format: json` und einem
+   `filePath` auf dem Host). Nutzt Dokploy fuer seine Anfragen-Ansicht bereits
+   ein Access-Log, diese Datei verwenden statt einer zweiten.
+2. Wie im Caddy-Stack gilt: `Authorization`/`Cookie` nicht protokollieren
+   (`fields.headers.defaultMode: drop`) und die Frist von 14 Tagen per
+   Rotation einhalten (§Access-Logs, `docs/compliance/vvt.md` §7). Query-Werte
+   (`code`, `token`) kann Traefik nicht einzeln redigieren. Deshalb vor dem
+   Einschalten pruefen, ob `RequestPath` mit Query im Log landet, und das mit
+   dem Datenschutz-Verantwortlichen klaeren.
+3. Der fail2ban-Filter im Repo (`deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf`)
+   ist auf Caddys JSON-Felder geschrieben und liest Traefik-Zeilen nicht. Fuer
+   den Dokploy-Stack braucht es einen eigenen Filter mit Test analog
+   `deploy/hetzner/tests/test_fail2ban_filter.sh` (eigene Karte). Alternativ
+   CrowdSec mit der Traefik-Collection. Die Entscheidung trifft der Owner.
+
+**Schritt 3: Rate-Limit-Middleware.**
+
+1. In derselben Datei aus Schritt 1 eine Middleware `who2be-ratelimit` vom Typ
+   `rateLimit` anlegen (`average`, `burst`, `sourceCriterion.ipStrategy`).
+   Die Werte orientieren sich an den Jails in §Rate-Limit an der Kante und
+   werden nach dem Lasttest der Stufe A bestaetigt.
+2. Nur an die Router `who2be-api` und `who2be-supabase` haengen, nicht an
+   `who2be-mcp`. Ein MCP-Client ist eine IP mit hoher legitimer Rate, seine
+   Limits setzt die App (§Rate-Limit an der Kante, „Nie gezaehlt").
+3. Das Label ist wieder eine Repo-Aenderung (Schritt 1.3) und laeuft mit
+   derselben Karte und demselben Owner-Go.
+
+---
+
+## Rate-Limit an der Kante (fail2ban)
+
+**Wozu:** die App drosselt selbst (`slowapi`, `McpLimitService`) — aber erst,
+nachdem eine Anfrage geparst, eine DB-Session gezogen und das Entitlement
+aufgeloest ist. fail2ban liest Caddys Access-Log und sperrt eine IP, die sich
+an Anmelde- und Token-Routen oder an der API mit abgewiesenen Anfragen haeuft,
+per Firewall-Regel. Danach erreicht ihre Flut keinen Container mehr. Das Limit
+in der App bleibt unveraendert; das hier ist die Stufe davor (#540,
+Owner-Entscheidung Option A: kein eigenes Caddy-Image).
+
+**Was im Repo liegt** (Vorlagen, auf dem Host von Hand eingerichtet — `deploy.sh`
+fasst fail2ban nicht an):
+
+| Datei | Inhalt |
+| --- | --- |
+| `deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf` | Filter auf das JSON-Access-Log, zwei Modi `auth`/`edge` |
+| `deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf` | zwei Jails, Schwellen, Sperrkette `DOCKER-USER`, `logpath` |
+| `deploy/hetzner/tests/test_fail2ban_filter.sh` | Filtertest mit echten Caddy-Zeilen (laeuft in CI, `compose-smoke`) |
+
+| Jail | zaehlt | Schwelle | Sperre |
+| --- | --- | --- | --- |
+| `who2be-caddy-auth` | `supabase.<DOMAIN>/auth/v1/{token,signup,recover,otp,magiclink,verify,resend}` mit 400/401/403/422/429, `api.<DOMAIN>/oauth/{token,register,authorize}` mit 400/401/403/429 | 10 in 10 min | 1 h |
+| `who2be-caddy-edge` | jede Route auf `api.<DOMAIN>` mit 401/403/429 | 120 in 2 min | 15 min |
+
+**Nie gezaehlt:** `mcp.<DOMAIN>` (ein MCP-Client ist eine IP mit hoher
+legitimer Rate, seine Limits setzt die App), `/v1/health`, `app.<DOMAIN>`,
+404 und 5xx. Begruendung je Regel steht im Kopf des Filters.
+
+### Einrichten
+
+Einmalig, als root auf dem Host. Voraussetzung: der Stack laeuft und Caddy hat
+mindestens eine Anfrage protokolliert (vorher existiert `access.log` nicht).
+
+```bash
+# 1) Paket (Debian/Ubuntu). Bringt iptables-Aktionen und den Dienst mit.
+apt-get install -y fail2ban
+
+# 2) Wo liegt das Log auf dem Host? Caddy schreibt in das benannte Volume
+#    `caddy-logs`; der Name traegt den Compose-Projektnamen als Praefix.
+docker volume ls --format '{{.Name}}' | grep caddy-logs
+docker volume inspect -f '{{ .Mountpoint }}' who2be_caddy-logs
+#    → z. B. /var/lib/docker/volumes/who2be_caddy-logs/_data
+
+# 3) Vorlagen kopieren (aus dem Checkout unter /opt/who2be)
+install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf \
+  /etc/fail2ban/filter.d/who2be-caddy.conf
+install -m 0644 /opt/who2be/deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf \
+  /etc/fail2ban/jail.d/who2be-caddy.conf
+
+# 4) logpath anpassen, falls Schritt 2 einen anderen Pfad geliefert hat
+$EDITOR /etc/fail2ban/jail.d/who2be-caddy.conf
+
+# 5) Filter gegen das ECHTE Log pruefen, bevor eine Jail scharf geht.
+#    Erwartung: einige "matched", keine Fehler, "Date template hits" > 0.
+fail2ban-regex /var/lib/docker/volumes/who2be_caddy-logs/_data/access.log \
+  '/etc/fail2ban/filter.d/who2be-caddy.conf[mode=auth]'
+fail2ban-regex /var/lib/docker/volumes/who2be_caddy-logs/_data/access.log \
+  '/etc/fail2ban/filter.d/who2be-caddy.conf[mode=edge]'
+
+# 6) Konfiguration testen, dann laden
+fail2ban-client -t
+systemctl enable --now fail2ban
+fail2ban-client reload
+```
+
+**Warum `DOCKER-USER` und nicht die Default-Kette:** Caddys Ports 80/443 sind
+von Docker veroeffentlicht; Docker leitet diese Pakete um, bevor `INPUT`
+greift — dieselbe Mechanik wie bei `ufw` in
+[§4 Firewall](#4--firewall-ports-80443-ssh-22). Eine Sperre in `INPUT` saehe in
+`fail2ban-client status` korrekt aus und wirkte nicht. `DOCKER-USER` ist die
+Kette, die Docker vor seinen eigenen Regeln auswertet.
+
+**Wenn der Pfad aus Schritt 2 nicht existiert:** Caddy hat noch keine Anfrage
+geschrieben, oder das Volume heisst anders (anderer Compose-Projektname). Mit
+fehlender Datei startet die Jail nicht (`Have not found any log file`).
+
+**Rotation:** der naechtliche Cron (`rotate-access-log.sh`,
+[§Access-Logs](#access-logs-lesen)) benennt die Datei um und startet Caddy neu;
+fail2ban (`backend = polling`) bemerkt den neuen Inode und liest die neue Datei
+von vorn. Die rotierten `.gz`-Generationen liest fail2ban bewusst nicht.
+
+### Pruefen
+
+```bash
+# Laufen beide Jails, und auf welche Datei schauen sie?
+fail2ban-client status
+fail2ban-client status who2be-caddy-auth
+fail2ban-client status who2be-caddy-edge
+#   → "File list:" zeigt den Log-Pfad, "Currently banned"/"Banned IP list" die Sperren
+
+# Sitzt die Sperrkette dort, wo Docker-Verkehr ankommt?
+iptables -S DOCKER-USER | grep f2b-who2be
+iptables -S f2b-who2be-caddy-auth
+
+# Was hat fail2ban zuletzt getan?
+grep -E 'who2be-caddy-(auth|edge)' /var/log/fail2ban.log | tail -n 20
+
+# Protokolliert Caddy echte Client-Adressen? Anfragen gesamt vs. Anfragen mit
+# remote_ip aus 172.16.0.0/12 (Docker-Netze, stehen in ignoreip).
+LOG=/var/lib/docker/volumes/who2be_caddy-logs/_data/access.log
+grep -c '"remote_ip":' "$LOG"
+grep -cE '"remote_ip":"172\.(1[6-9]|2[0-9]|3[01])\.' "$LOG"
+#   → Erwartung: zweite Zahl 0 (eigene Aufrufe vom Host selbst ausgenommen)
+```
+
+Ist die zweite Zahl bei Anfragen von aussen nicht 0, greift die Jail fuer
+diese Anfragen nicht. Das ist ein Befund fuer den Owner und wird ausserhalb des
+Repos geklaert, nicht durch Aenderung von `ignoreip`.
+
+Probe ohne Risiko fuer echte Nutzer: von einem Rechner **ausserhalb** der Box
+(eigene, wechselbare IP) elf fehlerhafte Anmeldungen schicken, danach muss die
+IP in `Banned IP list` stehen und `curl https://api.<DOMAIN>/v1/health` aus
+diesem Netz in den Timeout laufen. Im Anschluss entsperren (unten).
+
+```bash
+for i in $(seq 1 11); do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+    "https://supabase.<DOMAIN>/auth/v1/token?grant_type=password" \
+    -H 'Content-Type: application/json' -d '{"email":"probe@example.org","password":"falsch"}'
+done
+```
+
+### Entsperren
+
+Eine Fehlsperre ist fuer den Betroffenen ein Ausfall — deshalb zuerst:
+
+```bash
+# Ist die IP gesperrt, und in welcher Jail?
+fail2ban-client banned <IP>
+
+# Gezielt aus einer Jail nehmen
+fail2ban-client set who2be-caddy-auth unbanip <IP>
+fail2ban-client set who2be-caddy-edge unbanip <IP>
+
+# Aus allen Jails auf einmal
+fail2ban-client unban <IP>
+```
+
+Gehoert die IP dauerhaft zu einem legitimen Client (Buero-NAT, CI eines
+Kunden), traegt man sie in der Host-Kopie unter `ignoreip` ein
+(Leerzeichen-getrennt) und laedt neu: `fail2ban-client reload`. Sperrt die
+Jail wiederholt dieselbe legitime Quelle, ist die Schwelle zu knapp — Werte in
+`/etc/fail2ban/jail.d/who2be-caddy.conf` anheben, `fail2ban-client reload`,
+und die Aenderung in die Vorlage im Repo zurueckspielen, damit Host und Repo
+nicht auseinanderlaufen.
+
+### Abschalten
+
+```bash
+# Eine Jail sofort aus (gesperrte IPs werden dabei freigegeben)
+fail2ban-client stop who2be-caddy-edge
+
+# Dauerhaft: in der Host-Kopie `enabled = false` setzen, dann
+fail2ban-client reload
+
+# Komplett: beide Dateien entfernen und neu laden — die Kette
+# f2b-who2be-* verschwindet dabei aus DOCKER-USER
+rm /etc/fail2ban/jail.d/who2be-caddy.conf /etc/fail2ban/filter.d/who2be-caddy.conf
+fail2ban-client reload
+iptables -S DOCKER-USER | grep f2b-who2be || echo "keine who2be-Sperrkette mehr"
+```
+
+Die App laeuft ohne fail2ban unveraendert weiter; es entfaellt nur die Stufe
+vor ihr.
+
+**Wer den Filter aendert**, laesst zuerst
+`bash deploy/hetzner/tests/test_fail2ban_filter.sh` laufen — er prueft
+Treffer, Nicht-Treffer (`mcp.`, Health, 404/5xx), Header-Injektion und die
+Sperrkette. Wer das **Log-Format** in der Caddyfile aendert, bricht den Filter
+still; derselbe Test faengt das nur, wenn die Beispielzeilen neu aus Caddy
+erzeugt werden.
 
 ---
 
@@ -1677,6 +2068,10 @@ Alarm schlägt, wenn er älter als ~26 h ist:
 Jeder andere selbst betriebene Wächter (Uptime-Kuma-Push-Monitor, Prometheus
 Pushgateway + `time() - push_time_seconds > 93600`) erfüllt denselben Zweck.
 
+**Standardweg seit ADR-0062:** der Push-Monitor `backup` auf dem Wächter-Server,
+eingerichtet in [Wächter-Server, Schritt 10](#waechter-server-monitoring-adr-0062).
+Der Cron-Empfänger oben bleibt der Minimalweg für Betreiber ohne Wächter.
+
 #### Alarmweg testen — Pflicht vor dem Verlassen auf ihn
 
 Ein Alarmweg, der nie ausgelöst wurde, ist so viel wert wie ein ungetestetes Backup.
@@ -1820,8 +2215,9 @@ Der Dienst laeuft als Container `seaweedfs` (All-in-One `server -s3`,
 Apache-2.0 — Nachfolger von `minio`, #525/#528) + One-Shot
 `blobstore-bootstrap` (legt den Bucket idempotent an und terminiert,
 Nachfolger von `minio-bootstrap`); Daten liegen im Volume `seaweedfs-data`.
-S3-API intern auf **8333** (vorher MinIO: 9000), Master-/Health-Port auf
-**9333**. Credentials sind eine gemountete `s3.json`-Identitaetsdatei
+S3-API intern auf **8333** (vorher MinIO: 9000), Master-Port auf **9333**;
+der Healthcheck prueft beide (Master-Status und S3-Antwort). Credentials
+sind eine gemountete `s3.json`-Identitaetsdatei
 (Env `SEAWEEDFS_S3_ACCESS_KEY`/`SEAWEEDFS_S3_SECRET_KEY`) statt eines
 MinIO-Root-User/-Passworts — Details siehe „Betrieb der Compose-Dienste"
 unten.
@@ -2011,12 +2407,13 @@ mv -f "${tmp}" "${target}" || fehlschlag      # rename(2), Rueckgabewert gepruef
   vom Vortag besteht danach unveraendert `quick_check`.
 - **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
   Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
-- **Parallelitaet zum Retention-Cron ist unbedenklich** (gemessen 2026-09-26,
+- **Parallelitaet zum Purge ist unbedenklich** (gemessen 2026-09-26,
   ADR-0049-Nachtrag): `VACUUM INTO` laeuft als **Leser** — ein 6 s offener
   Snapshot liess 692 parallele Commits mit 0 Fehlern durch, `integrity_check`
   danach `ok`. Es ist also **keine** Betriebsregel einzuhalten, die Backup und
-  `who2be-purge` auseinanderhaelt; dass die Cron-Zeiten (03:15 bzw. 03:30 UTC)
-  auseinanderliegen, ist Bequemlichkeit, keine Bedingung.
+  Purge (Worker-Routine `purge` bzw. `who2be-purge`) auseinanderhaelt; dass
+  die Zeiten (03:15 bzw. 03:30 UTC) auseinanderliegen, ist Bequemlichkeit,
+  keine Bedingung.
 - `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
   Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
 - **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
@@ -2057,58 +2454,557 @@ comm -13 /tmp/ws-live.txt /tmp/ws-dirs.txt   # -> nach Pruefung loeschen
 
 ---
 
+## Waechter-Server (Monitoring, ADR-0062)
+
+Ein zweiter, kleiner Server ueberwacht Prod von aussen und nimmt Fehler-Events
+an (ADR-0062 §5, Paket A1). Er laeuft **nie** auf dem Prod-Host: stirbt Prod,
+muss der Waechter weiterleben, sonst kommt bei einem Totalausfall kein Alarm.
+Stack und Haertung: [`deploy/monitor/`](../monitor/README.md). Prod-Compose und
+Prod-Caddyfile bleiben unberuehrt.
+
+| Dienst | Adresse | Aufgabe |
+|---|---|---|
+| GlitchTip (+ eigenes Postgres) | `errors.<MONITOR_DOMAIN>` | Fehler-Events der Sentry-SDKs von API, MCP und Web (SDKs: Pakete A2/A3) |
+| Uptime Kuma | `status.<MONITOR_DOMAIN>` | Checks von aussen, TLS-Ablauf, Push-Monitor fuer den Backup-Heartbeat |
+| Beszel-Hub | `hosts.<MONITOR_DOMAIN>` | Host- und Container-Werte von Prod; Agent auf Prod als Host-Dienst |
+
+**Verbindungsrichtung.** Prod schickt, der Waechter empfaengt: SDK-Events,
+Backup-Heartbeat und der Beszel-Agent bauen ausgehende HTTPS-/WebSocket-
+Verbindungen auf. Auf Prod wird **kein** Port geoeffnet. Der Waechter prueft
+Prod nur so, wie ein Nutzer es taete (HTTPS auf `app.`, `api.`, `mcp.`).
+
+**Alarmwege (ADR-0062 §6, Weiche W4).** Telegram fuer Dringendes, Mail fuer
+alles. Nachrichten nennen nur Dienstnamen und Schwellen, keine Nutzerdaten.
+
+### Einrichtung (Owner, einmalig)
+
+Die Schritte bauen aufeinander auf. Jeder endet mit einer Pruefung; erst wenn
+sie stimmt, geht es weiter.
+
+1. **Server bestellen.** Kleinster Hetzner-Cloud-Typ mit 2 GB RAM (Stufe A,
+   ADR-0062 §5.1), moeglichst an einem **anderen Standort** als Prod. Beim
+   Bestellen die Hetzner-Option „Backups“ einschalten (deckt Schritt 13).
+   Grundhaertung wie Prod: [Provisioning](#provisioning-track-sc1), Abschnitte
+   Docker, `deploy`-User, SSH. Hetzner-Firewall: eingehend nur 22 (Admin-IP),
+   80 und 443.
+   Pruefung: `ssh deploy@<IP> docker version` antwortet.
+
+2. **DNS.** Drei Eintraege (A, bei IPv6 zusaetzlich AAAA) auf die IP des
+   Waechters: `errors.<MONITOR_DOMAIN>`, `status.<MONITOR_DOMAIN>`,
+   `hosts.<MONITOR_DOMAIN>`.
+   Pruefung: `dig +short errors.<MONITOR_DOMAIN>` liefert `<IP>`, ebenso fuer
+   `status.` und `hosts.`.
+
+3. **Repo und `.env`.**
+   ```bash
+   sudo install -d -o deploy -g deploy /opt/who2be-monitor
+   git clone https://github.com/luetzey/who2be.git /opt/who2be-monitor
+   cd /opt/who2be-monitor
+   install -m 600 deploy/monitor/.env.example deploy/monitor/.env
+   openssl rand -hex 32   # -> GLITCHTIP_SECRET_KEY
+   openssl rand -hex 32   # -> GLITCHTIP_DB_PASSWORD
+   $EDITOR deploy/monitor/.env   # MONITOR_DOMAIN, ACME_EMAIL, Mail-Werte
+   ```
+   `GLITCHTIP_EMAIL_URL` ist der SMTP-Zugang, den die Cloud ohnehin nutzt
+   (Format in `.env.example`).
+   Pruefung: `stat -c %a deploy/monitor/.env` ergibt `600`.
+
+4. **Stack starten, noch ohne Caddy.** Bis Schritt 6 ist von aussen nichts
+   erreichbar. Alle drei Oberflaechen vergeben ihr erstes Konto an den, der
+   es zuerst anlegt; deshalb entstehen die Konten in Schritt 5 ueber einen
+   SSH-Tunnel, und erst danach startet Caddy.
+   ```bash
+   MON="docker compose -f deploy/monitor/compose.yml --env-file deploy/monitor/.env"
+   ! grep -q CHANGE_ME deploy/monitor/.env && echo secrets-ok
+   $MON config -q && echo config-ok
+   $MON up -d glitchtip-db glitchtip uptime-kuma beszel
+   $MON ps
+   ```
+   Pruefung: `secrets-ok` und `config-ok`; vier Dienste `Up`, `glitchtip-db`
+   `(healthy)`, **kein** `caddy`. Von aussen scheitert
+   `curl -sI --max-time 5 http://<IP>` (Port 80 ohne Dienst).
+
+5. **Admin-Konten anlegen, solange nichts veroeffentlicht ist.** Alle drei
+   jetzt, vor jedem weiteren Schritt.
+
+   a) GlitchTip, auf dem Waechter (Passwort wird verdeckt abgefragt):
+   ```bash
+   $MON exec glitchtip ./manage.py createsuperuser --email <owner-mail>
+   ```
+
+   b) Uptime Kuma und Beszel ueber einen Tunnel vom eigenen Rechner. Die
+   Container-Adressen auf dem Waechter lesen:
+   ```bash
+   for s in uptime-kuma beszel; do
+     echo "$s $(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$($MON ps -q "$s")")"
+   done
+   ```
+   Auf dem eigenen Rechner (offen lassen, bis 5 fertig ist):
+   ```bash
+   ssh -N -L 13001:<KUMA-IP>:3001 -L 18090:<BESZEL-IP>:8090 deploy@<IP>
+   ```
+   Uptime Kuma: `http://localhost:13001` im Browser oeffnen, Admin-Konto
+   anlegen.
+   Beszel: das erste Konto per API anlegen. Es wird Admin und zugleich
+   PocketBase-Superuser (`/_/`), der Platzhalter-Superuser verschwindet.
+   ```bash
+   read -rp 'Mail: ' BM; read -rsp 'Passwort: ' BP; echo
+   jq -n --arg e "$BM" --arg p "$BP" '{email:$e,password:$p}' \
+     | curl -s -X POST http://localhost:18090/api/beszel/create-user \
+         -H 'content-type: application/json' --data @-
+   ```
+   Erwartet: `{"msg":"User created"}`. **Nicht** `USER_EMAIL`/`USER_PASSWORD`
+   in die Env setzen: in v0.21.0 bekommt dieses Konto nur die Rolle `user`.
+   Pruefung (noch im Tunnel; Passwort aus der Variable von eben):
+   ```bash
+   AUTH=$(jq -n --arg e "$BM" --arg p "$BP" '{identity:$e,password:$p}')
+   printf '%s' "$AUTH" | curl -s -X POST http://localhost:18090/api/collections/users/auth-with-password \
+     -H 'content-type: application/json' --data @- | grep -o '"role":"[a-z]*"'
+   printf '%s' "$AUTH" | curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+     http://localhost:18090/api/collections/_superusers/auth-with-password \
+     -H 'content-type: application/json' --data @-
+   unset AUTH BP
+   ```
+   Erwartet: `"role":"admin"` und `200` (PocketBase-Superuser `/_/` gehoert
+   demselben Konto). Uptime Kuma: Anmeldung unter `http://localhost:13001`
+   klappt. Tunnel schliessen.
+
+6. **Caddy starten und von aussen pruefen.**
+   ```bash
+   $MON up -d
+   $MON ps
+   ```
+   Pruefung: alle fuenf Dienste `Up`. Dann von einem **anderen** Rechner,
+   jede Zeile mit dem erwarteten Ergebnis:
+   ```bash
+   D=<MONITOR_DOMAIN>
+   # GlitchTip: Registrierung zu -> "enableUserRegistration": false
+   curl -s https://errors.$D/api/settings/ | grep -o '"enableUserRegistration": *[a-z]*'
+   # Beszel: kein Erststart, Anlegen verweigert -> {"firstRun":false}, 403/404, 403
+   curl -s https://hosts.$D/api/beszel/first-run; echo
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://hosts.$D/api/beszel/create-user \
+     -H 'content-type: application/json' -d '{"email":"probe@example.com","password":"probe-probe-1"}'
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://hosts.$D/api/collections/_superusers/records \
+     -H 'content-type: application/json' -d '{"email":"probe@example.com","password":"probe-probe-1","passwordConfirm":"probe-probe-1"}'
+   # Uptime Kuma: kein Setup offen -> 430[false]
+   K="https://status.$D/socket.io/?EIO=4&transport=polling"
+   SID=$(curl -s "$K" | sed -E 's/.*"sid":"([^"]+)".*/\1/')
+   curl -s -X POST --data '40' "$K&sid=$SID" >/dev/null; curl -s "$K&sid=$SID" >/dev/null
+   curl -s -X POST --data '420["needSetup"]' "$K&sid=$SID" >/dev/null; sleep 1
+   curl -s "$K&sid=$SID" | tr '\036' '\n' | grep '^430'
+   ```
+   Weicht eine Zeile ab: `$MON stop caddy`, Schritt 5 fuer diesen Dienst
+   wiederholen. Ausserdem: `nc -zv <IP> 5432` scheitert (DB nicht erreichbar).
+
+7. **GlitchTip einrichten.** Unter `https://errors.<MONITOR_DOMAIN>` mit dem
+   Konto aus Schritt 5 anmelden. Weitere Konten entstehen nur per Einladung
+   (`ENABLE_USER_REGISTRATION=false`). Danach:
+   Organisation `who2be`, drei Projekte `api`, `mcp`, `web`. Die drei DSNs
+   notieren; gesetzt werden sie erst mit den Paketen A2/A3 (nicht jetzt in
+   Prod eintragen). Je Projekt unter *Alerts* einen Alarm „neuer Fehler-Typ“
+   per Mail anlegen.
+   Mail-Weg pruefen:
+   ```bash
+   $MON exec glitchtip ./manage.py sendtestemail <owner-mail>
+   ```
+   Pruefung: die Testmail kommt an.
+
+8. **Telegram-Bot.** In Telegram `@BotFather` → `/newbot`, Token notieren
+   (Secret, nie ins Repo). Dem Bot im privaten Chat eine Nachricht schicken,
+   dann die Chat-ID lesen:
+   ```bash
+   curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | jq '.result[].message.chat.id'
+   ```
+   Pruefung: eine Zahl erscheint (die Chat-ID).
+
+9. **Uptime Kuma einrichten.** Unter `https://status.<MONITOR_DOMAIN>` mit
+   dem Konto aus Schritt 5 anmelden. *Einstellungen → Monitor-Verlauf*: **90 Tage**
+   (VVT §7). *Einstellungen → Benachrichtigungen*: zwei Ziele anlegen —
+   `Telegram` (Token + Chat-ID aus Schritt 8) und `SMTP` (Mail-Zugang wie in
+   Schritt 3); bei beiden „Test“ druecken. Danach die Monitore:
+
+   | Name | Typ | Ziel | Takt / Wiederholungen | Benachrichtigung |
+   |---|---|---|---|---|
+   | `app` | HTTP(s) | `https://app.<DOMAIN>/` | 30 s / 1 | Telegram + Mail |
+   | `api` | HTTP(s) - Keyword | `https://api.<DOMAIN>/v1/health`, Keyword `"db":"ok"` | 30 s / 1 | Telegram + Mail |
+   | `mcp` | HTTP(s) - Keyword | `https://mcp.<DOMAIN>/.well-known/oauth-protected-resource/mcp`, Keyword `"resource"` | 30 s / 1 | Telegram + Mail |
+   | `worker` | HTTP(s) - Keyword | `https://api.<DOMAIN>/v1/health`, Keyword `"worker":"ok"` | 300 s / 2 | Mail |
+   | `backup` | Push | Heartbeat-Intervall `93600` s (26 h) | 0 Wiederholungen | Telegram + Mail |
+
+   Bei `app`, `api` und `mcp` zusaetzlich „Zertifikatsablauf-Benachrichtigung“
+   einschalten; die Vorwarnzeit steht unter *Einstellungen →
+   Benachrichtigungen → TLS-Zertifikatsablauf* und wird auf **14 Tage**
+   gesetzt (Mail).
+   Begruendung der Abweichungen von ADR-0062 §5.2/§6:
+   - *1 Wiederholung bei 30 s* ergibt die „2 Fehlchecks in Folge (≈ 1 min)“.
+   - *MCP:* die Metadaten-Route statt einer Initialize-Probe. Initialize
+     verlangt ein Agent-Token, das dann auf dem Waechter laege. Die Route
+     antwortet aus demselben Prozess und Transport wie `/mcp`.
+   - *Worker:* das Feld `worker` in `/v1/health` wird `stale`, wenn der
+     Heartbeat des Worker-Prozesses aelter als 5 min ist
+     (`apps/api/src/who2be_api/main.py#Health`). Die ADR-Schwelle „2× laengstes
+     Routinenintervall“ waere bei taeglichen Routinen 48 h; der Prozess-
+     Heartbeat meldet einen toten Worker nach etwa 15 min.
+   - Die Checks zaehlen nicht fuer fail2ban: `mcp.` und `/v1/health` sind im
+     Filter ausgenommen ([Rate-Limit an der Kante](#rate-limit-an-der-kante-fail2ban)),
+     `app.` antwortet mit 200.
+
+   Pruefung: alle vier HTTP-Monitore gruen; je Ziel kam die Testnachricht an.
+
+10. **Backup-Heartbeat auf den Waechter.** Beim Monitor `backup` die Push-URL
+    kopieren (Form `https://status.<MONITOR_DOMAIN>/api/push/<token>?status=up&msg=OK&ping=`).
+    Auf Prod in der Env-Datei des Backup-Laufs eintragen
+    (`deploy/hetzner/.env`, Variable `BACKUP_HEARTBEAT_URL`, s.
+    [Alarmweg](#alarmweg-dead-mans-switch)). Der Token in der URL ist ein
+    Secret: nur in die `.env`, nicht ins Repo, nicht in Tickets.
+    Pruefung: der Test aus [Alarmweg testen](#alarmweg-testen--pflicht-vor-dem-verlassen-auf-ihn)
+    — Erfolgsfall setzt `backup` auf gruen, der erzwungene Fehlerfall sendet
+    keinen Ping. Zum Proben des Alarms das Intervall einmalig auf `120` s
+    stellen, Alarm abwarten, danach wieder `93600`.
+
+11. **Beszel-Hub und Agent auf Prod.**
+    Hub: unter `https://hosts.<MONITOR_DOMAIN>` mit dem Konto aus Schritt 5
+    anmelden, *System hinzufuegen* → Name `prod`. Der Dialog zeigt `KEY` (oeffentlicher
+    Schluessel) und `TOKEN`.
+
+    Agent auf **Prod** als Host-Dienst (keine Prod-Compose-Aenderung). Version
+    und Pruefsumme sind gepinnt (Release v0.21.0, Datei
+    `beszel-agent_linux_amd64.tar.gz`):
+    ```bash
+    cd /tmp
+    curl -fsSLO https://github.com/henrygd/beszel/releases/download/v0.21.0/beszel-agent_linux_amd64.tar.gz
+    echo "898d67d456a4feed7d651bbac22def5eb41840d4f3d9bf058a5ed37c8c815599  beszel-agent_linux_amd64.tar.gz" | sha256sum -c -
+    tar -xzf beszel-agent_linux_amd64.tar.gz beszel-agent
+    sudo install -m 755 beszel-agent /usr/local/bin/beszel-agent
+    sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups docker beszel
+    sudo install -d -m 700 -o beszel -g beszel /var/lib/beszel-agent
+    sudo install -m 600 /dev/null /etc/beszel-agent.env
+    sudoedit /etc/beszel-agent.env
+    ```
+    Inhalt von `/etc/beszel-agent.env`:
+    ```bash
+    HUB_URL=https://hosts.<MONITOR_DOMAIN>
+    KEY="<oeffentlicher Schluessel aus dem Hub>"
+    TOKEN=<Token aus dem Hub>
+    # Nur ausgehend per WebSocket; kein lauschender Port auf Prod.
+    DISABLE_SSH=true
+    # Keine Registry-Abfragen von Prod aus, keine Journal-Logs an den Hub.
+    DOCKER_IMAGE_CHECK=false
+    SKIP_SYSTEMD_LOGS=true
+    DATA_DIR=/var/lib/beszel-agent
+    ```
+    systemd-Unit `/etc/systemd/system/beszel-agent.service`:
+    ```ini
+    [Unit]
+    Description=Beszel Agent (Waechter, ADR-0062)
+    After=network-online.target docker.service
+    Wants=network-online.target
+
+    [Service]
+    User=beszel
+    EnvironmentFile=/etc/beszel-agent.env
+    ExecStart=/usr/local/bin/beszel-agent
+    Restart=on-failure
+    RestartSec=10
+    NoNewPrivileges=true
+    ProtectSystem=strict
+    ProtectHome=true
+    PrivateTmp=true
+    ReadWritePaths=/var/lib/beszel-agent
+    MemoryMax=64M
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+    ```bash
+    sudo systemctl daemon-reload && sudo systemctl enable --now beszel-agent
+    systemctl is-active beszel-agent
+    sudo ss -ltnp | grep beszel || echo "kein lauschender Port"
+    ```
+    **Risiko, bewusst getragen:** die Gruppe `docker` ist root-gleichwertig.
+    Der Agent braucht den Docker-Socket fuer Container-Werte; die Alternative
+    (Socket-Proxy als Container) waere eine Prod-Compose-Aenderung und gehoert
+    ins Infra-Paket (ADR-0062 W7). Die Unit begrenzt den Rest
+    (`ProtectSystem=strict`, kein Home, 64 MB).
+
+    Alarme im Hub (*Einstellungen → Benachrichtigungen*: Mail-Adresse und die
+    Telegram-URL `telegram://<TOKEN>@telegram?chats=<CHAT-ID>`; SMTP dafuer im
+    PocketBase-Admin `https://hosts.<MONITOR_DOMAIN>/_/` unter *Settings →
+    Mail settings*). Am System `prod` einschalten:
+
+    | Alarm | Schwelle | Quelle ADR-0062 §6 |
+    |---|---|---|
+    | Status | System nicht erreichbar | Host weg |
+    | Festplatte | > 80 % | Platte (Warnung; Beszel kennt je Alarm nur eine Schwelle) |
+    | Speicher | > 90 % fuer 5 min | Host-RAM |
+
+    **Nicht** einschalten: den Container-Health-Alarm. Er haengt beim Ausloesen
+    einen Auszug der Container-Logs an die Nachricht (Beszel v0.21.0,
+    `internal/alerts/alerts_container.go`); Logs der Who2Be-Dienste gehoeren
+    nicht nach Telegram. Der Hub laeuft deshalb auch mit
+    `CONTAINER_DETAILS=false`. Der Alarm „Container neu gestartet / OOM“ ist
+    damit in Stufe A **offen**; sichtbar bleiben Neustarts in der
+    Container-Tabelle des Hubs.
+    Pruefung: `prod` steht im Hub auf „up“ mit Container-Liste; Speicher-Alarm
+    einmal auf 1 % / 1 min stellen, Telegram + Mail abwarten, zuruecksetzen.
+
+12. **Abnahme.** Jeder Alarmweg wurde einmal ausgeloest: Uptime-Kuma-Test je
+    Ziel (Schritt 9), ein Monitor einmal rot (Keyword voruebergehend auf
+    `xxx` stellen, Alarm abwarten, zuruecksetzen), Backup-Heartbeat
+    (Schritt 10), Beszel (Schritt 11), GlitchTip-Mail (Schritt 7). Dazu die
+    Aussen-Pruefung aus Schritt 6 einmal wiederholt. Ergebnis mit
+    Datum in [Provisioning-Nachweise](#provisioning-nachweise) festhalten.
+
+13. **Backup des Waechters.** Die Hetzner-Backups aus Schritt 1 sichern den
+    ganzen Server taeglich (Daten bleiben bei Hetzner, kein neuer
+    Auftragsverarbeiter). Wichtig daran sind die Konten und Einstellungen in
+    GlitchTip, Uptime Kuma und Beszel. Die Fehler-Events selbst sind
+    entbehrlich (ADR-0062 §5.3). Ohne Hetzner-Backups: woechentlich
+    `$MON exec -T glitchtip-db pg_dump -U glitchtip glitchtip | gzip > …`
+    plus ein `tar` der Volumes `uptime-kuma-data` und `beszel-data`, auf einen
+    anderen Host kopiert.
+
+### Betrieb
+
+- **Fristen** (VVT V24, §7): Fehler-Events 30 Tage (`GLITCHTIP_EVENT_RETENTION_DAYS`
+  in `deploy/monitor/compose.yml`), Uptime-Kuma-Verlauf 90 Tage (Schritt 9).
+  Der Waechter-Caddy schreibt bewusst kein Access-Log.
+- **Updates:** Images sind per Tag und Digest gepinnt. Anheben per PR (Tag und
+  Digest gemeinsam), danach auf dem Waechter `git pull && $MON up -d`.
+  GlitchTip-Major-Spruenge koennen alte Postgres-Versionen fallen lassen,
+  vorher die Release-Notes lesen. Den Beszel-Agent auf Prod mit derselben
+  Version wie den Hub fahren (Schritt 11 mit neuer Version und Pruefsumme).
+- **Faellt der Waechter aus,** laeuft Prod unveraendert weiter (ADR-0062
+  §5.3); es fehlen nur Alarme und Events. Den Waechter selbst ueberwacht in
+  Stufe A niemand. Auffaellig wird ein Ausfall daran, dass die Status-Seite
+  nicht laedt oder keine Mails mehr kommen.
+- **Haertung:** `apps/api/tests/test_monitor_compose.py` prueft Speicherdeckel,
+  Log-Deckel, `no-new-privileges`, Digest-Pins, dass nur Caddy Ports
+  veroeffentlicht und die Datenbank nur im internen Netz haengt.
+
+---
+
+## Hintergrund-Routinen (Worker)
+
+Der DSGVO-Purge, der Verfall unbestaetigten Gedaechtnisses und das Aufraeumen
+des eigenen Laufprotokolls laufen im Compose-Dienst `worker` (ADR-0057). Er
+startet mit jedem `up` bzw. Deploy, in beiden Editionen. **Einzutragen ist
+nichts**, weder auf der Hetzner-Box noch in Dokploy.
+
+| Routine | Zeitplan (UTC) | Was sie tut | Nachholen nach Ausfall |
+|---|---|---|---|
+| `purge` | `30 3 * * *` | DSGVO-Hard-Purge nach der 30-Tage-Grace plus WorkArea-/KB-Sweeps (Ausgabe und Log-Meldungen: [Retention-Cron](#retention-cron-who2be-purge)) | ja, einmal beim Start |
+| `memory-expire` | `45 3 * * *` | setzt unbestaetigte Gedaechtnis-Eintraege nach Fristablauf auf `expired` (ADR-0053 3.1.3), loescht nichts | ja, einmal beim Start |
+| `audit-retention` | `0 4 * * *` | loescht `audit_log`-Zeilen geloeschter Workspaces/Orgs 12 Monate nach ihrer Anonymisierung (Owner E1a); Zaehler `deleted` | ja, einmal beim Start |
+| `usage-retention` | `10 4 * * *` | loescht `usage_event`-Rohzeilen (Nutzungszaehler, Owner E4b) und `agent_access_log`-Zeilen (Zugriffslog, Owner E4c-b), jeweils aelter als 13 Monate, in getrennten Transaktionen; Zaehler `deleted` (usage_event) und `deleted_access_log`. Scheitert ein Teil, laeuft der andere, der Lauf endet `failed` mit beiden Zaehlern | ja, einmal beim Start |
+| `routine-run-retention` | `15 4 * * *` | loescht Laufprotokoll aelter als 90 Tage, meldet externe Zeitplaene | nein |
+
+Quelle der Tabelle ist die Registry
+(`apps/api/src/who2be_api/worker/routines.py#purge`,
+`apps/api/src/who2be_api/worker/routines.py#memory_expire`,
+`apps/api/src/who2be_api/worker/routines.py#audit_retention`,
+`apps/api/src/who2be_api/worker/routines.py#usage_retention`,
+`apps/api/src/who2be_api/worker/routines.py#routine_run_retention`);
+`who2be-worker list` zeigt den tatsaechlich wirksamen Stand.
+
+**Dienst.** Dasselbe Image wie `api`, Befehl `who2be-worker`, Owner-Verbindung
+`DATABASE_URL`, BlobStore- und Tabellen-Store-Werte wie `api`, im
+Cloud-Overlay zusaetzlich `SUPABASE_SERVICE_KEY` (der Account-Purge loescht
+den GoTrue-User). Kein Port, kein Caddy-Eintrag. Genau **ein** Container,
+siehe [Legitime zweite Prozesse](#legitime-zweite-prozesse).
+`stop_grace_period: 65m`: ein Stopp laesst einen laufenden Purge (Timeout 1 h)
+zu Ende laufen. Ein Deploy kann deshalb im Ausnahmefall bis zu einer Stunde
+auf den alten Worker warten; das ist gewollt.
+
+**Laufprotokoll.** Jeder Lauf steht als Zeile in `routine_run` (Postgres,
+Migration 0102): Routine, Slot, Ausloeser (`schedule`, `cli`, `manual`),
+Status (`running`, `succeeded`, `failed`, `skipped`), Zaehler, bei Fehlern nur
+der Klassenname. Genau ein Lauf je Slot; ein Lauf, dessen Heartbeat aelter als
+5 min ist, wird als `failed` mit `Abandoned` abgeschlossen.
+
+### Worker pruefen
+
+```bash
+cd /opt/who2be
+# Cloud-Edition; On-Prem ohne das zweite -f.
+COMPOSE="docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env"
+SUPABASE_COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml --env-file deploy/hetzner/supabase/.env"
+
+# 1) Laeuft er, und ist er gesund? Healthcheck = `who2be-worker check`:
+#    eigener Heartbeat in der DB juenger als 2 min.
+$COMPOSE ps worker
+# → genau ein Container, "Up … (healthy)"
+
+# 2) Wirksame Zeitplaene (Code plus Env-Overrides):
+$COMPOSE exec worker who2be-worker list
+# ROUTINE                SCHEDULE    ENABLED  SOURCE
+# audit-retention        0 4 * * *   on       code
+# memory-expire          45 3 * * *  on       code
+# purge                  30 3 * * *  on       code
+# routine-run-retention  15 4 * * *  on       code
+# usage-retention        10 4 * * *  on       code
+
+# 3) Letzte Laeufe aus dem Protokoll (ohne UI):
+$SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -c \
+  "SELECT routine, trigger, status, started_at, finished_at, error_class, result
+     FROM routine_run ORDER BY started_at DESC LIMIT 10"
+# → je Routine ein Lauf mit status = succeeded; result enthaelt nur Zaehler
+```
+
+Beim Start schreibt der Worker die Logzeile `Worker <id> (Version …),
+aktiviert. Effektive Zeitplaene (UTC):` mit derselben Tabelle wie
+`who2be-worker list`; je Lauf folgen `Routine <name>, Slot …: Start.` und
+`… succeeded {…}` bzw. `… failed (<Klasse>)`. Mit `LOG_FORMAT=json` steht die
+Tabelle in einem Feld derselben Zeile.
+
+| Befund | Bedeutung | Aktion |
+|---|---|---|
+| Container `unhealthy`, `who2be-worker check` meldet `worker: stale` | kein Heartbeat seit 2 min: DB nicht erreichbar oder Prozess haengt | `$COMPOSE logs --tail 100 worker`, DB pruefen, dann `$COMPOSE restart worker` |
+| `Tick fehlgeschlagen (<Klasse>)` | DB-Verbindung im Tick verloren | keine, solange es nicht dauerhaft ist; der naechste Tick verbindet neu |
+| `Routine …: failed (<Klasse>)` | Routine hat geworfen | Logzeilen davor lesen; Routinen sind idempotent, der naechste Slot laeuft regulaer, ein Sofort-Lauf geht von Hand (unten) |
+| `… abgebrochene(r) Lauf/Laeufe auf failed/Abandoned gesetzt` | ein Lauf hatte 5 min keinen Heartbeat (Container-Kill, OOM) | `mem_limit` und `docker inspect` (OOMKilled) pruefen |
+| `Lock belegt, skipped` | zur selben Zeit lief ein CLI- oder anderer Lauf derselben Routine | keine |
+| `Externer Zeitplan erkannt: Routine …` | an zwei aufeinanderfolgenden Tagen lief die Routine per CLI: es steht noch eine Crontab-Zeile oder ein Dokploy-Schedule | Zeile bzw. Schedule entfernen ([Umstieg](#umstieg-alte-zeitplaene-entfernen)) |
+| `WHO2BE_ROUTINE_… passt zu keiner registrierten Routine` | Tippfehler im Override-Namen | Namen korrigieren |
+| Worker startet nicht, `Ungueltige Worker-Konfiguration: …` | ungueltiger Override; der Worker faellt bewusst nicht still auf den Code-Wert zurueck | Wert korrigieren |
+
+### Zeitplaene ueberschreiben, Routinen abschalten
+
+Der Code ist die Wahrheit; die Umgebung des Dienstes `worker` darf ohne
+Rebuild ueberschreiben, `api` liest dieselben Werte fuer die Anzeige
+(`apps/api/src/who2be_api/worker/schedule.py#effective_table`):
+
+- `WHO2BE_ROUTINE_<NAME>_SCHEDULE` — Cron-Ausdruck mit fuenf Feldern, Alias wie
+  `@daily` oder Intervall wie `@every 6h`, immer UTC.
+- `WHO2BE_ROUTINE_<NAME>_ENABLED` — `true`/`false`.
+- `WHO2BE_WORKER_ENABLED=false` — global: der Worker laeuft weiter und meldet
+  Heartbeat (bleibt also healthy), fuehrt aber keine Routine aus.
+
+`<NAME>` ist der Routinen-Name in Grossbuchstaben, Bindestrich wird
+Unterstrich: `WHO2BE_ROUTINE_PURGE_SCHEDULE`,
+`WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED`.
+
+> **Wirkt nur, wenn die Variable im Container ankommt.** Die Stacks nutzen
+> kein `env_file`; jede Compose-Datei mit `worker` reicht deshalb
+> `WHO2BE_WORKER_ENABLED` und je registrierter Routine `…_SCHEDULE` und
+> `…_ENABLED` einzeln durch, leer vorbelegt. Gesetzt wird der Wert in
+> `deploy/hetzner/.env` (Hetzner), in den Dokploy-Umgebungsvariablen bzw. in
+> der `.env` neben `docker-compose.yml` (lokal); danach
+> `$COMPOSE up -d worker api`. Beide Dienste, weil `api` dieselben Variablen
+> fuer die Betreiber-Uebersicht `GET /v1/system/routines` liest: wird nur
+> `worker` neu erzeugt, laeuft er nach dem neuen Zeitplan, die Uebersicht
+> zeigt aber weiter den alten. Ein leerer Wert gilt als nicht gesetzt, es bleibt
+> der Code-Zeitplan. Belegen statt annehmen: `$COMPOSE exec worker
+> who2be-worker list` muss in der Spalte `SOURCE` `env` zeigen. Eine neue
+> Routine braucht neue Zeilen fuer `worker` und `api` in allen
+> Compose-Dateien, sonst ist der Drift-Test
+> (`apps/api/tests/test_single_writer_guard.py`) rot.
+
+Kurzfristig anhalten, etwa fuer eine Fehlersuche: `$COMPOSE stop worker`. Der
+naechste Deploy startet ihn wieder (und `deploy.sh` verlangt genau einen
+laufenden `worker`). Wer anhaelt, setzt die Zusagen aus: kein DSGVO-Purge,
+kein Verfall. Beim Wiederstart holt der Worker je Routine **einen** Lauf nach.
+
+### Manueller Lauf und Notfallweg
+
+Die CLIs bleiben (ADR-0057 §8). Sie laufen ueber dasselbe Protokoll und
+denselben Advisory-Lock wie der Worker:
+
+```bash
+# Sofort-Lauf im laufenden Worker-Container (Protokoll trigger='manual'):
+$COMPOSE exec worker who2be-worker run-once purge
+# → purge @ <zeitpunkt>: succeeded
+# Notfallweg ohne laufenden Worker, frischer Container mit api-Umgebung
+# (Protokoll trigger='cli'):
+$COMPOSE run --rm --no-deps api who2be-purge
+$COMPOSE run --rm --no-deps api who2be-memory-expire
+```
+
+`run-once` lehnt eine abgeschaltete Routine ohne `--force` ab. Laeuft dieselbe
+Routine gerade, endet jeder manuelle Lauf als `skipped`: die CLI meldet
+`Routine … uebersprungen: ein anderer Lauf (Worker oder CLI) haelt gerade den
+Lock.` und endet mit Exit 0, `run-once` endet mit Exit 1. Doppelt gearbeitet
+wird nie.
+
+### Umstieg: alte Zeitplaene entfernen
+
+Instanzen, die vor dem Worker eingerichtet wurden, haben noch eine
+Crontab-Zeile (Hetzner) bzw. einen Dokploy-Schedule je Job. Sie richten keinen
+Schaden an (Ueberlappung endet als `skipped`, sonst ist der Lauf ein No-op),
+sind aber ueberfluessig. Erst entfernen, wenn der Worker gesund ist und je
+Routine einen `succeeded`-Lauf im Protokoll hat ([Worker pruefen](#worker-pruefen)).
+
+- Hetzner: [Retention-Cron](#retention-cron-who2be-purge) unten.
+- Dokploy: [`docs/cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy).
+
+Vergessene Eintraege meldet der Worker selbst: `routine-run-retention`
+schreibt taeglich `Externer Zeitplan erkannt: Routine …`, sobald eine Routine
+an zwei aufeinanderfolgenden Tagen per CLI lief. Ohne Log:
+
+```bash
+$SUPABASE_COMPOSE exec -T db psql -U supabase_admin postgres -c \
+  "SELECT routine, started_at::date AS tag, status FROM routine_run
+    WHERE trigger = 'cli' AND started_at > now() - interval '7 days'
+    ORDER BY started_at DESC"
+# → leer, sobald keine Crontab-Zeile / kein Schedule mehr laeuft
+#   (eigene manuelle CLI-Aufrufe tauchen hier ebenfalls auf)
+```
+
+**Unveraendert Host-Cron:** der [Backup-Lauf](#trigger-routine) und die
+[Access-Log-Rotation](#access-logs--ressourcen-limits). Beide brauchen
+Host-Zugriff (Docker-Socket, `pg_dump`, restic) und bleiben in der Crontab.
+
+---
+
 ## Retention-Cron (`who2be-purge`)
 
-> **Instanz auf Dokploy?** Dort gibt es keine Host-Crontab. Beide Jobs
-> (`who2be-purge` und `who2be-memory-expire`) plant Dokploy als Compose-Job im
-> Dienst `api` ein: [`docs/cloud-erstinbetriebnahme.md` § Hintergrundjobs auf Dokploy einplanen](../../docs/cloud-erstinbetriebnahme.md#hintergrundjobs-auf-dokploy-einplanen).
-> Dieser Abschnitt gilt fuer den Hetzner-Stack aus `deploy/hetzner/who2be/`.
+> **Entfaellt ab dieser Version.** Der Purge laeuft als Routine `purge` im
+> Dienst `worker` ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)).
+> Neue Instanzen tragen nichts ein. Bestehende Zeilen entfernen, sobald der
+> Worker gesund ist:
+>
+> ```bash
+> crontab -l | grep who2be-
+> # → zeigt Altzeilen fuer who2be-purge / who2be-memory-expire
+> crontab -e
+> # → beide Zeilen loeschen; die Backup-Zeile (run --rm backup) bleibt
+> crontab -l | grep -E 'who2be-(purge|memory-expire)'
+> # → keine Ausgabe
+> ```
+>
+> Die Log-Dateien `/var/log/who2be-purge.log` und
+> `/var/log/who2be-memory-expire.log` werden danach nicht mehr beschrieben und
+> koennen geloescht werden.
 
-Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach der
-30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
+Der Abschnitt bleibt als Referenz fuer den **Inhalt** des Laufs und fuer den
+Notfallweg. Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach
+der 30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
 idempotent — ein Lauf ohne faellige Daten ist ein No-op, ein abgebrochener
 Lauf wird vom naechsten fortgesetzt.
 
-Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
-`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
-`docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest verdrahteter
-Dev-DB) und purgt in der Produktions-DB nichts. Genau **eine** der beiden
-Zeilen eintragen, passend zur Edition:
+**Notfallweg von Hand** (Worker laeuft nicht, oder ein Lauf soll sofort
+passieren): der Aufruf muss den **Produktions-Stack** ansprechen — dieselben
+`-f`- und `--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh`
+baut. Ein nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest
+die Root-`docker-compose.yml` (Dev-Stack: `api` mit `build:` und fest
+verdrahteter Dev-DB) und purgt in der Produktions-DB nichts.
 
 ```bash
-# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
-# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
-# der Job laeuft gar nicht).
-install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-purge.log
-
-# Host-Crontab des Deploy-Users (crontab -e), taeglich 03:30.
+cd /opt/who2be
 # On-Prem-Edition:
-30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge
 # Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
-30 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge >> /var/log/who2be-purge.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-purge
 ```
 
 Der Lauf braucht `DATABASE_URL` (Owner-Rolle, RLS-Bypass), und fuer die
 Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
 `WHO2BE_TABLESTORE_DIR`-Werte wie die API. Der `api`-Dienst des
 Produktions-Stacks bringt beides in beiden Editionen mit (das Cloud-Overlay
-ergaenzt `APP_DATABASE_URL`, laesst `DATABASE_URL` aber stehen); ein Lauf
-ausserhalb dieses Compose-Kontexts hat beides nicht. `--no-deps`: der Job
-braucht nur die laufenden Dienste DB und `seaweedfs`. Ohne den Schalter startet
-`run` die Abhaengigkeiten des `api`-Dienstes mit, darunter `migrate`.
-
-**Verifikation**, dass der Job eingeplant ist und laeuft:
-
-```bash
-crontab -l | grep who2be-purge
-# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
-# Sofort-Probe: die eingetragene Cron-Zeile ab `cd` von Hand ausfuehren, OHNE
-# die Umleitung `>> …` — Ausgabe dann im Terminal (zwei Zeilen, s. u.).
-# Am Folgetag:
-tail -2 /var/log/who2be-purge.log
-# → Purge: … / Retention: …   (leere Datei ⇒ Cron lief nicht)
-```
+ergaenzt `APP_DATABASE_URL`, laesst `DATABASE_URL` aber stehen). `--no-deps`:
+der Job braucht nur die laufenden Dienste DB und `seaweedfs`. Haelt der Worker
+gerade den Lock, endet der Aufruf als `skipped` (Meldung, Exit 0) — der
+laufende Worker-Lauf erledigt dann die Arbeit.
 
 **Der Lauf darf sich mit dem Backup ueberschneiden.** Gemessen (2026-09-26,
 ADR-0049-Nachtrag): der Snapshot-Pfad des Backups ist ein Leser und stoert
@@ -2122,71 +3018,56 @@ sein Ergebnis nicht verliert. Das ist **kein Rueckstand und keine Aktion**: der
 naechste Lauf betrachtet die Datei erneut, und im Normalfall (keine
 Schreibaktivitaet) verschwindet sie wie bisher im selben Lauf.
 
-Ausgabe (zwei Zeilen, beide ins Log):
+Ausgabe der CLI (zwei Zeilen); im Worker stehen dieselben Zahlen als Zaehler
+in `routine_run.result`:
 
 ```
 Purge: 0 Org(s), 0 Account(s) geloescht; 0 Audit-Zeile(n) anonymisiert, …
 Retention: 12 Artifact(s) abgelaufen, 3 Blob-Zeile(n) + 3 Objekt(e) verwaist, 1 Area-Store(s) entfernt
 ```
 
-Worauf im Log zu achten ist:
+Worauf zu achten ist (CLI-Ausgabe bzw. `$COMPOSE logs worker` und
+`routine_run.result`):
 
 | Meldung | Bedeutung | Aktion |
 |---|---|---|
-| `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
-| `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `(kein BlobStore konfiguriert)` bzw. `blobstore_skipped: 1` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
+| `… unbekannte(s) Store-Verzeichnis(se) gemeldet` bzw. `unknown_store_dirs` > 0 | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
 | `… bleibt in der Karenzfrist liegen` | Area-Datei mit kuerzlicher Schreibaktivitaet | **keine** — der naechste Lauf nimmt sie |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
 | `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 
 ### Verfall unbestaetigten Gedaechtnisses (`who2be-memory-expire`)
 
-Eigener Einstiegspunkt neben `who2be-purge` (ADR-0053 3.1.3): setzt
-unbestaetigte Gedaechtnis-Eintraege (`pending` und automatisch aktivierte
-ohne Bestaetigung), deren `expires_at` erreicht ist, auf `expired` und
-schreibt je Eintrag das Ereignis `expired`. Geloescht wird nichts. Idempotent;
-ein ausgefallener Lauf holt der naechste nach — es verfaellt dann nur spaeter,
-nichts geht verloren.
+> **Entfaellt ab dieser Version.** Der Verfall laeuft als Routine
+> `memory-expire` im Dienst `worker`
+> ([Hintergrund-Routinen (Worker)](#hintergrund-routinen-worker)). Eine
+> bestehende Crontab-Zeile entfernen wie unter
+> [Retention-Cron](#retention-cron-who2be-purge) beschrieben
+> (`crontab -l | grep who2be-` zeigt sie).
 
-Der Aufruf muss den **Produktions-Stack** ansprechen — dieselben `-f`- und
-`--env-file`-Argumente, die `deploy/hetzner/scripts/deploy.sh` baut. Ein
-nacktes `docker compose … run` (ohne `-f`) in `/opt/who2be` liest die Root-
-`docker-compose.yml` (Dev-Stack mit eigener Dev-DB) und laesst in der
-Produktions-DB nichts verfallen. Genau **eine** der beiden Zeilen eintragen,
-passend zur Edition:
+Setzt unbestaetigte Gedaechtnis-Eintraege (`pending` und automatisch
+aktivierte ohne Bestaetigung), deren `expires_at` erreicht ist, auf `expired`
+und schreibt je Eintrag das Ereignis `expired` (ADR-0053 3.1.3). Geloescht
+wird nichts. Idempotent; ein ausgefallener Lauf holt der naechste nach — es
+verfaellt dann nur spaeter, nichts geht verloren. Taeglich reicht: die Frist
+betraegt 30 Tage, ein Tag Versatz ist fachlich ohne Belang.
+
+**Notfallweg von Hand**, gleiche Regeln wie beim Purge (Produktions-Stack mit
+`-f` und `--env-file`, `--no-deps`, `skipped` bei belegtem Lock). Er braucht
+nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass), die der `api`-Dienst in beiden
+Editionen mitbringt:
 
 ```bash
-# Einmalig als root: Log-Datei fuer den Deploy-User anlegen (/var/log ist fuer
-# ihn nicht beschreibbar — ohne die Datei scheitert schon die Umleitung, und
-# der Job laeuft gar nicht).
-install -o deploy -g deploy -m 640 /dev/null /var/log/who2be-memory-expire.log
-
-# Host-Crontab des Deploy-Users (crontab -e), Vorschlag: taeglich 03:45.
+cd /opt/who2be
 # On-Prem-Edition:
-45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
+docker compose -f deploy/hetzner/who2be/docker-compose.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire
 # Cloud-Edition (Overlay zusaetzlich, wie deploy.sh mit WHO2BE_EDITION=cloud):
-45 3 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire >> /var/log/who2be-memory-expire.log 2>&1
-```
-
-`--no-deps`: der Job braucht nur die laufende DB; ohne den Schalter startet
-`run` die Abhaengigkeiten des `api`-Dienstes mit (u. a. `migrate`). Er braucht
-nur `DATABASE_URL` (Owner-Rolle, RLS-Bypass) — der `api`-Dienst bringt sie in
-beiden Editionen mit. Taeglich reicht: die Frist betraegt 30 Tage, ein Tag
-Versatz ist fachlich ohne Belang. Ausgabe:
-`Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.`
-
-**Verifikation**, dass der Job eingeplant ist und laeuft:
-
-```bash
-crontab -l | grep who2be-memory-expire
-# → genau eine Zeile, mit -f deploy/hetzner/who2be/docker-compose.yml und --env-file
-# Sofort-Probe statt bis 03:45 warten: die eingetragene Cron-Zeile ab `cd`
-# von Hand ausfuehren, OHNE die Umleitung `>> …` — Ausgabe dann im Terminal:
+docker compose -f deploy/hetzner/who2be/docker-compose.yml -f deploy/hetzner/who2be/docker-compose.cloud.yml --env-file deploy/hetzner/.env run --rm --no-deps api who2be-memory-expire
 # → Gedaechtnis: N unbestaetigte(r) Eintrag/Eintraege abgelaufen.
-# Am Folgetag: der naechtliche Lauf hat geschrieben
-tail -1 /var/log/who2be-memory-expire.log
-# → Gedaechtnis: … abgelaufen.   (leere Datei ⇒ Cron lief nicht; Fehlertext ⇒ Ursache steht dort)
 ```
+
+Im Worker steht dieselbe Zahl als `expired` in `routine_run.result`.
 
 ---
 
@@ -2236,11 +3117,38 @@ gegen jeden S3-kompatiblen Endpoint.
   Trennung bleibt bestehen, gewechselt hat nur der Server dahinter. Der
   `api`-Dienst haengt per `service_completed_successfully` daran; ein
   fehlgeschlagener Bootstrap haelt also den Start auf — das ist Absicht.
-- **Healthcheck:** `http://127.0.0.1:9333/cluster/status` (Master-Port) —
-  **bewusst NICHT** `8333/healthz`: der S3-Handler liest den Pfad als
-  Bucket-Namen und antwortet 404 (bekannter Fallstrick, seaweedfs#8243), der
-  Stack bliebe damit dauerhaft unhealthy. Rot? → `$COMPOSE logs
-  seaweedfs`, meist ein Volume-/Rechteproblem auf `seaweedfs-data`.
+  Den ersten Kontakt zu S3 wiederholt der Bootstrap bei Verbindungsfehlern
+  (`Connection refused` und Verwandte) mit Backoff 1/2/4/8/8 … s, insgesamt
+  etwa 60 s (real rund 66 s, weil das SDK intern selbst noch wiederholt).
+  Danach bricht er mit Exit 1 und der Meldung `S3 unter '…' nach 60 s nicht
+  erreichbar — Abbruch` ab. Eine Antwort des Servers (z. B. 403 bei falschen
+  Keys) wird **nicht** wiederholt, sondern scheitert sofort.
+- **Healthcheck (zwei Stufen, beide muessen gruen sein):**
+  1. Master `http://127.0.0.1:9333/cluster/status` — der echte
+     Status-Endpunkt.
+  2. S3 auf `http://127.0.0.1:8333/` antwortet **ueberhaupt**. Jede
+     HTTP-Antwort zaehlt, anonym ist das `403 Forbidden`; entschieden wird
+     ueber die Statuszeile aus `wget -S`, nicht ueber den Exit-Code (busybox-
+     wget endet bei 403 und bei `Connection refused` gleichermassen mit 1).
+
+  `start_period: 60s`, `retries` 10 (Dev) bzw. 20 (Hetzner, Dokploy) — in
+  allen drei Compose-Dateien gleich aufgebaut.
+  **Warum Stufe 2:** Der Master wird frueher gesund als das S3-Gateway. Mit
+  SeaweedFS 4.48 war der reine Master-Check gruen, waehrend 8333 noch
+  `Connection refused` lieferte; `blobstore-bootstrap` scheiterte und hielt
+  `api` auf (#956). Pfad `/`, **bewusst NICHT** `8333/healthz`: der
+  S3-Handler liest den Pfad als Bucket-Namen und antwortet 404 (bekannter
+  Fallstrick, seaweedfs#8243), der Stack bliebe damit dauerhaft unhealthy.
+  Rot? → `$COMPOSE logs seaweedfs`: meist ein Volume-/Rechteproblem auf
+  `seaweedfs-data`; ist nur Stufe 2 rot, laeuft das S3-Gateway nicht
+  (`-s3` im `command` fehlt oder es startet noch). Von Hand pruefen:
+
+  ```bash
+  $COMPOSE exec seaweedfs wget -qO /dev/null http://127.0.0.1:9333/cluster/status && echo master-ok
+  $COMPOSE exec seaweedfs sh -c "wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep 'HTTP/'"
+  # -> HTTP/1.1 403 Forbidden (mit s3.json-Identitaet; jede HTTP-Statuszeile
+  #    heisst: S3 antwortet. Keine Zeile = S3 hoert nicht zu.)
+  ```
 - **Degradation:** ohne `WHO2BE_BLOBSTORE_*` in der API laeuft der Stack
   vollstaendig weiter; nur Ingest und Blob-Reads antworten 503
   `blobstore_unconfigured` (ADR-0048). Das ist ein gueltiger Betriebsmodus,

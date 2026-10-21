@@ -29,6 +29,11 @@
     "list": {
       "shownOfTotal": "{{shown}} of {{total}} shown"
     },
+    "usageLine": {
+      "label": "Usage",
+      "used": "{{n}}× in {{days}} days · last used {{age}} · counted since {{date}}",
+      "never": "Not used yet · counted since {{date}}"
+    },
     "table": {
       "scrollHint": "Swipe sideways for more columns"
     },
@@ -249,9 +254,18 @@
       "memory": "Memory"
     },
     "signOut": "Sign out",
+    "inbox": {
+      "label": "To do",
+      "bell_zero": "To do: nothing open",
+      "bell_one": "To do: {{count}} open",
+      "bell_other": "To do: {{count}} open"
+    },
     "language": {
       "label": "Language",
       "switch": "Change language"
+    },
+    "notice": {
+      "dismiss": "Dismiss notice"
     },
     "theme": {
       "switch": "Change theme",
@@ -393,6 +407,14 @@
     "detail": {
       "back": "Agents",
       "submitLabel": "Save",
+      "pageTabsAria": "Agent sections",
+      "pageTabs": {
+        "overview": "Overview",
+        "evolution": "Evolution",
+        "memory": "Memory",
+        "tests": "Test cases",
+        "settings": "Settings"
+      },
       "tabsAria": "Agent settings",
       "tabs": {
         "config": "Configuration",
@@ -563,12 +585,51 @@
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
-      "noPlaybooks": "No playbooks linked.",
-      "summaryPlaybooks_one": "{{count}} playbook",
-      "summaryPlaybooks_other": "{{count}} playbooks",
-      "summaryNoPlaybooks": "no playbooks",
-      "summaryNoPersona": "No persona",
-      "summarySeparator": " · "
+      "noPlaybooks": "No playbooks linked."
+    },
+    "overview": {
+      "glance": "At a glance",
+      "kpi": {
+        "linkLabel": "{{label}}: {{value}}",
+        "cases": "Open feedback reports",
+        "casesReopened_one": "1 reopened",
+        "casesReopened_other": "{{count}} reopened",
+        "casesInProgress_one": "1 in progress",
+        "casesInProgress_other": "{{count}} in progress",
+        "feedback": "Feedback on its building blocks",
+        "feedbackSub_one": "1 negative · {{days}} days",
+        "feedbackSub_other": "{{count}} negative · {{days}} days",
+        "memory": "Memory",
+        "memoryPending_one": "1 awaiting approval",
+        "memoryPending_other": "{{count}} awaiting approval",
+        "memoryExpiring_one": "1 expiring soon",
+        "memoryExpiring_other": "{{count}} expiring soon",
+        "patterns": "Patterns",
+        "patternTop": "{{element}} · {{count}}×",
+        "patternLesson": "Learning proposal",
+        "patternCase": "Cases",
+        "tests": "Test cases",
+        "testsActive": "active",
+        "usage": "Usage",
+        "usageLast": "last used {{age}} · {{days}} days",
+        "usageNever": "None yet · counted since {{date}}",
+        "none": "None yet",
+        "unavailable": "Not available"
+      },
+      "workAreas": {
+        "title": "Work areas",
+        "own": "own",
+        "shared": "shared · {{level}}",
+        "level": {
+          "read": "read",
+          "write": "read/write"
+        },
+        "moreAgents_one": "+1 agent",
+        "moreAgents_other": "+{{count}} agents",
+        "empty": "This agent has no work area yet. The private one is created on first access.",
+        "hint": "You grant access on the work area under \"Access\".",
+        "error": "Couldn't load the work areas."
+      }
     },
     "copy": {
       "plain": "Copy",
@@ -618,12 +679,7 @@
       "error": "Copy failed."
     },
     "filter": {
-      "all": "All",
-      "statusGroup": "Filter by status",
-      "searchLabel": "Search",
       "searchPlaceholder": "Search agents…",
-      "reset": "Reset filters",
-      "emptyTitle": "No matches",
       "emptyDescription": "No agent matches the filter and search."
     },
     "memory": {
@@ -860,50 +916,24 @@
       "pageOf": "Page {{page}} of {{totalPages}}",
       "next": "Next"
     },
-    "attention": {
-      "ariaLabel": "Needs your attention now",
-      "eyebrow": "Needs your attention now",
-      "reviews": {
-        "title_one": "1 version is awaiting review",
-        "title_other": "{{count}} versions are awaiting review",
-        "description": "Review the submitted versions and publish them or send them back to draft.",
-        "openVersion": "Review {{name}} v{{version}}",
-        "openList": {
-          "persona_one": "Review 1 persona",
-          "persona_other": "Review {{count}} personas",
-          "playbook_one": "Review 1 playbook",
-          "playbook_other": "Review {{count}} playbooks",
-          "resource_one": "Review 1 resource",
-          "resource_other": "Review {{count}} resources"
-        }
-      },
-      "memories": {
-        "title_one": "1 entry awaiting approval",
-        "title_other": "{{count}} entries awaiting approval",
-        "description": "Approve or reject the memory suggestions from your agents.",
-        "action": "Review"
-      },
-      "patterns": {
-        "title_one": "1 pattern",
-        "title_other": "{{count}} patterns",
-        "description": "Learning suggestions or cases that keep coming back.",
-        "action": "View"
-      },
-      "cases": {
-        "title_one": "1 open case",
-        "title_other": "{{count}} open cases",
-        "description": "Reported situations nobody has triaged yet.",
-        "action": "Triage"
-      },
-      "systemPrompts": {
-        "title_one": "1 system prompt is awaiting review",
-        "title_other": "{{count}} system prompts are awaiting review",
-        "description": "Review the submitted system prompt versions.",
-        "action": "Go to review"
-      },
-      "allClear": {
-        "title": "All clear",
-        "description": "Nothing is waiting on you — go ahead and start."
+    "inbox": {
+      "ariaLabel": "To do",
+      "loading": "Counting tasks …",
+      "title_one": "1 task is waiting for you",
+      "title_other": "{{count}} tasks are waiting for you",
+      "clear": "Nothing to do.",
+      "action": "View all",
+      "more_one": "+ 1 more",
+      "more_other": "+ {{count}} more",
+      "kind": {
+        "followUps_one": "1 follow-up due",
+        "followUps_other": "{{count}} follow-ups due",
+        "memory_one": "1 memory entry",
+        "memory_other": "{{count}} memory entries",
+        "versions_one": "1 version awaiting approval",
+        "versions_other": "{{count}} versions awaiting approval",
+        "cases_one": "1 feedback report",
+        "cases_other": "{{count}} feedback reports"
       }
     },
     "quickStart": {
@@ -1499,7 +1529,7 @@
       "contentDescription": "The actual playbook content and its triggers.",
       "contentHelp": "Example: Step 1 — greet the customer; Step 2 — verify identity; Step 3 — send reset link. Changes create a new version; old versions are retained.",
       "bodyLabel": "Content",
-      "bodyHint": "Type / in the editor to insert playbook or resource pills. Linked relations live in the body.",
+      "bodyHint": "Type / for blocks and references to playbooks, resources and tools.",
       "tagsPlaceholder": "Type a tag and press Enter",
       "triggersLabel": "Trigger",
       "triggersPlaceholder": "Type a trigger and press Enter",
@@ -1742,6 +1772,42 @@
       "org": "Organization",
       "workspace": "Workspace",
       "members": "Members"
+    },
+    "routines": {
+      "title": "Background routines",
+      "description": "Visible to operators only, read-only. Times in local time ({{timeZone}}), UTC in brackets.",
+      "workerLastSeen": "Worker last seen:",
+      "listLabel": "Routines",
+      "empty": "No routines registered.",
+      "none": "—",
+      "neverRun": "No run yet",
+      "utcHint": "({{time}} UTC)",
+      "schedule": "Schedule",
+      "scheduleUtc": "(UTC)",
+      "lastRun": "Last run",
+      "nextRun": "Next run",
+      "lastSuccess": "Last success",
+      "counters": "Counters:",
+      "errorClass": "Error class:",
+      "enabled": "On",
+      "disabled": "Off",
+      "source": {
+        "code": "Source: code",
+        "env": "Source: environment"
+      },
+      "status": {
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "trigger": {
+        "schedule": "scheduled",
+        "cli": "via CLI",
+        "manual": "manual"
+      },
+      "externalTitle": "External schedule detected (crontab/Dokploy).",
+      "externalDescription": "It can be removed."
     },
     "account": {
       "title": "Account",
@@ -2068,10 +2134,10 @@
         }
       },
       "promptBody": {
-        "title": "Prompt body",
-        "description": "Write your prompt in the editor. Type / to insert placeholders.",
-        "help": "Type / in the editor to insert playbook, resource, persona-field, or date placeholders. The backend renderer expands them to real text on MCP read.",
-        "label": "Body"
+        "title": "Content",
+        "description": "What the agent reads on every start. Type / for blocks and references.",
+        "help": "The server fills references to playbooks, resources, persona fields or the date with real text when the agent fetches the template.",
+        "label": "Content"
       },
       "saveVersion": "Save new version",
       "viewerTooltip": "Viewers can only read content",
@@ -2101,7 +2167,7 @@
       }
     },
     "placeholderHelp": {
-      "triggerLabel": "Available placeholders",
+      "triggerLabel": "Which references exist?",
       "docsLink": "More in the docs →",
       "intro": {
         "heading": "What is a placeholder?",
@@ -2278,16 +2344,16 @@
         "type": "Type",
         "allSignals": "All signals",
         "allTypes": "All types",
-        "statusGroup": "Filter by status"
+        "searchPlaceholder": "Search by element…"
       },
       "status": {
         "open": "Open",
         "in_progress": "In progress",
         "addressed": "Done",
-        "dismissed": "Dismissed",
-        "all": "All"
+        "dismissed": "Dismissed"
       },
-      "empty": "No feedback for this selection.",
+      "emptyOpenTitle": "No open feedback",
+      "emptyOpenDescription": "All feedback has been triaged. New items appear here as soon as an agent or a person leaves feedback.",
       "openElement": "Open element"
     },
     "overview": {
@@ -2519,7 +2585,11 @@
         "addressedShort": "Addressed",
         "dismissed": "Dismissed",
         "in_progress": "In progress",
-        "verified": "Verified"
+        "verified": "Verified",
+        "explain": {
+          "in_progress": "Being worked on through a change.",
+          "verified": "The change worked in the follow-up check."
+        }
       },
       "row": {
         "expected": "Expected: {{text}}",
@@ -2573,8 +2643,11 @@
           "testCase": "Test case: {{title}}",
           "lesson": "From learning suggestion",
           "feedback": "From old feedback",
-          "sourceRef": "Link to the run"
+          "sourceRef": "Link to the run",
+          "session": "Review on {{date}}",
+          "measure": "Change: {{element}} · {{state}}"
         },
+        "toEvolution": "To {{agent}} → Evolution",
         "next": "Next step",
         "moreActions": "More actions",
         "notFound": "This case doesn't exist (anymore).",
@@ -2589,7 +2662,10 @@
         "addressUnavailable": "Addressed needs a version of an assigned building block.",
         "toVersion": "Go to version",
         "dismiss": "Dismiss…",
-        "reopen": "Reopen…"
+        "reopen": "Reopen…",
+        "prepareSession": "Prepare a review",
+        "toMeasure": "Go to change",
+        "toFollowUp": "Go to follow-up check"
       },
       "assign": {
         "title": "Assign case",
@@ -2617,7 +2693,8 @@
         "activeTag": "active",
         "choose": "Please choose …",
         "note": "Note (optional)",
-        "submit": "Mark as addressed"
+        "submit": "Mark as addressed",
+        "noFollowUp": "Without a change from a review there's no follow-up check. The case can't be closed as \"Verified\" then."
       },
       "dismiss": {
         "title": "Dismiss case",
@@ -2639,6 +2716,7 @@
       },
       "history": {
         "title": "History",
+        "toMeasure": "Go to change",
         "event": {
           "reported": "Reported",
           "triaged": "Triaged",
@@ -2648,7 +2726,11 @@
           "element_assigned": "Assigned: {{element}}",
           "element_unassigned": "Assignment removed: {{element}}",
           "statement": "Agent's account received",
-          "unknown": "Change"
+          "unknown": "Change",
+          "in_progress": "In progress: change from a review",
+          "verified": "Verified after follow-up check",
+          "reopenedByFollowUp": "Reopened after follow-up check \"didn't work\": {{note}}",
+          "addressedOnActivation": "Addressed with {{element}} v{{version}} (on activation)"
         }
       },
       "delete": {
@@ -2968,7 +3050,50 @@
   },
   "editor": {
     "slash": {
-      "group": "Placeholder",
+      "group": {
+        "text": "Text",
+        "refs": "References",
+        "context": "Agent context"
+      },
+      "block": {
+        "heading": {
+          "title": "Title",
+          "subtext": "Heading of the whole document"
+        },
+        "heading2": {
+          "title": "Heading",
+          "subtext": "Section"
+        },
+        "heading3": {
+          "title": "Subheading",
+          "subtext": "Subsection"
+        },
+        "paragraph": {
+          "title": "Paragraph",
+          "subtext": "Body text"
+        },
+        "bullet": {
+          "title": "Bulleted list",
+          "subtext": "List without order"
+        },
+        "numbered": {
+          "title": "Numbered list",
+          "subtext": "Steps, order"
+        },
+        "quote": {
+          "title": "Quote",
+          "subtext": "Quote or highlighted note"
+        },
+        "code": {
+          "title": "Code",
+          "subtext": "JSON or Markdown example"
+        }
+      },
+      "key": {
+        "ctrl": "Ctrl",
+        "shift": "Shift",
+        "alt": "Alt"
+      },
       "playbook": {
         "title": "Playbook",
         "subtext": "Embed a playbook permanently (always loaded)"
@@ -3136,6 +3261,18 @@
           "description": "Rendered as \"2026-05-31\""
         }
       }
+    },
+    "placeholder": {
+      "withReferences": "Write or type / for blocks and references",
+      "plain": "Write or type / for blocks"
+    },
+    "footer": {
+      "length": "≈ {{chars}} characters · ≈ {{tokens}} tokens (estimated)",
+      "long": "· long",
+      "helpLabel": "How is the length estimated?",
+      "tooltip": "Estimate: about {{perToken}} characters per token. Embedded references are not included.",
+      "longTooltip": "Very long instructions are often followed less well.",
+      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)"
     }
   },
   "learning": {
@@ -3786,6 +3923,462 @@
       "categoryChange": "Category: {{from}} → {{to}}",
       "importanceChange": "Importance: {{from}} → {{to}}",
       "restored": "Earlier state restored."
+    }
+  },
+  "inbox": {
+    "page": {
+      "title": "To do",
+      "description": "Everything waiting for your decision. Done items disappear on their own."
+    },
+    "chip": {
+      "followUps": "Due",
+      "memory": "Memory",
+      "versions": "Approvals",
+      "cases": "Feedback reports"
+    },
+    "kind": {
+      "followUps": "Follow-ups due",
+      "followUpsHint": "Did the change work? Only a person rates it.",
+      "memory": "Memory awaiting approval",
+      "memoryHint": "Entries take effect only after you approve them.",
+      "versions": "Versions awaiting approval",
+      "versionsHint": "Agents use the new version only after you approve it.",
+      "versionsEditorHint": "Waiting for an admin to approve. You can move them back to draft.",
+      "cases": "Feedback reports, not triaged",
+      "casesHint": "Reported situations nobody has triaged yet."
+    },
+    "section": {
+      "heading": "{{title}}, {{count}}",
+      "toLook": "Worth a look",
+      "toLookHint": "not counted in the bell"
+    },
+    "followUps": {
+      "row": "Review of {{date}} · {{agent}}",
+      "today": "due today",
+      "since_one": "due for 1 day",
+      "since_other": "due for {{count}} days",
+      "changes_one": "1 change to check",
+      "changes_other": "{{count}} changes to check",
+      "term": "Due {{date}}",
+      "open": "Open follow-up check",
+      "openAria": "Open follow-up check: {{title}}",
+      "loadMore": "Load more",
+      "loadingMore": "Loading …",
+      "atAgent": "View at {{agent}}"
+    },
+    "memory": {
+      "userMemory": "Your user memory"
+    },
+    "cases": {
+      "reopened": "reopened"
+    },
+    "versions": {
+      "row": "{{name}} v{{version}}",
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "systemPrompt": "System prompt"
+      },
+      "typeCount": {
+        "persona_one": "{{count}} persona",
+        "persona_other": "{{count}} personas",
+        "playbook_one": "{{count}} playbook",
+        "playbook_other": "{{count}} playbooks",
+        "resource_one": "{{count}} resource",
+        "resource_other": "{{count}} resources",
+        "systemPrompt_one": "{{count}} system prompt",
+        "systemPrompt_other": "{{count}} system prompts"
+      }
+    },
+    "look": {
+      "patterns_one": "{{count}} pattern",
+      "patterns_other": "{{count}} patterns",
+      "patternsHint": "Feedback reports or learning suggestions that keep recurring",
+      "versions_one": "{{count}} version is waiting for an admin to approve",
+      "versions_other": "{{count}} versions are waiting for an admin to approve",
+      "open": "View",
+      "openAria": "View: {{title}}"
+    },
+    "action": {
+      "review": "Review",
+      "reviewAria": "Review: {{text}}",
+      "triage": "Triage",
+      "triageAria": "Triage: {{text}}",
+      "open": "Open",
+      "openVersionAria": "Open {{name}} version {{version}}"
+    },
+    "quoted": "“{{text}}”",
+    "unknownAgent": "Unknown agent",
+    "showAll_one": "View all {{count}}",
+    "showAll_other": "View all {{count}}",
+    "empty": {
+      "title": "All done",
+      "description": "New tasks show up here and on the bell.",
+      "filtered": "Nothing is open for this selection."
+    },
+    "sectionError": "Couldn't be loaded.",
+    "loadError": "The tasks couldn't be loaded.",
+    "retry": "Try again"
+  },
+  "sessions": {
+    "evolution": {
+      "title": "Evolution",
+      "stepsAria": "Steps of the evolution",
+      "waiting_one": "1 waiting for you",
+      "waiting_other": "{{count}} waiting for you",
+      "unavailable": "Not available",
+      "prepare": "Prepare a review",
+      "guide": {
+        "summary": "How to evolve an agent",
+        "steps": "4 steps",
+        "body": "Your agent gets better when you say what is off and check whether the change works. ① Collect: report a case when the agent gets something wrong. ② Discuss: prepare a review and hold it in your client with the Builder; you decide. ③ Implement: check the draft of each change and activate it. ④ Check: on the due date the follow-up check appears under “To do”, where you answer “Did it work?”."
+      },
+      "collect": {
+        "title": "① Collect",
+        "head_one": "1 open case",
+        "head_other": "{{count}} open cases",
+        "triaged": "{{count}} triaged",
+        "reopened": "{{count}} reopened",
+        "patterns_one": "1 pattern",
+        "patterns_other": "{{count}} patterns",
+        "view": "View"
+      },
+      "discuss": {
+        "title": "② Discuss",
+        "last": "Last review {{date}}",
+        "none": "No review yet",
+        "ready_one": "1 triaged case is ready",
+        "ready_other": "{{count}} triaged cases are ready"
+      },
+      "implement": {
+        "title": "③ Implement",
+        "head_one": "1 open change",
+        "head_other": "{{count}} open changes",
+        "none": "No open changes",
+        "latest": {
+          "agreed": "Agreed, no draft linked yet",
+          "draft_linked": "Draft linked, not activated yet"
+        },
+        "view": "View"
+      },
+      "check": {
+        "title": "④ Check",
+        "due_one": "1 follow-up check due",
+        "due_other": "{{count}} follow-up checks due",
+        "next": "Next on {{date}}",
+        "none": "None scheduled",
+        "today": "due today",
+        "since_one": "due for 1 day",
+        "since_other": "due for {{count}} days",
+        "open": "Open follow-up check"
+      },
+      "changes": {
+        "title": "Changes",
+        "subtitle": "open and awaiting follow-up",
+        "activeSince": "active since {{date}}",
+        "fromReview": "from the review of {{date}}",
+        "view": "View",
+        "actionAria": "{{action}}: {{title}}",
+        "more": "Older changes are in the reviews."
+      },
+      "reviews": {
+        "title": "Reviews",
+        "cases_one": "1 case",
+        "cases_other": "{{count}} cases",
+        "measures_one": "1 change",
+        "measures_other": "{{count}} changes",
+        "fromClient": "submitted by the client",
+        "mark": {
+          "due": "Follow-up check due",
+          "replaced": "Replaced",
+          "corrects": "Correction"
+        },
+        "more": "Load more",
+        "loadError": "The reviews could not be loaded.",
+        "empty": "There has been no review with {{agent}} yet. A review brings cases together: you prepare it here, hold it in your client with the Builder, and the result lands here."
+      },
+      "viewer": {
+        "head_one": "1 of your cases",
+        "head_other": "{{count}} of your cases",
+        "mine": "My cases",
+        "status": {
+          "open": "{{count}} open",
+          "reopened": "{{count}} reopened",
+          "triaged": "{{count}} triaged",
+          "in_progress": "{{count}} in progress",
+          "addressed": "{{count}} addressed",
+          "verified": "{{count}} verified",
+          "dismissed": "{{count}} dismissed"
+        },
+        "explain": "Editors run reviews, changes and follow-up checks. You can see what becomes of your case from its status: In progress · Addressed · Verified."
+      },
+      "timeline": {
+        "title": "History",
+        "intro": "Every activated version of a building block is a new generation of the agent.",
+        "listAria": "Generations, newest first",
+        "generation": "Generation of {{date}}",
+        "versions": "v{{from}} → v{{to}}",
+        "firstVersion": "v{{to}}",
+        "direct": "Changed directly, without review",
+        "noFollowUp": "No follow-up check",
+        "why_one": "Why: 1 case",
+        "why_other": "Why: {{count}} cases",
+        "whyReview_one": "Why: 1 case (review of {{date}})",
+        "whyReview_other": "Why: {{count}} cases (review of {{date}})",
+        "fromReview": "From a review",
+        "shared_one": "also affects: 1 other agent",
+        "shared_other": "also affects: {{count}} other agents",
+        "open": "View change",
+        "openAria": "View change: {{element}}",
+        "more": "Show older generations",
+        "moreError": "Older generations could not be loaded.",
+        "loadError": "The history could not be loaded.",
+        "empty": "No generation yet. As soon as you activate a change, it appears here."
+      }
+    },
+    "trigger": {
+      "threshold": "Threshold",
+      "scheduled": "Scheduled",
+      "manual": "Manual"
+    },
+    "supersede": {
+      "replacedBy": "Replaced by the review record from {{date}}",
+      "corrects": "Corrects the review record from {{date}}",
+      "toNew": "Go to the new review record",
+      "measuresStay": "This record's changes stay in effect until someone withdraws them."
+    },
+    "detail": {
+      "title": "Review on {{date}}",
+      "subtitle": "{{agent}} · {{trigger}}",
+      "subtitleClient": "{{agent}} · {{trigger}} · submitted by the client",
+      "back": "{{agent}} · Evolution",
+      "actions": "Review record actions",
+      "copyId": "Copy ID",
+      "idCopied": "ID copied.",
+      "followUpOn": "Follow-up check on {{date}}",
+      "fromClient": "Submitted by the client ({{who}}) on {{datetime}}. Can't be changed.",
+      "byHuman": "Submitted by {{name}} on {{datetime}}. Can't be changed.",
+      "participants": "Participants",
+      "participant": {
+        "builder": "Builder",
+        "formerMember": "Former member",
+        "deletedAgent": "Deleted agent"
+      },
+      "summary": "Summary",
+      "decisions": "Decisions",
+      "decisionsEmpty": "No decisions recorded.",
+      "standardRef": "Reference: {{ref}}",
+      "dissent": "Dissenting views",
+      "dissentEmpty": "No dissenting views recorded.",
+      "cases": "Cases",
+      "casesEmpty": "No cases linked anymore.",
+      "measures": "Changes",
+      "measuresEmpty": "No change was agreed in this review.",
+      "measureLabel": "M{{n}} · {{element}}",
+      "measureCases_one": "{{count}} case",
+      "measureCases_other": "{{count}} cases",
+      "testCase": "Test case: {{title}}",
+      "openMeasure": "Open change",
+      "openMeasureAria": "Open change: {{label}}",
+      "notFound": "This review doesn't exist (anymore).",
+      "toList": "Back to evolution",
+      "loadError": "The review record couldn't be loaded."
+    },
+    "measure": {
+      "state": {
+        "agreed": "Agreed",
+        "draft_linked": "Draft linked",
+        "activated": "Activated",
+        "follow_up_prepared": "Figures ready",
+        "effective": "Worked",
+        "ineffective": "Didn't work",
+        "not_measurable": "Not measurable",
+        "withdrawn": "Withdrawn"
+      },
+      "due": "Follow-up check due",
+      "dueNotActive": "Follow-up check due, change not active yet",
+      "followUpOn": "Follow-up check on {{date}}",
+      "title": "Change M{{n}} · {{element}}",
+      "from": "From the review with {{agent}} on {{date}}",
+      "field": {
+        "change": "Smallest change",
+        "target": "Target",
+        "testCase": "Test case",
+        "criterion": "Success criterion",
+        "counterposition": "Counterposition",
+        "followUp": "Follow-up check on",
+        "draft": "Draft",
+        "cases": "Cases"
+      },
+      "testCaseRetired": "retired",
+      "testCaseUnavailable": "Test case not available",
+      "noDraft": "No draft linked yet",
+      "versionState": {
+        "draft": "Draft",
+        "review": "in review",
+        "active": "active since {{date}}"
+      }
+    },
+    "copy": {
+      "label": "Paste into your client:",
+      "button": "Copy",
+      "copied": "Copied.",
+      "correctionTitle": "Submit a correction",
+      "correctionIntro": "A review record can't be changed. Have the Builder submit a new one that replaces it.",
+      "correction": "Correct review record {{sessionId}} for {{agent}} ({{agentId}}). Load it, check with me what is wrong, and submit a new record with submit_session_protocol and supersedes_id {{sessionId}}."
+    },
+    "followUp": {
+      "title": "Follow-up check",
+      "notYet": "Figures are available once the linked version is active.",
+      "caption": "Figures before and after the change",
+      "metric": "Metric",
+      "before": "before (v{{version}})",
+      "after": "after (v{{version}})",
+      "beforePlain": "before",
+      "afterPlain": "after",
+      "row": {
+        "passRate": "Test case passed",
+        "caseRate": "Cases per 100 uses",
+        "recurrence": "Came up again"
+      },
+      "runs": "{{passed}} of {{total}} runs",
+      "runsClient": "{{passed}} of {{total}} runs (per client)",
+      "rate": "{{rate}} ({{uses}} uses)",
+      "recurrenceCount_zero": "no new cases",
+      "recurrenceCount_one": "1 new case",
+      "recurrenceCount_other": "{{count}} new cases",
+      "direction": {
+        "lower": "lower",
+        "higher": "higher",
+        "same": "same"
+      },
+      "selfReport": "Test results reported by the client.",
+      "tooFewUses": "Only {{count}} uses since activation – too few for a comparison.",
+      "loadError": "The figures couldn't be loaded."
+    },
+    "history": {
+      "title": "History",
+      "empty": "No events yet.",
+      "event": {
+        "draft_linked": "Draft linked: {{element}} v{{version}}",
+        "activated_one": "Version became active, 1 case addressed",
+        "activated_other": "Version became active, {{count}} cases addressed",
+        "activatedNoCount": "Version became active",
+        "follow_up_prepared": "Figures prepared",
+        "reviewed": "Rated: {{verdict}}",
+        "withdrawn": "Withdrawn: {{note}}",
+        "unknown": "Event"
+      }
+    },
+    "error": {
+      "measureNotFound": "This change doesn't exist (anymore).",
+      "versionNotFound": "This version no longer exists. Pick another one.",
+      "conflict": "This step doesn't fit the current state. The change has been reloaded."
+    },
+    "review": {
+      "legend": "Did it work?",
+      "humanOnly": "Only people answer this. The Builder prepares, but doesn't decide.",
+      "option": {
+        "effective": "Yes, it worked",
+        "ineffective": "No, it didn't work",
+        "not_measurable": "Not measurable"
+      },
+      "effect": {
+        "effective_one": "The 1 addressed case will count as verified. Verified is a final state.",
+        "effective_other": "The {{count}} addressed cases will count as verified. Verified is a final state.",
+        "ineffective_one": "The 1 addressed case goes back to \"Reopened\" and shows up in the list again. Your note becomes its reason.",
+        "ineffective_other": "The {{count}} addressed cases go back to \"Reopened\" and show up in the list again. Your note becomes their reason.",
+        "not_measurable": "The cases stay as they are. The change is closed. A new follow-up check needs a new review.",
+        "unaffected_one": "1 other case of this change doesn't change.",
+        "unaffected_other": "{{count}} other cases of this change don't change."
+      },
+      "note": "Note",
+      "noteOptional": "Note (optional)",
+      "noteRequired": "\"No, it didn't work\" needs a reason for the cases. At least 10 characters.",
+      "submit": "Save answer",
+      "done": "Answered: {{verdict}}",
+      "newSession": "Prepare a new review"
+    },
+    "action": {
+      "linkDraft": "Link draft…",
+      "relinkDraft": "Link another draft…",
+      "toDraft": "Go to draft",
+      "withdraw": "Withdraw…",
+      "more": "More actions",
+      "noVersions": "This target has no versions. A draft can't be linked."
+    },
+    "linkDraft": {
+      "title": "Link draft",
+      "element": "Building block",
+      "version": "Version",
+      "choose": "Choose a version",
+      "versionRequired": "Choose a version.",
+      "help": "The draft stays a draft. It only becomes active in review, after the test cases have run. The cases then count as addressed automatically.",
+      "none": "There's no draft for {{element}} yet. Create one in the versions tab or have the Builder create it.",
+      "open": "Open {{element}}",
+      "submit": "Link",
+      "done": "Draft linked."
+    },
+    "withdraw": {
+      "title": "Withdraw change",
+      "intro": "The change is dropped. A linked draft stays a draft.",
+      "cases": "Cases currently in progress go back to \"Triaged\" unless another open change contains them. All other cases keep their status.",
+      "reason": "Why is the change being dropped?",
+      "submit": "Withdraw",
+      "done": "Change withdrawn."
+    },
+    "prepare": {
+      "title": "Prepare a review",
+      "step": {
+        "cases": "Pick cases (1–3 recommended)",
+        "situation": "Situation (put together by the server, read only)",
+        "start": "Start in your client"
+      },
+      "group": {
+        "triaged": "Triaged",
+        "untriaged": "Not triaged yet",
+        "untriagedHelp": "The Builder can assign them during the review."
+      },
+      "tooMany": "More than three cases make the review long. You can take the rest into a later review.",
+      "noCases": "There's no open case for {{agent}} right now. You can still hold a review, for example a scheduled check-in.",
+      "casesLoadError": "The cases couldn't be loaded.",
+      "unresolved_one": "1 case from the link can't be selected here and isn't in the starting sentence.",
+      "unresolved_other": "{{count}} cases from the link can't be selected here and aren't in the starting sentence.",
+      "loadMore": "Load more",
+      "situation": {
+        "openCases": "Open cases",
+        "total": "Total",
+        "rates": "Case rate per version",
+        "col": {
+          "element": "Building block",
+          "version": "Version",
+          "cases": "Cases",
+          "uses": "Uses",
+          "rate": "Cases per 100 uses",
+          "signals": "Signals"
+        },
+        "version": "v{{version}}",
+        "versionActive": "v{{version}} (active)",
+        "tooFewUses": "too few uses",
+        "elementsMore": "Showing {{shown}} of {{total}} building blocks.",
+        "access": "Access",
+        "accessWindow": "Period",
+        "accessWindowValue": "{{days}} days, since {{date}}",
+        "accessTotal": "Entries",
+        "accessRow": "{{entries}} entries, {{refs}} items, last {{date}}",
+        "pastMeasures": "Past changes",
+        "allReviews": "All reviews with {{agent}}",
+        "noData": "No data",
+        "loadError": "The situation couldn't be loaded."
+      },
+      "startIntro": "You hold the review in your client with the Builder. Paste this sentence:",
+      "prompt": "Hold a review with me about agent {{agent}} ({{agentId}}). Load the situation with get_dossier, moderate, don't decide anything yourself, and submit the record with submit_session_protocol at the end.",
+      "promptCases": "Cases: {{ids}}.",
+      "afterCopy": "The record shows up under {{link}}.",
+      "afterCopyLink": "{{agent}} → Evolution",
+      "copySticky_one": "Copy starting sentence (1 case)",
+      "copySticky_other": "Copy starting sentence ({{count}} cases)"
     }
   }
 }

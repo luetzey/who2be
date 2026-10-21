@@ -27,7 +27,7 @@ describe('StatusBar', () => {
         />
       </MemoryRouter>,
     )
-    const link = screen.getByRole('link', { name: /In Review/ })
+    const link = screen.getByRole('link', { name: /Zur Freigabe/ })
     expect(link).toHaveAttribute('href', '/w/ws-1/playbooks?status=review')
   })
 

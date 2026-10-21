@@ -28,6 +28,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from who2be_models.case import CaseSeverity, CaseStatus
 from who2be_models.status_history import EntityType
 
 # Laengen-Deckel, gespiegelt aus den CHECKs der Migration 0103 (ADR 3.5/3.6;
@@ -346,8 +347,191 @@ class SessionRead(BaseModel):
     created_at: datetime
 
 
+class SessionListItem(SessionRead):
+    """Eine Zeile der Protokoll-Liste (QE2 = a): Protokoll plus Zaehler.
+
+    - `case_count`, `measure_count`: Faelle bzw. Massnahmen des Protokolls.
+    - `due_measure_count`: Massnahmen, deren Nachschau-Datum (Massnahme,
+      sonst Protokoll) heute oder frueher liegt und die nicht abgeschlossen
+      sind (`reviewed`, `withdrawn`; PM-3).
+    - `next_follow_up_at`: fruehestes Nachschau-Datum der offenen
+      Massnahmen; None, wenn keine Massnahme mehr offen ist.
+    - `superseded_by_id`: das juengste Protokoll, das dieses korrigiert.
+    """
+
+    case_count: int
+    measure_count: int
+    next_follow_up_at: date | None
+    due_measure_count: int
+    superseded_by_id: UUID | None
+
+
 class SessionDetail(BaseModel):
-    """Protokoll mit eingebetteten Massnahmen (QE1 = a)."""
+    """Protokoll mit eingebetteten Massnahmen (QE1 = a).
+
+    `superseded_by_id`: das juengste Protokoll, das dieses korrigiert —
+    derselbe Wert wie an `SessionListItem` (eine SQL-Quelle im Repository).
+    None, wenn es nicht ersetzt ist.
+    """
 
     session: SessionRead
     measures: list[MeasureRead]
+    superseded_by_id: UUID | None = None
+
+
+# --- Dossier (E1) --------------------------------------------------------------
+#
+# `GET /agents/{agent_id}/dossier` (ADR-0053 6.6): Vorbereitung eines
+# Gespraechs. Die Antwort geht auch ueber MCP an Modelle (`get_dossier`), daher
+# haben alle Listen einen festen Deckel und Freitexte eine Kuerzung (W-E1).
+# Zahlen sind Rohzahlen (QE8 a): die UI rechnet „je 100“, der Server liefert
+# nur die Schwelle `min_uses` und je Version `insufficient`.
+
+# Offene Faelle mit Text (die Zaehler je Status sind vollstaendig).
+DOSSIER_OPEN_CASES_LIMIT = 20
+# Laenge von Fall- und Massnahmen-Texten im Dossier, danach „…“.
+DOSSIER_TEXT_MAX_LENGTH = 280
+# Bausteine im Block `elements` und Versionen je Baustein (neueste zuerst).
+DOSSIER_ELEMENTS_LIMIT = 25
+DOSSIER_VERSIONS_PER_ELEMENT = 3
+# Juengste Massnahmen des Agenten.
+DOSSIER_MEASURES_LIMIT = 10
+# Generationen je Seite (Weiche N2 a: „Limit 15 + Cursor“).
+DOSSIER_GENERATIONS_LIMIT = 15
+# Zeitfenster der Zugriffslog-Zusammenfassung in Tagen.
+DOSSIER_ACCESS_WINDOW_DAYS = 90
+
+
+class DossierCase(BaseModel):
+    """Ein offener Fall in Kurzform; Texte auf `DOSSIER_TEXT_MAX_LENGTH` gekuerzt."""
+
+    id: UUID
+    status: CaseStatus
+    severity: CaseSeverity
+    situation: str
+    expected_behavior: str
+    created_at: datetime
+
+
+class DossierOpenCases(BaseModel):
+    """Offene Faelle (open, triaged, in_progress, reopened): Zaehler plus juengste Faelle."""
+
+    counts: dict[CaseStatus, int]
+    total: int
+    items: list[DossierCase]
+
+
+class DossierVersion(BaseModel):
+    """Rohzahlen einer Version eines Bausteins (3.4: Nutzung nur `source='server'`).
+
+    - `uses`: Auslieferungen (`usage_event.source='server'`).
+    - `outcomes`: gemeldete Ergebnisse (`source='agent_report'`) je `outcome`.
+    - `signals`: Alt-Feedback (`agent_feedback`) je Signal.
+    - `cases`: Faelle aller Agenten mit Zuordnung zu diesem Baustein, angelegt,
+      waehrend die Version aktiv war; None, wenn es kein Aktivierungsdatum gibt.
+    - `insufficient`: `uses` liegt unter `Dossier.min_uses`.
+    """
+
+    version: int
+    active: bool
+    activated_at: datetime | None
+    uses: int
+    outcomes: dict[str, int]
+    signals: dict[str, int]
+    cases: int | None
+    insufficient: bool
+
+
+class DossierElement(BaseModel):
+    """Ein Baustein des Agenten mit seinen juengsten Versionen."""
+
+    entity_type: EntityType
+    entity_id: UUID
+    name: str
+    versions: list[DossierVersion]
+
+
+class DossierAccessRow(BaseModel):
+    """Eine Zeile der Zugriffslog-Zusammenfassung, ohne `ref_id`.
+
+    `entries` zaehlt Eintraege des tagesweise deduplizierten Logs (je Objekt
+    und Tag hoechstens einer), `refs` die verschiedenen Objekte.
+    """
+
+    ref_kind: str
+    operation: str
+    sensitivity: str
+    entries: int
+    refs: int
+    last_on: date
+
+
+class DossierAccess(BaseModel):
+    """Zugriffslog des Agenten (WorkArea/KB) im Zeitfenster, nur Summen."""
+
+    since: date
+    window_days: int
+    total: int
+    rows: list[DossierAccessRow]
+
+
+class DossierMeasure(BaseModel):
+    """Eine fruehere Massnahme mit Zustand und juengster Einstufung."""
+
+    id: UUID
+    session_id: UUID
+    target: MeasureTarget
+    entity_id: UUID | None
+    change_summary: str
+    state: MeasureState
+    verdict: MeasureVerdict | None
+    reviewed_at: datetime | None
+    follow_up_at: date
+    case_count: int
+    created_at: datetime
+
+
+class DossierGeneration(BaseModel):
+    """Eine Aktivierung eines Bausteins des Agenten (Weiche N2 a, Web-Verlauf E5k).
+
+    - `from_version`: die zuvor aktivierte Version; None bei der ersten.
+    - `measure_ids`: Massnahmen an diesem Baustein, die mit dieser Aktivierung
+      `activated` wurden; leer = direkt geaendert, ohne Review.
+    - `verdict`: juengste Einstufung dieser Massnahmen.
+    - `shared_agent_count`: wie viele ANDERE Agenten den Baustein heute
+      erreichen; None ohne Verweisindex (`external_tool`).
+    """
+
+    entity_type: EntityType
+    entity_id: UUID
+    name: str
+    from_version: int | None
+    to_version: int
+    activated_at: datetime
+    measure_ids: list[UUID]
+    verdict: MeasureVerdict | None
+    shared_agent_count: int | None
+
+
+class Dossier(BaseModel):
+    """`GET /agents/{agent_id}/dossier` (6.6): Vorbereitung eines Gespraechs.
+
+    Bausteine sind die HEUTIGEN Zuordnungen des Agenten (Persona, Template,
+    Playbooks und Resources samt Composite-Kindern) plus die Ziele seiner
+    Massnahmen; Zuordnungen sind nicht historisiert. `*_total` nennt die
+    Gesamtzahl, wenn eine Liste gedeckelt ist. `cursor` blaettert nur
+    `generations`; `generations_next_cursor` ist None auf der letzten Seite.
+    """
+
+    agent_id: UUID
+    agent_name: str
+    generated_at: datetime
+    min_uses: int
+    open_cases: DossierOpenCases
+    elements: list[DossierElement]
+    elements_total: int
+    access: DossierAccess
+    measures: list[DossierMeasure]
+    measures_total: int
+    generations: list[DossierGeneration]
+    generations_next_cursor: str | None

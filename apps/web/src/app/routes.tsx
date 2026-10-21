@@ -116,6 +116,12 @@ const DashboardPage = lazy(() =>
     default: mod.DashboardPage,
   })),
 )
+// Navigation & Transparenz W1-b: Seite „Zu erledigen“ hinter der Glocke.
+const InboxPage = lazy(() =>
+  import('@/features/inbox/pages/InboxPage').then((mod) => ({
+    default: mod.InboxPage,
+  })),
+)
 const AgentsPage = lazy(() =>
   import('@/features/agents/pages/AgentsPage').then((mod) => ({
     default: mod.AgentsPage,
@@ -168,6 +174,18 @@ const ReportCasePage = lazy(() =>
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
+  })),
+)
+// ADR-0053 Phase E (E5c): Review-Ergebnis am Agenten.
+const ReviewDetailPage = lazy(() =>
+  import('@/features/evolution/pages/ReviewDetailPage').then((mod) => ({
+    default: mod.ReviewDetailPage,
+  })),
+)
+// ADR-0053 Phase E (E5f): Review vorbereiten am Agenten.
+const ReviewPreparePage = lazy(() =>
+  import('@/features/evolution/pages/ReviewPreparePage').then((mod) => ({
+    default: mod.ReviewPreparePage,
   })),
 )
 const SystemPromptsPage = lazy(() =>
@@ -359,6 +377,7 @@ export function RouterRoot() {
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />
+                <Route path="/w/:workspaceId/inbox" element={<InboxPage />} />
                 <Route path="/w/:workspaceId/personas" element={<PersonasPage />} />
                 <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
                 <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
@@ -404,6 +423,17 @@ export function RouterRoot() {
                 />
                 <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
                 <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
+                {/* Review vorbereiten und Review-Ergebnis am Agenten (ADR-0053
+                    Phase E, Neuschnitt §2, Weiche N4 a). `prepare` (E5f) steht
+                    VOR `:sessionId` und darf nie als Review-ID gelesen werden. */}
+                <Route
+                  path="/w/:workspaceId/agents/:agentId/reviews/prepare"
+                  element={<ReviewPreparePage />}
+                />
+                <Route
+                  path="/w/:workspaceId/agents/:agentId/reviews/:sessionId"
+                  element={<ReviewDetailPage />}
+                />
                 <Route
                   path="/w/:workspaceId/system-prompts"
                   element={<SystemPromptsPage />}

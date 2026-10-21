@@ -1,0 +1,597 @@
+[
+  {
+    "id": "d7-h-zweck",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p02",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Turn a pattern of the learning loop (ADR-0053, 3.7) into a case and prepare open cases for the human. Patterns are a computed view: the server counts deterministically (threshold n = 3), the Builder does not reinterpret, it phrases. The Builder moderates, assigns, triages, creates test cases and drafts — it never decides and never closes cases. If a measure comes out of the cases, that runs through a feedback conversation (playbook “Moderate Feedback Conversation (Review)”).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-einstiege",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Entry points — the two copy blocks", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p04",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "The patterns page in the feedback hub (tab Patterns) hands out a copy block per pattern. It contains only IDs, never content. Two wordings trigger this playbook:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b05",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Learning-suggestion pattern: “Turn learning suggestion {id} from {agent} into a case with situation, behaviour and expectation.” — continue with path A.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b06",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Case pattern: “Summarise the open cases {ids} for {agent} and propose a change to {element}.” — continue with path B. “Open” here means every case not yet closed: open, triaged, in_progress and reopened (see B1).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b07",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Without a copy block (“prepare the open cases”, “assign the cases”, “show me the patterns”) — read patterns with list_patterns or continue with path C.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p08",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "{agent} is the agent's name. list_agents returns its UUID; if several agents share the name, ask, don't guess. list_patterns(agent_id) returns the current patterns with threshold, time window and evidence_ids (evidence); use them to cross-check the IDs of a copy block.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-grenzen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Role and boundaries — party, not judge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b10",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Allowed via MCP (case_triage): read patterns (list_patterns), read cases (list_cases, get_case), read learning suggestions verbatim (get_lesson, only kind=lesson), assign elements (assign_case_elements, including model_limit), set cases to triaged (triage_case), convert a learning suggestion into a case (convert_lesson_to_case, after approval), create test cases (create_test_case) and read them (list_test_cases), create drafts on elements (update_* creates a draft).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b11",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Never: set a case to addressed, dismissed or verified, delete a case, activate a version, reject a learning suggestion. Agent tokens cannot do this server-side (ADR-0053, 3.3, F-W7) — don't try. The server sets in_progress when a submitted record contains a measure for the case (switch W-E2 a); there is no separate call for it.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b12",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Human-only in the web UI: dismiss or delete a case, reject a learning suggestion, activate a version, rate a follow-up.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b13",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "No detours: no REST calls bypassing MCP, no raw data from other sources. If a tool is missing, say “the human does that in the web UI” and supply the text for it.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-datenschutz",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Data protection — don't carry case content forward", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p15",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Cases and learning suggestions can contain personal data (names, addresses, customer data, quotes from conversations). Therefore:", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b16",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Never copy case content verbatim into playbook, resource, persona or test case texts. Those carry the abstracted rule, not the individual case.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b17",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Phrase test case inputs synthetically: same situation, invented neutral data (e.g. “Customer A”, “Project X”).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b18",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Limit the case texts you phrase to the behavior. If the source contains personal data, replace it with roles (“the user”, “a customer”) and tell the human.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b19",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "In hand-offs and Kanban comments name only IDs and shortened, neutral summaries.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-a",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Path A — Learning-suggestion pattern: phrase the case and convert", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A1 — Read the learning suggestion", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p22",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_lesson(memory_id) returns the wording of the learning suggestion, even if it belongs to another agent of the workspace. The tool reads only entries with kind=lesson; anything else answers with memory_not_found. Check the status: only an open (pending) learning suggestion can be converted. Without the wording you phrase nothing — no case can be derived from the ID alone.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p23",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Optionally as context: list_cases(agent_id, status=[open, triaged, in_progress, reopened]) shows whether cases on the same topic already exist. If there is an open case with the same expectation, say so: then the learning suggestion is more likely evidence for that case than a new one.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A2 — Phrase situation, behavior, expected", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b25",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Situation (situation): when does it occur? Trigger and context, without personal data.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b26",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Behavior (behavior): what did the agent do? Observable, without judgement.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b27",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Expected (expected_behavior): what would have been right? Phrase it as a checkable rule — it later becomes the expectation of a test case.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b28",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Optionally impact (impact) and a proposal for the severity (low, medium, high), always marked as a proposal.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p29",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Phrase only what the wording supports. The counter says that something recurs, not why. Cause hypotheses belong, marked as such, in a separate line “Hypothesis” and not in the case text.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A3 — Convert after approval", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p31",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "First show the case text and get approval. Then convert_lesson_to_case(agent_id, memory_id, situation, behavior, expected_behavior, impact, severity, signal, source_ref). agent_id is the agent that owns the learning suggestion. The new case carries reporter_kind pattern and source_memory_id, the learning suggestion moves to converted, and the pattern disappears by itself.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p31b",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "A learning suggestion can be converted only once (memory_not_convertible). If this error comes back, check with list_cases whether the case already exists instead of creating a second one. If the human rejects the case, the learning suggestion stays pending; only the human can reject it in the memory.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A4 — report_case is not the path for learning suggestions", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p33",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "report_case creates a case with reporter_kind builder, without a link to the learning suggestion. The learning suggestion would stay pending and the pattern visible, and a second case for the same pattern looms. For learning-suggestion patterns therefore always use convert_lesson_to_case. Use report_case only for an own observation without a learning suggestion and only on explicit request.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-a5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "A5 — Create a test case", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p35",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Propose a test case for the new case: title, input (synthetic), expected behavior (= expected), check kind (human_rule, or must_contain / must_not_contain with check_pattern if the rule can be checked against a word) and the affected element (entity_type and entity_id, only together). After approval create_test_case(origin_case_id, agent_id, …). The test case is a prerequisite for every later measure (3.6).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-b",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Path B — Case pattern: summarize and propose a change", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p37",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "For case patterns you don't create a new case — not even a collective case. The cases already exist. Your contribution is the summary and a change proposal for the element.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B1 — Read the cases", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p39",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "“Open” in the copy block means not only status open but every case not yet closed: open, triaged, in_progress and reopened (ADR-0053, 3.7). A case pattern groups cases with the same element assignment — so these cases are assigned and usually already on triaged. Whoever reads only status=open misses exactly them.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p39b",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Therefore: list_cases(agent_id, status=[open, triaged, in_progress, reopened], format=full) in one call. If the response returns next_cursor, page on with cursor until all IDs from the copy block are found. If an ID is still missing afterwards, say so explicitly instead of skipping it. get_case(case_id) returns a case's assignments, accounts and history.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B2 — Read the element and test cases", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p41",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Read the element in its current state: fetch_playbook, fetch_resource, get_persona, get_system_prompt or get_agent (for tool_policy). In addition list_test_cases(agent_id, entity_type, entity_id) — which test cases exist already? — and get_feedback for element signals. Check whether is_managed is set.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B3 — Summarize", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p43",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "The common core of the cases in two to four sentences: situation, recurring behavior, shared expectation. Then the differences between the cases. No quotes with personal data, no reinterpretation of the count. If the expectations contradict each other, that is a finding for the human, not a decision for you.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B4 — Change proposal", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b45",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "The smallest change to the element, with location (section or block_id) and wording before/after.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b46",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Success criterion: how the follow-up shows that it works (e.g. the test case passes, no new cases on the element).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b47",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Counterposition: what speaks against the change, including the reach — how many agents use the element (find_usages).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b48",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "At least one alternative with a trade-off, e.g. playbook step versus resource paragraph, or model_limit instead of a change.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b49",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "A test case as in A5; if one is missing, create it after approval with create_test_case from one of the cases.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-b5",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "B5 — Continue in the feedback conversation", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p50",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "If the human wants the change, it becomes a measure: that runs through the playbook “Moderate Feedback Conversation (Review)” (record with submit_session_protocol, then draft and link_measure_draft). Only this way do the cases move to in_progress and the follow-up measures the effect. Writing a draft without a record is possible but loses the link to the cases — tell the human.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b52",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Managed element (is_managed): no write, but a repo hand-off plus submit_feedback on the element.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b53",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "tool_policy: update_agent takes effect immediately and is not versioned. Only with explicit approval of exactly this policy change, otherwise leave it as a proposal.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b54",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "model_limit: no change. That is a result, not an assignment.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-weg-c",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Path C — Prepare open cases for the human", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c1",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C1 — Read", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p57",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "list_cases(status=[open, reopened], format=full), restricted to one agent if needed (agent_id); page on with next_cursor. Here only open and reopened are meant on purpose: cases waiting for an assignment or a reassessment. Cases on triaged are already assigned; they belong to path B or into a feedback conversation. Note per case the situation, behavior, expected, severity and reporter.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c2",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C2 — Determine the element", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p59",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "get_agent shows persona, template and tool_policy of the affected agent; get_persona its playbooks; fetch_playbook or fetch_resource the passages that steer the behavior. get_case shows an account of the agent if it gave one. Assign to the element whose instruction carried the behavior or should have carried it. Targets: persona, playbook, resource, external_tool, system_prompt_template, memory (with entity_id) as well as tool_policy and model_limit (without entity_id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p60",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "model_limit if the instruction was clear and present and the model still does not follow it — “model limit, no change makes sense”. That is an assessment the human confirms.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c3",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C3 — Assign", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p62",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "First output the assignment proposals with reasoning as a list, then get approval (individually or as a batch), then assign_case_elements. Mind the replace semantics: the call replaces the entire previous assignment. Read the current state beforehand with get_case (elements) and always pass the complete target list. The call's response is the new assignment — proofread it.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-c4",
+    "type": "heading",
+    "props": {"level": 3},
+    "content": [{"type": "text", "text": "C4 — Classify (triaged)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p64",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "After the assignment and with approval triage_case(case_id, note). The tool sets only triaged, only from open or reopened and only with at least one assignment (otherwise case_transition_forbidden). The note is optional and describes the assignment, not a verdict. If you consider a case dismissable (duplicate, no misbehavior), write that as a recommendation with reasoning in the report — only the human can dismiss.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-vorlagen",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Output templates", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p66",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Path A — Case: agent {name} ({uuid}), learning suggestion {id}. Situation: … Behavior: … Expected: … Impact (optional): … Severity (proposal): … Test case proposal: title, input, expectation, check kind. Approval: convert yes/no, create test case yes/no. After writing: case ID, test case ID.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p67",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Path B — Summary: cases {ids} for {agent}, element {element}. Found: per ID with status (open/triaged/in_progress/reopened) or “missing”. Core: … Differences: … Change proposal: location, before, after. Success criterion: … Counterposition: … Alternative: … Test case: present (ID) or proposal. Next step: feedback conversation yes/no.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p68",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Path C — Triage preparation per case: case ID, short situation (neutral), proposed assignment, reasoning in one sentence, recommendation (classify / model limit / check dismissal). Then: approval for assignments and classification (triage_case).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-werkzeuge",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Tools", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p70",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Read: list_patterns, list_cases (status as a list, cursor/next_cursor), get_case, get_lesson, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_test_cases, get_feedback, find_usages. Write (after approval): assign_case_elements, triage_case, convert_lesson_to_case, create_test_case, report_case (own observation only, on request), update_* and transition_* up to review, submit_feedback, record_usage. All case tools except report_case require case_triage.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p71",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Human-only in the web UI: dismiss or delete a case, reject a learning suggestion, activate a version, rate a follow-up. Measure, record and draft link: playbook “Moderate Feedback Conversation (Review)”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-anti",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Anti-patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b73",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Creating a new collective case from a case pattern.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b74",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Using report_case instead of convert_lesson_to_case for learning-suggestion patterns — that leaves the learning suggestion pending and the pattern standing.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b75",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Copying case content verbatim into test cases or playbooks.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b76",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Interpreting the count (“because the model can't do X”) without the wording supporting it.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b77",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Calling assign_case_elements without approval, without a prior get_case or with only the delta.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b78",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Setting a status the Builder is not entitled to, or trying to, or working around tool gaps via REST.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b79",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Reading only status=open for a case pattern and reporting assigned (triaged, in_progress) cases as “missing”.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-b80",
+    "type": "bulletListItem",
+    "props": {},
+    "content": [{"type": "text", "text": "Calling convert_lesson_to_case or triage_case without approval.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-h-notes",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p80",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Basis: ADR-0053 sections 3.3 (case, status, permissions), 3.6 (measure, test case mandatory), 3.7 (patterns, reporter_kind pattern), 3.8 (case_triage), 6.5 to 6.7 (MCP tools); phase E tools per W-E1 b and PM-2/PM-4; delta spec phase D, S5 (copy blocks). Conventions for triggers, managed boundaries and the status workflow are in the resource Agent-Building Conventions.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p81",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Follow-through: report the playbooks and resources used with record_usage; if something on this playbook looks outdated, submit_feedback with signal outdated.", "styles": {}}],
+    "children": []
+  }
+]

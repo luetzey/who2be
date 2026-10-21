@@ -43,7 +43,7 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Ein Template-Body ist ein stringifiziertes BlockNote-Dokument (JSON-Array von Blocks). Placeholder sind Inline-Elemente im content-Array eines Blocks und werden beim Agent-Rendern serverseitig expandiert. ", "styles": {}},
+      {"type": "text", "text": "Ein Template-Body ist Markdown. Placeholder stehen darin als Token {{kind:target_id}} (bei einem Resource-Abschnitt {{resource:<uuid>#<block_id>}}); der Server macht daraus beim Speichern Pills und expandiert sie beim Agent-Rendern. ", "styles": {}},
       {"type": "text", "text": "Rufe zuerst list_placeholders auf", "styles": {"bold": true}},
       {"type": "text", "text": " — es liefert alle gueltigen kinds, ihre target_id-Vertraege und je ein Beispiel. Unbekannte kinds oder falsche target_id-Werte rendern spaeter als ungeloeste Platzhalter.", "styles": {}}
     ],
@@ -102,8 +102,8 @@
   {
     "id": "pb-agent-code-placeholder",
     "type": "codeBlock",
-    "props": {"language": "json"},
-    "content": [{"type": "text", "text": "[{\"id\": \"b1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n  {\"type\": \"text\", \"text\": \"Du bist \", \"styles\": {}},\n  {\"type\": \"placeholder\", \"props\": {\"kind\": \"persona-field\", \"target_id\": \"name\", \"label\": \"Persona: Name\"}}\n], \"children\": []}]", "styles": {}}],
+    "props": {"language": "markdown"},
+    "content": [{"type": "text", "text": "## Identitaet\n\nDu bist {{persona-field:name}}.\n\n{{tools-overview:}}\n\n{{memory:}}", "styles": {}}],
     "children": []
   },
   {
@@ -112,7 +112,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Workflow: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_placeholders lesen, Body als String verfassen, create_system_prompt (Draft), transition_system_prompt(to='review') zur Freigabe — das Aktivieren uebernimmt ein Mensch in der Web-UI.", "styles": {}}
+      {"type": "text", "text": "list_placeholders lesen, Body als Markdown verfassen, create_system_prompt (Draft), transition_system_prompt(to='review') zur Freigabe — das Aktivieren uebernimmt ein Mensch in der Web-UI. Spaetere Aenderungen: Vorlage mit get_system_prompt(format=\"source\") lesen und per edit_content (Abschnitt per Anker oder field='body') oder update_system_prompt (Vollstand) schreiben.", "styles": {}}
     ],
     "children": []
   },

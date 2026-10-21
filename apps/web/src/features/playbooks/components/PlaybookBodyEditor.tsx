@@ -16,6 +16,9 @@ import { BlockNoteView } from '@blocknote/mantine'
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 
 import { useTheme } from '@/app/theme-context'
+import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EditorFooter } from '@/components/editor/EditorFooter'
+import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
   type PlaceholderClickDetail,
@@ -25,7 +28,10 @@ import {
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
 import { PlaceholderPreviewPopover } from '@/components/editor/system-prompt/PlaceholderPreviewPopover'
 import { caretMeasurable } from '@/components/editor/system-prompt/caretAnchor'
-import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
+import {
+  buildEditorDictionary,
+  buildSlashMenuItems,
+} from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
 import { ToolPicker } from '@/components/editor/system-prompt/pickers/ToolPicker'
@@ -36,11 +42,13 @@ import { type Measurable } from '@/components/ui/popover'
 // bleiben gueltig; nur das Slash-Menue ist reduziert.
 const playbookBodySchema = buildSystemPromptSchema()
 
-// Nur diese Kinds sind im Playbook-Body erlaubt. `tool-ref` (WP-5) erzeugt
-// beim Speichern KEINEN Composition-/Link-Sync — die bestehende Pill-
-// Extraktion (`playbook_body_pills.py`) filtert nach `kind` und ignoriert
+// Einsatzort (editorProfiles.ts): Basis ohne Tabelle; nur Playbook-, Resource-
+// und Tool-Ref-Pills. `tool-ref` (WP-5) erzeugt beim Speichern KEINEN
+// Composition-/Link-Sync — die bestehende Pill-Extraktion
+// (`playbook_body_pills.py`) filtert nach `kind` und ignoriert
 // unbekannte/nicht-Sync-relevante Kinds bereits defensiv.
-const ALLOWED_KINDS: Set<PlaceholderKind> = new Set(['playbook', 'resource', 'tool-ref'])
+const PROFILE = EDITOR_PROFILES.playbook
+const ALLOWED_KINDS = PROFILE.pillKinds
 
 export type PlaybookBodyBlock = SystemPromptBlock
 
@@ -59,6 +67,8 @@ export function PlaybookBodyEditor({
 }: PlaybookBodyEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
   // Gemeinsamer Anker fuer die schwebenden Panels (Pill bzw. Caret).
@@ -73,6 +83,10 @@ export function PlaybookBodyEditor({
       schema: playbookBodySchema,
       initialContent:
         initialBlocks !== undefined && initialBlocks.length > 0 ? initialBlocks : undefined,
+      // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+      dictionary: buildEditorDictionary({ withReferences: true }),
+      // Eingefuegte Tabellen/Medien werden zu Text (Editor-Paket P2).
+      pasteHandler: profilePasteHandler(PROFILE),
     },
     [],
   )
@@ -133,18 +147,25 @@ export function PlaybookBodyEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(editor.document as unknown as PlaybookBodyBlock[])
           }}
+          // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
           slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(editor, handleOpenPicker, query, ALLOWED_KINDS)
+              buildSlashMenuItems(editor, handleOpenPicker, query, PROFILE)
             }
           />
+          <ProfileFormattingToolbar profile={PROFILE} />
+          <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

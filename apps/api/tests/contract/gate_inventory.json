@@ -111,6 +111,13 @@
       "gates": [
         "enforce_storage_quota"
       ]
+    },
+    {
+      "path": "/{entity_type}/markdown",
+      "name": "create_markdown",
+      "gates": [
+        "enforce_entity_quota"
+      ]
     }
   ],
   "service_gated": [
@@ -194,6 +201,11 @@
       "reason": "Qualitatives Feedback zu einem Element; zaehlt in keinem Kontingent, und ein Deckel darauf wuerde den Rueckmeldeweg verschliessen."
     },
     {
+      "path": "/feedback-sessions",
+      "name": "submit_session_protocol",
+      "reason": "Gespraechsprotokolle zaehlen in keinem Plan-Kontingent (wie die Faelle, ueber die sie sprechen); nur Mensch ab editor oder Agent mit case_triage, Agenten laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
       "path": "/feedback/{feedback_id}/promote",
       "name": "promote_feedback_to_case",
       "reason": "Uebernimmt ein bestehendes Alt-Feedback in einen Fall (je Feedback hoechstens einmal, sonst 409); Faelle zaehlen in keinem Plan-Kontingent, nur Menschen ab editor, gebremst durch write_limit."
@@ -237,6 +249,21 @@
       "path": "/me/memories/{memory_id}/triage",
       "name": "triage_my_memory",
       "reason": "Statuswechsel (approve/reject) an einem bestehenden Eintrag des eigenen Nutzergedaechtnisses, legt nichts Neues an."
+    },
+    {
+      "path": "/measures/{measure_id}/link-draft",
+      "name": "link_measure_draft",
+      "reason": "Haengt ein Event an eine bestehende Massnahme, legt kein neues Objekt an; Agenten laufen durch das Agent-Schreiblimit, alle durch write_limit."
+    },
+    {
+      "path": "/measures/{measure_id}/review",
+      "name": "review_measure",
+      "reason": "Einstufung einer bestehenden Massnahme (genau ein Event), nur Mensch ab editor, legt kein neues Objekt an."
+    },
+    {
+      "path": "/measures/{measure_id}/withdraw",
+      "name": "withdraw_measure",
+      "reason": "Statuswechsel einer bestehenden Massnahme (ein Event), nur Mensch ab editor, legt kein neues Objekt an."
     },
     {
       "path": "/memories/batch",
@@ -314,6 +341,11 @@
       "reason": "system_prompt_template steht nicht in entity_quota_service._COUNT_QUERY — die Entity-Grenze kennt diesen Typ nicht, ein Gate waere heute wirkungslos. Ob er mitzaehlen soll, ist eine Produktfrage (plans.md fuehrt ihn in keiner Spalte)."
     },
     {
+      "path": "/system-prompts/markdown",
+      "name": "create_system_prompt_markdown",
+      "reason": "Markdown-Anlegen des System-Prompts (ADR-0058 P2); gleiche Lage wie create_template: system_prompt_template steht nicht in entity_quota_service._COUNT_QUERY, ein Gate waere wirkungslos."
+    },
+    {
       "path": "/system-prompts/{template_id}/duplicate",
       "name": "duplicate_template",
       "reason": "Wie POST /system-prompts: system_prompt_template zaehlt in keinem Kontingent."
@@ -367,6 +399,11 @@
       "path": "/v1/invitations/{token}/accept",
       "name": "accept_invitation",
       "reason": "Beitritt zu einer bestehenden Einladung. Der Deckel gehoert, wenn ueberhaupt, an das Ausstellen — nicht an das Annehmen, wo er einen eingeladenen Nutzer aussperren wuerde."
+    },
+    {
+      "path": "/v1/me/tutorials/{tutorial_id}/restart",
+      "name": "restart_tutorial",
+      "reason": "Setzt den eigenen Tutorial-Fortschritt zurueck (ADR-0060), legt keine Inhalts-Entity an: die Zeilen in tutorial_state/tutorial_progress sind je Konto durch den Katalog begrenzt. Gebremst durch write_limit."
     },
     {
       "path": "/v1/organizations",

@@ -283,6 +283,20 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "submit_case_statement": _CASE_STATEMENT,
     "list_cases": _CASE_TRIAGE,
     "assign_case_elements": _CASE_TRIAGE,
+    # Feedback-Gespraech (ADR-0053 6.6/6.7, E-MCP-1): Dossier, Protokoll,
+    # Entwurf verknuepfen, Nachschau — nur mit `case_triage`. Einstufen und
+    # Zurueckziehen haben kein Werkzeug (Entscheidung eines Menschen).
+    "get_dossier": _CASE_TRIAGE,
+    "submit_session_protocol": _CASE_TRIAGE,
+    "link_measure_draft": _CASE_TRIAGE,
+    "get_follow_up": _CASE_TRIAGE,
+    # Werkzeugluecken D7 (Phase E, E-MCP-2, PM-2/PM-4): nur mit `case_triage`.
+    "get_case": _CASE_TRIAGE,
+    "triage_case": _CASE_TRIAGE,
+    "list_patterns": _CASE_TRIAGE,
+    "create_test_case": _CASE_TRIAGE,
+    "get_lesson": _CASE_TRIAGE,
+    "convert_lesson_to_case": _CASE_TRIAGE,
 }
 
 

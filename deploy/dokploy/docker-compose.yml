@@ -22,10 +22,36 @@
 # Persistente Nutzdaten liegen in DREI Volumes: db-data (Postgres),
 # seaweedfs-data (Blobs, ADR-0048) und tablestore-data (SQLite je WorkArea,
 # ADR-0049). Alle drei muessen ein Redeploy ueberleben.
+#
+# --- Container-Haertung (wie W8/S1-S3 im Hetzner-Stack) ----------------------
+# Dieser Stack ist PROD (Auto-Deploy auf main). Dieselben drei Bloecke wie in
+# deploy/hetzner/who2be/docker-compose.yml an JEDEM Dienst, auch an den
+# One-Shots; `apps/api/tests/test_compose_hardening.py` zaehlt das ab.
+# 1. `logging:` — Docker rotiert das Container-Log nur, wenn es gesagt
+#    bekommt; ohne Deckel waechst die json-Datei je Container unbegrenzt.
+# 2. `no-new-privileges` — kein Rechtezuwachs ueber setuid-Binaries im
+#    Container (Beitrag zu BSI SYS.1.6.A17). Entrypoints, die als root
+#    starten und Rechte ABGEBEN (gosu/su-exec in postgres, valkey), sind
+#    davon nicht betroffen.
+# 3. `mem_limit` — Obergrenze, keine Reservierung (BSI SYS.1.6.A15): ein
+#    Ausreisser trifft den OOM-Killer in SEINEM Container, nicht Postgres.
+#    Werte wie im Hetzner-Stack (Herleitung dort und in
+#    `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`), geeicht auf
+#    8 GB. Auf demselben Host laufen zusaetzlich Dokploy selbst und Traefik —
+#    Verhalten bei Ueberschreitung und Messung: RUNBOOK §Dokploy-Stack.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
 
 services:
   db:
-    image: supabase/postgres:15.14.1.176
+    image: supabase/postgres:15.19.0.004
     environment:
       POSTGRES_HOST: /var/run/postgresql
       POSTGRES_DB: postgres
@@ -53,6 +79,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    <<: *hardening
+    # Groesster legitimer Verbraucher (shared_buffers, work_mem je Verbindung,
+    # Autovacuum) und deshalb der hoechste Deckel — wie im Hetzner-Stack.
+    mem_limit: 3g
 
   # Einmal-Service: setzt das Passwort von supabase_auth_admin auf
   # POSTGRES_PASSWORD. Das supabase/postgres-Image LEGT diese GoTrue-Rolle an,
@@ -77,6 +107,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot: ein `psql -c "ALTER ROLE …"` in einer Warteschleife.
+    mem_limit: 128m
 
   auth:
     image: supabase/gotrue:v2.197.0
@@ -176,9 +209,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # GoTrue (Go-Binary), im Leerlauf zweistellige MB; 512m wie Hetzner.
+    mem_limit: 512m
 
   auth-gateway:
-    image: nginx:1.29-alpine
+    image: nginx:1.31-alpine
     volumes:
       - ../hetzner/supabase/auth-gateway.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -199,6 +235,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # nginx-Gateway ohne Body-Puffer-Last; einstellige MB.
+    mem_limit: 128m
 
   migrate:
     build:
@@ -212,6 +251,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot im API-Image, nur beim Deploy.
+    mem_limit: 512m
 
   # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
   # SeaweedFS (Apache-2.0) statt MinIO (#525/#529, WP1/WP2) — Begruendung siehe
@@ -223,7 +265,7 @@ services:
   seaweedfs:
     # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
     # impliziten Image-Sprung haengen (identisch zum lokalen Stack, WP1).
-    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     # Credential-Datei s3.json: SeaweedFS erlaubt OHNE `-s3.config` anonymen
     # Zugriff auf alle S3-Operationen (Doku woertlich) — die Datei ist ein
     # Sicherheits-Gate, keine Kuer. Der lokale Stack mountet dafuer eine
@@ -264,12 +306,21 @@ services:
     networks: [who2be]
     restart: unless-stopped
     healthcheck:
-      # NICHT `8333/healthz` (seaweedfs#8243, s. lokaler Stack) — Master-Port
-      # hat den echten Status-Endpunkt.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
+      # Master-Status UND „S3 auf 8333 antwortet" (jede HTTP-Antwort, auch
+      # 403) — Begruendung und seaweedfs#8243 s. lokaler Stack. Nur der
+      # Master-Port liess blobstore-bootstrap nach 4.48 ins Leere laufen.
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO /dev/null http://127.0.0.1:9333/cluster/status
+          && wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 60s
+    <<: *hardening
+    # Volume-Index + S3-Gateway in einem Prozess (`weed server`); wie Hetzner.
+    mem_limit: 1g
 
   # Einmal-Service: legt den Bucket an (idempotent). Faehrt das API-Image statt
   # eines eigenen CLI-Images (das S3-SDK aus dem API-Code, Apache-2.0, ist dort
@@ -293,6 +344,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot im API-Image: ein Bucket-Anlegen per S3-SDK.
+    mem_limit: 512m
 
   api:
     build:
@@ -305,6 +359,32 @@ services:
       CORS_ORIGINS: https://app.${DOMAIN}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       WHO2BE_EDITION: onprem
+      # Spiegel der Signup-Schalter des auth-Dienstes, gleiche Variablen und
+      # Defaults wie dort: die Uebernahme der Bootstrap-Org beim ersten Login
+      # (WHO2BE_BOOTSTRAP_ADMIN_EMAIL) setzt GOTRUE_MAILER_AUTOCONFIRM=false oder
+      # GOTRUE_DISABLE_SIGNUP=true voraus.
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      # Betreiber-Allowlist (ADR-0057 §7, Nachtrag 2026-10-10): kommaseparierte
+      # User-UUIDs, die Betriebsdaten der Instanz sehen. Gilt in beiden
+      # Editionen, deshalb im Basis-Stack; leer ⇒ niemand (fail-closed).
+      WHO2BE_OPERATORS: ${WHO2BE_OPERATORS:-}
+      # Dieselben Zeitplan-Overrides wie am `worker` (ADR-0057 §4, §7): die
+      # Betreiber-Route GET /v1/system/routines bildet die wirksame Tabelle aus
+      # der Umgebung DIESES Prozesses. Fehlt hier ein Paar, zeigt sie den
+      # Code-Zeitplan, waehrend der Worker nach dem Override laeuft
+      # (Drift-Test: apps/api/tests/test_single_writer_guard.py).
+      WHO2BE_WORKER_ENABLED: ${WHO2BE_WORKER_ENABLED:-true}
+      WHO2BE_ROUTINE_PURGE_SCHEDULE: ${WHO2BE_ROUTINE_PURGE_SCHEDULE:-}
+      WHO2BE_ROUTINE_PURGE_ENABLED: ${WHO2BE_ROUTINE_PURGE_ENABLED:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED: ${WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED:-}
+      WHO2BE_ROUTINE_USAGE_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_USAGE_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_USAGE_RETENTION_ENABLED: ${WHO2BE_ROUTINE_USAGE_RETENTION_ENABLED:-}
       # OAuth-Remote-MCP-Connector (ADR-0036) — aus DOMAIN abgeleitet.
       OAUTH_ISSUER_URL: https://api.${DOMAIN}
       OAUTH_CONSENT_URL: https://app.${DOMAIN}/oauth/consent
@@ -356,6 +436,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    <<: *hardening
+    # Ein uvicorn-Prozess (kein `--workers`, s. o.). Groesste legitime Spitze
+    # ist der Ingest (20 MiB Nutzdaten + Base64/JSON); 1g wie Hetzner.
+    mem_limit: 1g
 
   # Hintergrund-Routinen (ADR-0057 §3): Purge, Gedaechtnis-Verfall,
   # Protokoll-Aufbewahrung. Derselbe Build wie `api`, nur ein anderer Befehl;
@@ -383,6 +467,20 @@ services:
       WHO2BE_BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
       WHO2BE_BLOBSTORE_SECURE: "false"
       WHO2BE_TABLESTORE_DIR: /data/tablestore
+      # Env-Override der Zeitplaene (ADR-0057 §4). Leer = Code-Zeitplan; ohne
+      # diese Zeilen erreicht eine Dokploy-Variable den Container nicht. Je
+      # Routine der Registry ein Paar (Drift-Test: test_single_writer_guard.py).
+      WHO2BE_WORKER_ENABLED: ${WHO2BE_WORKER_ENABLED:-true}
+      WHO2BE_ROUTINE_PURGE_SCHEDULE: ${WHO2BE_ROUTINE_PURGE_SCHEDULE:-}
+      WHO2BE_ROUTINE_PURGE_ENABLED: ${WHO2BE_ROUTINE_PURGE_ENABLED:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_SCHEDULE:-}
+      WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED: ${WHO2BE_ROUTINE_MEMORY_EXPIRE_ENABLED:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_AUDIT_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED: ${WHO2BE_ROUTINE_AUDIT_RETENTION_ENABLED:-}
+      WHO2BE_ROUTINE_USAGE_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_USAGE_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_USAGE_RETENTION_ENABLED: ${WHO2BE_ROUTINE_USAGE_RETENTION_ENABLED:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_SCHEDULE:-}
+      WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED: ${WHO2BE_ROUTINE_ROUTINE_RUN_RETENTION_ENABLED:-}
     volumes:
       - tablestore-data:/data/tablestore
     depends_on:
@@ -402,6 +500,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    <<: *hardening
+    # Routinen laufen nacheinander, Purge streamt; 512m wie Hetzner.
+    mem_limit: 512m
 
   web:
     build:
@@ -431,6 +532,14 @@ services:
       # GOTRUE_DISABLE_SIGNUP bleibt separat und wird gemeinsam gesetzt.
       WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
       WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
+      # Freitext pro Sprache (Karte t_27d7c6ad): Hinweisseite im Launch-Modus
+      # und Banner auf Login + App (Wartung, Neustart). Leer = fester Text bzw.
+      # kein Banner. Level: info|warning.
+      WHO2BE_LAUNCH_MESSAGE_DE: ${WHO2BE_LAUNCH_MESSAGE_DE:-}
+      WHO2BE_LAUNCH_MESSAGE_EN: ${WHO2BE_LAUNCH_MESSAGE_EN:-}
+      WHO2BE_NOTICE_DE: ${WHO2BE_NOTICE_DE:-}
+      WHO2BE_NOTICE_EN: ${WHO2BE_NOTICE_EN:-}
+      WHO2BE_NOTICE_LEVEL: ${WHO2BE_NOTICE_LEVEL:-info}
       # Absolute Obergrenze der "Angemeldet bleiben"-Sitzung in Stunden
       # (#430/#470, ADR-0052). Gueltig ist 1-24; die Web-App faellt bei
       # fehlendem/ungueltigem Wert fail-closed auf 12 zurueck. Muss wie
@@ -456,6 +565,10 @@ services:
       - "traefik.http.routers.who2be-web.entrypoints=websecure"
       - "traefik.http.routers.who2be-web.tls.certResolver=letsencrypt"
       - "traefik.http.services.who2be-web.loadbalancer.server.port=80"
+    <<: *hardening
+    # nginx: statisches Bundle + Proxy auf /v1/, /auth/v1/; einstellige MB,
+    # 256m faengt Proxy-Puffer paralleler Uploads ab.
+    mem_limit: 256m
 
   mcp-http:
     build:
@@ -485,6 +598,10 @@ services:
       - "traefik.http.routers.who2be-mcp.entrypoints=websecure"
       - "traefik.http.routers.who2be-mcp.tls.certResolver=letsencrypt"
       - "traefik.http.services.who2be-mcp.loadbalancer.server.port=8765"
+    <<: *hardening
+    # Python-Dienst ohne Ingest-Pfad, dazu offene SSE-Sessions (wenige KB je
+    # Session); 512m wie Hetzner.
+    mem_limit: 512m
 
 networks:
   who2be:

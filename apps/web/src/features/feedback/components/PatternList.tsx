@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { copyToClipboard } from '@/lib/clipboard'
+import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
@@ -71,7 +72,7 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
 }
 
-const dateOf = (iso: string) => new Date(iso).toLocaleDateString()
+const dateOf = (iso: string) => formatDate(iso)
 
 interface PatternData {
   data: PatternListRead | null

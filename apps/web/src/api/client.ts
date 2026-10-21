@@ -11,6 +11,8 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  AgentUsageStats,
+  AgentWorkArea,
   ArtifactExportFormat,
   ArtifactMarkdown,
   CaseCounts,
@@ -25,6 +27,7 @@ import type {
   CheckoutInput,
   CheckoutResult,
   DashboardData,
+  Dossier,
   EntitlementInfo,
   EdgeType,
   EntityExport,
@@ -37,11 +40,14 @@ import type {
   FeedbackInput,
   FeedbackItems,
   FeedbackOverview,
+  FeedbackOverviewFilter,
   FeedbackResolutionInput,
   FeedbackSummary,
   FeedbackTarget,
   FeedbackUnused,
+  FollowUpReport,
   GdprExport,
+  InboxCounts,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
@@ -49,6 +55,8 @@ import type {
   KbNode,
   KbSearchHit,
   Me,
+  MeasureEvent,
+  MeasureVerdict,
   Member,
   MemberUpdateInput,
   MemoryAutoPolicy,
@@ -96,6 +104,11 @@ import type {
   ResourceRef,
   ResourceUsage,
   ResourceVersion,
+  RoutinesOverview,
+  SessionDetail,
+  SessionFilters,
+  SessionListItem,
+  SessionPage,
   SubResource,
   SubResourceLinkInput,
   SystemFeedbackInput,
@@ -116,6 +129,8 @@ import type {
   TokenCreated,
   TokenInput,
   TokenRenameInput,
+  UsageEntityType,
+  UsageStats,
   VersionDiff,
   VersionedEntityType,
   VersionStatus,
@@ -164,6 +179,28 @@ function urlFor(path: ApiPath): string {
   return `${config.apiBaseUrl}${resolved}`
 }
 
+/**
+ * Meldung „eine eigene Schreibanfrage ist durch“ (Navigation W1, Spec §2.3/N5 a):
+ * Zaehler wie die Glocke laden danach neu, ohne dass jede Fachseite ihre
+ * Aktionen einzeln melden muss. Gemeldet wird nur nach Erfolg und nur fuer
+ * schreibende Methoden; der Hörer bekommt keine Daten, nur das Signal.
+ */
+const mutationListeners = new Set<() => void>()
+
+export function subscribeApiMutations(listener: () => void): () => void {
+  mutationListeners.add(listener)
+  return () => {
+    mutationListeners.delete(listener)
+  }
+}
+
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function notifyMutation(method: string | undefined): void {
+  if (READ_METHODS.has((method ?? 'GET').toUpperCase())) return
+  for (const listener of mutationListeners) listener()
+}
+
 async function request<T>(token: string, path: ApiPath, init?: RequestInit): Promise<T> {
   const url = urlFor(path)
   const headers: Record<string, string> = {
@@ -195,6 +232,7 @@ async function request<T>(token: string, path: ApiPath, init?: RequestInit): Pro
     const { message, body } = await readErrorBody(response)
     throw new ApiError(response.status, message, body)
   }
+  notifyMutation(init?.method)
   if (response.status === 204) {
     return undefined as T
   }
@@ -546,7 +584,8 @@ export interface Api {
   getDashboard: (page?: number) => Promise<DashboardData>
   getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
-  getFeedbackOverview: () => Promise<FeedbackOverview>
+  // Navigation A6: optional je Agent und Zeitraum (`days` 1..365).
+  getFeedbackOverview: (filter?: FeedbackOverviewFilter) => Promise<FeedbackOverview>
   getFeedbackItems: () => Promise<FeedbackItems>
   // Detailsicht auf ein einzelnes Feedback (Absender + Triage-Historie).
   getFeedbackDetail: (feedbackId: string) => Promise<FeedbackDetail>
@@ -658,6 +697,9 @@ export interface Api {
   deleteAccount: () => Promise<AccountDeletion>
   deleteOrganization: (orgId: string) => Promise<OrganizationDeletion>
   exportMyData: () => Promise<GdprExport>
+  // ADR-0057 §7 — Hintergrund-Routinen, nur Betreiber (alle anderen 403).
+  // Nicht workspace-scoped: die Routinen gelten fuer die ganze Instanz.
+  getSystemRoutines: () => Promise<RoutinesOverview>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: (filters?: { locale?: string }) => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -733,6 +775,9 @@ export interface Api {
     options?: { cursor?: string; limit?: number },
   ) => Promise<CasePage>
   countCases: (agentId?: string) => Promise<CaseCounts>
+  // Navigation & Transparenz W1 — Aufgaben-Zaehler fuer Glocke, Dashboard-
+  // Zeile und Agent-Ueberblick (ein Request, rollengerecht).
+  getInboxCounts: (agentId?: string) => Promise<InboxCounts>
   getCase: (caseId: string) => Promise<CaseDetail>
   deleteCase: (caseId: string) => Promise<void>
   transitionCase: (caseId: string, input: CaseTransitionInput) => Promise<CaseRead>
@@ -748,6 +793,35 @@ export interface Api {
   promoteFeedback: (feedbackId: string, input: CaseCreate) => Promise<CaseRead>
   // ADR-0053 3.7/6.5 (D5b) — berechnete Muster, ab editor bzw. `case_triage`.
   listPatterns: (agentId?: string) => Promise<PatternListRead>
+  // ADR-0053 6.6 (E2b-3/E2b-4) — Reviews (Protokolle) und Aenderungen, ab
+  // editor. Die Liste ist eine Keyset-Seite (`next_cursor` aus
+  // `X-Next-Cursor`), neueste zuerst; `due` filtert serverseitig auf
+  // Protokolle mit faelliger Nachkontrolle. Aenderungen kommen eingebettet
+  // mit `getSession` (QE1 a), eine eigene Route `GET /measures/{id}` gibt es nicht.
+  listSessions: (
+    filters?: SessionFilters,
+    options?: { cursor?: string; limit?: number },
+  ) => Promise<SessionPage>
+  getSession: (sessionId: string) => Promise<SessionDetail>
+  // Kennzahlen der Nachkontrolle als Rohzahlen (QE8 a).
+  getFollowUp: (measureId: string) => Promise<FollowUpReport>
+  // Lage des Agenten zur Vorbereitung eines Reviews (6.6, E1), ab editor.
+  // Ein Request; `cursor` blaettert nur die Generationen.
+  getDossier: (agentId: string, options?: { cursor?: string }) => Promise<Dossier>
+  // Aktionen an einer Aenderung (6.6, E5e), ab editor. `review` und
+  // `withdraw` nur als Mensch — die Web-UI laeuft immer als Mensch.
+  linkMeasureDraft: (
+    measureId: string,
+    input: { version_entity_type: VersionedEntityType; version_id: string },
+  ) => Promise<MeasureEvent>
+  reviewMeasure: (
+    measureId: string,
+    input: { verdict: MeasureVerdict; note?: string },
+  ) => Promise<MeasureEvent>
+  withdrawMeasure: (
+    measureId: string,
+    input: { note: string },
+  ) => Promise<{ event: MeasureEvent; cases_reset: string[] }>
   // ADR-0053 6.2 — Pruefbericht einer Elementversion (editor+) und Meldung
   // von Ergebnissen. Aus der Web-Session setzt der Server `human_rating`.
   getTestReport: (entityType: VersionedEntityType, versionId: string) => Promise<TestReport>
@@ -842,6 +916,12 @@ export interface Api {
   // greift nur bei `w2b_`-Tokens. Sichtbarkeit serverseitig: editor+ sehen
   // auch fremde private Areas, viewer nur `scope='shared'`.
   listWorkAreas: () => Promise<WorkArea[]>
+  // Navigation A4: Arbeitsbereiche eines Agenten (nur Menschen, ab viewer;
+  // viewer sieht nur geteilte Bereiche).
+  listAgentWorkAreas: (agentId: string) => Promise<AgentWorkArea[]>
+  // Nutzung U1/U2 — Zaehler je Element bzw. Agent (ab viewer, nur Menschen).
+  getUsage: (entityType: UsageEntityType, entityId: string) => Promise<UsageStats>
+  getAgentUsage: (agentId: string) => Promise<AgentUsageStats>
   createWorkArea: (input: WorkAreaCreateInput) => Promise<WorkArea>
   // Grants gibt es nur auf SHARED Areas (private Area => 403 `area_forbidden`);
   // die Vergabe ist Menschen vorbehalten.
@@ -992,8 +1072,12 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackSummary>(token, apiPath`${ws}/feedback/${type}/${id}`),
     getFeedbackEvents: (type, id) =>
       request<FeedbackEvents>(token, apiPath`${ws}/feedback/${type}/${id}/events`),
-    getFeedbackOverview: () =>
-      request<FeedbackOverview>(token, apiPath`${ws}/feedback-overview`),
+    getFeedbackOverview: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.agent_id) params.set('agent_id', filter.agent_id)
+      if (filter?.days !== undefined) params.set('days', String(filter.days))
+      return request<FeedbackOverview>(token, withQuery(apiPath`${ws}/feedback-overview`, params))
+    },
     getFeedbackItems: () =>
       request<FeedbackItems>(token, apiPath`${ws}/feedback-items`),
     getFeedbackDetail: (feedbackId) =>
@@ -1177,6 +1261,7 @@ export function createApi(token: string, workspaceId: string): Api {
     deleteOrganization: (orgId) =>
       request<OrganizationDeletion>(token, apiPath`/v1/organizations/${orgId}`, { method: 'DELETE' }),
     exportMyData: () => request<GdprExport>(token, apiPath`/v1/gdpr/export`),
+    getSystemRoutines: () => request<RoutinesOverview>(token, apiPath`/v1/system/routines`),
     listSystemPromptTemplates: (filters) => {
       const params = new URLSearchParams()
       if (filters?.locale) params.set('locale', filters.locale)
@@ -1334,6 +1419,11 @@ export function createApi(token: string, workspaceId: string): Api {
       if (agentId) params.set('agent_id', agentId)
       return request<CaseCounts>(token, withQuery(apiPath`${ws}/cases/counts`, params))
     },
+    getInboxCounts: (agentId) => {
+      const params = new URLSearchParams()
+      if (agentId) params.set('agent_id', agentId)
+      return request<InboxCounts>(token, withQuery(apiPath`${ws}/inbox/counts`, params))
+    },
     getCase: (caseId) => request<CaseDetail>(token, apiPath`${ws}/cases/${caseId}`),
     deleteCase: (caseId) =>
       request<void>(token, apiPath`${ws}/cases/${caseId}`, { method: 'DELETE' }),
@@ -1362,6 +1452,40 @@ export function createApi(token: string, workspaceId: string): Api {
       if (agentId) params.set('agent_id', agentId)
       return request<PatternListRead>(token, withQuery(apiPath`${ws}/patterns`, params))
     },
+    listSessions: (filters, options) => {
+      const params = new URLSearchParams()
+      if (filters?.agent_id) params.set('agent_id', filters.agent_id)
+      if (filters?.case_id) params.set('case_id', filters.case_id)
+      if (filters?.due) params.set('due', 'true')
+      if (options?.cursor) params.set('cursor', options.cursor)
+      if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      return requestPage<SessionListItem>(token, withQuery(apiPath`${ws}/feedback-sessions`, params))
+    },
+    getSession: (sessionId) =>
+      request<SessionDetail>(token, apiPath`${ws}/feedback-sessions/${sessionId}`),
+    getFollowUp: (measureId) =>
+      request<FollowUpReport>(token, apiPath`${ws}/measures/${measureId}/follow-up`),
+    getDossier: (agentId, options) => {
+      const params = new URLSearchParams()
+      if (options?.cursor) params.set('cursor', options.cursor)
+      return request<Dossier>(token, withQuery(apiPath`${ws}/agents/${agentId}/dossier`, params))
+    },
+    linkMeasureDraft: (measureId, input) =>
+      request<MeasureEvent>(token, apiPath`${ws}/measures/${measureId}/link-draft`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    reviewMeasure: (measureId, input) =>
+      request<MeasureEvent>(token, apiPath`${ws}/measures/${measureId}/review`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    withdrawMeasure: (measureId, input) =>
+      request<{ event: MeasureEvent; cases_reset: string[] }>(
+        token,
+        apiPath`${ws}/measures/${measureId}/withdraw`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
     getTestReport: (entityType, versionId) =>
       request<TestReport>(token, apiPath`${ws}/versions/${entityType}/${versionId}/test-report`),
     submitTestRuns: (input) =>
@@ -1500,6 +1624,12 @@ export function createApi(token: string, workspaceId: string): Api {
       )
     },
     listWorkAreas: () => request<WorkArea[]>(token, apiPath`${ws}/work-areas`),
+    listAgentWorkAreas: (agentId) =>
+      request<AgentWorkArea[]>(token, apiPath`${ws}/agents/${agentId}/work-areas`),
+    getUsage: (entityType, entityId) =>
+      request<UsageStats>(token, apiPath`${ws}/usage/${entityType}/${entityId}`),
+    getAgentUsage: (agentId) =>
+      request<AgentUsageStats>(token, apiPath`${ws}/agents/${agentId}/usage`),
     createWorkArea: (input) =>
       request<WorkArea>(token, apiPath`${ws}/work-areas`, {
         method: 'POST',

@@ -22,6 +22,10 @@ hinzufuegen, ohne sich zu ihrer Mandantentrennung zu verhalten.
 * **V3 Listen-Scan** — lesende Route ohne Objekt-Referenz im eigenen
   Workspace. Erwartet 2xx, und die Antwort enthaelt nichts von B.
 
+Workspace-uebergreifende Betreiber-Routen (ADR-0057 §7) haben weder Workspace
+noch Objekt-ID; fuer sie gibt es stattdessen **V4 Nicht-Betreiber**: A ist
+nicht in der Betreiber-Allowlist und muss 403 bekommen.
+
 Fuer **jede** Antwort an A gilt zusaetzlich: kein Marker und keine ID von B
 im Antworttext, ausser A hat die ID selbst gesendet (Fehlermeldungen duerfen
 die Anfrage zitieren). Und nach allen A-Aufrufen ist der Fingerabdruck von B
@@ -75,7 +79,9 @@ from who2be_api.testing.workspace_setup import cleanup_workspaces, seed_auth_use
 _WS = "/v1/workspaces/{workspace_id}"
 # Pfad-Parameter, die keine Objekt-ID sind: der Workspace selbst (V1) und
 # Literale, die je Probe fest gesetzt werden.
-_NON_OBJECT_PARAMS = frozenset({"workspace_id", "version", "entity_type", "source_name"})
+_NON_OBJECT_PARAMS = frozenset(
+    {"workspace_id", "version", "entity_type", "source_name", "tutorial_id"}
+)
 _REF = re.compile(r"<<([a-z0-9_]+)>>")
 
 
@@ -98,6 +104,10 @@ class Probe:
     `oracle_exempt`: Begruendung, warum unterschiedliche Antworten fuer
     fremde und unbekannte IDs hier kein Orakel sind (etwa weil die "ID" ein
     Geheimnis ist, das nur der Berechtigte kennt).
+    `operator_only=True`: workspace-uebergreifende Betreiber-Route (ADR-0057
+    §7). Sie hat keine Objekt-ID und keinen Mandanten; die Grenze ist die
+    Betreiber-Allowlist. Variante V4: A ist kein Betreiber und muss 403
+    bekommen, ohne B-Spuren. Eine Gegenprobe gibt es nicht, B ist auch keiner.
     """
 
     body: Any = None
@@ -108,6 +118,7 @@ class Probe:
     known: str = ""
     oracle_exempt: str = ""
     denied: frozenset[int] = DENIED
+    operator_only: bool = False
 
 
 _TEXT_FILE = base64.b64encode(b"Isolation probe text.").decode()
@@ -116,8 +127,29 @@ _CONTENT_PLAYBOOK = {"description": "x", "body": "1. x", "type": "workflow"}
 _CONTENT_RESOURCE = {"description": "x", "blocks": []}
 _CONTENT_TOOL = {"display_name": "x", "mcp_server_name": "x", "tool_names": ["t"]}
 _CONTENT_TEMPLATE = {"description": "", "body": "x"}
+_MD_PLAYBOOK = {"description": "x", "body": "1. x", "type": "workflow"}
 _TRANSITION = {"to": "review"}
 _FEEDBACK_REF = {"entity_type": "playbook", "entity_id": "<<playbook_id>>"}
+# Protokoll mit einer Massnahme am Mandanten-Agenten: der Fall ist der
+# gemeldete Fall (`agent_case_id`), der Pruefall der Seed-Pruefall (`case_id`).
+_SESSION_BODY = {
+    "agent_id": "<<agent_id>>",
+    "trigger": "manual",
+    "case_ids": ["<<agent_case_id>>"],
+    "summary": "iso",
+    "follow_up_at": "2099-01-01",
+    "measures": [
+        {
+            "case_ids": ["<<agent_case_id>>"],
+            "target": "persona",
+            "entity_id": "<<persona_id>>",
+            "change_summary": "iso",
+            "test_case_id": "<<case_id>>",
+            "success_criterion": "x",
+            "counterposition": "x",
+        }
+    ],
+}
 
 # Jede Route: Schluessel "METHOD Pfad" (Pfad wie im Router-Baum).
 PROBES: dict[str, Probe] = {
@@ -127,6 +159,9 @@ PROBES: dict[str, Probe] = {
     f"DELETE {_WS}": Probe(),
     f"GET {_WS}/whoami": Probe(),
     f"GET {_WS}/dashboard": Probe(),
+    # Aufgaben-Zaehler (Navigation W1): `agent_id` filtert jede Zahl; ein
+    # fremder Agent ist `agent_not_found` wie ein unbekannter.
+    f"GET {_WS}/inbox/counts": Probe(query={"agent_id": "<<agent_id>>"}),
     f"GET {_WS}/billing/entitlement": Probe(),
     f"GET {_WS}/members": Probe(),
     f"PATCH {_WS}/members/{{user_id}}": Probe(body={"role": "viewer"}),
@@ -252,6 +287,29 @@ PROBES: dict[str, Probe] = {
     f"POST {_WS}/system-prompts/{{template_id}}/versions/{{version}}/transition": Probe(
         body=_TRANSITION
     ),
+    # --- Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Arten,
+    # geprobt am Playbook; die Art waehlt nur den Mapper, die Grenze zieht der
+    # gemeinsame Service-Weg.
+    f"GET {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        query={"format": "source"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"GET {_WS}/{{entity_type}}/{{entity_id}}/versions/{{version}}/markdown": Probe(
+        query={"format": "source"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"POST {_WS}/{{entity_type}}/markdown": Probe(
+        body={"name": "iso", "content": _MD_PLAYBOOK}, path={"entity_type": "playbooks"}
+    ),
+    f"POST {_WS}/system-prompts/markdown": Probe(body={"name": "iso", "content": {"body": "x"}}),
+    f"PUT {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        body={"content": _MD_PLAYBOOK},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"PATCH {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        body={"base_rev": "0" * 16, "op": "replace", "field": "body", "markdown": "x"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
     # --- Agenten -----------------------------------------------------------
     f"GET {_WS}/agents": Probe(),
     f"POST {_WS}/agents": Probe(
@@ -359,6 +417,14 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/feedback/{{entity_type}}/{{entity_id}}/events": Probe(
         path={"entity_type": "playbook", "entity_id": "playbook_id"}
     ),
+    # --- Nutzungszaehler (U1) ----------------------------------------------
+    f"GET {_WS}/usage": Probe(),
+    f"GET {_WS}/usage/{{entity_type}}/{{entity_id}}": Probe(
+        path={"entity_type": "playbook", "entity_id": "playbook_id"}
+    ),
+    # Nutzung U2: Agent- und Arbeitsbereich-Zaehler.
+    f"GET {_WS}/agents/{{agent_id}}/usage": Probe(),
+    f"GET {_WS}/work-areas/{{area_id}}/usage": Probe(),
     # --- Pruefaelle --------------------------------------------------------
     f"GET {_WS}/test-cases": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
     f"POST {_WS}/test-cases": Probe(
@@ -420,6 +486,22 @@ PROBES: dict[str, Probe] = {
         path={"case_id": "agent_case_id"},
         agent=True,
     ),
+    # --- Protokolle und Massnahmen (ADR-0053 6.6, E2b-3) ---------------------
+    # Protokoll und Massnahme je Mandant setzt `_session_extras`. Fremder
+    # Agent bzw. fremde Faelle im Body: `agent_not_found` wie ein unbekannter.
+    f"POST {_WS}/feedback-sessions": Probe(body=_SESSION_BODY),
+    f"GET {_WS}/feedback-sessions": Probe(query={"agent_id": "<<agent_id>>"}, filters=True),
+    f"GET {_WS}/feedback-sessions/{{session_id}}": Probe(),
+    # Mischform: eigene Massnahme, fremde Version -> 404 wie eine unbekannte.
+    f"POST {_WS}/measures/{{measure_id}}/link-draft": Probe(
+        body={"version_entity_type": "persona", "version_id": "<<version_id>>"}
+    ),
+    f"GET {_WS}/measures/{{measure_id}}/follow-up": Probe(),
+    # Gegenprobe: die Massnahme ist nicht aktiviert -> 409 nach dem Lookup.
+    f"POST {_WS}/measures/{{measure_id}}/review": Probe(body={"verdict": "not_measurable"}),
+    f"POST {_WS}/measures/{{measure_id}}/withdraw": Probe(body={"note": "iso"}),
+    # Dossier (E1): fremder Agent im Pfad -> 404 `agent_not_found` wie ein unbekannter.
+    f"GET {_WS}/agents/{{agent_id}}/dossier": Probe(),
     # --- Umwandeln / Uebernehmen (ADR-0053 6.4/6.5, D2c-2) ------------------
     # Seed-`memory_id` ist ein user_fact: die Gegenprobe als B endet fachlich
     # mit 409 memory_not_convertible — nach dem Lookup, also bestanden.
@@ -457,6 +539,8 @@ PROBES: dict[str, Probe] = {
         body={"file_b64": _TEXT_FILE, "filename": "iso.txt"}
     ),
     f"GET {_WS}/work-areas/{{area_id}}/grants": Probe(),
+    # Arbeitsbereiche je Agent (Navigation A4): fremder Agent = agent_not_found.
+    f"GET {_WS}/agents/{{agent_id}}/work-areas": Probe(),
     f"PUT {_WS}/work-areas/{{area_id}}/grants/{{agent_id}}": Probe(body={"level": "read"}),
     f"DELETE {_WS}/work-areas/{{area_id}}/grants/{{agent_id}}": Probe(),
     f"GET {_WS}/work-areas/{{area_id}}/category-rules": Probe(),
@@ -539,6 +623,23 @@ PROBES: dict[str, Probe] = {
         body={"name": "iso", "slug": "iso-probe"}
     ),
     "DELETE /v1/organizations/{organization_id}": Probe(),
+    # Tutorial-Fortschritt (ADR-0060): kontoweit, geschrieben wird nur das
+    # eigene Konto. Die Mandantengrenze ist `?workspace_id=` fuer die
+    # abgeleiteten Schritte: B's Workspace muss wie ein unbekannter mit 404
+    # enden, bevor etwas geschrieben wird. `tutorial_id` ist keine Objekt-ID
+    # (der Katalog ist fuer alle gleich), deshalb ein fester Wert.
+    "GET /v1/me/tutorials": Probe(query={"workspace_id": "<<workspace_id>>"}),
+    "GET /v1/me/tutorials/{tutorial_id}": Probe(
+        query={"workspace_id": "<<workspace_id>>"}, path={"tutorial_id": "getting-started"}
+    ),
+    "PATCH /v1/me/tutorials/{tutorial_id}": Probe(
+        query={"workspace_id": "<<workspace_id>>"},
+        path={"tutorial_id": "getting-started"},
+        body={"step_id": "connect-claude", "state": "skipped"},
+    ),
+    "POST /v1/me/tutorials/{tutorial_id}/restart": Probe(
+        query={"workspace_id": "<<workspace_id>>"}, path={"tutorial_id": "getting-started"}
+    ),
     # Offene Einladungen des eigenen Kontos, ueber alle Workspaces hinweg —
     # genau deshalb hier: B hat eine offene Einladung auf B's Adresse, A darf
     # sie nicht sehen (V3, Leck-Check). Beide Konten sind bestaetigt
@@ -568,6 +669,10 @@ PROBES: dict[str, Probe] = {
             "hat, darf wissen, dass er gilt (403 bei falscher E-Mail statt 404)."
         ),
     ),
+    # --- Betreiber-Routen (ADR-0057 §7) ------------------------------------
+    # Workspace-uebergreifend: Routinen und Laufprotokoll aller Mandanten.
+    # Die Grenze ist die Betreiber-Allowlist; A ist kein Betreiber (V4: 403).
+    "GET /v1/system/routines": Probe(operator_only=True, denied=frozenset({403})),
 }
 
 EXEMPT: dict[str, str] = {
@@ -659,6 +764,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
         "own_invitation_id", "user_memory_id", "proposal_id", "agent_case_id",
+        "session_id", "measure_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -743,6 +849,8 @@ def build_calls(key: str, probe: Probe, me: Tenant, other: Tenant) -> list[Call]
         )
 
     calls: list[Call] = []
+    if probe.operator_only:
+        return [call("V4", me, me, mine)]
     if on_ws:
         calls.append(call("V1", other, other, theirs))
     if object_params:
@@ -895,6 +1003,25 @@ def _case_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
     ghost.ids["agent_case_id"] = str(uuid4())
 
 
+def _session_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
+    """Ein Protokoll mit einer Massnahme je Mandant (ADR-0053 3.5/3.6), nach `_case_extras`.
+
+    Ueber `POST /feedback-sessions` wie im Betrieb; die Zusammenfassung traegt
+    den Marker, damit ein Leck im Antworttext auffaellt.
+    """
+    for t in tenants:
+        body = _fill(_SESSION_BODY, t.ids) | {"summary": f"{t.marker} Protokoll"}
+        res = client.post(
+            f"/v1/workspaces/{t.workspace_id}/feedback-sessions", json=body, headers=t.human
+        )
+        assert res.status_code == 201, res.text
+        detail = res.json()["detail"]
+        t.ids["session_id"] = detail["session"]["id"]
+        t.ids["measure_id"] = detail["measures"][0]["id"]
+    for key in ("session_id", "measure_id"):
+        ghost.ids[key] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -918,6 +1045,8 @@ def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
         assert counts.get("V2", 0) >= 140, counts
         assert counts.get("V2-mix", 0) >= 6, counts
         assert counts.get("V3", 0) >= 20, counts
+        # Betreiber-Routen: Nicht-Betreiber bekommt 403 (ADR-0057 §7).
+        assert counts.get("V4", 0) >= 1, counts
         # V1- und V2-Gegenprobe sind derselbe Aufruf (B, eigene IDs) und
         # laufen nur einmal.
         assert counts.get("control", 0) >= 175, counts
@@ -948,6 +1077,13 @@ def _probe_as_a(
         report.findings.append(f"{c.variant} {c.key}: B-Daten in Antwort an A: {leaked}")
     if status >= 500:
         report.findings.append(f"{c.variant} {c.key}: A -> {status} (Serverfehler)")
+        return
+    if c.variant == "V4":
+        if status not in probe.denied:
+            report.findings.append(
+                f"V4 {c.key}: Betreiber-Route als Nicht-Betreiber -> {status}, "
+                f"erwartet {sorted(probe.denied)} {response.text[:200]}"
+            )
         return
     if c.variant == "V3":
         if not 200 <= status < 300:
@@ -985,6 +1121,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
     _own_invitations(ghost, a, b)
     _memory_extras(ghost, a, b)
     _case_extras(client, ghost, a, b)
+    _session_extras(client, ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():
@@ -993,7 +1130,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
         for c in build_calls(key, probe, a, b):
             control = next((m for m in mirror if m.variant == c.variant), None)
             g = next((m for m in phantom if m.variant == c.variant), None)
-            plan.append((c, g, control if c.variant != "V3" else None))
+            plan.append((c, g, control if c.variant not in ("V3", "V4") else None))
 
     for c, g, _ in plan:
         _probe_as_a(client, report, c, g, a, b)

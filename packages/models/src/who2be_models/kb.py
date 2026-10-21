@@ -47,10 +47,11 @@ EvidenceAnchor = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 KB_EDGE_EVIDENCE_MAX_ANCHORS = 20
 
 
+# Tier-Leiter nach ADR-0047; das Heben auf `verified` ist ein P2-UI-Thema.
 class NodeTier(StrEnum):
-    """Vertrauensstufe eines KB-Nodes (ADR-0047) — geordnete Leiter.
+    """Vertrauensstufe eines KB-Nodes — geordnete Leiter.
 
-    - ``verified``: menschlich bestaetigt (Heben dorthin ist P2-UI-Thema).
+    - ``verified``: menschlich bestaetigt.
     - ``derived``: aus mehreren Belegen abgeleitet.
     - ``hypothesis``: unbestaetigte Vermutung (Einstieg fuer Agenten).
     """
@@ -152,8 +153,9 @@ class KbNodeUpdate(BaseModel):
         return self
 
 
+# Kantentypen nach ADR-0047.
 class EdgeType(StrEnum):
-    """Kantentyp der Knowledge Base (ADR-0047)."""
+    """Kantentyp der Knowledge Base."""
 
     supports = "supports"
     contradicts = "contradicts"

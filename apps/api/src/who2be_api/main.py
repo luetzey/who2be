@@ -9,6 +9,7 @@ Routen-Layout nach Phase 2:
   `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
+import asyncio
 import importlib
 import logging
 import os
@@ -32,7 +33,11 @@ from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.logging import configure_logging
-from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
+from who2be_api.core.middleware import (
+    AccessLogMiddleware,
+    InternalAreaGuard,
+    RequestIDMiddleware,
+)
 from who2be_api.core.rate_limit import (
     RateLimitExceeded,
     _rate_limit_exceeded_handler,
@@ -44,11 +49,13 @@ from who2be_api.repositories.workspace_repository import sync_managed_builder_co
 from who2be_api.routers import (
     agents,
     cases,
+    content_markdown,
     dashboard,
     entitlement,
     external_tools,
     feedback,
     gdpr,
+    inbox,
     invitations,
     kb,
     me,
@@ -65,7 +72,9 @@ from who2be_api.routers import (
     resource_composition,
     resources,
     search,
+    sessions,
     system_prompts,
+    system_routines,
     test_cases,
     tokens,
     usages,
@@ -80,7 +89,9 @@ from who2be_api.routers import (
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
+from who2be_api.worker.store import WorkerHealth, worker_health
 from who2be_models import ApiErrorBody, ApiProblem
+from who2be_models.error_tracking import init_error_tracking
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +296,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
     "draft_conflict": "Draft existiert bereits",
     "review_conflict": "Version steht in Review",
+    "markdown_unsupported": "Markdown nicht unterstuetzt",
+    "block_not_representable": "Block nur im Web-Editor aenderbar",
+    "anchor_unknown": "Anker unbekannt",
+    "anchor_duplicate": "Anker doppelt",
+    "version_conflict": "Stand hat sich geaendert",
     "area_id_required_for_human": "area_id erforderlich",
     "template_version_inactive": "Template ohne aktive Version",
     "agent_incomplete": "Agent unvollstaendig",
@@ -333,6 +349,12 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Lernschleife Phase D — Umwandeln/Uebernehmen (ADR-0053 6.4/6.5, D2c):
     "memory_not_convertible": "Eintrag laesst sich nicht in einen Fall umwandeln",
     "feedback_not_promotable": "Feedback laesst sich nicht in einen Fall uebernehmen",
+    # Lernschleife Phase E — Gespraechsprotokoll und Massnahme (ADR-0053 6.1/6.6, E2b-1):
+    "session_cases_invalid": "Faelle des Protokolls ungueltig",
+    "measure_test_case_required": "Massnahme ohne gueltigen Pruefall",
+    "measure_not_found": "Massnahme nicht gefunden",
+    "session_not_found": "Protokoll nicht gefunden",
+    "measure_transition_forbidden": "Schritt im Verlauf der Massnahme nicht erlaubt",
 }
 
 
@@ -340,6 +362,37 @@ class Health(BaseModel):
     status: str
     version: str
     db: str
+    #: Dead-Man-Signal des Workers (ADR-0057 §7): `ok`, `stale` (juengster
+    #: Heartbeat aelter als 5 min) oder `unknown` (kein Heartbeat bzw. keine
+    #: Datenbank). Nur Information — `status` bleibt davon unberuehrt.
+    worker: WorkerHealth
+
+
+#: Zeitgrenze fuer das Health-Feld `worker` (Pool-Acquire + Abfrage zusammen).
+#: Deutlich unter dem Container-Healthcheck-Timeout (5 s), damit ein reines
+#: Info-Feld den API-Dienst nie unhealthy macht.
+WORKER_HEALTH_TIMEOUT_S = 1.5
+
+
+async def _read_worker_health() -> WorkerHealth:
+    async with database.pool.acquire() as conn:
+        return await worker_health(conn)
+
+
+async def _worker_health() -> WorkerHealth:
+    """Health-Feld `worker`; jede DB-Stoerung ergibt `unknown` statt eines 500.
+
+    Acquire und Abfrage laufen unter `WORKER_HEALTH_TIMEOUT_S`: ein Lock auf
+    `worker_heartbeat` oder ein erschoepfter Pool liefert `unknown`, statt den
+    Endpunkt haengen zu lassen (`TimeoutError` ist ein `OSError`). Ein
+    schliessender Pool (`asyncpg.InterfaceError`) ergibt ebenfalls `unknown`.
+    """
+    if not database.is_connected:
+        return "unknown"
+    try:
+        return await asyncio.wait_for(_read_worker_health(), timeout=WORKER_HEALTH_TIMEOUT_S)
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError):
+        return "unknown"
 
 
 def _on_rate_limit(request: Request, exc: Exception) -> Response:
@@ -496,6 +549,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Observability-Stack: AccessLog innen, RequestID aussen — Starlette stacked LIFO,
     # also wird RequestID zuerst aufgerufen, bindet die ID, und der AccessLog-Logger
     # kann sie ueber `structlog.contextvars` lesen, bevor er die Zeile emittiert.
+    # InternalAreaGuard liegt INNERHALB von AccessLog (abgewiesene Zugriffe auf
+    # /v1/internal erscheinen im Log) und AUSSERHALB von CORS/Rate-Limit/Routing:
+    # die Sperre greift vor jeder Anwendungslogik (ADR-0010, Dokploy ohne Caddy).
+    app.add_middleware(InternalAreaGuard)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
     # Workspace-scoped Router unter `/v1/workspaces/{workspace_id}/...` —
@@ -517,6 +574,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(test_cases.router, prefix=_WORKSPACE_PREFIX)
     # Faelle (ADR-0053 6.5, Lernschleife D2b).
     app.include_router(cases.router, prefix=_WORKSPACE_PREFIX)
+    # Gespraechsprotokolle und Massnahmen (ADR-0053 6.6, Lernschleife E2b-3).
+    app.include_router(sessions.router, prefix=_WORKSPACE_PREFIX)
     # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
     # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
     # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der
@@ -532,8 +591,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(kb.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
+    # Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Elementarten.
+    app.include_router(content_markdown.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
+    # Aufgaben-Zaehler fuer Glocke/Dashboard/Agent (Navigation W1, nur Menschen).
+    app.include_router(inbox.router, prefix=_WORKSPACE_PREFIX)
     # Identitaets-/Capability-Introspektion (#253) — ungated Read, Viewer-offen.
     app.include_router(whoami.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
@@ -547,6 +610,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces.router)
     app.include_router(gdpr.router)
     app.include_router(invitations.accept_router)
+    # Betreiber-Sicht (ADR-0057 §7): workspace-uebergreifend, nur Betreiber + MFA.
+    app.include_router(system_routines.router)
     # OAuth-2.1-Authorization-Server (Remote-MCP-Connector): top-level, anonym
     # erreichbar (`/oauth/*`), plus RFC-8414-Metadaten unter `/.well-known`.
     app.include_router(oauth.router)
@@ -560,10 +625,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:
         db_status = "ok" if await database.ping() else "unavailable"
-        return Health(status="ok", version=__version__, db=db_status)
+        return Health(status="ok", version=__version__, db=db_status, worker=await _worker_health())
 
     return app
 
 
 configure_logging(get_settings().log_format)
+# Fehler-Tracking (Stabilitaet A2): nur aktiv mit SENTRY_DSN, sonst kein Init und
+# kein Netzwerk-Aufruf. Vor `create_app`, damit die FastAPI-Integration greift.
+init_error_tracking("who2be-api", __version__)
 app = create_app()

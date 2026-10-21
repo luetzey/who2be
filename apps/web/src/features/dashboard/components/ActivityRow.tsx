@@ -4,6 +4,7 @@ import { Check, CircleDot, Pencil, Plus, RotateCcw, Send, Trash2, X } from 'luci
 import { useTranslation } from 'react-i18next'
 
 import type { DashboardActivity, DashboardEntityType } from '@/api/types'
+import { formatDateTime } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 // Das `event`-Property im Activity-Feed kommt als Free-Form-String (z.B.
@@ -84,7 +85,7 @@ export function ActivityRow({ activity }: ActivityRowProps) {
       : ''
   const date = activity.ts ? new Date(activity.ts) : null
   const dateLabel =
-    date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : (activity.ts ?? '')
+    date && !Number.isNaN(date.getTime()) ? formatDateTime(date) : (activity.ts ?? '')
 
   const dot = EVENT_DOT[activity.event] ?? { color: 'var(--status-inactive)', icon: CircleDot }
   const DotIcon = dot.icon

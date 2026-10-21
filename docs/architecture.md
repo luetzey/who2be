@@ -54,12 +54,14 @@ graph TD
     MODELS["packages/models — geteilte Pydantic-/Domain-Modelle"]
     SUPA["Supabase Auth — JWT-Ausstellung"]
     PG[("Postgres — Supabase")]
+    WORKER["worker — Hintergrund-Routinen (gleiches Image wie api)"]
 
     AGENT --> TOOLS
     WEB -->|"Login (JWT)"| SUPA
     WEB -->|"Bearer JWT"| R
     TOOLS -->|"Bearer API-Token"| R
     R --> S --> REPO --> PG
+    WORKER -->|"Owner-Verbindung, routine_run"| PG
     R -.-> CORE
     S -.-> CORE
     R --> MODELS
@@ -68,6 +70,14 @@ graph TD
     TOOLS --> MODELS
     CORE -->|"JWT-Verify"| SUPA
 ```
+
+**Hintergrund-Routinen** (DSGVO-Purge, Gedaechtnis-Verfall,
+Protokoll-Aufraeumen) laufen im Compose-Dienst `worker` (ADR-0057): dasselbe
+Image wie `api`, ein eigener Prozess ohne Port, Zeitplaene als Registry im Code
+(`apps/api/src/who2be_api/worker/`), Laufprotokoll in der Tabelle `routine_run`,
+kein Broker. Die API bleibt der einzige HTTP-Eingang; der Worker schreibt als
+interner Owner-Client direkt in dieselbe DB, genau ein Container. Betrieb:
+[`deploy/hetzner/RUNBOOK.md` § Hintergrund-Routinen (Worker)](../deploy/hetzner/RUNBOOK.md#hintergrund-routinen-worker).
 
 ### 2.1 Schichten (Clean Architecture)
 
@@ -376,13 +386,16 @@ filtert serverseitig nach `owner_id` — Zero-Trust, keine implizite Freigabe.
   aufloest), `path`, `status` und `duration_ms`. Der Header `X-Request-ID`
   wird Eingangs uebernommen und Ausgangs propagiert; per `LOG_FORMAT=console`
   laesst sich lokal auf lesbares Format schalten.
-- Prometheus-Metriken via `prometheus-fastapi-instrumentator` (ADR-0010):
-  RED-Metriken (Rate/Errors/Duration) auf `GET /v1/internal/metrics`.
-  Caddy blockt `/v1/internal/*` von extern (403, MS-3 H5). Prometheus
-  + Grafana laufen im selben Compose-Netz; Grafana wird unter
-  `app.<domain>/grafana/` mit Basic-Auth exponiert. Custom-Counter
-  `who2be_auth_token_attempts_total{result="hit|miss"}` liefert das
-  Mess-Signal fuer den F-04-Re-Eval-Trigger aus ADR-0008.
+- Metriken (ADR-0010, revidiert durch ADR-0062) sind **geplant, nicht
+  umgesetzt**: RED-Metriken (Rate/Errors/Duration) von API und MCP auf
+  `GET /v1/internal/metrics`, nie oeffentlich (Caddy blockt
+  `/v1/internal/*` von extern, MS-3 H5). Ein Metrik-Agent auf Prod schickt
+  per `remote_write` an VictoriaMetrics + Grafana auf einem zweiten Server
+  (Waechter). Custom-Counter `who2be_auth_token_attempts_total{result="hit|miss"}`
+  liefert das Mess-Signal fuer den F-04-Re-Eval-Trigger aus ADR-0008.
+- Fehler-Tracking, Erreichbarkeits- und Host-Ueberwachung (ADR-0062):
+  GlitchTip, Uptime Kuma und Beszel auf dem Waechter; API, MCP und Web melden
+  ueber das Sentry-SDK, DSN per Env (leer = aus). Alarme per Telegram + Mail.
 - Caddy-Security-Header (MS-3 H5): `Strict-Transport-Security`,
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, restriktive CSP fuer `app.<domain>`.

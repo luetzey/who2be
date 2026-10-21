@@ -137,11 +137,11 @@ describe('PatternList — Liste', () => {
 
     const rows = await rowsOf()
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]).getByText('Ähnliche Fälle 3×')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Ähnliche Rückmeldungen 3×')).toBeInTheDocument()
     expect(within(rows[1]).getByText('Dieselbe Korrektur 4×')).toBeInTheDocument()
     expect(
       await within(rows[0]).findByText(
-        '3 offene Fälle zu researcher, alle zugeordnet zu Playbook: Code-Task-Flow, in 30 Tagen.',
+        '3 offene Rückmeldungen zu researcher, alle zugeordnet zu Playbook: Code-Task-Flow, in 30 Tagen.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -151,7 +151,7 @@ describe('PatternList — Liste', () => {
     expect(screen.getByText(/ab 3 Treffern erscheint hier ein Muster/)).toBeInTheDocument()
     // Hinweis folgt dem Server (ADR-0053 3.7): eingeordnete Faelle zaehlen weiter.
     expect(
-      screen.getByText(/sobald der Lernvorschlag entschieden ist oder die Fälle umgesetzt oder verworfen sind/),
+      screen.getByText(/sobald der Lernvorschlag entschieden ist oder die Rückmeldungen geändert oder verworfen sind/),
     ).toBeInTheDocument()
     expect(screen.queryByText(/Fälle eingeordnet sind/)).not.toBeInTheDocument()
     // Kein Zustand: weder Status noch Verwerfen.
@@ -195,14 +195,14 @@ describe('PatternList — Liste', () => {
     expect(screen.queryByRole('combobox', { name: /Agent/ })).not.toBeInTheDocument()
   })
 
-  it('zeigt ohne jedes Material den Hinweis und „Fall melden“', async () => {
+  it('zeigt ohne jedes Material den Hinweis und „Rückmeldung geben“', async () => {
     listPatterns.mockResolvedValue(list([]))
     renderList()
 
     expect(
-      await screen.findByText('Muster brauchen Lernvorschläge oder Fälle. Es gibt noch keine.'),
+      await screen.findByText('Muster brauchen Lernvorschläge oder Rückmeldungen. Es gibt noch keine.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fall melden' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toBeInTheDocument()
     expect(countMemories).toHaveBeenCalledWith({ kind: 'lesson' })
   })
 
@@ -224,15 +224,15 @@ describe('PatternList — Sheet', () => {
 
     const sheet = await screen.findByTestId('pattern-sheet')
     expect(currentSearch()).toBe('?pattern=case.a2.playbook.pb1')
-    expect(within(sheet).getByRole('heading', { name: 'Ähnliche Fälle 3×' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('heading', { name: 'Ähnliche Rückmeldungen 3×' })).toBeInTheDocument()
     expect(within(sheet).getByText('Warum ist das ein Muster?')).toBeInTheDocument()
 
     const evidence = within(sheet).getByTestId('pattern-evidence')
     const link = await within(evidence).findByRole('link', { name: 'Erwartet c1' })
     expect(link).toHaveAttribute('href', '/w/ws-1/feedback/cases/c1')
 
-    // Fall-Muster: „Fälle ansehen“ mit Agent und Zuordnung als Filter.
-    expect(within(sheet).getByRole('link', { name: /Fälle ansehen/ })).toHaveAttribute(
+    // Rückmeldungs-Muster: „Rückmeldungen ansehen“ mit Agent und Zuordnung als Filter.
+    expect(within(sheet).getByRole('link', { name: /Rückmeldungen ansehen/ })).toHaveAttribute(
       'href',
       '/w/ws-1/feedback?tab=cases&agent=a2&target=playbook',
     )
@@ -252,14 +252,14 @@ describe('PatternList — Sheet', () => {
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(text))
   })
 
-  it('bietet bei Lernvorschlag-Mustern „Fall anlegen“ und verlinkt den Beleg ins Gedaechtnis', async () => {
+  it('bietet bei Lernvorschlag-Mustern „Rückmeldung anlegen“ und verlinkt den Beleg ins Gedaechtnis', async () => {
     renderList('?pattern=lesson.a1.m1')
     const sheet = await screen.findByTestId('pattern-sheet')
 
     const link = await within(sheet).findByRole('link', { name: 'Vor dem Push lokal testen.' })
     expect(link).toHaveAttribute('href', '/w/ws-1/memory?entry=m1')
     await waitFor(() =>
-      expect(within(sheet).getByRole('button', { name: 'Fall anlegen' })).toBeEnabled(),
+      expect(within(sheet).getByRole('button', { name: 'Rückmeldung anlegen' })).toBeEnabled(),
     )
   })
 

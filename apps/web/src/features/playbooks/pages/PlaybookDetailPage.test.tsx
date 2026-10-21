@@ -554,7 +554,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+      expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
     })
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
@@ -603,7 +603,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
 
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+      expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
     })
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })
@@ -675,7 +675,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     )
 
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
-    expect(screen.getByText('v2 wartet auf Review')).toBeInTheDocument()
+    expect(screen.getByText('v2 wartet auf Freigabe')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Veroeffentlichen' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
   })

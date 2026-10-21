@@ -119,6 +119,15 @@ finished issues stay open and have to be closed by hand afterwards (eleven of
 twelve PRs in wave 3 missed the line, leaving nine issues open;
 [#625](https://github.com/luetzey/who2be/issues/625)).
 
+The reference is **one line of its own at the very top of the body, starting
+at column one with `Issue:`** — `Issue: Closes #NNN`, `Issue: Refs #NNN` or
+`Issue: n/a (Kanban card <id>, <context>)`. Not a bullet, not under a heading,
+not inside a sentence: review checks the body with
+`gh pr view <n> --json body -q '.body|test("(?m)^Issue:")'`, and a line embedded
+anywhere else fails that check and costs a full review round (it happened in
+#854, #856 and #863). GitHub still recognises `Closes #NNN` after the prefix,
+so the merge closes the issue as before.
+
 ## Merging: agents request, they do not merge
 
 Agents never merge. After a review has been **approved**, auto-merge may be

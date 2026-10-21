@@ -60,6 +60,17 @@ def _draft_conflict() -> ApiError:
     )
 
 
+def _review_conflict() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
+            "Lehne die Review erst ab, bevor du weiter editierst."
+        ),
+        reason="review_conflict",
+    )
+
+
 def _slug_conflict() -> ApiError:
     return ApiError(
         status_code=status.HTTP_409_CONFLICT,
@@ -188,6 +199,32 @@ class SystemPromptTemplateService:
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
+        if outcome.template is None:
+            raise _not_found()
+        return outcome.template
+
+    async def update_draft(
+        self,
+        ctx: WorkspaceContext,
+        template_id: UUID,
+        data: SystemPromptTemplateUpdate,
+    ) -> SystemPromptTemplateRead:
+        """Draft-in-place-Pfad (ADR-0058 §6.2), Gegenstueck zu
+        `PersonaService.update_draft`.
+
+        Schreibt in einen offenen Draft, ohne neue Version, oder legt einen
+        Draft an. Gates wie `update`. 409 `review_conflict`, wenn die aktuelle
+        Version in Review steht. Ein per `expected_base_rev` gesetzter Token
+        wird im Repository unter der Sperre geprueft.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.system_prompt_write)  # ADR-0040
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, template_id))
+        outcome = await self._repo.upsert_draft(
+            ctx.workspace_id, ctx.user_id, template_id, data.name, data.content, data.locale
+        )
+        if outcome.conflict == "review_pending":
+            raise _review_conflict()
         if outcome.template is None:
             raise _not_found()
         return outcome.template
