@@ -3265,6 +3265,14 @@
     "placeholder": {
       "withReferences": "Schreibe oder tippe / für Blöcke und Verweise",
       "plain": "Schreibe oder tippe / für Blöcke"
+    },
+    "footer": {
+      "length": "≈ {{chars}} Zeichen · ≈ {{tokens}} Token (geschätzt)",
+      "long": "· lang",
+      "helpLabel": "Wie wird die Länge geschätzt?",
+      "tooltip": "Schätzung: etwa {{perToken}} Zeichen je Token. Eingebettete Verweise sind nicht eingerechnet.",
+      "longTooltip": "Sehr lange Anweisungen werden oft schlechter befolgt.",
+      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)"
     }
   },
   "learning": {
