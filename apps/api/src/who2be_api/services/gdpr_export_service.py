@@ -40,6 +40,7 @@ import asyncpg
 from who2be_api.core.entity_sql import safe_entity
 from who2be_api.core.security import role_satisfies
 from who2be_api.core.tenancy import scope_to_self, tenant_scope
+from who2be_api.repositories.tutorial_repository import PgTutorialRepository
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.tablestore import AreaStoreMissingError, TableStore, quote_identifier
 from who2be_models import WorkspaceRole
@@ -320,8 +321,17 @@ class GdprExportService:
             "exported_at": datetime.now(UTC),
             "user_id": str(user_id),
             "account": await self._export_account(user_id),
+            "tutorials": await self._export_tutorials(user_id),
             "organizations": list(orgs.values()),
         }
+
+    async def _export_tutorials(self, user_id: UUID) -> dict[str, Any]:
+        """Tutorial-Fortschritt am Konto (ADR-0060, Migration 0108).
+
+        Kontoweit und ohne Mandant, deshalb ein eigener Block neben
+        `organizations` statt je Workspace.
+        """
+        return await PgTutorialRepository(self._pool).export(user_id)
 
     async def _export_account(self, user_id: UUID) -> dict[str, Any]:
         """GoTrue-Profildaten des Users (Art.-15-Vollstaendigkeit, WP-E).

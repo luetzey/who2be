@@ -71,6 +71,26 @@
   },
   {
     "method": "GET",
+    "path": "/v1/me/tutorials",
+    "operationId": "list_tutorials_v1_me_tutorials_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/tutorials/{tutorial_id}",
+    "operationId": "get_tutorial_v1_me_tutorials__tutorial_id__get"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/me/tutorials/{tutorial_id}",
+    "operationId": "patch_tutorial_v1_me_tutorials__tutorial_id__patch"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/me/tutorials/{tutorial_id}/restart",
+    "operationId": "restart_tutorial_v1_me_tutorials__tutorial_id__restart_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/organizations",
     "operationId": "list_organizations_v1_organizations_get"
   },

@@ -401,6 +401,11 @@
       "reason": "Beitritt zu einer bestehenden Einladung. Der Deckel gehoert, wenn ueberhaupt, an das Ausstellen — nicht an das Annehmen, wo er einen eingeladenen Nutzer aussperren wuerde."
     },
     {
+      "path": "/v1/me/tutorials/{tutorial_id}/restart",
+      "name": "restart_tutorial",
+      "reason": "Setzt den eigenen Tutorial-Fortschritt zurueck (ADR-0060), legt keine Inhalts-Entity an: die Zeilen in tutorial_state/tutorial_progress sind je Konto durch den Katalog begrenzt. Gebremst durch write_limit."
+    },
+    {
       "path": "/v1/organizations",
       "name": "create_organization",
       "reason": "Legt die Organisation an, die ein Entitlement erst traegt — vor diesem Aufruf existiert kein org_entitlement, gegen das ein Gate pruefen koennte."

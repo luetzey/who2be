@@ -315,6 +315,10 @@ class PgAccountPurgeRepository:
             # Zeile ueberlebten die Sterne eines geloeschten Kontos in fremden
             # Workspaces, in denen der User Mitglied war.
             await self._conn.execute("DELETE FROM agent_favorite WHERE user_id = $1", user_id)
+            # Tutorial-Fortschritt (ADR-0060, Migration 0108): kontoweit, ohne
+            # Mandant und ohne FK — nur dieser Schritt entfernt ihn.
+            await self._conn.execute("DELETE FROM tutorial_progress WHERE user_id = $1", user_id)
+            await self._conn.execute("DELETE FROM tutorial_state WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
             sh_result = await self._conn.execute(
