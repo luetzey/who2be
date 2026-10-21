@@ -8,7 +8,7 @@ Zwei Schichten in einer Datei:
 * **Integration:** die vier Routen unter `/v1/me/tutorials` gegen die echte
   App. Belegt werden die Akzeptanzkriterien der Karte t_cdf85bb8: ID-Form
   und unbekannte IDs, kein Schreiben fremder Konten, abgeleitete Schritte
-  (erster MCP-Abruf, eigener Agent), Neustart nur fuer dieses Tutorial,
+  (erster MCP-Abruf, Agent angelegt, eigener Agent), Neustart nur fuer dieses Tutorial,
   Purge bei Konto-Loeschung, Export im DSGVO-Buendel, Token-Sperre.
 
 Integrationsteil nutzt die zentralen Fixtures aus `conftest.py`. Ohne
@@ -22,21 +22,26 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Annotated
 from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.db import get_pool
 from who2be_api.main import app
 from who2be_api.repositories.tutorial_repository import (
     DerivedSignals,
+    PgTutorialRepository,
     StepProgressRow,
     TutorialStateRow,
 )
-from who2be_api.services.tutorial_service import build_tutorial_read
+from who2be_api.routers.me import get_tutorial_service
+from who2be_api.services.tutorial_service import TutorialService, build_tutorial_read
 from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 from who2be_models.tutorial import (
@@ -370,6 +375,83 @@ def test_automatic_steps_are_derived_from_workspace_data(make_auth_headers: Auth
             assert _rows(me) == before
     finally:
         _db("DELETE FROM usage_event WHERE workspace_id = ANY($1::uuid[])", [ws, foreign_ws])
+        _db("DELETE FROM tutorial_progress WHERE user_id = $1", me)
+        _db("DELETE FROM tutorial_state WHERE user_id = $1", me)
+        cleanup_workspaces([me, stranger])
+
+
+_AGENT_TUTORIAL = TutorialDefinition.model_validate(
+    {
+        "id": "agent-test",
+        "audience": "everyone",
+        "steps": [{"id": "create-agent", "type": "agent_created"}],
+    }
+)
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_agent_created_counts_only_own_unmanaged_agents_since_restart(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """AK „Agent angelegt“: `agent_created` gegen die echte `agent`-Tabelle.
+
+    Der ausgelieferte Katalog nutzt den Typ (noch) nicht, deshalb laeuft die
+    Route hier mit einem Test-Katalog — Ableitung, Mandanten-Scope und
+    `since`-Filter sind dieselben wie im Betrieb.
+    """
+
+    def _service(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> TutorialService:
+        return TutorialService(
+            PgTutorialRepository(pool), catalog={_AGENT_TUTORIAL.id: _AGENT_TUTORIAL}
+        )
+
+    me, stranger = fresh_user_id(), fresh_user_id()
+    ws = setup_workspace(me)
+    auth = make_auth_headers(me)
+    query = {"workspace_id": str(ws)}
+    base = f"/v1/me/tutorials/{_AGENT_TUTORIAL.id}"
+    app.dependency_overrides[get_tutorial_service] = _service
+    try:
+        with TestClient(app) as client:
+            prefix = f"/v1/workspaces/{ws}"
+
+            def _create(name: str) -> UUID:
+                res = client.post(f"{prefix}/agents", json={"name": name}, headers=auth)
+                assert res.status_code == 201, res.text
+                return UUID(res.json()["id"])
+
+            def _state() -> str:
+                res = client.get(base, params=query, headers=auth)
+                assert res.status_code == 200, res.text
+                return _step(res.json(), "create-agent")
+
+            assert _state() == "open"
+
+            # Verwalteter Agent (wie der Builder) zaehlt nicht.
+            managed = _create("[Tut] Verwaltet")
+            _db("UPDATE agent SET is_managed = true WHERE id = $1", managed)
+            assert _state() == "open"
+
+            # Agent eines anderen Owners im selben Workspace zaehlt nicht.
+            foreign = _create("[Tut] Fremd")
+            _db("UPDATE agent SET owner_id = $1 WHERE id = $2", stranger, foreign)
+            assert _state() == "open"
+
+            # Eigener, nicht verwalteter Agent zaehlt.
+            _create("[Tut] Eigener")
+            assert _state() == "done"
+
+            # Nach dem Neustart zaehlt der vorher angelegte Agent nicht mehr ...
+            restarted = client.post(f"{base}/restart", params=query, headers=auth)
+            assert restarted.status_code == 200, restarted.text
+            assert _step(restarted.json(), "create-agent") == "open"
+            assert _state() == "open"
+            # ... ein danach angelegter schon.
+            _create("[Tut] Nach Neustart")
+            assert _state() == "done"
+    finally:
+        app.dependency_overrides.pop(get_tutorial_service, None)
         _db("DELETE FROM tutorial_progress WHERE user_id = $1", me)
         _db("DELETE FROM tutorial_state WHERE user_id = $1", me)
         cleanup_workspaces([me, stranger])
