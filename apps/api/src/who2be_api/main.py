@@ -294,6 +294,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
     "draft_conflict": "Draft existiert bereits",
     "review_conflict": "Version steht in Review",
+    "markdown_unsupported": "Markdown nicht unterstuetzt",
+    "block_not_representable": "Block nur im Web-Editor aenderbar",
+    "anchor_unknown": "Anker unbekannt",
+    "anchor_duplicate": "Anker doppelt",
+    "version_conflict": "Stand hat sich geaendert",
     "area_id_required_for_human": "area_id erforderlich",
     "template_version_inactive": "Template ohne aktive Version",
     "agent_incomplete": "Agent unvollstaendig",
