@@ -393,6 +393,8 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             )
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
+            # Erwarteter `base_rev` (ADR-0058 §6.3) unter der Sperre, wie im Kern.
+            await self._check_base_rev_locked(conn, workspace_id, playbook_id)
             # Solange irgendein Draft existiert, blockiert PUT: der Caller soll
             # erst Promote/Discard durchspielen.
             existing_draft = await conn.fetchval(
@@ -477,6 +479,8 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             )
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
+            # Erwarteter `base_rev` (ADR-0058 §6.3) unter der Sperre, wie im Kern.
+            await self._check_base_rev_locked(conn, workspace_id, playbook_id)
             draft_version = await conn.fetchval(
                 "SELECT version FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,

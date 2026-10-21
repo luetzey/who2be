@@ -33,7 +33,11 @@ from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.logging import configure_logging
-from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
+from who2be_api.core.middleware import (
+    AccessLogMiddleware,
+    InternalAreaGuard,
+    RequestIDMiddleware,
+)
 from who2be_api.core.rate_limit import (
     RateLimitExceeded,
     _rate_limit_exceeded_handler,
@@ -45,6 +49,7 @@ from who2be_api.repositories.workspace_repository import sync_managed_builder_co
 from who2be_api.routers import (
     agents,
     cases,
+    content_markdown,
     dashboard,
     entitlement,
     external_tools,
@@ -290,6 +295,11 @@ _PROBLEM_TITLES: dict[str, str] = {
     # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
     "draft_conflict": "Draft existiert bereits",
     "review_conflict": "Version steht in Review",
+    "markdown_unsupported": "Markdown nicht unterstuetzt",
+    "block_not_representable": "Block nur im Web-Editor aenderbar",
+    "anchor_unknown": "Anker unbekannt",
+    "anchor_duplicate": "Anker doppelt",
+    "version_conflict": "Stand hat sich geaendert",
     "area_id_required_for_human": "area_id erforderlich",
     "template_version_inactive": "Template ohne aktive Version",
     "agent_incomplete": "Agent unvollstaendig",
@@ -538,6 +548,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Observability-Stack: AccessLog innen, RequestID aussen — Starlette stacked LIFO,
     # also wird RequestID zuerst aufgerufen, bindet die ID, und der AccessLog-Logger
     # kann sie ueber `structlog.contextvars` lesen, bevor er die Zeile emittiert.
+    # InternalAreaGuard liegt INNERHALB von AccessLog (abgewiesene Zugriffe auf
+    # /v1/internal erscheinen im Log) und AUSSERHALB von CORS/Rate-Limit/Routing:
+    # die Sperre greift vor jeder Anwendungslogik (ADR-0010, Dokploy ohne Caddy).
+    app.add_middleware(InternalAreaGuard)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
     # Workspace-scoped Router unter `/v1/workspaces/{workspace_id}/...` —
@@ -576,6 +590,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(kb.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
+    # Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Elementarten.
+    app.include_router(content_markdown.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     # Aufgaben-Zaehler fuer Glocke/Dashboard/Agent (Navigation W1, nur Menschen).

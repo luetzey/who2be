@@ -218,6 +218,16 @@ ProblemReason = Literal[
     "session_not_found",  # 404 — Protokoll unbekannt oder nicht lesbar (QE3; params: field)
     # 409 — Event passt nicht zum Zustand der Massnahme (QE3/QE4; params: state, action)
     "measure_transition_forbidden",
+    # Markdown-Schreibweg fuer Agenten (ADR-0058 §3.3, §4.2, §6.3, Paket P2).
+    # 422 — Markdown ausserhalb des Dialekts (params: line, construct[, field])
+    "markdown_unsupported",
+    # 422 — geschuetzter Block geaendert oder Marker unbekannt (params: block_id[, field])
+    "block_not_representable",
+    # 422 — Anker bzw. Feld gibt es in der Basisversion nicht (params: anchor|block_id[, field])
+    "anchor_unknown",
+    "anchor_duplicate",  # 422 — dieselbe Block-ID zweimal (params: block_id[, field])
+    # 409 — base_rev passt nicht zum Stand (params: current_version, current_base_rev)
+    "version_conflict",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

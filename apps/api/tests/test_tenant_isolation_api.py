@@ -125,6 +125,7 @@ _CONTENT_PLAYBOOK = {"description": "x", "body": "1. x", "type": "workflow"}
 _CONTENT_RESOURCE = {"description": "x", "blocks": []}
 _CONTENT_TOOL = {"display_name": "x", "mcp_server_name": "x", "tool_names": ["t"]}
 _CONTENT_TEMPLATE = {"description": "", "body": "x"}
+_MD_PLAYBOOK = {"description": "x", "body": "1. x", "type": "workflow"}
 _TRANSITION = {"to": "review"}
 _FEEDBACK_REF = {"entity_type": "playbook", "entity_id": "<<playbook_id>>"}
 # Protokoll mit einer Massnahme am Mandanten-Agenten: der Fall ist der
@@ -283,6 +284,29 @@ PROBES: dict[str, Probe] = {
     f"POST {_WS}/system-prompts/{{template_id}}/versions/{{version}}/restore": Probe(),
     f"POST {_WS}/system-prompts/{{template_id}}/versions/{{version}}/transition": Probe(
         body=_TRANSITION
+    ),
+    # --- Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Arten,
+    # geprobt am Playbook; die Art waehlt nur den Mapper, die Grenze zieht der
+    # gemeinsame Service-Weg.
+    f"GET {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        query={"format": "source"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"GET {_WS}/{{entity_type}}/{{entity_id}}/versions/{{version}}/markdown": Probe(
+        query={"format": "source"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"POST {_WS}/{{entity_type}}/markdown": Probe(
+        body={"name": "iso", "content": _MD_PLAYBOOK}, path={"entity_type": "playbooks"}
+    ),
+    f"POST {_WS}/system-prompts/markdown": Probe(body={"name": "iso", "content": {"body": "x"}}),
+    f"PUT {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        body={"content": _MD_PLAYBOOK},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
+    ),
+    f"PATCH {_WS}/{{entity_type}}/{{entity_id}}/markdown": Probe(
+        body={"base_rev": "0" * 16, "op": "replace", "field": "body", "markdown": "x"},
+        path={"entity_type": "playbooks", "entity_id": "playbook_id"},
     ),
     # --- Agenten -----------------------------------------------------------
     f"GET {_WS}/agents": Probe(),
