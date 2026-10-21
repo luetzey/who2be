@@ -13,6 +13,8 @@ A1 fest, damit sie nicht nur im Review gelten:
 3. Secrets kommen nur per Env und mit ``:?``-Guard (kein Default, kein Literal).
 4. Jedes Image ist per Digest gepinnt.
 5. Die Frist fuer Fehler-Events steht im Compose so, wie das VVT sie zusagt.
+6. Die Einrichtung im RUNBOOK legt alle Admin-Konten an, bevor Caddy die
+   Oberflaechen veroeffentlicht.
 
 Reiner Datei-Test, ohne Docker. ``docker compose config`` laeuft zusaetzlich
 von Hand (README des Stacks), weil CI fuer diesen Stack keinen Daemon braucht.
@@ -32,6 +34,7 @@ _MONITOR = _REPO_ROOT / "deploy" / "monitor"
 _COMPOSE = _MONITOR / "compose.yml"
 _ENV_EXAMPLE = _MONITOR / ".env.example"
 _VVT = _REPO_ROOT / "docs" / "compliance" / "vvt.md"
+_RUNBOOK = _REPO_ROOT / "deploy" / "hetzner" / "RUNBOOK.md"
 
 #: Variablen, die Geheimnisse tragen. Jede muss im Compose als ``${VAR:?…}``
 #: stehen und darf in ``.env.example`` nur einen Platzhalter haben.
@@ -154,3 +157,51 @@ def test_beszel_hub_never_dials_into_prod() -> None:
 
 def test_beszel_hub_cannot_pull_prod_container_logs() -> None:
     assert _services()["beszel"]["environment"]["CONTAINER_DETAILS"] == "false"
+
+
+# effect-exempt: Konfig-Drift-Guard; Rolle des Env-Kontos gegen Beszel v0.21.0 von Hand geprobt
+def test_beszel_first_account_is_not_created_from_env() -> None:
+    # In v0.21.0 wird ein Konto aus USER_EMAIL/USER_PASSWORD nur `user`, nicht
+    # `admin`; das Admin-Konto entsteht im RUNBOOK per create-user im Tunnel.
+    env = _services()["beszel"]["environment"]
+    for key in ("USER_EMAIL", "USER_PASSWORD", "BESZEL_HUB_USER_EMAIL", "BESZEL_HUB_USER_PASSWORD"):
+        assert key not in env, key
+
+
+def _runbook_setup() -> str:
+    text = _RUNBOOK.read_text(encoding="utf-8")
+    start = text.index("## Waechter-Server (Monitoring, ADR-0062)")
+    return text[start : text.index("### Betrieb", start)]
+
+
+def _step(setup: str, number: int) -> str:
+    match = re.search(rf"^{number}\. \*\*.*?(?=^\d+\. \*\*|\Z)", setup, re.M | re.S)
+    assert match, f"RUNBOOK §Waechter-Server: Schritt {number} fehlt"
+    return match.group(0)
+
+
+# effect-exempt: Doku-Konformitaet der Owner-Schrittliste; Befehle gegen die Images geprobt
+def test_runbook_creates_all_admin_accounts_before_caddy_publishes() -> None:
+    # Alle drei Oberflaechen geben das erste Konto an den, der zuerst kommt.
+    # Deshalb startet der erste `up` ohne caddy, die Konten entstehen ueber
+    # den Tunnel, und erst danach wird veroeffentlicht.
+    setup = _runbook_setup()
+    first_up, accounts, publish = _step(setup, 4), _step(setup, 5), _step(setup, 6)
+    up_lines = re.findall(r"^\s*\$MON up -d.*$", first_up, re.M)
+    assert up_lines and all("caddy" not in line for line in up_lines)
+    assert all(name in up_lines[0] for name in sorted(set(_SERVICE_NAMES) - {"caddy"}))
+    assert "! grep -q CHANGE_ME deploy/monitor/.env" in first_up
+    assert "createsuperuser" in accounts
+    assert "/api/beszel/create-user" in accounts
+    assert "ssh -N -L" in accounts
+    assert re.search(r"^\s*\$MON up -d\s*$", publish, re.M)
+    probes = (
+        '/api/settings/ | grep -o \'"enableUserRegistration"',
+        "curl -s https://hosts.$D/api/beszel/first-run",
+        "--data '420[\"needSetup\"]'",
+    )
+    for probe in probes:
+        assert probe in publish, f"Aussen-Pruefung ohne {probe!r}"
+    # Kein spaeterer Schritt legt noch ein Konto ueber die oeffentliche UI an.
+    later = setup[setup.index(publish) + len(publish) :]
+    assert "Admin-Konto anlegen" not in later and "Owner-Konto anlegen" not in later

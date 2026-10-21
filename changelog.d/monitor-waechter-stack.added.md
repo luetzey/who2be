@@ -13,7 +13,10 @@
   The operator runbook gained the section "Waechter-Server (Monitoring,
   ADR-0062)" with a numbered setup list for the owner, the alert routes
   (Telegram for urgent alerts, mail for everything) and an acceptance test for
-  each of them. The record of processing activities (`docs/compliance/vvt.md`)
+  each of them. The first start leaves Caddy out: all admin accounts are
+  created through an SSH tunnel, and only then are the interfaces published,
+  followed by an outside check that no setup or sign-up is still open. The
+  record of processing activities (`docs/compliance/vvt.md`)
   adds V24 and a 30-day retention for error events, enforced by GlitchTip
   itself. The production Compose files and Caddyfile are unchanged; the SDKs
   that send error events follow in packages A2/A3.

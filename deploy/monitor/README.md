@@ -41,6 +41,9 @@ Gleiche Regeln wie im Prod-Stack, geprueft von
 - GlitchTip: Selbstregistrierung nach dem ersten Konto aus, Fehler-Events
   30 Tage (VVT V24). Beszel-Hub: keine SSH-Verbindung zu Prod, keine
   Container-Logs von Prod.
+- Erster Start ohne `caddy`: die Admin-Konten aller drei Oberflaechen
+  entstehen per SSH-Tunnel, bevor etwas oeffentlich erreichbar ist
+  (RUNBOOK, Schritte 4–6).
 
 ## Pruefen ohne Start
 

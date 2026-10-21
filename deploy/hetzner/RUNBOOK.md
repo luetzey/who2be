@@ -2069,7 +2069,7 @@ Jeder andere selbst betriebene Wächter (Uptime-Kuma-Push-Monitor, Prometheus
 Pushgateway + `time() - push_time_seconds > 93600`) erfüllt denselben Zweck.
 
 **Standardweg seit ADR-0062:** der Push-Monitor `backup` auf dem Wächter-Server,
-eingerichtet in [Wächter-Server, Schritt 8](#waechter-server-monitoring-adr-0062).
+eingerichtet in [Wächter-Server, Schritt 10](#waechter-server-monitoring-adr-0062).
 Der Cron-Empfänger oben bleibt der Minimalweg für Betreiber ohne Wächter.
 
 #### Alarmweg testen — Pflicht vor dem Verlassen auf ihn
@@ -2483,7 +2483,7 @@ sie stimmt, geht es weiter.
 
 1. **Server bestellen.** Kleinster Hetzner-Cloud-Typ mit 2 GB RAM (Stufe A,
    ADR-0062 §5.1), moeglichst an einem **anderen Standort** als Prod. Beim
-   Bestellen die Hetzner-Option „Backups“ einschalten (deckt Schritt 11).
+   Bestellen die Hetzner-Option „Backups“ einschalten (deckt Schritt 13).
    Grundhaertung wie Prod: [Provisioning](#provisioning-track-sc1), Abschnitte
    Docker, `deploy`-User, SSH. Hetzner-Firewall: eingehend nur 22 (Admin-IP),
    80 und 443.
@@ -2509,21 +2509,96 @@ sie stimmt, geht es weiter.
    (Format in `.env.example`).
    Pruefung: `stat -c %a deploy/monitor/.env` ergibt `600`.
 
-4. **Stack starten.**
+4. **Stack starten, noch ohne Caddy.** Bis Schritt 6 ist von aussen nichts
+   erreichbar. Alle drei Oberflaechen vergeben ihr erstes Konto an den, der
+   es zuerst anlegt; deshalb entstehen die Konten in Schritt 5 ueber einen
+   SSH-Tunnel, und erst danach startet Caddy.
    ```bash
    MON="docker compose -f deploy/monitor/compose.yml --env-file deploy/monitor/.env"
+   ! grep -q CHANGE_ME deploy/monitor/.env && echo secrets-ok
    $MON config -q && echo config-ok
+   $MON up -d glitchtip-db glitchtip uptime-kuma beszel
+   $MON ps
+   ```
+   Pruefung: `secrets-ok` und `config-ok`; vier Dienste `Up`, `glitchtip-db`
+   `(healthy)`, **kein** `caddy`. Von aussen scheitert
+   `curl -sI --max-time 5 http://<IP>` (Port 80 ohne Dienst).
+
+5. **Admin-Konten anlegen, solange nichts veroeffentlicht ist.** Alle drei
+   jetzt, vor jedem weiteren Schritt.
+
+   a) GlitchTip, auf dem Waechter (Passwort wird verdeckt abgefragt):
+   ```bash
+   $MON exec glitchtip ./manage.py createsuperuser --email <owner-mail>
+   ```
+
+   b) Uptime Kuma und Beszel ueber einen Tunnel vom eigenen Rechner. Die
+   Container-Adressen auf dem Waechter lesen:
+   ```bash
+   for s in uptime-kuma beszel; do
+     echo "$s $(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$($MON ps -q "$s")")"
+   done
+   ```
+   Auf dem eigenen Rechner (offen lassen, bis 5 fertig ist):
+   ```bash
+   ssh -N -L 13001:<KUMA-IP>:3001 -L 18090:<BESZEL-IP>:8090 deploy@<IP>
+   ```
+   Uptime Kuma: `http://localhost:13001` im Browser oeffnen, Admin-Konto
+   anlegen.
+   Beszel: das erste Konto per API anlegen. Es wird Admin und zugleich
+   PocketBase-Superuser (`/_/`), der Platzhalter-Superuser verschwindet.
+   ```bash
+   read -rp 'Mail: ' BM; read -rsp 'Passwort: ' BP; echo
+   jq -n --arg e "$BM" --arg p "$BP" '{email:$e,password:$p}' \
+     | curl -s -X POST http://localhost:18090/api/beszel/create-user \
+         -H 'content-type: application/json' --data @-
+   ```
+   Erwartet: `{"msg":"User created"}`. **Nicht** `USER_EMAIL`/`USER_PASSWORD`
+   in die Env setzen: in v0.21.0 bekommt dieses Konto nur die Rolle `user`.
+   Pruefung (noch im Tunnel; Passwort aus der Variable von eben):
+   ```bash
+   AUTH=$(jq -n --arg e "$BM" --arg p "$BP" '{identity:$e,password:$p}')
+   printf '%s' "$AUTH" | curl -s -X POST http://localhost:18090/api/collections/users/auth-with-password \
+     -H 'content-type: application/json' --data @- | grep -o '"role":"[a-z]*"'
+   printf '%s' "$AUTH" | curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+     http://localhost:18090/api/collections/_superusers/auth-with-password \
+     -H 'content-type: application/json' --data @-
+   unset AUTH BP
+   ```
+   Erwartet: `"role":"admin"` und `200` (PocketBase-Superuser `/_/` gehoert
+   demselben Konto). Uptime Kuma: Anmeldung unter `http://localhost:13001`
+   klappt. Tunnel schliessen.
+
+6. **Caddy starten und von aussen pruefen.**
+   ```bash
    $MON up -d
    $MON ps
    ```
-   Pruefung: `config-ok`, alle fuenf Dienste `Up`, `glitchtip-db` `(healthy)`.
-   Von aussen: `curl -sI https://errors.<MONITOR_DOMAIN> | head -1` liefert
-   `HTTP/2 200`; die Datenbank ist nicht erreichbar
-   (`nc -zv <IP> 5432` scheitert).
+   Pruefung: alle fuenf Dienste `Up`. Dann von einem **anderen** Rechner,
+   jede Zeile mit dem erwarteten Ergebnis:
+   ```bash
+   D=<MONITOR_DOMAIN>
+   # GlitchTip: Registrierung zu -> "enableUserRegistration": false
+   curl -s https://errors.$D/api/settings/ | grep -o '"enableUserRegistration": *[a-z]*'
+   # Beszel: kein Erststart, Anlegen verweigert -> {"firstRun":false}, 403/404, 403
+   curl -s https://hosts.$D/api/beszel/first-run; echo
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://hosts.$D/api/beszel/create-user \
+     -H 'content-type: application/json' -d '{"email":"probe@example.com","password":"probe-probe-1"}'
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://hosts.$D/api/collections/_superusers/records \
+     -H 'content-type: application/json' -d '{"email":"probe@example.com","password":"probe-probe-1","passwordConfirm":"probe-probe-1"}'
+   # Uptime Kuma: kein Setup offen -> 430[false]
+   K="https://status.$D/socket.io/?EIO=4&transport=polling"
+   SID=$(curl -s "$K" | sed -E 's/.*"sid":"([^"]+)".*/\1/')
+   curl -s -X POST --data '40' "$K&sid=$SID" >/dev/null; curl -s "$K&sid=$SID" >/dev/null
+   curl -s -X POST --data '420["needSetup"]' "$K&sid=$SID" >/dev/null; sleep 1
+   curl -s "$K&sid=$SID" | tr '\036' '\n' | grep '^430'
+   ```
+   Weicht eine Zeile ab: `$MON stop caddy`, Schritt 5 fuer diesen Dienst
+   wiederholen. Ausserdem: `nc -zv <IP> 5432` scheitert (DB nicht erreichbar).
 
-5. **GlitchTip einrichten.** **Sofort** `https://errors.<MONITOR_DOMAIN>`
-   oeffnen und das Owner-Konto anlegen: nach dem ersten Konto ist die
-   Selbstregistrierung zu (`ENABLE_USER_REGISTRATION=false`). Danach:
+7. **GlitchTip einrichten.** Unter `https://errors.<MONITOR_DOMAIN>` mit dem
+   Konto aus Schritt 5 anmelden. Weitere Konten entstehen nur per Einladung
+   (`ENABLE_USER_REGISTRATION=false`). Danach:
    Organisation `who2be`, drei Projekte `api`, `mcp`, `web`. Die drei DSNs
    notieren; gesetzt werden sie erst mit den Paketen A2/A3 (nicht jetzt in
    Prod eintragen). Je Projekt unter *Alerts* einen Alarm „neuer Fehler-Typ“
@@ -2532,10 +2607,9 @@ sie stimmt, geht es weiter.
    ```bash
    $MON exec glitchtip ./manage.py sendtestemail <owner-mail>
    ```
-   Pruefung: die Testmail kommt an; ein zweiter Registrierungsversuch im
-   privaten Fenster wird abgelehnt.
+   Pruefung: die Testmail kommt an.
 
-6. **Telegram-Bot.** In Telegram `@BotFather` → `/newbot`, Token notieren
+8. **Telegram-Bot.** In Telegram `@BotFather` → `/newbot`, Token notieren
    (Secret, nie ins Repo). Dem Bot im privaten Chat eine Nachricht schicken,
    dann die Chat-ID lesen:
    ```bash
@@ -2543,10 +2617,10 @@ sie stimmt, geht es weiter.
    ```
    Pruefung: eine Zahl erscheint (die Chat-ID).
 
-7. **Uptime Kuma einrichten.** `https://status.<MONITOR_DOMAIN>` oeffnen,
-   Admin-Konto anlegen. *Einstellungen → Monitor-Verlauf*: **90 Tage**
+9. **Uptime Kuma einrichten.** Unter `https://status.<MONITOR_DOMAIN>` mit
+   dem Konto aus Schritt 5 anmelden. *Einstellungen → Monitor-Verlauf*: **90 Tage**
    (VVT §7). *Einstellungen → Benachrichtigungen*: zwei Ziele anlegen —
-   `Telegram` (Token + Chat-ID aus Schritt 6) und `SMTP` (Mail-Zugang wie in
+   `Telegram` (Token + Chat-ID aus Schritt 8) und `SMTP` (Mail-Zugang wie in
    Schritt 3); bei beiden „Test“ druecken. Danach die Monitore:
 
    | Name | Typ | Ziel | Takt / Wiederholungen | Benachrichtigung |
@@ -2577,110 +2651,111 @@ sie stimmt, geht es weiter.
 
    Pruefung: alle vier HTTP-Monitore gruen; je Ziel kam die Testnachricht an.
 
-8. **Backup-Heartbeat auf den Waechter.** Beim Monitor `backup` die Push-URL
-   kopieren (Form `https://status.<MONITOR_DOMAIN>/api/push/<token>?status=up&msg=OK&ping=`).
-   Auf Prod in der Env-Datei des Backup-Laufs eintragen
-   (`deploy/hetzner/.env`, Variable `BACKUP_HEARTBEAT_URL`, s.
-   [Alarmweg](#alarmweg-dead-mans-switch)). Der Token in der URL ist ein
-   Secret: nur in die `.env`, nicht ins Repo, nicht in Tickets.
-   Pruefung: der Test aus [Alarmweg testen](#alarmweg-testen--pflicht-vor-dem-verlassen-auf-ihn)
-   — Erfolgsfall setzt `backup` auf gruen, der erzwungene Fehlerfall sendet
-   keinen Ping. Zum Proben des Alarms das Intervall einmalig auf `120` s
-   stellen, Alarm abwarten, danach wieder `93600`.
+10. **Backup-Heartbeat auf den Waechter.** Beim Monitor `backup` die Push-URL
+    kopieren (Form `https://status.<MONITOR_DOMAIN>/api/push/<token>?status=up&msg=OK&ping=`).
+    Auf Prod in der Env-Datei des Backup-Laufs eintragen
+    (`deploy/hetzner/.env`, Variable `BACKUP_HEARTBEAT_URL`, s.
+    [Alarmweg](#alarmweg-dead-mans-switch)). Der Token in der URL ist ein
+    Secret: nur in die `.env`, nicht ins Repo, nicht in Tickets.
+    Pruefung: der Test aus [Alarmweg testen](#alarmweg-testen--pflicht-vor-dem-verlassen-auf-ihn)
+    — Erfolgsfall setzt `backup` auf gruen, der erzwungene Fehlerfall sendet
+    keinen Ping. Zum Proben des Alarms das Intervall einmalig auf `120` s
+    stellen, Alarm abwarten, danach wieder `93600`.
 
-9. **Beszel-Hub und Agent auf Prod.**
-   Hub: `https://hosts.<MONITOR_DOMAIN>` oeffnen, Admin-Konto anlegen,
-   *System hinzufuegen* → Name `prod`. Der Dialog zeigt `KEY` (oeffentlicher
-   Schluessel) und `TOKEN`.
+11. **Beszel-Hub und Agent auf Prod.**
+    Hub: unter `https://hosts.<MONITOR_DOMAIN>` mit dem Konto aus Schritt 5
+    anmelden, *System hinzufuegen* → Name `prod`. Der Dialog zeigt `KEY` (oeffentlicher
+    Schluessel) und `TOKEN`.
 
-   Agent auf **Prod** als Host-Dienst (keine Prod-Compose-Aenderung). Version
-   und Pruefsumme sind gepinnt (Release v0.21.0, Datei
-   `beszel-agent_linux_amd64.tar.gz`):
-   ```bash
-   cd /tmp
-   curl -fsSLO https://github.com/henrygd/beszel/releases/download/v0.21.0/beszel-agent_linux_amd64.tar.gz
-   echo "898d67d456a4feed7d651bbac22def5eb41840d4f3d9bf058a5ed37c8c815599  beszel-agent_linux_amd64.tar.gz" | sha256sum -c -
-   tar -xzf beszel-agent_linux_amd64.tar.gz beszel-agent
-   sudo install -m 755 beszel-agent /usr/local/bin/beszel-agent
-   sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups docker beszel
-   sudo install -d -m 700 -o beszel -g beszel /var/lib/beszel-agent
-   sudo install -m 600 /dev/null /etc/beszel-agent.env
-   sudoedit /etc/beszel-agent.env
-   ```
-   Inhalt von `/etc/beszel-agent.env`:
-   ```bash
-   HUB_URL=https://hosts.<MONITOR_DOMAIN>
-   KEY="<oeffentlicher Schluessel aus dem Hub>"
-   TOKEN=<Token aus dem Hub>
-   # Nur ausgehend per WebSocket; kein lauschender Port auf Prod.
-   DISABLE_SSH=true
-   # Keine Registry-Abfragen von Prod aus, keine Journal-Logs an den Hub.
-   DOCKER_IMAGE_CHECK=false
-   SKIP_SYSTEMD_LOGS=true
-   DATA_DIR=/var/lib/beszel-agent
-   ```
-   systemd-Unit `/etc/systemd/system/beszel-agent.service`:
-   ```ini
-   [Unit]
-   Description=Beszel Agent (Waechter, ADR-0062)
-   After=network-online.target docker.service
-   Wants=network-online.target
+    Agent auf **Prod** als Host-Dienst (keine Prod-Compose-Aenderung). Version
+    und Pruefsumme sind gepinnt (Release v0.21.0, Datei
+    `beszel-agent_linux_amd64.tar.gz`):
+    ```bash
+    cd /tmp
+    curl -fsSLO https://github.com/henrygd/beszel/releases/download/v0.21.0/beszel-agent_linux_amd64.tar.gz
+    echo "898d67d456a4feed7d651bbac22def5eb41840d4f3d9bf058a5ed37c8c815599  beszel-agent_linux_amd64.tar.gz" | sha256sum -c -
+    tar -xzf beszel-agent_linux_amd64.tar.gz beszel-agent
+    sudo install -m 755 beszel-agent /usr/local/bin/beszel-agent
+    sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups docker beszel
+    sudo install -d -m 700 -o beszel -g beszel /var/lib/beszel-agent
+    sudo install -m 600 /dev/null /etc/beszel-agent.env
+    sudoedit /etc/beszel-agent.env
+    ```
+    Inhalt von `/etc/beszel-agent.env`:
+    ```bash
+    HUB_URL=https://hosts.<MONITOR_DOMAIN>
+    KEY="<oeffentlicher Schluessel aus dem Hub>"
+    TOKEN=<Token aus dem Hub>
+    # Nur ausgehend per WebSocket; kein lauschender Port auf Prod.
+    DISABLE_SSH=true
+    # Keine Registry-Abfragen von Prod aus, keine Journal-Logs an den Hub.
+    DOCKER_IMAGE_CHECK=false
+    SKIP_SYSTEMD_LOGS=true
+    DATA_DIR=/var/lib/beszel-agent
+    ```
+    systemd-Unit `/etc/systemd/system/beszel-agent.service`:
+    ```ini
+    [Unit]
+    Description=Beszel Agent (Waechter, ADR-0062)
+    After=network-online.target docker.service
+    Wants=network-online.target
 
-   [Service]
-   User=beszel
-   EnvironmentFile=/etc/beszel-agent.env
-   ExecStart=/usr/local/bin/beszel-agent
-   Restart=on-failure
-   RestartSec=10
-   NoNewPrivileges=true
-   ProtectSystem=strict
-   ProtectHome=true
-   PrivateTmp=true
-   ReadWritePaths=/var/lib/beszel-agent
-   MemoryMax=64M
+    [Service]
+    User=beszel
+    EnvironmentFile=/etc/beszel-agent.env
+    ExecStart=/usr/local/bin/beszel-agent
+    Restart=on-failure
+    RestartSec=10
+    NoNewPrivileges=true
+    ProtectSystem=strict
+    ProtectHome=true
+    PrivateTmp=true
+    ReadWritePaths=/var/lib/beszel-agent
+    MemoryMax=64M
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
-   ```bash
-   sudo systemctl daemon-reload && sudo systemctl enable --now beszel-agent
-   systemctl is-active beszel-agent
-   sudo ss -ltnp | grep beszel || echo "kein lauschender Port"
-   ```
-   **Risiko, bewusst getragen:** die Gruppe `docker` ist root-gleichwertig.
-   Der Agent braucht den Docker-Socket fuer Container-Werte; die Alternative
-   (Socket-Proxy als Container) waere eine Prod-Compose-Aenderung und gehoert
-   ins Infra-Paket (ADR-0062 W7). Die Unit begrenzt den Rest
-   (`ProtectSystem=strict`, kein Home, 64 MB).
+    [Install]
+    WantedBy=multi-user.target
+    ```
+    ```bash
+    sudo systemctl daemon-reload && sudo systemctl enable --now beszel-agent
+    systemctl is-active beszel-agent
+    sudo ss -ltnp | grep beszel || echo "kein lauschender Port"
+    ```
+    **Risiko, bewusst getragen:** die Gruppe `docker` ist root-gleichwertig.
+    Der Agent braucht den Docker-Socket fuer Container-Werte; die Alternative
+    (Socket-Proxy als Container) waere eine Prod-Compose-Aenderung und gehoert
+    ins Infra-Paket (ADR-0062 W7). Die Unit begrenzt den Rest
+    (`ProtectSystem=strict`, kein Home, 64 MB).
 
-   Alarme im Hub (*Einstellungen → Benachrichtigungen*: Mail-Adresse und die
-   Telegram-URL `telegram://<TOKEN>@telegram?chats=<CHAT-ID>`; SMTP dafuer im
-   PocketBase-Admin `https://hosts.<MONITOR_DOMAIN>/_/` unter *Settings →
-   Mail settings*). Am System `prod` einschalten:
+    Alarme im Hub (*Einstellungen → Benachrichtigungen*: Mail-Adresse und die
+    Telegram-URL `telegram://<TOKEN>@telegram?chats=<CHAT-ID>`; SMTP dafuer im
+    PocketBase-Admin `https://hosts.<MONITOR_DOMAIN>/_/` unter *Settings →
+    Mail settings*). Am System `prod` einschalten:
 
-   | Alarm | Schwelle | Quelle ADR-0062 §6 |
-   |---|---|---|
-   | Status | System nicht erreichbar | Host weg |
-   | Festplatte | > 80 % | Platte (Warnung; Beszel kennt je Alarm nur eine Schwelle) |
-   | Speicher | > 90 % fuer 5 min | Host-RAM |
+    | Alarm | Schwelle | Quelle ADR-0062 §6 |
+    |---|---|---|
+    | Status | System nicht erreichbar | Host weg |
+    | Festplatte | > 80 % | Platte (Warnung; Beszel kennt je Alarm nur eine Schwelle) |
+    | Speicher | > 90 % fuer 5 min | Host-RAM |
 
-   **Nicht** einschalten: den Container-Health-Alarm. Er haengt beim Ausloesen
-   einen Auszug der Container-Logs an die Nachricht (Beszel v0.21.0,
-   `internal/alerts/alerts_container.go`); Logs der Who2Be-Dienste gehoeren
-   nicht nach Telegram. Der Hub laeuft deshalb auch mit
-   `CONTAINER_DETAILS=false`. Der Alarm „Container neu gestartet / OOM“ ist
-   damit in Stufe A **offen**; sichtbar bleiben Neustarts in der
-   Container-Tabelle des Hubs.
-   Pruefung: `prod` steht im Hub auf „up“ mit Container-Liste; Speicher-Alarm
-   einmal auf 1 % / 1 min stellen, Telegram + Mail abwarten, zuruecksetzen.
+    **Nicht** einschalten: den Container-Health-Alarm. Er haengt beim Ausloesen
+    einen Auszug der Container-Logs an die Nachricht (Beszel v0.21.0,
+    `internal/alerts/alerts_container.go`); Logs der Who2Be-Dienste gehoeren
+    nicht nach Telegram. Der Hub laeuft deshalb auch mit
+    `CONTAINER_DETAILS=false`. Der Alarm „Container neu gestartet / OOM“ ist
+    damit in Stufe A **offen**; sichtbar bleiben Neustarts in der
+    Container-Tabelle des Hubs.
+    Pruefung: `prod` steht im Hub auf „up“ mit Container-Liste; Speicher-Alarm
+    einmal auf 1 % / 1 min stellen, Telegram + Mail abwarten, zuruecksetzen.
 
-10. **Abnahme.** Jeder Alarmweg wurde einmal ausgeloest: Uptime-Kuma-Test je
-    Ziel (Schritt 7), ein Monitor einmal rot (Keyword voruebergehend auf
+12. **Abnahme.** Jeder Alarmweg wurde einmal ausgeloest: Uptime-Kuma-Test je
+    Ziel (Schritt 9), ein Monitor einmal rot (Keyword voruebergehend auf
     `xxx` stellen, Alarm abwarten, zuruecksetzen), Backup-Heartbeat
-    (Schritt 8), Beszel (Schritt 9), GlitchTip-Mail (Schritt 5). Ergebnis mit
+    (Schritt 10), Beszel (Schritt 11), GlitchTip-Mail (Schritt 7). Dazu die
+    Aussen-Pruefung aus Schritt 6 einmal wiederholt. Ergebnis mit
     Datum in [Provisioning-Nachweise](#provisioning-nachweise) festhalten.
 
-11. **Backup des Waechters.** Die Hetzner-Backups aus Schritt 1 sichern den
+13. **Backup des Waechters.** Die Hetzner-Backups aus Schritt 1 sichern den
     ganzen Server taeglich (Daten bleiben bei Hetzner, kein neuer
     Auftragsverarbeiter). Wichtig daran sind die Konten und Einstellungen in
     GlitchTip, Uptime Kuma und Beszel. Die Fehler-Events selbst sind
@@ -2692,13 +2767,13 @@ sie stimmt, geht es weiter.
 ### Betrieb
 
 - **Fristen** (VVT V24, §7): Fehler-Events 30 Tage (`GLITCHTIP_EVENT_RETENTION_DAYS`
-  in `deploy/monitor/compose.yml`), Uptime-Kuma-Verlauf 90 Tage (Schritt 7).
+  in `deploy/monitor/compose.yml`), Uptime-Kuma-Verlauf 90 Tage (Schritt 9).
   Der Waechter-Caddy schreibt bewusst kein Access-Log.
 - **Updates:** Images sind per Tag und Digest gepinnt. Anheben per PR (Tag und
   Digest gemeinsam), danach auf dem Waechter `git pull && $MON up -d`.
   GlitchTip-Major-Spruenge koennen alte Postgres-Versionen fallen lassen,
   vorher die Release-Notes lesen. Den Beszel-Agent auf Prod mit derselben
-  Version wie den Hub fahren (Schritt 9 mit neuer Version und Pruefsumme).
+  Version wie den Hub fahren (Schritt 11 mit neuer Version und Pruefsumme).
 - **Faellt der Waechter aus,** laeuft Prod unveraendert weiter (ADR-0062
   §5.3); es fehlen nur Alarme und Events. Den Waechter selbst ueberwacht in
   Stufe A niemand. Auffaellig wird ein Ausfall daran, dass die Status-Seite

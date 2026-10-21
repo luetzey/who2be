@@ -201,7 +201,7 @@ Kurzfassung:
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
 | Server-Logs (Caddy-Access-Log) | **14 Tage**, durchgesetzt von einem Host-Cron, der taeglich `deploy/hetzner/scripts/rotate-access-log.sh` startet (rotiert die aktive Datei, loescht beide Generationen-Namensklassen; `deploy/hetzner/RUNBOOK.md` §Access-Logs). Das Skript ist der **einzige** Loeschpfad fuer die Frist — `roll_keep_for 336h` in `deploy/hetzner/Caddyfile` begrenzt nur Caddys eigene Generationen und ist kein Rueckfall; zusaetzlich groessenbegrenzt (`roll_size`/`roll_keep`). Container-Logs (stdout/stderr) je Dienst auf 3 x 10 MB gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien) |
 | Fehler-Events (GlitchTip, Waechter-Server) | **30 Tage**, durchgesetzt von GlitchTip selbst (`GLITCHTIP_EVENT_RETENTION_DAYS=30`, gleiche Master-Frist `GLITCHTIP_RETENTION_DAYS`, `deploy/monitor/compose.yml`). Untere Grenze des Vorschlags 30–90 Tage (ADR-0062 §3.2): Datensparsamkeit, weil trotz Scrubbing Freitext in Fehlermeldungen bleiben kann; fuer Ursachensuche und Trend genuegt ein Monat. Kein Access-Log auf dem Waechter (`deploy/monitor/Caddyfile`) |
-| Betriebsmetriken + Heartbeats (Uptime Kuma, Beszel) | ohne Personenbezug. Uptime Kuma: Verlauf **90 Tage** (Einstellung beim Einrichten, RUNBOOK §Waechter-Server Schritt 7; deckt die Monats-SLO aus ADR-0062 §7). Beszel: Voreinstellung des Hubs |
+| Betriebsmetriken + Heartbeats (Uptime Kuma, Beszel) | ohne Personenbezug. Uptime Kuma: Verlauf **90 Tage** (Einstellung beim Einrichten, RUNBOOK §Waechter-Server Schritt 9; deckt die Monats-SLO aus ADR-0062 §7). Beszel: Voreinstellung des Hubs |
 
 ---
 
