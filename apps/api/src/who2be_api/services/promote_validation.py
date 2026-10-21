@@ -20,6 +20,7 @@ nur fuer die Promote-Richtungen draft -> review und draft -> active.
 from typing import Any
 
 from who2be_models import VersionStatus
+from who2be_models.blocknote_text import table_cells
 
 
 class PromoteValidationError(Exception):
@@ -58,6 +59,10 @@ def _blocks_empty(blocks: list[Any]) -> bool:
       als befuellt werten — non-text Bloecke sind valider Inhalt.
     - Block mit 'content'-Liste: leer wenn alle Items keinen sichtbaren Text
       tragen.
+    - Tabellenblock ('content' ist ein `tableContent`-Objekt): dieselbe Regel
+      ueber die Inlines aller Zellen (`table_cells`).
+    - Verschachtelte `children` zaehlen mit: Text in einem Kindblock (z. B.
+      eine Tabelle unter einem Listenpunkt) macht den Body befuellt.
     """
     if not blocks:
         return True
@@ -68,13 +73,21 @@ def _blocks_empty(blocks: list[Any]) -> bool:
         if "content" not in block:
             # Non-text-Block (Image, HorizontalRule, …) — konservativ befuellt.
             return False
-        content_items = block.get("content", [])
-        if isinstance(content_items, list):
-            for item in content_items:
-                if isinstance(item, dict):
-                    text = item.get("text", "")
-                    if isinstance(text, str) and text.strip():
-                        return False
+        content = block.get("content", [])
+        if isinstance(content, list):
+            content_items: list[Any] = content
+        else:
+            # Tabellenblock: sichtbarer Text steht in den Zellen.
+            rows = table_cells(content) or []
+            content_items = [item for row in rows for cell in row for item in cell]
+        for item in content_items:
+            if isinstance(item, dict):
+                text = item.get("text", "")
+                if isinstance(text, str) and text.strip():
+                    return False
+        children = block.get("children")
+        if isinstance(children, list) and children and not _blocks_empty(children):
+            return False
     return True
 
 
