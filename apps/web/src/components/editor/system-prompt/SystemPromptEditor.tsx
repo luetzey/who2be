@@ -24,7 +24,7 @@ import type {
   PlaceholderProps,
 } from './PlaceholderBlock'
 import { caretMeasurable } from './caretAnchor'
-import { buildSlashMenuItems } from './slashMenu'
+import { buildEditorDictionary, buildSlashMenuItems } from './slashMenu'
 import { PlaceholderPreviewPopover } from './PlaceholderPreviewPopover'
 import { PlaybookPicker } from './pickers/PlaybookPicker'
 import { ResourcePicker } from './pickers/ResourcePicker'
@@ -78,6 +78,8 @@ export function SystemPromptEditor({
         initialBlocks !== undefined && initialBlocks.length > 0
           ? initialBlocks
           : undefined,
+      // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+      dictionary: buildEditorDictionary({ withReferences: true }),
     },
     [],
   )

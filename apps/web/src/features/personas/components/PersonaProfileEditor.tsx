@@ -26,7 +26,10 @@ import {
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
 import { PlaceholderPreviewPopover } from '@/components/editor/system-prompt/PlaceholderPreviewPopover'
 import { caretMeasurable } from '@/components/editor/system-prompt/caretAnchor'
-import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
+import {
+  buildEditorDictionary,
+  buildSlashMenuItems,
+} from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
 import { CatalogScopePicker } from '@/components/editor/system-prompt/pickers/CatalogScopePicker'
@@ -82,6 +85,8 @@ export function PersonaProfileEditor({
         initialBlocks !== undefined && initialBlocks.length > 0
           ? (initialBlocks as unknown as SystemPromptBlock[])
           : undefined,
+      // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
+      dictionary: buildEditorDictionary({ withReferences: true }),
     },
     [],
   )
