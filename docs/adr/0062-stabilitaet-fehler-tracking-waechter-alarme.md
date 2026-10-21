@@ -98,7 +98,7 @@ Sicherheitskarte ok“**. Damit gelten die Empfehlungen aus Bericht §6, im
 Wortlaut der Karte:
 
 - **W1 = a:** GlitchTip selbst gehostet (Wechsel zu Sentry später per DSN).
-- **W2 = ja:** zweiter Hetzner-Server als Wächter (6–10 €/Monat).
+- **W2 = ja:** zweiter Hetzner-Server als Wächter […].
 - **W3:** VictoriaMetrics + Grafana auf dem Wächter (Stufe B).
 - **W4:** Telegram für Dringendes + Mail für alles.
 - **W5:** Stufe A vor dem Cloud-Release (Ende November), Stufe B danach.
@@ -110,8 +110,9 @@ Wortlaut der Karte:
 
 „Sicherheitskarte ok“ bezieht sich auf den Nebenbefund, dass der
 Dokploy-Stack kein Caddy hat und deshalb dort die `/v1/internal`-Sperre, die
-Speicherdeckel und fail2ban fehlen. Das ist eine **eigene Karte** außerhalb
-dieser ADR (Abschnitt 4.3).
+Speicherdeckel und fail2ban fehlten. Das regelt eine **eigene Karte**
+außerhalb dieser ADR; Sperre und Speicherdeckel sind seit PR #1003 aktiv
+(Abschnitt 4.3).
 
 ## 3. Fehler-Tracking: GlitchTip über das Sentry-SDK
 
@@ -194,10 +195,12 @@ Grafana über Caddy unter `app.<DOMAIN>/grafana/`. Das entfällt (Weiche W3):
 
 ADR-0010 verlässt sich für die Sperre auf Caddy. Der Dokploy-Stack hat kein
 Caddy, Routing und TLS übernimmt Traefik. Die Sperre dort regelt die
-Sicherheitskarte, die der Owner mit „Sicherheitskarte ok“ freigegeben hat
-(PR #1003, bei Abfassung offen: Sperre zusätzlich in der App, Härtung des
-Dokploy-Stacks). Diese
-ADR legt dafür nichts fest. Für die Metrik-Pakete gilt: Ein Metrik-Endpunkt
+Sicherheitskarte, die der Owner mit „Sicherheitskarte ok“ freigegeben hat.
+Seit PR #1003 ist sie aktiv: Die App sperrt `/v1/internal` selbst
+(`apps/api/src/who2be_api/core/middleware.py#InternalAreaGuard`), und alle
+Dienste des Dokploy-Stacks tragen Speicherdeckel (`deploy/hetzner/RUNBOOK.md`
+§Dokploy-Stack). Offen bleibt fail2ban an der Traefik-Kante. Diese ADR legt
+dafür nichts fest. Für die Metrik-Pakete gilt: Ein Metrik-Endpunkt
 wird erst gebaut, wenn die Sperre auf **jedem** ausgelieferten Stack belegt
 ist.
 
@@ -212,7 +215,7 @@ Stufe A (Erreichbarkeit, Host, Container, Fehler-Tracking) und Stufe B
 
 ### 5.1 Entscheidung
 
-Ein **zweiter, kleiner Hetzner-Server** (Weiche W2, etwa 6–10 €/Monat) ist
+Ein **zweiter, kleiner Hetzner-Server** (Weiche W2) ist
 der unabhängige Wächter. Er erfüllt den RUNBOOK-Grundsatz „Empfänger
 self-hosted auf zweiter Maschine“ und bündelt drei Aufgaben, die heute
 niemand erledigt:
@@ -364,7 +367,7 @@ keine Spezifikation.
 
 ### Wächter (Weiche W2)
 
-- **Alles auf dem Prod-Server.** Spart etwa 6–10 €/Monat, aber Wächter und
+- **Alles auf dem Prod-Server.** Spart einen zweiten Server, aber Wächter und
   Überwachtes sterben gemeinsam; bei Totalausfall kommt kein Alarm. Das
   widerspricht dem RUNBOOK-Grundsatz.
 
@@ -398,8 +401,8 @@ keine Spezifikation.
   bleibt „Akzeptiert“, revidiert in den Punkten aus Abschnitt 4.
 - `docs/architecture.md` beschreibt den Metrik-Stack nicht mehr als laufend,
   sondern verweist auf ADR-0010 und diese ADR.
-- Neue laufende Kosten: ein Wächter-Server, etwa 6–10 €/Monat, dazu etwa 1 €
-  je Testtag für Server auf Zeit.
+- Ein zusätzlicher kleiner Server; Lasttests auf kurzzeitig gemieteter
+  Infrastruktur.
 - Neuer Betriebsaufwand: ein zweiter Server mit eigenem Backup, gepflegt vom
   Owner.
 - Kein neuer Auftragsverarbeiter: Wächter und Testserver laufen bei Hetzner,
@@ -410,4 +413,5 @@ keine Spezifikation.
 - On-Prem bleibt unberührt: ohne DSN kein Fehler-Tracking, ohne Wächter keine
   Alarme. Der Betreiber kann beides mit eigenen Zielen einschalten.
 - Offen und außerhalb dieser ADR: Bestätigung der SLOs nach Paket A5
-  (Nachtrag) und die Härtung des Dokploy-Stacks (Sicherheitskarte).
+  (Nachtrag) und fail2ban an der Traefik-Kante des Dokploy-Stacks
+  (Sicherheitskarte).
