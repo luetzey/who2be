@@ -31,8 +31,8 @@ export default defineConfig({
   },
   // Source-Maps fuer das Fehler-Tracking (Stabilitaet A3): `hidden` erzeugt
   // die .map-Dateien, ohne im JS auf sie zu verweisen. Ausgeliefert werden sie
-  // nie: das Dockerfile laedt sie (nur mit Token) zum Tracker hoch, loescht sie
-  // danach und bricht ab, falls im Image noch eine liegt.
+  // nie: das Dockerfile loescht sie und bricht ab, falls im Image noch eine
+  // liegt. Der Upload zum Tracker folgt in einem eigenen Infra-Schritt.
   build: {
     sourcemap: 'hidden',
   },

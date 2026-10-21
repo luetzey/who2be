@@ -169,6 +169,22 @@ describe('Scrubbing', () => {
     expect(out).toContain('/callback')
   })
 
+  it('maskiert Fragment-Parameter wie Query-Strings, reine Anker bleiben', () => {
+    const text =
+      'Callback fehlgeschlagen: https://who2be.de/cb?lang=de#access_token=opaque123' +
+      '&expires_in=3600&refresh_token=rt-geheim-456&token_type=bearer&type=recovery' +
+      ' siehe /docs#abschnitt'
+
+    const out = scrubText(text)
+
+    expect(out).not.toContain('rt-geheim-456')
+    expect(out).not.toContain('opaque123')
+    expect(out).not.toContain('refresh_token')
+    expect(out).toContain('https://who2be.de/cb')
+    expect(out).toContain('/docs#abschnitt')
+    expect(out).toBe('Callback fehlgeschlagen: https://who2be.de/cb[Filtered][Filtered] siehe /docs#abschnitt')
+  })
+
   it('beforeSend entfernt Nutzer, Request-Daten und URL-Anhang und maskiert verschachtelt', () => {
     const event = {
       user: { id: 'u1', email: 'max@example.org', ip_address: '{{auto}}' },

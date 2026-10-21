@@ -47,6 +47,9 @@ const TEXT_PATTERNS: readonly RegExp[] = [
   /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
   // Query-Strings in URLs (OAuth-`code`, `token`, Supabase-Hash u. a.).
   /\?[^\s"'#]*=[^\s"'#]*/g,
+  // Fragment-Parameter (Supabase-Callback `#access_token=…&refresh_token=…`;
+  // der Refresh-Token ist kein JWT). Reine Anker wie `#abschnitt` bleiben.
+  /#[^\s"'#]*=[^\s"'#]*/g,
 ]
 
 // Request-Felder, die nie mitgeschickt werden. Uebrig bleibt die URL ohne
@@ -57,7 +60,7 @@ const REQUEST_DROP = ['data', 'cookies', 'headers', 'query_string', 'env'] as co
 // wollen: Session-Pings (eigener Netzaufruf je Seitenaufruf).
 const DROPPED_INTEGRATIONS = new Set(['BrowserSession'])
 
-/** Maskiert Tokens, JWTs, Bearer-Werte, E-Mail-Adressen und Query-Strings. */
+/** Maskiert Tokens, JWTs, Bearer-Werte, E-Mail-Adressen sowie Query- und Fragment-Parameter. */
 export function scrubText(value: string): string {
   let out = value
   for (const pattern of TEXT_PATTERNS) {

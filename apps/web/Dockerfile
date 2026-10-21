@@ -45,35 +45,10 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
 RUN npm run build
 
 # Source-Maps (Stabilitaet A3): `vite build` erzeugt sie versteckt
-# (`sourcemap: 'hidden'`, kein Verweis im JS). Mit Token werden sie an den
-# Fehler-Tracker (GlitchTip/Sentry, sentry-cli-kompatibel) hochgeladen; die
-# Zuordnung laeuft ueber Debug-IDs, die `sourcemaps inject` vorher in JS und
-# Map schreibt. OHNE Token (Normalfall, Auto-Deploy) passiert nichts davon —
-# der Build laeuft wie bisher, nur ohne Upload. Der Token kommt als
-# Build-Secret, nie als ARG (ARGs landen in der Image-Historie):
-#   docker build --secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
-#     --build-arg SENTRY_URL=https://<DOMAIN>/ --build-arg SENTRY_ORG=<org> \
-#     --build-arg SENTRY_PROJECT=<projekt> -f apps/web/Dockerfile .
-# Danach werden alle .map-Dateien geloescht, mit und ohne Upload.
-ARG SENTRY_URL=
-ARG SENTRY_ORG=
-ARG SENTRY_PROJECT=
-ARG SENTRY_RELEASE=
-ARG SENTRY_CLI_VERSION=3.8.1
-RUN --mount=type=secret,id=sentry_auth_token,required=false \
-    set -eu; \
-    if [ -s /run/secrets/sentry_auth_token ]; then \
-      echo "[who2be] Source-Maps: Upload zum Fehler-Tracker"; \
-      export SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token)"; \
-      export SENTRY_URL SENTRY_ORG SENTRY_PROJECT; \
-      { npx --yes "@sentry/cli@${SENTRY_CLI_VERSION}" sourcemaps inject dist \
-        && npx --yes "@sentry/cli@${SENTRY_CLI_VERSION}" sourcemaps upload \
-          ${SENTRY_RELEASE:+--release "$SENTRY_RELEASE"} dist; } \
-        || echo "[who2be] WARNUNG: Source-Map-Upload fehlgeschlagen, Build laeuft weiter"; \
-    else \
-      echo "[who2be] Source-Maps: kein Token, kein Upload"; \
-    fi; \
-    find dist -type f -name '*.map' -delete
+# (`sourcemap: 'hidden'`, kein Verweis im JS). Sie werden hier geloescht und
+# nie ausgeliefert. Ein Upload an den Fehler-Tracker ist bewusst nicht Teil
+# dieses Images (folgt in einem eigenen Infra-Paket).
+RUN find dist -type f -name '*.map' -delete
 
 FROM nginx:1.31-alpine AS runtime
 
