@@ -16,19 +16,24 @@ faellt auf, weil der Stack ja startet:
    beendet — und das soll nicht dem Zufall ueberlassen bleiben.
 
 Deshalb prueft dieser Test nicht Stichproben, sondern zaehlt ab: jeder Dienst,
-den die beiden Dateien definieren — inklusive One-Shots und Profil-Diensten.
+den die Dateien definieren — inklusive One-Shots und Profil-Diensten.
 Reiner Datei-Test, ohne DB und ohne Docker.
 
+Geprueft werden beide Hetzner-Stacks UND der Dokploy-Stack
+(``deploy/dokploy/*``, Basis + Cloud-Overlay zusammengefuehrt). Der
+Dokploy-Stack ist seit 2026-10-15 der Prod-Weg (Auto-Deploy auf main); die
+fruehere Ausnahme „Staging mit eigener Ressourcenverwaltung" galt nicht mehr —
+Dokploy setzt von sich aus weder Speicher- noch Log-Deckel.
+
 Bewusst NICHT geprueft werden ``docker-compose.yml`` (Repo-Root, lokale
-Entwicklung), ``deploy/dokploy/*`` (Staging mit eigener Ressourcenverwaltung)
-und die Cloud-Overlays: die ``mem_limit``-Werte sind auf die konkrete
-Zielmaschine geeicht (CX32, 8 GB) und waeren anderswo eine willkuerliche
-Fremdvorgabe.
+Entwicklung) und die lokalen Cloud-Overlays: dort waeren auf 8 GB geeichte
+Deckel eine willkuerliche Fremdvorgabe fuer die Entwicklermaschine.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +48,10 @@ _CADDYFILE = _HETZNER / "Caddyfile"
 
 _COMPOSE_FILES = (_APP_COMPOSE, _SUPABASE_COMPOSE)
 
+_DOKPLOY = _REPO_ROOT / "deploy" / "dokploy"
+_DOKPLOY_BASE = _DOKPLOY / "docker-compose.yml"
+_DOKPLOY_CLOUD = _DOKPLOY / "docker-compose.cloud.yml"
+
 
 def _services(path: Path) -> dict[str, dict[str, Any]]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -51,11 +60,29 @@ def _services(path: Path) -> dict[str, dict[str, Any]]:
     return services
 
 
+def _dokploy_services() -> dict[str, dict[str, Any]]:
+    """Dienste des Dokploy-Prod-Stacks, so wie Dokploy sie rendert.
+
+    Prod laeuft mit Basis + Cloud-Overlay (``docker compose -f … -f …``). Ein
+    Overlay-Dienst, der in der Basis existiert, erbt deren Schluessel; nur
+    Dienste, die allein im Overlay stehen (``redis``,
+    ``set-app-role-password``), muessen die Haertung selbst tragen. Flaches
+    Zusammenfuehren genuegt, weil das Overlay keinen der drei Schluessel
+    ueberschreibt — taete es das, gewaenne der Overlay-Wert wie in Compose.
+    """
+    merged = {name: dict(spec) for name, spec in _services(_DOKPLOY_BASE).items()}
+    for name, spec in _services(_DOKPLOY_CLOUD).items():
+        merged[name] = {**merged.get(name, {}), **spec}
+    return merged
+
+
 def _all_services() -> list[tuple[str, str, dict[str, Any]]]:
     out: list[tuple[str, str, dict[str, Any]]] = []
     for path in _COMPOSE_FILES:
         for name, spec in _services(path).items():
             out.append((path.parent.name, name, spec))
+    for name, spec in _dokploy_services().items():
+        out.append(("dokploy", name, spec))
     return out
 
 
@@ -93,6 +120,22 @@ def test_service_has_memory_ceiling(stack: str, name: str, spec: dict[str, Any])
     )
 
 
+def _always_on_budget_mib(stack_filter: Callable[[str], bool]) -> tuple[int, list[str]]:
+    """Summe der Deckel aller Dauerdienste (ohne One-Shots und Profil-Dienste)."""
+    total_mib = 0
+    counted: list[str] = []
+    for stack, name, spec in _ALL:
+        if not stack_filter(stack):
+            continue
+        if spec.get("restart") == "no" or spec.get("profiles"):
+            continue
+        limit = str(spec["mem_limit"])
+        value, unit = int(limit[:-1]), limit[-1]
+        total_mib += value * (1024 if unit == "g" else 1)
+        counted.append(f"{stack}/{name}={limit}")
+    return total_mib, counted
+
+
 def test_memory_budget_of_always_on_services_fits_the_host() -> None:
     """Die Deckel der DAUERHAFT laufenden Dienste passen auf die Zielmaschine.
 
@@ -105,20 +148,41 @@ def test_memory_budget_of_always_on_services_fits_the_host() -> None:
     Budget hiesse, dass die Deckel im Normalbetrieb greifen, und ein OOM im
     Normalbetrieb waere schlechter als gar kein Deckel.
     """
-    total_mib = 0
-    counted: list[str] = []
-    for stack, name, spec in _ALL:
-        if spec.get("restart") == "no" or spec.get("profiles"):
-            continue
-        limit = str(spec["mem_limit"])
-        value, unit = int(limit[:-1]), limit[-1]
-        total_mib += value * (1024 if unit == "g" else 1)
-        counted.append(f"{stack}/{name}={limit}")
-
+    total_mib, counted = _always_on_budget_mib(lambda stack: stack != "dokploy")
     assert counted, "kein Dauerdienst gefunden — der Filter ist kaputt"
     assert 4096 <= total_mib <= 7168, (
         f"Dauerdienst-Budget {total_mib} MiB passt nicht zu 8 GB RAM: {sorted(counted)}"
     )
+
+
+def test_dokploy_memory_budget_fits_the_host() -> None:
+    """Dieselbe Rechnung fuer den Dokploy-Prod-Stack (Basis + Cloud-Overlay).
+
+    Gleiche Grenzen wie oben, weil die Werte je Dienst aus dem Hetzner-Stack
+    uebernommen sind und dieselbe 8-GB-Klasse zugrunde liegt. Der Unterschied:
+    hier teilen sich die Deckel den Host zusaetzlich mit Dokploy selbst und
+    Traefik, die das Repo nicht deckelt. Die Deckel sind Obergrenzen, keine
+    Reservierungen; die gemessene Summe im Leerlauf liegt weit darunter
+    (RUNBOOK §Dokploy-Stack). Waechst ein Dienst dazu, muss die Summe hier
+    sichtbar neu begruendet werden statt still zu steigen.
+    """
+    total_mib, counted = _always_on_budget_mib(lambda stack: stack == "dokploy")
+    assert len(counted) >= 8, f"Dokploy-Dauerdienste nicht gefunden: {counted}"
+    assert 4096 <= total_mib <= 7168, (
+        f"Dokploy-Dauerdienst-Budget {total_mib} MiB passt nicht zu 8 GB RAM: {sorted(counted)}"
+    )
+
+
+def test_dokploy_services_publish_no_host_ports() -> None:
+    """Im Dokploy-Stack erreicht Traefik die Dienste ueber das Docker-Netz.
+
+    Ein ``ports:``-Eintrag wuerde den Dienst an Traefik vorbei direkt auf dem
+    Host veroeffentlichen — und Docker leitet veroeffentlichte Ports an der
+    Host-Firewall vorbei (RUNBOOK §4). ``expose:`` ist nur Dokumentation und
+    oeffnet nichts.
+    """
+    published = [name for name, spec in _dokploy_services().items() if spec.get("ports")]
+    assert not published, f"Dokploy-Dienste mit Host-Port: {published}"
 
 
 def _caddyfile_text() -> str:
