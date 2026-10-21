@@ -107,6 +107,10 @@ eigenen Sales-Invoice-Webhook. Mollie bietet Webhooks für Sales Invoices an
 1. **Auslöser.** `handle_webhook` stellt fest, dass eine Zahlung bezahlt ist:
    die Erstzahlung (`sequenceType=first`) oder eine Folgezahlung des Abos.
    Nicht bezahlte Zahlungen (fehlgeschlagen, offen) lösen keine Rechnung aus.
+   Achtung im Folgezahlungs-Zweig: `handle_webhook` beansprucht die
+   `payment_id` dort auch bei `payment_paid=False`. Die Rechnung hängt deshalb
+   an `payment.is_paid` im Subscription-Zweig, nicht daran, dass der Ping
+   verarbeitet wurde (R2).
 2. **Vormerken.** Im selben Transaktionspfad wie das Entitlement legt der
    Webhook eine Zeile „Rechnung zu Zahlung `<payment_id>`“ mit Status
    `pending` an (Abschnitt 4). Ab hier ist die Rechnung geschuldet, auch wenn
@@ -375,7 +379,7 @@ nennt sie im PR.
 | Option | Vorteil | Nachteil |
 | --- | --- | --- |
 | **A** eigener Präfix `invoices/…` im vorhandenen BlobStore (SeaweedFS/S3), Katalog und Hash in Postgres | keine neue Infrastruktur; der BlobStore ist schon im nächtlichen Backup (`s3 sync` plus restic, `deploy/hetzner/scripts/backup.sh`); Datenbank-Dumps bleiben klein | das Backup hält nur 6 Monate Historie (`keep-monthly 6`); das Archiv selbst ist der Bucket, ein versehentliches Löschen dort wäre nach 6 Monaten endgültig |
-| **B** PDF als `bytea` in Postgres | transaktional mit der Rechnungszeile, keine zweite Quelle, im verschlüsselten Dump enthalten | etwa 170 KB je PDF (Test P3d): bei 100 Kunden rund 200 MB im Jahr, 2 GB in 10 Jahren in jedem Dump |
+| **B** PDF als `bytea` in Postgres | transaktional mit der Rechnungszeile, keine zweite Quelle, im verschlüsselten Dump enthalten | etwa 170 KB je PDF (Test P3d), also rund 170 MB je 1 000 Rechnungen; über 10 Jahre wächst jeder Dump entsprechend mit |
 | **C** zusätzlich zu A eine Ablage außerhalb von Who2Be (Export in die Buchhaltung oder ein Speicher mit Schreibschutz) | unabhängig vom App-Stack; Schreibschutz deckt die GoBD-Forderung am besten ab | eigener Betreiber-Ablauf; ohne Buchhaltungssoftware zum Start ein Handgriff im Monat |
 
 **Empfehlung: A**, und C als Betreiber-Ablauf, sobald eine Buchhaltung
@@ -417,14 +421,14 @@ Aus dem Bericht §3 bis §5:
 
 - **A2 Mollie + Lexware Office XL:** deutscher Anbieter mit fertigen
   Steuerarten für Reverse Charge und §13b, ZUGFeRD/XRechnung und GoBD-Archiv.
-  Kostet aber 32,90 € im Monat netto, die API gibt es erst ab XL, der Umbau ist
+  Kostet aber eine zusätzliche Monatsgebühr, die API gibt es erst im teuersten
+  Tarif (XL), der Umbau ist
   größer (Kontaktabgleich, OAuth, Rate-Limit 2/s, eigener Retry-Pfad, Umbau M
   statt S–M). Bleibt der fertige Plan B ohne Änderung an der Zahlungsseite,
   falls Mollie Invoicing später nicht trägt.
 - **Merchant of Record (Paddle, Creem, Stripe Managed Payments, Polar u. a.):**
-  nimmt Who2Be die Steuer ab, kostet aber etwa das 2- bis 6-Fache der
-  Mollie-Gebühren (bei 100 Kunden rund 200 bis 220 € statt 35 bis 125 € im
-  Monat), verlangt einen Neubau von Checkout, Abo-Lebenszyklus und allen
+  nimmt Who2Be die Steuer ab, kostet aber ein Mehrfaches der
+  Mollie-Gebühren, verlangt einen Neubau von Checkout, Abo-Lebenszyklus und allen
   Billing-Tests (Umbau L) und sitzt meist außerhalb der EU (Paddle UK, Stripe
   MP über Link LLC USA). Creem als einziger EU-MoR hat keine USt-IdNr.-Eingabe
   für B2B. Wieder prüfen, sobald nennenswert Kunden außerhalb der EU kaufen.
