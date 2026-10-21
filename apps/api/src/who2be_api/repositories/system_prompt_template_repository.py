@@ -69,7 +69,7 @@ _BASE_REV_TARGET = """
         SELECT v.version, v.content FROM system_prompt_template_version v
         WHERE v.template_id = t.id
           AND (v.status = 'draft' OR v.version = t.current_version)
-        ORDER BY (v.status = 'draft') DESC, v.version DESC
+        ORDER BY (v.status = 'draft') DESC, v.version DESC, (v.locale = t.locale) DESC
         LIMIT 1
     ) tv ON TRUE
     WHERE t.id = $1 AND t.workspace_id = $2

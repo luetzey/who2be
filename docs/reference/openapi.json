@@ -14293,6 +14293,474 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown": {
+      "get": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Get Markdown Source",
+        "description": "Quellfassung (`format=source`, ADR-0058 §5.1 B) mit `base_rev` im Kopf.\n\n`base_rev` ist `null`, wenn die gelieferte Version nicht das Schreibziel\nist (Leser sieht nur die aktive Version, waehrend ein Draft offen ist).",
+        "operationId": "get_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__markdown_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "const": "source",
+              "type": "string",
+              "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens.",
+              "default": "source",
+              "title": "Format"
+            },
+            "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Put Markdown",
+        "description": "Vollstand per Markdown; PUT-Semantik wie `update_*` (offener Draft = 409).\n\nIst `base_rev` gesetzt, wird er unter der Zeilensperre geprueft.",
+        "operationId": "put_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Patch Markdown",
+        "description": "Teilaenderung an einem Ueberschriften-Anker oder Feld (ADR-0058 §6.2).\n\nSchreibt in den offenen Draft, sonst entsteht einer. `base_rev` ist Pflicht.",
+        "operationId": "patch_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/versions/{version}/markdown": {
+      "get": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Get Version Markdown Source",
+        "description": "Quellfassung eines Versions-Snapshots (Vorlage fuer eine Wiederherstellung).",
+        "operationId": "get_version_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__versions__version__markdown_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "system-prompts",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "const": "source",
+              "type": "string",
+              "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens.",
+              "default": "source",
+              "title": "Format"
+            },
+            "description": "Quellfassung: Markdown-Normalform mit Ankern und Pill-Tokens."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/system-prompts/markdown": {
+      "post": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Create System Prompt Markdown",
+        "description": "Legt einen System-Prompt aus Markdown an (ohne Entity-Kontingent wie der JSON-Weg).",
+        "operationId": "create_system_prompt_markdown_v1_workspaces__workspace_id__system_prompts_markdown_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/{entity_type}/markdown": {
+      "post": {
+        "tags": [
+          "content-markdown"
+        ],
+        "summary": "Create Markdown",
+        "description": "Legt ein Element aus Markdown an. Anker sind beim Anlegen unbekannt.",
+        "operationId": "create_markdown_v1_workspaces__workspace_id___entity_type__markdown_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "personas",
+                "playbooks",
+                "resources",
+                "external_tools"
+              ],
+              "type": "string",
+              "title": "Entity Type"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownWriteResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict` (base_rev veraltet; `params.current_version`, `params.current_base_rev`), `draft_conflict` oder `review_conflict`."
+          },
+          "422": {
+            "description": "`markdown_unsupported`, `block_not_representable`, `anchor_unknown`, `anchor_duplicate` (`params.field`, `params.line`, `params.block_id`, `params.construct`) oder Validierungsfehler."
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agents": {
       "get": {
         "tags": [
@@ -17611,7 +18079,12 @@
               "measure_test_case_required",
               "measure_not_found",
               "session_not_found",
-              "measure_transition_forbidden"
+              "measure_transition_forbidden",
+              "markdown_unsupported",
+              "block_not_representable",
+              "anchor_unknown",
+              "anchor_duplicate",
+              "version_conflict"
             ],
             "title": "Reason"
           },
@@ -19001,6 +19474,100 @@
         "title": "ContentChunkHit",
         "description": "Eine gefundene Passage aus der aktiven Version eines Elements.\n\n`block_id` ist der Heading-Anker aus ADR-0021 — zusammen mit `entity_id`\nergibt er die bestehende Referenzform `\"<entity_id>#<block_id>\"`, es gibt\nalso keine zweite Ankersprache. `None` bei Passagen ohne Anker\n(Beschreibung, Text vor dem ersten Heading, blocklose Aggregate).\n\n`heading_path` ist die Ueberschriften-Kette der Vorfahren (ohne die eigene\nUeberschrift — die steht als erste Zeile in `text`) und sagt dem Modell,\nwo im Dokument die Passage steht."
       },
+      "ContentEdit": {
+        "properties": {
+          "base_rev": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Base Rev"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "insert_after",
+              "delete"
+            ],
+            "title": "Op"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "markdown": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Markdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "base_rev",
+          "op"
+        ],
+        "title": "ContentEdit",
+        "description": "Teilaenderung (`PATCH …/{entity_type}/{id}/markdown`, ADR-0058 §6.2).\n\nGenau eines von `anchor` (Ueberschriften-ID; der Abschnitt reicht bis vor\ndie naechste Ueberschrift gleicher oder hoeherer Ebene) und `field` (ein\nganzes Markdown-Feld: `body`, `usage_notes`, `profile`,\n`modes[<Name>].identity_add|output_style_override|anti_patterns`).\n`markdown` ist bei `replace`/`insert_after` Pflicht, bei `delete` verboten.\nGeschrieben wird in den offenen Draft, sonst entsteht einer."
+      },
+      "DanglingRef": {
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "playbook",
+              "resource"
+            ],
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_id",
+          "block_id"
+        ],
+        "title": "DanglingRef",
+        "description": "Ein gespeicherter Verweis auf eine Ueberschrift, die das Schreiben geloescht hat."
+      },
       "DashboardActivity": {
         "properties": {
           "ts": {
@@ -20039,6 +20606,64 @@
         ],
         "title": "ExternalToolCreate",
         "description": "Eingabe fuer `POST /v1/workspaces/{ws}/external_tools` — legt Version 1 an.\n\nNur `name` ist Pflicht (spiegelt `ResourceCreate`/`SystemPromptTemplateCreate`).\n`alias` wird beim Create aus dem Namen abgeleitet, falls nicht gesetzt —\nworkspace-eindeutig (409 bei Kollision, partieller UNIQUE-Index Migration 0065)."
+      },
+      "ExternalToolMarkdownContent": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Display Name",
+            "default": ""
+          },
+          "mcp_server_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Mcp Server Name",
+            "default": ""
+          },
+          "tool_names": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Tool Names"
+          },
+          "usage_notes": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Usage Notes",
+            "default": ""
+          },
+          "fallback_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Note"
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExternalToolMarkdownContent",
+        "description": "Externes Tool: `usage_notes` als Markdown (Owner W58-4), sonst wie `ExternalToolContent`."
       },
       "ExternalToolRead": {
         "properties": {
@@ -21905,6 +22530,295 @@
         ],
         "title": "KbSearchHit",
         "description": "Ein Treffer der KB-Suche — nie WorkArea-Inhalte (getrennte Indizes)."
+      },
+      "MarkdownCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content",
+            "description": "Felder je Elementart, siehe die `*MarkdownContent`-Schemas."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MarkdownCreate",
+        "description": "Anlegen per Markdown (`POST …/{entity_type}/markdown`).\n\n`slug` gilt fuer Resource und System-Prompt, `alias` fuer das externe\nTool; bei den anderen Elementarten ist das Feld ein 422. Anker sind beim\nAnlegen immer unbekannt (ADR-0058 §4.2)."
+      },
+      "MarkdownSource": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "personas",
+              "playbooks",
+              "resources",
+              "system-prompts",
+              "external_tools"
+            ],
+            "title": "Entity Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 2,
+            "title": "Locale"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VersionStatus"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonaMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/PlaybookMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/SystemPromptMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalToolMarkdownContent"
+              }
+            ],
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "id",
+          "name",
+          "locale",
+          "version",
+          "status",
+          "base_rev",
+          "content"
+        ],
+        "title": "MarkdownSource",
+        "description": "Quellfassung (`format=source`): Vorlage fuer Vollstand und Teilaenderung.\n\n`base_rev` ist der Konflikt-Token der Version, auf die geschrieben wuerde\n(ADR-0058 §6.3). Er fehlt (`null`), wenn die gelieferte Version nicht das\nSchreibziel ist: bei Versions-Snapshots und bei Lesern, die nur die aktive\nVersion sehen, waehrend ein Draft offen ist."
+      },
+      "MarkdownWrite": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content",
+            "description": "Felder je Elementart, siehe die `*MarkdownContent`-Schemas."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "MarkdownWrite",
+        "description": "Vollstand per Markdown (`PUT …/{entity_type}/{id}/markdown`), PUT-Semantik wie `update_*`.\n\n`base_rev` ist optional: gesetzt prueft der Server ihn unter der\nZeilensperre (409 `version_conflict`)."
+      },
+      "MarkdownWriteResult": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "personas",
+              "playbooks",
+              "resources",
+              "system-prompts",
+              "external_tools"
+            ],
+            "title": "Entity Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 2,
+            "title": "Locale"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VersionStatus"
+          },
+          "base_rev": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rev"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonaMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/PlaybookMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/SystemPromptMarkdownContent"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalToolMarkdownContent"
+              }
+            ],
+            "title": "Content"
+          },
+          "dangling_refs": {
+            "items": {
+              "$ref": "#/components/schemas/DanglingRef"
+            },
+            "type": "array",
+            "title": "Dangling Refs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "id",
+          "name",
+          "locale",
+          "version",
+          "status",
+          "base_rev",
+          "content"
+        ],
+        "title": "MarkdownWriteResult",
+        "description": "Antwort eines Schreibens: der neue Stand samt neuem `base_rev`.\n\n`dangling_refs` nennt gespeicherte Verweise (Playbook- und\nSub-Resource-Links) auf Ueberschriften, die dieses Schreiben entfernt hat\n(ADR-0058 §4.2). Die Verweise bleiben stehen wie nach einem Loeschen im\nWeb-Editor."
       },
       "MeOrganization": {
         "properties": {
@@ -24686,6 +25600,52 @@
         "title": "PersonaCreate",
         "description": "Eingabe fuer `POST /v1/personas` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf; fuer\ndie Freigabe muessen Beschreibung und Profil-Inhalt gefuellt sein."
       },
+      "PersonaMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          },
+          "profile": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Profile",
+            "default": ""
+          },
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/PersonaModeMarkdown"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Modes"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/SkillRef"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Skills"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonaMarkdownContent",
+        "description": "Persona: `profile` ist der Profil-Inhalt, Modi werden ueber den Namen zugeordnet."
+      },
       "PersonaMode": {
         "properties": {
           "name": {
@@ -24761,6 +25721,76 @@
         ],
         "title": "PersonaMode",
         "description": "Ein einzelner Modus einer Multi-Modus-Persona.\n\nEin Modus beschreibt, wie sich die Persona in einem bestimmten Kontext\nverhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne\nTrigger-Match greift der Default-Modus (`is_default=True`).\n\n`identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`\nbeschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`\nlistet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Bloecke.\n\n`playbook_id` bindet den Modus an ein zugehoeriges Playbook;\n`playbook_name` ist dessen Name zur Anzeige und kann bei Umbenennung\nveralten."
+      },
+      "PersonaModeMarkdown": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          },
+          "identity_add": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Identity Add",
+            "default": ""
+          },
+          "output_style_override": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Output Style Override",
+            "default": ""
+          },
+          "anti_patterns": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Anti Patterns",
+            "default": ""
+          },
+          "playbook_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playbook Id"
+          },
+          "playbook_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Playbook Name",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PersonaModeMarkdown",
+        "description": "Ein Persona-Modus; die drei Inhaltsfelder sind je ein Markdown-Dokument."
       },
       "PersonaPlaybookLinkSet": {
         "properties": {
@@ -25279,6 +26309,61 @@
         ],
         "title": "PlaybookCreate",
         "description": "Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.\n\nNur `name` ist Pflicht. Fehlt `content`, entsteht ein leerer Entwurf."
+      },
+      "PlaybookMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaybookType"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ],
+            "title": "Type",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlaybookMarkdownContent",
+        "description": "Playbook: `body` als Markdown, sonst wie `PlaybookContent`."
       },
       "PlaybookRead": {
         "properties": {
@@ -25936,6 +27021,36 @@
         "type": "object",
         "title": "ResourceLinkSet",
         "description": "Eingabe fuer `PUT .../playbooks/{id}/resource_links`.\n\nSet-Replace-Semantik: die Liste ersetzt den bisherigen Stand vollstaendig\n(leere Liste loest alle Links). Obergrenze schuetzt vor Riesen-Arrays."
+      },
+      "ResourceMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResourceMarkdownContent",
+        "description": "Resource: `body` als Markdown (GFM-Tabellen erlaubt, ADR-0058 §3.4)."
       },
       "ResourceRead": {
         "properties": {
@@ -27446,6 +28561,26 @@
         ],
         "title": "SystemFeedbackCreate",
         "description": "Eingabe von `report_problem`: ein zielloses System-/MCP-Problem.\n\nKein `entity_*` — das Problem haengt an der Plattform, nicht an einem Inhalt.\n`category` klassifiziert es, `note` beschreibt es (Pflicht — ein Report ohne\nBeschreibung ist nutzlos)."
+      },
+      "SystemPromptMarkdownContent": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 200000,
+            "title": "Body",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SystemPromptMarkdownContent",
+        "description": "System-Prompt: `body` als Markdown mit Platzhalter-Tokens."
       },
       "SystemPromptTemplateContent": {
         "properties": {
