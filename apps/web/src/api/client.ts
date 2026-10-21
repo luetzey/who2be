@@ -513,6 +513,79 @@ export function oauthConsentPreview(
   })
 }
 
+// Tutorials am Konto (ADR-0060). Nicht workspace-scoped im Pfad: der
+// Fortschritt haengt am Konto. `workspaceId` geht nur als Query mit — daraus
+// leitet der Server die automatischen Schritte ab (und prueft die
+// Mitgliedschaft). Schritt-Definitionen kommen ausschliesslich von hier; das
+// Web haelt keine zweite Schrittliste, nur den Text je Sprache. Eine
+// Tutorial-ID aus der URL wird nur ueber diese Liste aufgeloest, nie direkt in
+// einen Pfad gesetzt — deshalb gibt es hier kein `getTutorial`.
+export type TutorialStepType =
+  | 'head_start'
+  | 'first_mcp_call'
+  | 'agent_created'
+  | 'own_agent_mcp_call'
+  | 'page_visited'
+  | 'manual'
+
+export type TutorialStepState = 'open' | 'done' | 'skipped'
+
+export interface TutorialStep {
+  id: string
+  type: TutorialStepType
+  page: string | null
+  automatic: boolean
+  state: TutorialStepState
+  completed_at: string | null
+}
+
+export interface Tutorial {
+  id: string
+  audience: 'everyone'
+  welcome: boolean
+  welcome_seen_at: string | null
+  restarted_at: string | null
+  completed: boolean
+  steps: TutorialStep[]
+}
+
+export type TutorialPatch =
+  | { step_id: string; state: TutorialStepState }
+  | { welcome_seen: true }
+
+function tutorialQuery(workspaceId: string): Record<string, string> {
+  return workspaceId === '' ? {} : { workspace_id: workspaceId }
+}
+
+export function listTutorials(token: string, workspaceId: string): Promise<Tutorial[]> {
+  return request<Tutorial[]>(token, withQuery(apiPath`/v1/me/tutorials`, tutorialQuery(workspaceId)))
+}
+
+export function patchTutorial(
+  token: string,
+  workspaceId: string,
+  tutorialId: string,
+  body: TutorialPatch,
+): Promise<Tutorial> {
+  return request<Tutorial>(
+    token,
+    withQuery(apiPath`/v1/me/tutorials/${tutorialId}`, tutorialQuery(workspaceId)),
+    { method: 'PATCH', body: JSON.stringify(body) },
+  )
+}
+
+export function restartTutorial(
+  token: string,
+  workspaceId: string,
+  tutorialId: string,
+): Promise<Tutorial> {
+  return request<Tutorial>(
+    token,
+    withQuery(apiPath`/v1/me/tutorials/${tutorialId}/restart`, tutorialQuery(workspaceId)),
+    { method: 'POST' },
+  )
+}
+
 // Query-Parameter von `GET /memories` und `/memories/counts` aus einem
 // `MemoryFilter`. Leere Werte bleiben weg — der Server versteht fehlend als
 // „kein Filter“, ein leerer String waere 422.

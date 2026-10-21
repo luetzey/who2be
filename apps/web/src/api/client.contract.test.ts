@@ -16,7 +16,14 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { acceptInvitation, createApi, fetchMe } from './client'
+import {
+  acceptInvitation,
+  createApi,
+  fetchMe,
+  listTutorials,
+  patchTutorial,
+  restartTutorial,
+} from './client'
 
 // Distinktive Sentinels fuer dynamische Pfad-Segmente. Jedes Segment, das exakt
 // einem Sentinel entspricht, wird beim Normalisieren zu `{}`.
@@ -81,6 +88,9 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
   const invocations: Array<Promise<unknown>> = [
     fetchMe('token'),
     acceptInvitation('token', 'tok-plain'),
+    listTutorials('token', WS),
+    patchTutorial('token', WS, ID, { welcome_seen: true }),
+    restartTutorial('token', WS, ID),
     api.listPersonas(),
     api.getPersona(ID),
     api.createPersona({} as never),

@@ -1,6 +1,6 @@
 import { lazy, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
@@ -208,6 +208,17 @@ const HelpPlaceholdersPage = lazy(() =>
     default: mod.HelpPlaceholdersPage,
   })),
 )
+// Hilfe-Bereich (Onboarding P4): ein Chunk fuer Start, Artikel und Tutorial —
+// die drei teilen Index, Markdown-Renderer und Tutorial-Hook.
+const HelpHomePage = lazy(() =>
+  import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpHomePage })),
+)
+const HelpArticlePage = lazy(() =>
+  import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpArticlePage })),
+)
+const HelpTutorialPage = lazy(() =>
+  import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpTutorialPage })),
+)
 
 // Agenten-Arbeitsbereich + Knowledge Base (ADR-0047). Eigenes Sub-Layout mit
 // Sub-Navigation (Muster `SettingsLayout`) — die Lese-Ansicht besteht aus
@@ -329,6 +340,21 @@ function WorkspaceIndexRedirect() {
   return <Navigate to={`/w/${params.workspaceId}/dashboard`} replace />
 }
 
+// `/help/<rest>#anker` → `/w/<default>/help/<rest>#anker`. Der Rest bleibt ein
+// Pfad unter `/help/` und wird dort von den Hilfe-Routen gegen den Index
+// aufgeloest.
+function HelpShortLinkRedirect() {
+  const params = useParams()
+  const { hash } = useLocation()
+  const { me } = useSession()
+  const workspaceId = me?.default_workspace_id ?? null
+  if (workspaceId === null) return <DefaultWorkspaceRedirect />
+  const rest = params['*'] ?? ''
+  return (
+    <Navigate to={`/w/${workspaceId}/help${rest === '' ? '' : `/${rest}`}${hash}`} replace />
+  )
+}
+
 export function RouterRoot() {
   return (
     <BrowserRouter>
@@ -374,6 +400,8 @@ export function RouterRoot() {
                   Konto-Adresse, Annahme per Klick. Ohne Session faengt
                   RequireAuth ab und fuehrt per `next` hierher zurueck. */}
               <Route path="/invitations" element={<PendingInvitationsPage />} />
+              {/* Kurzlink ohne Workspace (E-Mails, „Was ist neu“). */}
+              <Route path="/help/*" element={<HelpShortLinkRedirect />} />
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />
@@ -497,10 +525,18 @@ export function RouterRoot() {
                     element={<MembersPage />}
                   />
                 </Route>
+                <Route path="/w/:workspaceId/help" element={<HelpHomePage />} />
+                {/* Statische Segmente (`placeholders`, `tutorials`) vor `:slug`;
+                    der Inhaltstest sperrt diese Slugs fuer Hilfe-Seiten. */}
                 <Route
                   path="/w/:workspaceId/help/placeholders"
                   element={<HelpPlaceholdersPage />}
                 />
+                <Route
+                  path="/w/:workspaceId/help/tutorials/:tutorialId"
+                  element={<HelpTutorialPage />}
+                />
+                <Route path="/w/:workspaceId/help/:slug" element={<HelpArticlePage />} />
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />
                 ) : null}

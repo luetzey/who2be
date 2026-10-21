@@ -4380,5 +4380,85 @@
       "copySticky_one": "Copy starting sentence (1 case)",
       "copySticky_other": "Copy starting sentence ({{count}} cases)"
     }
+  },
+  "help": {
+    "nav": {
+      "back": "Back to help",
+      "overview": "Go to help overview"
+    },
+    "sections": {
+      "firstSteps": "Getting started",
+      "buildingBlocks": "Building blocks",
+      "improveAgents": "Improving agents",
+      "accountAndTeam": "Account and team"
+    },
+    "home": {
+      "title": "Help",
+      "description": "Guides, tutorials and answers about Who2Be.",
+      "search": {
+        "label": "Search help",
+        "placeholder": "What are you looking for?",
+        "resultsTitle": "Search results",
+        "count_one": "1 result for “{{query}}”",
+        "count_other": "{{count}} results for “{{query}}”",
+        "none": "Nothing found. Try another word or ask us."
+      },
+      "tutorials": {
+        "title": "Tutorials",
+        "empty": "No tutorials yet.",
+        "error": "Tutorials could not be loaded.",
+        "retry": "Try again"
+      },
+      "reference": {
+        "title": "Reference",
+        "empty": "The first help pages will appear here soon."
+      },
+      "footer": {
+        "prefix": "Didn't find what you were looking for?",
+        "link": "Report a problem"
+      }
+    },
+    "article": {
+      "breadcrumb": "Breadcrumb",
+      "meta": "Updated {{date}} · {{minutes}} min read",
+      "copyForAgents": "Copy for agents",
+      "copied": "Page copied as Markdown.",
+      "copyFailed": "Copying failed.",
+      "onThisPage": "On this page",
+      "allPages": "All help pages",
+      "next": "Next: {{title}} →",
+      "notFound": "This help page does not exist."
+    },
+    "tutorial": {
+      "notFound": "This tutorial does not exist.",
+      "stepNumber": "Step {{number}}:",
+      "automaticHint": "Who2Be checks this step off by itself once it's done.",
+      "progress": {
+        "label": "{{done}} of {{total}} steps · about {{minutes}} min",
+        "completed": "Completed · all {{total}} steps",
+        "aria": "Progress: {{title}}"
+      },
+      "state": {
+        "open": "Open",
+        "done": "Done",
+        "skipped": "Skipped"
+      },
+      "actions": {
+        "start": "Start",
+        "resume": "Resume",
+        "restart": "Restart",
+        "openPage": "Open page",
+        "markDone": "Mark as done",
+        "skip": "Skip",
+        "reopen": "Reopen"
+      },
+      "restart": {
+        "title": "Restart “{{title}}”?",
+        "body": "Your progress in this tutorial will be reset. Steps that Who2Be detects by itself will check off again afterwards.",
+        "cancel": "Cancel",
+        "confirm": "Restart",
+        "done": "Tutorial restarted."
+      }
+    }
   }
 }
