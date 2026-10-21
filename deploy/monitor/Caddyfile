@@ -1,0 +1,50 @@
+# Reverse-Proxy des Waechter-Servers (ADR-0062, Paket A1).
+# Auto-HTTPS via Let's Encrypt. Env aus ./compose.yml: MONITOR_DOMAIN, ACME_EMAIL.
+#
+# Drei Subdomains, alle auf dem Waechter. Keine davon liefert Nutzerinhalte
+# von Who2Be aus; die Prod-Caddyfile (deploy/hetzner/Caddyfile) bleibt davon
+# unberuehrt.
+#
+# Kein Access-Log: GlitchTip empfaengt hier die SDK-Events von Prod, die
+# Quell-IP waere dann die des Prod-Servers bzw. bei Web-Fehlern die des
+# Browsers. Fuer den Betrieb genuegt das Container-Log (gedeckelt in
+# compose.yml); ein IP-Protokoll braeuchte eine eigene Frist im VVT.
+
+{
+    email {$ACME_EMAIL}
+}
+
+(security_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        X-Robots-Tag "noindex, nofollow, noarchive"
+        -Server
+    }
+}
+
+# GlitchTip: Web-UI + Ingest-Endpunkte der Sentry-SDKs (/api/<id>/envelope/).
+# Die SDKs von API, MCP und Web senden hierhin; die DSN setzen die Pakete A2/A3.
+errors.{$MONITOR_DOMAIN} {
+    import security_headers
+    # Grosse Envelopes (Source-Maps beim Upload) nicht am Proxy abschneiden.
+    request_body {
+        max_size 20MB
+    }
+    reverse_proxy glitchtip:8000
+}
+
+# Uptime Kuma: Status-UI und Push-Endpunkte (/api/push/<token>) fuer
+# Backup-Heartbeat und weitere Dead-Man's-Switches.
+status.{$MONITOR_DOMAIN} {
+    import security_headers
+    reverse_proxy uptime-kuma:3001
+}
+
+# Beszel-Hub: UI und WebSocket-Endpunkt fuer den Agenten auf Prod.
+hosts.{$MONITOR_DOMAIN} {
+    import security_headers
+    reverse_proxy beszel:8090
+}
