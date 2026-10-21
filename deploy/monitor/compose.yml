@@ -1,0 +1,165 @@
+# Waechter-Stack (ADR-0062 §5, Paket A1) — laeuft auf einem ZWEITEN, kleinen
+# Server, nie auf dem Prod-Host. Stirbt Prod, muss der Waechter weiterleben,
+# sonst kommt bei einem Totalausfall kein Alarm.
+#
+# Dienste (Stufe A):
+#   caddy        einziger Dienst mit Host-Ports (80/443), TLS via Let's Encrypt
+#                errors.<MONITOR_DOMAIN> -> glitchtip:8000
+#                status.<MONITOR_DOMAIN> -> uptime-kuma:3001
+#                hosts.<MONITOR_DOMAIN>  -> beszel:8090
+#   glitchtip    Fehler-Tracking (Sentry-SDK-kompatibel), all_in_one ohne Valkey
+#   glitchtip-db eigenes Postgres, NUR im internen Netz `glitchtip-db`
+#   uptime-kuma  externe Checks, TLS-Ablauf, Push-Monitore (Backup-Heartbeat)
+#   beszel       Hub fuer Host-/Container-Werte; der Agent laeuft auf Prod als
+#                Host-Dienst und verbindet sich ausgehend per WebSocket
+#
+# Einrichtung, Alarmwege und Tests: deploy/hetzner/RUNBOOK.md
+# §Waechter-Server (Monitoring, ADR-0062). Uebersicht: ./README.md.
+#
+# Pruefen ohne Start:
+#   docker compose -f deploy/monitor/compose.yml --env-file deploy/monitor/.env config -q
+#
+# --- Haertung wie Prod (deploy/hetzner/who2be/docker-compose.yml) -------------
+# An JEDEM Dienst: Log-Deckel, no-new-privileges, mem_limit.
+# apps/api/tests/test_monitor_compose.py haelt das nach, dazu: keine Host-Ports
+# ausser caddy, Images per Digest gepinnt, Secrets nur per Env mit `:?`-Guard.
+#
+# Speicher-Budget (Stufe A, Bericht §3.4: etwa 1 GB Bedarf): die Deckel sind
+# Obergrenzen, keine Reservierung; ihre Summe (1408 MB) bleibt auf einem
+# 2-GB-Typ unter 1,5 GB, Rest fuer Kernel und Page-Cache. Stufe B
+# (VictoriaMetrics + Grafana) braucht den naechstgroesseren Typ.
+
+name: who2be-monitor
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  caddy:
+    <<: *hardening
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MONITOR_DOMAIN: ${MONITOR_DOMAIN:?MONITOR_DOMAIN fehlt (deploy/monitor/.env)}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL fehlt (deploy/monitor/.env)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    depends_on: [glitchtip, uptime-kuma, beszel]
+    mem_limit: 128m
+
+  glitchtip:
+    <<: *hardening
+    # 6.2.6 (Oktober 2026). Major-Spruenge (etwa jaehrlich) koennen alte
+    # Postgres-Versionen fallen lassen: vor dem Anheben die Release-Notes lesen.
+    image: glitchtip/glitchtip:6.2.6@sha256:a3d8eb1b36c1e1603d55ab32711ea3dd8115874742a781a57391a62a16e0dff6
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:?GLITCHTIP_DB_PASSWORD fehlt}@glitchtip-db:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?GLITCHTIP_SECRET_KEY fehlt}
+      GLITCHTIP_DOMAIN: https://errors.${MONITOR_DOMAIN:?MONITOR_DOMAIN fehlt}
+      DEFAULT_FROM_EMAIL: ${MONITOR_MAIL_FROM:?MONITOR_MAIL_FROM fehlt}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?GLITCHTIP_EMAIL_URL fehlt}
+      # Web und Hintergrund-Worker in einem Prozess; Valkey aus, Postgres
+      # traegt Queue, Cache und Sessions (GlitchTip-Doku, Low-RAM-Betrieb).
+      SERVER_ROLE: all_in_one
+      VALKEY_URL: ""
+      # Nach dem ersten Konto (Owner) keine Selbstregistrierung und keine
+      # weiteren Organisationen ohne Superuser.
+      ENABLE_USER_REGISTRATION: "false"
+      ENABLE_ORGANIZATION_CREATION: "false"
+      # Nur Fehler-Tracking. Log-Ingest und GlitchTips eigene Uptime-Checks
+      # bleiben aus (Uptime Kuma macht das), ebenso Admin, OpenAPI und MCP —
+      # weniger RAM, weniger Angriffsflaeche (Werte wie compose.sample.yml).
+      GLITCHTIP_ENABLE_LOGS: "False"
+      GLITCHTIP_ENABLE_UPTIME: "False"
+      GLITCHTIP_ENABLE_MCP: "False"
+      GLITCHTIP_ENABLE_DUCKDB: "False"
+      ENABLE_ADMIN: "False"
+      ENABLE_OPENAPI: "False"
+      # Aufbewahrung (VVT V24 / §7): Fehler-Events 30 Tage. Transaktionen,
+      # Logs und Uptime-Daten nutzt Who2Be nicht; dieselbe Frist, damit nichts
+      # laenger liegt als die Events.
+      GLITCHTIP_RETENTION_DAYS: "30"
+      GLITCHTIP_EVENT_RETENTION_DAYS: "30"
+    volumes:
+      - glitchtip-uploads:/code/uploads
+    networks: [edge, glitchtip-db]
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    mem_limit: 640m
+
+  glitchtip-db:
+    <<: *hardening
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_DB: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:?GLITCHTIP_DB_PASSWORD fehlt}
+    # Postgres 18: Datenverzeichnis liegt unter /var/lib/postgresql/18/docker,
+    # gemountet wird deshalb das Elternverzeichnis.
+    volumes:
+      - glitchtip-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Kein `ports:` und nur das interne Netz: die DB ist weder vom Host noch
+    # aus dem Internet erreichbar, nur fuer `glitchtip`.
+    networks: [glitchtip-db]
+    mem_limit: 256m
+
+  uptime-kuma:
+    <<: *hardening
+    image: louislam/uptime-kuma:2.5.6@sha256:9912da7d7d9b6ddc0c2d904beb84d24689c1ed9c33b81419eb9008663a92a329
+    environment:
+      # SQLite im Volume; ueberspringt die DB-Auswahl beim ersten Start.
+      UPTIME_KUMA_DB_TYPE: sqlite
+    volumes:
+      - uptime-kuma-data:/app/data
+    networks: [edge]
+    mem_limit: 256m
+
+  beszel:
+    <<: *hardening
+    image: henrygd/beszel:0.21.0@sha256:6b39a8b64f9b15d00a25e7683e31a93c46161182a54f62713525107064e10599
+    environment:
+      APP_URL: https://hosts.${MONITOR_DOMAIN:?MONITOR_DOMAIN fehlt}
+      # Nur ausgehende WebSocket-Verbindungen der Agenten; der Hub oeffnet
+      # keine SSH-Verbindung zu Prod, auf Prod bleibt kein Port offen.
+      DISABLE_SSH: "true"
+      # Keine Container-Logs/-Details von Prod im Hub abrufbar: die Logs der
+      # Who2Be-Dienste koennen Nutzer-IDs und Pfade enthalten und gehoeren
+      # nicht auf den Waechter (ADR-0062 §6: Alarme ohne Nutzerdaten).
+      CONTAINER_DETAILS: "false"
+    volumes:
+      - beszel-data:/beszel_data
+    networks: [edge]
+    mem_limit: 128m
+
+networks:
+  edge: {}
+  glitchtip-db:
+    internal: true
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+  glitchtip-uploads: {}
+  glitchtip-pg: {}
+  uptime-kuma-data: {}
+  beszel-data: {}
