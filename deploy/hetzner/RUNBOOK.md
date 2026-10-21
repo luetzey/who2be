@@ -866,6 +866,130 @@ Web-Container leitet nur `/v1/` (klein) an die API, alles andere ist das
 statische Bundle — die Anfrage erreicht die API nicht (gemessen im lokalen
 Stack-Lauf 2026-10-21: SPA-HTML, kein Eintrag im API-Access-Log).
 
+#### Vergleich Hetzner/Caddy-Stack und Dokploy-Stack
+
+Was der jeweilige Stack aus dem Repo mitbringt. Belege als Datei + Anker
+(Dienst, Snippet, Symbol), siehe CONTRIBUTING §Referencing code. „Kante" heisst
+beim Hetzner-Stack Caddy, beim Dokploy-Stack Traefik, das Dokploy selbst
+betreibt und dessen Konfiguration nicht im Repo liegt.
+
+| Schutz | Hetzner/Caddy-Stack | Dokploy-Stack | Soll im Dokploy-Stack |
+| --- | --- | --- | --- |
+| Security-Header (HSTS, nosniff, XFO, Referrer, Permissions, COOP, X-Robots-Tag, Server-Banner aus) | `deploy/hetzner/Caddyfile#(security_headers)`, an allen vier Hosts importiert | Nicht im Repo. `apps/web/nginx.conf` setzt nur `Cache-Control`, keine Security-Header | Traefik-Middleware, Schritt 1 unten |
+| CSP API/MCP/Auth | `deploy/hetzner/Caddyfile#api.{$DOMAIN}`, `#mcp.{$DOMAIN}`, `#supabase.{$DOMAIN}` (`default-src 'none'` …) | Nicht im Repo | Traefik-Middleware je Host, Schritt 1 |
+| CSP Web | `deploy/hetzner/Caddyfile#app.{$DOMAIN}` | Nicht im Repo | Traefik-Middleware je Host, Schritt 1 |
+| `Cache-Control: no-store` (API/MCP, nur wenn die App keinen setzt) | `deploy/hetzner/Caddyfile#(no_store)` | Nicht im Repo; die OAuth-Endpunkte setzen `no-store` selbst | Bedingtes Setzen kann Traefik nicht, siehe Hinweis zu Schritt 1 |
+| `/v1/internal`-Sperre | Kante: `deploy/hetzner/Caddyfile#@internal`, `#@internal_alt`. App: `InternalAreaGuard` | App: `apps/api/src/who2be_api/core/middleware.py#InternalAreaGuard`, registriert in `apps/api/src/who2be_api/main.py#create_app` | Erfuellt durch die App; eine Sperre an der Kante ist optional |
+| Body-Limit vor der App | `deploy/hetzner/Caddyfile#api.{$DOMAIN}` (`request_body max_size`) | Web-Pfad: `apps/web/nginx.conf#client_max_body_size`; fuer `api.<DOMAIN>` nicht im Repo | Traefik-Middleware `buffering` (`maxRequestBodyBytes` wie im Caddyfile), Repo-Label wie Schritt 1.3 |
+| Rate-Limit an der Kante | fail2ban auf Caddys Access-Log: `deploy/hetzner/fail2ban/jail.d/who2be-caddy.conf` | Nicht im Repo; die App drosselt selbst (`slowapi`, `McpLimitService`) | Traefik-`rateLimit` und/oder fail2ban/CrowdSec, Schritte 2 und 3 |
+| Zugriffslog fuer fail2ban/CrowdSec | `deploy/hetzner/Caddyfile#(access_log)`, Volume `caddy-logs` in `deploy/hetzner/who2be/docker-compose.yml#caddy` | Nicht im Repo | Traefik-Access-Log, Schritt 2 |
+| `mem_limit` | jeder Dienst, `deploy/hetzner/who2be/docker-compose.yml` + `deploy/hetzner/supabase/docker-compose.yml` | jeder Dienst, `deploy/dokploy/docker-compose.yml` + `docker-compose.cloud.yml#redis`, `#set-app-role-password`; Test `apps/api/tests/test_compose_hardening.py` | erfuellt |
+| `cpus` | nicht gesetzt | nicht gesetzt | bewusst offen: ohne Lastmessung (Stufe A, Lasttest) waere jeder Wert geraten |
+| `no-new-privileges` | `deploy/hetzner/who2be/docker-compose.yml#x-hardening` | `deploy/dokploy/docker-compose.yml#x-hardening`, Overlay-Dienste einzeln | erfuellt |
+| `read_only` / `cap_drop` | nicht gesetzt | nicht gesetzt | gleiches Niveau; Einfuehrung braucht je Image eine Pruefung der Schreibpfade und ist eine eigene Aenderung |
+| Log-Rotation der Container | `deploy/hetzner/who2be/docker-compose.yml#x-logging` | `deploy/dokploy/docker-compose.yml#x-logging` | erfuellt |
+| Veroeffentlichte Host-Ports | nur `caddy` (80/443), `deploy/hetzner/who2be/docker-compose.yml#caddy` | keine; Traefik erreicht die Dienste ueber `dokploy-network` (`expose:`), Test `test_compose_hardening.py` | erfuellt |
+| Healthchecks | Compose: `api`, `worker`, `seaweedfs`, `web`, `mcp`, `db`, `auth`, `auth-gateway`, `redis` | Compose: `db`, `auth`, `auth-gateway`, `seaweedfs`, `api`, `worker`, `redis`; `web` und `mcp-http` ueber `HEALTHCHECK` in `apps/web/Dockerfile`, `apps/mcp/Dockerfile` | erfuellt |
+
+#### Einrichtung an der Kante (Owner, Dokploy-Oberflaeche)
+
+Diese Schritte gehen nur in Dokploy bzw. in Traefik und liegen deshalb nicht im
+Repo. Reihenfolge einhalten: Ein Router-Label, das auf eine noch nicht
+definierte `@file`-Middleware zeigt, nimmt Traefik den ganzen Router aus dem
+Betrieb, der Host waere dann nicht erreichbar.
+
+**Schritt 1: Header-Middleware (Angleichung an `(security_headers)` und die CSP
+im Caddyfile).**
+
+1. In Dokploy unter *Traefik → File System* im Verzeichnis `dynamic/` eine Datei
+   `who2be-headers.yml` anlegen:
+
+   ```yaml
+   http:
+     middlewares:
+       who2be-security-headers:
+         headers:
+           stsSeconds: 31536000
+           stsIncludeSubdomains: true
+           contentTypeNosniff: true
+           frameDeny: true
+           referrerPolicy: "no-referrer"
+           permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), microphone=()"
+           customResponseHeaders:
+             Cross-Origin-Opener-Policy: "same-origin"
+             X-Robots-Tag: "noindex, nofollow, noarchive"
+             Server: ""          # leerer Wert entfernt den Header
+       who2be-csp-strict:     # api., mcp., supabase.
+         headers:
+           contentSecurityPolicy: "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
+       who2be-csp-web:        # app.
+         headers:
+           contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.<DOMAIN> https://supabase.<DOMAIN>; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
+   ```
+
+   `<DOMAIN>` durch die eigene Domain ersetzen. Die CSP-Werte sind die aus
+   `deploy/hetzner/Caddyfile`. Aendert sich dort eine CSP (etwa W7,
+   Tracker-Domain in `connect-src`), wird diese Datei im selben Zug angepasst.
+2. Pruefen, dass Traefik die Datei geladen hat: Im Traefik-Log (Dokploy →
+   *Traefik → Logs*) darf kein Fehler zu `who2be-headers.yml` stehen.
+   Liegt am Entrypoint `websecure` bereits eine globale Header-Middleware, wird
+   sie durch `who2be-security-headers` ersetzt und nicht mit ihr kombiniert,
+   damit kein Header doppelt oder mit zwei Werten ankommt.
+3. Erst danach die Middlewares an die Router haengen. Das sind Labels in
+   `deploy/dokploy/docker-compose.yml` und damit eine Repo-Aenderung, die nach
+   dem Merge sofort live geht. Sie laeuft als eigene Karte mit Owner-Go:
+
+   ```text
+   traefik.http.routers.who2be-api.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-mcp.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-supabase.middlewares=who2be-security-headers@file,who2be-csp-strict@file
+   traefik.http.routers.who2be-web.middlewares=who2be-security-headers@file,who2be-csp-web@file
+   ```
+4. Nach dem Deploy pruefen, an allen vier Hosts:
+
+   ```bash
+   for h in api app supabase mcp; do
+     echo "== $h"; curl -sI "https://$h.<DOMAIN>/" | grep -iE \
+       'strict-transport|x-content-type|x-frame|referrer-policy|permissions-policy|cross-origin-opener|x-robots|content-security|^server:'
+   done   # erwartet: Werte wie oben, keine server:-Zeile
+   ```
+
+Hinweis zu `Cache-Control: no-store`: Caddy setzt ihn nur, wenn die App keinen
+eigenen liefert. Traefik ueberschreibt Antwort-Header immer und wuerde damit
+die bewusst cachebaren MCP-Metadaten (`/.well-known/*`) ebenfalls auf
+`no-store` setzen. Deshalb hier nicht an der Kante; der richtige Ort ist die
+App selbst (eigene Karte).
+
+**Schritt 2: Access-Log fuer fail2ban oder CrowdSec.**
+
+1. In Dokploy das Traefik-Access-Log einschalten (*Traefik →
+   Konfiguration* `traefik.yml`, Block `accessLog` mit `format: json` und einem
+   `filePath` auf dem Host). Nutzt Dokploy fuer seine Anfragen-Ansicht bereits
+   ein Access-Log, diese Datei verwenden statt einer zweiten.
+2. Wie im Caddy-Stack gilt: `Authorization`/`Cookie` nicht protokollieren
+   (`fields.headers.defaultMode: drop`) und die Frist von 14 Tagen per
+   Rotation einhalten (§Access-Logs, `docs/compliance/vvt.md` §7). Query-Werte
+   (`code`, `token`) kann Traefik nicht einzeln redigieren. Deshalb vor dem
+   Einschalten pruefen, ob `RequestPath` mit Query im Log landet, und das mit
+   dem Datenschutz-Verantwortlichen klaeren.
+3. Der fail2ban-Filter im Repo (`deploy/hetzner/fail2ban/filter.d/who2be-caddy.conf`)
+   ist auf Caddys JSON-Felder geschrieben und liest Traefik-Zeilen nicht. Fuer
+   den Dokploy-Stack braucht es einen eigenen Filter mit Test analog
+   `deploy/hetzner/tests/test_fail2ban_filter.sh` (eigene Karte). Alternativ
+   CrowdSec mit der Traefik-Collection. Die Entscheidung trifft der Owner.
+
+**Schritt 3: Rate-Limit-Middleware.**
+
+1. In derselben Datei aus Schritt 1 eine Middleware `who2be-ratelimit` vom Typ
+   `rateLimit` anlegen (`average`, `burst`, `sourceCriterion.ipStrategy`).
+   Die Werte orientieren sich an den Jails in §Rate-Limit an der Kante und
+   werden nach dem Lasttest der Stufe A bestaetigt.
+2. Nur an die Router `who2be-api` und `who2be-supabase` haengen, nicht an
+   `who2be-mcp`. Ein MCP-Client ist eine IP mit hoher legitimer Rate, seine
+   Limits setzt die App (§Rate-Limit an der Kante, „Nie gezaehlt").
+3. Das Label ist wieder eine Repo-Aenderung (Schritt 1.3) und laeuft mit
+   derselben Karte und demselben Owner-Go.
+
 ---
 
 ## Rate-Limit an der Kante (fail2ban)

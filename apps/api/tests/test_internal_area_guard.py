@@ -14,6 +14,8 @@ hat gegriffen“, 404 heisst „bis zum Router durchgelassen“.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -113,8 +115,6 @@ def test_guard_passes_non_http_scopes_through() -> None:
 
     async def inner(scope, receive, send):  # type: ignore[no-untyped-def]
         seen.append(scope["type"])
-
-    import asyncio
 
     asyncio.run(InternalAreaGuard(inner)({"type": "lifespan"}, None, None))  # type: ignore[arg-type]
     assert seen == ["lifespan"]
