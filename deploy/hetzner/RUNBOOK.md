@@ -931,6 +931,12 @@ im Caddyfile).**
    `<DOMAIN>` durch die eigene Domain ersetzen. Die CSP-Werte sind die aus
    `deploy/hetzner/Caddyfile`. Aendert sich dort eine CSP (etwa W7,
    Tracker-Domain in `connect-src`), wird diese Datei im selben Zug angepasst.
+   Fehler-Tracking der Web-App (ADR-0062 W7): Ist `SENTRY_DSN_WEB` im
+   Dokploy-Environment gesetzt, an `connect-src` von `who2be-csp-web` die
+   Tracker-Origin anhaengen, mit einem Leerzeichen direkt hinter
+   `https://supabase.<DOMAIN>`, z. B. `… https://supabase.<DOMAIN>
+   https://errors.<MONITOR_DOMAIN>; object-src …`. Ohne DSN bleibt die Zeile
+   wie oben, genau wie im Caddy-Stack mit leerem `ERROR_TRACKER_ORIGIN`.
 2. Pruefen, dass Traefik die Datei geladen hat: Im Traefik-Log (Dokploy →
    *Traefik → Logs*) darf kein Fehler zu `who2be-headers.yml` stehen.
    Liegt am Entrypoint `websecure` bereits eine globale Header-Middleware, wird
@@ -2600,8 +2606,9 @@ sie stimmt, geht es weiter.
    Konto aus Schritt 5 anmelden. Weitere Konten entstehen nur per Einladung
    (`ENABLE_USER_REGISTRATION=false`). Danach:
    Organisation `who2be`, drei Projekte `api`, `mcp`, `web`. Die drei DSNs
-   notieren; gesetzt werden sie erst mit den Paketen A2/A3 (nicht jetzt in
-   Prod eintragen). Je Projekt unter *Alerts* einen Alarm „neuer Fehler-Typ“
+   notieren; gesetzt werden sie erst mit dem Owner-Go fuer das Infra-Paket
+   (siehe „Fehler-Tracking an Prod anschliessen" unten). Je Projekt unter
+   *Alerts* einen Alarm „neuer Fehler-Typ“
    per Mail anlegen.
    Mail-Weg pruefen:
    ```bash
@@ -2781,6 +2788,43 @@ sie stimmt, geht es weiter.
 - **Haertung:** `apps/api/tests/test_monitor_compose.py` prueft Speicherdeckel,
   Log-Deckel, `no-new-privileges`, Digest-Pins, dass nur Caddy Ports
   veroeffentlicht und die Datenbank nur im internen Netz haengt.
+
+### Fehler-Tracking an Prod anschliessen
+
+Erst nach Owner-Go. Ohne die Variablen bleibt alles wie vorher: kein SDK-Start,
+kein Netzaufruf, die CSP der Web-App ist byte-identisch
+(`apps/api/tests/test_error_tracking_infra.py`).
+
+| Variable | geht an | Wirkung |
+| --- | --- | --- |
+| `SENTRY_DSN_API` | `api` als `SENTRY_DSN` | DSN des Projekts `api` |
+| `SENTRY_DSN_MCP` | `mcp`, `mcp-http` als `SENTRY_DSN` | DSN des Projekts `mcp` |
+| `SENTRY_DSN_WEB` | `web` als `WHO2BE_SENTRY_DSN` (`/config.js`) | DSN des Projekts `web` |
+| `SENTRY_ENVIRONMENT` | alle drei | Umgebungs-Tag, leer = `production` |
+| `ERROR_TRACKER_ORIGIN` | `caddy` als `CSP_CONNECT_SRC_EXTRA` | haengt die Origin an `connect-src` der Web-App |
+
+Tracing bleibt aus: `SENTRY_TRACES_SAMPLE_RATE` reicht kein Stack durch.
+
+1. Caddy-Stack: die Werte in `deploy/hetzner/.env` eintragen (Vorlage in
+   `.env.example`), dann `docker compose up -d api mcp-http web caddy`.
+   Dokploy-Stack: die drei DSNs und `SENTRY_ENVIRONMENT` unter *Environment*
+   eintragen; die Origin gehoert dort in die Traefik-Datei
+   `who2be-headers.yml` (§Dokploy-Stack, Schritt 1), nicht in die Env.
+2. Pruefen, dass die CSP die Origin traegt:
+   ```bash
+   curl -sI "https://app.<DOMAIN>/" | grep -i content-security
+   # erwartet: connect-src 'self' https://api.<DOMAIN> https://supabase.<DOMAIN> https://errors.<MONITOR_DOMAIN>;
+   ```
+3. Pruefen, dass die Web-App den DSN bekommt:
+   `curl -s "https://app.<DOMAIN>/config.js" | grep sentryDsn` zeigt den DSN.
+4. Beim naechsten echten Fehler erscheint ein Event im passenden Projekt, und
+   der Mail-Alarm aus Schritt 7 meldet den neuen Fehler-Typ.
+
+Zuruecknehmen: die Variablen leeren und dieselben Dienste neu starten.
+
+Source-Maps der Web-App laedt der Build bisher nicht hoch (ADR-0062 A3,
+`apps/web/Dockerfile` loescht sie). Stacktraces der Web-App zeigen damit
+minifizierte Namen, bis der Upload als eigenes Paket kommt.
 
 ---
 

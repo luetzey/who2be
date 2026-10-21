@@ -80,6 +80,11 @@ services:
       # kein `env_file`, eine nur in `.env` gesetzte Variable erreicht den
       # Container nicht (Guard: apps/api/tests/test_compose_env_promises.py).
       WHO2BE_DOCS_PUBLIC: ${WHO2BE_DOCS_PUBLIC:-false}
+      # Fehler-Tracking (ADR-0062 A2, W1): leer = aus, kein SDK-Start, kein
+      # Netzaufruf. Ein DSN je GlitchTip-Projekt (api/mcp/web). Tracing bleibt
+      # aus (SENTRY_TRACES_SAMPLE_RATE wird bewusst nicht durchgereicht).
+      SENTRY_DSN: ${SENTRY_DSN_API:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       # Spiegel der Signup-Schalter des Supabase-Stacks (supabase/.env) fuer
       # die Uebernahme der Bootstrap-Org beim ersten Login: sie setzt
       # GOTRUE_MAILER_AUTOCONFIRM=false oder GOTRUE_DISABLE_SIGNUP=true voraus.
@@ -378,6 +383,11 @@ services:
       # hier (oeffentlich, steht im HTML), Secret dort (nie in die Web-App).
       # Nur eine der beiden Seiten zu setzen bricht den Signup.
       WHO2BE_TURNSTILE_SITE_KEY: ${WHO2BE_TURNSTILE_SITE_KEY:-}
+      # Fehler-Tracking der Web-App (ADR-0062 A3): landet in /config.js, leer =
+      # @sentry/react wird nicht geladen. Der Browser darf nur senden, wenn
+      # ERROR_TRACKER_ORIGIN in der CSP connect-src steht (caddy unten).
+      WHO2BE_SENTRY_DSN: ${SENTRY_DSN_WEB:-}
+      WHO2BE_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     networks: [app-net]
     restart: unless-stopped
     healthcheck:
@@ -404,6 +414,9 @@ services:
       WHO2BE_API_TOKEN: ${WHO2BE_API_TOKEN:-}
       WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
       WHO2BE_TRANSPORT: stdio
+      # Fehler-Tracking (ADR-0062 A2): leer = aus. Eigenes GlitchTip-Projekt.
+      SENTRY_DSN: ${SENTRY_DSN_MCP:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
     networks: [app-net]
     profiles: ["mcp"]
     restart: "no"
@@ -428,6 +441,9 @@ services:
       WHO2BE_API_TOKEN: ${WHO2BE_API_TOKEN:-}
       WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
       WHO2BE_TRANSPORT: http
+      # Fehler-Tracking (ADR-0062 A2): leer = aus. Eigenes GlitchTip-Projekt.
+      SENTRY_DSN: ${SENTRY_DSN_MCP:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WHO2BE_HTTP_HOST: 0.0.0.0
       WHO2BE_HTTP_PORT: "8765"
       WHO2BE_HTTP_PATH: /mcp
@@ -465,6 +481,10 @@ services:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
       VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      # CSP connect-src der Web-App (ADR-0062 W7): leer, solange
+      # ERROR_TRACKER_ORIGIN fehlt, sonst " <origin>" mit fuehrendem
+      # Leerzeichen. Ohne Tracker bleibt der Header damit byte-identisch.
+      CSP_CONNECT_SRC_EXTRA: ${ERROR_TRACKER_ORIGIN:+ ${ERROR_TRACKER_ORIGIN}}
     volumes:
       - ../Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

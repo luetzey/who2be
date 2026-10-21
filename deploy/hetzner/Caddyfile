@@ -169,7 +169,12 @@ app.{$DOMAIN} {
     # BlockNote-Insel ADR-0022). connect-src haelt die eigene API + die
     # Supabase-Instanz erlaubt. `object-src 'none'` killt Plugin-XSS,
     # `form-action 'self'` verhindert Form-Hijack (kein default-src-Fallback).
-    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.{$DOMAIN} {$VITE_SUPABASE_URL}; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
+    # `{$CSP_CONNECT_SRC_EXTRA}` (ADR-0062 W7): die Compose-Datei setzt es aus
+    # ERROR_TRACKER_ORIGIN als " <origin>" MIT fuehrendem Leerzeichen, sonst
+    # leer. Deshalb steht es direkt hinter der Supabase-URL: ohne Tracker ist
+    # der Header byte-identisch zur Fassung ohne Tracker
+    # (apps/api/tests/test_error_tracking_infra.py).
+    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.{$DOMAIN} {$VITE_SUPABASE_URL}{$CSP_CONNECT_SRC_EXTRA}; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
     reverse_proxy web:80
 }
 
