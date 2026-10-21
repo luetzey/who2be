@@ -25,12 +25,27 @@ internes Literal aus der Subklasse).
 Aliase im generierten SQL sind fix: `e` (Identitaet), `ev` (Version), `dv`/`v`
 (Subquery-Aliase). Subklassen-SQL, das die `_select_*`-Bausteine einbettet,
 muss dieselben Aliase verwenden.
+
+Konflikt-Token `base_rev` (ADR-0058 §6.3 A): ein Content-Hash ueber die
+aktuelle Version (Inhalt, Name, Entity-Sprache). Ist per `expected_base_rev`
+ein erwarteter Wert gesetzt, vergleichen `_update`/`_upsert_draft` ihn in
+derselben Transaktion unter der Zeilensperre (`FOR UPDATE OF e`) und werfen
+bei Abweichung `BaseRevConflictError`, bevor etwas geschrieben wird. Ohne
+gesetzten Wert bleibt jeder Schreibpfad unveraendert. Der Wert reist ueber
+eine `ContextVar`, damit er die bestehenden Service-Methoden unveraendert
+durchlaeuft (ADR-0058 §6.2: `edit_content` ruft dieselben Service-Methoden);
+gesetzt wird er nur ueber den Kontextmanager, der ihn garantiert zuruecksetzt.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 import asyncpg
@@ -46,6 +61,80 @@ TVersionRead = TypeVar("TVersionRead", bound=BaseModel)
 # bei bereits offenem Draft, `review_pending` blockiert den Auto-Save gegen eine
 # Review-Version. Beide werden vom Service in einen 409 uebersetzt.
 WriteConflict = Literal["draft_exists", "review_pending"]
+
+# --- Konflikt-Token base_rev (ADR-0058 §6.3 A) -------------------------------
+
+# Laenge des Tokens in Hex-Zeichen (die ersten 16 des SHA-256).
+BASE_REV_LENGTH = 16
+
+_expected_base_rev: ContextVar[str | None] = ContextVar("who2be_expected_base_rev", default=None)
+
+
+def compute_base_rev(content: Any, name: str, locale: str) -> str:
+    """Konflikt-Token: SHA-256 ueber die kanonische JSON-Form, erste 16 Hex.
+
+    Kanonisch heisst: sortierte Schluessel, kein Leerraum, Unicode unescaped.
+    `content` ist der Versions-Inhalt als JSON-Wert (so wie er in der
+    jsonb-Spalte steht), `name` der Elementname, `locale` die Entity-Sprache.
+    Die Entity-Sprache statt der Versions-Sprache, weil ein Sprachwechsel nur
+    die Identitaets-Zeile aendert und der Token sich bei jedem Schreiben
+    aendern muss.
+    """
+    canonical = json.dumps(
+        {"content": content, "locale": locale, "name": name},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:BASE_REV_LENGTH]
+
+
+@contextmanager
+def expected_base_rev(rev: str) -> Iterator[None]:
+    """Setzt den erwarteten `base_rev` fuer die Schreibpfade dieses Blocks.
+
+    Der Wert gilt nur im aktuellen Kontext (Task/Thread) und wird beim
+    Verlassen des Blocks zurueckgesetzt, auch nach einer Exception.
+    """
+    token = _expected_base_rev.set(rev)
+    try:
+        yield
+    finally:
+        _expected_base_rev.reset(token)
+
+
+def current_expected_base_rev() -> str | None:
+    """Der im aktuellen Kontext erwartete `base_rev` (None = keine Pruefung)."""
+    return _expected_base_rev.get()
+
+
+class BaseRevConflictError(Exception):
+    """Der erwartete `base_rev` passt nicht zum Stand unter der Sperre.
+
+    Traegt die aktuelle Versionsnummer und den aktuellen `base_rev`, damit der
+    Aufrufer sie im 409 `version_conflict` nennen kann (ADR-0058 §6.2).
+    """
+
+    def __init__(self, current_version: int, current_base_rev: str) -> None:
+        super().__init__(
+            f"base_rev passt nicht: aktuell v{current_version}, base_rev {current_base_rev}"
+        )
+        self.current_version = current_version
+        self.current_base_rev = current_base_rev
+
+
+def check_base_rev(current_version: int, content: Any, name: str, locale: str) -> None:
+    """Vergleicht den erwarteten `base_rev` mit dem uebergebenen Stand.
+
+    No-Op, wenn kein Wert erwartet wird. Muss unter der Zeilensperre laufen,
+    sonst bleibt eine Pruefen-dann-Schreiben-Luecke.
+    """
+    expected = _expected_base_rev.get()
+    if expected is None:
+        return
+    current = compute_base_rev(content, name, locale)
+    if current != expected:
+        raise BaseRevConflictError(current_version, current)
 
 
 @dataclass(frozen=True)
@@ -173,6 +262,51 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             "WHERE e.id = $1 AND e.workspace_id = $2 FOR UPDATE OF e"
         )
 
+    def _base_rev_target_sql(self) -> str:
+        """Stand, ueber den `base_rev` gebildet wird: die Version, auf die
+        geschrieben wuerde.
+
+        Das ist der offene Draft, falls es einen gibt (der Autosave schreibt in
+        ihn), sonst die global hoechste Version (Tie-Break wie
+        `_select_current`). Name und Sprache kommen von der Identitaets-Zeile.
+        """
+        e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
+        return (
+            "SELECT e.name, e.locale, t.version, t.content "
+            f"FROM {e} e "
+            "JOIN LATERAL ( "
+            f"    SELECT v.version, v.content FROM {ev} v "
+            f"    WHERE v.{fk} = e.id "
+            "    ORDER BY (v.status = 'draft') DESC, v.version DESC, "
+            "             (v.locale = e.locale) DESC "
+            "    LIMIT 1 "
+            ") t ON TRUE "
+            "WHERE e.id = $1 AND e.workspace_id = $2"
+        )
+
+    async def fetch_base_rev(self, workspace_id: UUID, entity_id: UUID) -> tuple[int, str] | None:
+        """`(version, base_rev)` des Schreibziels, None wenn nicht im Workspace."""
+        row = await self._pool.fetchrow(self._base_rev_target_sql(), entity_id, workspace_id)
+        if row is None:
+            return None
+        return row["version"], compute_base_rev(row["content"], row["name"], row["locale"])
+
+    async def _check_base_rev_locked(
+        self, conn: asyncpg.Connection, workspace_id: UUID, entity_id: UUID
+    ) -> None:
+        """Prueft den erwarteten `base_rev` in der laufenden Transaktion.
+
+        Muss nach `_current_version_sql` laufen: dann haelt die Transaktion die
+        Sperre auf der Identitaets-Zeile, und kein anderer Schreibpfad kann den
+        Stand zwischen Pruefen und Schreiben aendern. Ohne erwarteten Wert
+        keine zusaetzliche Abfrage.
+        """
+        if current_expected_base_rev() is None:
+            return
+        row = await conn.fetchrow(self._base_rev_target_sql(), entity_id, workspace_id)
+        assert row is not None  # die Zeile ist gesperrt, also vorhanden
+        check_base_rev(row["version"], row["content"], row["name"], row["locale"])
+
     # --- Schreib-Kern (identisch ueber alle Aggregate) -----------------------
 
     async def _insert(
@@ -248,6 +382,8 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         Blockiert mit `draft_exists`, solange irgendein Draft offen ist.
         `new_locale` (gesetzt) wechselt die Entity-Sprache (Metadaten-Update);
         die neue Versions-Row uebernimmt die (ggf. neue) Entity-Sprache.
+        Ist ein `base_rev` erwartet, wird er unter der Sperre geprueft
+        (`BaseRevConflictError`).
         """
         content_json = content.model_dump(mode="json")
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
@@ -259,6 +395,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             )
             if current is None:
                 return None, None
+            await self._check_base_rev_locked(conn, workspace_id, entity_id)
             existing_draft = await conn.fetchval(
                 f"SELECT 1 FROM {ev} WHERE {fk} = $1 AND status = 'draft'",
                 entity_id,
@@ -324,6 +461,8 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         - Existiert kein Draft, wird ein neuer Draft v(n+1) angelegt.
         - Edge-Case `current_status='review'` ohne offenen Draft: `review_pending`.
         `new_locale` wechselt die Entity-Sprache (Metadaten-Update).
+        Ist ein `base_rev` erwartet, wird er unter der Sperre geprueft
+        (`BaseRevConflictError`).
         """
         content_json = content.model_dump(mode="json")
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
@@ -335,6 +474,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             )
             if current is None:
                 return None, None
+            await self._check_base_rev_locked(conn, workspace_id, entity_id)
             draft_version = await conn.fetchval(
                 f"SELECT version FROM {ev} WHERE {fk} = $1 AND status = 'draft'",
                 entity_id,
