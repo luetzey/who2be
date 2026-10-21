@@ -1,7 +1,9 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { EntitlementInfo } from '@/api/types'
+import type { BillingProfile, BillingProfileInput, BillingProfileResponse } from '@/api/client'
+import type { EntitlementInfo, Me } from '@/api/types'
+import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
 import { BillingPanel, formatBytes } from './BillingPanel'
@@ -414,5 +416,243 @@ describe('BillingPanel', () => {
     expect(screen.getByText('Who2Be-API-Fehler (500).')).toBeInTheDocument()
     // Nach dem Fehler ist der Button wieder aktiv (kein Redirect erfolgt).
     expect(screen.getByRole('button', { name: 'Jetzt upgraden' })).not.toBeDisabled()
+  })
+})
+
+// --- Rechnungsdaten (ADR-0061 R1) --------------------------------------------
+// Platzhalter-Daten, keine echten Adressen oder USt-IdNr. (oeffentliches Repo).
+
+const adminMe: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [
+    {
+      id: 'org-1',
+      name: 'Beispiel',
+      slug: 'beispiel',
+      kind: 'company',
+      workspaces: [{ id: 'ws-1', name: 'W', slug: 'w', role: 'admin' }],
+    },
+  ],
+}
+
+const savedProfile: BillingProfile = {
+  customer_type: 'business',
+  given_name: null,
+  family_name: null,
+  company_name: 'Beispiel GmbH',
+  street: 'Musterstrasse 1',
+  postal_code: '1010',
+  city: 'Musterstadt',
+  country: 'AT',
+  vat_id: 'ATU00000000',
+  vat_status: 'unchecked',
+  vat_checked_at: null,
+  updated_at: '2026-10-22T10:00:00Z',
+}
+
+const COUNTRIES = ['AT', 'CH', 'DE', 'FR', 'GR', 'US']
+const EU = ['AT', 'DE', 'FR', 'GR']
+
+function profileResponse(profile: BillingProfile | null): BillingProfileResponse {
+  return { profile, countries: COUNTRIES, eu_countries: EU }
+}
+
+function billingFetch(options: {
+  profile: BillingProfile | null
+  onPut?: (body: BillingProfileInput) => Response | Promise<Response>
+}) {
+  return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    const u = String(url)
+    if (u.includes('/inbox/counts')) {
+      return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+    }
+    if (u.includes('/billing/profile')) {
+      if (init?.method === 'PUT' && options.onPut) {
+        return Promise.resolve(options.onPut(JSON.parse(String(init.body)) as BillingProfileInput))
+      }
+      return Promise.resolve(new Response(JSON.stringify(profileResponse(options.profile))))
+    }
+    return Promise.resolve(new Response(JSON.stringify({ ...cloudActive, features: ['core'] })))
+  })
+}
+
+function renderAdminPanel() {
+  return renderInRoutes(<BillingPanel />, {
+    path: '/w/:workspaceId/settings/billing',
+    initialEntries: ['/w/ws-1/settings/billing'],
+    me: adminMe,
+  })
+}
+
+function profileCalls(fetchMock: ReturnType<typeof vi.fn>, method: string) {
+  return fetchMock.mock.calls.filter(
+    ([url, init]) =>
+      String(url).includes('/billing/profile') && ((init as RequestInit | undefined)?.method ?? 'GET') === method,
+  )
+}
+
+describe('BillingPanel – Rechnungsdaten', () => {
+  it('laedt fuer Nicht-Admins keine Rechnungsdaten und sperrt den Upgrade nicht', async () => {
+    const fetchMock = billingFetch({ profile: null })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPanel()
+
+    const button = await screen.findByRole('button', { name: 'Jetzt upgraden' })
+    expect(button).not.toBeDisabled()
+    expect(screen.queryByRole('form', { name: 'Rechnungsdaten' })).not.toBeInTheDocument()
+    expect(profileCalls(fetchMock, 'GET')).toHaveLength(0)
+  })
+
+  it('sperrt den Upgrade, bis Rechnungsdaten gespeichert sind', async () => {
+    vi.stubGlobal('fetch', billingFetch({ profile: null }))
+    renderAdminPanel()
+
+    expect(await screen.findByRole('form', { name: 'Rechnungsdaten' })).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: 'Jetzt upgraden' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAccessibleDescription(/zuerst die Rechnungsdaten speichern/)
+  })
+
+  it('zeigt gespeicherte Daten als Zusammenfassung mit VIES-Status und gibt den Upgrade frei', async () => {
+    vi.stubGlobal('fetch', billingFetch({ profile: savedProfile }))
+    renderAdminPanel()
+
+    const summary = await screen.findByTestId('billing-details-summary')
+    expect(summary).toHaveTextContent('Beispiel GmbH')
+    expect(summary).toHaveTextContent('ATU00000000')
+    expect(screen.getByText('ungeprüft')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Jetzt upgraden' })).not.toBeDisabled()
+  })
+
+  it('verlangt je Kundentyp die Pflichtfelder (Client-Validierung)', async () => {
+    const fetchMock = billingFetch({ profile: null })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAdminPanel()
+
+    const form = await screen.findByRole('form', { name: 'Rechnungsdaten' })
+    // Firma (Default): Firmenname ist Pflicht, Vor-/Nachname gibt es nicht.
+    expect(within(form).getByLabelText('Firmenname')).toBeInTheDocument()
+    expect(within(form).queryByLabelText('Vorname')).not.toBeInTheDocument()
+    fireEvent.click(within(form).getByRole('button', { name: 'Rechnungsdaten speichern' }))
+    expect(await within(form).findAllByText('Pflichtfeld.')).toHaveLength(5)
+
+    // Privat: Vor- und Nachname statt Firmenname, keine USt-IdNr.
+    fireEvent.click(within(form).getByRole('radio', { name: 'Privatperson' }))
+    expect(within(form).getByLabelText('Vorname')).toBeInTheDocument()
+    expect(within(form).queryByLabelText('Firmenname')).not.toBeInTheDocument()
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'AT' } })
+    expect(within(form).queryByLabelText('USt-IdNr. (optional)')).not.toBeInTheDocument()
+
+    expect(profileCalls(fetchMock, 'PUT')).toHaveLength(0)
+  })
+
+  it('zeigt die USt-IdNr. nur fuer Firmen in der EU und prueft den Laenderpraefix', async () => {
+    const fetchMock = billingFetch({ profile: null })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAdminPanel()
+
+    const form = await screen.findByRole('form', { name: 'Rechnungsdaten' })
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'CH' } })
+    expect(within(form).queryByLabelText('USt-IdNr. (optional)')).not.toBeInTheDocument()
+
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'GR' } })
+    fireEvent.change(within(form).getByLabelText('Firmenname'), { target: { value: 'Beispiel AE' } })
+    fireEvent.change(within(form).getByLabelText('Straße und Hausnummer'), { target: { value: 'Odos 1' } })
+    fireEvent.change(within(form).getByLabelText('PLZ'), { target: { value: '10000' } })
+    fireEvent.change(within(form).getByLabelText('Ort'), { target: { value: 'Musterstadt' } })
+    fireEvent.change(within(form).getByLabelText('USt-IdNr. (optional)'), {
+      target: { value: 'GR000000000' },
+    })
+    fireEvent.click(within(form).getByRole('button', { name: 'Rechnungsdaten speichern' }))
+
+    expect(await within(form).findByText(/mit EL beginnen/)).toBeInTheDocument()
+    expect(profileCalls(fetchMock, 'PUT')).toHaveLength(0)
+  })
+
+  it('speichert normalisiert, zeigt den Server-Stand und schaltet den Upgrade frei', async () => {
+    const puts: BillingProfileInput[] = []
+    let resolvePut: (r: Response) => void = () => {}
+    const fetchMock = billingFetch({
+      profile: null,
+      onPut: (body) => {
+        puts.push(body)
+        return new Promise<Response>((resolve) => {
+          resolvePut = resolve
+        })
+      },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAdminPanel()
+
+    const form = await screen.findByRole('form', { name: 'Rechnungsdaten' })
+    fireEvent.change(within(form).getByLabelText('Firmenname'), { target: { value: ' Beispiel GmbH ' } })
+    fireEvent.change(within(form).getByLabelText('Straße und Hausnummer'), {
+      target: { value: 'Musterstrasse 1' },
+    })
+    fireEvent.change(within(form).getByLabelText('PLZ'), { target: { value: '1010' } })
+    fireEvent.change(within(form).getByLabelText('Ort'), { target: { value: 'Musterstadt' } })
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'AT' } })
+    fireEvent.change(within(form).getByLabelText('USt-IdNr. (optional)'), {
+      target: { value: 'atu 000.000-00' },
+    })
+    const submit = within(form).getByRole('button', { name: 'Rechnungsdaten speichern' })
+    fireEvent.click(submit)
+
+    // Waehrend des Speicherns gesperrt: kein Doppel-Submit.
+    await waitFor(() => expect(within(form).getByRole('button', { name: 'Speichert…' })).toBeDisabled())
+    fireEvent.submit(form)
+    expect(puts).toHaveLength(1)
+    expect(puts[0]).toEqual({
+      customer_type: 'business',
+      given_name: null,
+      family_name: null,
+      company_name: 'Beispiel GmbH',
+      street: 'Musterstrasse 1',
+      postal_code: '1010',
+      city: 'Musterstadt',
+      country: 'AT',
+      vat_id: 'ATU00000000',
+    })
+
+    resolvePut(new Response(JSON.stringify(profileResponse(savedProfile))))
+    expect(await screen.findByTestId('billing-details-summary')).toHaveTextContent('Beispiel GmbH')
+    expect(screen.getByText('ungeprüft')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Jetzt upgraden' })).not.toBeDisabled()
+  })
+
+  it('zeigt einen Server-Fehler und behaelt die Eingaben', async () => {
+    vi.stubGlobal(
+      'fetch',
+      billingFetch({
+        profile: savedProfile,
+        onPut: () => new Response(JSON.stringify({ detail: 'nope' }), { status: 422 }),
+      }),
+    )
+    renderAdminPanel()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bearbeiten' }))
+    const form = screen.getByRole('form', { name: 'Rechnungsdaten' })
+    expect(within(form).getByLabelText('Firmenname')).toHaveValue('Beispiel GmbH')
+    fireEvent.change(within(form).getByLabelText('Ort'), { target: { value: 'Andere Stadt' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Rechnungsdaten speichern' }))
+
+    expect(await within(form).findByTestId('error-alert')).toBeInTheDocument()
+    expect(within(form).getByLabelText('Ort')).toHaveValue('Andere Stadt')
+  })
+
+  it('hat im Formular und in der Zusammenfassung keine axe-Verstoesse', async () => {
+    vi.stubGlobal('fetch', billingFetch({ profile: null }))
+    const { unmount } = renderAdminPanel()
+    const form = await screen.findByRole('form', { name: 'Rechnungsdaten' })
+    fireEvent.click(within(form).getByRole('button', { name: 'Rechnungsdaten speichern' }))
+    await within(form).findAllByText('Pflichtfeld.')
+    expect(await axe(document.body)).toHaveNoViolations()
+    unmount()
+
+    vi.stubGlobal('fetch', billingFetch({ profile: savedProfile }))
+    renderAdminPanel()
+    await screen.findByTestId('billing-details-summary')
+    expect(await axe(document.body)).toHaveNoViolations()
   })
 })

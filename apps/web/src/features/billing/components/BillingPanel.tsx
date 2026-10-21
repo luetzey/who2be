@@ -1,14 +1,18 @@
 import type { TFunction } from 'i18next'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import '../i18n'
 
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatDate } from '@/lib/dates'
 
 import { useCheckout } from '../hooks/useCheckout'
 import { useEntitlement } from '../hooks/useEntitlement'
+
+import { BillingDetailsForm, BillingDetailsSummary, useBillingProfile } from './BillingDetailsForm'
 
 interface BillingTier {
   code: string
@@ -155,11 +159,19 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
  * On-Prem-Edition liefert der Endpoint `edition='onprem'` und das Panel rendert
  * `null` — On-Prem ist unbegrenzt und ohne Billing. Zeigt Plan-Status, Features,
  * MCP-Kontingent/Verbrauch und einen Upgrade-CTA.
+ *
+ * Darunter fuer Admins die Rechnungsdaten (ADR-0061 R1). Solange keine
+ * gespeichert sind, bleibt der Upgrade-Knopf gesperrt: eine Rechnung nach §14
+ * UStG braucht Name und Adresse. Die serverseitige Sperre im Checkout folgt
+ * mit R2; fuer Nicht-Admins aendert sich nichts (der Checkout ist ohnehin
+ * admin-only).
  */
 export function BillingPanel() {
   const { t } = useTranslation('billing')
   const { data, loading, error, notFound } = useEntitlement()
   const checkout = useCheckout()
+  const isAdmin = useCurrentWorkspaceRole() === 'admin'
+  const details = useBillingProfile(isAdmin && data?.edition === 'cloud')
 
   if (loading) return <LoadingState />
   if (notFound) return null
@@ -181,8 +193,11 @@ export function BillingPanel() {
   const quota = data.mcp_monthly_quota
   const isPaid = active && (quota === null || quota > FREE_QUOTA)
   const tier = findTier(quota)
+  // Upgrade erst mit gespeicherten Rechnungsdaten (nur Admins laden sie).
+  const detailsMissing = isAdmin && (details.loading || !details.data?.profile)
 
   return (
+    <div className="flex min-w-0 flex-col gap-4">
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
@@ -242,15 +257,74 @@ export function BillingPanel() {
             {t('panel.proActive', { plan: tier?.name ?? t('panel.plan.unknown') })}
           </Button>
         ) : (
-          <Button
-            className="w-full"
-            disabled={checkout.pending}
-            onClick={() => checkout.start('pro')}
-          >
-            {checkout.pending ? t('panel.upgrading') : t('panel.upgrade')}
-          </Button>
+          <>
+            <Button
+              className="w-full"
+              disabled={checkout.pending || detailsMissing}
+              aria-describedby={detailsMissing ? 'billing-upgrade-hint' : undefined}
+              onClick={() => checkout.start('pro')}
+            >
+              {checkout.pending ? t('panel.upgrading') : t('panel.upgrade')}
+            </Button>
+            {detailsMissing && !details.loading ? (
+              <p id="billing-upgrade-hint" className="text-sm text-muted-foreground">
+                {t('details.requiredForUpgrade')}
+              </p>
+            ) : null}
+          </>
         )}
         {checkout.error ? <ErrorAlert message={checkout.error} /> : null}
+      </CardContent>
+    </Card>
+    {isAdmin ? <BillingDetailsCard details={details} /> : null}
+    </div>
+  )
+}
+
+/**
+ * Rechnungsdaten-Karte: Formular, solange nichts gespeichert ist oder der
+ * Admin bearbeitet, sonst die Zusammenfassung mit „Bearbeiten“.
+ */
+function BillingDetailsCard({ details }: { details: ReturnType<typeof useBillingProfile> }) {
+  const { t } = useTranslation('billing')
+  const [editing, setEditing] = useState(false)
+  const profile = details.data?.profile ?? null
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="min-w-0 truncate">{t('details.title')}</CardTitle>
+          {profile && !editing ? (
+            <Button variant="outline" className="h-10 shrink-0" onClick={() => setEditing(true)}>
+              {t('details.edit')}
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {details.loading ? (
+          <LoadingState />
+        ) : details.error || !details.data ? (
+          <ErrorAlert message={details.error ?? t('common:errors.unknown')} />
+        ) : profile && !editing ? (
+          <BillingDetailsSummary profile={profile} />
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">{t('details.intro')}</p>
+            <BillingDetailsForm
+              response={details.data}
+              saving={details.saving}
+              saveError={details.saveError}
+              onCancel={profile ? () => setEditing(false) : undefined}
+              onSubmit={async (input) => {
+                const ok = await details.save(input)
+                if (ok) setEditing(false)
+                return ok
+              }}
+            />
+          </>
+        )}
       </CardContent>
     </Card>
   )
