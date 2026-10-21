@@ -22,6 +22,32 @@
 # Persistente Nutzdaten liegen in DREI Volumes: db-data (Postgres),
 # seaweedfs-data (Blobs, ADR-0048) und tablestore-data (SQLite je WorkArea,
 # ADR-0049). Alle drei muessen ein Redeploy ueberleben.
+#
+# --- Container-Haertung (wie W8/S1-S3 im Hetzner-Stack) ----------------------
+# Dieser Stack ist PROD (Auto-Deploy auf main). Dieselben drei Bloecke wie in
+# deploy/hetzner/who2be/docker-compose.yml an JEDEM Dienst, auch an den
+# One-Shots; `apps/api/tests/test_compose_hardening.py` zaehlt das ab.
+# 1. `logging:` — Docker rotiert das Container-Log nur, wenn es gesagt
+#    bekommt; ohne Deckel waechst die json-Datei je Container unbegrenzt.
+# 2. `no-new-privileges` — kein Rechtezuwachs ueber setuid-Binaries im
+#    Container (Beitrag zu BSI SYS.1.6.A17). Entrypoints, die als root
+#    starten und Rechte ABGEBEN (gosu/su-exec in postgres, valkey), sind
+#    davon nicht betroffen.
+# 3. `mem_limit` — Obergrenze, keine Reservierung (BSI SYS.1.6.A15): ein
+#    Ausreisser trifft den OOM-Killer in SEINEM Container, nicht Postgres.
+#    Werte wie im Hetzner-Stack (Herleitung dort und in
+#    `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`), geeicht auf
+#    8 GB. Auf demselben Host laufen zusaetzlich Dokploy selbst und Traefik —
+#    Verhalten bei Ueberschreitung und Messung: RUNBOOK §Dokploy-Stack.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
 
 services:
   db:
@@ -53,6 +79,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    <<: *hardening
+    # Groesster legitimer Verbraucher (shared_buffers, work_mem je Verbindung,
+    # Autovacuum) und deshalb der hoechste Deckel — wie im Hetzner-Stack.
+    mem_limit: 3g
 
   # Einmal-Service: setzt das Passwort von supabase_auth_admin auf
   # POSTGRES_PASSWORD. Das supabase/postgres-Image LEGT diese GoTrue-Rolle an,
@@ -77,6 +107,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot: ein `psql -c "ALTER ROLE …"` in einer Warteschleife.
+    mem_limit: 128m
 
   auth:
     image: supabase/gotrue:v2.197.0
@@ -176,6 +209,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # GoTrue (Go-Binary), im Leerlauf zweistellige MB; 512m wie Hetzner.
+    mem_limit: 512m
 
   auth-gateway:
     image: nginx:1.31-alpine
@@ -199,6 +235,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    <<: *hardening
+    # nginx-Gateway ohne Body-Puffer-Last; einstellige MB.
+    mem_limit: 128m
 
   migrate:
     build:
@@ -212,6 +251,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot im API-Image, nur beim Deploy.
+    mem_limit: 512m
 
   # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
   # SeaweedFS (Apache-2.0) statt MinIO (#525/#529, WP1/WP2) — Begruendung siehe
@@ -276,6 +318,9 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+    <<: *hardening
+    # Volume-Index + S3-Gateway in einem Prozess (`weed server`); wie Hetzner.
+    mem_limit: 1g
 
   # Einmal-Service: legt den Bucket an (idempotent). Faehrt das API-Image statt
   # eines eigenen CLI-Images (das S3-SDK aus dem API-Code, Apache-2.0, ist dort
@@ -299,6 +344,9 @@ services:
         condition: service_healthy
     networks: [who2be]
     restart: "no"
+    <<: *hardening
+    # One-Shot im API-Image: ein Bucket-Anlegen per S3-SDK.
+    mem_limit: 512m
 
   api:
     build:
@@ -388,6 +436,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    <<: *hardening
+    # Ein uvicorn-Prozess (kein `--workers`, s. o.). Groesste legitime Spitze
+    # ist der Ingest (20 MiB Nutzdaten + Base64/JSON); 1g wie Hetzner.
+    mem_limit: 1g
 
   # Hintergrund-Routinen (ADR-0057 §3): Purge, Gedaechtnis-Verfall,
   # Protokoll-Aufbewahrung. Derselbe Build wie `api`, nur ein anderer Befehl;
@@ -448,6 +500,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    <<: *hardening
+    # Routinen laufen nacheinander, Purge streamt; 512m wie Hetzner.
+    mem_limit: 512m
 
   web:
     build:
@@ -510,6 +565,10 @@ services:
       - "traefik.http.routers.who2be-web.entrypoints=websecure"
       - "traefik.http.routers.who2be-web.tls.certResolver=letsencrypt"
       - "traefik.http.services.who2be-web.loadbalancer.server.port=80"
+    <<: *hardening
+    # nginx: statisches Bundle + Proxy auf /v1/, /auth/v1/; einstellige MB,
+    # 256m faengt Proxy-Puffer paralleler Uploads ab.
+    mem_limit: 256m
 
   mcp-http:
     build:
@@ -539,6 +598,10 @@ services:
       - "traefik.http.routers.who2be-mcp.entrypoints=websecure"
       - "traefik.http.routers.who2be-mcp.tls.certResolver=letsencrypt"
       - "traefik.http.services.who2be-mcp.loadbalancer.server.port=8765"
+    <<: *hardening
+    # Python-Dienst ohne Ingest-Pfad, dazu offene SSE-Sessions (wenige KB je
+    # Session); 512m wie Hetzner.
+    mem_limit: 512m
 
 networks:
   who2be:

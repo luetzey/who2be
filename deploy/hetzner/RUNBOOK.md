@@ -825,6 +825,47 @@ Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
 anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
 OOM im Normalbetrieb waere schlechter als gar kein Limit.
 
+### Dokploy-Stack
+
+Der Dokploy-Stack (`deploy/dokploy/docker-compose.yml` + `docker-compose.cloud.yml`,
+Auto-Deploy auf main) traegt seit t_68b3121e dieselben drei Bloecke wie der
+Hetzner-Stack an **jedem** Dienst: Log-Rotation (`json-file`, 3 x 10 MB),
+`no-new-privileges` und ein `mem_limit` mit denselben Werten je Dienst. Dokploy
+setzt keinen dieser Deckel von sich aus. `test_compose_hardening.py` zaehlt
+auch diesen Stack ab (Basis und Overlay zusammengefuehrt) und prueft, dass
+kein Dienst einen Host-Port veroeffentlicht.
+
+Budget: Die Dauerdienste summieren sich auf genau 7 GiB (db 3g, api 1g,
+seaweedfs 1g, auth/worker/mcp-http je 512m, web 256m, auth-gateway und
+redis je 128m). Auf demselben Host laufen zusaetzlich Dokploy selbst und
+Traefik ohne Deckel aus dem Repo. Das geht, weil die Deckel Obergrenzen sind:
+ein lokaler Lauf des kompletten Stacks (2026-10-21, podman) brauchte im
+Leerlauf zusammen rund 470 MB, kein Dienst ueber 18 % seines Deckels, alle
+One-Shots mit Exit 0, kein `OOMKilled`. Waechst ein Dienst dazu, schlaegt der
+Budget-Test an und die Summe muss neu begruendet werden.
+
+**Interner Bereich `/v1/internal` (ADR-0010).** Vor diesem Stack steht
+Traefik ohne Sperr-Regel; eine Probe von aussen bekam auf `/v1/internal/*`
+ein 404 von uvicorn, die Anfrage erreichte also die App. Seitdem sperrt die
+API den Bereich selbst (`InternalAreaGuard`, `core/middleware.py`), in jeder
+Schreibweise (`//`, Gross/Klein, `%69`, `;`): `403`, solange ein Proxy-Header
+(`X-Forwarded-For`, `X-Real-IP`, `Forwarded`, `X-Forwarded-Host`) gesetzt ist
+oder die Gegenstelle nicht aus Loopback/RFC 1918 kommt. Durchgelassen wird nur
+der direkte Zugriff aus dem Container-Netz (z. B. ein kuenftiger Metrik-Agent
+auf `api:8000`). Pruefen nach einem Deploy, von aussen:
+
+```bash
+for p in /v1/internal/metrics /v1//internal/x /v1/%69nternal/x; do
+  curl -s -o /dev/null -w "$p %{http_code}\n" "https://api.<DOMAIN>$p"
+  curl -s -o /dev/null -w "app$p %{http_code}\n" "https://app.<DOMAIN>$p"
+done   # erwartet: ueberall 403
+```
+
+`/V1/INTERNAL/...` auf `app.<DOMAIN>` liefert `200` mit der SPA: der nginx im
+Web-Container leitet nur `/v1/` (klein) an die API, alles andere ist das
+statische Bundle — die Anfrage erreicht die API nicht (gemessen im lokalen
+Stack-Lauf 2026-10-21: SPA-HTML, kein Eintrag im API-Access-Log).
+
 ---
 
 ## Rate-Limit an der Kante (fail2ban)

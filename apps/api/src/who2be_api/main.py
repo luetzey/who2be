@@ -33,7 +33,11 @@ from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.logging import configure_logging
-from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
+from who2be_api.core.middleware import (
+    AccessLogMiddleware,
+    InternalAreaGuard,
+    RequestIDMiddleware,
+)
 from who2be_api.core.rate_limit import (
     RateLimitExceeded,
     _rate_limit_exceeded_handler,
@@ -538,6 +542,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Observability-Stack: AccessLog innen, RequestID aussen — Starlette stacked LIFO,
     # also wird RequestID zuerst aufgerufen, bindet die ID, und der AccessLog-Logger
     # kann sie ueber `structlog.contextvars` lesen, bevor er die Zeile emittiert.
+    # InternalAreaGuard liegt INNERHALB von AccessLog (abgewiesene Zugriffe auf
+    # /v1/internal erscheinen im Log) und AUSSERHALB von CORS/Rate-Limit/Routing:
+    # die Sperre greift vor jeder Anwendungslogik (ADR-0010, Dokploy ohne Caddy).
+    app.add_middleware(InternalAreaGuard)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
     # Workspace-scoped Router unter `/v1/workspaces/{workspace_id}/...` —
