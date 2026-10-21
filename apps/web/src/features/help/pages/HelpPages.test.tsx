@@ -149,6 +149,12 @@ describe('HelpHomePage', () => {
     )
     expect(screen.getByRole('link', { name: 'Persona de' })).toBeInTheDocument()
     expect(screen.queryByText('Abrechnung de')).not.toBeInTheDocument()
+    // Gliederung: Abschnitte h2, Karten- und Gruppentitel h3, keine Überschrift in einer Überschrift.
+    expect(screen.getByRole('heading', { level: 2, name: 'Tutorials' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Nachschlagen' })).toBeInTheDocument()
+    expect(within(card).getByRole('heading', { level: 3, name: 'Demo-Tutorial de' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Bausteine' })).toBeInTheDocument()
+    expect(container.querySelector(':is(h1,h2,h3,h4,h5,h6) :is(h1,h2,h3,h4,h5,h6)')).toBeNull()
     expect(await axe(container)).toHaveNoViolations()
   })
 

@@ -24,7 +24,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
   Dialog,
   DialogClose,
@@ -67,6 +67,9 @@ import i18n from '@/i18n'
  */
 
 const LINK = 'font-medium text-brand underline-offset-4 hover:underline'
+// Kartentitel unter einer h2-Abschnittsüberschrift: echte h3 mit dem Aussehen von CardTitle
+// (CardTitle rendert h2, card.tsx).
+const CARD_HEADING = 'text-lg leading-none font-semibold tracking-tight'
 
 // --- Tutorials am Konto (Daten) -------------------------------------------------
 
@@ -369,7 +372,7 @@ function TutorialCard({ tutorial, text, busy, onRestart }: TutorialCardProps) {
   return (
     <Card data-testid={`tutorial-card-${tutorial.id}`}>
       <CardHeader className="gap-1">
-        <CardTitle className="text-lg">{text.title}</CardTitle>
+        <h3 className={CARD_HEADING}>{text.title}</h3>
         <p className="text-sm text-muted-foreground">{text.description}</p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -528,9 +531,7 @@ function ReferenceSection({ index }: { index: HelpIndex }) {
           {groups.map((group) => (
             <Card key={group.section}>
               <CardHeader>
-                <CardTitle className="text-lg">
-                  <h3>{sectionLabel(group.section)}</h3>
-                </CardTitle>
+                <h3 className={CARD_HEADING}>{sectionLabel(group.section)}</h3>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
