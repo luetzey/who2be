@@ -134,7 +134,7 @@ def _conversion_error(exc: MarkdownConversionError, field: str) -> ApiError:
     if exc.reason == "block_not_representable":
         detail += " Diesen Block aendert der Web-Editor."
     return ApiError(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=detail,
         reason=exc.reason,
         params=params,
@@ -155,7 +155,7 @@ def _version_conflict(current_version: int | None, current_base_rev: str | None)
 
 def _anchor_unknown(detail: str, **params: Any) -> ApiError:
     return ApiError(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=detail,
         reason="anchor_unknown",
         params=params,
@@ -467,8 +467,10 @@ _Read = Any
 
 
 class _BaseRevRepo(Protocol):
+    # Positionsparameter: die Repositories benennen den zweiten Parameter
+    # unterschiedlich (`entity_id`, `template_id`).
     async def fetch_base_rev(
-        self, workspace_id: UUID, entity_id: UUID
+        self, workspace_id: UUID, entity_id: UUID, /
     ) -> tuple[int, str] | None: ...
 
 
@@ -592,7 +594,7 @@ class ContentMarkdownService:
             version=snapshot.version,
             status=snapshot.status,
             base_rev=None,
-            content=_MAPPERS[et].to_markdown_content(snapshot.content),
+            content=cast(Any, _MAPPERS[et].to_markdown_content(snapshot.content)),
         )
 
     # --- Pill-Labels (ADR-0058 §3.2) ------------------------------------------

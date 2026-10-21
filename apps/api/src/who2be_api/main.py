@@ -49,6 +49,7 @@ from who2be_api.repositories.workspace_repository import sync_managed_builder_co
 from who2be_api.routers import (
     agents,
     cases,
+    content_markdown,
     dashboard,
     entitlement,
     external_tools,
@@ -589,6 +590,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(kb.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
+    # Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Elementarten.
+    app.include_router(content_markdown.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     # Aufgaben-Zaehler fuer Glocke/Dashboard/Agent (Navigation W1, nur Menschen).
