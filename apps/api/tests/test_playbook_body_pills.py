@@ -120,3 +120,51 @@ def test_children_recursion() -> None:
     child_ids, links = extract_pills(body)
     assert child_ids == [child]
     assert links[0].resource_id == resource
+
+
+def _table(rows: list[list[object]]) -> dict[str, object]:
+    """Tabellenblock: `content` ist ein `tableContent`-Objekt statt einer Inline-Liste."""
+    return {
+        "type": "table",
+        "content": {"type": "tableContent", "rows": [{"cells": cells} for cells in rows]},
+        "children": [],
+    }
+
+
+def test_pills_in_table_cells_are_extracted() -> None:
+    """Folge #994: Pills in Tabellenzellen zaehlen wie Pills im Fliesstext."""
+    child = uuid4()
+    resource = uuid4()
+    body = json.dumps(
+        [
+            _table(
+                [
+                    # Zelle als Inline-Liste ...
+                    [[_text("Sub")], [_playbook_pill(str(child))]],
+                    # ... und als `tableCell`-Objekt.
+                    [{"type": "tableCell", "content": [_resource_pill(f"{resource}#h2")]}],
+                ]
+            )
+        ]
+    )
+    child_ids, links = extract_pills(body)
+    assert child_ids == [child]
+    assert [(link.resource_id, link.block_id, link.position) for link in links] == [
+        (resource, "h2", 0)
+    ]
+
+
+def test_pills_in_table_nested_in_children_keep_document_order() -> None:
+    first = uuid4()
+    in_table = uuid4()
+    body = json.dumps(
+        [
+            _block(
+                [_resource_pill(str(first))],
+                children=[_table([[[_resource_pill(str(in_table))]]])],
+            )
+        ]
+    )
+    _, links = extract_pills(body)
+    assert [link.resource_id for link in links] == [first, in_table]
+    assert [link.position for link in links] == [0, 1]

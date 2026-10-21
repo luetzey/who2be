@@ -65,6 +65,19 @@ class TestFieldEmpty:
         assert _field_empty(0) is False
 
 
+def _text(value: str) -> dict[str, object]:
+    return {"type": "text", "text": value, "styles": {}}
+
+
+def _table(rows: list[list[object]]) -> dict[str, object]:
+    """Tabellenblock: `content` ist ein `tableContent`-Objekt, keine Inline-Liste."""
+    return {
+        "id": "t1",
+        "type": "table",
+        "content": {"type": "tableContent", "rows": [{"cells": cells} for cells in rows]},
+    }
+
+
 class TestBlocksEmpty:
     def test_empty_list_is_empty(self) -> None:
         assert _blocks_empty([]) is True
@@ -93,6 +106,36 @@ class TestBlocksEmpty:
         # Unbekanntes Format — konservativ als befuellt werten.
         blocks = [{"id": "b1", "type": "image"}]
         assert _blocks_empty(blocks) is False
+
+    def test_table_with_cell_text_is_not_empty(self) -> None:
+        # Folge #994: Tabellen tragen `content` als `tableContent`-Objekt.
+        blocks = [_table([[[], {"type": "tableCell", "content": [_text("Wert")]}]])]
+        assert _blocks_empty(blocks) is False
+
+    def test_table_with_only_blank_cells_is_empty(self) -> None:
+        assert _blocks_empty([_table([[[_text("  ")], []]])]) is True
+
+    def test_table_nested_in_children_is_not_empty(self) -> None:
+        blocks = [
+            {
+                "id": "p1",
+                "type": "paragraph",
+                "content": [],
+                "children": [_table([[[_text("Wert")]]])],
+            }
+        ]
+        assert _blocks_empty(blocks) is False
+
+    def test_blank_children_stay_empty(self) -> None:
+        blocks = [
+            {
+                "id": "p1",
+                "type": "paragraph",
+                "content": [],
+                "children": [{"id": "c1", "type": "paragraph", "content": [_text(" ")]}],
+            }
+        ]
+        assert _blocks_empty(blocks) is True
 
 
 class TestValidatePromotePersona:
