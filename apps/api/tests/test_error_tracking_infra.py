@@ -117,9 +117,25 @@ def test_runbook_traefik_csp_matches_caddy() -> None:
     assert match.group(1) == expected
 
 
-@pytest.mark.skipif(shutil.which("docker-compose") is None, reason="docker-compose fehlt")
+def _compose_cmd() -> list[str] | None:
+    """`docker compose` (Plugin, CI-Runner) vor `docker-compose` (Standalone)."""
+    if shutil.which("docker"):
+        probe = subprocess.run(["docker", "compose", "version"], capture_output=True, check=False)
+        if probe.returncode == 0:
+            return ["docker", "compose"]
+    if shutil.which("docker-compose"):
+        return ["docker-compose"]
+    return None
+
+
+_COMPOSE = _compose_cmd()
+
+
+@pytest.mark.skipif(_COMPOSE is None, reason="docker compose fehlt")
 def test_compose_renders_empty_or_prefixed_origin(tmp_path: Path) -> None:
     """Compose-Interpolation `${X:+ ${X}}` liefert '' bzw. ' <origin>'."""
+    assert _COMPOSE is not None
+    compose: list[str] = _COMPOSE
     probe = tmp_path / "compose.yml"
     probe.write_text(
         "services:\n  caddy:\n    image: scratch\n    environment:\n"
@@ -130,7 +146,7 @@ def test_compose_renders_empty_or_prefixed_origin(tmp_path: Path) -> None:
     def render(extra: dict[str, str]) -> str:
         env = {"PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path), **extra}
         out = subprocess.run(
-            ["docker-compose", "-f", str(probe), "config", "--format", "json"],
+            [*compose, "-f", str(probe), "config", "--format", "json"],
             env=env,
             capture_output=True,
             text=True,
