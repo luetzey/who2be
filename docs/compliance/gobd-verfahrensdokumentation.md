@@ -109,6 +109,12 @@ geschrieben).
   eigenem Invoicing), ist EN 16931 neu zu bewerten und eine eigene
   Verfahrensdokumentation dafuer zu erstellen.
 
+> **Angekuendigte Aenderung (ADR-0061, Accepted 2026-10-20):** Who2Be wird
+> Rechnungen ueber Mollie Invoicing (Sales Invoices API) ausstellen, eine je
+> bezahlter Zahlung, und die PDFs selbst archivieren (mindestens 10 Jahre).
+> Bis zur Umsetzung in Paket R2 gilt der Ist-Stand oben. Mit R2 werden dieser
+> Abschnitt sowie §4 und §6 nach ADR-0061 neu gefasst.
+
 ---
 
 ## 6 · Offene Betreiber-Fragen (Steuer/Vertrieb)
@@ -135,3 +141,4 @@ Steuerberater zu klaeren:
 | Datum | Aenderung | Quelle |
 |---|---|---|
 | 2026-06-05 | Erstanlage (WP-H) — aus Billing-/Entitlement-Code abgeleitet | Plan §WP-H, ADR-0031 |
+| 2026-10-21 | Hinweis in §5: Rechnungsstellung ueber Mollie Invoicing angekuendigt, Neufassung mit R2 | ADR-0061 |
