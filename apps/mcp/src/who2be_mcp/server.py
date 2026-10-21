@@ -22,8 +22,9 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import BaseModel
+from sentry_sdk.integrations.mcp import MCPIntegration
 
-from who2be_mcp import text_view
+from who2be_mcp import __version__, text_view
 from who2be_mcp.client import (
     AnyUsage,
     AnyVersionRead,
@@ -103,6 +104,7 @@ from who2be_models import (
     VersionTransitionRequest,
     WhoAmIRead,
 )
+from who2be_models.error_tracking import init_error_tracking
 from who2be_models.memory import MemorySaveResult
 
 logger = logging.getLogger(__name__)
@@ -1538,9 +1540,25 @@ register_learning_tools(mcp)
 register_session_tools(mcp)
 
 
+def _init_error_tracking() -> bool:
+    """Fehler-Tracking (Stabilitaet A2), nur aktiv mit `SENTRY_DSN`.
+
+    `MCPIntegration` meldet Fehler je Werkzeug, auch solche, die das MCP-SDK
+    als JSON-RPC-Antwort verschluckt. `include_prompts=False` plus
+    `send_default_pii=False` halten Werkzeug-Argumente, Ergebnisse und
+    Playbook-/Persona-Inhalte aus dem Event, denn das sind Nutzerdaten.
+    """
+    return init_error_tracking(
+        "who2be-mcp",
+        __version__,
+        integrations=[MCPIntegration(include_prompts=False)],
+    )
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_format)
+    _init_error_tracking()
     if settings.transport == "http":
         # Streamable-HTTP (MCP-Spec 2025-03-26). OAuth-Resource-Server (ADR-0034-
         # Folge): FastMCP introspectiert jeden Bearer (`Who2BeTokenVerifier`) vor
