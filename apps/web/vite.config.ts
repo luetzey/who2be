@@ -29,6 +29,13 @@ export default defineConfig({
   define: {
     __CLOUD_BUILD__: JSON.stringify(isCloudBuild),
   },
+  // Source-Maps fuer das Fehler-Tracking (Stabilitaet A3): `hidden` erzeugt
+  // die .map-Dateien, ohne im JS auf sie zu verweisen. Ausgeliefert werden sie
+  // nie: das Dockerfile laedt sie (nur mit Token) zum Tracker hoch, loescht sie
+  // danach und bricht ab, falls im Image noch eine liegt.
+  build: {
+    sourcemap: 'hidden',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

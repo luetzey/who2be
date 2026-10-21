@@ -6,6 +6,9 @@ import i18n from '@/i18n'
 
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 
+const reportBoundaryError = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/errorTracking', () => ({ reportBoundaryError }))
+
 const GUARD_KEY = 'who2be:stale-chunk-reload'
 
 function ThrowStaleChunk(): null {
@@ -30,6 +33,7 @@ describe('RouteErrorBoundary', () => {
 
   beforeEach(() => {
     window.sessionStorage.clear()
+    reportBoundaryError.mockClear()
     reloadSpy = vi.fn()
     vi.stubGlobal('location', { ...window.location, reload: reloadSpy })
     // React loggt gefangene Render-Fehler zusaetzlich per console.error —
@@ -65,5 +69,20 @@ describe('RouteErrorBoundary', () => {
     expect(screen.getByTestId('error-alert')).toBeInTheDocument()
     expect(screen.getByText(i18n.t('common:unexpectedError'))).toBeInTheDocument()
     expect(screen.getByText('Boom')).toBeInTheDocument()
+  })
+
+  it('meldet einen gewoehnlichen Fehler an den Fehler-Tracker, mit Komponenten-Stack', () => {
+    renderBoundary(<ThrowGeneric />)
+
+    expect(reportBoundaryError).toHaveBeenCalledTimes(1)
+    const [error, info] = reportBoundaryError.mock.calls[0] as [Error, { componentStack: string }]
+    expect(error.message).toBe('Boom')
+    expect(info.componentStack).toContain('ThrowGeneric')
+  })
+
+  it('meldet Stale-Chunk-Fehler nicht (Deploy-Wechsel, kein Code-Fehler)', () => {
+    renderBoundary(<ThrowStaleChunk />)
+
+    expect(reportBoundaryError).not.toHaveBeenCalled()
   })
 })

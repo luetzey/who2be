@@ -34,6 +34,7 @@
     "@radix-ui/react-radio-group": "^1.5.1",
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@sentry/react": "^11.8.0",
     "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/vite": "^4.3.3",
     "class-variance-authority": "^0.7.1",

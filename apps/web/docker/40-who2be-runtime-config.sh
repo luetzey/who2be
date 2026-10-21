@@ -88,6 +88,9 @@ window.__WHO2BE_CONFIG__ = {
   noticeLevel: "$(sanitize "${WHO2BE_NOTICE_LEVEL:-info}")",
   sessionMaxAgeHours: ${SESSION_MAX_AGE_HOURS},
   turnstileSiteKey: "$(sanitize "${WHO2BE_TURNSTILE_SITE_KEY:-}")",
+  sentryDsn: "$(sanitize "${WHO2BE_SENTRY_DSN:-}")",
+  sentryEnvironment: "$(sanitize "${WHO2BE_SENTRY_ENVIRONMENT:-production}")",
+  sentryRelease: "$(sanitize "${WHO2BE_SENTRY_RELEASE:-}")",
 }
 EOF
 

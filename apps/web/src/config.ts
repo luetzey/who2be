@@ -72,6 +72,17 @@ interface Config {
   // Backend (`GOTRUE_SECURITY_CAPTCHA_*`); dieser Schluessel ist nur die
   // Client-Haelfte und bewusst oeffentlich (er steht im ausgelieferten HTML).
   turnstileSiteKey: string
+  // Fehler-Tracking (Stabilitaet A3, ADR-0062): DSN eines Sentry-kompatiblen
+  // Trackers (GlitchTip), `WHO2BE_SENTRY_DSN`. NUR zur Laufzeit aus
+  // `/config.js`, bewusst ohne Build-Arg und ohne Same-Origin-Fallback.
+  // Leerstring = aus: das SDK wird dann nicht geladen und schickt nichts
+  // (`src/lib/errorTracking.ts`).
+  sentryDsn: string
+  // `WHO2BE_SENTRY_ENVIRONMENT`, Default "production".
+  sentryEnvironment: string
+  // `WHO2BE_SENTRY_RELEASE`, leer = ohne Release (die Source-Maps werden per
+  // Debug-ID zugeordnet, nicht per Release).
+  sentryRelease: string
 }
 
 /** Von `/config.js` gesetzte Runtime-Werte. Leerstring = „nicht gesetzt". */
@@ -90,6 +101,9 @@ export interface RuntimeConfig {
   noticeLevel?: string
   sessionMaxAgeHours?: number
   turnstileSiteKey?: string
+  sentryDsn?: string
+  sentryEnvironment?: string
+  sentryRelease?: string
 }
 
 declare global {
@@ -232,6 +246,11 @@ export function resolveConfig(): Config {
     turnstileSiteKey:
       rt.turnstileSiteKey ??
       ((import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? ''),
+    // Nur Runtime: ein eingebackener DSN wuerde jedes Image an einen Tracker
+    // binden. Leer = Fehler-Tracking aus.
+    sentryDsn: (rt.sentryDsn ?? '').trim(),
+    sentryEnvironment: (rt.sentryEnvironment ?? '').trim() || 'production',
+    sentryRelease: (rt.sentryRelease ?? '').trim(),
     // Rueckwaerts-kompatibel (Issue #429, Weiche 2a): der Altschalter
     // (`VITE_WHO2BE_SIGNUP_DISABLED`) UND `launchMode === 'coming_soon'`
     // fuehren beide zu `signupDisabled`. `40-who2be-runtime-config.sh`
