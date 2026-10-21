@@ -79,7 +79,9 @@ from who2be_api.testing.workspace_setup import cleanup_workspaces, seed_auth_use
 _WS = "/v1/workspaces/{workspace_id}"
 # Pfad-Parameter, die keine Objekt-ID sind: der Workspace selbst (V1) und
 # Literale, die je Probe fest gesetzt werden.
-_NON_OBJECT_PARAMS = frozenset({"workspace_id", "version", "entity_type", "source_name"})
+_NON_OBJECT_PARAMS = frozenset(
+    {"workspace_id", "version", "entity_type", "source_name", "tutorial_id"}
+)
 _REF = re.compile(r"<<([a-z0-9_]+)>>")
 
 
@@ -621,6 +623,23 @@ PROBES: dict[str, Probe] = {
         body={"name": "iso", "slug": "iso-probe"}
     ),
     "DELETE /v1/organizations/{organization_id}": Probe(),
+    # Tutorial-Fortschritt (ADR-0060): kontoweit, geschrieben wird nur das
+    # eigene Konto. Die Mandantengrenze ist `?workspace_id=` fuer die
+    # abgeleiteten Schritte: B's Workspace muss wie ein unbekannter mit 404
+    # enden, bevor etwas geschrieben wird. `tutorial_id` ist keine Objekt-ID
+    # (der Katalog ist fuer alle gleich), deshalb ein fester Wert.
+    "GET /v1/me/tutorials": Probe(query={"workspace_id": "<<workspace_id>>"}),
+    "GET /v1/me/tutorials/{tutorial_id}": Probe(
+        query={"workspace_id": "<<workspace_id>>"}, path={"tutorial_id": "getting-started"}
+    ),
+    "PATCH /v1/me/tutorials/{tutorial_id}": Probe(
+        query={"workspace_id": "<<workspace_id>>"},
+        path={"tutorial_id": "getting-started"},
+        body={"step_id": "connect-claude", "state": "skipped"},
+    ),
+    "POST /v1/me/tutorials/{tutorial_id}/restart": Probe(
+        query={"workspace_id": "<<workspace_id>>"}, path={"tutorial_id": "getting-started"}
+    ),
     # Offene Einladungen des eigenen Kontos, ueber alle Workspaces hinweg —
     # genau deshalb hier: B hat eine offene Einladung auf B's Adresse, A darf
     # sie nicht sehen (V3, Leck-Check). Beide Konten sind bestaetigt

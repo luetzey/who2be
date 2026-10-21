@@ -1,0 +1,1 @@
+- Tutorials (Onboarding P1, ADR-0060): neue Routen `GET /v1/me/tutorials`, `GET|PATCH /v1/me/tutorials/{tutorial_id}` und `POST /v1/me/tutorials/{tutorial_id}/restart` (nur Menschen). Fortschritt am Konto (Migration 0108), automatische Schritte aus Workspace-Daten abgeleitet, enthalten im DSGVO-Export und im Konto-Purge.

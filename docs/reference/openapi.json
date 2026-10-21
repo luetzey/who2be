@@ -16055,6 +16055,282 @@
         ]
       }
     },
+    "/v1/me/tutorials": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "List Tutorials",
+        "description": "Alle Tutorials des Katalogs mit dem Stand des eigenen Kontos.",
+        "operationId": "list_tutorials_v1_me_tutorials_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TutorialRead"
+                  },
+                  "title": "Response List Tutorials V1 Me Tutorials Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/tutorials/{tutorial_id}": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Tutorial",
+        "operationId": "get_tutorial_v1_me_tutorials__tutorial_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Patch Tutorial",
+        "description": "Schritt abhaken, ueberspringen oder wieder oeffnen; Begruessung gesehen.",
+        "operationId": "patch_tutorial_v1_me_tutorials__tutorial_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorialPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/tutorials/{tutorial_id}/restart": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Restart Tutorial",
+        "description": "Setzt den Fortschritt genau dieses Tutorials zurueck.",
+        "operationId": "restart_tutorial_v1_me_tutorials__tutorial_id__restart_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tutorial_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Tutorial Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workspace, aus dem automatische Schritte abgeleitet werden.",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace, aus dem automatische Schritte abgeleitet werden."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/organizations": {
       "get": {
         "tags": [
@@ -30054,6 +30330,182 @@
         ],
         "title": "TriggerOverview",
         "description": "Welle 5: ein deduplizierter Trigger mit den Playbooks, die ihn fuehren.\n\nQuelle: denormalisierte `playbook.triggers`-Spalte, kommagetrennt. Wird vom\nDiscovery-Endpoint `GET /v1/workspaces/{ws}/playbooks/triggers` und vom\nMCP-Tool `list_triggers` zurueckgegeben — der LLM nutzt die Tabelle, um\nfuer eine User-Anfrage das passende Playbook zu finden, ohne dass alle\nPlaybook-Bodies in den Systemprompt geladen werden muessen."
+      },
+      "TutorialPatch": {
+        "properties": {
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "done",
+                  "skipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "welcome_seen": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Seen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TutorialPatch",
+        "description": "Body von `PATCH /v1/me/tutorials/{tutorial_id}`.\n\n`step_id` und `state` kommen nur gemeinsam (`open` nimmt Haken oder\nUeberspringen zurueck). `welcome_seen: true` vermerkt die Begruessung."
+      },
+      "TutorialRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "audience": {
+            "type": "string",
+            "const": "everyone",
+            "title": "Audience"
+          },
+          "welcome": {
+            "type": "boolean",
+            "title": "Welcome"
+          },
+          "welcome_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Seen At"
+          },
+          "restarted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restarted At"
+          },
+          "completed": {
+            "type": "boolean",
+            "title": "Completed"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TutorialStepRead"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "audience",
+          "welcome",
+          "completed",
+          "steps"
+        ],
+        "title": "TutorialRead",
+        "description": "Antwort von `GET /v1/me/tutorials/{tutorial_id}` und Listeneintrag."
+      },
+      "TutorialStepRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "head_start",
+              "first_mcp_call",
+              "agent_created",
+              "own_agent_mcp_call",
+              "page_visited",
+              "manual"
+            ],
+            "title": "Type"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "automatic": {
+            "type": "boolean",
+            "title": "Automatic"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done",
+              "skipped"
+            ],
+            "title": "State"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "automatic",
+          "state"
+        ],
+        "title": "TutorialStepRead",
+        "description": "Zustand eines Schritts fuer den aktuellen Nutzer."
       },
       "UsageByType": {
         "properties": {

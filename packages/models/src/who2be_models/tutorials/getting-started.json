@@ -1,0 +1,11 @@
+{
+  "id": "getting-started",
+  "audience": "everyone",
+  "welcome": true,
+  "steps": [
+    { "id": "builder-ready", "type": "head_start" },
+    { "id": "connect-claude", "type": "first_mcp_call" },
+    { "id": "build-own-agent", "type": "own_agent_mcp_call" },
+    { "id": "learn-feedback", "type": "page_visited", "page": "/help/feedback-and-cases" }
+  ]
+}
