@@ -120,12 +120,13 @@ updates:
   #
   # Vollstaendigkeit ist hier der ganze Punkt: eine Teilabdeckung waere
   # schlechter als keine, weil die nicht erfassten Dateien dann als geprueft
-  # gelten. Erfasst sind daher ALLE vier Verzeichnisse, in denen Compose-Dateien
+  # gelten. Erfasst sind daher ALLE fuenf Verzeichnisse, in denen Compose-Dateien
   # externe Images pinnen:
   #   /                          docker-compose.yml, docker-compose.cloud.yml
   #   /deploy/dokploy            docker-compose.yml, docker-compose.cloud.yml
   #   /deploy/hetzner/supabase   docker-compose.yml
   #   /deploy/hetzner/who2be     docker-compose.yml, .cloud.yml, .local.yml
+  #   /deploy/monitor            compose.yml (Waechter-Stack, ADR-0062)
   # Gegen stilles Auseinanderlaufen gesichert: der Test
   # `apps/api/tests/test_dependabot_compose_coverage.py` zaehlt die Compose-
   # Dateien des Repos ab und failt, sobald eine in einem hier nicht genannten
@@ -141,6 +142,7 @@ updates:
       - "/deploy/dokploy"
       - "/deploy/hetzner/supabase"
       - "/deploy/hetzner/who2be"
+      - "/deploy/monitor"
     schedule:
       interval: "weekly"
       day: "monday"
