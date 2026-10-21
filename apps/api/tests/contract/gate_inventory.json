@@ -111,6 +111,13 @@
       "gates": [
         "enforce_storage_quota"
       ]
+    },
+    {
+      "path": "/{entity_type}/markdown",
+      "name": "create_markdown",
+      "gates": [
+        "enforce_entity_quota"
+      ]
     }
   ],
   "service_gated": [
@@ -332,6 +339,11 @@
       "path": "/system-prompts",
       "name": "create_template",
       "reason": "system_prompt_template steht nicht in entity_quota_service._COUNT_QUERY — die Entity-Grenze kennt diesen Typ nicht, ein Gate waere heute wirkungslos. Ob er mitzaehlen soll, ist eine Produktfrage (plans.md fuehrt ihn in keiner Spalte)."
+    },
+    {
+      "path": "/system-prompts/markdown",
+      "name": "create_system_prompt_markdown",
+      "reason": "Markdown-Anlegen des System-Prompts (ADR-0058 P2); gleiche Lage wie create_template: system_prompt_template steht nicht in entity_quota_service._COUNT_QUERY, ein Gate waere wirkungslos."
     },
     {
       "path": "/system-prompts/{template_id}/duplicate",

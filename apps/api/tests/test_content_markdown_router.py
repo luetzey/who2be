@@ -510,8 +510,12 @@ def test_external_tool_usage_notes_roundtrip(env: _Env) -> None:
     # Zurueckschreiben (Vollstand ueber einen Patch auf das Feld) und erneut lesen.
     res = env.client.patch(
         f"{env.base}/external_tools/{tid}/markdown",
-        json={"base_rev": src["base_rev"], "op": "replace", "field": "usage_notes",
-              "markdown": written},
+        json={
+            "base_rev": src["base_rev"],
+            "op": "replace",
+            "field": "usage_notes",
+            "markdown": written,
+        },
         headers=env.owner,
     )
     assert res.status_code == 200, res.text
@@ -568,8 +572,12 @@ def test_system_prompt_create_and_patch(env: _Env) -> None:
     src = env.source("system-prompts", tid)
     res = env.client.patch(
         f"{env.base}/system-prompts/{tid}/markdown",
-        json={"base_rev": src["base_rev"], "op": "insert_after",
-              "anchor": _anchor(src["content"]["body"], "Rolle"), "markdown": "## Ton\n\nKnapp."},
+        json={
+            "base_rev": src["base_rev"],
+            "op": "insert_after",
+            "anchor": _anchor(src["content"]["body"], "Rolle"),
+            "markdown": "## Ton\n\nKnapp.",
+        },
         headers=env.owner,
     )
     assert res.status_code == 200, res.text

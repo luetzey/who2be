@@ -965,6 +965,11 @@
     "operationId": "create_template_v1_workspaces__workspace_id__system_prompts_post"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/system-prompts/markdown",
+    "operationId": "create_system_prompt_markdown_v1_workspaces__workspace_id__system_prompts_markdown_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/system-prompts/{template_id}",
     "operationId": "get_template_v1_workspaces__workspace_id__system_prompts__template_id__get"
@@ -1228,5 +1233,30 @@
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/workarea-search",
     "operationId": "search_workarea_v1_workspaces__workspace_id__workarea_search_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/markdown",
+    "operationId": "create_markdown_v1_workspaces__workspace_id___entity_type__markdown_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "get_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__markdown_get"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "patch_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_patch"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/markdown",
+    "operationId": "put_markdown_v1_workspaces__workspace_id___entity_type___entity_id__markdown_put"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/{entity_type}/{entity_id}/versions/{version}/markdown",
+    "operationId": "get_version_markdown_source_v1_workspaces__workspace_id___entity_type___entity_id__versions__version__markdown_get"
   }
 ]

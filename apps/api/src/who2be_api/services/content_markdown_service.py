@@ -218,7 +218,7 @@ def _body_blocks(body: str) -> list[Block]:
 
 def _body_string(blocks: list[Block], base_body: str, *, empty: str = "") -> str:
     """Body-String fuer `blocks`; unveraenderte Bloecke behalten den gespeicherten String."""
-    if blocks == _body_blocks(base_body):
+    if base_body and blocks == _body_blocks(base_body):
         return base_body
     if not blocks:
         return empty
