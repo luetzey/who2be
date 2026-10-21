@@ -17,6 +17,8 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 
 import { useTheme } from '@/app/theme-context'
 import type { ResourceBlock } from '@/api/types'
+import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
   type PlaceholderClickDetail,
@@ -42,17 +44,12 @@ import { type Measurable } from '@/components/ui/popover'
 // auf den Persona-Satz reduziert.
 const personaProfileSchema = buildSystemPromptSchema()
 
-// Der volle Persona-Pill-Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools-
-// Uebersicht — die Persona referenziert nicht sich selbst). `tool-ref` (WP-5)
-// ist additiv: reine Alias-Referenz, kein Composition-/Link-Sync beim
-// Speichern.
-const ALLOWED_KINDS: Set<PlaceholderKind> = new Set([
-  'playbook',
-  'resource',
-  'playbooks-catalog',
-  'resources-catalog',
-  'tool-ref',
-])
+// Einsatzort (editorProfiles.ts): Basis ohne Tabelle, der volle Persona-Pill-
+// Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools-Uebersicht — die Persona
+// referenziert nicht sich selbst). `tool-ref` (WP-5) ist additiv: reine
+// Alias-Referenz, kein Composition-/Link-Sync beim Speichern.
+const PROFILE = EDITOR_PROFILES['persona-profile']
+const ALLOWED_KINDS = PROFILE.pillKinds
 
 export interface PersonaProfileEditorProps {
   /** Initial-Bloecke aus dem gespeicherten Persona-Profil (`content.content.blocks`). */
@@ -87,6 +84,8 @@ export function PersonaProfileEditor({
           : undefined,
       // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
       dictionary: buildEditorDictionary({ withReferences: true }),
+      // Eingefuegte Tabellen/Medien werden zu Text (Editor-Paket P2).
+      pasteHandler: profilePasteHandler(PROFILE),
     },
     [],
   )
@@ -147,14 +146,19 @@ export function PersonaProfileEditor({
             if (!userInteractedRef.current) return
             onChange?.(editor.document as unknown as ResourceBlock[])
           }}
+          // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
           slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(editor, handleOpenPicker, query, ALLOWED_KINDS)
+              buildSlashMenuItems(editor, handleOpenPicker, query, PROFILE)
             }
           />
+          <ProfileFormattingToolbar profile={PROFILE} />
+          <ProfileSideMenu />
         </BlockNoteView>
       </div>
 

@@ -1,9 +1,9 @@
 // slashMenu.ts — Slash-Menue und BlockNote-Dictionary der Editoren.
 //
 // Strategie: `getDefaultReactSlashMenuItems` liefert alle Default-Items.
-// Wir filtern auf Absatz, Ueberschriften und Aufzaehlung und ergaenzen die
-// Verweis-Items (Playbook, Resource, Werkzeug, Persona-Feld, Datum, …), die
-// beim Klick einen Picker-Callback aufrufen.
+// Wir filtern auf die Grundbloecke des Einsatzorts (`editorProfiles.ts`) und
+// ergaenzen die Verweis-Items (Playbook, Resource, Werkzeug, Persona-Feld,
+// Datum, …), die beim Klick einen Picker-Callback aufrufen.
 //
 // BlockNote-Slash-Menu-API (v0.56): `SuggestionMenuController` akzeptiert
 // `getItems: (query: string) => Promise<DefaultReactSuggestionItem[]>`.
@@ -33,10 +33,8 @@ import type { DefaultReactSuggestionItem } from '@blocknote/react'
 import { getDefaultReactSlashMenuItems, SuggestionMenuController } from '@blocknote/react'
 
 import type { PlaceholderKind, PlaceholderProps } from './PlaceholderBlock'
+import { EDITOR_PROFILES, type EditorProfile } from '../editorProfiles'
 import i18n, { DEFAULT_LOCALE, isLocale, type Locale } from '@/i18n'
-
-// Erlaubte Default-Item-Keys (Paragraph, Heading, Bulleted-List).
-const ALLOWED_KEYS = new Set(['paragraph', 'heading_1', 'heading_2', 'heading_3', 'bullet_list'])
 
 // Callback-Typ, den der Editor-Wrapper bereitstellt.
 export type PickerOpenFn = (kind: PlaceholderKind) => void
@@ -163,24 +161,39 @@ export function localizeShortcutBadges<T extends { badge?: string }>(items: T[])
 }
 
 /**
- * Standard-Slash-Menue von BlockNote mit Kuerzeln in der UI-Sprache, fuer den
- * einfachen Editor (Resource, Modi, Tool-Hinweise). Als Kind von
- * `BlockNoteView` mit `slashMenu={false}` einsetzen. Texte und Gruppen kommen
- * aus dem Dictionary; nur die Kuerzel liefert BlockNote an ihm vorbei.
+ * Die Grundbloecke des Einsatzorts aus dem BlockNote-Standardmenue, in der
+ * Reihenfolge des Profils (Spec §3.3) und mit Kuerzeln in der UI-Sprache.
+ * Alles andere (Tabelle ausserhalb der Resource, Medien, Checkliste, H4–H6,
+ * Emoji, …) fehlt ganz (Editor-Paket P2).
  */
-export function LocalizedDefaultSlashMenu({ editor }: { editor: unknown }) {
+function profileBlockItems(editor: unknown, profile: EditorProfile): DefaultReactSuggestionItem[] {
+  // `as any` noetig, weil `getDefaultReactSlashMenuItems` den Default-Schema-
+  // Editor erwartet, unser Editor aber das Custom-Placeholder-Schema traegt —
+  // reine Typing-Grenze der BlockNote-Custom-Schema-API, laufzeitkompatibel.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const defaults = getDefaultReactSlashMenuItems(editor as any)
+  const order: readonly string[] = profile.slashKeys
+  const keyOf = (item: DefaultReactSuggestionItem) =>
+    // DefaultReactSuggestionItem hat `key` nur bei Default-Items.
+    (item as DefaultReactSuggestionItem & { key?: string }).key ?? ''
+  return localizeShortcutBadges(
+    defaults
+      .filter((item) => order.includes(keyOf(item)))
+      .sort((a, b) => order.indexOf(keyOf(a)) - order.indexOf(keyOf(b))),
+  )
+}
+
+/**
+ * Slash-Menue des Editors ohne Verweise (Resource, Modi, Tool-Hinweise). Als
+ * Kind von `BlockNoteView` mit `slashMenu={false}` einsetzen. Texte und
+ * Gruppen kommen aus dem Dictionary; nur die Kuerzel liefert BlockNote an ihm
+ * vorbei.
+ */
+export function ProfileSlashMenu({ editor, profile }: { editor: unknown; profile: EditorProfile }) {
   return createElement(SuggestionMenuController, {
     triggerCharacter: '/',
     getItems: (query: string) =>
-      Promise.resolve(
-        filterSuggestionItems(
-          // Typing-Grenze wie in buildSlashMenuItems: der Editor kommt als
-          // `unknown`, BlockNote erwartet seinen generischen Editor-Typ.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          localizeShortcutBadges(getDefaultReactSlashMenuItems(editor as any)),
-          query,
-        ),
-      ),
+      Promise.resolve(filterSuggestionItems(profileBlockItems(editor, profile), query)),
   })
 }
 
@@ -237,36 +250,22 @@ export function buildSlashMenuItems(
   editor: unknown,
   openPicker: PickerOpenFn,
   query: string,
-  // Optionaler Filter: nur Placeholder-Items dieser Kinds anbieten. Ohne
-  // Param bleibt das Verhalten wie bisher (alle Items). Der Playbook-Body-
-  // Editor uebergibt z. B. `new Set(['playbook', 'resource'])`, damit dort
-  // keine Persona-Feld-/Datum-/MCP-Tools-Pills angeboten werden. Das
-  // gemeinsame PlaceholderBlock-Schema (alle Kinds) bleibt unveraendert —
-  // wir filtern nur die Slash-Items. Leere Gruppen fallen damit von selbst weg.
-  allowedKinds?: Set<PlaceholderKind>,
+  // Einsatzort (editorProfiles.ts): welche Grundbloecke und welche Verweis-
+  // Pills das Menue anbietet. Das gemeinsame Schema (alle Kinds, alle Bloecke)
+  // bleibt unveraendert — wir filtern nur die Slash-Items. Leere Gruppen
+  // fallen damit von selbst weg.
+  profile: EditorProfile = EDITOR_PROFILES['system-prompt'],
 ): DefaultReactSuggestionItem[] {
-  // `as any` noetig, weil `getDefaultReactSlashMenuItems` den Default-Schema-
-  // Editor erwartet, unser Editor aber das Custom-Placeholder-Schema traegt —
-  // reine Typing-Grenze der BlockNote-Custom-Schema-API, laufzeitkompatibel.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const defaults = getDefaultReactSlashMenuItems(editor as any)
-
-  // Gefilterte Defaults; Texte und Gruppe „Text“ kommen aus dem Dictionary.
-  const filtered = localizeShortcutBadges(
-    defaults.filter((item) => {
-      // DefaultReactSuggestionItem hat `key` nur bei Default-Items.
-      const asAny = item as DefaultReactSuggestionItem & { key?: string }
-      return asAny.key !== undefined && ALLOWED_KEYS.has(asAny.key)
-    }),
-  )
+  // Grundbloecke; Texte und Gruppe „Text“ kommen aus dem Dictionary.
+  const filtered = profileBlockItems(editor, profile)
 
   const groupLabel: Record<ReferenceGroup, string> = {
     refs: i18n.t('editor:slash.group.refs'),
     context: i18n.t('editor:slash.group.context'),
   }
 
-  const customItems: DefaultReactSuggestionItem[] = REFERENCE_ITEMS.filter(
-    (spec) => allowedKinds === undefined || allowedKinds.has(spec.kind),
+  const customItems: DefaultReactSuggestionItem[] = REFERENCE_ITEMS.filter((spec) =>
+    profile.pillKinds.has(spec.kind),
   ).map((spec) => ({
     title: i18n.t(`editor:slash.${spec.key}.title`),
     subtext: i18n.t(`editor:slash.${spec.key}.subtext`),

@@ -16,6 +16,8 @@ import { BlockNoteView } from '@blocknote/mantine'
 import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 
 import { useTheme } from '@/app/theme-context'
+import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
   type PlaceholderClickDetail,
@@ -39,11 +41,13 @@ import { type Measurable } from '@/components/ui/popover'
 // bleiben gueltig; nur das Slash-Menue ist reduziert.
 const playbookBodySchema = buildSystemPromptSchema()
 
-// Nur diese Kinds sind im Playbook-Body erlaubt. `tool-ref` (WP-5) erzeugt
-// beim Speichern KEINEN Composition-/Link-Sync — die bestehende Pill-
-// Extraktion (`playbook_body_pills.py`) filtert nach `kind` und ignoriert
+// Einsatzort (editorProfiles.ts): Basis ohne Tabelle; nur Playbook-, Resource-
+// und Tool-Ref-Pills. `tool-ref` (WP-5) erzeugt beim Speichern KEINEN
+// Composition-/Link-Sync — die bestehende Pill-Extraktion
+// (`playbook_body_pills.py`) filtert nach `kind` und ignoriert
 // unbekannte/nicht-Sync-relevante Kinds bereits defensiv.
-const ALLOWED_KINDS: Set<PlaceholderKind> = new Set(['playbook', 'resource', 'tool-ref'])
+const PROFILE = EDITOR_PROFILES.playbook
+const ALLOWED_KINDS = PROFILE.pillKinds
 
 export type PlaybookBodyBlock = SystemPromptBlock
 
@@ -78,6 +82,8 @@ export function PlaybookBodyEditor({
         initialBlocks !== undefined && initialBlocks.length > 0 ? initialBlocks : undefined,
       // BlockNote-Oberflaeche in der UI-Sprache (Editor-Paket P1).
       dictionary: buildEditorDictionary({ withReferences: true }),
+      // Eingefuegte Tabellen/Medien werden zu Text (Editor-Paket P2).
+      pasteHandler: profilePasteHandler(PROFILE),
     },
     [],
   )
@@ -140,14 +146,19 @@ export function PlaybookBodyEditor({
             if (!userInteractedRef.current) return
             onChange?.(editor.document as unknown as PlaybookBodyBlock[])
           }}
+          // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
           slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
         >
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(editor, handleOpenPicker, query, ALLOWED_KINDS)
+              buildSlashMenuItems(editor, handleOpenPicker, query, PROFILE)
             }
           />
+          <ProfileFormattingToolbar profile={PROFILE} />
+          <ProfileSideMenu />
         </BlockNoteView>
       </div>
 
