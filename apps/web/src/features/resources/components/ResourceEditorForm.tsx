@@ -137,6 +137,8 @@ export function ResourceEditorForm({
                         key={formKey}
                         initialBlocks={initialBodyBlocks}
                         editable={!isViewer}
+                        // Einziger Einsatzort mit Tabelle (Editor-W1, ADR-0058 §3.4).
+                        profile="resource"
                         onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
                       />
                     </FormControl>

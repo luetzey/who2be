@@ -45,6 +45,11 @@ vi.mock('@blocknote/mantine', () => ({
     <div data-testid="blocknote-view">{children}</div>
   ),
 }))
+// Leiste und Seitenmenue des Einsatzorts (P2) brauchen den BlockNote-Kontext.
+vi.mock('@/components/editor/BlockNoteEditor', () => ({
+  ProfileFormattingToolbar: () => null,
+  ProfileSideMenu: () => null,
+}))
 vi.mock('@blocknote/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@blocknote/core')>()
   return {

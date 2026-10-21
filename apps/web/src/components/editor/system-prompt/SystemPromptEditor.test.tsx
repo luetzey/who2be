@@ -42,12 +42,19 @@ vi.mock('@blocknote/react', () => ({
   },
   getDefaultReactSlashMenuItems: () => [
     { key: 'paragraph', title: 'Absatz', onItemClick: vi.fn() },
-    { key: 'heading_1', title: 'Heading 1', onItemClick: vi.fn() },
+    { key: 'heading', title: 'Heading 1', onItemClick: vi.fn() },
     { key: 'heading_2', title: 'Heading 2', badge: 'Ctrl-Alt-2', onItemClick: vi.fn() },
     { key: 'heading_3', title: 'Heading 3', onItemClick: vi.fn() },
-    { key: 'bullet_list', title: 'Aufzaehlung', onItemClick: vi.fn() },
+    { key: 'quote', title: 'Zitat', onItemClick: vi.fn() },
+    { key: 'toggle_list', title: 'Aufklappliste', onItemClick: vi.fn() },
     { key: 'numbered_list', title: 'Nummeriert', onItemClick: vi.fn() },
+    { key: 'bullet_list', title: 'Aufzaehlung', onItemClick: vi.fn() },
+    { key: 'check_list', title: 'Checkliste', onItemClick: vi.fn() },
+    { key: 'code_block', title: 'Code', onItemClick: vi.fn() },
     { key: 'table', title: 'Tabelle', onItemClick: vi.fn() },
+    { key: 'image', title: 'Bild', onItemClick: vi.fn() },
+    { key: 'heading_4', title: 'Heading 4', onItemClick: vi.fn() },
+    { key: 'emoji', title: 'Emoji', onItemClick: vi.fn() },
   ],
   // Mockt die Spec-Erstellung — gibt ein einfaches Objekt zurueck, das den
   // Typ-Check besteht; BlockNote baut in jsdom keine ProseMirror-Node.
@@ -60,6 +67,11 @@ vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="blocknote-view">{children}</div>
   ),
+}))
+// Leiste und Seitenmenue des Einsatzorts (P2) brauchen den BlockNote-Kontext.
+vi.mock('../BlockNoteEditor', () => ({
+  ProfileFormattingToolbar: () => null,
+  ProfileSideMenu: () => null,
 }))
 vi.mock('@blocknote/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@blocknote/core')>()
@@ -117,6 +129,7 @@ vi.mock('@/api/useApi', () => ({ useApi: () => apiMock }))
 import { SystemPromptEditor } from './SystemPromptEditor'
 import { buildEditorDictionary, buildSlashMenuItems, formatShortcutBadge } from './slashMenu'
 import { buildSystemPromptSchema } from './PlaceholderBlock'
+import { EDITOR_PROFILES } from '../editorProfiles'
 
 describe('SystemPromptEditor', () => {
   it('rendert ohne Fehler', () => {
@@ -232,11 +245,36 @@ describe('buildSlashMenuItems', () => {
     expect(titles).toContain('Gedächtnis')
   })
 
-  it('filtert Table und Numbered-List aus Default-Items heraus', () => {
+  it('bietet die Grundbloecke der Vorlage in Spec-Reihenfolge, ohne Tabelle und Medien (P2)', () => {
     const items = buildSlashMenuItems(editorStub, vi.fn(), '')
+    const blocks = items.filter((i) => (i as { key?: string }).key !== undefined)
+    expect(blocks.map((i) => (i as { key?: string }).key)).toEqual([
+      'paragraph',
+      'heading',
+      'heading_2',
+      'heading_3',
+      'bullet_list',
+      'numbered_list',
+      'quote',
+      'code_block',
+    ])
     const titles = items.map((i) => i.title)
-    expect(titles).not.toContain('Tabelle')
-    expect(titles).not.toContain('Nummeriert')
+    for (const missing of ['Tabelle', 'Bild', 'Checkliste', 'Aufklappliste', 'Heading 4', 'Emoji']) {
+      expect(titles).not.toContain(missing)
+    }
+  })
+
+  it('bietet Titel (H1) nur in der Vorlage, Tabelle nur in der Resource', () => {
+    const keys = (profile: (typeof EDITOR_PROFILES)[keyof typeof EDITOR_PROFILES]) =>
+      buildSlashMenuItems(editorStub, vi.fn(), '', profile).map(
+        (i) => (i as { key?: string }).key,
+      )
+    for (const id of ['persona-profile', 'playbook', 'plain'] as const) {
+      expect(keys(EDITOR_PROFILES[id])).not.toContain('heading')
+      expect(keys(EDITOR_PROFILES[id])).not.toContain('table')
+      expect(keys(EDITOR_PROFILES[id])).toContain('numbered_list')
+    }
+    expect(keys(EDITOR_PROFILES.resource)).toContain('table')
   })
 
   it('filtert nach Query (case-insensitive)', () => {
@@ -277,22 +315,16 @@ describe('buildSlashMenuItems', () => {
     expect(openPicker).toHaveBeenCalledWith('memory')
   })
 
-  it('allowedKinds filtert die Custom-Items (Persona-Pill-Satz)', () => {
-    const allowed = new Set([
-      'playbook',
-      'resource',
-      'playbooks-catalog',
-      'resources-catalog',
-    ] as const)
-    const items = buildSlashMenuItems(editorStub, vi.fn(), '', allowed)
+  it('der Pill-Satz des Profils filtert die Custom-Items (Persona-Profil)', () => {
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '', EDITOR_PROFILES['persona-profile'])
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Resource-Katalog')
     expect(titles).toContain('Playbook-Katalog')
+    expect(titles).toContain('Externes Tool')
     // Nicht erlaubte Kinds fehlen.
     expect(titles).not.toContain('Persona-Feld')
     expect(titles).not.toContain('Datum')
     expect(titles).not.toContain('MCP-Tools')
-    expect(titles).not.toContain('Externes Tool')
     expect(titles).not.toContain('Gedächtnis')
   })
 
@@ -315,12 +347,7 @@ describe('buildSlashMenuItems', () => {
   })
 
   it('laesst eine leere Gruppe weg (Playbook-Satz ohne Agent-Kontext)', () => {
-    const items = buildSlashMenuItems(
-      editorStub,
-      vi.fn(),
-      '',
-      new Set(['playbook', 'resource', 'tool-ref'] as const),
-    )
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '', EDITOR_PROFILES.playbook)
     expect(items.some((i) => i.group === 'Agent-Kontext')).toBe(false)
     expect(items.filter((i) => i.group === 'Verweise')).toHaveLength(3)
   })

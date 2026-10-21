@@ -5,6 +5,12 @@ interface ResourceEditorProps {
   initialBlocks: ResourceBlock[]
   editable?: boolean
   onChange?: (blocks: ResourceBlock[]) => void
+  /**
+   * Einsatzort (editorProfiles.ts). Nur der Resource-Inhalt setzt `resource`
+   * und bekommt damit die Tabelle (Editor-W1); Persona-Modi und
+   * Tool-Hinweise bleiben beim Default `plain`.
+   */
+  profile?: 'resource' | 'plain'
 }
 
 // Duenner Wrapper um die geteilte BlockNote-Insel (ADR-0022). Die eigentliche
@@ -13,13 +19,19 @@ interface ResourceEditorProps {
 // (nicht im resources-Feature), weil neben den Resource-Forms auch der
 // Persona-Modi-Editor die Komponente nutzt — Cross-Feature-Imports sind per
 // Lint-Gate verboten, Geteiltes wandert nach `@/components/`.
-export function ResourceEditor({ initialBlocks, editable = true, onChange }: ResourceEditorProps) {
+export function ResourceEditor({
+  initialBlocks,
+  editable = true,
+  onChange,
+  profile = 'plain',
+}: ResourceEditorProps) {
   return (
     <div data-testid="resource-editor">
       <BlockNoteEditor
         initialBlocks={initialBlocks}
         editable={editable}
         onChange={onChange}
+        profile={profile}
       />
     </div>
   )
