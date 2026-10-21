@@ -44,11 +44,23 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
 
 RUN npm run build
 
+# Source-Maps (Stabilitaet A3): `vite build` erzeugt sie versteckt
+# (`sourcemap: 'hidden'`, kein Verweis im JS). Sie werden hier geloescht und
+# nie ausgeliefert. Ein Upload an den Fehler-Tracker ist bewusst nicht Teil
+# dieses Images (folgt in einem eigenen Infra-Paket).
+RUN find dist -type f -name '*.map' -delete
+
 FROM nginx:1.31-alpine AS runtime
 
 RUN apk add --no-cache curl
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Keine Source-Map im ausgelieferten Image (Stabilitaet A3). Schlaegt nur fehl,
+# wenn tatsaechlich eine .map-Datei uebrig ist.
+RUN leftover="$(find /usr/share/nginx/html -type f -name '*.map')"; \
+    if [ -n "$leftover" ]; then \
+      echo "[who2be] FEHLER: Source-Maps im Image:"; echo "$leftover"; exit 1; \
+    fi
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 # Schreibt /etc/nginx/resolver.conf bei jedem Container-Start aus der DNS-Adresse
 # des Containers (Docker: 127.0.0.11, rootless Podman: eine andere) — nginx.conf
