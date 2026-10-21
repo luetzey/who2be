@@ -8,6 +8,7 @@ die Eingabevalidierung von `ContentEdit`.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from who2be_api.core.errors import ApiError
 from who2be_api.repositories.versioned_repository import BaseRevConflictError
 from who2be_api.services.content_markdown_service import (
     _MAPPERS,
+    _STATIC_LABELS,
     ContentMarkdownService,
     _body_string,
     _conflict_as_409,
@@ -196,3 +198,23 @@ def test_content_edit_requires_base_rev_but_put_does_not() -> None:
     with pytest.raises(ValidationError):
         ContentEdit.model_validate({"op": "delete", "anchor": "a"})
     assert MarkdownWrite.model_validate({"content": {}}).base_rev is None
+
+
+# --- Feste Pill-Labels gegen das Web (ADR-0058 §3.2) -------------------------
+
+_WEB_EDITOR = Path(__file__).resolve().parents[3] / "apps/web/src/components/editor/system-prompt"
+
+
+# effect-exempt: haelt die Python-Labels gegen die TS-Quellen des Web-Editors, kein Python-Subjekt
+def test_static_labels_match_web_sources() -> None:
+    """Jedes feste Label steht woertlich in den Web-Quellen, die es setzen.
+
+    Aendert das Web ein Label, faellt das hier auf, statt dass der Markdown-
+    Weg still andere Pill-Texte erzeugt als der Editor.
+    """
+    sources = [_WEB_EDITOR / "SystemPromptEditor.tsx", *sorted(_WEB_EDITOR.glob("pickers/*.tsx"))]
+    web = "\n".join(
+        p.read_text(encoding="utf-8") for p in sources if not p.name.endswith(".test.tsx")
+    )
+    missing = [label for label in _STATIC_LABELS.values() if f"'{label}'" not in web]
+    assert missing == []

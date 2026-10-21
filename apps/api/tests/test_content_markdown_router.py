@@ -33,10 +33,29 @@ import pytest
 from fastapi.testclient import TestClient
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.db import init_connection
 from who2be_api.main import app
+from who2be_api.repositories.external_tool_repository import PgExternalToolRepository
+from who2be_api.repositories.persona_repository import PgPersonaRepository
+from who2be_api.repositories.playbook_repository import PgPlaybookRepository
+from who2be_api.repositories.resource_repository import PgResourceRepository
+from who2be_api.repositories.system_prompt_template_repository import (
+    PgSystemPromptTemplateRepository,
+)
+from who2be_api.repositories.versioned_repository import (
+    BaseRevConflictError,
+    expected_base_rev,
+)
 from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
-from who2be_models import WorkspaceRole
+from who2be_models import (
+    ExternalToolContent,
+    PersonaVersionContent,
+    PlaybookContent,
+    ResourceContent,
+    SystemPromptTemplateContent,
+    WorkspaceRole,
+)
 
 AuthFactory = Callable[[UUID], dict[str, str]]
 
@@ -561,6 +580,50 @@ def test_resource_allows_tables_and_reports_dangling_refs_shape(env: _Env) -> No
     assert created["dangling_refs"] == []
 
 
+def test_deleted_heading_reports_dangling_refs_from_playbook_and_resource(env: _Env) -> None:
+    child = env.create(
+        "resources",
+        {"name": "Kind", "content": {"body": "# Bleibt\n\nA.\n\n## Weg\n\nB."}},
+    )
+    cid = child["id"]
+    gone = _anchor(child["content"]["body"], "Weg")
+    kept = _anchor(child["content"]["body"], "Bleibt")
+    playbook = env.create("playbooks", _playbook("Verweist"))
+    parent = env.create("resources", {"name": "Eltern", "content": {"body": "# X\n\nY."}})
+
+    # Gespeicherte Verweise auf die Ueberschrift, die gleich verschwindet,
+    # plus einer auf eine bleibende (darf nicht gemeldet werden).
+    links = env.client.put(
+        f"{env.base}/playbooks/{playbook['id']}/resource_links",
+        json={
+            "links": [
+                {"resource_id": cid, "block_id": gone, "position": 0},
+                {"resource_id": cid, "block_id": kept, "position": 1},
+            ]
+        },
+        headers=env.owner,
+    )
+    assert links.status_code == 200, links.text
+    subs = env.client.put(
+        f"{env.base}/resources/{parent['id']}/sub_resources",
+        json={"links": [{"child_id": cid, "block_id": gone, "link_scope": "block"}]},
+        headers=env.owner,
+    )
+    assert subs.status_code == 200, subs.text
+
+    src = env.source("resources", cid)
+    res = env.client.patch(
+        f"{env.base}/resources/{cid}/markdown",
+        json={"base_rev": src["base_rev"], "op": "delete", "anchor": gone},
+        headers=env.owner,
+    )
+    assert res.status_code == 200, res.text
+    refs = sorted(
+        (r["source_type"], r["source_id"], r["block_id"]) for r in res.json()["dangling_refs"]
+    )
+    assert refs == [("playbook", playbook["id"], gone), ("resource", parent["id"], gone)]
+
+
 def test_system_prompt_create_and_patch(env: _Env) -> None:
     created = env.client.post(
         f"{env.base}/system-prompts/markdown",
@@ -637,3 +700,80 @@ def test_version_source_has_no_base_rev(env: _Env) -> None:
     assert res.status_code == 200, res.text
     assert res.json()["base_rev"] is None
     assert res.json()["content"]["body"].startswith("# Titel [#")
+
+
+# --- base_rev im Repository jeder Art (ADR-0058 §6.3 A) ----------------------
+#
+# Direkt am Repository, ohne Service und damit ohne dessen Frueh-Check:
+# Ueberschreibt eine Art `update`/`upsert_draft` des Kerns und laesst die
+# Pruefung unter der Sperre aus, wird genau ihr Fall rot.
+
+
+def _make_repo(kind: str, pool: asyncpg.Pool) -> tuple[Any, Callable[[str], Any]]:
+    if kind == "persona":
+        return PgPersonaRepository(pool), lambda t: PersonaVersionContent(description=t)
+    if kind == "playbook":
+        return PgPlaybookRepository(pool), lambda t: PlaybookContent(description=t)
+    if kind == "resource":
+        return PgResourceRepository(pool), lambda t: ResourceContent(description=t)
+    if kind == "external_tool":
+        return PgExternalToolRepository(pool), lambda t: ExternalToolContent(display_name=t)
+    return PgSystemPromptTemplateRepository(pool), lambda t: SystemPromptTemplateContent(body=t)
+
+
+async def _insert(kind: str, repo: Any, ws: UUID, user: UUID, content: Any) -> Any:
+    tag = f"{kind[:2]}-{fresh_user_id().hex[:8]}"
+    if kind == "resource":
+        return await repo.insert(ws, user, "E", content, "de", slug=tag)
+    if kind == "external_tool":
+        return await repo.insert(ws, user, "E", content, "de", alias=tag)
+    if kind == "system_prompt":
+        return await repo.insert(ws, user, "E", tag, content, "de")
+    return await repo.insert(ws, user, "E", content, "de")
+
+
+@pytest.mark.parametrize(
+    "kind", ["persona", "playbook", "resource", "external_tool", "system_prompt"]
+)
+def test_every_kind_checks_base_rev_under_lock_in_repository(migrated_db: None, kind: str) -> None:
+    user = fresh_user_id()
+    ws = setup_workspace(user)
+
+    async def body() -> None:
+        pool = await asyncpg.create_pool(
+            get_settings().database_url, min_size=1, max_size=2, init=init_connection
+        )
+        assert pool is not None
+        try:
+            repo, make = _make_repo(kind, pool)
+            created = await _insert(kind, repo, ws, user, make("start"))
+            state = await repo.fetch_base_rev(ws, created.id)
+            assert state is not None
+
+            # Autosave- und PUT-Pfad lehnen einen veralteten Token ab, bevor
+            # etwas geschrieben wird (PUT: vor der draft_exists-Pruefung).
+            with pytest.raises(BaseRevConflictError), expected_base_rev("0" * 16):
+                await repo.upsert_draft(ws, user, created.id, None, make("verloren"))
+            with pytest.raises(BaseRevConflictError), expected_base_rev("0" * 16):
+                await repo.update(ws, user, created.id, None, make("verloren"))
+            assert await repo.fetch_base_rev(ws, created.id) == state
+
+            # Passender Token: Autosave geht durch, der Token aendert sich.
+            with expected_base_rev(state[1]):
+                await repo.upsert_draft(ws, user, created.id, None, make("neu"))
+            after = await repo.fetch_base_rev(ws, created.id)
+            assert after is not None
+            assert after[1] != state[1]
+
+            # Der alte Token ist jetzt veraltet: der Autosave-Fall aus §6.3.
+            with pytest.raises(BaseRevConflictError) as exc, expected_base_rev(state[1]):
+                await repo.upsert_draft(ws, user, created.id, None, make("verloren"))
+            assert exc.value.current_base_rev == after[1]
+            assert await repo.fetch_base_rev(ws, created.id) == after
+        finally:
+            await pool.close()
+
+    try:
+        asyncio.run(body())
+    finally:
+        cleanup_workspaces([user])

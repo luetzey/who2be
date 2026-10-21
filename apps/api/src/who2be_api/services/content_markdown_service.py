@@ -103,8 +103,9 @@ _PILL_RE = re.compile(r"\{\{([a-z][a-z0-9-]*):([^{}\n]*)\}\}")
 # Roundtrips ausloesen; der Rest faellt auf `kind:target_id` zurueck).
 _MAX_LABEL_LOOKUPS = 100
 
-# Feste Labels, wie die Picker im Web-Editor sie setzen
-# (`apps/web/src/components/editor/system-prompt/pickers/*.tsx`).
+# Feste Labels, wie das Web sie setzt (`apps/web/src/components/editor/
+# system-prompt/pickers/*.tsx` und die parameterlosen Pills in
+# `SystemPromptEditor.tsx`). Ein Test prueft die Literale gegen diese Quellen.
 _STATIC_LABELS: dict[tuple[str, str], str] = {
     ("persona-field", "name"): "Persona: Name",
     ("persona-field", "description"): "Persona: Beschreibung",
@@ -113,9 +114,9 @@ _STATIC_LABELS: dict[tuple[str, str], str] = {
     ("persona-field", "modes"): "Persona: Modi",
     ("date", "human"): "Datum (lesbar)",
     ("date", ""): "Datum (ISO-8601)",
-    ("persona-ref", ""): "Persona laden",
-    ("tools-overview", ""): "MCP-Tools",
-    ("memory", ""): "Gedaechtnis",
+    ("persona-ref", ""): "Persona laden (MCP)",
+    ("tools-overview", ""): "MCP-Tools-Übersicht",
+    ("memory", ""): "Gedächtnis-Hinweis",
 }
 
 
