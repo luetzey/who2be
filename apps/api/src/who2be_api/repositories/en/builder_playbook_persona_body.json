@@ -63,7 +63,7 @@
     "id": "pb-persona-li-2",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Propose: Consolidate the persona body (description + BlockNote profile with Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Show it to the user, explain trade-offs, get confirmation.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Propose: Consolidate the persona body (description + profile as Markdown with the sections Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Show it to the user, explain trade-offs, get confirmation.", "styles": {}}],
     "children": []
   },
   {
@@ -84,7 +84,7 @@
     "id": "pb-persona-li-5",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Update — Write: update_persona(persona_id, content) automatically creates a new draft (a PUT on an active version creates a draft; if a draft already exists, you get a 409). Batch changes together instead of forcing a new version per micro-edit.", "styles": {}}],
+    "content": [{"type": "text", "text": "Update — Write: Read the template with get_persona(identifier, format=\"source\") — source Markdown with heading anchors and base_rev in the header. To change one field or section, use edit_content(entity_type, entity_id, base_rev, op, anchor | field, markdown), e.g. field='profile' or field='modes[<name>].identity_add'; the rest stays untouched. For a rework, call update_persona(persona_id, content) with the full state (profile and mode fields as Markdown). On an active version both create a new draft; if a draft is already open, update_persona returns 409, while edit_content writes into that draft when base_rev matches. Batch changes together instead of forcing a new version per micro-edit.", "styles": {}}],
     "children": []
   },
   {
@@ -152,7 +152,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Fields per mode: ", "styles": {"bold": true}},
-      {"type": "text", "text": "name, trigger, is_default, identity_add (addition to the base identity), output_style_override (replaces the base output style), and anti_patterns — the three content fields are BlockNote block arrays like the profile body.", "styles": {}}
+      {"type": "text", "text": "name, trigger, is_default, identity_add (addition to the base identity), output_style_override (replaces the base output style), and anti_patterns — the three content fields are each a Markdown document like the profile.", "styles": {}}
     ],
     "children": []
   },
@@ -160,7 +160,7 @@
     "id": "pb-persona-code-modi",
     "type": "codeBlock",
     "props": {"language": "json"},
-    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"\", \"is_default\": true,\n   \"identity_add\": [{\"id\": \"m1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Responds concisely and directly in a chat tone.\", \"styles\": {}}], \"children\": []}],\n   \"output_style_override\": [], \"anti_patterns\": []},\n  {\"name\": \"Report\", \"trigger\": \"report, summary, analysis\", \"is_default\": false,\n   \"identity_add\": [], \"output_style_override\": [{\"id\": \"m2\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Structured Markdown report with subheadings.\", \"styles\": {}}], \"children\": []}],\n   \"anti_patterns\": []}\n]", "styles": {}}],
+    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"\", \"is_default\": true,\n   \"identity_add\": \"Responds concisely and directly in a chat tone.\",\n   \"output_style_override\": \"\", \"anti_patterns\": \"\"},\n  {\"name\": \"Report\", \"trigger\": \"report, summary, analysis\", \"is_default\": false,\n   \"identity_add\": \"\",\n   \"output_style_override\": \"Structured Markdown report with subheadings.\",\n   \"anti_patterns\": \"\"}\n]", "styles": {}}],
     "children": []
   },
   {
@@ -169,7 +169,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Server-side retrieval: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Consuming agents call get_persona(identifier, mode='<mode-name>') — the server applies the mode to body_rendered (identity_add appends, output_style_override replaces the output style, anti_patterns apply additionally). Choose mode names and triggers concretely enough that matching from the user's request is unambiguous. Modes continue to be managed via update_persona (content.modes).", "styles": {}}
+      {"type": "text", "text": "Consuming agents call get_persona(identifier, mode='<mode-name>') — the server applies the mode to body_rendered (identity_add appends, output_style_override replaces the output style, anti_patterns apply additionally). Choose mode names and triggers concretely enough that matching from the user's request is unambiguous. Modes continue to be managed via update_persona (content.modes); individual mode fields can also be changed via edit_content (field='modes[<name>].<field>').", "styles": {}}
     ],
     "children": []
   },

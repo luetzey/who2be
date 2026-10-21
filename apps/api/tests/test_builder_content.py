@@ -219,21 +219,82 @@ def test_en_sidecars_exist_and_parse_when_present(filename: str) -> None:
 
 
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
-def test_conventions_tell_writers_to_read_full_format_before_update(pack: ContentPack) -> None:
-    """Schreiber-Regel (ADR-0056 Abschnitt 5, Schicht 3) in DE und EN.
+def test_conventions_tell_writers_to_read_source_format_before_writing(pack: ContentPack) -> None:
+    """Schreiber-Regel (ADR-0058 §5.1 W58-2 B, §6.2) in DE und EN.
 
-    Die Lese-Werkzeuge liefern kuenftig standardmaessig eine Lesefassung ohne
-    Editor-JSON; ein PUT auf deren Grundlage leert den Inhalt. Der Builder
-    liest diese Resource vor jedem Bau, deshalb steht die Regel hier — als
-    eigener Block, damit sie ueber ihren Anker zitierbar bleibt.
+    Agenten schreiben Markdown; die Vorlage ist die Quellfassung
+    `format="source"` mit `base_rev`, Teilaenderungen laufen ueber
+    `edit_content`. Die Lesefassung `format="text"` ist keine Vorlage. Der
+    Builder liest diese Resource vor jedem Bau, deshalb steht die Regel hier —
+    als eigener Block, damit sie ueber ihren Anker zitierbar bleibt.
     """
     blocks = json.loads(pack.resource.load_body(pack.locale))
     rule = next((b for b in blocks if b["id"] == "res-conv-li-status-put-vollstand"), None)
     assert rule is not None, f"Regelblock fehlt in {pack.locale!r}"
     text = " ".join(_collect_block_texts(rule))
     assert "update_*" in text
-    assert 'format="full"' in text
+    assert "edit_content" in text
+    assert "base_rev" in text
+    assert 'format="source"' in text
     assert 'format="text"' in text
+
+
+_JSON_WRITE_PATH_PHRASES = (
+    "BlockNote-JSON",
+    "BlockNote JSON",
+    "BlockNote-Dokument",
+    "BlockNote document",
+    "BlockNote-Block-Arrays",
+    "BlockNote block arrays",
+    "BlockNote-Profil",
+    "BlockNote profile",
+    "content-Array",
+    "content array",
+)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_content_describes_no_json_write_path(pack: ContentPack) -> None:
+    """Nach dem harten Schnitt (ADR-0058 §7, W58-3 A) beschreibt kein verwalteter
+    Builder-Inhalt mehr Editor-JSON als Schreibweg, und keiner verweist fuer das
+    Schreiben auf `format="full"` als Vorlage."""
+    filenames = [
+        "builder_playbook_persona_body.json",
+        "builder_playbook_playbook_body.json",
+        "builder_playbook_agent_body.json",
+        "builder_playbook_external_tool_body.json",
+        "builder_playbook_feedback_session_body.json",
+        "builder_resource_conventions_body.json",
+    ]
+    for filename in filenames:
+        blocks = json.loads(load_sidecar(filename, pack.locale))
+        for block in blocks:
+            text = " ".join(_collect_block_texts(block))
+            for phrase in _JSON_WRITE_PATH_PHRASES:
+                assert phrase not in text, f"{pack.locale}/{filename}#{block['id']}: {phrase!r}"
+            if "update_*" in text and 'format="full"' in text:
+                assert 'format="source"' in text, f"{pack.locale}/{filename}#{block['id']}"
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_playbook_markdown_example_converts_to_pills(pack: ContentPack) -> None:
+    """Das Template-Beispiel im Agent-Playbook ist gueltiges Markdown des
+    Schreibwegs (ADR-0058 §3.2): der Konverter, den die API beim Schreiben
+    nutzt, macht aus den Tokens echte Placeholder-Pills."""
+    from who2be_models.blocknote_markdown import from_markdown
+
+    blocks = json.loads(load_sidecar("builder_playbook_agent_body.json", pack.locale))
+    example = next(b for b in blocks if b["id"] == "pb-agent-code-placeholder")
+    assert example["props"]["language"] == "markdown"
+    converted = from_markdown(example["content"][0]["text"])
+    pills = [
+        (item["props"]["kind"], item["props"]["target_id"])
+        for block in converted
+        for item in block.get("content") or []
+        if isinstance(item, dict) and item.get("type") == "placeholder"
+    ]
+    assert pills == [("persona-field", "name"), ("tools-overview", ""), ("memory", "")]
+    assert converted[0]["type"] == "heading"
 
 
 def test_en_pack_display_texts_are_translated_not_de_literals() -> None:

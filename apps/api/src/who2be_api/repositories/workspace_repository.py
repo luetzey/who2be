@@ -506,7 +506,14 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # „Feedback-Gespräch (Review) moderieren" (aus 212aca0d v1), DE + EN. Der
 # Insert-missing-Zweig (4) legt sie in Bestands-Workspaces an und verlinkt sie
 # additiv mit der Builder-Persona; bestehende Links bleiben unberuehrt.
-BUILDER_CONTENT_VERSION = 18
+# v19: Markdown-Schreibweg (ADR-0058 §9 P4a, W58-3 A) — Persona-, Playbook-,
+# Agent-, External-Tool- und Feedback-Gespraech-Playbook sowie die
+# Agent-Bau-Konventionen beschreiben Markdown statt Editor-JSON:
+# `format="source"` als Vorlage, `edit_content` mit `base_rev` fuer
+# Teilaenderungen, Platzhalter als `{{kind:target_id}}`, `usage_notes` als
+# Markdown (W58-4) — DE + EN. Muss im selben Release wie P3 (MCP nimmt nur
+# noch Markdown) verteilt sein.
+BUILDER_CONTENT_VERSION = 19
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

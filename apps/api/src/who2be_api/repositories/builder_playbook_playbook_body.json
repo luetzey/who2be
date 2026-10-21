@@ -165,7 +165,7 @@
     "id": "pb-playbook-create-p2-atomic",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Atomic: Body als BlockNote-Dokument entwerfen — klare Phasen oder nummerierte Schritte, dazu die Sektionen Tools & Operations, Anti-Patterns und Notes. Die Zwischenueberschriften sind zugleich die Schnittkanten der Passagen-Suche (search_content): ein Abschnitt = ein Gedanke, die Ueberschrift benennt den Gegenstand.", "styles": {}}],
+    "content": [{"type": "text", "text": "Atomic: Body als Markdown entwerfen (Ueberschriften ##/###, Listen, Code-Fences; Platzhalter als {{kind:target_id}}) — klare Phasen oder nummerierte Schritte, dazu die Sektionen Tools & Operations, Anti-Patterns und Notes. Die Zwischenueberschriften sind zugleich die Schnittkanten der Passagen-Suche (search_content): ein Abschnitt = ein Gedanke, die Ueberschrift benennt den Gegenstand.", "styles": {}}],
     "children": []
   },
   {
@@ -188,7 +188,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "create_playbook", "styles": {"code": true}},
-      {"type": "text", "text": " mit name und content (description, body als BlockNote-JSON, type, tags, triggers) aufrufen. Das legt eine Draft-Version 1 an — Status ist serverseitig draft, nicht active.", "styles": {}}
+      {"type": "text", "text": " mit name und content (description, body als Markdown, type, tags, triggers) aufrufen. Neue Ueberschriften tragen keinen Anker [#id] — die IDs vergibt der Server. Das legt eine Draft-Version 1 an — Status ist serverseitig draft, nicht active.", "styles": {}}
     ],
     "children": []
   },
@@ -297,9 +297,13 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Schreiben: ", "styles": {}},
+      {"type": "text", "text": "Schreiben: Vorlage mit ", "styles": {}},
+      {"type": "text", "text": "fetch_playbook(playbook_id, format=\"source\")", "styles": {"code": true}},
+      {"type": "text", "text": " lesen (Quell-Markdown mit Ueberschriften-Ankern [#id] und base_rev im Kopf). Einen Abschnitt aendert ", "styles": {}},
+      {"type": "text", "text": "edit_content", "styles": {"code": true}},
+      {"type": "text", "text": " mit base_rev, op (replace, insert_after, delete) und dem Anker der Ueberschrift; der Rest des Bodys bleibt bitgleich. Fuer einen Umbau ", "styles": {}},
       {"type": "text", "text": "update_playbook", "styles": {"code": true}},
-      {"type": "text", "text": " mit dem vollstaendigen content aufrufen. Auf einer aktiven Version erzeugt das eine neue Draft-Version (kein In-Place-Edit; existiert schon ein Draft, kommt 409). Composes oder Resource-Links bei Bedarf mit set_playbook_composes / set_playbook_resource_links nachziehen.", "styles": {}}
+      {"type": "text", "text": " mit dem vollstaendigen content aufrufen und die Anker bestehender Ueberschriften stehen lassen, sonst verlieren Resource-Links ihr Ziel. Auf einer aktiven Version erzeugen beide eine neue Draft-Version (kein In-Place-Edit); ist schon ein Draft offen, antwortet update_playbook mit 409, edit_content schreibt bei passendem base_rev in diesen Draft. Composes oder Resource-Links bei Bedarf mit set_playbook_composes / set_playbook_resource_links nachziehen.", "styles": {}}
     ],
     "children": []
   },

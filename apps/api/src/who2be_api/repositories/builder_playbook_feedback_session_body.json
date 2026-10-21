@@ -262,7 +262,7 @@
     "id": "fg-p27",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Je Maßnahme mit Versions-Ziel (persona, playbook, resource, system_prompt_template, external_tool): Element im Vollstand lesen (format=\"full\"), die Änderung nach Freigabe mit update_* als neuen Draft schreiben und auf review schalten. Gibt update_* 409 (Draft existiert schon), den bestehenden Draft mit dem Menschen klären, nicht überschreiben.", "styles": {}}],
+    "content": [{"type": "text", "text": "Je Maßnahme mit Versions-Ziel (persona, playbook, resource, system_prompt_template, external_tool): Element als Vorlage lesen (format=\"source\", Markdown mit base_rev), die Änderung nach Freigabe mit edit_content (ein Abschnitt oder Feld) oder update_* (Vollstand) als Draft schreiben und auf review schalten. Gibt update_* 409 (Draft existiert schon), den bestehenden Draft mit dem Menschen klären, nicht überschreiben; edit_content schreibt nur mit passendem base_rev in einen offenen Draft.", "styles": {}}],
     "children": []
   },
   {

@@ -165,7 +165,7 @@
     "id": "pb-playbook-create-p2-atomic",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Atomic: Draft the body as a BlockNote document — clear phases or numbered steps, plus the Tools & Operations, Anti-Patterns, and Notes sections. Those sub-headings are also the cut lines of passage search (search_content): one section = one thought, and the heading names the subject.", "styles": {}}],
+    "content": [{"type": "text", "text": "Atomic: Draft the body as Markdown (headings ##/###, lists, code fences; placeholders as {{kind:target_id}}) — clear phases or numbered steps, plus the Tools & Operations, Anti-Patterns, and Notes sections. Those sub-headings are also the cut lines of passage search (search_content): one section = one thought, and the heading names the subject.", "styles": {}}],
     "children": []
   },
   {
@@ -188,7 +188,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "create_playbook", "styles": {"code": true}},
-      {"type": "text", "text": " is called with name and content (description, body as BlockNote JSON, type, tags, triggers). This creates a draft version 1 — status is server-side draft, not active.", "styles": {}}
+      {"type": "text", "text": " is called with name and content (description, body as Markdown, type, tags, triggers). New headings carry no anchor [#id] — the server assigns the IDs. This creates a draft version 1 — status is server-side draft, not active.", "styles": {}}
     ],
     "children": []
   },
@@ -297,9 +297,13 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Write: ", "styles": {}},
+      {"type": "text", "text": "Write: Read the template with ", "styles": {}},
+      {"type": "text", "text": "fetch_playbook(playbook_id, format=\"source\")", "styles": {"code": true}},
+      {"type": "text", "text": " (source Markdown with heading anchors [#id] and base_rev in the header). To change one section, use ", "styles": {}},
+      {"type": "text", "text": "edit_content", "styles": {"code": true}},
+      {"type": "text", "text": " with base_rev, op (replace, insert_after, delete) and the heading's anchor; the rest of the body stays bit-identical. For a rework, call ", "styles": {}},
       {"type": "text", "text": "update_playbook", "styles": {"code": true}},
-      {"type": "text", "text": " with the complete content. On an active version, this creates a new draft version (no in-place edit; if a draft already exists, this returns 409). Follow up with set_playbook_composes / set_playbook_resource_links if composes or resource links need updating.", "styles": {}}
+      {"type": "text", "text": " with the complete content and keep the anchors of existing headings, otherwise resource links lose their target. On an active version, both create a new draft version (no in-place edit); if a draft is already open, update_playbook returns 409, while edit_content writes into that draft when base_rev matches. Follow up with set_playbook_composes / set_playbook_resource_links if composes or resource links need updating.", "styles": {}}
     ],
     "children": []
   },

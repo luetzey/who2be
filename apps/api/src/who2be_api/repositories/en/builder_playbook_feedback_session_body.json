@@ -262,7 +262,7 @@
     "id": "fg-p27",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Per measure with a versioned target (persona, playbook, resource, system_prompt_template, external_tool): read the element in full (format=\"full\"), after approval write the change with update_* as a new draft and switch it to review. If update_* returns 409 (a draft already exists), clarify the existing draft with the human, don't overwrite it.", "styles": {}}],
+    "content": [{"type": "text", "text": "Per measure with a versioned target (persona, playbook, resource, system_prompt_template, external_tool): read the element as a template (format=\"source\", Markdown with base_rev), after approval write the change with edit_content (one section or field) or update_* (full state) as a draft and switch it to review. If update_* returns 409 (a draft already exists), clarify the existing draft with the human, don't overwrite it; edit_content writes into an open draft only with a matching base_rev.", "styles": {}}],
     "children": []
   },
   {
