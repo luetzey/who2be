@@ -45,7 +45,8 @@ Fuer diese ADR heisst das:
      Sie traegt nur Titel und Texte und im Frontmatter `tutorial: <id>`.
 
    Die API validiert Tutorial- und Schritt-IDs gegen die JSON-Datei. Das Web
-   importiert **dieselbe** Datei und haelt keine zweite Schrittliste. Ob die
+   haelt keine zweite Schrittliste: es bekommt die Schritte ueber die API
+   (§5). Ob die
    step_ids im Markdown zur JSON-Datei passen, prueft ein Paritaetstest im
    Hilfe-Geruest (Onboarding P4). Ein neues Tutorial heisst damit: drei
    Dateien, kein Code und keine Migration, solange es nur Schritt-Typen aus
@@ -127,7 +128,10 @@ Code-Paket: Ableitung, Test und Nachtrag in dieser Tabelle.
 
 - Neue Tutorials brauchen weder Code noch Migration, nur die drei Dateien aus
   §2.1. Neue Schritt-Typen brauchen Code und einen Nachtrag in §3.
-- Das Web (P4 und folgende) liest den Katalog aus `packages/models`. Ob das
-  Web-Image das Paket sieht, klaert P4, notfalls per Kopie im Build.
+- Das Web liest den Katalog **nicht** aus `packages/models` (Praezisierung
+  P4, PM 2026-10-21): die Schritt-Definitionen liefert `GET /v1/me/tutorials`,
+  das Web traegt nur den Markdown-Text, und der Paritaetstest JSON↔Markdown
+  laeuft in Python (`packages/models/tests/test_tutorial_help_parity.py`) —
+  das Web-Image bleibt unveraendert.
 - Die Signale werden je Tutorial einzeln abgefragt. Bei wenigen Tutorials ist
   das unkritisch, waechst der Katalog, laesst es sich buendeln.

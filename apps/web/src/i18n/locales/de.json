@@ -4380,5 +4380,85 @@
       "copySticky_one": "Startsatz kopieren (1 Rückmeldung)",
       "copySticky_other": "Startsatz kopieren ({{count}} Rückmeldungen)"
     }
+  },
+  "help": {
+    "nav": {
+      "back": "Zurück zur Hilfe",
+      "overview": "Zur Hilfe-Übersicht"
+    },
+    "sections": {
+      "firstSteps": "Erste Schritte",
+      "buildingBlocks": "Bausteine",
+      "improveAgents": "Agenten verbessern",
+      "accountAndTeam": "Konto und Team"
+    },
+    "home": {
+      "title": "Hilfe",
+      "description": "Anleitungen, Tutorials und Antworten rund um Who2Be.",
+      "search": {
+        "label": "Hilfe durchsuchen",
+        "placeholder": "Wonach suchst du?",
+        "resultsTitle": "Suchergebnisse",
+        "count_one": "1 Treffer für „{{query}}“",
+        "count_other": "{{count}} Treffer für „{{query}}“",
+        "none": "Nichts gefunden. Versuch ein anderes Wort oder frag uns."
+      },
+      "tutorials": {
+        "title": "Tutorials",
+        "empty": "Noch keine Tutorials.",
+        "error": "Tutorials konnten nicht geladen werden.",
+        "retry": "Erneut versuchen"
+      },
+      "reference": {
+        "title": "Nachschlagen",
+        "empty": "Hier erscheinen bald die ersten Hilfe-Seiten."
+      },
+      "footer": {
+        "prefix": "Nicht gefunden, was du suchst?",
+        "link": "Problem melden"
+      }
+    },
+    "article": {
+      "breadcrumb": "Brotkrumen",
+      "meta": "Aktualisiert am {{date}} · {{minutes}} Min. Lesezeit",
+      "copyForAgents": "Für Agenten kopieren",
+      "copied": "Seite als Markdown kopiert.",
+      "copyFailed": "Kopieren fehlgeschlagen.",
+      "onThisPage": "Auf dieser Seite",
+      "allPages": "Alle Hilfe-Seiten",
+      "next": "Weiter: {{title}} →",
+      "notFound": "Diese Hilfe-Seite gibt es nicht."
+    },
+    "tutorial": {
+      "notFound": "Dieses Tutorial gibt es nicht.",
+      "stepNumber": "Schritt {{number}}:",
+      "automaticHint": "Diesen Schritt hakt Who2Be selbst ab, sobald er erledigt ist.",
+      "progress": {
+        "label": "{{done}} von {{total}} Schritten · etwa {{minutes}} Min.",
+        "completed": "Abgeschlossen · alle {{total}} Schritte",
+        "aria": "Fortschritt: {{title}}"
+      },
+      "state": {
+        "open": "Offen",
+        "done": "Erledigt",
+        "skipped": "Übersprungen"
+      },
+      "actions": {
+        "start": "Starten",
+        "resume": "Fortsetzen",
+        "restart": "Neu starten",
+        "openPage": "Seite öffnen",
+        "markDone": "Erledigt",
+        "skip": "Überspringen",
+        "reopen": "Wieder öffnen"
+      },
+      "restart": {
+        "title": "„{{title}}“ neu starten?",
+        "body": "Dein Fortschritt in diesem Tutorial wird zurückgesetzt. Schritte, die Who2Be selbst erkennt, haken sich danach wieder ab.",
+        "cancel": "Abbrechen",
+        "confirm": "Neu starten",
+        "done": "Tutorial neu gestartet."
+      }
+    }
   }
 }
