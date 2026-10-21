@@ -429,8 +429,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Vollstand vor update_*: ", "styles": {"bold": true}},
-      {"type": "text", "text": "update_* hat PUT-Semantik — content ersetzt den gespeicherten Stand vollstaendig. Die Vorlage dafuer IMMER im Vollstand lesen: bietet das Lesewerkzeug einen format-Parameter, mit format=\"full\". Die Lesefassung (format=\"text\") enthaelt kein Editor-JSON; ein PUT auf ihrer Grundlage leert den Inhalt.", "styles": {}}
+      {"type": "text", "text": "Vorlage vor dem Schreiben: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Agenten schreiben Inhalte als Markdown. Die Vorlage dafuer IMMER mit format=\"source\" lesen: Quell-Markdown mit Ueberschriften-Ankern [#id], Platzhaltern als {{kind:target_id}} und base_rev im Kopf. Eine Teilaenderung (ein Abschnitt per Anker, ein Feld per field) laeuft ueber edit_content mit diesem base_rev; weicht der Stand ab, kommt 409 version_conflict — dann neu lesen, nicht blind wiederholen. update_* hat PUT-Semantik — content ersetzt den gespeicherten Stand vollstaendig; Anker bestehender Ueberschriften stehen lassen, sonst verlieren Verweise ihr Ziel. Die Lesefassung (format=\"text\") ist keine Vorlage: ihr fehlen Anker und Blockstruktur, Platzhalter sind dort teils aufgeloest; ein PUT auf ihrer Grundlage zerstoert den Inhalt. format=\"full\" (Editor-JSON) dient nur noch der Diagnose.", "styles": {}}
     ],
     "children": []
   },

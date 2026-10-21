@@ -43,7 +43,7 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "A template body is a stringified BlockNote document (JSON array of blocks). Placeholders are inline elements in a block's content array and are expanded server-side when the agent renders. ", "styles": {}},
+      {"type": "text", "text": "A template body is Markdown. Placeholders appear in it as tokens {{kind:target_id}} (for a resource section {{resource:<uuid>#<block_id>}}); the server turns them into pills on save and expands them when the agent renders. ", "styles": {}},
       {"type": "text", "text": "Call list_placeholders first", "styles": {"bold": true}},
       {"type": "text", "text": " — it returns all valid kinds, their target_id contracts, and an example each. Unknown kinds or incorrect target_id values later render as unresolved placeholders.", "styles": {}}
     ],
@@ -102,8 +102,8 @@
   {
     "id": "pb-agent-code-placeholder",
     "type": "codeBlock",
-    "props": {"language": "json"},
-    "content": [{"type": "text", "text": "[{\"id\": \"b1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n  {\"type\": \"text\", \"text\": \"You are \", \"styles\": {}},\n  {\"type\": \"placeholder\", \"props\": {\"kind\": \"persona-field\", \"target_id\": \"name\", \"label\": \"Persona: Name\"}}\n], \"children\": []}]", "styles": {}}],
+    "props": {"language": "markdown"},
+    "content": [{"type": "text", "text": "## Identity\n\nYou are {{persona-field:name}}.\n\n{{tools-overview:}}\n\n{{memory:}}", "styles": {}}],
     "children": []
   },
   {
@@ -112,7 +112,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Workflow: ", "styles": {"bold": true}},
-      {"type": "text", "text": "read list_placeholders, author the body as a string, create_system_prompt (draft), transition_system_prompt(to='review') for approval — activation is handled by a human in the web UI.", "styles": {}}
+      {"type": "text", "text": "read list_placeholders, author the body as Markdown, create_system_prompt (draft), transition_system_prompt(to='review') for approval — activation is handled by a human in the web UI. Later changes: read the template with get_system_prompt(format=\"source\") and write via edit_content (one section by anchor, or field='body') or update_system_prompt (full state).", "styles": {}}
     ],
     "children": []
   },
