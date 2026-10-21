@@ -18,6 +18,7 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { useTheme } from '@/app/theme-context'
 import type { ResourceBlock } from '@/api/types'
 import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EditorFooter } from '@/components/editor/EditorFooter'
 import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
@@ -69,6 +70,8 @@ export function PersonaProfileEditor({
 }: PersonaProfileEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   const containerRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<Measurable | null>(null)
 
@@ -144,6 +147,7 @@ export function PersonaProfileEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(editor.document as unknown as ResourceBlock[])
           }}
           // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
@@ -161,6 +165,7 @@ export function PersonaProfileEditor({
           <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

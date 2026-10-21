@@ -19,6 +19,7 @@ import { useTheme } from '@/app/theme-context'
 import { type Measurable } from '@/components/ui/popover'
 
 import { ProfileFormattingToolbar, ProfileSideMenu } from '../BlockNoteEditor'
+import { EditorFooter } from '../EditorFooter'
 import { EDITOR_PROFILES, profilePasteHandler } from '../editorProfiles'
 import { buildSystemPromptSchema, type SystemPromptSchema } from './PlaceholderBlock'
 import type {
@@ -65,6 +66,8 @@ export function SystemPromptEditor({
 }: SystemPromptEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
   // Gemeinsamer Anker fuer die schwebenden Panels: Pill (Klick/Edit) oder
@@ -179,6 +182,7 @@ export function SystemPromptEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(
               editor.document as unknown as SystemPromptBlock[],
             )
@@ -198,6 +202,7 @@ export function SystemPromptEditor({
           <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

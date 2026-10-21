@@ -166,3 +166,58 @@ test('Bestand: Playbook mit Tabelle oeffnet und zeigt sie weiter', async ({ page
   await expect(editor.locator('[data-content-type="table"]')).toHaveCount(1)
   await expect(editor.getByText('Bestand B')).toBeVisible()
 })
+
+/**
+ * Editor-Paket P3: Längen-Fußzeile. Tippen im echten Editor ändert die Zahl;
+ * die Live-Region schweigt beim Öffnen und meldet erst nach einer Pause.
+ * Pills zählen nicht mit (Unit-Test), hier geht es um das Browser-Verhalten.
+ */
+test('Fußzeile: Zähler folgt dem Tippen, Live-Region meldet erst nach der Pause', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90_000)
+  const { ws, post } = await setup(page, request)
+  const playbook = await post<{ id: string }>('/playbooks', {
+    name: 'E2E P3 Zähler',
+    content: { description: 'Kurz.', body: JSON.stringify([paragraph('e2e-z1', 'Grüße')]) },
+  })
+
+  await page.goto(`${ws}/playbooks/${playbook.id}`)
+  const editor = page.getByTestId('playbook-body-editor')
+  await expect(editor.getByText('Grüße')).toBeVisible()
+  const footer = page.getByTestId('editor-footer')
+  const length = footer.getByTestId('editor-footer-length')
+  const live = footer.getByTestId('editor-footer-live')
+  await expect(length).toHaveText('≈ 5 Zeichen · ≈ 10 Token (geschätzt)')
+  await expect(live).toHaveAttribute('aria-live', 'polite')
+  await page.waitForTimeout(1500)
+  await expect(live).toHaveText('')
+
+  await focusEnd(editor)
+  await page.keyboard.type(' an alle')
+  await expect(length).toHaveText('≈ 13 Zeichen · ≈ 10 Token (geschätzt)')
+  // Gedrosselt: direkt nach dem Tippen noch still, nach der Pause gemeldet.
+  await expect(live).toHaveText('')
+  await expect(live).toHaveText('Länge: etwa 13 Zeichen, etwa 10 Token (geschätzt)')
+
+  await footer.getByRole('button', { name: 'Wie wird die Länge geschätzt?' }).focus()
+  await expect(page.getByRole('tooltip')).toContainText('Eingebettete Verweise sind nicht eingerechnet.')
+})
+
+test('Fußzeile: auch im Resource-Editor', async ({ page, request }) => {
+  const { ws, post } = await setup(page, request)
+  const resource = await post<{ id: string }>('/resources', {
+    name: 'E2E P3 Resource',
+    content: { description: 'Kurz.', blocks: [paragraph('e2e-zr1', 'Zwölf Zeichen')] },
+  })
+
+  await page.goto(`${ws}/resources/${resource.id}`)
+  const editor = page.getByTestId('resource-editor')
+  await expect(editor.getByText('Zwölf Zeichen')).toBeVisible()
+  const length = editor.getByTestId('editor-footer-length')
+  await expect(length).toHaveText('≈ 13 Zeichen · ≈ 10 Token (geschätzt)')
+  await focusEnd(editor.getByTestId('blocknote-editor'))
+  await page.keyboard.type('!')
+  await expect(length).toHaveText('≈ 14 Zeichen · ≈ 10 Token (geschätzt)')
+})

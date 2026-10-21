@@ -3265,6 +3265,14 @@
     "placeholder": {
       "withReferences": "Write or type / for blocks and references",
       "plain": "Write or type / for blocks"
+    },
+    "footer": {
+      "length": "≈ {{chars}} characters · ≈ {{tokens}} tokens (estimated)",
+      "long": "· long",
+      "helpLabel": "How is the length estimated?",
+      "tooltip": "Estimate: about {{perToken}} characters per token. Embedded references are not included.",
+      "longTooltip": "Very long instructions are often followed less well.",
+      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)"
     }
   },
   "learning": {

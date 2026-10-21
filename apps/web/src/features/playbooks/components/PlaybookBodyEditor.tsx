@@ -17,6 +17,7 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 
 import { useTheme } from '@/app/theme-context'
 import { ProfileFormattingToolbar, ProfileSideMenu } from '@/components/editor/BlockNoteEditor'
+import { EditorFooter } from '@/components/editor/EditorFooter'
 import { EDITOR_PROFILES, profilePasteHandler } from '@/components/editor/editorProfiles'
 import {
   buildSystemPromptSchema,
@@ -66,6 +67,8 @@ export function PlaybookBodyEditor({
 }: PlaybookBodyEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Dokumentstand fuer die Laengen-Fusszeile (Editor-Paket P3).
+  const [doc, setDoc] = useState<unknown>(initialBlocks ?? [])
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
   // Gemeinsamer Anker fuer die schwebenden Panels (Pill bzw. Caret).
@@ -144,6 +147,7 @@ export function PlaybookBodyEditor({
           portalElements={portalElements}
           onChange={() => {
             if (!userInteractedRef.current) return
+            setDoc(editor.document)
             onChange?.(editor.document as unknown as PlaybookBodyBlock[])
           }}
           // Slash-Menue, Leiste und Seitenmenue nach Einsatzort (P2).
@@ -161,6 +165,7 @@ export function PlaybookBodyEditor({
           <ProfileSideMenu />
         </BlockNoteView>
       </div>
+      <EditorFooter blocks={doc} />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover
