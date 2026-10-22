@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { createUser, loginAs, seedWorkspace } from './helpers/auth'
+import { apiRequest, createUser, loginAs, seedWorkspace } from './helpers/auth'
 import { decideCookieConsent } from './helpers/consent'
 
 /**
@@ -52,6 +52,23 @@ test.skip(
 const FAKE_CHECKOUT_URL = 'https://mollie-checkout.e2e.invalid/session/e2e-test'
 
 const UPGRADE_BUTTON_NAME = /Jetzt upgraden|Upgrade now/
+
+/**
+ * Rechnungsdaten-Vorbedingung (ADR-0061 R1): der Upgrade-Knopf ist gesperrt,
+ * bis die Org Rechnungsdaten gespeichert hat. Nur Platzhalter-Daten und ohne
+ * USt-IdNr., damit kein VIES-Aufruf entsteht.
+ */
+const PLACEHOLDER_BILLING = {
+  customer_type: 'business',
+  given_name: null,
+  family_name: null,
+  company_name: 'E2E Beispiel GmbH',
+  street: 'Musterstrasse 1',
+  postal_code: '12345',
+  city: 'Musterstadt',
+  country: 'DE',
+  vat_id: null,
+} as const
 
 test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitung an', async ({
   page,
@@ -110,9 +127,23 @@ test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitu
   await expect(storageBar).toHaveAttribute('aria-valuemax', String(104857600))
   await expect(storageBar).toHaveAttribute('aria-valuenow', '0')
 
-  // AC 2: Upgrade ausloesen. Im Free-Tier ist der Upgrade-CTA der einzige
-  // Button im Billing-Slot.
-  await billingSlot.getByRole('button', { name: UPGRADE_BUTTON_NAME }).click()
+  // R1: ohne Rechnungsdaten ist Upgrade gesperrt. Die Daten werden hier ueber
+  // das echte Formular gegen den echten Endpunkt gespeichert, danach ist der
+  // Knopf frei.
+  const upgrade = billingSlot.getByRole('button', { name: UPGRADE_BUTTON_NAME })
+  await expect(upgrade).toBeDisabled()
+  const form = billingSlot.getByRole('form', { name: /Rechnungsdaten|Billing details/ })
+  await form.getByLabel(/^(Firmenname|Company name)$/).fill(PLACEHOLDER_BILLING.company_name)
+  await form.getByLabel(/^(Straße und Hausnummer|Street and number)$/).fill(PLACEHOLDER_BILLING.street)
+  await form.getByLabel(/^(PLZ|Postal code)$/).fill(PLACEHOLDER_BILLING.postal_code)
+  await form.getByLabel(/^(Ort|City)$/).fill(PLACEHOLDER_BILLING.city)
+  await form.getByLabel(/^(Land|Country)$/).selectOption(PLACEHOLDER_BILLING.country)
+  await form.getByRole('button', { name: /Rechnungsdaten speichern|Save billing details/ }).click()
+  await expect(billingSlot.getByTestId('billing-details-summary')).toBeVisible()
+
+  // AC 2: Upgrade ausloesen.
+  await expect(upgrade).toBeEnabled()
+  await upgrade.click()
 
   // Weiterleitung zum Bezahlanbieter ist angestossen (`window.location.href`
   // in `useCheckout`), aber abgefangen: die Navigation landet auf dem lokalen
@@ -129,6 +160,11 @@ test('Billing: fehlgeschlagener Checkout-Aufruf zeigt eine sichtbare Fehlermeldu
   await loginAs(page, user)
   await decideCookieConsent(page)
   const { workspaceId } = await seedWorkspace(request, user)
+  // R1-Vorbedingung direkt per API (das Formular deckt der Test oben ab).
+  await apiRequest(request, user.session.access_token, `/v1/workspaces/${workspaceId}/billing/profile`, {
+    method: 'PUT',
+    data: PLACEHOLDER_BILLING,
+  })
 
   // AC 5: der Checkout-Aufruf schlaegt fehl (Backend 500) -> sichtbarer Fehler.
   await page.route('**/billing/checkout', (route) =>
