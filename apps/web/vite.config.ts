@@ -45,6 +45,12 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Schutz gegen Node >= 25 (oder einen falschen `node` im PATH): dort ist
+    // Node-eigenes Web Storage aktiv, und Vitest 4 filtert jsdoms
+    // `window.localStorage` weg (vitest#8757). Auf dem gepinnten Node 22 ohne
+    // Wirkung. Gilt nur fuer die Test-Worker, nicht fuer Build oder Dev-Server.
+    // Details: CONTRIBUTING.md, Definition of Done. Karte t_61bd62ed.
+    execArgv: ['--no-experimental-webstorage'],
     // Zwei Projekte, die sich die Wurzel-Config teilen (`extends: true`) und
     // sich nur im Timeout unterscheiden. Coverage, Reporter und CLI-Filter
     // (`--testNamePattern a11y`) wirken weiter ueber beide Projekte.
