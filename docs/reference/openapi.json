@@ -28878,10 +28878,11 @@
           "technical",
           "mcp",
           "performance",
+          "tool_request",
           "other"
         ],
         "title": "SystemFeedbackCategory",
-        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt) oder `other`. Wird in derselben `agent_feedback`-Spalte\n`signal` gespeichert (entity_type='system', entity_id=NULL) und fliesst in\nden gemeinsamen Kurations-Posteingang."
+        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt), `tool_request` (ein Werkzeug liegt nicht im\nWerkzeug-Profil des Agenten, ADR-0059 §8 / W59-6) oder `other`. Wird in\nderselben `agent_feedback`-Spalte `signal` gespeichert (entity_type=\n'system', entity_id=NULL; die Spalte hat keinen CHECK, Migration 0059) und\nfliesst in den gemeinsamen Kurations-Posteingang."
       },
       "SystemFeedbackCreate": {
         "properties": {
@@ -30357,6 +30358,61 @@
         "title": "TokenRename",
         "description": "Eingabe fuer `PATCH /v1/tokens/{id}` — nur der Name ist editierbar.\n\nSecret, Rolle und Agent-Bindung bleiben bewusst unveraenderlich (ADR-0023-\nSnapshot). Fuer ein neues Secret gibt es `POST /v1/tokens/{id}/rotate`."
       },
+      "ToolProfileGrant": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "tools_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Added"
+          },
+          "tools_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Removed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ToolProfileGrant",
+        "description": "Das Werkzeug-Profil eines agent-gebundenen Tokens (`whoami`, §6.1).\n\n`id is None` heisst „Alle\" (mit Ausnahmen in `tools_added`/\n`tools_removed`). Kein Profil und keine Ausnahmen liefert `whoami` als\n`tool_profile=None`. Die ausgerechnete Werkzeugliste steht bewusst NICHT\nhier — der Aufrufer rechnet sie mit `effective_tool_set` aus (§6.1).\n\nGruppen und Werkzeuge sind `str`, nicht `ToolGroup`: Ein Name, den der\nCode nicht mehr kennt, darf das Lesen nicht brechen, er wird bei der\nAuswertung uebergangen (§3.3)."
+      },
       "TransitionGrant": {
         "properties": {
           "promote": {
@@ -31324,6 +31380,16 @@
               }
             ],
             "title": "Work Areas"
+          },
+          "tool_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolProfileGrant"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
