@@ -2168,10 +2168,6 @@
         "toast": {
           "restored": "v{{version}} als Entwurf wiederhergestellt."
         }
-      },
-      "help": {
-        "title": "Placeholder-Referenz",
-        "description": "Welche Placeholder dir im System-Prompt-Editor zur Verfügung stehen und was sie beim MCP-Read einfügen."
       }
     },
     "nav": {
