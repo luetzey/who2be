@@ -454,7 +454,10 @@ export function AgentsPage() {
                                   <Star
                                     className={cn(
                                       'h-4 w-4',
-                                      agent.is_favorite === true && 'fill-current text-brand',
+                                      // Flaeche, kein Text: `fill-brand`/`stroke-brand`
+                                      // statt `text-brand`, das ueber das dunklere
+                                      // Text-Token `--brand-text` liefe.
+                                      agent.is_favorite === true && 'fill-brand stroke-brand',
                                     )}
                                   />
                                 </Button>

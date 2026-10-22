@@ -192,3 +192,55 @@ describe('Zaehler-Pill: Kontrast nach WCAG AA (Audit A12)', () => {
     })
   }
 })
+
+/**
+ * Linkfarbe (Karte t_6e61ed97): `text-brand` liest das Text-Token
+ * `--brand-text`, die Flaeche `--brand` bleibt unveraendert. Hell mass die
+ * Flaeche als Linkfarbe 2,61:1 auf Weiss (axe auf /help). Neben den Surfaces
+ * steht `text-brand` auch auf der Tinte `bg-brand/10` ueber `--card`
+ * (Platzhalter-Chip, Playbook-Zaehler).
+ */
+describe('Brand-Text: Kontrast nach WCAG AA (Links und Text)', () => {
+  const TINT_ALPHA = 0.1
+  const SURFACES = ['--background', '--card', '--popover', '--muted']
+
+  it('Tailwind-Namespace: text-brand liest --brand-text, Flaechen bleiben bei --brand', () => {
+    expect(GLOBALS_CSS).toMatch(/--text-color-brand:\s*var\(--brand-text\);/)
+    expect(GLOBALS_CSS).toMatch(/--color-brand:\s*var\(--brand\);/)
+  })
+
+  it('Referenz: die Flaeche --brand als Text faellt hell unter 4,5:1', () => {
+    const css = block('light (:root)')
+    expect(contrastRatio(token(css, '--brand'), token(css, '--background'))).toBeLessThan(
+      WCAG_AA_NORMAL_TEXT,
+    )
+  })
+
+  for (const name of Object.keys(THEME_BLOCKS)) {
+    it(`${name}: --brand-text auf ${SURFACES.join('/')} >= 4,5:1`, () => {
+      const css = block(name)
+      const fg = token(css, '--brand-text')
+      for (const surface of SURFACES) {
+        expect(
+          contrastRatio(fg, token(css, surface)),
+          `${surface} in ${name}`,
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT)
+      }
+    })
+
+    it(`${name}: --brand-text auf bg-brand/10 ueber --card >= 4,5:1`, () => {
+      const css = block(name)
+      const tint = over(toSrgb(token(css, '--brand')), TINT_ALPHA, toSrgb(token(css, '--card')))
+      expect(srgbContrast(toSrgb(token(css, '--brand-text')), tint)).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL_TEXT,
+      )
+    })
+  }
+
+  it('dunkel: Text-Token ist identisch zur Flaeche (keine Aenderung im Dark Mode)', () => {
+    for (const name of ['dark (prefers-color-scheme)', "dark ([data-theme='dark'])"]) {
+      const css = block(name)
+      expect(token(css, '--brand-text')).toEqual(token(css, '--brand'))
+    }
+  })
+})
