@@ -36,6 +36,14 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-hover: var(--brand-hover);
+  /*
+   * `text-brand` liest `--text-color-brand` vor `--color-brand` (gleicher
+   * Mechanismus wie `text-destructive`). Damit laufen alle Text- und
+   * Linkverwendungen ueber das Text-Token `--brand-text`; Flaechen
+   * (`bg-`, `border-`, `fill-`, `stroke-`) bleiben bei `--brand`.
+   * Hell misst die Flaeche als Linkfarbe nur 2,61:1 auf Weiss.
+   */
+  --text-color-brand: var(--brand-text);
   /* Wortmarke A (components/layout/Wordmark.tsx), Asset-Farben je Theme. */
   --color-wordmark-accent: var(--wordmark-accent);
 
@@ -175,6 +183,9 @@
   --brand: oklch(0.72 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
+  /* Text-Variante fuer `text-brand` (Links, Text). Dunkler als die Flaeche:
+   * 5,12:1 auf Weiss, 4,69:1 auf --muted. Waechter: brand-contrast.test.ts. */
+  --brand-text: oklch(0.55 0.17 55);
   /* Die "2" der Wortmarke A (docs/assets/brand/logo-light.svg: #de6f00). */
   --wordmark-accent: oklch(0.66 0.17 55);
 
@@ -248,6 +259,9 @@
     --brand: oklch(0.74 0.17 55);
     --brand-foreground: oklch(0.145 0 0);
     --brand-hover: oklch(0.8 0.16 55);
+    /* Text-Variante: dunkel identisch zur Flaeche, die misst als Text schon
+     * 7,76:1 auf --card (6,23:1 auf --muted). */
+    --brand-text: oklch(0.74 0.17 55);
     /* Die "2" der Wortmarke A (docs/assets/brand/logo-dark.svg: #fa8927). */
     --wordmark-accent: oklch(0.74 0.17 55);
 
@@ -295,6 +309,8 @@
   --brand: oklch(0.72 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.66 0.17 55);
+  /* Text-Variante, siehe :root. */
+  --brand-text: oklch(0.55 0.17 55);
   /* Die "2" der Wortmarke A (docs/assets/brand/logo-light.svg: #de6f00). */
   --wordmark-accent: oklch(0.66 0.17 55);
 
@@ -350,6 +366,8 @@
   --brand: oklch(0.74 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.8 0.16 55);
+  /* Text-Variante, siehe Dark-Block unter prefers-color-scheme. */
+  --brand-text: oklch(0.74 0.17 55);
   /* Die "2" der Wortmarke A (docs/assets/brand/logo-dark.svg: #fa8927). */
   --wordmark-accent: oklch(0.74 0.17 55);
 

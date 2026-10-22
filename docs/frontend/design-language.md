@@ -45,9 +45,19 @@ Alle Farben sind OKLCH (ADR-0014) in
 | `--brand` | `oklch(0.72 0.17 55)` | `oklch(0.74 0.17 55)` | Primaere CTA-Fill |
 | `--brand-foreground` | `oklch(0.145 0 0)` (dunkel) | `oklch(0.145 0 0)` (dunkel) | Text auf `--brand` |
 | `--brand-hover` | `oklch(0.66 0.17 55)` (dunkler) | `oklch(0.80 0.16 55)` (heller) | Hover-State |
+| `--brand-text` | `oklch(0.55 0.17 55)` (dunkler) | `oklch(0.74 0.17 55)` (= Flaeche) | Brand als **Text** und Linkfarbe (`text-brand`) |
 | `--wordmark-accent` | `oklch(0.66 0.17 55)` (= Asset `#de6f00`) | `oklch(0.74 0.17 55)` (= Asset `#fa8927`) | Nur die "2" der Wortmarke (§10.2) |
 
 Tailwind-Klassen: `bg-brand`, `text-brand-foreground`, `hover:bg-brand-hover`.
+
+`text-brand` liest `--brand-text` (Tailwind-Namespace `--text-color-brand`),
+nicht die Flaeche — gleiches Muster wie `text-destructive` (§2.4). Grund: die
+helle Flaeche misst als Linkfarbe nur 2,61:1 auf Weiss. Die Text-Variante
+misst hell 5,12:1 auf Weiss (4,69:1 auf `--muted`), dunkel ist sie identisch
+zur Flaeche (7,76:1 auf `--card`, 6,23:1 auf `--muted`). Flaechen (`bg-`,
+`border-`, `fill-`, `stroke-`) bleiben bei `--brand`; ein gefuelltes Icon
+nimmt deshalb `fill-brand stroke-brand`, nicht `text-brand`.
+Waechter: `styles/brand-contrast.test.ts`.
 
 **Schrift auf Brand ist in beiden Modi dunkel.** Weisse Schrift auf dem
 Light-Orange erreicht nur 2,5:1 (Hover 3,1:1) und faellt durch §11. Die
