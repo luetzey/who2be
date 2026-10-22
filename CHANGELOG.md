@@ -190,15 +190,6 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
-- The web Definition of Done runs green locally on Node 22 again without
-  `NODE_OPTIONS`. Node 22.23.x enables Web Storage in Node itself, as Node 25+
-  does by default, and Vitest 4 then drops jsdom's `window.localStorage`
-  (vitest#8757): `npm run test:coverage` failed with 583 red tests in 58 files,
-  while CI on an older 22 patch release stayed green. The Vitest config now
-  starts its workers with `--no-experimental-webstorage` (`test.execArgv`), so
-  local runs and CI use the same flag; `CONTRIBUTING.md` describes the current
-  state.
-
 - A failed offsite backup no longer reports success. `restic backup` and
   `restic forget` were deliberately non-fatal, so a full storage box, an expired
   SSH key or a network outage ended the cron run with exit 0 — nobody found out
