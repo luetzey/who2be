@@ -372,16 +372,20 @@ permanently red for no reason.
 `node-version: 22` in `.github/workflows/ci.yml`. Run `mise install` (or
 `nvm use` / `fnm use`) in the repo root before touching the web stack.
 
-Newer Node releases enable Web Storage in Node itself: by default from Node 25,
-and in recent Node 22 patch releases as well (observed on 22.23.3). Vitest 4 then filters
-jsdom's `window.localStorage` away (upstream
+Self-check: `npm exec -- node -v` must print `v22.x`. `node -v` alone is not
+enough — `npm`/`npx` start through `#!/usr/bin/env node`, so another `node`
+earlier in `PATH` (in front of mise/nvm/fnm) silently runs the tests on a
+different major.
+
+Node 25+ enables Web Storage in Node itself by default; the pinned Node 22 does
+not. On Node 25+ Vitest 4 filters jsdom's `window.localStorage` away (upstream
 [vitest#8757](https://github.com/vitest-dev/vitest/issues/8757), fixed only in
-Vitest 5 — no 4.1.x backport), and several hundred web tests fail with a
-`TypeError` on `localStorage`. The test config therefore starts every Vitest
-worker with `--no-experimental-webstorage` (`test.execArgv` in
-`apps/web/vite.config.ts`). The commands above need no `NODE_OPTIONS` and
-behave the same locally and in CI. Remove the flag together with the upgrade
-to Vitest 5.
+Vitest 5 — no 4.1.x backport), and hundreds of web tests fail with a
+`TypeError` on `localStorage`. As a safeguard against an accidental Node 25+
+the test config starts every Vitest worker with `--no-experimental-webstorage`
+(`test.execArgv` in `apps/web/vite.config.ts`); on Node 22 the flag changes
+nothing. The commands above need no `NODE_OPTIONS`. Remove the flag together
+with the upgrade to Vitest 5.
 
 New dependency? Check its license first (mandatory scan, ADR-0033).
 Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
