@@ -666,17 +666,78 @@
       "saved": "Agent saved.",
       "unknownError": "Unknown error."
     },
-    "connector": {
-      "title": "Claude connector",
-      "description": "Connection parameters for a remote MCP connector bound to this agent. You sign in via OAuth when connecting — no token needed. The URL is unique per agent so Claude won't reject it as a duplicate.",
-      "nameLabel": "Connector name",
+    "connect": {
+      "title": "Connection",
       "nameValue": "Who2Be – {{name}}",
+      "clientQuestion": "Where do you use your agents?",
+      "client": {
+        "claude": "Claude",
+        "code": "Claude Code",
+        "editor": "Cursor or VS Code",
+        "other": "Something else"
+      },
+      "clientName": {
+        "claude": "Claude",
+        "code": "Claude Code",
+        "editor": "your editor",
+        "other": "your app"
+      },
+      "status": {
+        "connected": "Connected",
+        "notConnected": "Not connected yet"
+      },
+      "steps": {
+        "claude": "Click “Connect to Claude”. Claude opens with everything filled in. Click “Add” there, then “Connect”.",
+        "confirm": "Confirm in Who2Be that {{client}} may use the agent “{{agent}}”.",
+        "test": "Write in a new chat:",
+        "code": "Copy this command and run it in your terminal:",
+        "editor": "Click “Add to Cursor” or “Install in VS Code”. The editor asks once.",
+        "login": "Sign in to Who2Be and confirm the agent “{{agent}}”.",
+        "otherIntro": "Your app needs to support remote MCP with sign-in (OAuth). Enter this address there:",
+        "otherTest": "Then write to your agent:"
+      },
+      "cta": {
+        "claude": "Connect to Claude",
+        "code": "Copy command",
+        "cursor": "Add to Cursor",
+        "vscode": "Install in VS Code",
+        "other": "I've entered the address"
+      },
+      "newTab": "(opens in a new tab)",
+      "reopenClaude": "Open Claude again",
+      "testLabel": "Test sentence",
+      "testSentence": "Who are you? Load your persona from Who2Be.",
+      "copySentence": "Copy sentence",
+      "commandLabel": "Command",
+      "nameLabel": "Name",
       "urlLabel": "Server URL",
-      "urlHint": "Paste it as the URL when adding a connector in Claude. The URL determines the agent, so you just confirm it during login.",
-      "copyUrl": "Copy URL",
       "copyName": "Copy name",
+      "copyUrl": "Copy URL",
       "copied": "Copied to clipboard.",
-      "error": "Copy failed."
+      "copyError": "Copy failed.",
+      "manual": {
+        "summary": "Button not working? Add it manually",
+        "claudePath": "In Claude: Settings › Connectors › “Add custom connector”. On the iPhone the button sometimes doesn't open the dialog; this way works.",
+        "editorPath": "Add it in your editor as a remote MCP server with this URL (HTTP transport). You sign in on first use."
+      },
+      "teamPlan": "On a Team or Enterprise plan? There, your Claude organization owner adds connectors.",
+      "free": "Claude Free allows only one custom connector. Remove the Builder there first.",
+      "waiting": "Waiting for “{{agent}}” …",
+      "waitingHint": "As soon as it loads its persona in {{client}}, this step is checked off. You can leave this page open.",
+      "expired": "No request has arrived yet. Who2Be has stopped checking on its own.",
+      "confirmQuestion": "Did it answer?",
+      "confirmYes": "Yes, continue",
+      "checkAgain": "Check again",
+      "troubleshoot": "Not working? Common causes",
+      "success": "Connected. “{{agent}}” has loaded its persona.",
+      "lastFetch": "Last request on {{date}}",
+      "confirmedHint": "You confirmed the connection. The first request shows up here as soon as it arrives.",
+      "addAnother": "Add connection",
+      "collapse": "Collapse",
+      "notReady": {
+        "disabled": "The agent is not active.",
+        "fix": "Go to settings"
+      }
     },
     "filter": {
       "searchPlaceholder": "Search agents…",

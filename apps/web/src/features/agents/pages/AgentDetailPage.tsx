@@ -150,6 +150,9 @@ export function AgentDetailPage() {
                       <CopyPromptButton
                         agentId={agent.id}
                         disabled={agent.status !== 'enabled'}
+                        // Hoechstens eine Brand-Aktion je Seite (Designsprache
+                        // §2.2): die traegt jetzt „Verbindung“ im Ueberblick.
+                        variant="outline"
                       />
                       <DuplicateAgentButton agent={agent} />
                       {/* Lernschleife D6a (Delta-Spec S6): ab viewer, Agent fest. */}
@@ -174,19 +177,25 @@ export function AgentDetailPage() {
                   </TabsList>
 
                   <TabsContent value="overview">
-                    {/* Navigation W2-b (Spec §3.2): Aufgaben-Zeile, Kacheln,
-                        Zusammensetzung und Arbeitsbereiche. */}
-                    <AgentOverview
-                      agent={agent}
-                      composition={
-                        <AgentHierarchyView
-                          agent={agent}
-                          persona={persona}
-                          template={template}
-                          playbooks={playbooks}
-                        />
-                      }
-                    />
+                    {/* Reihenfolge im Ueberblick (Onboarding-Spec §10.1): Kopf →
+                        Verbindung → Briefing (Editor-Spec §6.1, folgt) →
+                        Kennzahlen. */}
+                    <Stack gap="lg">
+                      <AgentConnectorSection agent={agent} />
+                      {/* Navigation W2-b (Spec §3.2): Aufgaben-Zeile, Kacheln,
+                          Zusammensetzung und Arbeitsbereiche. */}
+                      <AgentOverview
+                        agent={agent}
+                        composition={
+                          <AgentHierarchyView
+                            agent={agent}
+                            persona={persona}
+                            template={template}
+                            playbooks={playbooks}
+                          />
+                        }
+                      />
+                    </Stack>
                   </TabsContent>
 
                   <TabsContent value="evolution">
@@ -211,12 +220,7 @@ export function AgentDetailPage() {
                       templates={templates}
                       agent={agent}
                       locked={locked}
-                      connectionSlot={
-                        <Stack gap="lg">
-                          <AgentConnectorSection agentId={agent.id} agentName={agent.name} />
-                          <AgentTokensSection agentId={agent.id} />
-                        </Stack>
-                      }
+                      connectionSlot={<AgentTokensSection agentId={agent.id} />}
                     />
                   </TabsContent>
                 </Tabs>

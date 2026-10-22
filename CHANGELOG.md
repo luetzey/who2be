@@ -10,6 +10,14 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- Agent overview: a new "Connection" card asks where the agent is used
+  (Claude, Claude Code, Cursor/VS Code, other) and offers one-click install
+  links without a token (OAuth on first connect), a ready-to-copy
+  `claude mcp add` command, a manual fallback, and a waiting state that
+  detects the first fetch by polling the agent's usage (Onboarding P2). The
+  connector card moved from Settings → Connection into the overview; API
+  tokens stay there.
+
 - CI aggregates all jobs into a single `all-green` job, intended to become the
   only required status check on `main`. Requiring the individual jobs would be
   wrong in both directions: five of them are gated by the docs allowlist and
