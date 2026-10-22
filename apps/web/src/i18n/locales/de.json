@@ -4520,6 +4520,25 @@
         "confirm": "Neu starten",
         "done": "Tutorial neu gestartet."
       }
+    },
+    "checklist": {
+      "title": "Erste Schritte",
+      "progress": "{{done}} von {{total}} erledigt · etwa {{minutes}} Minuten",
+      "hide": "Ausblenden",
+      "hidden": "Ausgeblendet. Du findest „{{title}}“ jederzeit in der Hilfe unter Tutorials.",
+      "hideFailed": "Ausblenden hat nicht ganz geklappt. Die Liste ist neu geladen, versuch es bitte noch einmal.",
+      "error": "Erste Schritte konnten nicht geladen werden.",
+      "openAgents": "Zu den Agents",
+      "state": {
+        "done": "erledigt",
+        "skipped": "übersprungen",
+        "next": "als Nächstes"
+      },
+      "done": {
+        "title": "Du bist startklar",
+        "body": "Alle Schritte aus „{{title}}“ sind erledigt.",
+        "help": "Zur Hilfe"
+      }
     }
   }
 }

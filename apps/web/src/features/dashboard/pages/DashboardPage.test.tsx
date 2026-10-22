@@ -39,11 +39,15 @@ const sampleData: DashboardData = {
 
 // Antwortet jedem Request mit `payload` — ausser dem Aufgaben-Zaehler
 // (`/inbox/counts`, Glocke und Dashboard-Zeile): der scheitert, damit die
-// Zeile hier entfaellt und die Tests nur das uebrige Dashboard pruefen.
+// Zeile hier entfaellt und die Tests nur das uebrige Dashboard pruefen. Die
+// Startliste (`/me/tutorials`, eigene Tests) bekommt eine leere Liste.
 function jsonFetch(payload: unknown, status = 200) {
   return vi.fn().mockImplementation((input: RequestInfo | URL) => {
     if (String(input).includes('/inbox/counts')) {
       return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+    }
+    if (String(input).includes('/me/tutorials')) {
+      return Promise.resolve(new Response('[]', { status: 200 }))
     }
     return Promise.resolve(new Response(JSON.stringify(payload), { status }))
   })
@@ -289,6 +293,7 @@ describe('DashboardPage — Zeile „Zu erledigen“ (W1-c)', () => {
       const json = (body: unknown, status = 200) =>
         Promise.resolve(new Response(JSON.stringify(body), { status }))
       if (url.pathname.endsWith('/dashboard')) return json(quiet)
+      if (url.pathname.endsWith('/me/tutorials')) return json([])
       if (url.pathname.endsWith('/inbox/counts')) {
         if (answer === 'pending') return new Promise<Response>(() => {})
         if (answer === 'fail') return json({ detail: 'boom' }, 500)

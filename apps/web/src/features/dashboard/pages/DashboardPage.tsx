@@ -13,6 +13,7 @@ import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { statusLabel } from '@/components/version'
+import { TutorialChecklist } from '@/features/help'
 import { useInboxCounts } from '@/hooks/useInboxCounts'
 
 import { ActivityRow } from '../components/ActivityRow'
@@ -44,6 +45,11 @@ export function DashboardPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader title={t('page.title')} description={t('page.description')} />
+
+        {/* Startliste (Onboarding P3, Spec §6.1): ganz oben, eigene Quelle
+            (`/v1/me/tutorials`). Laedt und scheitert unabhaengig vom
+            Dashboard-Aggregat darunter. */}
+        {!preparing ? <TutorialChecklist /> : null}
 
         {preparing ? (
           <EmptyState
