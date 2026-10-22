@@ -452,6 +452,7 @@ function ClientGuide({
             copyLabel={t('connect.cta.code')}
             onCopy={(value) => onCopy(value, onStart)}
             primary={!waiting}
+            breakAll
           />
         </li>
         <li>{t('connect.steps.login', { agent: agentName })}</li>
@@ -507,6 +508,7 @@ function ClientGuide({
         copyLabel={t('connect.copyUrl')}
         onCopy={onCopy}
         mono
+        breakAll
       />
       <p>{t('connect.steps.otherTest')}</p>
       {sentence}
@@ -551,6 +553,7 @@ function ManualFallback({
           copyLabel={t('connect.copyUrl')}
           onCopy={onCopy}
           mono
+          breakAll
         />
         <p className="text-xs break-words text-muted-foreground">{path}</p>
       </div>
@@ -560,7 +563,9 @@ function ManualFallback({
 
 // Kopierfeld (Designsprache §10.2): Wert als `<output>` mit Label, Knopf
 // daneben, unter `md` darunter. Lange URLs brechen um statt abgeschnitten zu
-// werden (Responsive-Vertrag #570).
+// werden (Responsive-Vertrag #570). `breakAll` nur fuer URLs und Befehle ohne
+// Trennstelle; Text (Test-Satz, Name) bricht an Wortgrenzen (`break-words`),
+// sonst zerreisst er bei 320 px mitten im Wort (Review P6).
 function CopyField({
   label,
   value,
@@ -569,6 +574,7 @@ function CopyField({
   mono = false,
   dashed = false,
   primary = false,
+  breakAll = false,
 }: {
   label: string
   value: string
@@ -577,6 +583,7 @@ function CopyField({
   mono?: boolean
   dashed?: boolean
   primary?: boolean
+  breakAll?: boolean
 }) {
   const id = useId()
   return (
@@ -589,7 +596,8 @@ function CopyField({
           id={id}
           aria-live="off"
           className={[
-            'flex min-h-10 min-w-0 flex-1 items-center rounded-md px-3 py-2 text-sm break-all',
+            'flex min-h-10 min-w-0 flex-1 items-center rounded-md px-3 py-2 text-sm',
+            breakAll ? 'break-all' : 'break-words',
             dashed ? 'border border-dashed border-input' : 'border border-input bg-muted/50',
             mono || dashed ? 'font-mono' : '',
           ].join(' ')}

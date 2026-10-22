@@ -321,6 +321,8 @@ describe('AgentConnectorSection — andere Programme', () => {
     expect(screen.getByLabelText('Befehl')).toHaveTextContent(
       `claude mcp add --transport http who2be-coder ${URL_}`,
     )
+    // Befehl mit URL: darf mitten im Wort brechen (keine Trennstelle).
+    expect(screen.getByLabelText('Befehl')).toHaveClass('break-all')
     fireEvent.click(screen.getByRole('button', { name: 'Befehl kopieren' }))
     await waitFor(() => expect(screen.getByTestId('connect-waiting')).toBeInTheDocument())
     expect(screen.getByTestId('connect-waiting')).toHaveTextContent('in Claude Code')
@@ -427,6 +429,19 @@ describe('AgentConnectorSection — Responsive (#570)', () => {
     const row = value.parentElement
     expect(row).toHaveClass('flex-col')
     expect(row).toHaveClass('md:flex-row')
+  })
+
+  it('Text bricht an Wortgrenzen, nur URLs und Befehle mitten im Wort', async () => {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+    // Test-Satz und Name sind Text: kein Zerreissen mitten im Wort bei 320 px.
+    const sentence = screen.getByLabelText('Test-Satz')
+    expect(sentence).toHaveClass('break-words')
+    expect(sentence).not.toHaveClass('break-all')
+    const name = within(screen.getByTestId('connect-manual')).getByLabelText('Name')
+    expect(name).toHaveClass('break-words')
+    expect(name).not.toHaveClass('break-all')
   })
 })
 

@@ -12,6 +12,7 @@ import {
 } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
+import { findPage, helpIndex } from '@/help/helpIndex'
 import { notify } from '@/lib/feedback'
 
 import { AgentsPage } from './AgentsPage'
@@ -116,6 +117,15 @@ afterEach(() => {
 })
 
 describe('AgentsPage', () => {
+  it('Kontext-Ziele existieren in der Hilfe (DE und EN, Onboarding P8)', () => {
+    for (const locale of ['de', 'en'] as const) {
+      expect(findPage(helpIndex, locale, 'own-agent')?.blocks.map((b) => b.id)).toContain(
+        'mit-dem-builder',
+      )
+      expect(findPage(helpIndex, locale, 'workspaces')?.blocks.map((b) => b.id)).toContain('rollen')
+    }
+  })
+
   it('Audit A10: genau eine Brand-Flaeche — Kopieren in der Zeile ist outline', async () => {
     const list = [agent(), agent({ id: 'a2', name: 'Zweiter Bot' }), agent({ id: 'a3', name: 'Dritter Bot' })]
     vi.stubGlobal(
@@ -298,8 +308,54 @@ describe('AgentsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('Noch keine Agents')).toBeInTheDocument()
+    expect(await screen.findByText('Noch keine eigenen Agenten')).toBeInTheDocument()
+    expect(
+      screen.getByText('Der Builder baut dir einen im Chat, oder du legst ihn hier selbst an.'),
+    ).toBeInTheDocument()
     expect(screen.getByTestId('new-agent-empty')).toBeEnabled()
+    // Kontext-Link (Onboarding P8): exaktes Ziel, workspace-relativ.
+    expect(screen.getByRole('link', { name: 'So baut dir der Builder einen Agenten' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/own-agent#mit-dem-builder',
+    )
+    expect(screen.queryByTestId('agents-only-managed')).not.toBeInTheDocument()
+  })
+
+  it('viewer: Leerzustand verlinkt auf die Rollen statt auf den Builder', async () => {
+    stubFetch([])
+    renderPage(meWithRole('viewer'))
+
+    expect(await screen.findByText('Eigene Agenten legt ein Editor oder Admin an.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Wer darf was? Die Rollen erklärt' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/workspaces#rollen',
+    )
+    expect(screen.getByTestId('new-agent-empty')).toBeDisabled()
+  })
+
+  it('nur der Builder (verwaltet): Hinweis „Noch keine eigenen Agenten“ über der Liste', async () => {
+    stubFetch([agent({ id: 'b1', name: 'Builder', is_managed: true })])
+    renderPage()
+
+    expect(await screen.findByText('Builder')).toBeInTheDocument()
+    const hint = screen.getByTestId('agents-only-managed')
+    expect(within(hint).getByText('Noch keine eigenen Agenten')).toBeInTheDocument()
+    expect(within(hint).getByRole('link')).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/own-agent#mit-dem-builder',
+    )
+  })
+
+  it('ein eigener Agent neben dem Builder: kein Hinweis mehr', async () => {
+    stubFetch([
+      agent({ id: 'b1', name: 'Builder', is_managed: true }),
+      agent({ id: 'a2', name: 'Carlas Agent', is_managed: false }),
+    ])
+    renderPage()
+
+    expect(await screen.findByText('Carlas Agent')).toBeInTheDocument()
+    expect(screen.queryByTestId('agents-only-managed')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('agents-help-link')).not.toBeInTheDocument()
   })
 
   it('zeigt einen ErrorAlert, wenn die Liste nicht geladen werden kann', async () => {

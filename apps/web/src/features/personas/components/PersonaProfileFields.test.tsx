@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import { FormProvider, useForm } from 'react-hook-form'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+
+import { findPage, helpIndex } from '@/help/helpIndex'
 
 import { PersonaProfileFields } from './PersonaProfileFields'
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
@@ -31,7 +33,7 @@ function mode(name: string) {
   }
 }
 
-function Harness({
+function HarnessBody({
   modes = [],
   legacySystemPrompt,
 }: {
@@ -49,15 +51,24 @@ function Harness({
     },
   })
   return (
+    <FormProvider {...form}>
+      <PersonaProfileFields
+        form={form}
+        formKey="p1-1"
+        initialProfileBlocks={[]}
+        legacySystemPrompt={legacySystemPrompt}
+      />
+    </FormProvider>
+  )
+}
+
+function Harness(props: {
+  modes?: PersonaEditorValues['modes']
+  legacySystemPrompt?: string
+}) {
+  return (
     <MemoryRouter>
-      <FormProvider {...form}>
-        <PersonaProfileFields
-          form={form}
-          formKey="p1-1"
-          initialProfileBlocks={[]}
-          legacySystemPrompt={legacySystemPrompt}
-        />
-      </FormProvider>
+      <HarnessBody {...props} />
     </MemoryRouter>
   )
 }
@@ -105,5 +116,38 @@ describe('PersonaProfileFields — Responsive (#571)', () => {
     expect(pre).not.toBeNull()
     expect(pre).toHaveClass('break-words')
     expect(pre).toHaveClass('whitespace-pre-wrap')
+  })
+})
+
+// Kontext-Link (Onboarding P8): eine Quelle fuer New-Page und Detail-Tab.
+describe('PersonaProfileFields — Hilfe-Link', () => {
+  function renderAt(entry: string) {
+    return render(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/w/:workspaceId/personas/:id" element={<HarnessBody />} />
+          <Route path="/personas-ohne-workspace" element={<HarnessBody />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  it('verlinkt workspace-relativ auf /help/persona#felder', () => {
+    renderAt('/w/ws-1/personas/p1')
+    expect(screen.getByRole('link', { name: 'Was in eine Persona gehört' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/persona#felder',
+    )
+  })
+
+  it('fällt ohne Workspace in der Route auf den Kurzlink zurück', () => {
+    renderAt('/personas-ohne-workspace')
+    expect(screen.getByTestId('persona-help-link')).toHaveAttribute('href', '/help/persona#felder')
+  })
+
+  it('das Ziel existiert in der Hilfe (DE und EN)', () => {
+    for (const locale of ['de', 'en'] as const) {
+      expect(findPage(helpIndex, locale, 'persona')?.blocks.map((b) => b.id)).toContain('felder')
+    }
   })
 })

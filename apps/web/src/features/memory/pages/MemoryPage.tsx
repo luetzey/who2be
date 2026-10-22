@@ -1,9 +1,10 @@
 import { MoreHorizontal, Undo2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -34,6 +35,8 @@ import {
 
 type MemoryTab = 'approval' | 'entries'
 
+const MEMORY_HELP_PATH = '/help/memory'
+
 /**
  * Gedaechtnis-Seite (Spec §4, §11.2). Tabs „Zur Freigabe“ (C5a) und
  * „Eintraege“ (C5b-1, nur editor+); „Mein Gedaechtnis“ folgt mit C5d.
@@ -45,6 +48,7 @@ type MemoryTab = 'approval' | 'entries'
 export function MemoryPage() {
   const { t, i18n } = useTranslation('learning')
   const role = useCurrentWorkspaceRole()
+  const wsPath = useWorkspacePath()
   const canManageAgents = role !== null && role !== 'viewer'
   const [params, setParams] = useSearchParams()
   const [countNonce, setCountNonce] = useState(0)
@@ -148,6 +152,24 @@ export function MemoryPage() {
     </DropdownMenu>
   ) : null
 
+  // Kontext-Link in die Hilfe (Onboarding P8, Spec §5.3): fuer editor+ und
+  // viewer gleich, eine Quelle in beiden Zweigen.
+  const helpLink = (
+    <Link
+      to={wsPath(MEMORY_HELP_PATH)}
+      className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground md:min-h-0"
+      data-testid="memory-help-link"
+    >
+      {t('page.helpLink')}
+    </Link>
+  )
+  const headerActions = (
+    <>
+      {helpLink}
+      {pullbackMenu}
+    </>
+  )
+
   // Detail-Sheet (C5c-1): `?entry=<id>`; der Eintrag kommt, wenn vorhanden,
   // aus der Liste im Router-State mit.
   const location = useLocation()
@@ -218,7 +240,11 @@ export function MemoryPage() {
     // Viewer: ein Tab — keine Leiste, nur die Ueberschrift (bis C5d).
     return (
       <Container>
-        <PageHeader title={t('page.title')} description={t('page.description')} />
+        <PageHeader
+          title={t('page.title')}
+          description={t('page.description')}
+          actions={headerActions}
+        />
         <div className="mt-6 flex flex-col gap-6">
           <h2 className="text-lg font-semibold outline-none" tabIndex={-1} data-memory-tab-heading>
             {t('page.tabs.approval')}
@@ -246,7 +272,11 @@ export function MemoryPage() {
 
   return (
     <Container>
-      <PageHeader title={t('page.title')} description={t('page.description')} actions={pullbackMenu} />
+      <PageHeader
+        title={t('page.title')}
+        description={t('page.description')}
+        actions={headerActions}
+      />
       <Tabs value={tab} onValueChange={switchTab} className="mt-6">
         <TabsList aria-label={t('page.tabsAria')}>
           <TabsTrigger value="approval">{tabLabel('approval', counts.approval)}</TabsTrigger>
