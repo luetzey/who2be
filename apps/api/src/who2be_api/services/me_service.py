@@ -68,5 +68,9 @@ def _scoped_to(me: MeRead, workspace_id: UUID) -> MeRead:
             "organizations": [org for org in scoped if org.workspaces],
             "default_workspace_id": workspace_id,
             "token_workspace_id": workspace_id,
+            # Kontoanlage und „Was ist neu“ betreffen die Person, nicht die
+            # Credential: ein Agent bekommt sie nicht (ADR-0060 §4).
+            "created_at": None,
+            "news_seen_at": None,
         }
     )

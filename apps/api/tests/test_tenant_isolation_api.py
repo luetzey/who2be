@@ -616,6 +616,9 @@ PROBES: dict[str, Probe] = {
     f"GET {_WS}/kb-search": Probe(query={"q": "<<marker>>"}, filters=True),
     # --- Kontoweite Routen -------------------------------------------------
     "GET /v1/me": Probe(),
+    # „Was ist neu“ gesehen (ADR-0060 §4): nimmt keine Objekt-ID, schreibt nur
+    # die eigene Zeile; die Probe belegt, dass die Antwort nichts von B traegt.
+    "PATCH /v1/me/news-seen": Probe(),
     "GET /v1/organizations": Probe(),
     "GET /v1/gdpr/export": Probe(),
     "GET /v1/organizations/{organization_id}/workspaces": Probe(),

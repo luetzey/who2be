@@ -319,6 +319,8 @@ class PgAccountPurgeRepository:
             # Mandant und ohne FK — nur dieser Schritt entfernt ihn.
             await self._conn.execute("DELETE FROM tutorial_progress WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM tutorial_state WHERE user_id = $1", user_id)
+            # Konto-Zustand „Was ist neu“ (Migration 0110), gleiches Muster.
+            await self._conn.execute("DELETE FROM account_state WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
             sh_result = await self._conn.execute(

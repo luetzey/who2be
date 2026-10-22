@@ -123,6 +123,20 @@ Code-Paket: Ableitung, Test und Nachtrag in dieser Tabelle.
 - **Mandantentrennung:** Die Tabellen sind kontoweit und gehoeren keiner Org.
   Der Org-Transfer fuehrt sie deshalb in `GLOBAL_TABLES` (`_classify` ist
   fail-closed). Fremde Workspaces liefern keine Ableitung (404).
+- **„Was ist neu“ gesehen (Nachtrag P5-API, Migration 0110):** Der Punkt am
+  „?“-Menue (Onboarding-Spec §5.4, Owner O7 a) braucht einen Zeitpunkt je
+  Konto, nicht je Tutorial. Er liegt deshalb in einer eigenen kontoweiten
+  Tabelle `account_state` (`user_id` als Schluessel, `news_seen_at`) statt
+  als Spalte an `tutorial_state`, deren Schluessel (Nutzer, Tutorial) ist.
+  Es gilt dasselbe Muster wie fuer die Tutorial-Tabellen: keine RLS, jede
+  Query filtert auf `user_id`, `GLOBAL_TABLES` im Org-Transfer, ausdrueckliches
+  Loeschen im Konto-Purge, Block `account_state` im DSGVO-Export.
+  `GET /v1/me` liefert `news_seen_at` und `created_at` (Kontoanlage aus
+  GoTrue ueber `w2b_self_account()`, Grundlage der 14-Tage-Regel).
+  `PATCH /v1/me/news-seen` setzt den Wert auf jetzt und laesst sich gefahrlos
+  wiederholen; Tokens bekommen 403. Auf dem Token-Pfad bleiben beide Felder
+  in `GET /v1/me` leer, weil sie die Person betreffen und nicht die
+  Credential.
 
 ## 5. Folgen
 

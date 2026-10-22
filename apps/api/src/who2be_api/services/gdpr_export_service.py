@@ -321,9 +321,24 @@ class GdprExportService:
             "exported_at": datetime.now(UTC),
             "user_id": str(user_id),
             "account": await self._export_account(user_id),
+            "account_state": await self._export_account_state(user_id),
             "tutorials": await self._export_tutorials(user_id),
             "organizations": list(orgs.values()),
         }
+
+    async def _export_account_state(self, user_id: UUID) -> dict[str, Any]:
+        """Konto-Zustand aus der Who2Be-DB (Migration 0110, ADR-0060 §4).
+
+        Eigener Block neben `account`: jener kommt aus GoTrue und faellt ohne
+        GoTrue leer aus, dieser liegt in der eigenen DB und ist immer da.
+        Ohne Zeile (nie geoeffnet) steht `news_seen_at` auf `None`.
+        """
+        rows = await self._pool.fetch(
+            "SELECT news_seen_at, updated_at FROM account_state WHERE user_id = $1", user_id
+        )
+        if not rows:
+            return {"news_seen_at": None, "updated_at": None}
+        return dict(rows[0])
 
     async def _export_tutorials(self, user_id: UUID) -> dict[str, Any]:
         """Tutorial-Fortschritt am Konto (ADR-0060, Migration 0108).

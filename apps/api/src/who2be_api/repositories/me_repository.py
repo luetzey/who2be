@@ -12,6 +12,7 @@ Response immer eine valide `default_workspace_id` traegt und der Frontend-
 Endlos-Redirect unterbunden wird.
 """
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -133,12 +134,42 @@ class PgMeRepository:
             )
             if default_workspace_id is None:
                 default_workspace_id = row["workspace_id"]
+        has_password, created_at = await self._self_account(user_id)
         return MeRead(
             user_id=user_id,
             default_workspace_id=default_workspace_id,
             organizations=list(orgs.values()),
-            has_password=await self._has_password(user_id),
+            has_password=has_password,
+            created_at=created_at,
+            news_seen_at=await self.news_seen_at(user_id),
         )
+
+    async def news_seen_at(self, user_id: UUID) -> datetime | None:
+        """Wann das Konto „Was ist neu“ zuletzt geoeffnet hat (Migration 0110).
+
+        `account_state` ist kontoweit und ohne RLS (Muster 0108): die
+        `user_id`-Bedingung ist die einzige Trennung zwischen Konten.
+        """
+        value: datetime | None = await self._pool.fetchval(
+            "SELECT news_seen_at FROM account_state WHERE user_id = $1", user_id
+        )
+        return value
+
+    async def mark_news_seen(self, user_id: UUID) -> datetime:
+        """Setzt `news_seen_at` auf jetzt; ein zweiter Aufruf ueberschreibt.
+
+        Idempotent im Sinn der Karte: wiederholte Aufrufe sind gefahrlos und
+        hinterlassen genau eine Zeile; der Punkt am „?“ richtet sich nach dem
+        letzten Oeffnen.
+        """
+        value: datetime = await self._pool.fetchval(
+            "INSERT INTO account_state (user_id, news_seen_at) VALUES ($1, now()) "
+            "ON CONFLICT (user_id) DO UPDATE "
+            "SET news_seen_at = now(), updated_at = now() "
+            "RETURNING news_seen_at",
+            user_id,
+        )
+        return value
 
     async def _lookup_profile(self, user_id: UUID) -> tuple[str | None, str]:
         """Liest `email` + `preferred_locale` des Users — EINE Query,
@@ -168,17 +199,21 @@ class PgMeRepository:
             return None, DEFAULT_LOCALE
         return row["email"], _content_locale_from_preferred(row["preferred_locale"])
 
-    async def _has_password(self, user_id: UUID) -> bool:
-        """Ob der User ein Passwort gesetzt hat — frisch eingeladene
-        Magic-Link-User und reine OAuth-User haben keins, bis sie auf
-        `/onboarding/set-password` eines setzen. Gelesen ueber
-        `w2b_self_account()` (Migration 0093): nur die eigene Zeile, nur der
-        Wahrheitswert, nie der Hash. Ist die Funktion nicht aufrufbar (reine
-        API-Test-DB ohne GoTrue), gilt `False`."""
+    async def _self_account(self, user_id: UUID) -> tuple[bool, datetime | None]:
+        """Ob der User ein Passwort gesetzt hat, und wann das Konto angelegt
+        wurde — frisch eingeladene Magic-Link-User und reine OAuth-User haben
+        kein Passwort, bis sie auf `/onboarding/set-password` eines setzen.
+        Gelesen ueber `w2b_self_account()` (Migration 0093): nur die eigene
+        Zeile, vom Passwort nur der Wahrheitswert, nie der Hash. `created_at`
+        traegt die 14-Tage-Regel des Punkts am „?“ (ADR-0060 §4). Ist die
+        Funktion nicht aufrufbar (reine API-Test-DB ohne GoTrue), gilt
+        `(False, None)`."""
         try:
             async with self._pool.acquire() as conn, conn.transaction():
                 await scope_to_self(conn, user_id)
-                value = await conn.fetchval("SELECT has_password FROM w2b_self_account()")
+                row = await conn.fetchrow("SELECT has_password, created_at FROM w2b_self_account()")
         except asyncpg.PostgresError:
-            return False
-        return bool(value)
+            return False, None
+        if row is None:
+            return False, None
+        return bool(row["has_password"]), row["created_at"]
