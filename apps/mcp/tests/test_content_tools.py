@@ -495,3 +495,193 @@ def test_edit_content_is_registered_on_the_server() -> None:
     assert {"entity_type", "entity_id", "base_rev", "op", "anchor", "field", "markdown"} <= set(
         params
     )
+
+
+def test_edit_content_surfaces_unknown_anchor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anker nicht gefunden: die API-Meldung kommt beim Agenten an, nichts wird geschrieben."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.method)
+        return httpx.Response(
+            422,
+            json={
+                "type": "about:blank",
+                "title": "Unprocessable Entity",
+                "status": 422,
+                "detail": "anchor_unknown: Anker 'h-fehlt' gibt es nicht.",
+            },
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="anchor_unknown"):
+        asyncio.run(edit_content("playbook", str(uuid4()), "r", "delete", anchor="h-fehlt"))
+    assert calls == ["PATCH"]
+
+
+# --- Katalog: kein Werkzeug nimmt BlockNote-JSON (ADR-0058 W58-3 A) ---------------
+
+# Offene Objekte, die bewusst beliebige Schluessel nehmen: Tabellenzeilen,
+# Tabellenschema und Quell-Konvention im Arbeitsbereich. Kein Bibliotheksinhalt,
+# kein Editor-Dokument; jede weitere Ausnahme muss hier begruendet werden.
+_OPEN_OBJECT_ALLOWED = {
+    "create_table.schema",
+    "insert_rows.rows[]",
+    "set_convention.convention",
+}
+
+# Schluessel, an denen ein BlockNote-Block erkennbar ist.
+_BLOCK_KEYS = {"children", "props"}
+
+
+def _block_shaped_inputs(name: str, schema: dict[str, Any]) -> list[str]:
+    """Pfade im Eingabeschema, die ein Editor-Dokument annehmen koennten.
+
+    Gemeldet wird: ein Feld `blocks`, ein Objekt mit Block-Schluesseln
+    (`children`/`props`), ein Modell mit `Block` im Namen, ein untypisiertes
+    Feld (`Any`) und ein offenes Objekt (`additionalProperties: true` oder
+    ohne Properties) ausserhalb der Ausnahmeliste. Maps mit typisierten Werten
+    werden in ihre Werte hinein geprueft.
+    """
+    defs: dict[str, Any] = schema.get("$defs", {})
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def walk(node: Any, path: str) -> None:
+        if not isinstance(node, dict):
+            return
+        ref = node.get("$ref")
+        if ref:
+            target = ref.rsplit("/", 1)[-1]
+            if "Block" in target:
+                found.append(f"{path}: Modell {target}")
+            if target in seen:
+                return
+            seen.add(target)
+            walk(defs[target], path)
+            seen.discard(target)
+            return
+        for key in ("anyOf", "oneOf", "allOf"):
+            for option in node.get(key, []):
+                walk(option, path)
+        typed = {"type", "anyOf", "oneOf", "allOf", "enum", "const"} & set(node)
+        if not typed:
+            found.append(f"{path}: untypisiert")
+        props: dict[str, Any] = node.get("properties", {})
+        if "blocks" in props:
+            found.append(f"{path}.blocks")
+        if _BLOCK_KEYS & set(props):
+            found.append(f"{path}: Block-Schluessel {sorted(_BLOCK_KEYS & set(props))}")
+        extra = node.get("additionalProperties")
+        if isinstance(extra, dict):
+            walk(extra, f"{path}{{}}")
+        elif node.get("type") == "object" and (extra is True or (extra is None and not props)):
+            if path not in _OPEN_OBJECT_ALLOWED:
+                found.append(f"{path}: offenes Objekt")
+        for key, sub in props.items():
+            walk(sub, f"{path}.{key}")
+        if "items" in node:
+            walk(node["items"], f"{path}[]")
+
+    for key, sub in (schema.get("properties") or {}).items():
+        walk(sub, f"{name}.{key}")
+    return found
+
+
+def test_no_tool_input_schema_accepts_blocknote_json() -> None:
+    """Ueber den ganzen Katalog: kein Eingabeschema nimmt ein Editor-Dokument an."""
+    tools = asyncio.run(mcp.list_tools(run_middleware=False))
+    assert len(tools) == 101
+    findings: list[str] = []
+    for tool in tools:
+        findings += _block_shaped_inputs(tool.name, tool.parameters or {})
+    assert not findings, "Eingaben, die BlockNote-JSON annehmen koennten:\n" + "\n".join(findings)
+
+
+def test_block_walk_flags_editor_shapes() -> None:
+    """Gegenprobe: der Schema-Walk erkennt die alten Editor-Formen wirklich."""
+    old_resource = {
+        "properties": {
+            "data": {
+                "type": "object",
+                "properties": {"blocks": {"type": "array", "items": {"$ref": "#/$defs/Block"}}},
+            }
+        },
+        "$defs": {
+            "Block": {
+                "type": "object",
+                "properties": {"type": {"type": "string"}, "children": {"type": "array"}},
+            }
+        },
+    }
+    found = _block_shaped_inputs("old", old_resource)
+    assert any(f.endswith(".blocks") for f in found)
+    assert any("Modell Block" in f for f in found)
+    assert any("Block-Schluessel" in f for f in found)
+    loose = {"properties": {"content": {}, "extra": {"type": "object"}}}
+    assert _block_shaped_inputs("loose", loose) == [
+        "loose.content: untypisiert",
+        "loose.extra: offenes Objekt",
+    ]
+
+
+_BLOCK_LIST = _editor_blocks(1)
+
+# Jedes Markdown-Feld der zehn Schreibwerkzeuge, mit einer echten Block-Liste belegt.
+_WRITE_CALLS: list[tuple[str, dict[str, Any]]] = []
+for _kind, _id_key, _fields in (
+    (
+        "persona",
+        "persona_id",
+        [
+            {"profile": _BLOCK_LIST},
+            {"modes": [{"name": "M", "identity_add": _BLOCK_LIST}]},
+            {"modes": [{"name": "M", "output_style_override": _BLOCK_LIST}]},
+            {"modes": [{"name": "M", "anti_patterns": _BLOCK_LIST}]},
+            {"blocks": _BLOCK_LIST},
+        ],
+    ),
+    ("playbook", "playbook_id", [{"body": _BLOCK_LIST}, {"blocks": _BLOCK_LIST}]),
+    ("resource", "resource_id", [{"body": _BLOCK_LIST}, {"blocks": _BLOCK_LIST}]),
+    ("system_prompt", "template_id", [{"body": _BLOCK_LIST}, {"blocks": _BLOCK_LIST}]),
+    ("external_tool", "tool_id", [{"usage_notes": _BLOCK_LIST}, {"blocks": _BLOCK_LIST}]),
+):
+    for _content in _fields:
+        _WRITE_CALLS.append((f"create_{_kind}", {"data": {"name": "x", "content": _content}}))
+        _WRITE_CALLS.append(
+            (f"update_{_kind}", {_id_key: str(uuid4()), "data": {"content": _content}})
+        )
+
+
+def test_write_calls_cover_every_create_and_update_tool() -> None:
+    names = {t.name for t in asyncio.run(mcp.list_tools(run_middleware=False))}
+    writers = {n for n in names if n.startswith(("create_", "update_"))}
+    content_writers = {
+        f"{op}_{kind}"
+        for op in ("create", "update")
+        for kind in ("persona", "playbook", "resource", "system_prompt", "external_tool")
+    }
+    assert content_writers <= writers
+    assert {tool for tool, _ in _WRITE_CALLS} == content_writers
+
+
+@pytest.mark.parametrize(("tool", "args"), _WRITE_CALLS)
+def test_write_tool_rejects_blocknote_list(
+    tool: str, args: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Block-Liste in einem Markdown-Feld (oder als `blocks`) scheitert vor der API."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    async def _run() -> None:
+        async with Client(mcp) as client:
+            await client.call_tool(tool, args)
+
+    with pytest.raises(ToolError):
+        asyncio.run(_run())
+    assert calls == []

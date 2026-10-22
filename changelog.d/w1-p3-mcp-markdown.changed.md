@@ -8,6 +8,10 @@
   bevor die API gefragt wird. Die Antwort ist der neue Stand samt neuem
   `base_rev`.
 
+  **Breaking:** Clients, die `create_*`/`update_*` mit Editor-JSON aufrufen,
+  müssen auf Markdown umstellen (Vorlage `format="source"`, Teiländerung
+  `edit_content`).
+
   Neu: `edit_content(entity_type, entity_id, base_rev, op, anchor | field,
   markdown)` ändert einen Abschnitt (Überschriften-Anker) oder ein ganzes Feld
   als Draft; 409 `version_conflict` kommt als Fehler mit Hinweis, neu zu lesen.
