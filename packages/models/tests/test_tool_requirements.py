@@ -452,3 +452,44 @@ def test_memory_tools_hidden_for_unrestricted_whoami() -> None:
         )
         is True
     )
+
+
+def test_read_only_follows_the_visibility_axis() -> None:
+    """`is_read_only` (MCP `readOnlyHint`) leitet sich aus der Achse ab.
+
+    Der explizite Wert gewinnt nur dort, wo die Achse nichts verraet: ein
+    Lesewerkzeug hinter einer Capability. Ohne Achse gilt schreibend.
+    """
+    from who2be_models import ToolRequirement
+
+    assert ToolRequirement(always=True).is_read_only
+    assert ToolRequirement(read_domain="kb").is_read_only
+    assert ToolRequirement(memory=MemoryMode.read_only).is_read_only
+    assert not ToolRequirement(memory=MemoryMode.suggest).is_read_only
+    assert not ToolRequirement(capabilities=(AgentCapability.kb_write,)).is_read_only
+    assert ToolRequirement(capabilities=(AgentCapability.case_triage,), read_only=True).is_read_only
+    assert not ToolRequirement().is_read_only
+    assert not ToolRequirement(read_domain="kb", read_only=False).is_read_only
+
+
+def test_read_only_tools_behind_capabilities() -> None:
+    """Lesewerkzeuge mit Capability-Sichtbarkeit tragen `read_only=True`.
+
+    `get_follow_up` liest nicht nur: fuer einen Agenten kann dabei ein
+    `follow_up_prepared`-Ereignis entstehen. Es bleibt deshalb schreibend.
+    """
+    flagged = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.read_only is not None}
+    assert flagged == {
+        "list_system_prompts",
+        "get_system_prompt",
+        "list_placeholders",
+        "get_feedback",
+        "list_test_cases",
+        "list_cases",
+        "get_dossier",
+        "get_case",
+        "list_patterns",
+        "get_lesson",
+    }
+    assert all(MCP_TOOL_REQUIREMENTS[name].is_read_only for name in flagged)
+    assert not MCP_TOOL_REQUIREMENTS["get_follow_up"].is_read_only
