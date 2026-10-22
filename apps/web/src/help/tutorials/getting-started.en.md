@@ -27,4 +27,4 @@ Tell the Builder in Claude what your agent is for. It asks what it needs to know
 
 ## Learn how your agent gets better [#learn-feedback]
 
-Agents report feedback and cases to Who2Be. The help page on this explains in three minutes how to turn them into better playbooks.
+Agents report feedback and cases to Who2Be. The help page [Feedback and cases](/help/feedback-and-cases) explains in three minutes how to turn them into better playbooks.

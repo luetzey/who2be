@@ -27,4 +27,4 @@ Sag dem Builder in Claude, wofür dein Agent da sein soll. Er fragt nach, was er
 
 ## Lerne, wie dein Agent besser wird [#learn-feedback]
 
-Agenten melden Rückmeldungen und Fälle an Who2Be. Die Hilfe-Seite dazu erklärt in drei Minuten, wie du daraus bessere Playbooks machst.
+Agenten melden Rückmeldungen und Fälle an Who2Be. Die Hilfe-Seite [Rückmeldungen und Fälle](/help/feedback-and-cases) erklärt in drei Minuten, wie du daraus bessere Playbooks machst.
