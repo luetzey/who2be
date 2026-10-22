@@ -5,3 +5,7 @@
 // Hauptchunk landen (FE-10).
 export { CookieConsentBanner } from './components/CookieConsentBanner'
 export { LegalLayout } from './components/LegalLayout'
+// Fuer Features, die auf den Cookie-Hinweis warten (Begruessung, Onboarding
+// P6). Statisch hier statt im Pages-Barrel, damit die Rechtsseiten nicht in
+// fremde Chunks wandern.
+export { useCookieConsent } from './hooks/useCookieConsent'

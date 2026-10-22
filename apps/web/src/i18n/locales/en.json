@@ -4540,6 +4540,33 @@
         "help": "Go to Help"
       }
     },
+    "welcome": {
+      "title": "Welcome to Who2Be",
+      "body": "This is where you decide who your AI agents are. Claude and others fetch it from here. Your first agent, the Builder, is ready. Connect it — it takes about two minutes.",
+      "skip": "Skip",
+      "later": "Later",
+      "back": "← Back",
+      "altLabel": "I use",
+      "altGroup": "Choose another app",
+      "scene": {
+        "source": "Persona · Playbooks",
+        "client": "Claude & co.",
+        "clientSub": "your chat",
+        "connected": "connected"
+      },
+      "connect": {
+        "title": "Connect “{{agent}}” to {{client}}",
+        "intro": "Three quick steps, then “{{agent}}” answers you.",
+        "missing": "The Builder isn't ready in this workspace right now."
+      },
+      "success": {
+        "title": "Connected!",
+        "body": "“{{agent}}” just loaded its persona from Who2Be. It works the same way for every agent you build here.",
+        "nextLabel": "Next:",
+        "next": "Let “{{agent}}” build your own agent, right in the chat.",
+        "cta": "Continue to “{{title}}”"
+      }
+    },
     "menu": {
       "label": "Help and what's new",
       "firstSteps": "Getting started",

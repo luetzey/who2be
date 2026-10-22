@@ -951,6 +951,229 @@
 }
 
 /*
+ * Szenen der Begruessung (Onboarding P6, Spec §3.1, `WelcomeScene.tsx`).
+ *
+ * Die Grundstile sind der **Endzustand** jeder Szene; genau ihn zeigt
+ * „Bewegung reduzieren“ sofort (Spec §8). Die Keyframes haengen deshalb nur
+ * unter `prefers-reduced-motion: no-preference` — das globale Netz darunter
+ * bleibt unangetastet und greift trotzdem, falls eine Animation laeuft.
+ * Einmalig, keine Schleife, alles unter 5 s (WCAG 2.2.2). Farben nur aus
+ * Tokens, damit der dunkle Modus mitzieht.
+ */
+.w2b-scene {
+  /* Laufzeit der wandernden Karte (Prototyp `--dur-scene`). */
+  --w2b-scene-travel: 1600ms;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklch, var(--brand) 6%, var(--card));
+  padding: 0.5rem 0;
+}
+
+.w2b-scene-box {
+  fill: var(--card);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.w2b-scene-box-brand {
+  fill: color-mix(in oklch, var(--brand) 14%, var(--card));
+  stroke: color-mix(in oklch, var(--brand) 45%, var(--card));
+}
+
+.w2b-scene-box-ok .w2b-scene-box,
+.w2b-anim-scene-arrive .w2b-scene-box {
+  stroke: var(--status-active);
+  stroke-width: 2.5;
+}
+
+.w2b-scene-title {
+  fill: var(--foreground);
+  font-size: 16px;
+  font-weight: 650;
+  text-anchor: middle;
+}
+
+.w2b-scene-two {
+  fill: var(--wordmark-accent);
+}
+
+.w2b-scene-sub {
+  fill: var(--muted-foreground);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.w2b-anim-scene-path {
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-dasharray: 6 6;
+  stroke-width: 2;
+}
+
+.w2b-anim-scene-card {
+  opacity: 0;
+  transform: translate(360px, 85px) scale(0.6);
+}
+
+.w2b-anim-scene-card rect {
+  fill: var(--card);
+  stroke: var(--brand);
+  stroke-width: 1.5;
+}
+
+.w2b-anim-scene-card circle {
+  fill: var(--brand);
+}
+
+.w2b-anim-scene-card path {
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.w2b-anim-scene-ok,
+.w2b-anim-scene-mid {
+  transform: scale(1);
+}
+
+.w2b-anim-scene-ok {
+  transform-origin: 488px 48px;
+}
+
+.w2b-anim-scene-mid {
+  transform-origin: 260px 75px;
+}
+
+.w2b-anim-scene-ok circle,
+.w2b-anim-scene-mid circle {
+  fill: var(--status-active);
+}
+
+.w2b-anim-scene-ok path,
+.w2b-anim-scene-mid path {
+  fill: none;
+  stroke: var(--card);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.w2b-anim-scene-line {
+  fill: none;
+  stroke: var(--status-active);
+  stroke-dasharray: 200;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.w2b-anim-scene-burst circle {
+  fill: var(--brand);
+  opacity: 0;
+  transform-origin: 260px 75px;
+}
+
+.w2b-anim-scene-burst circle:nth-child(even) {
+  fill: var(--status-active);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes w2b-scene-fly {
+    0% {
+      opacity: 0;
+      transform: translate(160px, 85px) scale(0.8);
+    }
+    12% {
+      opacity: 1;
+    }
+    25% {
+      transform: translate(210px, 62.5px) scale(1);
+    }
+    50% {
+      transform: translate(260px, 55px) scale(1.06);
+    }
+    75% {
+      transform: translate(310px, 62.5px) scale(1);
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(360px, 85px) scale(0.6);
+    }
+  }
+
+  @keyframes w2b-scene-arrive {
+    from {
+      stroke: var(--border);
+      stroke-width: 1.5;
+    }
+  }
+
+  @keyframes w2b-scene-pop {
+    from {
+      transform: scale(0);
+    }
+  }
+
+  @keyframes w2b-scene-draw {
+    from {
+      stroke-dashoffset: 200;
+    }
+  }
+
+  @keyframes w2b-scene-burst {
+    0% {
+      opacity: 0;
+      transform: rotate(var(--w2b-burst-angle)) translateX(0);
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: rotate(var(--w2b-burst-angle)) translateX(52px);
+    }
+  }
+
+  .w2b-anim-scene-path {
+    animation: w2b-fade-in var(--duration-slow) var(--ease-standard) both;
+  }
+
+  .w2b-anim-scene-card {
+    animation: w2b-scene-fly var(--w2b-scene-travel) var(--ease-emphasized)
+      var(--duration-slow) both;
+  }
+
+  /* Ankunft: kurz nachdem die Karte im Kasten verschwindet. */
+  .w2b-anim-scene-arrive .w2b-scene-box {
+    animation: w2b-scene-arrive var(--duration-medium) var(--ease-standard)
+      calc(var(--w2b-scene-travel) + var(--duration-slow) - var(--duration-fast)) both;
+  }
+
+  .w2b-anim-scene-ok {
+    animation: w2b-scene-pop var(--duration-slow) var(--ease-spring)
+      calc(var(--w2b-scene-travel) + var(--duration-slow)) both;
+  }
+
+  .w2b-anim-scene-line {
+    animation: w2b-scene-draw var(--duration-slow) var(--ease-standard) var(--duration-fast) both;
+  }
+
+  .w2b-anim-scene-mid {
+    animation: w2b-scene-pop var(--duration-slow) var(--ease-spring)
+      calc(var(--duration-fast) + var(--duration-slow)) both;
+  }
+
+  .w2b-anim-scene-burst circle {
+    animation: w2b-scene-burst calc(var(--duration-slow) + var(--duration-medium))
+      var(--ease-standard) calc(var(--duration-fast) + var(--duration-slow)) both;
+  }
+}
+
+/*
  * Reduced-Motion-Safety-Net (design-language.md §7.2). Global, damit
  * keine Komponente die User-Praeferenz vergessen kann. Aushebeln in
  * Komponenten ist ein Review-Reject.

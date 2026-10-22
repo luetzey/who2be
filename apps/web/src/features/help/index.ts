@@ -3,3 +3,5 @@
 // bewusst nur, was ausserhalb der Hilfe gebraucht wird, damit z. B. das
 // Dashboard die Hilfe-Seiten nicht in seinen Chunk zieht.
 export { TutorialChecklist } from './components/TutorialChecklist'
+// Begruessung (Onboarding P6): haengt im Dashboard, nicht in der AppShell.
+export { DashboardWelcome } from './components/WelcomeDialog'

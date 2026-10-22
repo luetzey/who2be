@@ -142,17 +142,36 @@ export async function loginAs(page: Page, user: E2EUser): Promise<void> {
  * `GET /v1/me` mit dem User-JWT: der erste Aufruf seedet lazy Personal-Org +
  * Workspace (User = admin, ON CONFLICT ⇒ idempotent) und liefert
  * `default_workspace_id`.
+ *
+ * Danach gilt die Begruessung (Onboarding P6, `WelcomeDialog`) als gesehen:
+ * sie oeffnet sich sonst auf dem Dashboard des eigenen persoenlichen
+ * Workspace automatisch und sperrt per Fokusfalle die Navigation, von der die
+ * Journeys fachlich nichts wissen. Gleiches Muster wie `decideCookieConsent`
+ * — ueber den echten API-Weg (`PATCH /v1/me/tutorials/{id}` mit
+ * `welcome_seen`), den auch der Dialog selbst beim ersten Oeffnen nimmt; kein
+ * Test-Schalter im Produktcode.
  */
 export async function seedWorkspace(
   request: APIRequestContext,
   user: E2EUser,
 ): Promise<{ workspaceId: string }> {
-  const me = await apiRequest<{ default_workspace_id: string }>(
+  const token = user.session.access_token
+  const me = await apiRequest<{ default_workspace_id: string }>(request, token, '/v1/me')
+  const workspaceId = me.default_workspace_id
+  const query = `workspace_id=${encodeURIComponent(workspaceId)}`
+  const tutorials = await apiRequest<{ id: string; welcome: boolean; welcome_seen_at: string | null }[]>(
     request,
-    user.session.access_token,
-    '/v1/me',
+    token,
+    `/v1/me/tutorials?${query}`,
   )
-  return { workspaceId: me.default_workspace_id }
+  for (const tutorial of tutorials) {
+    if (!tutorial.welcome || tutorial.welcome_seen_at !== null) continue
+    await apiRequest(request, token, `/v1/me/tutorials/${encodeURIComponent(tutorial.id)}?${query}`, {
+      method: 'PATCH',
+      data: { welcome_seen: true },
+    })
+  }
+  return { workspaceId }
 }
 
 /**
