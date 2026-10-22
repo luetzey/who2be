@@ -145,7 +145,7 @@ describe('AccountPage', () => {
     fireEvent.change(screen.getByLabelText('Passwort wiederholen'), {
       target: { value: 'neues-passwort-1' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Passwort aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort ändern' }))
 
     await waitFor(() => {
       expect(updateUser).toHaveBeenCalledWith({ password: 'neues-passwort-1' })
@@ -156,10 +156,10 @@ describe('AccountPage', () => {
     updateUser.mockResolvedValue({ data: {}, error: null })
     renderPage()
 
-    fireEvent.change(screen.getByLabelText('E-Mail aendern'), {
+    fireEvent.change(screen.getByLabelText('E-Mail ändern'), {
       target: { value: 'neu@who2be.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'E-Mail aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'E-Mail ändern' }))
 
     await waitFor(() => {
       expect(updateUser).toHaveBeenCalledWith({ email: 'neu@who2be.dev' })
@@ -194,7 +194,7 @@ describe('AccountPage', () => {
     })
   })
 
-  it('loescht das Konto erst nach E-Mail-Bestaetigung und meldet ab', async () => {
+  it('loescht das Konto erst nach E-Mail-Bestätigung und meldet ab', async () => {
     deleteAccount.mockResolvedValue({ purge_after: '2026-07-03T00:00:00Z' })
     signOut.mockResolvedValue({ error: null })
     renderPage()
@@ -202,7 +202,7 @@ describe('AccountPage', () => {
     // Dialog oeffnen.
     fireEvent.click(screen.getByRole('button', { name: 'Konto löschen' }))
 
-    // Ohne passende E-Mail bleibt der Bestaetigen-Button deaktiviert.
+    // Ohne passende E-Mail bleibt der Bestätigen-Button deaktiviert.
     const confirmButton = screen.getByRole('button', { name: 'Konto endgültig löschen' })
     expect(confirmButton).toBeDisabled()
 
@@ -266,10 +266,10 @@ describe('AccountPage — E-Mail-Formular', () => {
   it('lehnt die aktuelle E-Mail als neue Adresse ab', async () => {
     renderPage()
 
-    fireEvent.change(screen.getByLabelText('E-Mail aendern'), {
+    fireEvent.change(screen.getByLabelText('E-Mail ändern'), {
       target: { value: 'agent@who2be.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'E-Mail aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'E-Mail ändern' }))
 
     expect(
       await screen.findByText('Das ist bereits deine aktuelle E-Mail-Adresse.'),
@@ -277,10 +277,10 @@ describe('AccountPage — E-Mail-Formular', () => {
     expect(updateUser).not.toHaveBeenCalled()
   })
 
-  it('validiert eine ungueltige E-Mail, ohne GoTrue aufzurufen', async () => {
+  it('validiert eine ungültige E-Mail, ohne GoTrue aufzurufen', async () => {
     renderPage()
 
-    const emailInput = screen.getByLabelText('E-Mail aendern')
+    const emailInput = screen.getByLabelText('E-Mail ändern')
     fireEvent.change(emailInput, { target: { value: 'nicht-gueltig' } })
     // Direktes submit-Event statt Button-Klick: jsdom blockiert den Klick
     // sonst per nativer Constraint-Validation (type="email"), bevor die
@@ -291,7 +291,7 @@ describe('AccountPage — E-Mail-Formular', () => {
     }
     fireEvent.submit(formEl)
 
-    expect(await screen.findByText('Bitte gueltige E-Mail eingeben.')).toBeInTheDocument()
+    expect(await screen.findByText('Bitte gültige E-Mail eingeben.')).toBeInTheDocument()
     expect(updateUser).not.toHaveBeenCalled()
   })
 
@@ -299,10 +299,10 @@ describe('AccountPage — E-Mail-Formular', () => {
     updateUser.mockResolvedValue({ data: null, error: { message: 'email taken' } })
     renderPage()
 
-    fireEvent.change(screen.getByLabelText('E-Mail aendern'), {
+    fireEvent.change(screen.getByLabelText('E-Mail ändern'), {
       target: { value: 'neu@who2be.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'E-Mail aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'E-Mail ändern' }))
 
     expect(await screen.findByText('email taken')).toBeInTheDocument()
     expect(notifySuccess).not.toHaveBeenCalled()
@@ -314,14 +314,14 @@ describe('AccountPage — Passwort-Formular', () => {
     renderPage()
 
     fireEvent.change(screen.getByLabelText('Neues Passwort'), { target: { value: 'kurz' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Passwort aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort ändern' }))
 
     expect(await screen.findByText('Mindestens 8 Zeichen.')).toBeInTheDocument()
     expect(screen.getByText('Bitte wiederholen.')).toBeInTheDocument()
     expect(updateUser).not.toHaveBeenCalled()
   })
 
-  it('validiert nicht uebereinstimmende Passwoerter', async () => {
+  it('validiert nicht übereinstimmende Passwörter', async () => {
     renderPage()
 
     fireEvent.change(screen.getByLabelText('Neues Passwort'), {
@@ -330,9 +330,9 @@ describe('AccountPage — Passwort-Formular', () => {
     fireEvent.change(screen.getByLabelText('Passwort wiederholen'), {
       target: { value: 'langgenug-zwei' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Passwort aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort ändern' }))
 
-    expect(await screen.findByText('Passwoerter stimmen nicht ueberein.')).toBeInTheDocument()
+    expect(await screen.findByText('Passwörter stimmen nicht überein.')).toBeInTheDocument()
     expect(updateUser).not.toHaveBeenCalled()
   })
 
@@ -346,7 +346,7 @@ describe('AccountPage — Passwort-Formular', () => {
     fireEvent.change(screen.getByLabelText('Passwort wiederholen'), {
       target: { value: 'neues-passwort-1' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Passwort aendern' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort ändern' }))
 
     expect(await screen.findByText('weak password')).toBeInTheDocument()
     expect(notifySuccess).not.toHaveBeenCalled()
@@ -451,7 +451,7 @@ describe('AccountPage — Konto löschen (Fehlerpfade)', () => {
     })
   })
 
-  it('setzt die E-Mail-Bestaetigung beim Schliessen des Dialogs zurueck', async () => {
+  it('setzt die E-Mail-Bestätigung beim Schliessen des Dialogs zurueck', async () => {
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'Konto löschen' }))

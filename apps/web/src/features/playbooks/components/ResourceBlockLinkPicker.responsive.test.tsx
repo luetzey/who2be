@@ -49,7 +49,7 @@ vi.mock('@/api/useApi', () => ({
 describe('ResourceBlockLinkPicker — Responsive (#573)', () => {
   it('laesst den Resource-Namen in der Auswahlliste umbrechen', async () => {
     render(<ResourceBlockLinkPicker existing={[]} saving={false} onSave={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
 
     // Gemessen: der Button erbt das `whitespace-nowrap` der Button-Basis und
     // schneidet den Namen ab — 344 px Inhalt in 238 px sichtbar, und zwar bei
@@ -63,10 +63,10 @@ describe('ResourceBlockLinkPicker — Responsive (#573)', () => {
 
   it('haelt die Embed-Modus-Buttons auf dem 40-px-Hit-Target aus AK 5', async () => {
     render(<ResourceBlockLinkPicker existing={[]} saving={false} onSave={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
     fireEvent.click(await screen.findByRole('button', { name: resource.name }))
     fireEvent.click(
-      await screen.findByRole('checkbox', { name: 'Gesamtes Dokument verknuepfen' }),
+      await screen.findByRole('checkbox', { name: 'Gesamtes Dokument verknüpfen' }),
     )
 
     // Gemessen je 24 px hoch (`h-6`) — unter dem Norm-Floor aus §11 und unter

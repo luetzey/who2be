@@ -166,7 +166,7 @@ describe('PersonaDetailPage', () => {
     expect(putCalls).toHaveLength(0)
   }, 15_000)
 
-  it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {
+  it('verknüpft Playbooks via PUT auf /personas/:id/playbooks', async () => {
     const pb1 = {
       id: 'pb1',
       workspace_id: 'ws-1',
@@ -219,7 +219,7 @@ describe('PersonaDetailPage', () => {
     )
 
     // WP-E: Playbooks liegen jetzt im „Playbooks"-Tab; Anzeige-Modus default —
-    // verknuepftes Playbook als Link, der Picker liegt hinter „Verknüpfungen
+    // verknüpftes Playbook als Link, der Picker liegt hinter „Verknüpfungen
     // bearbeiten".
     fireEvent.click(await screen.findByRole('tab', { name: 'Playbooks' }))
     expect(await screen.findByRole('link', { name: 'Coaching' })).toBeInTheDocument()
@@ -355,7 +355,7 @@ describe('PersonaDetailPage', () => {
 
   it('vom System verwaltet: Notice + read-only, keine Status-/Lösch-Aktionen', async () => {
     const managed: PersonaShape = { ...persona(1, 's1'), is_managed: true }
-    // Draft-Version => ohne Lock erschiene der „Draft abschliessen"-Button.
+    // Draft-Version => ohne Lock erschiene der „Entwurf abschließen"-Button.
     const v1 = {
       version: 1,
       status: 'draft',
@@ -401,7 +401,7 @@ describe('PersonaDetailPage', () => {
     expect(screen.getByLabelText('Name')).toBeDisabled()
     // Keine Status-Aktion trotz vorhandener Draft-Version.
     expect(
-      screen.queryByRole('button', { name: 'Draft abschliessen' }),
+      screen.queryByRole('button', { name: 'Entwurf abschließen' }),
     ).not.toBeInTheDocument()
     // Kein Lösch-Bereich (Danger-Zone liegt im „Versionen"-Tab, fuer managed
     // ohnehin ausgeblendet).
@@ -565,7 +565,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(await screen.findByText('PERSONAS-LISTE')).toBeInTheDocument()
   })
 
-  it('Draft: "Draft abschliessen" reicht die Version zur Review ein', async () => {
+  it('Draft: "Entwurf abschließen" reicht die Version zur Review ein', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers()
     renderPersonaDetail((path, method, init) => {
@@ -584,7 +584,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     // e2e/journeys.spec.ts bindet.
     expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Entwurf abschließen' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
@@ -592,7 +592,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
 
-  it('Active + Review (Admin): Header nennt beide, "Veroeffentlichen" aktiviert', async () => {
+  it('Active + Review (Admin): Header nennt beide, "Veröffentlichen" aktiviert', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers({
       persona: personaWith({ current_version: 2 }),
@@ -611,7 +611,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
 
     expect(await screen.findByText(/Active: v1 · Zur Freigabe: v2/)).toBeInTheDocument()
 
-    const publish = screen.getByRole('button', { name: 'Veroeffentlichen' })
+    const publish = screen.getByRole('button', { name: 'Veröffentlichen' })
     expect(publish).toBeEnabled()
     expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
@@ -623,7 +623,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"active"')
   })
 
-  it('Review (kein Admin): Publish ist gesperrt, "Zurueck zu Draft" lehnt ab', async () => {
+  it('Review (kein Admin): Publish ist gesperrt, "Zurück zu Draft" lehnt ab', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers({ versions: [pVersion(1, 'review')] })
     renderPersonaDetail(
@@ -637,11 +637,11 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
       { me: meWithRole('editor') },
     )
 
-    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
     expect(publish).toBeDisabled()
     expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück zu Draft' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
@@ -685,7 +685,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
     )
 
     await waitFor(() => {
@@ -709,7 +709,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
     )
 
     await waitFor(() => {
@@ -731,7 +731,7 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
       await screen.findByText(/Active: v1 · Du arbeitest auf Draft v2/),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Draft abschliessen' }),
+      screen.getByRole('button', { name: 'Entwurf abschließen' }),
     ).toBeInTheDocument()
   })
 
@@ -748,7 +748,7 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     expect(await screen.findByRole('heading', { name: 'Coach' })).toBeInTheDocument()
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Draft abschliessen' }),
+      screen.queryByRole('button', { name: 'Entwurf abschließen' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
@@ -880,7 +880,7 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
     ['unbekannter Tab und kaputte Version', '?tab=bogus&diff=abc', /Bearbeiten/],
     ['diff ohne tab=versions', '?diff=2', /Bearbeiten/],
     ['Version, die es nicht gibt', '?tab=versions&diff=99', /Versionen/],
-  ])('ignoriert ungueltige Parameter (%s)', async (_label, search, selectedTab) => {
+  ])('ignoriert ungültige Parameter (%s)', async (_label, search, selectedTab) => {
     const fetchMock = renderPersonaDetail(reviewHandlers(), {
       entry: `/w/ws-1/personas/p1${search}`,
     })
@@ -895,7 +895,7 @@ describe('PersonaDetailPage — Deep-Link in die Pruefansicht', () => {
     expect(diffCalls(fetchMock)).toBe(0)
   })
 
-  it('ungueltiger Diff-Wert: der Versions-Tab klappt die Review-Version auf (Spec S11)', async () => {
+  it('ungültiger Diff-Wert: der Versions-Tab klappt die Review-Version auf (Spec S11)', async () => {
     const fetchMock = renderPersonaDetail(reviewHandlers(), {
       entry: '/w/ws-1/personas/p1?tab=versions&diff=2.0',
     })

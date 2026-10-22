@@ -342,11 +342,11 @@ describe('SubResourcePicker — Auswahlliste (M9/M6)', () => {
     listResourcesMock.mockResolvedValue(many)
     renderPicker()
 
-    const list = await screen.findByRole('list', { name: 'Verfuegbare Resources' })
+    const list = await screen.findByRole('list', { name: 'Verfügbare Resources' })
     await waitFor(() => expect(list.children).toHaveLength(8))
     const frame = screen.getByTestId('sub-resource-available')
     expect(frame.className).not.toMatch(/max-h-|overflow-/)
-    expect(screen.queryByRole('region', { name: 'Verfuegbare Resources' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Verfügbare Resources' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '3 weitere anzeigen' }))
     expect(list.children).toHaveLength(11)
@@ -361,11 +361,11 @@ describe('SubResourcePicker — Auswahlliste (M9/M6)', () => {
     listResourcesMock.mockResolvedValue(many)
     renderPicker()
 
-    const region = await screen.findByRole('region', { name: 'Verfuegbare Resources' })
+    const region = await screen.findByRole('region', { name: 'Verfügbare Resources' })
     expect(region).toHaveClass('max-h-72', 'overflow-auto')
     expect(region).toHaveAttribute('tabindex', '0')
     await waitFor(() =>
-      expect(screen.getByRole('list', { name: 'Verfuegbare Resources' }).children).toHaveLength(11),
+      expect(screen.getByRole('list', { name: 'Verfügbare Resources' }).children).toHaveLength(11),
     )
   })
 

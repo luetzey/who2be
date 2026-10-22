@@ -20,7 +20,7 @@ describe('DpaPage', () => {
     expect(getByRole('heading', { name: /Gegenstand & Dauer/i })).toBeInTheDocument()
     expect(getByRole('heading', { name: /Unterauftragsverarbeiter/i })).toBeInTheDocument()
     expect(
-      getByRole('heading', { name: /Technische & organisatorische Massnahmen/i }),
+      getByRole('heading', { name: /Technische & organisatorische Maßnahmen/i }),
     ).toBeInTheDocument()
     expect(container.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0)
   })

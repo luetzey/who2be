@@ -212,7 +212,7 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(function Tag
         <ul
           id={listboxId}
           role="listbox"
-          aria-label="Tag-Vorschlaege"
+          aria-label="Tag-Vorschläge"
           className="absolute top-full z-10 mt-1 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-popover"
         >
           {filtered.map((tag) => (

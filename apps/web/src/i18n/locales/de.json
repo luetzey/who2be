@@ -358,7 +358,7 @@
       "whyActive": "Warum aktiv?",
       "history": "Verlauf",
       "restoreHint": "Diese Version als neuen Draft wiederherstellen",
-      "restoreBlockedHint": "Es existiert bereits ein Draft — erst abschliessen oder verwerfen.",
+      "restoreBlockedHint": "Es existiert bereits ein Draft — erst abschließen oder verwerfen.",
       "loadFailed": "Laden fehlgeschlagen.",
       "restoreFailed": "Wiederherstellen fehlgeschlagen."
     },
@@ -732,7 +732,7 @@
       "newPassword": "Neues Passwort"
     },
     "or": "oder",
-    "backToLogin": "Zurueck zur Anmeldung",
+    "backToLogin": "Zurück zur Anmeldung",
     "login": {
       "title": "Anmeldung",
       "description": "Melde dich mit deinem Who2Be-Konto an.",
@@ -741,17 +741,17 @@
       "submit": "Anmelden",
       "noAccount": "Noch kein Konto?",
       "register": "Registrieren",
-      "unconfirmedEmail": "Deine E-Mail-Adresse ist noch nicht bestaetigt.",
+      "unconfirmedEmail": "Deine E-Mail-Adresse ist noch nicht bestätigt.",
       "loginFailed": "Login fehlgeschlagen.",
-      "resendConfirmation": "Bestaetigungs-Mail erneut senden",
-      "confirmationResent": "Bestaetigungs-Mail erneut gesendet.",
+      "resendConfirmation": "Bestätigungs-Mail erneut senden",
+      "confirmationResent": "Bestätigungs-Mail erneut gesendet.",
       "mfa": {
         "title": "Zwei-Faktor-Authentifizierung",
         "description": "Gib den 6-stelligen Code aus deiner Authenticator-App ein.",
         "codeLabel": "Code",
         "codePlaceholder": "123456",
         "codeInvalid": "Bitte einen 6-stelligen Code eingeben.",
-        "submit": "Bestaetigen",
+        "submit": "Bestätigen",
         "failed": "Code konnte nicht verifiziert werden. Bitte erneut versuchen.",
         "factorsFailed": "MFA-Faktoren konnten nicht geladen werden.",
         "challengeFailed": "MFA-Challenge konnte nicht gestartet werden."
@@ -762,21 +762,21 @@
       "description": "Erstelle ein Konto, um deinen Workspace einzurichten.",
       "descriptionPending": "Bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
       "submit": "Konto erstellen",
-      "confirmPending": "Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung abzuschliessen.",
+      "confirmPending": "Prüfe dein Postfach und folge dem Bestätigungs-Link, um die Anmeldung abzuschließen.",
       "alreadyAccount": "Schon ein Konto?",
       "signIn": "Anmelden",
       "consent": {
         "before": "Ich akzeptiere die",
         "termsLink": "AGB",
         "middle": "und die",
-        "privacyLink": "Datenschutzerklaerung",
+        "privacyLink": "Datenschutzerklärung",
         "after": "."
       },
       "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklärung zu, um fortzufahren."
     },
     "captcha": {
       "pending": "Bitte bestätige kurz, dass du kein Bot bist.",
-      "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
+      "failed": "Die Bot-Prüfung ist fehlgeschlagen. Bitte versuche es noch einmal."
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
@@ -855,11 +855,11 @@
       "invalidRequest": "Dieser Verbindungs-Link ist ungültig oder abgelaufen. Fordere einen neuen Link an."
     },
     "validation": {
-      "emailInvalid": "Bitte gueltige E-Mail eingeben.",
+      "emailInvalid": "Bitte gültige E-Mail eingeben.",
       "passwordRequired": "Passwort erforderlich.",
       "passwordMinLength": "Mindestens 8 Zeichen.",
       "confirmRequired": "Bitte wiederholen.",
-      "passwordMismatch": "Passwoerter stimmen nicht ueberein.",
+      "passwordMismatch": "Passwörter stimmen nicht überein.",
       "consentRequired": "Bitte AGB und Datenschutz akzeptieren."
     }
   },
@@ -975,7 +975,7 @@
         "legalNotice": {
           "heading": "Angaben gemäß § 5 DDG",
           "companyName": "Firmenname / Rechtsform",
-          "street": "Strasse und Hausnummer",
+          "street": "Straße und Hausnummer",
           "city": "PLZ und Ort",
           "country": "Land"
         },
@@ -1019,7 +1019,7 @@
       }
     },
     "terms": {
-      "title": "Allgemeine Geschaeftsbedingungen (AGB)",
+      "title": "Allgemeine Geschäftsbedingungen (AGB)",
       "intro": "Diese AGB regeln die Nutzung von Who2Be (SaaS-Mischvertrag aus Miet- und Dienstleistungselementen) durch",
       "introUserGroup": "Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)",
       "introPeriod": ". Abschnitt A gilt für alle Nutzer, Abschnitt B nur für Verbraucher (B2C), Abschnitt C nur für Unternehmer (B2B).",
@@ -1029,11 +1029,11 @@
         },
         "consumer": {
           "heading": "B. Zusätzliche Bestimmungen für Verbraucher (B2C)",
-          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die überwiegend weder seiner gewerblichen noch seiner selbständigen beruflichen Tätigkeit zugerechnet werden können."
+          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschließt, die überwiegend weder seiner gewerblichen noch seiner selbständigen beruflichen Tätigkeit zugerechnet werden können."
         },
         "business": {
           "heading": "C. Zusätzliche Bestimmungen für Unternehmer (B2B)",
-          "note": "Unternehmer ist, wer den Vertrag in Ausübung gewerblicher oder selbständiger beruflicher Tätigkeit abschliesst."
+          "note": "Unternehmer ist, wer den Vertrag in Ausübung gewerblicher oder selbständiger beruflicher Tätigkeit abschließt."
         }
       },
       "sections": {
@@ -1055,7 +1055,7 @@
         },
         "termination": {
           "heading": "§ 5 Laufzeit & Kündigung",
-          "body": "Vertragslaufzeit, Verlängerung, ordentliche/ausserordentliche Kündigung, Kündigung zum Periodenende"
+          "body": "Vertragslaufzeit, Verlängerung, ordentliche/außerordentliche Kündigung, Kündigung zum Periodenende"
         },
         "obligations": {
           "heading": "§ 6 Pflichten der Nutzer & zulässige Nutzung",
@@ -1113,7 +1113,7 @@
       }
     },
     "privacy": {
-      "title": "Datenschutzerklaerung",
+      "title": "Datenschutzerklärung",
       "intro": "Diese Erklärung informiert über die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
       "sections": {
         "controller": {
@@ -1197,7 +1197,7 @@
           "body": "Weisungsbindung, Vertraulichkeit, Unterstützung bei Betroffenenrechten, Meldepflichten"
         },
         "tom": {
-          "heading": "6. Technische & organisatorische Massnahmen (TOM)",
+          "heading": "6. Technische & organisatorische Maßnahmen (TOM)",
           "body": "Verweis auf TOM-Anlage (Verschlüsselung, Zugriffskontrolle, RLS, Backups, Logging)"
         },
         "subprocessors": {
@@ -1242,9 +1242,9 @@
         "currentVersion": "Aktuelle Version: v{{version}} ({{status}})"
       },
       "branch": {
-        "submit": "Draft abschliessen",
-        "publish": "Veroeffentlichen",
-        "reject": "Zurueck zu Draft",
+        "submit": "Entwurf abschließen",
+        "publish": "Veröffentlichen",
+        "reject": "Zurück zu Draft",
         "reactivate": "Reaktivieren als Draft"
       },
       "toast": {
@@ -1542,16 +1542,16 @@
     "typeHints": {
       "prompt": "Ein Einzel-Prompt mit klarem Outcome — z. B. „Fasse den Anruf in 3 Bullets zusammen\".",
       "instructions": "Mehrteilige Handlungsanweisung mit Schritt-Reihenfolge — z. B. Onboarding-Flow eines Agenten.",
-      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begrüßung oder rechtliche Fussnote.",
+      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begrüßung oder rechtliche Fußnote.",
       "workflow": "Mehrstufiger Prozess mit Verzweigungen — z. B. Eskalation, wenn der Kunde unzufrieden bleibt.",
       "checklist": "Prüfliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
       "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
     },
     "actions": {
       "activateAdminOnly": "Nur Admins können aktivieren",
-      "draftSubmit": "Draft abschliessen",
-      "publish": "Veroeffentlichen",
-      "rejectDraft": "Zurueck zu Draft",
+      "draftSubmit": "Entwurf abschließen",
+      "publish": "Veröffentlichen",
+      "rejectDraft": "Zurück zu Draft",
       "reactivateDraft": "Reaktivieren als Draft"
     },
     "toast": {
@@ -1571,12 +1571,12 @@
       "dialogTitle": "Sub-Playbooks (Composition)",
       "dialogDescription": "Wähle Playbooks als Sub-Playbooks aus und ordne sie per Pfeil-Buttons. Die Reihenfolge bestimmt die Ausführungssequenz beim Rendern.",
       "selectedHeading": "Ausgewählt ({{count}})",
-      "selectedList": "Ausgewaehlte Sub-Playbooks",
+      "selectedList": "Ausgewählte Sub-Playbooks",
       "moveUp": "{{name}} nach oben verschieben",
       "moveDown": "{{name}} nach unten verschieben",
       "addMore": "Weitere hinzufügen",
       "availableHeading": "Playbooks",
-      "availableList": "Verfuegbare Playbooks",
+      "availableList": "Verfügbare Playbooks",
       "addAriaLabel": "{{name}} als Sub-Playbook hinzufügen",
       "noMore": "Alle verfügbaren Playbooks sind bereits ausgewählt.",
       "noPlaybooks": "Keine weiteren Playbooks im Workspace.",
@@ -1584,34 +1584,34 @@
       "saveButton": "Speichern ({{count}})"
     },
     "linkedBlocks": {
-      "empty": "Noch keine Bloecke verknuepft.",
+      "empty": "Noch keine Blöcke verknüpft.",
       "ariaLabel": "Verknüpfte Blöcke",
       "statusActive": "Aktiv",
       "statusDraft": "Nur in Draft",
-      "statusDeleted": "Block geloescht",
+      "statusDeleted": "Block gelöscht",
       "emptyActive": "(leer)",
       "emptyDraft": "(leer — Draft)",
       "emptyDeleted": "Block nicht mehr verfügbar",
       "resourceScopeLabel": "Ganzes Dokument",
       "resourceScopeEmpty": "Resource nicht mehr verfügbar",
-      "sublinesLazy": "Vollstaendige Resource — Link (lazy), via fetch nachgeladen",
-      "sublinesInline": "Vollstaendige Resource — fest eingebettet (inline)"
+      "sublinesLazy": "Vollständige Resource — Link (lazy), via fetch nachgeladen",
+      "sublinesInline": "Vollständige Resource — fest eingebettet (inline)"
     },
     "resourcePicker": {
-      "triggerButton": "Bloecke verknuepfen",
+      "triggerButton": "Blöcke verknüpfen",
       "dialogTitle": "Resource-Blöcke verknüpfen",
       "dialogDescription": "Wähle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Blöcke sind als Anker erlaubt.",
       "noResources": "Keine Resources.",
       "selectResourceHint": "Resource wählen, um Heading-Blöcke zu sehen.",
       "wholeDocLabel": "Gesamtes Dokument",
       "wholeDocDescription": "Verlinkt die komplette Resource — exklusive zu einzelnen Block-Ankern.",
-      "wholeDocAriaLabel": "Gesamtes Dokument verknuepfen",
+      "wholeDocAriaLabel": "Gesamtes Dokument verknüpfen",
       "embedModeGroup": "Embed-Modus für das gesamte Dokument",
       "embedLazy": "Link (lazy)",
       "embedInline": "Fest einbetten",
-      "headingBlocksLabel": "Heading-Bloecke",
+      "headingBlocksLabel": "Heading-Blöcke",
       "noHeadings": "Diese Resource hat keine Heading-Blöcke.",
-      "sectionAriaLabel": "Section {{heading}} verknuepfen",
+      "sectionAriaLabel": "Section {{heading}} verknüpfen",
       "emptySection": "(leere Section)",
       "loadFailed": "Laden fehlgeschlagen.",
       "saveButton": "Speichern ({{count}})"
@@ -1715,7 +1715,7 @@
       "moveDown": "{{name}} nach unten verschieben",
       "addMore": "Weitere hinzufügen",
       "resources": "Resources",
-      "availableAriaLabel": "Verfuegbare Resources",
+      "availableAriaLabel": "Verfügbare Resources",
       "addAriaLabel": "{{name}} als Sub-Resource hinzufügen",
       "noMore": "Keine weiteren Resources im Workspace.",
       "allSelected": "Alle verfügbaren Resources sind bereits ausgewählt.",
@@ -1822,11 +1822,11 @@
         "savedToast": "Anzeigename gespeichert."
       },
       "email": {
-        "changeLabel": "E-Mail aendern",
-        "changeButton": "E-Mail aendern",
+        "changeLabel": "E-Mail ändern",
+        "changeButton": "E-Mail ändern",
         "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss über einen Bestätigungs-Link aktiviert werden.",
         "sameError": "Das ist bereits deine aktuelle E-Mail-Adresse.",
-        "invalidError": "Bitte gueltige E-Mail eingeben.",
+        "invalidError": "Bitte gültige E-Mail eingeben.",
         "sentToast": "Bestätigungs-Mail an die neue Adresse gesendet."
       },
       "security": {
@@ -1861,11 +1861,11 @@
         "newLabel": "Neues Passwort",
         "setLabel": "Passwort setzen",
         "confirmLabel": "Passwort wiederholen",
-        "changeButton": "Passwort aendern",
+        "changeButton": "Passwort ändern",
         "setButton": "Passwort setzen",
         "minLength": "Mindestens 8 Zeichen.",
         "confirmRequired": "Bitte wiederholen.",
-        "mismatch": "Passwoerter stimmen nicht ueberein.",
+        "mismatch": "Passwörter stimmen nicht überein.",
         "magicLinkHint": "Du bist per Magic-Link oder Social-Login angemeldet. Mit einem Passwort kannst du dich auch direkt anmelden.",
         "changedToast": "Passwort geändert.",
         "setToast": "Passwort gesetzt."
@@ -3170,7 +3170,7 @@
     },
     "picker": {
       "cancel": "Abbrechen",
-      "insert": "Einfuegen",
+      "insert": "Einfügen",
       "update": "Aktualisieren",
       "searchPlaceholder": "Suchen…",
       "loading": "Lade…",
@@ -3187,7 +3187,7 @@
         "ariaLabel": "Resource verlinken",
         "listLabel": "Resource-Liste",
         "empty": "Keine Resources gefunden.",
-        "blocksLabel": "Heading-Bloecke",
+        "blocksLabel": "Heading-Blöcke",
         "blocksLoading": "Lade Blöcke…",
         "noBlocks": "Keine Heading-Blöcke — die ganze Resource wird verlinkt."
       },
@@ -3200,8 +3200,8 @@
       },
       "personaField": {
         "titleEdit": "Persona-Feld ändern",
-        "titleNew": "Persona-Feld einfuegen",
-        "ariaLabel": "Persona-Feld einfuegen",
+        "titleNew": "Persona-Feld einfügen",
+        "ariaLabel": "Persona-Feld einfügen",
         "listLabel": "Persona-Feld auswählen",
         "name": {
           "label": "Persona: Name",
@@ -3226,8 +3226,8 @@
       },
       "catalogScope": {
         "titleEdit": "Playbook-Katalog ändern",
-        "titleNew": "Playbook-Katalog einfuegen",
-        "ariaLabel": "Playbook-Katalog einfuegen",
+        "titleNew": "Playbook-Katalog einfügen",
+        "ariaLabel": "Playbook-Katalog einfügen",
         "listLabel": "Playbook-Auswahl für den Katalog",
         "all": {
           "label": "Alle verknüpften Playbooks",
@@ -3249,8 +3249,8 @@
       },
       "date": {
         "titleEdit": "Datum ändern",
-        "titleNew": "Datum einfuegen",
-        "ariaLabel": "Datum einfuegen",
+        "titleNew": "Datum einfügen",
+        "ariaLabel": "Datum einfügen",
         "listLabel": "Datumsformat auswählen",
         "readable": {
           "label": "Datum (lesbar)",

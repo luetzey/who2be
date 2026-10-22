@@ -532,7 +532,7 @@ describe('PlaybookDetailPage — Lade-/Fehler-Zustaende', () => {
 })
 
 describe('PlaybookDetailPage — Status-Transitions', () => {
-  it('Draft: "Draft abschliessen" reicht die Version zur Review ein', async () => {
+  it('Draft: "Entwurf abschließen" reicht die Version zur Review ein', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers()
     renderPlaybookDetail((path, method, init) => {
@@ -551,7 +551,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     // e2e/journeys.spec.ts bindet.
     expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Entwurf abschließen' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
@@ -559,7 +559,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"review"')
   })
 
-  it('Review (Admin): "Veroeffentlichen" aktiviert die Version', async () => {
+  it('Review (Admin): "Veröffentlichen" aktiviert die Version', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers({ versions: [pbVersion(1, 'review')] })
     renderPlaybookDetail(
@@ -573,7 +573,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       { me: meWithRole('admin') },
     )
 
-    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
     expect(publish).toBeEnabled()
     expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
@@ -585,7 +585,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"active"')
   })
 
-  it('Review (kein Admin): Publish ist gesperrt, "Zurueck zu Draft" lehnt ab', async () => {
+  it('Review (kein Admin): Publish ist gesperrt, "Zurück zu Draft" lehnt ab', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers({ versions: [pbVersion(1, 'review')] })
     renderPlaybookDetail((path, method, init) => {
@@ -596,11 +596,11 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       return base(path, method, init)
     })
 
-    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
     expect(publish).toBeDisabled()
     expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück zu Draft' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
@@ -642,7 +642,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
     )
 
     await waitFor(() => {
@@ -662,7 +662,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
     expect(screen.getByText('Entwurf: v2')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Draft abschliessen' }),
+      screen.getByRole('button', { name: 'Entwurf abschließen' }),
     ).toBeInTheDocument()
   })
 
@@ -676,8 +676,8 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
 
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
     expect(screen.getByText('v2 wartet auf Freigabe')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Veroeffentlichen' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Veröffentlichen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeInTheDocument()
   })
 
   it('nur Active (ohne Draft/Review): Hero-Chip statt Banner, keine Branch-Aktionen', async () => {
@@ -868,7 +868,7 @@ describe('PlaybookDetailPage — Composite-, Tag- und Link-Zweige', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('Resource-Links: rendert verlinkte Bloecke read-only mit Body-Hinweis', async () => {
+  it('Resource-Links: rendert verlinkte Blöcke read-only mit Body-Hinweis', async () => {
     renderPlaybookDetail(
       playbookHandlers({
         resourceLinks: [
@@ -899,7 +899,7 @@ describe('PlaybookDetailPage — Composite-, Tag- und Link-Zweige', () => {
 })
 
 describe('PlaybookDetailPage — Delete-Flow', () => {
-  it('loescht nach Bestaetigung und navigiert zurueck zur Liste', async () => {
+  it('loescht nach Bestätigung und navigiert zurueck zur Liste', async () => {
     const base = playbookHandlers()
     renderPlaybookDetail((path, method, init) => {
       if (method === 'DELETE' && path === `${WS_PREFIX}/playbooks/pb1`) {
@@ -952,7 +952,7 @@ describe('PlaybookDetailPage — Delete-Flow', () => {
 // Issues, NICHT aus der Norm: `docs/frontend/design-language.md` §11 ist die
 // einzige Quelle des Hit-Target-Floors und setzt ihn auf >= 32 px; 40 px ist
 // dort die Praeferenz `size="default"`, `size="sm"` (36 px) bleibt zulaessig.
-// Der gemessene Zurueck-Button liegt mit 36 px also im Rahmen der Norm und
+// Der gemessene Zurück-Button liegt mit 36 px also im Rahmen der Norm und
 // wird allein wegen AK 5 angehoben.
 //
 // jsdom hat kein Layout, deshalb sind das Klassen-Vertraege; die
@@ -988,7 +988,7 @@ describe('PlaybookDetailPage — Responsive (#573)', () => {
     }
   })
 
-  it('haelt den Zurueck-Link auf dem 40-px-Hit-Target aus AK 5', async () => {
+  it('haelt den Zurück-Link auf dem 40-px-Hit-Target aus AK 5', async () => {
     renderPlaybookDetail(playbookHandlers())
 
     // Gemessen 36 px (`size="sm"`) — nach §11 zulaessig, nach AK 5 dieses

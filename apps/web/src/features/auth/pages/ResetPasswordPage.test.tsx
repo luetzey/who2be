@@ -133,10 +133,10 @@ describe('ResetPasswordPage', () => {
   // heben. Gemessen lieferte `size="sm"` hier 36px — oberhalb des
   // verbindlichen Floors (§11: >= 32px), aber nicht gewollt. `h-10 md:h-9`
   // hebt den Phone-Fall auf 40px und behaelt die Verdichtung ab `md`.
-  it('haelt den Zurueck-Link unterhalb md auf 40px Hit-Target (#569)', () => {
+  it('haelt den Zurück-Link unterhalb md auf 40px Hit-Target (#569)', () => {
     renderResetPage()
 
-    const back = screen.getByRole('link', { name: 'Zurueck zur Anmeldung' })
+    const back = screen.getByRole('link', { name: 'Zurück zur Anmeldung' })
     expect(back.className).toContain('h-10')
     expect(back.className).toContain('md:h-9')
   })
@@ -206,7 +206,7 @@ describe('ResetPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset-Link senden' }))
 
     expect(
-      await screen.findByText('Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal.'),
+      await screen.findByText('Die Bot-Prüfung ist fehlgeschlagen. Bitte versuche es noch einmal.'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/request disallowed/i)).not.toBeInTheDocument()
     await waitFor(() => {

@@ -58,7 +58,7 @@ async function openPicker(): Promise<HTMLElement> {
     />,
   )
   fireEvent.click(screen.getByRole('button', { name: 'Sub-Playbooks bearbeiten' }))
-  const list = await screen.findByRole('list', { name: 'Ausgewaehlte Sub-Playbooks' })
+  const list = await screen.findByRole('list', { name: 'Ausgewählte Sub-Playbooks' })
   return list
 }
 

@@ -100,12 +100,12 @@ describe('PlaybookComposesPicker', () => {
 
     await waitFor(() => {
       const selectedList = screen.getByRole('list', {
-        name: 'Ausgewaehlte Sub-Playbooks',
+        name: 'Ausgewählte Sub-Playbooks',
       })
       expect(selectedList).toHaveTextContent('Atomic A')
     })
-    // pbA ist ausgewaehlt — darf nicht mehr in "Verfuegbare" stehen.
-    const availableList = screen.getByRole('list', { name: 'Verfuegbare Playbooks' })
+    // pbA ist ausgewaehlt — darf nicht mehr in "Verfügbare" stehen.
+    const availableList = screen.getByRole('list', { name: 'Verfügbare Playbooks' })
     expect(availableList).not.toHaveTextContent('Atomic A')
   })
 
@@ -156,7 +156,7 @@ describe('PlaybookComposesPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sub-Playbooks bearbeiten' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('list', { name: 'Ausgewaehlte Sub-Playbooks' })).toBeInTheDocument()
+      expect(screen.getByRole('list', { name: 'Ausgewählte Sub-Playbooks' })).toBeInTheDocument()
     })
 
     // B ist an Position 2 — einmal nach oben.

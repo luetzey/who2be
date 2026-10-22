@@ -12,7 +12,7 @@ function setup(initial?: PlaceholderProps, open = true) {
 }
 
 describe('DateFormatPicker', () => {
-  it('bestaetigt im Default-Modus mit target_id "human"', () => {
+  it('bestätigt im Default-Modus mit target_id "human"', () => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId('date-format-picker-confirm'))
     expect(onConfirm).toHaveBeenCalledWith({
@@ -22,7 +22,7 @@ describe('DateFormatPicker', () => {
     })
   })
 
-  it('bestaetigt nach Auswahl von ISO mit target_id ""', () => {
+  it('bestätigt nach Auswahl von ISO mit target_id ""', () => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId('date-format-option-iso'))
     fireEvent.click(screen.getByTestId('date-format-picker-confirm'))
@@ -67,10 +67,10 @@ describe('DateFormatPicker', () => {
     expect(screen.getByTestId('date-format-picker-confirm')).toHaveTextContent('Aktualisieren')
   })
 
-  it('zeigt Einfuegen-Beschriftungen ohne Pill', () => {
+  it('zeigt Einfügen-Beschriftungen ohne Pill', () => {
     setup()
-    expect(screen.getByText('Datum einfuegen')).toBeInTheDocument()
-    expect(screen.getByTestId('date-format-picker-confirm')).toHaveTextContent('Einfuegen')
+    expect(screen.getByText('Datum einfügen')).toBeInTheDocument()
+    expect(screen.getByTestId('date-format-picker-confirm')).toHaveTextContent('Einfügen')
   })
 
   it('ruft onCancel ueber den Abbrechen-Button auf', () => {

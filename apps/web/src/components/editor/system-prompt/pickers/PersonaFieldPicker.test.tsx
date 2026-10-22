@@ -14,7 +14,7 @@ function setup(initial?: PlaceholderProps, open = true) {
 }
 
 describe('PersonaFieldPicker', () => {
-  it('bestaetigt im Default-Modus mit target_id "name"', () => {
+  it('bestätigt im Default-Modus mit target_id "name"', () => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId('persona-field-picker-confirm'))
     expect(onConfirm).toHaveBeenCalledWith({
@@ -29,7 +29,7 @@ describe('PersonaFieldPicker', () => {
     ['profile', 'Persona: Profil (vollständig)'],
     ['profile-body', 'Persona: Profil-Inhalt'],
     ['modes', 'Persona: Modi'],
-  ])('bestaetigt nach Auswahl von "%s" mit passendem Label', (target, label) => {
+  ])('bestätigt nach Auswahl von "%s" mit passendem Label', (target, label) => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId(`persona-field-option-${target}`))
     fireEvent.click(screen.getByTestId('persona-field-picker-confirm'))
@@ -62,10 +62,10 @@ describe('PersonaFieldPicker', () => {
     expect(screen.getByTestId('persona-field-picker-confirm')).toHaveTextContent('Aktualisieren')
   })
 
-  it('zeigt Einfuegen-Beschriftungen ohne Pill', () => {
+  it('zeigt Einfügen-Beschriftungen ohne Pill', () => {
     setup()
-    expect(screen.getByText('Persona-Feld einfuegen')).toBeInTheDocument()
-    expect(screen.getByTestId('persona-field-picker-confirm')).toHaveTextContent('Einfuegen')
+    expect(screen.getByText('Persona-Feld einfügen')).toBeInTheDocument()
+    expect(screen.getByTestId('persona-field-picker-confirm')).toHaveTextContent('Einfügen')
   })
 
   it('ruft onCancel ueber den Abbrechen-Button auf', () => {

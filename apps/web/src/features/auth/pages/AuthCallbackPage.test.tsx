@@ -68,7 +68,7 @@ describe('AuthCallbackPage', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/Signups not allowed/)).not.toBeInTheDocument()
     expect(screen.queryByTestId('error-alert')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Zurueck zur Anmeldung' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Zurück zur Anmeldung' })).toHaveAttribute(
       'href',
       '/login',
     )
