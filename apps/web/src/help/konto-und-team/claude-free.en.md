@@ -19,7 +19,7 @@ Nothing gets lost in Who2Be. Personas, playbooks and memory stay as they are.
 
 ## Swap the connector [#tauschen]
 
-1. In Claude, open **Settings › Connectors**.
+1. In Claude, open **Customize › Connectors**.
 2. Remove the current Who2Be connector.
 3. In Who2Be, connect the other agent via the **Connection** card, see [Connect to Claude](/help/connect-claude#schritte).
 4. Send the test sentence in a new chat.
