@@ -393,8 +393,11 @@
       "newAgent": "Neuen Agent erstellen",
       "viewerNoCreate": "Viewer können keine Agents anlegen",
       "empty": {
-        "title": "Noch keine Agents",
-        "description": "Lege deinen ersten Agent an, um Prompts mit einem Klick zu kopieren."
+        "title": "Noch keine eigenen Agenten",
+        "description": "Der Builder baut dir einen im Chat, oder du legst ihn hier selbst an.",
+        "viewerDescription": "Eigene Agenten legt ein Editor oder Admin an.",
+        "helpLink": "So baut dir der Builder einen Agenten",
+        "viewerHelpLink": "Wer darf was? Die Rollen erklärt"
       },
       "favoritesSection": "Favoriten",
       "othersSection": "Weitere Agents"
@@ -913,7 +916,9 @@
       "lockedHint": "Dieser Agent ist durch die Connector-URL vorgegeben und kann hier nicht gewechselt werden.",
       "lockedWorkspace": "Workspace: {{workspace}}",
       "lockedUnresolvable": "Dieser Agent lässt sich mit diesem Konto nicht auflösen. Die Connector-URL verweist auf einen Agenten, auf den dieses Konto keinen Zugriff hat — prüfe die URL oder wende dich an den Workspace-Owner.",
-      "invalidRequest": "Dieser Verbindungs-Link ist ungültig oder abgelaufen. Fordere einen neuen Link an."
+      "invalidRequest": "Dieser Verbindungs-Link ist ungültig oder abgelaufen. Fordere einen neuen Link an.",
+      "helpLink": "Was passiert hier?",
+      "helpLinkNewTab": "(öffnet in neuem Tab)"
     },
     "validation": {
       "emailInvalid": "Bitte gültige E-Mail eingeben.",
@@ -1376,7 +1381,8 @@
         "helpLine1": "Der Agent leitet daraus ab, wie er antworten soll — strukturierte Beispiele schlagen Bullet-Listen.",
         "helpLine2": "Mit / fügst du Pills ein: einzelne Playbooks/Resources oder die Kataloge Playbook-Katalog (alle/getriggert) und Resource-Katalog (alle/Tag). Sie lösen beim get_persona-Abruf gegen die aktiven Playbooks/Resources des Workspace auf.",
         "helpExampleLabel": "Beispiel",
-        "contentLabel": "Profil-Inhalt"
+        "contentLabel": "Profil-Inhalt",
+        "helpLink": "Was in eine Persona gehört"
       },
       "modes": {
         "infoAriaLabel": "{{count}} Modi definiert, Default {{defaultLabel}}. Zu Modi springen.",
@@ -3630,7 +3636,8 @@
         "entries": "Einträge"
       },
       "tabsAria": "Bereiche des Gedächtnisses",
-      "moreActions": "Weitere Aktionen"
+      "moreActions": "Weitere Aktionen",
+      "helpLink": "So funktioniert das Gedächtnis"
     },
     "pullback": {
       "menu": "Automatisch Freigegebenes zurücknehmen…",

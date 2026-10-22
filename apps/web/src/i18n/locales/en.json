@@ -393,8 +393,11 @@
       "newAgent": "Create new agent",
       "viewerNoCreate": "Viewers cannot create agents",
       "empty": {
-        "title": "No agents yet",
-        "description": "Create your first agent to copy prompts with one click."
+        "title": "No agents of your own yet",
+        "description": "The Builder can build one for you in chat, or you can create one here.",
+        "viewerDescription": "Editors and admins create agents of their own.",
+        "helpLink": "How the Builder builds an agent for you",
+        "viewerHelpLink": "Who can do what? Roles explained"
       },
       "favoritesSection": "Favorites",
       "othersSection": "Other agents"
@@ -913,7 +916,9 @@
       "lockedHint": "This agent is fixed by the connector URL and can't be changed here.",
       "lockedWorkspace": "Workspace: {{workspace}}",
       "lockedUnresolvable": "This agent can't be resolved with this account. The connection URL points to an agent this account doesn't have access to — check the URL or ask the workspace owner.",
-      "invalidRequest": "This connection link is invalid or has expired. Request a new one."
+      "invalidRequest": "This connection link is invalid or has expired. Request a new one.",
+      "helpLink": "What is happening here?",
+      "helpLinkNewTab": "(opens in a new tab)"
     },
     "validation": {
       "emailInvalid": "Please enter a valid email address.",
@@ -1376,7 +1381,8 @@
         "helpLine1": "The agent uses this to determine how to respond — structured examples beat bullet lists.",
         "helpLine2": "Use / to insert pills: individual playbooks/resources or the catalogs Playbook catalog (all/triggered) and Resource catalog (all/tag). They resolve at get_persona fetch time against the active playbooks/resources of the workspace.",
         "helpExampleLabel": "Example",
-        "contentLabel": "Profile content"
+        "contentLabel": "Profile content",
+        "helpLink": "What goes into a persona"
       },
       "modes": {
         "infoAriaLabel": "{{count}} modes defined, default {{defaultLabel}}. Jump to modes.",
@@ -3630,7 +3636,8 @@
         "entries": "Entries"
       },
       "tabsAria": "Memory sections",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "helpLink": "How memory works"
     },
     "pullback": {
       "menu": "Pull back automatic approvals…",

@@ -1,7 +1,7 @@
 import { Link2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 
 import { ApiError, createApi, oauthConsent, oauthConsentPreview } from '@/api/client'
 import type { OAuthConsentPreviewAgent } from '@/api/client'
@@ -14,6 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+
+// Hilfe-Seite zum Verbinden als Kurzlink (`/help/*` leitet in den
+// Default-Workspace weiter): die Consent-Seite selbst hat keinen Workspace.
+const CONNECT_HELP_PATH = '/help/connect-claude#schritte'
 
 // Public-Route (ADR-0034-Folge): Consent-Screen des Who2Be-OAuth-Servers. Ein
 // eingeloggter User autorisiert einen LLM-Client (Claude/ChatGPT) fuer GENAU
@@ -175,6 +179,20 @@ export function OAuthConsentPage() {
               ? t('connector.description', { client: clientName })
               : t('connector.descriptionGeneric')}
           </CardDescription>
+          {/* Kontext-Link (Onboarding P8): oeffentlicher Kurzlink ohne
+              `?request=` und ohne Token, gleicher Origin. Neuer Tab, damit
+              der Consent offen bleibt; `noreferrer` haelt die Consent-URL
+              (mit dem signierten Request) aus dem Referrer. */}
+          <Link
+            to={CONNECT_HELP_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground md:min-h-0"
+            data-testid="consent-help-link"
+          >
+            {t('connector.helpLink')}{' '}
+            <span className="sr-only">{t('connector.helpLinkNewTab')}</span>
+          </Link>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">

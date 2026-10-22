@@ -74,6 +74,15 @@ function AgentStatusPill({ agent }: { agent: Agent }) {
   )
 }
 
+// Kontext-Links in die Hilfe (Onboarding P8, Spec §5.3). Editor+ lernen, wie
+// der Builder einen Agenten baut; Viewer duerfen keine anlegen und landen bei
+// den Rollen.
+const OWN_AGENT_HELP_PATH = '/help/own-agent#mit-dem-builder'
+const ROLES_HELP_PATH = '/help/workspaces#rollen'
+
+const HELP_LINK =
+  'inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground md:min-h-0'
+
 const STATUS_VALUES: readonly AgentFilter[] = ['all', 'active', 'disabled', 'incomplete']
 
 function isAgentFilter(value: string): value is AgentFilter {
@@ -171,6 +180,22 @@ export function AgentsPage() {
 
   const filterActive = status !== 'all' || query.trim() !== ''
 
+  // Nur verwaltete Agenten (der geseedete Builder) zaehlen nicht als „eigene“:
+  // dann steht ueber der Liste ein Hinweis mit dem Weg zum ersten eigenen.
+  const onlyManaged = agents.length > 0 && agents.every((agent) => agent.is_managed === true)
+  const helpLink = (
+    <Link
+      to={wsPath(isViewer ? ROLES_HELP_PATH : OWN_AGENT_HELP_PATH)}
+      className={HELP_LINK}
+      data-testid="agents-help-link"
+    >
+      {isViewer ? t('page.empty.viewerHelpLink') : t('page.empty.helpLink')}
+    </Link>
+  )
+  const emptyDescription = isViewer
+    ? t('page.empty.viewerDescription')
+    : t('page.empty.description')
+
   // Genau ein Erstell-Pfad: ein leerer, sofort speicherbarer Agent. Persona,
   // Systemprompt und Status werden anschliessend in der Detail-Page ergaenzt.
   const createAgent = async () => {
@@ -234,23 +259,38 @@ export function AgentsPage() {
             <EmptyState
               icon={Bot}
               title={t('page.empty.title')}
-              description={t('page.empty.description')}
+              description={emptyDescription}
               action={
-                <Button
-                  type="button"
-                  variant="brand"
-                  disabled={isViewer || creating}
-                  onClick={() => void createAgent()}
-                  title={isViewer ? t('page.viewerNoCreate') : undefined}
-                  data-testid="new-agent-empty"
-                >
-                  <Plus className="h-4 w-4" />
-                  {t('page.newAgent')}
-                </Button>
+                <div className="flex flex-col items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="brand"
+                    disabled={isViewer || creating}
+                    onClick={() => void createAgent()}
+                    title={isViewer ? t('page.viewerNoCreate') : undefined}
+                    data-testid="new-agent-empty"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('page.newAgent')}
+                  </Button>
+                  {helpLink}
+                </div>
               }
             />
           ) : (
             <>
+              {onlyManaged ? (
+                <div
+                  className="flex flex-col gap-1 rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-sm break-words sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                  data-testid="agents-only-managed"
+                >
+                  <p>
+                    <span className="font-medium">{t('page.empty.title')}</span>{' '}
+                    <span className="text-muted-foreground">{emptyDescription}</span>
+                  </p>
+                  {helpLink}
+                </div>
+              ) : null}
               <ListFilterBar
                 idPrefix="agents"
                 statusOptions={statusOptions}

@@ -7,6 +7,7 @@ import type { Me, MemoryProposalRead, MemoryRead, WorkspaceRole } from '@/api/ty
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { MemoryRow, wordDiff } from '@/components/memory/MemoryRow'
+import { findPage, helpIndex } from '@/help/helpIndex'
 import { axe } from '@/test/a11y'
 
 import { isBatchable, resolveCommand } from '../hooks/useQueueShortcuts'
@@ -403,6 +404,24 @@ describe('MemoryPage · Zur Freigabe (C5a, Spec S1′)', () => {
     const { container } = renderPage()
     await screen.findByTestId('memory-proposal-row')
     expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+describe('MemoryPage · Hilfe-Link (Onboarding P8)', () => {
+  it.each(['editor', 'viewer'] as const)('%s: Seitenkopf verlinkt auf /help/memory', async (role) => {
+    stubApi()
+    renderPage(role)
+    expect(await screen.findByText('Nichts zur Freigabe')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'So funktioniert das Gedächtnis' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/memory',
+    )
+  })
+
+  it('das Ziel existiert in der Hilfe (DE und EN)', () => {
+    for (const locale of ['de', 'en'] as const) {
+      expect(findPage(helpIndex, locale, 'memory')).not.toBeNull()
+    }
   })
 })
 
