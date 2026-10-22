@@ -4540,6 +4540,33 @@
         "help": "Zur Hilfe"
       }
     },
+    "welcome": {
+      "title": "Willkommen bei Who2Be",
+      "body": "Hier legst du fest, wer deine KI-Agenten sind. Claude & Co. holen sich das dann von hier. Dein erster Agent, der Builder, ist schon bereit. Verbinde ihn, das dauert etwa zwei Minuten.",
+      "skip": "Überspringen",
+      "later": "Später",
+      "back": "← Zurück",
+      "altLabel": "Ich nutze",
+      "altGroup": "Anderes Programm wählen",
+      "scene": {
+        "source": "Persona · Playbooks",
+        "client": "Claude & Co.",
+        "clientSub": "dein Chat",
+        "connected": "verbunden"
+      },
+      "connect": {
+        "title": "Verbinde „{{agent}}“ mit {{client}}",
+        "intro": "Drei kurze Schritte, dann antwortet dir „{{agent}}“.",
+        "missing": "Der Builder ist in diesem Workspace gerade nicht bereit."
+      },
+      "success": {
+        "title": "Verbunden!",
+        "body": "„{{agent}}“ hat gerade seine Persona aus Who2Be geladen. Genau so funktioniert es mit jedem Agenten, den du hier baust.",
+        "nextLabel": "Als Nächstes:",
+        "next": "Lass dir von „{{agent}}“ deinen eigenen Agenten bauen, direkt im Chat.",
+        "cta": "Weiter zu „{{title}}“"
+      }
+    },
     "menu": {
       "label": "Hilfe und Neuigkeiten",
       "firstSteps": "Erste Schritte",

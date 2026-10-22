@@ -13,7 +13,7 @@ import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { statusLabel } from '@/components/version'
-import { TutorialChecklist } from '@/features/help'
+import { DashboardWelcome, TutorialChecklist } from '@/features/help'
 import { useInboxCounts } from '@/hooks/useInboxCounts'
 
 import { ActivityRow } from '../components/ActivityRow'
@@ -50,6 +50,9 @@ export function DashboardPage() {
             (`/v1/me/tutorials`). Laedt und scheitert unabhaengig vom
             Dashboard-Aggregat darunter. */}
         {!preparing ? <TutorialChecklist /> : null}
+        {/* Begruessung (Onboarding P6, Spec §10.1): hier statt in der
+            AppShell, weil sie nur auf dem Dashboard aufgeht. */}
+        {!preparing ? <DashboardWelcome /> : null}
 
         {preparing ? (
           <EmptyState

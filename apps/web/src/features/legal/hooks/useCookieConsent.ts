@@ -39,19 +39,35 @@ function readAcknowledged(): boolean {
   }
 }
 
+/**
+ * Fenster-Event, mit dem `acknowledge` die Bestaetigung im **selben** Tab an
+ * alle anderen Hook-Instanzen meldet. Das `storage`-Event feuert nur in
+ * anderen Tabs; ohne dieses Signal bliebe z. B. die Begruessung (Onboarding
+ * P6), die auf den Hinweis wartet, bis zum Neuladen zu.
+ */
+export const CONSENT_ACKNOWLEDGED_EVENT = 'who2be:cookie-consent-acknowledged'
+
 export function useCookieConsent() {
   const [isDecided, setIsDecided] = useState<boolean>(() => readAcknowledged())
 
   // Zweiter Tab/Fenster: Kenntnisnahme dort uebernehmen, damit das Banner
-  // nicht doppelt erscheint.
+  // nicht doppelt erscheint. Im selben Tab kommt sie ueber das eigene Event —
+  // direkt als `true`, damit sie auch ohne Storage (Private-Mode) ankommt.
   useEffect(() => {
     function onStorage(event: StorageEvent) {
       if (event.key === CONSENT_STORAGE_KEY) {
         setIsDecided(readAcknowledged())
       }
     }
+    function onAcknowledged() {
+      setIsDecided(true)
+    }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    window.addEventListener(CONSENT_ACKNOWLEDGED_EVENT, onAcknowledged)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener(CONSENT_ACKNOWLEDGED_EVENT, onAcknowledged)
+    }
   }, [])
 
   const acknowledge = useCallback(() => {
@@ -61,6 +77,7 @@ export function useCookieConsent() {
     } catch {
       // Persistenz best-effort; das State-Update haelt das Banner im Tab fern.
     }
+    window.dispatchEvent(new Event(CONSENT_ACKNOWLEDGED_EVENT))
   }, [])
 
   return { isDecided, acknowledge }
