@@ -162,6 +162,14 @@ class AgentRead(BaseModel):
     # Update-Pfad ab WP14.
     model_provider: str | None = None
     model_name: str | None = None
+    # Werkzeug-Profil (ADR-0059 §4.2, Migration 0111). `tool_profile_id=None`
+    # heisst „Alle“. Ein Profil ist kein Recht, es blendet nur Werkzeuge aus
+    # (§3.3). Nur Ausgabe: `AgentCreate`/`AgentUpdate` tragen die Felder
+    # bewusst nicht (§7.3). Gesetzt wird ueber den eigenen Zuordnungsweg, den
+    # nur Menschen nutzen.
+    tool_profile_id: UUID | None = None
+    tools_added: list[str] = Field(default_factory=list)
+    tools_removed: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
