@@ -720,7 +720,7 @@
         "claudePath": "In Claude: Einstellungen › Connectors › „Eigenen Connector hinzufügen“. Auf dem iPhone öffnet der Knopf den Dialog manchmal nicht, dann hilft dieser Weg.",
         "editorPath": "Im Editor als Remote-MCP-Server mit dieser URL eintragen (Transport HTTP). Angemeldet wird beim ersten Aufruf."
       },
-      "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectoren hinzu.",
+      "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectors hinzu.",
       "free": "Claude Free erlaubt nur einen eigenen Connector. Entferne dort vorher den Builder.",
       "waiting": "Warte auf „{{agent}}“ …",
       "waitingHint": "Sobald er in {{client}} seine Persona lädt, hakt sich der Schritt ab. Du kannst diese Seite offen lassen.",

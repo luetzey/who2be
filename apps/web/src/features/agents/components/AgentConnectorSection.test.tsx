@@ -132,8 +132,18 @@ describe('AgentConnectorSection — Claude', () => {
     expect(cta).toHaveAttribute('target', '_blank')
     expect(cta).toHaveAttribute('rel', 'noopener noreferrer')
     expect(cta.className).toContain('bg-brand')
+    // Der ganze Link wird verglichen: kein Token, kein weiterer Parameter, kein Fragment.
+    const expected = new URLSearchParams({
+      modal: 'add-custom-connector',
+      connectorName: 'Who2Be – Coder',
+      connectorUrl: URL_,
+    })
+    expect(cta.getAttribute('href')).toBe(
+      `https://claude.ai/customize/connectors?${expected.toString()}`,
+    )
     const href = new URL(cta.getAttribute('href') ?? '')
-    expect(href.origin + href.pathname).toBe('https://claude.ai/customize/connectors')
+    expect([...href.searchParams.keys()].sort()).toEqual(['connectorName', 'connectorUrl', 'modal'])
+    expect(href.hash).toBe('')
     expect(href.searchParams.get('connectorName')).toBe('Who2Be – Coder')
     expect(href.searchParams.get('connectorUrl')).toBe(URL_)
     expect(screen.getByRole('button', { name: 'Claude' })).toHaveAttribute('aria-pressed', 'true')
@@ -446,6 +456,9 @@ describe('installLinks', () => {
     const link = new URL(claudeInstallLink('Who2Be – Carla', URL_))
     expect(link.origin).toBe('https://claude.ai')
     expect(link.pathname).toBe('/customize/connectors')
+    expect(link.hash).toBe('')
+    // Genau diese drei Parameter — ein zusaetzlicher (etwa ein Token) waere ein Leck.
+    expect([...link.searchParams.keys()].sort()).toEqual(['connectorName', 'connectorUrl', 'modal'])
     expect(link.searchParams.get('modal')).toBe('add-custom-connector')
     expect(link.searchParams.get('connectorName')).toBe('Who2Be – Carla')
     expect(link.searchParams.get('connectorUrl')).toBe(URL_)
@@ -461,6 +474,7 @@ describe('installLinks', () => {
     const link = cursorInstallLink('who2be-carla', URL_)
     expect(link.startsWith('cursor://anysphere.cursor-deeplink/mcp/install?')).toBe(true)
     const query = new URLSearchParams(link.split('?')[1])
+    expect([...query.keys()].sort()).toEqual(['config', 'name'])
     expect(query.get('name')).toBe('who2be-carla')
     expect(JSON.parse(atob(query.get('config') ?? ''))).toEqual({ url: URL_ })
   })
