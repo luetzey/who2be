@@ -35,8 +35,12 @@ describe('DashboardPage (a11y)', () => {
   it('hat keine axe-Violations im AppLayout', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(sampleData), { status: 200 }),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          new Response(String(input).includes('/me/tutorials') ? '[]' : JSON.stringify(sampleData), {
+            status: 200,
+          }),
+        ),
       ),
     )
 
@@ -72,6 +76,7 @@ describe('DashboardPage (a11y)', () => {
             total: 6,
           })
         }
+        if (path.endsWith('/me/tutorials')) return json([])
         return json(sampleData)
       }),
     )

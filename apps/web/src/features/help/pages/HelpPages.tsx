@@ -1,20 +1,10 @@
-import Markdown, { type MarkdownToJSX } from 'markdown-to-jsx'
 import { ArrowLeft, BookOpen, Check, Copy, GraduationCap, Search } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import {
-  listTutorials,
-  patchTutorial,
-  restartTutorial,
-  type Tutorial,
-  type TutorialStep,
-  type TutorialStepState,
-} from '@/api/client'
-import { useAuthToken } from '@/auth/useAuthToken'
+import type { Tutorial, TutorialStep } from '@/api/client'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
-import { useWorkspaceId } from '@/auth/useWorkspaceId'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -47,7 +37,6 @@ import {
   type HelpPage,
   type HelpSection,
   type HelpTutorial,
-  safeHelpHref,
   SEARCH_MIN_LENGTH,
   searchHelp,
   toHelpLocale,
@@ -55,8 +44,13 @@ import {
 import { copyToClipboard } from '@/lib/clipboard'
 import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
-import { useListData } from '@/hooks/useListData'
-import i18n from '@/i18n'
+
+import { HelpMarkdown } from '../components/HelpMarkdown'
+import { TutorialProgressBar as ProgressBar } from '../components/TutorialChecklist'
+import { finishedSteps, type TutorialsState, useTutorials } from '../hooks/useTutorials'
+
+// Bisheriger Exportort; die Darstellung liegt seit P3 in `components/`.
+export { HelpMarkdown }
 
 /*
  * Hilfe-Bereich (Onboarding P4): Startseite mit Tutorials, Suche und
@@ -71,183 +65,9 @@ const LINK = 'font-medium text-brand underline-offset-4 hover:underline'
 // (CardTitle rendert h2, card.tsx).
 const CARD_HEADING = 'text-lg leading-none font-semibold tracking-tight'
 
-// --- Tutorials am Konto (Daten) -------------------------------------------------
-
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
-}
-
-interface TutorialsState {
-  tutorials: Tutorial[]
-  loading: boolean
-  error: string | null
-  reload: () => void
-  /** ID des Tutorials bzw. Schritts, dessen Aenderung gerade laeuft. */
-  pending: string | null
-  restart: (tutorialId: string) => Promise<Tutorial | null>
-  setStep: (tutorialId: string, stepId: string, state: TutorialStepState) => Promise<void>
-}
-
-/**
- * Tutorials des Kontos mit Fortschritt (`GET /v1/me/tutorials`, ADR-0060).
- *
- * Eine Quelle pro Ansicht: Schritte, Typen und Zustaende kommen nur vom
- * Server; Antworten auf Aenderungen ersetzen das Tutorial in der Liste. Eine
- * laufende Aenderung sperrt weitere (`pending`), damit kein Doppel-Submit
- * entsteht.
- */
-function useTutorials(): TutorialsState {
-  const token = useAuthToken()
-  const workspaceId = useWorkspaceId()
-  const loader = useCallback(() => listTutorials(token, workspaceId), [token, workspaceId])
-  const list = useListData<Tutorial>(loader)
-  // Antworten auf Aenderungen ueberdecken den geladenen Stand, bis neu geladen
-  // wird — gebunden an den Workspace, dessen Signale sie enthalten.
-  const [updated, setUpdated] = useState<{ workspaceId: string; items: Record<string, Tutorial> }>({
-    workspaceId,
-    items: {},
-  })
-  const [pending, setPending] = useState<string | null>(null)
-  const busy = useRef(false)
-
-  const tutorials = useMemo(() => {
-    const items = updated.workspaceId === workspaceId ? updated.items : {}
-    return list.data.map((item) => items[item.id] ?? item)
-  }, [list.data, updated, workspaceId])
-  const { reload: reloadList } = list
-  const reload = useCallback(() => {
-    setUpdated({ workspaceId, items: {} })
-    reloadList()
-  }, [reloadList, workspaceId])
-
-  const replace = useCallback(
-    (next: Tutorial) => {
-      setUpdated((current) => ({
-        workspaceId,
-        items: { ...(current.workspaceId === workspaceId ? current.items : {}), [next.id]: next },
-      }))
-    },
-    [workspaceId],
-  )
-
-  const run = useCallback(
-    async (key: string, action: () => Promise<Tutorial>): Promise<Tutorial | null> => {
-      if (busy.current) return null
-      busy.current = true
-      setPending(key)
-      try {
-        const next = await action()
-        replace(next)
-        return next
-      } catch (cause) {
-        notify.error(describeError(cause))
-        return null
-      } finally {
-        busy.current = false
-        setPending(null)
-      }
-    },
-    [replace],
-  )
-
-  const restart = useCallback(
-    (tutorialId: string) => run(tutorialId, () => restartTutorial(token, workspaceId, tutorialId)),
-    [run, token, workspaceId],
-  )
-
-  const setStep = useCallback(
-    async (tutorialId: string, stepId: string, state: TutorialStepState) => {
-      await run(stepId, () =>
-        patchTutorial(token, workspaceId, tutorialId, { step_id: stepId, state }),
-      )
-    },
-    [run, token, workspaceId],
-  )
-
-  return { tutorials, loading: list.loading, error: list.error, reload, pending, restart, setStep }
-}
-
-/** Erledigte bzw. uebersprungene Schritte (alles, was nicht mehr offen ist). */
-function finishedSteps(tutorial: Tutorial): number {
-  return tutorial.steps.filter((step) => step.state !== 'open').length
-}
-
 /** Begonnen = ein Schritt ausser dem Startvorsprung ist nicht mehr offen. */
 function isStarted(tutorial: Tutorial): boolean {
   return tutorial.steps.some((step) => step.type !== 'head_start' && step.state !== 'open')
-}
-
-// --- Markdown -----------------------------------------------------------------
-
-function HelpLink({ href, children }: { href?: string; children?: ReactNode }) {
-  const wsPath = useWorkspacePath()
-  const safe = href === undefined ? null : safeHelpHref(href)
-  if (safe === null) return <span>{children}</span>
-  if (/^https?:\/\//i.test(safe)) {
-    // RR7-`Link` rendert absolute URLs als normalen externen Link.
-    return (
-      <Link to={safe} reloadDocument target="_blank" rel="noopener noreferrer" className={LINK}>
-        {children}
-      </Link>
-    )
-  }
-  if (safe.startsWith('#')) {
-    return (
-      <Link to={{ hash: safe }} className={LINK}>
-        {children}
-      </Link>
-    )
-  }
-  // Interne Ziele sind workspace-relativ geschrieben (`/help/<slug>#<anker>`).
-  return (
-    <Link to={wsPath(safe)} className={LINK}>
-      {children}
-    </Link>
-  )
-}
-
-function NoImage() {
-  return null
-}
-
-const MARKDOWN_OPTIONS: MarkdownToJSX.Options = {
-  // Raw-HTML aus: Tags bleiben Text, werden nie zu Elementen.
-  disableParsingRawHTML: true,
-  disableAutoLink: true,
-  disableFrontmatter: true,
-  enforceAtxHeadings: true,
-  forceBlock: true,
-  wrapper: null,
-  sanitizer: (value, _tag, attribute) => (attribute === 'href' ? safeHelpHref(value) : null),
-  overrides: {
-    a: { component: HelpLink },
-    // Im Dialekt verboten (Inhaltstest), hier zusaetzlich wirkungslos.
-    img: { component: NoImage },
-    p: { props: { className: 'leading-relaxed' } },
-    ul: { props: { className: 'list-disc space-y-1 pl-6' } },
-    ol: { props: { className: 'list-decimal space-y-1 pl-6' } },
-    code: { props: { className: 'rounded bg-muted px-1 py-0.5 font-mono text-sm break-words' } },
-    pre: {
-      props: {
-        className:
-          'overflow-x-auto rounded-md border border-dashed bg-muted/40 p-3 font-mono text-sm whitespace-pre-wrap [&_code]:bg-transparent [&_code]:p-0',
-      },
-    },
-    blockquote: { props: { className: 'border-l-2 pl-4 text-muted-foreground' } },
-  },
-}
-
-/**
- * Markdown des Hilfe-Dialekts als React-Elemente (kein
- * `dangerouslySetInnerHTML`). Ueberschriften setzt der Aufrufer selbst.
- */
-export function HelpMarkdown({ children }: { children: string }) {
-  if (children.trim() === '') return null
-  return (
-    <div className="space-y-3 text-base">
-      <Markdown options={MARKDOWN_OPTIONS}>{children}</Markdown>
-    </div>
-  )
 }
 
 function BlockHeading({ block }: { block: HelpBlock }) {
@@ -303,23 +123,6 @@ function BackToHelp() {
         {t('nav.back')}
       </Link>
     </Button>
-  )
-}
-
-function ProgressBar({ done, total, label }: { done: number; total: number; label: string }) {
-  const percent = total > 0 ? Math.round((done / total) * 100) : 0
-  return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div
-        className="h-full bg-primary transition-[width] duration-[var(--duration-base)] ease-standard"
-        style={{ width: `${percent}%` }}
-        role="progressbar"
-        aria-valuenow={done}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-label={label}
-      />
-    </div>
   )
 }
 
