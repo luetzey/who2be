@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useNavigate } from 'react-router-dom'
 
 import type { Tutorial, TutorialStep } from '@/api/client'
 import type { Me, WorkspaceRole } from '@/api/types'
@@ -359,5 +360,90 @@ describe('TutorialChecklist', () => {
       'aria-expanded',
       'true',
     )
+  })
+
+  it('setzt beim Sprung aus dem „?“-Menü den Fokus auf die Überschrift', async () => {
+    stubApi([[probe()]])
+    renderInRoutes(<TutorialChecklist index={index} now={NOW} />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: [{ pathname: '/w/ws-1/dashboard', state: { focusTutorial: 'probe' } }],
+      me: meWithRole('editor'),
+    })
+    const card = await screen.findByRole('region', { name: 'Probe-Liste de' })
+    await waitFor(() => expect(within(card).getByText('Probe-Liste de')).toHaveFocus())
+  })
+
+  describe('Sprung aus dem „?“-Menü bei schon offenem Dashboard', () => {
+    // Navigiert innerhalb derselben Route — die Startliste bleibt gemountet,
+    // nur `location.key`/`location.state` wechseln (wie der Klick im Menü).
+    function JumpProbe() {
+      const navigate = useNavigate()
+      return (
+        <>
+          <button type="button" onClick={() => navigate('/w/ws-1/dashboard', { state: { focusTutorial: 'probe' } })}>
+            sprung-fokus
+          </button>
+          <button type="button" onClick={() => navigate('/w/ws-1/dashboard', { state: { replayWelcome: true } })}>
+            sprung-neustart
+          </button>
+          <button type="button" onClick={() => navigate('/w/ws-1/dashboard')}>
+            ohne-sprung
+          </button>
+          <TutorialChecklist index={index} now={NOW} />
+        </>
+      )
+    }
+
+    function tutorialGets(calls: Call[]) {
+      return calls.filter((c) => c.method === 'GET' && c.url.includes('/v1/me/tutorials'))
+    }
+
+    it.each([
+      ['focusTutorial', 'sprung-fokus'],
+      ['replayWelcome', 'sprung-neustart'],
+    ])('lädt die Liste mit %s neu (zweiter GET)', async (_state, button) => {
+      const connected = probe()
+      connected.steps[1] = { ...connected.steps[1], state: 'done', completed_at: '2026-10-22T11:00:00Z' }
+      const calls = stubApi([[probe()], [connected]])
+      renderInRoutes(<JumpProbe />, {
+        path: '/w/:workspaceId/dashboard',
+        initialEntries: ['/w/ws-1/dashboard'],
+        me: meWithRole('editor'),
+      })
+      await screen.findByRole('region', { name: 'Probe-Liste de' })
+      expect(tutorialGets(calls)).toHaveLength(1)
+
+      fireEvent.click(screen.getByRole('button', { name: button }))
+      await waitFor(() => expect(tutorialGets(calls)).toHaveLength(2))
+      expect(await screen.findByText('2 von 6 erledigt · etwa 7 Minuten')).toBeInTheDocument()
+    })
+
+    it('lädt ohne Sprung-State nicht neu', async () => {
+      const calls = stubApi([[probe()]])
+      renderInRoutes(<JumpProbe />, {
+        path: '/w/:workspaceId/dashboard',
+        initialEntries: ['/w/ws-1/dashboard'],
+        me: meWithRole('editor'),
+      })
+      await screen.findByRole('region', { name: 'Probe-Liste de' })
+      fireEvent.click(screen.getByRole('button', { name: 'ohne-sprung' }))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(tutorialGets(calls)).toHaveLength(1)
+      // Kontrollsprung danach: der Effekt laeuft wirklich, nur eben nicht ohne State.
+      fireEvent.click(screen.getByRole('button', { name: 'sprung-fokus' }))
+      await waitFor(() => expect(tutorialGets(calls)).toHaveLength(2))
+    })
+
+    it('lädt beim ersten Mount mit Sprung-State nicht doppelt', async () => {
+      const calls = stubApi([[probe()]])
+      renderInRoutes(<TutorialChecklist index={index} now={NOW} />, {
+        path: '/w/:workspaceId/dashboard',
+        initialEntries: [{ pathname: '/w/ws-1/dashboard', state: { replayWelcome: true } }],
+        me: meWithRole('editor'),
+      })
+      await screen.findByRole('region', { name: 'Probe-Liste de' })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(tutorialGets(calls)).toHaveLength(1)
+    })
   })
 })

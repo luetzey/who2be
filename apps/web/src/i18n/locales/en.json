@@ -4525,7 +4525,7 @@
       "title": "Getting started",
       "progress": "{{done}} of {{total}} done · about {{minutes}} minutes",
       "hide": "Hide",
-      "hidden": "Hidden. You can find “{{title}}” any time in Help under Tutorials.",
+      "hidden": "Hidden. You can find “{{title}}” any time in the question-mark menu at the top right.",
       "hideFailed": "Hiding didn't fully work. The list has been reloaded, please try again.",
       "error": "Getting started could not be loaded.",
       "openAgents": "Go to Agents",
@@ -4538,6 +4538,29 @@
         "title": "You're all set",
         "body": "All steps of “{{title}}” are done.",
         "help": "Go to Help"
+      }
+    },
+    "menu": {
+      "label": "Help and what's new",
+      "firstSteps": "Getting started",
+      "firstStepsProgress": "{{done}} of {{total}}",
+      "tutorials": "Tutorials",
+      "search": "Search help",
+      "news": "What's new",
+      "replay": "Restart introduction",
+      "replayDone": "Introduction restarted.",
+      "problem": "Report a problem"
+    },
+    "news": {
+      "title": "What's new",
+      "description": "New features and improvements in Who2Be.",
+      "all": "All updates",
+      "more": "Learn more →",
+      "empty": "No updates yet. New features will show up here as soon as there are any.",
+      "type": {
+        "new": "New",
+        "improved": "Improved",
+        "changed": "Changed"
       }
     }
   }

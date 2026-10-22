@@ -36,6 +36,13 @@ export type HelpSection = (typeof HELP_SECTIONS)[number]
 /** Ordner der Tutorials (kein Abschnitt). */
 export const TUTORIALS_DIR = 'tutorials'
 
+/** Ordner der Einträge „Was ist neu“ (kein Abschnitt, Onboarding P5). */
+export const NEWS_DIR = 'news'
+
+/** Arten eines Eintrags „Was ist neu“ (Spec §5.4). */
+export const NEWS_TYPES = ['new', 'improved', 'changed'] as const
+export type NewsType = (typeof NEWS_TYPES)[number]
+
 /** Slugs, die als feste Route unter `/help/` stehen (Tutorials, Altseite, Was ist neu). */
 const RESERVED_SLUGS: readonly string[] = ['tutorials', 'placeholders', 'neu']
 
@@ -60,6 +67,10 @@ const FENCE = /^(```|~~~)/
 
 const PAGE_KEYS = ['title', 'description', 'section', 'order', 'updated', 'audience'] as const
 const TUTORIAL_KEYS = ['tutorial', 'title', 'description', 'duration'] as const
+const NEWS_KEYS = ['date', 'type', 'title', 'link'] as const
+const NEWS_REQUIRED = ['date', 'type', 'title'] as const
+/** `link` eines News-Eintrags: nur eine Hilfe-Seite bzw. ein Tutorial, optional mit Anker. */
+const NEWS_LINK = /^\/help\/(?:tutorials\/)?[a-z0-9]+(?:-[a-z0-9]+)*(?:#[a-z0-9]+(?:-[a-z0-9]+)*)?$/
 
 /** Ein Abschnitt unter einer `##`/`###`-Ueberschrift mit Anker. */
 export interface HelpBlock {
@@ -97,9 +108,28 @@ export interface HelpTutorial extends HelpEntryBase {
 
 export type HelpEntry = HelpPage | HelpTutorial
 
+/**
+ * Ein Eintrag „Was ist neu“: `src/help/news/<JJJJ-MM-TT>-<slug>.<lang>.md`,
+ * Frontmatter `date` (= Datum im Dateinamen), `type`, `title`, optional `link`
+ * (`/help/<slug>` bzw. `/help/tutorials/<id>`). Der Text ist der Body, ohne
+ * Ueberschriften. Pflege von Hand, nicht aus dem CHANGELOG.
+ */
+export interface HelpNews {
+  kind: 'news'
+  slug: string
+  locale: HelpLocale
+  date: string
+  type: NewsType
+  title: string
+  link: string | null
+  body: string
+}
+
 export interface HelpIndex {
   pages: HelpPage[]
   tutorials: HelpTutorial[]
+  /** Neueste zuerst. */
+  news: HelpNews[]
   /** Ein Befund je Problem; leer = Inhalt gueltig. */
   errors: string[]
 }
@@ -192,6 +222,7 @@ function required(data: Record<string, string>, keys: readonly string[]): string
 export function buildHelpIndex(files: Record<string, string>): HelpIndex {
   const pages: HelpPage[] = []
   const tutorials: HelpTutorial[] = []
+  const news: HelpNews[] = []
   const errors: string[] = []
 
   for (const [path, raw] of Object.entries(files).sort(([a], [b]) => a.localeCompare(b))) {
@@ -233,6 +264,35 @@ export function buildHelpIndex(files: Record<string, string>): HelpIndex {
     const before = errors.length
     problems.forEach(fail)
 
+    if (dir === NEWS_DIR) {
+      unknownKeys(data, NEWS_KEYS).forEach((key) => fail(`unbekanntes Feld "${key}"`))
+      required(data, NEWS_REQUIRED).forEach((key) => fail(`Pflichtfeld "${key}" fehlt`))
+      if (data.date !== undefined && !DATE.test(data.date)) fail('date muss JJJJ-MM-TT sein')
+      if (data.date !== undefined && !slug.startsWith(`${data.date}-`)) {
+        fail(`Dateiname muss mit dem Datum "${data.date}-" beginnen`)
+      }
+      if (data.type !== undefined && !(NEWS_TYPES as readonly string[]).includes(data.type)) {
+        fail(`type "${data.type}" ist nicht new, improved oder changed`)
+      }
+      if (data.link !== undefined && !NEWS_LINK.test(data.link)) {
+        fail(`link "${data.link}" muss /help/<slug> oder /help/tutorials/<id> sein`)
+      }
+      if (blocks.length > 0) fail('Einträge „Was ist neu“ haben keine Überschriften')
+      if (body.trim() === '') fail('Text fehlt')
+      if (errors.length === before) {
+        news.push({
+          kind: 'news',
+          slug,
+          locale: locale as HelpLocale,
+          date: data.date,
+          type: data.type as NewsType,
+          title: data.title,
+          link: data.link ?? null,
+          body: body.trim(),
+        })
+      }
+      continue
+    }
     if (dir === TUTORIALS_DIR) {
       unknownKeys(data, TUTORIAL_KEYS).forEach((key) => fail(`unbekanntes Feld "${key}"`))
       required(data, TUTORIAL_KEYS).forEach((key) => fail(`Pflichtfeld "${key}" fehlt`))
@@ -281,8 +341,41 @@ export function buildHelpIndex(files: Record<string, string>): HelpIndex {
   }
 
   errors.push(...checkConsistency(pages, tutorials))
+  errors.push(...checkNews(news, [...pages, ...tutorials]))
   pages.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug))
-  return { pages, tutorials, errors }
+  news.sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug))
+  return { pages, tutorials, news, errors }
+}
+
+/** DE/EN-Paritaet der News und `link` loest auf eine vorhandene Seite auf. */
+function checkNews(news: HelpNews[], entries: HelpEntry[]): string[] {
+  const errors: string[] = []
+  for (const item of news) {
+    const other = HELP_LOCALES.find((candidate) => candidate !== item.locale)
+    if (!news.some((n) => n.slug === item.slug && n.locale === other)) {
+      errors.push(`news "${item.slug}" fehlt in ${other}`)
+    }
+    if (item.link !== null) {
+      const [target] = internalHelpLinks(`](${item.link})`)
+      const entry = entries.find((e) => e.slug === target.slug && e.locale === item.locale)
+      if (entry === undefined) {
+        errors.push(`news ${item.slug}.${item.locale}: link auf unbekannte Seite "${target.slug}"`)
+      } else if (target.anchor !== null && !entry.blocks.some((b) => b.id === target.anchor)) {
+        errors.push(`news ${item.slug}.${item.locale}: Anker "#${target.anchor}" fehlt in "${target.slug}"`)
+      }
+    }
+    for (const match of item.body.matchAll(/\]\(([^)]*)\)/g)) {
+      if (safeHelpHref(match[1]) === null) {
+        errors.push(`news ${item.slug}.${item.locale}: Link "${match[1]}" ist nicht erlaubt`)
+      }
+    }
+    for (const link of internalHelpLinks(item.body)) {
+      if (!entries.some((e) => e.slug === link.slug && e.locale === item.locale)) {
+        errors.push(`news ${item.slug}.${item.locale}: Link auf unbekannte Seite "${link.slug}"`)
+      }
+    }
+  }
+  return errors
 }
 
 /** Interne Hilfe-Links im Text: `/help/<slug>` oder `/help/<slug>#<anker>`. */
@@ -406,4 +499,9 @@ export function findTutorial(
   id: string,
 ): HelpTutorial | null {
   return index.tutorials.find((t) => t.locale === locale && t.slug === id) ?? null
+}
+
+/** Einträge „Was ist neu“ in der Sprache, neueste zuerst. */
+export function newsFor(index: HelpIndex, locale: HelpLocale): HelpNews[] {
+  return index.news.filter((item) => item.locale === locale)
 }

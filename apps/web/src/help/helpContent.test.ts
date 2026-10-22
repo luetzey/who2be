@@ -5,6 +5,7 @@ import {
   findPage,
   helpIndex,
   internalHelpLinks,
+  newsFor,
   safeHelpHref,
   searchHelp,
   toHelpLocale,
@@ -78,6 +79,9 @@ describe('helpIndex: ausgelieferter Inhalt', () => {
         'learn-feedback',
       ])
     }
+    // „Was ist neu“: mindestens ein Eintrag, in beiden Sprachen gleich viele.
+    expect(newsFor(helpIndex, 'de').length).toBeGreaterThan(0)
+    expect(newsFor(helpIndex, 'en').length).toBe(newsFor(helpIndex, 'de').length)
   })
 })
 
@@ -221,6 +225,140 @@ describe('buildHelpIndex: ungültiger Inhalt wird rot', () => {
       '/src/help/bausteine/persona.de.md': page('de', {}, '```\n# kein Titel\n```'),
     })
     expect(index.errors).toEqual([])
+  })
+})
+
+const news = (
+  lang: string,
+  fields: Record<string, string> = {},
+  body = 'Ein Satz zur Neuerung.',
+) => {
+  const all = {
+    date: '2026-11-13',
+    type: 'new',
+    title: `Hilfe-Bereich ${lang}`,
+    link: '/help/persona#felder',
+    ...fields,
+  }
+  return [
+    '---',
+    ...Object.entries(all)
+      .filter(([, value]) => value !== '')
+      .map(([key, value]) => `${key}: ${value}`),
+    '---',
+    '',
+    body,
+    '',
+  ].join('\n')
+}
+
+const newsFiles = {
+  ...validFiles,
+  '/src/help/news/2026-11-13-hilfe.de.md': news('de'),
+  '/src/help/news/2026-11-13-hilfe.en.md': news('en'),
+  '/src/help/news/2026-10-02-start.de.md': news('de', { date: '2026-10-02', type: 'improved', link: '' }),
+  '/src/help/news/2026-10-02-start.en.md': news('en', { date: '2026-10-02', type: 'improved', link: '' }),
+}
+
+describe('buildHelpIndex: „Was ist neu“ nur aus Dateien', () => {
+  it('nimmt Einträge ohne Code-Änderung auf, neueste zuerst, je Sprache', () => {
+    const index = buildHelpIndex(newsFiles)
+    expect(index.errors).toEqual([])
+    expect(newsFor(index, 'de').map((n) => n.slug)).toEqual(['2026-11-13-hilfe', '2026-10-02-start'])
+    expect(newsFor(index, 'en')[0]).toMatchObject({
+      kind: 'news',
+      date: '2026-11-13',
+      type: 'new',
+      title: 'Hilfe-Bereich en',
+      link: '/help/persona#felder',
+      body: 'Ein Satz zur Neuerung.',
+    })
+    expect(newsFor(index, 'de')[1].link).toBeNull()
+    // News sind keine Seiten und keine Suchtreffer.
+    expect(index.pages.map((p) => p.slug)).not.toContain('2026-11-13-hilfe')
+  })
+
+  const cases: Array<[string, Record<string, string>, RegExp]> = [
+    [
+      'Sprache fehlt',
+      { ...validFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de') },
+      /news "2026-11-13-hilfe" fehlt in en/,
+    ],
+    [
+      'unbekannter Typ',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', { type: 'fix' }) },
+      /type "fix" ist nicht new, improved oder changed/,
+    ],
+    [
+      'Datum passt nicht zum Dateinamen',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', { date: '2026-11-14' }) },
+      /muss mit dem Datum "2026-11-14-" beginnen/,
+    ],
+    [
+      'Pflichtfeld fehlt',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', { title: '' }) },
+      /Pflichtfeld "title" fehlt/,
+    ],
+    [
+      'unbekanntes Feld',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', { audience: 'all' }) },
+      /unbekanntes Feld "audience"/,
+    ],
+    [
+      'link nach außen',
+      {
+        ...newsFiles,
+        '/src/help/news/2026-11-13-hilfe.de.md': news('de', { link: 'https://who2be.de' }),
+      },
+      /link "https:\/\/who2be.de" muss \/help\/<slug>/,
+    ],
+    [
+      'link auf unbekannte Seite',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', { link: '/help/fehlt' }) },
+      /link auf unbekannte Seite "fehlt"/,
+    ],
+    [
+      'link auf unbekannten Anker',
+      {
+        ...newsFiles,
+        '/src/help/news/2026-11-13-hilfe.de.md': news('de', { link: '/help/persona#weg' }),
+      },
+      /Anker "#weg" fehlt in "persona"/,
+    ],
+    [
+      'Überschrift im Text',
+      {
+        ...newsFiles,
+        '/src/help/news/2026-11-13-hilfe.de.md': news('de', {}, '## Mehr [#mehr]\n\nText'),
+      },
+      /haben keine Überschriften/,
+    ],
+    [
+      'unsicherer Link im Text',
+      {
+        ...newsFiles,
+        '/src/help/news/2026-11-13-hilfe.de.md': news('de', {}, '[x](javascript:alert(1))'),
+      },
+      /Link "javascript:alert\(1" ist nicht erlaubt/,
+    ],
+    [
+      'Text fehlt',
+      { ...newsFiles, '/src/help/news/2026-11-13-hilfe.de.md': news('de', {}, '') },
+      /Text fehlt/,
+    ],
+  ]
+
+  it.each(cases)('%s wird rot', (_name, files, expected) => {
+    const index = buildHelpIndex(files)
+    expect(index.errors.join('\n')).toMatch(expected)
+  })
+
+  it('lässt ungültige Einträge aus dem Index heraus', () => {
+    const index = buildHelpIndex({
+      ...newsFiles,
+      '/src/help/news/2026-11-13-hilfe.de.md': news('de', { type: 'fix' }),
+    })
+    expect(newsFor(index, 'de').map((n) => n.slug)).toEqual(['2026-10-02-start'])
   })
 })
 

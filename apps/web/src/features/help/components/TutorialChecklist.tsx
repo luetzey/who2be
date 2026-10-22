@@ -1,10 +1,9 @@
 import { CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash } from 'lucide-react'
-import { type ReactNode, useEffect, useId, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import type { Tutorial, TutorialStep, TutorialStepState } from '@/api/client'
-import type { WorkspaceRole } from '@/api/types'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -22,7 +21,13 @@ import {
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
-import { finishedSteps, type TutorialsState, useTutorials } from '../hooks/useTutorials'
+import {
+  finishedSteps,
+  readHelpNavigationState,
+  stepsForRole,
+  type TutorialsState,
+  useTutorials,
+} from '../hooks/useTutorials'
 import { HelpMarkdown } from './HelpMarkdown'
 
 /*
@@ -41,17 +46,6 @@ import { HelpMarkdown } from './HelpMarkdown'
 /** So lange bleibt „Du bist startklar“ stehen (Spec §6.1). */
 const DONE_CARD_DAYS = 7
 const DAY_MS = 24 * 60 * 60 * 1000
-
-/** Schritte, die eine Rolle nicht selbst erledigen kann (viewer legt keine Agenten an). */
-const AGENT_STEP_TYPES: ReadonlySet<TutorialStep['type']> = new Set([
-  'agent_created',
-  'own_agent_mcp_call',
-])
-
-/** Sichtbare Schritte je Rolle; viewer sieht keine Agent-Schritte. */
-function stepsForRole(steps: TutorialStep[], role: WorkspaceRole | null): TutorialStep[] {
-  return role === 'viewer' ? steps.filter((step) => !AGENT_STEP_TYPES.has(step.type)) : steps
-}
 
 type ChecklistPhase = 'open' | 'done' | 'gone'
 
@@ -257,6 +251,8 @@ interface ChecklistCardProps {
 function OpenCard({ tutorial, text, steps, state }: ChecklistCardProps) {
   const { t } = useTranslation('help')
   const titleId = useId()
+  const location = useLocation()
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const { pending, reload, setStep } = state
   const [choice, setChoice] = useState<{ id: string | null } | null>(null)
   const [hiding, setHiding] = useState(false)
@@ -266,6 +262,15 @@ function OpenCard({ tutorial, text, steps, state }: ChecklistCardProps) {
   const expandedId = choice === null ? (nextStep?.id ?? null) : choice.id
   const done = finishedSteps({ steps })
   const busy = pending !== null || hiding
+
+  // Sprung aus dem „?“-Menue („Erste Schritte“): Fokus auf die Ueberschrift,
+  // einmal je Navigation (`location.key`).
+  const focusTarget = readHelpNavigationState(location.state).focusTutorial
+  useEffect(() => {
+    if (focusTarget !== tutorial.id) return
+    headingRef.current?.focus()
+    headingRef.current?.scrollIntoView?.({ block: 'start' })
+  }, [location.key, focusTarget, tutorial.id])
 
   async function hide() {
     if (busy) return
@@ -293,7 +298,14 @@ function OpenCard({ tutorial, text, steps, state }: ChecklistCardProps) {
       <CardHeader className="gap-2 space-y-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <CardTitle id={titleId}>{text.title}</CardTitle>
+            <CardTitle
+              id={titleId}
+              ref={headingRef}
+              tabIndex={-1}
+              className="focus-visible:outline-none"
+            >
+              {text.title}
+            </CardTitle>
             <p className="text-sm text-muted-foreground" aria-live="polite">
               {t('checklist.progress', {
                 done,
@@ -394,6 +406,17 @@ export function TutorialChecklist({
   const state = useTutorials()
   const { tutorials, loading, error, reload } = state
   useReloadOnReturn(reload)
+  // Sprung aus dem „?“-Menue, waehrend das Dashboard schon offen ist (z. B.
+  // nach „Einführung erneut starten“): die Liste ist dann veraltet. Beim
+  // ersten Rendern laedt der Hook ohnehin, deshalb erst ab der naechsten
+  // Navigation.
+  const location = useLocation()
+  const [mountKey] = useState(location.key)
+  const jump = readHelpNavigationState(location.state)
+  const jumped = jump.focusTutorial !== undefined || jump.replayWelcome === true
+  useEffect(() => {
+    if (jumped && location.key !== mountKey) reload()
+  }, [jumped, location.key, mountKey, reload])
   // Zeitpunkt einmal je Darstellung; ein Test kann ihn festlegen.
   const [mountedAt] = useState(() => Date.now())
   const at = now ?? mountedAt

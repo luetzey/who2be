@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { type ReactElement } from 'react'
 import { render, type RenderResult } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { type InitialEntry, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 
 import type { Me } from '@/api/types'
@@ -11,7 +11,7 @@ import { SessionContext } from '@/auth/session-context'
 
 interface RenderInRoutesOptions {
   path: string
-  initialEntries?: string[]
+  initialEntries?: InitialEntry[]
   session?: Session | null
   me?: Me | null
 }

@@ -35,6 +35,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 
 import { Footer } from './Footer'
+import { HelpMenu } from './HelpMenu'
 import { NoticeBanner } from './NoticeBanner'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
@@ -278,12 +279,25 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
               >
                 {renderNavGroups('sheet', () => setNavSheetOpen(false))}
               </nav>
+              {/* Unter `sm` stehen Sprache und Theme hier statt in der
+                  Kopfzeile (Onboarding-Spec §5.2): neben ☰ · „?“ · Glocke ·
+                  Abmelden ist bei 320 px kein Platz mehr. */}
+              <div
+                data-testid="app-nav-sheet-preferences"
+                className="mt-4 flex items-center gap-2 border-t pt-4 sm:hidden"
+              >
+                <LanguageSwitcher />
+                <ThemeToggle />
+              </div>
             </SheetContent>
           </Sheet>
           <div className="ml-auto flex items-center gap-2">
+            <HelpMenu />
             <InboxBell />
-            <LanguageSwitcher />
-            <ThemeToggle />
+            <div data-testid="app-header-preferences" className="hidden items-center gap-2 sm:flex">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </div>
             <Button variant="ghost" size="sm" onClick={onSignOut}>
               <LogOut className="h-4 w-4" />
               {t('signOut')}
