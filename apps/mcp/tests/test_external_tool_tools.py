@@ -26,16 +26,35 @@ from who2be_mcp.server import (
     transition_external_tool,
     update_external_tool,
 )
+from who2be_mcp.tools.content import ExternalToolMarkdownCreate, ExternalToolMarkdownUpdate
 from who2be_models import (
-    ExternalToolContent,
-    ExternalToolCreate,
     ExternalToolRead,
-    ExternalToolUpdate,
     ExternalToolVersionRead,
     VersionStatus,
 )
+from who2be_models.content_markdown import (
+    ExternalToolMarkdownContent,
+    MarkdownWriteResult,
+)
 
 _WORKSPACE_ID = uuid4()
+
+
+def _md_result(
+    entity_type: str, content: dict[str, object], name: str = "Neu", locale: str = "de"
+) -> dict[str, object]:
+    """Antwort der `/markdown`-Schreibrouten (`MarkdownWriteResult`, ADR-0058 P2)."""
+    return {
+        "entity_type": entity_type,
+        "id": str(uuid4()),
+        "name": name,
+        "locale": locale,
+        "version": 1,
+        "status": "draft",
+        "base_rev": "rev-1",
+        "content": content,
+        "dangling_refs": [],
+    }
 
 
 def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[], object]:
@@ -182,17 +201,24 @@ def test_create_external_tool_forwards_payload(monkeypatch: pytest.MonkeyPatch) 
         if request.method == "GET" and request.url.path == f"/v1/workspaces/{_WORKSPACE_ID}":
             return httpx.Response(200, json=_workspace_json())
         assert request.method == "POST"
-        assert request.url.path.endswith("/external_tools")
-        seen_names.append(json.loads(request.content)["name"])
-        return httpx.Response(201, json=_tool_payload())
+        assert request.url.path.endswith("/external_tools/markdown")
+        body = json.loads(request.content)
+        seen_names.append(body["name"])
+        return httpx.Response(201, json=_md_result("external_tools", body["content"]))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
     result = asyncio.run(
         create_external_tool(
-            ExternalToolCreate(name="Todoist", content=ExternalToolContent(display_name="Todoist"))
+            ExternalToolMarkdownCreate(
+                name="Todoist",
+                content=ExternalToolMarkdownContent(
+                    display_name="Todoist", usage_notes="Nur **lesen**."
+                ),
+            )
         )
     )
-    assert isinstance(result, ExternalToolRead)
+    assert isinstance(result, MarkdownWriteResult)
+    assert result.base_rev == "rev-1"
     assert seen_names == ["Todoist"]
 
 
@@ -201,14 +227,19 @@ def test_update_external_tool_sends_put(monkeypatch: pytest.MonkeyPatch) -> None
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "PUT"
-        assert request.url.path.endswith(f"/external_tools/{tid}")
-        return httpx.Response(200, json=_tool_payload())
+        assert request.url.path.endswith(f"/external_tools/{tid}/markdown")
+        body = json.loads(request.content)
+        assert body["base_rev"] == "rev-0"
+        return httpx.Response(200, json=_md_result("external_tools", body["content"]))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
     result = asyncio.run(
-        update_external_tool(str(tid), ExternalToolUpdate(content=ExternalToolContent()))
+        update_external_tool(
+            str(tid),
+            ExternalToolMarkdownUpdate(content=ExternalToolMarkdownContent(), base_rev="rev-0"),
+        )
     )
-    assert isinstance(result, ExternalToolRead)
+    assert isinstance(result, MarkdownWriteResult)
 
 
 def test_transition_external_tool_posts_transition(monkeypatch: pytest.MonkeyPatch) -> None:

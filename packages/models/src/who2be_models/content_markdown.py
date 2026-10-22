@@ -82,8 +82,10 @@ class PlaybookMarkdownContent(BaseModel):
 
 
 class ResourceMarkdownContent(BaseModel):
-    """Resource: `body` als Markdown (GFM-Tabellen erlaubt, ADR-0058 §3.4)."""
+    """Resource: `body` als Markdown, GFM-Tabellen erlaubt."""
 
+    # GFM-Tabellen: ADR-0058 §3.4 (Kommentar, nicht Docstring: der geht als
+    # Werkzeug-Schema auf den Draht, siehe test_tool_payload_budget).
     model_config = ConfigDict(extra="forbid")
 
     description: str = Field(default="", max_length=2_000)

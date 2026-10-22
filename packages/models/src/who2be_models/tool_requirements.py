@@ -215,6 +215,18 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "update_system_prompt": _SYSTEM_PROMPT_WRITE,
     "restore_system_prompt": _SYSTEM_PROMPT_WRITE,
     "transition_system_prompt": _SYSTEM_PROMPT_WRITE,
+    # --- Markdown-Abschnitts-Edit (ADR-0058 §6.2) — dispatcht ueber alle fuenf
+    #     Inhaltsarten; sichtbar, sobald EINE ihrer Schreib-Capabilities
+    #     gewaehrt ist. Die API prueft je Elementart autoritativ.
+    "edit_content": ToolRequirement(
+        capabilities=(
+            AgentCapability.persona_write,
+            AgentCapability.playbook_write,
+            AgentCapability.resource_write,
+            AgentCapability.external_tool_write,
+            AgentCapability.system_prompt_write,
+        )
+    ),
     # --- Usage-/Feedback-Flywheel (ADR-0038) — `feedback_write` (Default an) ---
     "record_usage": _FEEDBACK_WRITE,
     "submit_feedback": _FEEDBACK_WRITE,

@@ -47,9 +47,10 @@ Finden: `search` liefert Elemente, `search_content` die passende Stelle. \
 Erst suchen, dann gezielt laden, statt ganze Listen zu holen.
 
 Regeln fuer alle Werkzeuge:
-- Lese-Werkzeuge liefern Markdown (`format="text"`). Vorlage fuer ein \
-`update_*` ist immer `format="full"`, denn der neue Stand ersetzt den alten \
-vollstaendig.
+- Lese-Werkzeuge liefern Markdown (`format="text"`). Inhalte schreibst du \
+nur als Markdown. Vorlage fuer `update_*` (ersetzt den Stand vollstaendig) \
+und `edit_content` (ein Abschnitt per Anker oder ein Feld) ist immer \
+`format="source"` mit dem Konflikt-Token base_rev; bei 409 neu lesen.
 - Versionen laufen draft -> review -> active; draft -> active geht nicht \
 direkt. Nach active oder inactive schalten braucht die admin-Rolle bzw. \
 `promote_retire`; sonst reichst du mit `to="review"` zur Freigabe ein.

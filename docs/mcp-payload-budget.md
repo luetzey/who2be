@@ -119,14 +119,22 @@ Die Entscheidung steht in
   Status, Locale, je nach Werkzeug Tags, Trigger, Gliederung), darunter der
   Inhalt als Klartext. Kein Editor-JSON, kein Escaping. Platzhalter erscheinen
   als `{{kind:target_id}}`.
+- **`"source"`** (seit ADR-0058, nur die sechs Werkzeuge mit Schreibvorlage:
+  `get_persona`, `fetch_playbook`, `fetch_resource`, `get_system_prompt`,
+  `get_external_tool`, `get_version`): das Quell-Markdown mit
+  Ueberschriften-Ankern `[#id]`, Platzhalter-Tokens und dem Konflikt-Token
+  `base_rev` im Kopf. Das ist die Vorlage fuer `update_*` (PUT, `content`
+  ersetzt den Stand vollstaendig) und `edit_content` (ein Abschnitt oder ein
+  Feld). Strukturfelder stehen als JSON-Block, jedes Markdown-Feld in einem
+  eigenen Fence unter seinem Feldnamen.
 - **`"full"`**: die Antwort, wie sie die REST-API liefert, mit Editor-JSON.
-  Das ist die Vorlage fuer die `update_*`-Werkzeuge (PUT, `content` ersetzt den
-  Stand vollstaendig) und fuer strukturelle Verarbeitung.
+  Seit ADR-0058 nur noch fuer strukturelle Verarbeitung und Diagnose; die
+  Schreibwerkzeuge nehmen kein Editor-JSON mehr an.
 - **`"outline"`**: nur bei `fetch_playbook`, Kopf und Gliederung ohne
   Prozedur.
 
-Jede `text`-Antwort sagt selbst, dass `update_*` die Vorlage mit
-`format="full"` braucht. Ein Schreiber, der die Lesefassung als Vorlage nimmt,
+Jede `text`-Antwort sagt selbst, dass `update_*` und `edit_content` die
+Vorlage mit `format="source"` brauchen. Ein Schreiber, der die Lesefassung als Vorlage nimmt,
 wuerde den Inhalt beim naechsten PUT leeren. Deshalb steht der Hinweis an drei
 Stellen: in der Antwort, in den Beschreibungen der `update_*`-Werkzeuge und in
 der Builder-Resource „Agent-Bau-Konventionen“ (ADR-0056, Abschnitt 5).
@@ -261,13 +269,18 @@ middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
 echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 
 **Zielwerte je Agent-Start (seit T3, harter Test):** Draht-Bytes der
-sichtbaren Werkzeuge plus Server-`instructions` (1.604 Bytes), die jeder
+sichtbaren Werkzeuge plus Server-`instructions` (1.732 Bytes), die jeder
 Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) |
-| --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 |
-| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) | Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 |
+
+ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um gut 9 KB: die
+zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content` kommt
+mit 1.421 Bytes dazu. Der Default-Start waechst nur um die laengeren
+`instructions` und die `source`-Hinweise der Lesewerkzeuge.
 
 Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
 2026-10-14 auf 120.000 angehoben („1a“), weil die Gespraechs-Werkzeuge aus
@@ -358,7 +371,7 @@ Fuer den Default-Agenten wirkt erst die Beschreibungs-Diaet (T3).
 Die Werkzeugbeschreibung ist der Docstring der Funktion. Regeln:
 
 - **Erster Satz:** Zweck und Suchwoerter. Kurzkataloge zeigen nur ihn.
-- **Keine Wiederholung von Querschnittsregeln.** `format="full"` als
+- **Keine Wiederholung von Querschnittsregeln.** `format="source"` als
   PUT-Vorlage, der Status-Ablauf und die Sprachregel stehen einmal in den
   Server-`instructions`. Im Werkzeug bleibt hoechstens ein Kurzverweis; die
   PUT-Werkzeuge behalten den Pflichtsatz aus ADR-0056.
@@ -392,10 +405,10 @@ Kurzkatalog und die Server-`instructions`. Die vollen Definitionen holt der
 Agent erst per Suche. Zwei Hebel steuern, was dabei sofort da ist. Beide
 stehen in `apps/mcp/src/who2be_mcp/instructions.py`.
 
-- **Server-`instructions`** (1.604 Bytes): Boot-Reihenfolge `whoami` →
+- **Server-`instructions`** (1.732 Bytes): Boot-Reihenfolge `whoami` →
   `get_persona` → `search_memory` → `list_triggers`/`fetch_playbook`, wann
   `search` und wann `search_content`, dazu die Regeln, die für viele Werkzeuge
-  gelten: `format="full"` als Vorlage für `update_*`, die
+  gelten: `format="source"` als Vorlage für `update_*` und `edit_content`, die
   Versions-Übergänge, die Sprache neuer Elemente, Gedächtnis-Treffer als
   Daten und `record_usage` nach jedem Einsatz. Die `instructions` gehen nicht
   über `tools/list` und zählen deshalb nicht zum Katalog-Budget.

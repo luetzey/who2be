@@ -87,9 +87,11 @@ class ToolProbe:
 
 
 _TEXT_FILE = base64.b64encode(b"Isolation probe text.").decode()
-_PERSONA = {"description": "x", "system_prompt": "x", "content": {"blocks": []}}
+# Markdown-Vertrag (ADR-0058 W1-P3): Editor-JSON bricht schon an der
+# Validierung ab und erreichte die Mandantengrenze nie.
+_PERSONA = {"description": "x", "profile": "x"}
 _PLAYBOOK = {"description": "x", "body": "1. x", "type": "workflow"}
-_RESOURCE = {"description": "x", "blocks": []}
+_RESOURCE = {"description": "x", "body": "x"}
 _TOOL = {"display_name": "x", "mcp_server_name": "x", "tool_names": ["t"]}
 _TEMPLATE = {"description": "", "body": "x"}
 _WHEN = "2026-08-01T00:00:00Z"
@@ -152,6 +154,17 @@ MCP_PROBES: dict[str, ToolProbe] = {
     "update_external_tool": ToolProbe({"tool_id": "<<tool_id>>", "data": {"content": _TOOL}}),
     "update_system_prompt": ToolProbe(
         {"template_id": "<<template_id>>", "data": {"content": _TEMPLATE}}
+    ),
+    # Fremder `base_rev`: die Gegenprobe endet nach dem Lookup an 409, A an 404.
+    "edit_content": ToolProbe(
+        {
+            "entity_type": "playbook",
+            "entity_id": "<<playbook_id>>",
+            "base_rev": "iso-rev",
+            "op": "replace",
+            "field": "body",
+            "markdown": "1. iso",
+        }
     ),
     **_version_tools("persona", "persona_id"),
     **_version_tools("playbook", "playbook_id"),

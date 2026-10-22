@@ -3,6 +3,7 @@
 import asyncio
 import json
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -83,6 +84,23 @@ def test_transition_tools_share_state_machine_doc() -> None:
         assert "admin-Rolle" in description, name
 
 
+def _md_result(
+    entity_type: str, content: dict[str, object], name: str = "Neu", locale: str = "de"
+) -> dict[str, object]:
+    """Antwort der `/markdown`-Schreibrouten (`MarkdownWriteResult`, ADR-0058 P2)."""
+    return {
+        "entity_type": entity_type,
+        "id": str(uuid4()),
+        "name": name,
+        "locale": locale,
+        "version": 1,
+        "status": "draft",
+        "base_rev": "rev-1",
+        "content": content,
+        "dangling_refs": [],
+    }
+
+
 def _workspace_json(workspace_id: str, content_locale: str = "de") -> dict[str, object]:
     now = datetime.now(UTC).isoformat()
     return {
@@ -99,7 +117,6 @@ def test_create_persona_tool_posts_and_returns_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace_id = uuid4()
-    persona_id = uuid4()
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -111,7 +128,8 @@ def test_create_persona_tool_posts_and_returns_model(
             return httpx.Response(200, json=_workspace_json(str(workspace_id)))
         seen["method"] = request.method
         seen["path"] = request.url.path
-        return httpx.Response(201, json=_persona_json(str(persona_id), "Neu", str(workspace_id)))
+        body = json.loads(request.content)
+        return httpx.Response(201, json=_md_result("personas", body["content"]))
 
     api_client = ApiClient(
         "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
@@ -131,9 +149,10 @@ def test_create_persona_tool_posts_and_returns_model(
 
     data = asyncio.run(_run())
     assert seen["method"] == "POST"
-    assert str(seen["path"]).endswith("/personas")
+    assert str(seen["path"]).endswith("/personas/markdown")
     assert isinstance(data, dict)
     assert data["name"] == "Neu"
+    assert data["base_rev"] == "rev-1"
 
 
 def test_create_persona_without_locale_defaults_to_workspace_content_locale(
@@ -144,16 +163,14 @@ def test_create_persona_without_locale_defaults_to_workspace_content_locale(
     der Default wird explizit im MCP-Layer aufgeloest (eigene kleine Query),
     nicht implizit der API ueberlassen."""
     workspace_id = uuid4()
-    persona_id = uuid4()
-    seen_body: dict[str, object] = {}
+    seen_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path == f"/v1/workspaces/{workspace_id}":
             return httpx.Response(200, json=_workspace_json(str(workspace_id), "en"))
         seen_body["json"] = json.loads(request.content)
-        payload = _persona_json(str(persona_id), "Neu", str(workspace_id))
-        payload["locale"] = "en"
-        return httpx.Response(201, json=payload)
+        content = seen_body["json"]["content"]
+        return httpx.Response(201, json=_md_result("personas", content, locale="en"))
 
     api_client = ApiClient(
         "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
@@ -482,7 +499,7 @@ def test_get_persona_tool_default_is_markdown_with_modes(
     assert "**Trigger:** issue veredeln" in text
     assert "**Identitaet ergaenzt:** Veredelungs-Haltung" in text
     assert f"- Code-Task-Flow (`{linked['id']}`) — Trigger: arbeite Task [X] ab" in text
-    assert 'format="full"' in text
+    assert 'format="source"' in text
 
 
 def test_list_playbooks_tool_default_is_markdown_catalog(

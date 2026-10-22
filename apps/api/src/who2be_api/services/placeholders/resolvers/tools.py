@@ -296,6 +296,15 @@ _TOOLS: list[_ToolDoc] = [
         description="Playbooks anlegen, als neuen Draft aendern oder wiederherstellen.",
     ),
     _ToolDoc(
+        signature="edit_content(entity_type, entity_id, base_rev, op, anchor | field, markdown)",
+        tool_names=("edit_content",),
+        description=(
+            "Einen Abschnitt (Ueberschriften-Anker) oder ein Feld einer Persona, eines "
+            "Playbooks, einer Resource, eines System-Prompts oder externen Tools als "
+            'Markdown aendern; Vorlage und `base_rev` aus `format="source"`.'
+        ),
+    ),
+    _ToolDoc(
         signature="set_playbook_resource_links(...) / set_playbook_composes(...)",
         tool_names=("set_playbook_resource_links", "set_playbook_composes"),
         description=(
