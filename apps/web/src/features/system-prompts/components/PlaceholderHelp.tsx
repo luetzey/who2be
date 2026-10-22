@@ -53,9 +53,9 @@ const SLASH_PLACEHOLDERS: readonly SlashRow[] = [
 ]
 
 /**
- * Referenz-Inhalt der verfügbaren Placeholder (ohne Container). Wird sowohl im
- * Info-Popover (`PlaceholderHelp`) als auch auf der vollen Hilfe-Seite
- * (`HelpPlaceholdersPage`) verwendet — eine Quelle, zwei Darstellungen.
+ * Referenz-Inhalt der verfügbaren Placeholder (ohne Container) für das
+ * Info-Popover (`PlaceholderHelp`). Die ausführliche Fassung steht in der
+ * Hilfe-Seite `help/bausteine/system-prompts.<lang>.md`.
  */
 export function PlaceholderHelpContent() {
   const { t } = useTranslation('systemPrompts')
@@ -127,7 +127,7 @@ export function PlaceholderHelp() {
         <PlaceholderHelpContent />
         <div className="mt-3 border-t border-border pt-3">
           <Link
-            to={wsPath('/help/placeholders')}
+            to={wsPath('/help/system-prompts#placeholders')}
             className="text-sm font-medium text-brand hover:underline"
           >
             {t('placeholderHelp.docsLink')}
