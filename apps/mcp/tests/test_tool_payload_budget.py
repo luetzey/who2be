@@ -97,6 +97,7 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 # verlieren die BlockNote-Schemata (z. B. `create_persona` 5_766 -> 2_731),
 # `edit_content` kostet 1_421, die `source`-Hinweise der sechs Lesewerkzeuge
 # zusammen ~400.
+# `readOnlyHint` an den 42 Lesewerkzeugen: 104_777 -> 106_415 Bytes.
 _PAYLOAD_BUDGET_BYTES = 180_000
 _NEW_TOOL_DOC_CAP = 1_100
 

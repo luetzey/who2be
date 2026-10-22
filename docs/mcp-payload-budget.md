@@ -272,10 +272,14 @@ echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 sichtbaren Werkzeuge plus Server-`instructions` (1.732 Bytes), die jeder
 Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) | Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3) |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 |
-| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) | Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3) | Stand 2026-10-22 (101 Werkzeuge, `readOnlyHint`) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 | 32.814 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 | 108.147 |
+
+Die Annotation `readOnlyHint: true` an den 42 Lesewerkzeugen kostet je
+Werkzeug 39 Bytes, zusammen 1.638 Bytes im Gesamtkatalog (104.777 -> 106.415).
+Schreibwerkzeuge bekommen keine Annotation und kosten nichts.
 
 ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um gut 9 KB: die
 zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content` kommt
