@@ -2110,7 +2110,7 @@
         "removeButton": "Entfernen",
         "removedToast": "Mitglied entfernt.",
         "roleUpdatedToast": "Rolle aktualisiert.",
-        "tokenDowngradeInfo": "Bestehende API-Tokens dieses Mitglieds behalten ihre alte Rolle, bis sie widerrufen werden."
+        "tokensRevokedInfo": "Die API-Tokens dieses Mitglieds wurden widerrufen. Neue Tokens erhalten die neue Rolle."
       },
       "invite": {
         "cardTitle": "Einladen",

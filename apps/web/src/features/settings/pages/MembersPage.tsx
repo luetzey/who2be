@@ -42,7 +42,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery'
 import { copyToClipboard } from '@/lib/clipboard'
 import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
-import { isDowngrade, ROLE_ORDER, roleLabel } from '@/lib/roles'
+import { ROLE_ORDER, roleLabel } from '@/lib/roles'
 
 import { useInvitations } from '../hooks/useInvitations'
 import { useMembers } from '../hooks/useMembers'
@@ -201,12 +201,10 @@ export function MembersPage() {
     try {
       await api.updateMemberRole(userId, { role: nextRole })
       notify.success(t('members.list.roleUpdatedToast'))
-      // ADR-0023: Token tragen einen Rollen-Snapshot. Ein Downgrade des
-      // Mitglieds entzieht dessen bestehenden Tokens NICHT automatisch die
-      // höheren Rechte — die müssen explizit widerrufen werden.
-      if (isDowngrade(currentRole, nextRole)) {
-        notify.info(t('members.list.tokenDowngradeInfo'))
-      }
+      // Jeder Rollenwechsel widerruft serverseitig alle aktiven Tokens des
+      // Mitglieds im Workspace (WorkspaceMemberService.update_role, Nachtrag
+      // in ADR-0023) — in beide Richtungen, daher der Hinweis bei jedem Wechsel.
+      notify.info(t('members.list.tokensRevokedInfo'))
       members.reload()
     } catch (cause) {
       notify.error(describeError(cause, t('members.invite.actionFailed')))

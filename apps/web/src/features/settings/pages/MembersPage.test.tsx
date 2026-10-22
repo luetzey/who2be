@@ -228,7 +228,7 @@ function stubFetch(handler: FetchHandler) {
 }
 
 describe('MembersPage — Rollen-Aenderung', () => {
-  it('Upgrade (editor → admin): PATCH + Erfolgs-Toast, kein Downgrade-Hinweis', async () => {
+  it('Upgrade (editor → admin): PATCH + Erfolgs-Toast + Token-Widerrufs-Hinweis', async () => {
     const patchBodies: string[] = []
     const base = settingsHandlers()
     stubFetch((path, method, init) => {
@@ -248,10 +248,13 @@ describe('MembersPage — Rollen-Aenderung', () => {
       expect(notify.success).toHaveBeenCalledWith('Rolle aktualisiert.')
     })
     expect(patchBodies[0]).toContain('"role":"admin"')
-    expect(notify.info).not.toHaveBeenCalled()
+    // Auch ein Upgrade widerruft die Tokens serverseitig (update_role).
+    expect(notify.info).toHaveBeenCalledWith(
+      'Die API-Tokens dieses Mitglieds wurden widerrufen. Neue Tokens erhalten die neue Rolle.',
+    )
   })
 
-  it('Downgrade (editor → viewer): zusaetzlicher Token-Snapshot-Hinweis', async () => {
+  it('Downgrade (editor → viewer): Token-Widerrufs-Hinweis', async () => {
     const base = settingsHandlers()
     stubFetch((path, method, init) => {
       if (method === 'PATCH' && path === `${WS_PREFIX}/members/m1`) {
@@ -269,8 +272,9 @@ describe('MembersPage — Rollen-Aenderung', () => {
       expect(notify.success).toHaveBeenCalledWith('Rolle aktualisiert.')
     })
     expect(notify.info).toHaveBeenCalledWith(
-      'Bestehende API-Tokens dieses Mitglieds behalten ihre alte Rolle, bis sie widerrufen werden.',
+      'Die API-Tokens dieses Mitglieds wurden widerrufen. Neue Tokens erhalten die neue Rolle.',
     )
+    expect(notify.info).not.toHaveBeenCalledWith(expect.stringContaining('alte Rolle'))
   })
 
   it('gleiche Rolle: kein PATCH, kein Toast (No-op-Zweig)', async () => {
