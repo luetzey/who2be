@@ -179,6 +179,52 @@ describe('DashboardWelcome', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('Escape schliesst wie Überspringen; der Fokus startet auf der Überschrift', async () => {
+    acknowledgeCookies()
+    stubApi([[welcomeTutorial()]])
+    renderWelcome()
+    const heading = await screen.findByRole('heading', { name: 'Willkommen bei Who2Be' })
+    await waitFor(() => expect(heading).toHaveFocus())
+    fireEvent.keyDown(heading, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('stoppt das Nachfragen beim Schliessen und beim Unmount', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    acknowledgeCookies()
+    const calls = stubApi([[welcomeTutorial()]])
+    const tutorialGets = () => calls.filter((c) => c.method === 'GET' && c.url.includes('/v1/me/tutorials')).length
+
+    // 1) Schliessen waehrend des Wartens.
+    const first = renderWelcome()
+    let dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Etwas anderes' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ich habe die Adresse eingetragen' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WELCOME_POLL_INTERVAL_MS)
+    })
+    const whileOpen = tutorialGets()
+    fireEvent.click(screen.getByRole('button', { name: 'Später' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WELCOME_POLL_INTERVAL_MS * 4)
+    })
+    expect(tutorialGets()).toBe(whileOpen)
+    first.unmount()
+
+    // 2) Unmount waehrend des Wartens (Seitenwechsel).
+    const second = renderWelcome()
+    dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Etwas anderes' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ich habe die Adresse eingetragen' }))
+    second.unmount()
+    const atUnmount = tutorialGets()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WELCOME_POLL_INTERVAL_MS * 4)
+    })
+    expect(tutorialGets()).toBe(atUnmount)
+  })
+
   it('Verbinden: wartet, zeigt nach dem ersten Abruf den Erfolg und kündigt ihn an', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     acknowledgeCookies()
