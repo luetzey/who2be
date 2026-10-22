@@ -430,14 +430,28 @@ describe('AppShell', () => {
     })
   })
 
-  it('rendert Sprache, Theme und Abmelden im Header unabhaengig vom Breakpoint', () => {
+  it('rendert Sprache und Theme im Header erst ab sm, Abmelden immer (Onboarding-Spec §5.2)', () => {
     const onSignOut = vi.fn()
     renderShell({ onSignOut })
-    expect(screen.getByRole('button', { name: 'Sprache umstellen' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Theme umstellen' })).toBeInTheDocument()
+    const prefs = screen.getByTestId('app-header-preferences')
+    expect(prefs).toHaveClass('hidden', 'sm:flex')
+    expect(within(prefs).getByRole('button', { name: 'Sprache umstellen' })).toBeInTheDocument()
+    expect(within(prefs).getByRole('button', { name: 'Theme umstellen' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Abmelden' }))
+    const signOut = screen.getByRole('button', { name: 'Abmelden' })
+    expect(prefs).not.toContainElement(signOut)
+    fireEvent.click(signOut)
     expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('bietet Sprache und Theme unter sm im Navigations-Sheet an', async () => {
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: 'Menü öffnen' }))
+    const dialog = await screen.findByRole('dialog')
+    const prefs = within(dialog).getByTestId('app-nav-sheet-preferences')
+    expect(prefs).toHaveClass('sm:hidden')
+    expect(within(prefs).getByRole('button', { name: 'Sprache umstellen' })).toBeInTheDocument()
+    expect(within(prefs).getByRole('button', { name: 'Theme umstellen' })).toBeInTheDocument()
   })
 
   describe('Glocke „Zu erledigen“ (Navigation W1, Spec §2.3)', () => {

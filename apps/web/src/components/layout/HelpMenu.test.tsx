@@ -25,9 +25,13 @@ function step(id: string, type: TutorialStep['type'], state: TutorialStep['state
   return { id, type, page: null, automatic: type !== 'manual', state, completed_at: null }
 }
 
+// Bewusst NICHT „getting-started“: das Menue findet „Erste Schritte“ ueber
+// `welcome: true`, nie ueber eine feste ID (Review B3).
+const WELCOME_ID = 'start-probe'
+
 function welcome(states: Partial<Record<string, TutorialStep['state']>> = {}): Tutorial {
   return {
-    id: 'getting-started',
+    id: WELCOME_ID,
     audience: 'everyone',
     welcome: true,
     welcome_seen_at: null,
@@ -39,6 +43,22 @@ function welcome(states: Partial<Record<string, TutorialStep['state']>> = {}): T
       step('create', 'agent_created', states.create ?? 'open'),
       step('manual', 'manual', states.manual ?? 'open'),
     ],
+  }
+}
+
+/**
+ * Zweites Tutorial ohne `welcome`, in der API-Liste VOR dem Willkommens-
+ * Tutorial und mit der ID, die eine hart codierte Suche treffen wuerde.
+ */
+function other(): Tutorial {
+  return {
+    id: 'getting-started',
+    audience: 'everyone',
+    welcome: false,
+    welcome_seen_at: null,
+    restarted_at: null,
+    completed: false,
+    steps: [step('x', 'manual', 'done'), step('y', 'manual', 'skipped')],
   }
 }
 
@@ -63,7 +83,8 @@ function stubApi(initial: Tutorial[]) {
       if (!url.includes('/v1/me/tutorials')) return json({ detail: 'nope' }, 500)
       calls.push({ url, method, body })
       if (method === 'GET') return json(current)
-      const tutorial = current[0]
+      const tutorial = current.find((t) => new RegExp(`/v1/me/tutorials/${t.id}(/|\\?|$)`).test(url))
+      if (tutorial === undefined) return json({ detail: 'unbekannt' }, 404)
       const next: Tutorial = url.includes('/restart')
         ? { ...tutorial, steps: tutorial.steps.map((s) => (s.type === 'head_start' ? s : { ...s, state: 'open' })) }
         : {
@@ -72,7 +93,7 @@ function stubApi(initial: Tutorial[]) {
               s.id === body?.step_id ? { ...s, state: body.state as TutorialStep['state'] } : s,
             ),
           }
-      current = [next]
+      current = current.map((t) => (t.id === next.id ? next : t))
       return json(next)
     }),
   )
@@ -125,7 +146,7 @@ function tutorialCalls(calls: Call[], method: string) {
 
 describe('HelpMenu', () => {
   it('lädt erst beim Öffnen und zeigt die Einträge in fester Reihenfolge, besteht axe', async () => {
-    const calls = stubApi([welcome()])
+    const calls = stubApi([other(), welcome()])
     const { container } = renderShell()
     // Kein Abruf auf jeder Seite.
     await act(async () => {})
@@ -146,7 +167,7 @@ describe('HelpMenu', () => {
   })
 
   it('blendet „Erste Schritte“ aus, wenn alles erledigt ist; viewer zählt nur seine Schritte', async () => {
-    stubApi([welcome({ connect: 'done', manual: 'done' })])
+    stubApi([other(), welcome({ connect: 'done', manual: 'done' })])
     renderShell('viewer')
     let menu = await openMenu()
     await waitFor(() =>
@@ -159,13 +180,13 @@ describe('HelpMenu', () => {
 
     fireEvent.keyDown(menu, { key: 'Escape' })
     vi.unstubAllGlobals()
-    stubApi([welcome({ manual: 'done' })])
+    stubApi([other(), welcome({ manual: 'done' })])
     menu = await openMenu()
     expect(await within(menu).findByText('2 von 3')).toBeInTheDocument()
   })
 
   it('springt mit Router-State zu Tutorials, Suche, Neuigkeiten und Problem melden', async () => {
-    stubApi([welcome()])
+    stubApi([other(), welcome()])
     renderShell()
     const cases: Array<[string, string]> = [
       ['Tutorials', '/w/ws-1/help {"helpFocus":"tutorials"}'],
@@ -181,13 +202,13 @@ describe('HelpMenu', () => {
   })
 
   it('„Erste Schritte“ holt eine ausgeblendete Liste zurück und springt ins Dashboard', async () => {
-    const calls = stubApi([welcome({ connect: 'skipped', create: 'skipped', manual: 'done' })])
+    const calls = stubApi([other(), welcome({ connect: 'skipped', create: 'skipped', manual: 'done' })])
     renderShell()
     const menu = await openMenu()
     fireEvent.click(await within(menu).findByRole('menuitem', { name: /Erste Schritte/ }))
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/w/ws-1/dashboard {"focusTutorial":"getting-started"}',
+        '/w/ws-1/dashboard {"focusTutorial":"start-probe"}',
       ),
     )
     // Uebersprungenes wird wieder offen, Erledigtes bleibt.
@@ -198,7 +219,7 @@ describe('HelpMenu', () => {
   })
 
   it('startet die Einführung ohne Rückfrage neu, solange nichts begonnen ist', async () => {
-    const calls = stubApi([welcome()])
+    const calls = stubApi([other(), welcome()])
     renderShell()
     const menu = await openMenu()
     const replay = await within(menu).findByRole('menuitem', { name: 'Einführung erneut starten' })
@@ -206,16 +227,16 @@ describe('HelpMenu', () => {
     fireEvent.click(replay)
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/w/ws-1/dashboard {"replayWelcome":true,"focusTutorial":"getting-started"}',
+        '/w/ws-1/dashboard {"replayWelcome":true,"focusTutorial":"start-probe"}',
       ),
     )
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(tutorialCalls(calls, 'POST')).toHaveLength(1)
-    expect(tutorialCalls(calls, 'POST')[0].url).toContain('/v1/me/tutorials/getting-started/restart')
+    expect(tutorialCalls(calls, 'POST')[0].url).toContain('/v1/me/tutorials/start-probe/restart')
   })
 
   it('fragt vor dem Neustart nach, wenn Fortschritt verloren geht', async () => {
-    const calls = stubApi([welcome({ manual: 'done' })])
+    const calls = stubApi([other(), welcome({ manual: 'done' })])
     renderShell()
     const menu = await openMenu()
     const replay = await within(menu).findByRole('menuitem', { name: 'Einführung erneut starten' })
@@ -228,6 +249,7 @@ describe('HelpMenu', () => {
       expect(screen.getByTestId('location')).toHaveTextContent('"replayWelcome":true'),
     )
     expect(tutorialCalls(calls, 'POST')).toHaveLength(1)
+    expect(tutorialCalls(calls, 'POST')[0].url).toContain(`/v1/me/tutorials/${WELCOME_ID}/restart`)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
