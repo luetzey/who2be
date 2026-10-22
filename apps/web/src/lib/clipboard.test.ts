@@ -65,7 +65,7 @@ describe('copyToClipboard', () => {
   it('wirft eindeutige Error-Message, wenn execCommand fehlschlaegt', async () => {
     setExecCommand(() => false)
 
-    await expect(copyToClipboard('lost')).rejects.toThrow(/Clipboard nicht verfuegbar/)
+    await expect(copyToClipboard('lost')).rejects.toThrow(/Clipboard nicht verfügbar/)
     expect(document.querySelector('textarea')).toBeNull()
   })
 

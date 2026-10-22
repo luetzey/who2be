@@ -10,14 +10,16 @@ import de from './locales/de.json'
 // Code-Kommentare bewusst ASCII bleiben und der Unterschied im Diff kaum
 // auffaellt. Ab hier faellt er auf.
 //
+// `common.errors.*` wird mit geprueft: die Schluessel sind die Wire-Werte des
+// API-`reason` (ADR-0051) und bleiben unveraendert, die deutschen Web-Texte
+// dazu schreiben echte Umlaute. Die API-Fehlertexte selbst (apps/api,
+// packages/) bleiben laut Owner-Entscheidung 2026-10-22 ohne Umlaute.
+//
 // Bewusst NICHT geprueft:
-// - `common.errors.*`: der Schluessel ist der Wire-Wert des API-`reason`
-//   (ADR-0051, siehe localeParity.test.ts). API-Fehlertexte bleiben laut
-//   Owner-Regel ohne Umlaute; dieser Namespace bleibt deshalb unberuehrt.
 // - `editor.slash.aliases.*`: Suchbegriffe fuer das Slash-Menue, keine
 //   sichtbaren Texte. Dort hilft „gedaechtnis“ beim Tippen ohne Umlaut-Taste.
 // - Interpolationen `{{…}}`: Variablennamen, kein Text.
-const EXEMPT_PREFIXES = ['common.errors.', 'editor.slash.aliases.'] as const
+const EXEMPT_PREFIXES = ['editor.slash.aliases.'] as const
 
 // Woerter mit echtem ae/oe/ue/ss. Ein Wort ist erlaubt, wenn es nach dem
 // Herausnehmen dieser Wortteile kein Ersatzmuster mehr enthaelt. So decken
@@ -112,7 +114,8 @@ describe('de.json — echte Umlaute statt Ersatzschreibung', () => {
     const sample: Tree = {
       bad: { a: 'Zurueck', b: 'Draft abschliessen', c: 'Aenderung', d: 'hoechstens', e: 'Strasse' },
       good: { a: 'Neue Steuer, aktuell und manuell', b: 'Passwort vergessen, dass Wissen', c: 'Bearbeitungsstand {{value}}' },
-      common: { errors: { x: 'Ungueltige Anmeldedaten' } },
+      common: { errors: { x: 'Kann nicht geloescht werden.', y: 'Kann nicht gelöscht werden.' } },
+      editor: { slash: { aliases: { memory: 'gedaechtnis' } } },
     }
     expect(findSubstitutes(sample)).toEqual([
       'bad.a: Zurueck',
@@ -120,6 +123,7 @@ describe('de.json — echte Umlaute statt Ersatzschreibung', () => {
       'bad.c: Aenderung',
       'bad.d: hoechstens',
       'bad.e: Strasse',
+      'common.errors.x: geloescht',
     ])
   })
 })

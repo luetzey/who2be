@@ -543,7 +543,7 @@ describe('MembersPage — Invitations', () => {
       }),
     )
     vi.mocked(copyToClipboard).mockRejectedValueOnce(
-      new Error('Clipboard nicht verfuegbar.'),
+      new Error('Clipboard nicht verfügbar.'),
     )
 
     renderMembers('admin')
@@ -551,7 +551,7 @@ describe('MembersPage — Invitations', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Link kopieren' }))
 
     await waitFor(() => {
-      expect(notify.error).toHaveBeenCalledWith('Clipboard nicht verfuegbar.')
+      expect(notify.error).toHaveBeenCalledWith('Clipboard nicht verfügbar.')
     })
   })
 

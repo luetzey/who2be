@@ -154,7 +154,7 @@ describe('useResourceSubResources', () => {
     })
 
     expect(notify.error).toHaveBeenCalledWith(
-      'Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen.',
+      'Verknüpfung wurde abgelehnt: Zyklus würde entstehen.',
     )
     expect(result.current.saving).toBe(false)
   })
