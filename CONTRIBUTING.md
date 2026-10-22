@@ -370,13 +370,18 @@ permanently red for no reason.
 **Node 22 is mandatory, not a recommendation.** The repo pins the major in
 `.nvmrc`, `mise.toml` and `apps/web/package.json` (`engines.node`), matching
 `node-version: 22` in `.github/workflows/ci.yml`. Run `mise install` (or
-`nvm use` / `fnm use`) in the repo root before touching the web stack. On Node
-25+ `npm run test:coverage` fails with ~135 red tests and writes no `coverage/`,
-because Node enables Web Storage by default there and Vitest 4 then filters
+`nvm use` / `fnm use`) in the repo root before touching the web stack.
+
+Newer Node releases enable Web Storage in Node itself: by default from Node 25,
+and in recent Node 22 patch releases as well (observed on 22.23.3). Vitest 4 then filters
 jsdom's `window.localStorage` away (upstream
 [vitest#8757](https://github.com/vitest-dev/vitest/issues/8757), fixed only in
-Vitest 5 — no 4.1.x backport). CI stays green because it runs Node 22, so a
-local failure on a newer Node is a toolchain mismatch, not a code defect.
+Vitest 5 — no 4.1.x backport), and several hundred web tests fail with a
+`TypeError` on `localStorage`. The test config therefore starts every Vitest
+worker with `--no-experimental-webstorage` (`test.execArgv` in
+`apps/web/vite.config.ts`). The commands above need no `NODE_OPTIONS` and
+behave the same locally and in CI. Remove the flag together with the upgrade
+to Vitest 5.
 
 New dependency? Check its license first (mandatory scan, ADR-0033).
 Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are

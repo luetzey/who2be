@@ -33,6 +33,11 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Node-eigenes Web Storage in den Test-Workern abschalten, sonst filtert
+    // Vitest 4 jsdoms `window.localStorage` weg (vitest#8757). Wirkt nur auf
+    // die Worker, nicht auf Build oder Dev-Server. Warum und ab welcher
+    // Node-Version: CONTRIBUTING.md, Definition of Done. Karte t_61bd62ed.
+    execArgv: ['--no-experimental-webstorage'],
     // Zwei Projekte, die sich die Wurzel-Config teilen (`extends: true`) und
     // sich nur im Timeout unterscheiden. Coverage, Reporter und CLI-Filter
     // (`--testNamePattern a11y`) wirken weiter ueber beide Projekte.
