@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+
+import { HelpPlaceholdersRedirect } from '@/app/routes'
+import { findPage, helpIndex } from '@/help/helpIndex'
 
 import { PlaceholderHelp } from './PlaceholderHelp'
 
@@ -35,7 +38,35 @@ describe('PlaceholderHelp', () => {
   it('verlinkt auf die Placeholder-Doku-Seite', () => {
     open()
     const link = screen.getByRole('link', { name: /Doku/ })
-    expect(link).toHaveAttribute('href', '/w/ws-1/help/placeholders')
+    expect(link).toHaveAttribute('href', '/w/ws-1/help/system-prompts#placeholders')
+  })
+})
+
+describe('Umleitung der früheren Platzhalter-Seite', () => {
+  function LocationProbe() {
+    const location = useLocation()
+    return <p data-testid="location">{`${location.pathname}${location.hash}`}</p>
+  }
+
+  it('leitet /help/placeholders per replace auf die Hilfe-Seite mit Anker', () => {
+    render(
+      <MemoryRouter initialEntries={['/w/ws-1/help/placeholders']}>
+        <Routes>
+          <Route path="/w/:workspaceId/help/placeholders" element={<HelpPlaceholdersRedirect />} />
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/w/ws-1/help/system-prompts#placeholders',
+    )
+  })
+
+  it('der Anker #placeholders steht auf der Hilfe-Seite in beiden Sprachen', () => {
+    for (const locale of ['de', 'en'] as const) {
+      const page = findPage(helpIndex, locale, 'system-prompts')
+      expect(page?.blocks.map((block) => block.id)).toContain('placeholders')
+    }
   })
 })
 

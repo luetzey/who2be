@@ -203,11 +203,6 @@ const SystemPromptDetailPage = lazy(() =>
     default: mod.SystemPromptDetailPage,
   })),
 )
-const HelpPlaceholdersPage = lazy(() =>
-  import('@/features/system-prompts/pages/HelpPlaceholdersPage').then((mod) => ({
-    default: mod.HelpPlaceholdersPage,
-  })),
-)
 // Hilfe-Bereich (Onboarding P4): ein Chunk fuer Start, Artikel und Tutorial —
 // die drei teilen Index, Markdown-Renderer und Tutorial-Hook.
 const HelpHomePage = lazy(() =>
@@ -356,6 +351,14 @@ function HelpShortLinkRedirect() {
   return (
     <Navigate to={`/w/${workspaceId}/help${rest === '' ? '' : `/${rest}`}${hash}`} replace />
   )
+}
+
+// Die fruehere Platzhalter-Seite ist in die Hilfe-Seite „System-Prompts und
+// Platzhalter“ aufgegangen (Onboarding P7c). Alte Lesezeichen und Links landen
+// per replace direkt am Abschnitt mit allen Platzhaltern.
+export function HelpPlaceholdersRedirect() {
+  const params = useParams<{ workspaceId: string }>()
+  return <Navigate to={`/w/${params.workspaceId}/help/system-prompts#placeholders`} replace />
 }
 
 export function RouterRoot() {
@@ -533,7 +536,7 @@ export function RouterRoot() {
                     der Inhaltstest sperrt diese Slugs fuer Hilfe-Seiten. */}
                 <Route
                   path="/w/:workspaceId/help/placeholders"
-                  element={<HelpPlaceholdersPage />}
+                  element={<HelpPlaceholdersRedirect />}
                 />
                 <Route
                   path="/w/:workspaceId/help/tutorials/:tutorialId"
