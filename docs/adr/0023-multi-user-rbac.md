@@ -189,3 +189,17 @@ raus und taucht serverseitig nur im Accept-Request auf (`InvitationAccept`).
 - Roll-Back ist billig: `workspace_invitation` droppen und
   `api_token.role` droppen — Bestandsdaten (Token, Member) bleiben
   unangetastet.
+
+## Nachtrag 2026-10-22 — Rollenwechsel und Entfernen widerrufen Tokens
+
+Der im Trade-off oben als "spaeterer Schritt" offengelassene Auto-Revoke ist
+seit 951a088c (2026-07-22) umgesetzt, und zwar fuer **jeden** Rollenwechsel
+(nicht nur Downgrade) und fuer das Entfernen eines Mitglieds. Die
+Kehrseite "herabgestuftes Mitglied behaelt sein admin-Token" entfaellt damit;
+die Snapshot-Semantik selbst (Pinning beim Erstellen, statisch bei Nutzung)
+gilt unveraendert. Massgeblich ist der Code:
+`WorkspaceMemberService.update_role` / `.remove` →
+`TokenRepository.revoke_by_owner`, belegt durch
+`apps/api/tests/test_tokens.py::test_member_downgrade_revokes_their_tokens`.
+Die Mitglieder-Seite meldet den Widerruf nach jedem Rollenwechsel
+(`members.list.tokensRevokedInfo`).
