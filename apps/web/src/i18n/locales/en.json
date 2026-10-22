@@ -2168,10 +2168,6 @@
         "toast": {
           "restored": "v{{version}} restored as draft."
         }
-      },
-      "help": {
-        "title": "Placeholder reference",
-        "description": "Which placeholders are available in the system-prompt editor and what they insert on MCP read."
       }
     },
     "nav": {
