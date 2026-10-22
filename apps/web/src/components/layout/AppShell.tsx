@@ -35,6 +35,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 
 import { Footer } from './Footer'
+import { HelpMenu } from './HelpMenu'
 import { NoticeBanner } from './NoticeBanner'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
@@ -281,6 +282,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
             </SheetContent>
           </Sheet>
           <div className="ml-auto flex items-center gap-2">
+            <HelpMenu />
             <InboxBell />
             <LanguageSwitcher />
             <ThemeToggle />

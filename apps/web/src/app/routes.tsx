@@ -219,6 +219,9 @@ const HelpArticlePage = lazy(() =>
 const HelpTutorialPage = lazy(() =>
   import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpTutorialPage })),
 )
+const HelpNewsPage = lazy(() =>
+  import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpNewsPage })),
+)
 
 // Agenten-Arbeitsbereich + Knowledge Base (ADR-0047). Eigenes Sub-Layout mit
 // Sub-Navigation (Muster `SettingsLayout`) — die Lese-Ansicht besteht aus
@@ -526,7 +529,7 @@ export function RouterRoot() {
                   />
                 </Route>
                 <Route path="/w/:workspaceId/help" element={<HelpHomePage />} />
-                {/* Statische Segmente (`placeholders`, `tutorials`) vor `:slug`;
+                {/* Statische Segmente (`placeholders`, `tutorials`, `neu`) vor `:slug`;
                     der Inhaltstest sperrt diese Slugs fuer Hilfe-Seiten. */}
                 <Route
                   path="/w/:workspaceId/help/placeholders"
@@ -536,6 +539,7 @@ export function RouterRoot() {
                   path="/w/:workspaceId/help/tutorials/:tutorialId"
                   element={<HelpTutorialPage />}
                 />
+                <Route path="/w/:workspaceId/help/neu" element={<HelpNewsPage />} />
                 <Route path="/w/:workspaceId/help/:slug" element={<HelpArticlePage />} />
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />

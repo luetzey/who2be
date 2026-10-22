@@ -4525,7 +4525,7 @@
       "title": "Erste Schritte",
       "progress": "{{done}} von {{total}} erledigt · etwa {{minutes}} Minuten",
       "hide": "Ausblenden",
-      "hidden": "Ausgeblendet. Du findest „{{title}}“ jederzeit in der Hilfe unter Tutorials.",
+      "hidden": "Ausgeblendet. Du findest „{{title}}“ jederzeit im Fragezeichen-Menü oben rechts.",
       "hideFailed": "Ausblenden hat nicht ganz geklappt. Die Liste ist neu geladen, versuch es bitte noch einmal.",
       "error": "Erste Schritte konnten nicht geladen werden.",
       "openAgents": "Zu den Agents",
@@ -4538,6 +4538,29 @@
         "title": "Du bist startklar",
         "body": "Alle Schritte aus „{{title}}“ sind erledigt.",
         "help": "Zur Hilfe"
+      }
+    },
+    "menu": {
+      "label": "Hilfe und Neuigkeiten",
+      "firstSteps": "Erste Schritte",
+      "firstStepsProgress": "{{done}} von {{total}}",
+      "tutorials": "Tutorials",
+      "search": "Hilfe durchsuchen",
+      "news": "Was ist neu",
+      "replay": "Einführung erneut starten",
+      "replayDone": "Einführung neu gestartet.",
+      "problem": "Problem melden"
+    },
+    "news": {
+      "title": "Was ist neu",
+      "description": "Neue Funktionen und Verbesserungen in Who2Be.",
+      "all": "Alle Neuigkeiten",
+      "more": "Mehr erfahren →",
+      "empty": "Noch keine Neuigkeiten. Hier erscheinen neue Funktionen, sobald es welche gibt.",
+      "type": {
+        "new": "Neu",
+        "improved": "Verbessert",
+        "changed": "Geändert"
       }
     }
   }

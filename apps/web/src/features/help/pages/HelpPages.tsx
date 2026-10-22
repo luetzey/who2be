@@ -1,7 +1,7 @@
-import { ArrowLeft, BookOpen, Check, Copy, GraduationCap, Search } from 'lucide-react'
+import { ArrowLeft, BookOpen, Check, Copy, GraduationCap, Search, Sparkles } from 'lucide-react'
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import type { Tutorial, TutorialStep } from '@/api/client'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
@@ -15,15 +15,7 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { RestartTutorialDialog as RestartDialog } from '@/components/help/RestartTutorialDialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -34,9 +26,12 @@ import {
   type HelpEntry,
   type HelpIndex,
   helpIndex as defaultIndex,
+  type HelpNews,
   type HelpPage,
   type HelpSection,
   type HelpTutorial,
+  type NewsType,
+  newsFor,
   SEARCH_MIN_LENGTH,
   searchHelp,
   toHelpLocale,
@@ -47,7 +42,13 @@ import { notify } from '@/lib/feedback'
 
 import { HelpMarkdown } from '../components/HelpMarkdown'
 import { TutorialProgressBar as ProgressBar } from '../components/TutorialChecklist'
-import { finishedSteps, type TutorialsState, useTutorials } from '../hooks/useTutorials'
+import {
+  finishedSteps,
+  readHelpNavigationState,
+  tutorialStarted as isStarted,
+  type TutorialsState,
+  useTutorials,
+} from '../hooks/useTutorials'
 
 // Bisheriger Exportort; die Darstellung liegt seit P3 in `components/`.
 export { HelpMarkdown }
@@ -64,11 +65,6 @@ const LINK = 'font-medium text-brand underline-offset-4 hover:underline'
 // Kartentitel unter einer h2-Abschnittsüberschrift: echte h3 mit dem Aussehen von CardTitle
 // (CardTitle rendert h2, card.tsx).
 const CARD_HEADING = 'text-lg leading-none font-semibold tracking-tight'
-
-/** Begonnen = ein Schritt ausser dem Startvorsprung ist nicht mehr offen. */
-function isStarted(tutorial: Tutorial): boolean {
-  return tutorial.steps.some((step) => step.type !== 'head_start' && step.state !== 'open')
-}
 
 function BlockHeading({ block }: { block: HelpBlock }) {
   const Tag = block.level === 2 ? 'h2' : 'h3'
@@ -126,36 +122,6 @@ function BackToHelp() {
   )
 }
 
-interface RestartDialogProps {
-  open: boolean
-  title: string
-  busy: boolean
-  onOpenChange: (open: boolean) => void
-  onConfirm: () => void
-}
-
-function RestartDialog({ open, title, busy, onOpenChange, onConfirm }: RestartDialogProps) {
-  const { t } = useTranslation('help')
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('tutorial.restart.title', { title })}</DialogTitle>
-          <DialogDescription>{t('tutorial.restart.body')}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">{t('tutorial.restart.cancel')}</Button>
-          </DialogClose>
-          <Button onClick={onConfirm} disabled={busy}>
-            {t('tutorial.restart.confirm')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 // --- Startseite -----------------------------------------------------------------
 
 interface TutorialCardProps {
@@ -208,13 +174,17 @@ function TutorialCard({ tutorial, text, busy, onRestart }: TutorialCardProps) {
   )
 }
 
-function TutorialsSection({ index }: { index: HelpIndex }) {
+function TutorialsSection({ index, focusTitle }: { index: HelpIndex; focusTitle: boolean }) {
   const { t } = useTranslation('help')
   const locale = useHelpLocale()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const { tutorials, loading, error, reload, pending, restart } = useTutorials()
   const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (focusTitle) titleRef.current?.focus()
+  }, [focusTitle])
 
   // Nur Tutorials, fuer die es Text in dieser Sprache gibt (Paritaetstest
   // sichert das ab; ohne Text zeigt die Liste lieber nichts als eine ID).
@@ -235,7 +205,12 @@ function TutorialsSection({ index }: { index: HelpIndex }) {
 
   return (
     <section aria-labelledby="help-tutorials-title" className="space-y-3">
-      <h2 id="help-tutorials-title" className="text-xl font-semibold tracking-tight">
+      <h2
+        id="help-tutorials-title"
+        ref={titleRef}
+        tabIndex={-1}
+        className="text-xl font-semibold tracking-tight focus-visible:outline-none"
+      >
         {t('home.tutorials.title')}
       </h2>
       {loading ? (
@@ -355,12 +330,131 @@ function ReferenceSection({ index }: { index: HelpIndex }) {
   )
 }
 
+// --- Was ist neu ---------------------------------------------------------------
+
+function useNewsTypeLabel(): (type: NewsType) => string {
+  const { t } = useTranslation('help')
+  const labels: Record<NewsType, string> = {
+    new: t('news.type.new'),
+    improved: t('news.type.improved'),
+    changed: t('news.type.changed'),
+  }
+  return (type) => labels[type]
+}
+
+/** Monat des Eintrags (JJJJ-MM) in der UI-Sprache, z. B. „November 2026“. */
+function monthLabel(date: string): string {
+  return formatDate(`${date.slice(0, 7)}-01T12:00:00`, { month: 'long', year: 'numeric' })
+}
+
+function NewsItem({ item }: { item: HelpNews }) {
+  const { t } = useTranslation('help')
+  const wsPath = useWorkspacePath()
+  const typeLabel = useNewsTypeLabel()
+  return (
+    <li className="space-y-2 p-4" data-testid={`news-${item.slug}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={item.type === 'new' ? 'default' : 'secondary'}>{typeLabel(item.type)}</Badge>
+        <span className="text-xs text-muted-foreground">
+          {formatDate(`${item.date}T12:00:00`)}
+        </span>
+      </div>
+      <h3 className="font-semibold">{item.title}</h3>
+      <HelpMarkdown>{item.body}</HelpMarkdown>
+      {item.link !== null ? (
+        <Link to={wsPath(item.link)} className={`${LINK} text-sm`}>
+          {t('news.more')}
+          <span className="sr-only">: {item.title}</span>
+        </Link>
+      ) : null}
+    </li>
+  )
+}
+
+/** Startseite: die letzten zwei Einträge plus Link auf „Was ist neu“. */
+function NewsTeaser({ index }: { index: HelpIndex }) {
+  const { t } = useTranslation('help')
+  const locale = useHelpLocale()
+  const wsPath = useWorkspacePath()
+  const latest = newsFor(index, locale).slice(0, 2)
+  return (
+    <section aria-labelledby="help-news-title" className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="help-news-title" className="text-xl font-semibold tracking-tight">
+          {t('news.title')}
+        </h2>
+        <Link to={wsPath('/help/neu')} className={`${LINK} text-sm`}>
+          {t('news.all')}
+        </Link>
+      </div>
+      {latest.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('news.empty')}</p>
+      ) : (
+        <ul className="divide-y rounded-lg border bg-card">
+          {latest.map((item) => (
+            <NewsItem key={item.slug} item={item} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Seite `/help/neu`: alle Einträge der Sprache, nach Monat gruppiert (Spec §5.4). */
+export function HelpNewsPage({ index = defaultIndex }: { index?: HelpIndex }) {
+  const { t } = useTranslation('help')
+  const locale = useHelpLocale()
+  const items = newsFor(index, locale)
+  const months: Array<{ month: string; items: HelpNews[] }> = []
+  for (const item of items) {
+    const month = item.date.slice(0, 7)
+    const last = months.at(-1)
+    if (last !== undefined && last.month === month) last.items.push(item)
+    else months.push({ month, items: [item] })
+  }
+  return (
+    <Container>
+      <Stack gap="lg">
+        <BackToHelp />
+        <PageHeader title={t('news.title')} description={t('news.description')} />
+        {months.length === 0 ? (
+          <EmptyState icon={Sparkles} title={t('news.empty')} />
+        ) : (
+          months.map((group) => {
+            const headingId = `news-month-${group.month}`
+            return (
+              <section key={group.month} aria-labelledby={headingId} className="space-y-3">
+                <h2 id={headingId} className="text-xl font-semibold tracking-tight">
+                  {monthLabel(group.items[0].date)}
+                </h2>
+                <ul className="divide-y rounded-lg border bg-card">
+                  {group.items.map((item) => (
+                    <NewsItem key={item.slug} item={item} />
+                  ))}
+                </ul>
+              </section>
+            )
+          })
+        )}
+      </Stack>
+    </Container>
+  )
+}
+
 export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
   const { t } = useTranslation('help')
   const wsPath = useWorkspacePath()
+  const location = useLocation()
   const searchId = useId()
+  const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const searching = query.trim().length >= SEARCH_MIN_LENGTH
+  // Sprung aus dem „?“-Menue: Fokus ins Suchfeld bzw. auf „Tutorials“,
+  // einmal je Navigation.
+  const focus = readHelpNavigationState(location.state).helpFocus
+  useEffect(() => {
+    if (focus === 'search') searchRef.current?.focus()
+  }, [focus, location.key])
   return (
     <Container>
       <Stack gap="lg">
@@ -374,6 +468,7 @@ export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
             />
             <Input
               id={searchId}
+              ref={searchRef}
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -387,8 +482,13 @@ export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
           <SearchResults query={query} index={index} />
         ) : (
           <>
-            <TutorialsSection index={index} />
+            <TutorialsSection
+              key={location.key}
+              index={index}
+              focusTitle={focus === 'tutorials'}
+            />
             <ReferenceSection index={index} />
+            <NewsTeaser index={index} />
           </>
         )}
         <p className="text-sm text-muted-foreground">

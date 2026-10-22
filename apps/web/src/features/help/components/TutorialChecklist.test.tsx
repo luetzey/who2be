@@ -360,4 +360,15 @@ describe('TutorialChecklist', () => {
       'true',
     )
   })
+
+  it('setzt beim Sprung aus dem „?“-Menü den Fokus auf die Überschrift', async () => {
+    stubApi([[probe()]])
+    renderInRoutes(<TutorialChecklist index={index} now={NOW} />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: [{ pathname: '/w/ws-1/dashboard', state: { focusTutorial: 'probe' } }],
+      me: meWithRole('editor'),
+    })
+    const card = await screen.findByRole('region', { name: 'Probe-Liste de' })
+    await waitFor(() => expect(within(card).getByText('Probe-Liste de')).toHaveFocus())
+  })
 })

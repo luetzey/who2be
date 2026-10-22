@@ -7,7 +7,7 @@ import { buildHelpIndex } from '@/help/helpIndex'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
-import { HelpArticlePage, HelpHomePage, HelpMarkdown, HelpTutorialPage } from './HelpPages'
+import { HelpArticlePage, HelpHomePage, HelpMarkdown, HelpNewsPage, HelpTutorialPage } from './HelpPages'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -60,6 +60,15 @@ const pageMd = (lang: string, title: string, audience: string, order: number, bo
     'Siehe [extern](https://who2be.de).',
   ].join('\n')
 
+/** News-Eintrag in beiden Sprachen (`./news/<slug>.<lang>.md`). */
+function newsMd(slug: string, type: string, title: string, extra = ''): Record<string, string> {
+  const md = (lang: string) =>
+    ['---', `date: ${slug.slice(0, 10)}`, `type: ${type}`, `title: ${title} ${lang}`, extra, '---', '', `Text ${lang}.`]
+      .filter((line) => line !== '')
+      .join('\n')
+  return { [`./news/${slug}.de.md`]: md('de'), [`./news/${slug}.en.md`]: md('en') }
+}
+
 const index = buildHelpIndex({
   './tutorials/demo.de.md': tutorialMd('de'),
   './tutorials/demo.en.md': tutorialMd('en'),
@@ -67,6 +76,9 @@ const index = buildHelpIndex({
   './bausteine/persona.en.md': pageMd('en', 'Persona', 'all', 1, 'Identity and `tone`.'),
   './bausteine/admin-only.de.md': pageMd('de', 'Abrechnung', 'admin', 2, 'Nur für Admins.'),
   './bausteine/admin-only.en.md': pageMd('en', 'Billing', 'admin', 2, 'Admins only.'),
+  ...newsMd('2026-11-13-hilfe', 'new', 'Hilfe-Menü', 'link: /help/persona'),
+  ...newsMd('2026-11-02-suche', 'improved', 'Bessere Suche'),
+  ...newsMd('2026-10-20-start', 'changed', 'Neuer Start'),
 })
 
 function tutorial(overrides: Partial<Tutorial> = {}): Tutorial {
@@ -210,6 +222,73 @@ describe('HelpHomePage', () => {
     expect(calls.find((c) => c.method === 'POST')?.url).toContain(
       '/v1/me/tutorials/demo/restart?workspace_id=ws-1',
     )
+  })
+
+  it('zeigt die letzten zwei Neuigkeiten mit Link auf „Was ist neu“', async () => {
+    stubApi([tutorial()])
+    renderInRoutes(<HelpHomePage index={index} />, {
+      path: '/w/:workspaceId/help',
+      initialEntries: ['/w/ws-1/help'],
+      me: meWithRole('editor'),
+    })
+    const section = await screen.findByRole('region', { name: 'Was ist neu' })
+    expect(within(section).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Hilfe-Menü de',
+      'Bessere Suche de',
+    ])
+    expect(within(section).getByRole('link', { name: 'Alle Neuigkeiten' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/neu',
+    )
+  })
+
+  it.each([
+    ['search', () => screen.getByLabelText('Hilfe durchsuchen')],
+    ['tutorials', () => screen.getByRole('heading', { level: 2, name: 'Tutorials' })],
+  ] as const)('setzt nach dem Sprung aus dem Menü den Fokus (%s)', async (helpFocus, target) => {
+    stubApi([tutorial()])
+    renderInRoutes(<HelpHomePage index={index} />, {
+      path: '/w/:workspaceId/help',
+      initialEntries: [{ pathname: '/w/ws-1/help', state: { helpFocus } }],
+      me: meWithRole('editor'),
+    })
+    await waitFor(() => expect(target()).toHaveFocus())
+  })
+})
+
+describe('HelpNewsPage', () => {
+  it('gruppiert nach Monat, neueste zuerst, mit Typ und Link, besteht axe', async () => {
+    const { container } = renderInRoutes(<HelpNewsPage index={index} />, {
+      path: '/w/:workspaceId/help/neu',
+      initialEntries: ['/w/ws-1/help/neu'],
+      me: meWithRole('editor'),
+    })
+    expect(screen.getByRole('heading', { level: 1, name: 'Was ist neu' })).toBeInTheDocument()
+    const main = screen.getByRole('main')
+    expect(within(main).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'November 2026',
+      'Oktober 2026',
+    ])
+    const november = screen.getByRole('region', { name: 'November 2026' })
+    const first = within(november).getByTestId('news-2026-11-13-hilfe')
+    expect(within(first).getByText('Neu')).toBeInTheDocument()
+    expect(within(first).getByText('Text de.')).toBeInTheDocument()
+    expect(within(first).getByRole('link', { name: /Mehr erfahren/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/persona',
+    )
+    expect(within(november).getByText('Verbessert')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Oktober 2026' })).getByText('Geändert')).toBeInTheDocument()
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('zeigt einen leeren Zustand ohne Einträge', () => {
+    renderInRoutes(<HelpNewsPage index={buildHelpIndex({})} />, {
+      path: '/w/:workspaceId/help/neu',
+      initialEntries: ['/w/ws-1/help/neu'],
+      me: meWithRole('editor'),
+    })
+    expect(screen.getByText(/Noch keine Neuigkeiten/)).toBeInTheDocument()
   })
 })
 
