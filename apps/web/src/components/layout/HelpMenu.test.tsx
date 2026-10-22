@@ -205,6 +205,23 @@ describe('HelpMenu', () => {
       expect(trigger()).toHaveAccessibleName('Hilfe und Neuigkeiten')
     })
 
+    it('kein Punkt, wenn news_seen_at genau auf dem Eintragsdatum liegt (00:00 UTC)', async () => {
+      // Eintragsdatum 2026-10-20 gilt als 2026-10-20T00:00:00Z; „danach“ heisst echt spaeter.
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: '2026-10-20T00:00:00Z', created_at: '2026-01-01T00:00:00Z' })
+      await settled()
+      expect(dot()).toBeNull()
+    })
+
+    it('ohne news_seen_at: Punkt noch am Tag 14 nach dem Eintrag', async () => {
+      // 2026-10-20 00:00 UTC + 14 Tage = 2026-11-03 00:00 UTC: letzter Zeitpunkt mit Punkt.
+      at('2026-11-03T00:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: null, created_at: '2026-08-01T00:00:00Z' })
+      expect(await screen.findByTestId('help-menu-news-dot')).toBeInTheDocument()
+    })
+
     it('ohne news_seen_at: Punkt bei einem Eintrag nach der Kontoanlage, höchstens 14 Tage alt', async () => {
       at('2026-10-22T10:00:00Z')
       stubApi([welcome()])
