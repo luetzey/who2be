@@ -38,6 +38,7 @@ from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_mcp.instructions import ALWAYS_LOAD_META, SERVER_INSTRUCTIONS
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
+from who2be_mcp.tool_annotations import ReadOnlyHintTransform
 from who2be_mcp.tools import content as content_tools
 from who2be_mcp.tools.content import (
     ENTITY_PATH,
@@ -123,6 +124,9 @@ mcp: FastMCP = FastMCP("who2be", instructions=SERVER_INSTRUCTIONS)
 # fail-open ohne aufloesbare Identitaet (ping bleibt token-frei nutzbar);
 # KEINE Security-Grenze — die API-Durchsetzung bleibt autoritativ (ADR-0039).
 mcp.add_middleware(PolicyFilterMiddleware())
+# `readOnlyHint` je Werkzeug aus `MCP_TOOL_REQUIREMENTS` (ChatGPT fragt sonst
+# bei jedem Lesezugriff nach); als Transform gilt es auch fuer `tools/*.register`.
+mcp.add_transform(ReadOnlyHintTransform())
 
 # Alle Tools registrieren sich mit `output_schema=None`: FastMCP 3 generiert
 # sonst aus den Pydantic-Rueckgabetypen voluminoese outputSchemas, die ~72 %

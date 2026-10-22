@@ -85,6 +85,32 @@ class ToolRequirement(BaseModel):
     capabilities: tuple[AgentCapability, ...] = ()
     memory: MemoryMode | None = None
     always: bool = False
+    # Nur fuer Werkzeuge, deren Sichtbarkeits-Achse nicht verraet, ob sie
+    # schreiben: Lesewerkzeuge hinter einer Capability (`get_dossier`,
+    # `get_system_prompt` …). `None` = aus der Achse abgeleitet, siehe
+    # `is_read_only`.
+    read_only: bool | None = None
+
+    @property
+    def is_read_only(self) -> bool:
+        """Liest das Werkzeug nur (MCP-Annotation `readOnlyHint`)?
+
+        Abgeleitet aus der Sichtbarkeits-Achse, damit es keine zweite Liste
+        gibt: `always` und `read_domain` lesen, Memory nur auf Stufe
+        `read_only`, Capability-Werkzeuge und Werkzeuge ohne Achse schreiben.
+        Ein gesetztes `read_only` gewinnt. Im Zweifel `False`: ein Client
+        fragt dann einmal zu viel nach, statt eine Schreibaktion ohne
+        Rueckfrage auszufuehren.
+        """
+        if self.read_only is not None:
+            return self.read_only
+        if self.always:
+            return True
+        if self.capabilities:
+            return False
+        if self.memory is not None:
+            return self.memory == MemoryMode.read_only
+        return self.read_domain is not None
 
 
 # Geteilte, eingefrorene Instanzen — haelt das Mapping unten lesbar.
@@ -120,7 +146,7 @@ _KB_EDGE_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_edge_write,))
 # Agenten, ein fremder `agent_id` endet in `missing_capability`.
 _TEST_REPORT = ToolRequirement(capabilities=(AgentCapability.test_report,))
 _TEST_CASE_READ = ToolRequirement(
-    capabilities=(AgentCapability.test_report, AgentCapability.case_triage)
+    capabilities=(AgentCapability.test_report, AgentCapability.case_triage), read_only=True
 )
 # Faelle (ADR-0053 6.5/6.7, Paket D4): Melden wie Feedback hinter
 # `feedback_write`. Schildern haengt an keiner Capability und keinem
@@ -132,6 +158,15 @@ _TEST_CASE_READ = ToolRequirement(
 # `tools/list`.
 _CASE_STATEMENT = ToolRequirement()
 _CASE_TRIAGE = ToolRequirement(capabilities=(AgentCapability.case_triage,))
+# Lesewerkzeuge hinter einer Capability (MCP-Annotation `readOnlyHint`, siehe
+# `ToolRequirement.is_read_only`): gleiche Sichtbarkeit, aber als lesend
+# markiert. `get_follow_up` gehoert NICHT dazu: ruft ein Agent es auf, kann ein
+# `follow_up_prepared`-Ereignis entstehen.
+_CASE_TRIAGE_READ = ToolRequirement(capabilities=(AgentCapability.case_triage,), read_only=True)
+_SYSTEM_PROMPT_READ = ToolRequirement(
+    capabilities=(AgentCapability.system_prompt_write,), read_only=True
+)
+_FEEDBACK_READ = ToolRequirement(capabilities=(AgentCapability.feedback_write,), read_only=True)
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -208,9 +243,9 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
         capabilities=(AgentCapability.promote_retire, AgentCapability.external_tool_write)
     ),
     # --- System-Prompt-Templates (ADR-0040) — nur mit `system_prompt_write` ---
-    "list_system_prompts": _SYSTEM_PROMPT_WRITE,
-    "get_system_prompt": _SYSTEM_PROMPT_WRITE,
-    "list_placeholders": _SYSTEM_PROMPT_WRITE,
+    "list_system_prompts": _SYSTEM_PROMPT_READ,
+    "get_system_prompt": _SYSTEM_PROMPT_READ,
+    "list_placeholders": _SYSTEM_PROMPT_READ,
     "create_system_prompt": _SYSTEM_PROMPT_WRITE,
     "update_system_prompt": _SYSTEM_PROMPT_WRITE,
     "restore_system_prompt": _SYSTEM_PROMPT_WRITE,
@@ -231,7 +266,7 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "record_usage": _FEEDBACK_WRITE,
     "submit_feedback": _FEEDBACK_WRITE,
     "report_problem": _FEEDBACK_WRITE,
-    "get_feedback": _FEEDBACK_WRITE,
+    "get_feedback": _FEEDBACK_READ,
     # --- Feedback-Triage — `feedback_resolve` (Default aus): Signale schliessen
     #     ist Kurations-Macht, getrennt vom blossen Melden (`feedback_write`).
     "resolve_feedback": ToolRequirement(capabilities=(AgentCapability.feedback_resolve,)),
@@ -293,21 +328,21 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     # --- Faelle (ADR-0053 6.5, D4) — `tools/learning.py` ---
     "report_case": _FEEDBACK_WRITE,
     "submit_case_statement": _CASE_STATEMENT,
-    "list_cases": _CASE_TRIAGE,
+    "list_cases": _CASE_TRIAGE_READ,
     "assign_case_elements": _CASE_TRIAGE,
     # Feedback-Gespraech (ADR-0053 6.6/6.7, E-MCP-1): Dossier, Protokoll,
     # Entwurf verknuepfen, Nachschau — nur mit `case_triage`. Einstufen und
     # Zurueckziehen haben kein Werkzeug (Entscheidung eines Menschen).
-    "get_dossier": _CASE_TRIAGE,
+    "get_dossier": _CASE_TRIAGE_READ,
     "submit_session_protocol": _CASE_TRIAGE,
     "link_measure_draft": _CASE_TRIAGE,
     "get_follow_up": _CASE_TRIAGE,
     # Werkzeugluecken D7 (Phase E, E-MCP-2, PM-2/PM-4): nur mit `case_triage`.
-    "get_case": _CASE_TRIAGE,
+    "get_case": _CASE_TRIAGE_READ,
     "triage_case": _CASE_TRIAGE,
-    "list_patterns": _CASE_TRIAGE,
+    "list_patterns": _CASE_TRIAGE_READ,
     "create_test_case": _CASE_TRIAGE,
-    "get_lesson": _CASE_TRIAGE,
+    "get_lesson": _CASE_TRIAGE_READ,
     "convert_lesson_to_case": _CASE_TRIAGE,
 }
 
