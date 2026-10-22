@@ -3,7 +3,9 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
-import type { Tutorial, TutorialStep } from '@/api/client'
+import { markNewsSeen, type Tutorial, type TutorialStep } from '@/api/client'
+import { useSession } from '@/auth/session-context'
+import { useAuthToken } from '@/auth/useAuthToken'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { EmptyState } from '@/components/data/EmptyState'
@@ -400,10 +402,33 @@ function NewsTeaser({ index }: { index: HelpIndex }) {
   )
 }
 
+/**
+ * Oeffnen der Seite setzt `news_seen_at` am Konto (Spec §5.4, ADR-0060 §4)
+ * und laedt danach `/v1/me` neu, damit der Punkt am „?“ verschwindet. Genau
+ * ein PATCH je Seitenbesuch: der Ref haelt auch den doppelten Effekt-Lauf im
+ * StrictMode und ein Neu-Rendern durch das neue `me` ab. Scheitert der
+ * Aufruf, bleibt der Punkt stehen — kein Fehlerhinweis, die Seite selbst
+ * funktioniert.
+ */
+function useMarkNewsSeen() {
+  const token = useAuthToken()
+  const { refreshMe } = useSession()
+  const sent = useRef(false)
+  useEffect(() => {
+    if (sent.current || token === '') return
+    sent.current = true
+    markNewsSeen(token).then(
+      () => void refreshMe(),
+      () => undefined,
+    )
+  }, [token, refreshMe])
+}
+
 /** Seite `/help/neu`: alle Einträge der Sprache, nach Monat gruppiert (Spec §5.4). */
 export function HelpNewsPage({ index = defaultIndex }: { index?: HelpIndex }) {
   const { t } = useTranslation('help')
   const locale = useHelpLocale()
+  useMarkNewsSeen()
   const items = newsFor(index, locale)
   const months: Array<{ month: string; items: HelpNews[] }> = []
   for (const item of items) {

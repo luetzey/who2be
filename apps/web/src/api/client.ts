@@ -413,6 +413,12 @@ export function fetchMe(token: string): Promise<Me> {
   return request<Me>(token, apiPath`/v1/me`)
 }
 
+// „Was ist neu“ geoeffnet: setzt `news_seen_at` des Kontos auf jetzt (ADR-0060
+// §4). Kontoweit, nicht workspace-scoped; wiederholbar ohne Nebenwirkung.
+export function markNewsSeen(token: string): Promise<{ news_seen_at: string }> {
+  return request<{ news_seen_at: string }>(token, apiPath`/v1/me/news-seen`, { method: 'PATCH' })
+}
+
 // Invitation-Annahme ist bewusst NICHT workspace-scoped: der Einladende kennt
 // den Ziel-Workspace, der Eingeladene noch nicht. Der Klartext-Token reist im
 // Body, nie in Pfad oder Query — sonst stuende er in Access-Logs zwischen
