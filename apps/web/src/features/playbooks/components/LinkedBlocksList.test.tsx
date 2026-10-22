@@ -44,7 +44,7 @@ describe('LinkedBlocksList', () => {
 
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
     expect(screen.getByText('Nur in Draft')).toBeInTheDocument()
-    expect(screen.getByText('Block geloescht')).toBeInTheDocument()
+    expect(screen.getByText('Block gelöscht')).toBeInTheDocument()
     expect(screen.getByText('Aktive Section.')).toBeInTheDocument()
     expect(screen.getByText('Draft-Section.')).toBeInTheDocument()
   })
@@ -58,7 +58,7 @@ describe('LinkedBlocksList', () => {
     )
 
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
-    expect(screen.getByText('Block geloescht')).toBeInTheDocument()
+    expect(screen.getByText('Block gelöscht')).toBeInTheDocument()
     expect(screen.getByText('Erster Block')).toBeInTheDocument()
   })
 
@@ -72,7 +72,7 @@ describe('LinkedBlocksList', () => {
 
   it('zeigt Leerzustand ohne Links', () => {
     render(<LinkedBlocksList links={[]} onRemove={() => {}} />)
-    expect(screen.getByText('Noch keine Bloecke verknuepft.')).toBeInTheDocument()
+    expect(screen.getByText('Noch keine Blöcke verknüpft.')).toBeInTheDocument()
   })
 
   it('rendert einen Resource-Scope-Link als Ganzes Dokument', () => {
@@ -88,7 +88,7 @@ describe('LinkedBlocksList', () => {
     expect(screen.getByText('Ganzes Dokument')).toBeInTheDocument()
     // Default ohne embedding_mode → lazy-Hinweis.
     expect(
-      screen.getByText('Vollstaendige Resource — Link (lazy), via fetch nachgeladen'),
+      screen.getByText('Vollständige Resource — Link (lazy), via fetch nachgeladen'),
     ).toBeInTheDocument()
   })
 
@@ -104,7 +104,7 @@ describe('LinkedBlocksList', () => {
     })
     render(<LinkedBlocksList links={[inlineLink]} onRemove={() => {}} />)
     expect(
-      screen.getByText('Vollstaendige Resource — fest eingebettet (inline)'),
+      screen.getByText('Vollständige Resource — fest eingebettet (inline)'),
     ).toBeInTheDocument()
   })
 })

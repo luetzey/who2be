@@ -263,7 +263,7 @@ describe('LoginPage', () => {
     // Zweite Stufe: Code-Feld erscheint.
     const codeField = await screen.findByLabelText('Code')
     fireEvent.change(codeField, { target: { value: '123456' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
 
     await waitFor(() => {
       expect(challenge).toHaveBeenCalledWith({ factorId: 'f1' })
@@ -384,11 +384,11 @@ describe('LoginPage — Passwort-Login-Fehlerpfade', () => {
     // Bleibt auf der Login-Maske; kein Resend-CTA (nicht der Unconfirmed-Fall).
     expect(screen.getByRole('button', { name: 'Anmelden' })).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Bestaetigungs-Mail erneut senden' }),
+      screen.queryByRole('button', { name: 'Bestätigungs-Mail erneut senden' }),
     ).not.toBeInTheDocument()
   })
 
-  it('zeigt bei unbestaetigter E-Mail den Resend-CTA und versendet die Mail erneut', async () => {
+  it('zeigt bei unbestätigter E-Mail den Resend-CTA und versendet die Mail erneut', async () => {
     signInWithPassword.mockResolvedValue({
       data: { session: null },
       error: { message: 'Email not confirmed' },
@@ -399,9 +399,9 @@ describe('LoginPage — Passwort-Login-Fehlerpfade', () => {
     fillAndSubmitLogin()
 
     expect(
-      await screen.findByText('Deine E-Mail-Adresse ist noch nicht bestaetigt.'),
+      await screen.findByText('Deine E-Mail-Adresse ist noch nicht bestätigt.'),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigungs-Mail erneut senden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigungs-Mail erneut senden' }))
 
     await waitFor(() => {
       expect(resend).toHaveBeenCalledWith({
@@ -410,10 +410,10 @@ describe('LoginPage — Passwort-Login-Fehlerpfade', () => {
         options: { emailRedirectTo: expect.stringContaining('/auth/callback') },
       })
     })
-    expect(notifySuccess).toHaveBeenCalledWith('Bestaetigungs-Mail erneut gesendet.')
+    expect(notifySuccess).toHaveBeenCalledWith('Bestätigungs-Mail erneut gesendet.')
   })
 
-  it('meldet einen Fehler beim erneuten Versand der Bestaetigungs-Mail', async () => {
+  it('meldet einen Fehler beim erneuten Versand der Bestätigungs-Mail', async () => {
     signInWithPassword.mockResolvedValue({
       data: { session: null },
       error: { message: 'Email not confirmed' },
@@ -424,7 +424,7 @@ describe('LoginPage — Passwort-Login-Fehlerpfade', () => {
     fillAndSubmitLogin()
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Bestaetigungs-Mail erneut senden' }),
+      await screen.findByRole('button', { name: 'Bestätigungs-Mail erneut senden' }),
     )
 
     await waitFor(() => {
@@ -447,7 +447,7 @@ describe('LoginPage — Passwort-Login-Fehlerpfade', () => {
     }
     fireEvent.submit(formEl)
 
-    expect(await screen.findByText('Bitte gueltige E-Mail eingeben.')).toBeInTheDocument()
+    expect(await screen.findByText('Bitte gültige E-Mail eingeben.')).toBeInTheDocument()
     expect(screen.getByText('Passwort erforderlich.')).toBeInTheDocument()
     expect(signInWithPassword).not.toHaveBeenCalled()
   })
@@ -474,7 +474,7 @@ describe('LoginPage — MFA-Step-up-Zweige', () => {
     const codeField = await reachMfaStep()
 
     fireEvent.change(codeField, { target: { value: '123456' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
 
     expect(
       await screen.findByText('Code konnte nicht verifiziert werden. Bitte erneut versuchen.'),
@@ -488,7 +488,7 @@ describe('LoginPage — MFA-Step-up-Zweige', () => {
     const codeField = await reachMfaStep()
 
     fireEvent.change(codeField, { target: { value: '12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
 
     expect(await screen.findByText('Bitte einen 6-stelligen Code eingeben.')).toBeInTheDocument()
     expect(challenge).not.toHaveBeenCalled()
@@ -499,7 +499,7 @@ describe('LoginPage — MFA-Step-up-Zweige', () => {
     const codeField = await reachMfaStep()
 
     fireEvent.change(codeField, { target: { value: '123456' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
 
     expect(
       await screen.findByText('Code konnte nicht verifiziert werden. Bitte erneut versuchen.'),
@@ -512,7 +512,7 @@ describe('LoginPage — MFA-Step-up-Zweige', () => {
     const codeField = await reachMfaStep()
 
     fireEvent.change(codeField, { target: { value: '123456' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
 
     expect(
       await screen.findByText('Code konnte nicht verifiziert werden. Bitte erneut versuchen.'),
@@ -689,7 +689,7 @@ describe('LoginPage — Captcha', () => {
     fillAndSubmitLogin()
 
     expect(
-      await screen.findByText('Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal.'),
+      await screen.findByText('Die Bot-Prüfung ist fehlgeschlagen. Bitte versuche es noch einmal.'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/request disallowed/i)).not.toBeInTheDocument()
     // Verbrauchtes Token verworfen → Submit gesperrt, Widget neu gestellt.
@@ -699,7 +699,7 @@ describe('LoginPage — Captcha', () => {
     })
   })
 
-  it('schickt das Token beim erneuten Versand der Bestaetigungs-Mail mit', async () => {
+  it('schickt das Token beim erneuten Versand der Bestätigungs-Mail mit', async () => {
     mockConfig.turnstileSiteKey = '0x4AAAAAAA-test'
     const turnstile = stubTurnstile()
     signInWithPassword.mockResolvedValue({
@@ -717,7 +717,7 @@ describe('LoginPage — Captcha', () => {
     // Der Login hat das erste Token verbraucht — der Resend-CTA ist gesperrt,
     // bis eine frische Challenge geloest ist.
     const resendButton = await screen.findByRole('button', {
-      name: 'Bestaetigungs-Mail erneut senden',
+      name: 'Bestätigungs-Mail erneut senden',
     })
     expect(resendButton).toBeDisabled()
 
@@ -749,7 +749,7 @@ describe('LoginPage — Captcha', () => {
 
     fillAndSubmitLogin()
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Bestaetigungs-Mail erneut senden' }),
+      await screen.findByRole('button', { name: 'Bestätigungs-Mail erneut senden' }),
     )
 
     await waitFor(() => {
@@ -794,7 +794,7 @@ describe('LoginPage — Responsive (#569)', () => {
     fillAndSubmitLogin()
 
     const resendButton = await screen.findByRole('button', {
-      name: 'Bestaetigungs-Mail erneut senden',
+      name: 'Bestätigungs-Mail erneut senden',
     })
     expect(resendButton.className).toContain('h-10')
     expect(resendButton.className).toContain('md:h-9')

@@ -80,7 +80,7 @@ function PersonaModesInfoPill({ onJumpToModes }: { onJumpToModes?: () => void })
 
 const PROFILE_EXAMPLE_SNIPPET = `Rolle: Senior-Customer-Support-Coach.
 Tonfall: ruhig, empathisch, direkt — kein Marketing-Geschwurbel.
-Beispiele: "Reset-Mail beantworten" → freundlich begruessen, Schritte als Liste.
+Beispiele: "Reset-Mail beantworten" → freundlich begrüßen, Schritte als Liste.
 Ausnahmen: kein Rabattversprechen ohne Freigabe.`
 
 interface PersonaProfileFieldsProps {

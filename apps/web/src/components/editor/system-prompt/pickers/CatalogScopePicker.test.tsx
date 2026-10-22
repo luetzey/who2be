@@ -14,7 +14,7 @@ function setup(initial?: PlaceholderProps, open = true) {
 }
 
 describe('CatalogScopePicker', () => {
-  it('bestaetigt im Default-Modus mit target_id "all"', () => {
+  it('bestätigt im Default-Modus mit target_id "all"', () => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId('catalog-scope-picker-confirm'))
     expect(onConfirm).toHaveBeenCalledWith({
@@ -24,7 +24,7 @@ describe('CatalogScopePicker', () => {
     })
   })
 
-  it('bestaetigt nach Auswahl von "triggered" mit passendem Label', () => {
+  it('bestätigt nach Auswahl von "triggered" mit passendem Label', () => {
     const { onConfirm } = setup()
     fireEvent.click(screen.getByTestId('catalog-scope-option-triggered'))
     fireEvent.click(screen.getByTestId('catalog-scope-picker-confirm'))
@@ -69,10 +69,10 @@ describe('CatalogScopePicker', () => {
     expect(screen.getByTestId('catalog-scope-picker-confirm')).toHaveTextContent('Aktualisieren')
   })
 
-  it('zeigt Einfuegen-Beschriftungen ohne Pill', () => {
+  it('zeigt Einfügen-Beschriftungen ohne Pill', () => {
     setup()
-    expect(screen.getByText('Playbook-Katalog einfuegen')).toBeInTheDocument()
-    expect(screen.getByTestId('catalog-scope-picker-confirm')).toHaveTextContent('Einfuegen')
+    expect(screen.getByText('Playbook-Katalog einfügen')).toBeInTheDocument()
+    expect(screen.getByTestId('catalog-scope-picker-confirm')).toHaveTextContent('Einfügen')
   })
 
   it('ruft onCancel ueber den Abbrechen-Button auf', () => {

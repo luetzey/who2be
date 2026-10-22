@@ -14,7 +14,7 @@ describe('PrivacyPage', () => {
       </MemoryRouter>,
     )
     expect(
-      getByRole('heading', { level: 1, name: /Datenschutzerklaerung/i }),
+      getByRole('heading', { level: 1, name: /Datenschutzerklärung/i }),
     ).toBeInTheDocument()
     // Art.-13/14-Kernabschnitte.
     expect(getByRole('heading', { name: /Verantwortlicher/i })).toBeInTheDocument()

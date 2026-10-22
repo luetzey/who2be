@@ -40,7 +40,7 @@ describe('ComingSoonPage', () => {
   it('verlinkt zurueck zur Anmeldung', () => {
     renderPage()
 
-    expect(screen.getByRole('link', { name: 'Zurueck zur Anmeldung' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Zurück zur Anmeldung' })).toHaveAttribute(
       'href',
       '/login',
     )
@@ -110,7 +110,7 @@ describe('ComingSoonPage', () => {
 
     expect(screen.getByText(hostile)).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
-    // Einziger Link bleibt "Zurueck zur Anmeldung".
+    // Einziger Link bleibt "Zurück zur Anmeldung".
     expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 })

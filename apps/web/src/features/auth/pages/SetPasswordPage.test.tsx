@@ -84,7 +84,7 @@ describe('SetPasswordPage', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 
-  it('blockt Submit, wenn Passwoerter nicht uebereinstimmen', async () => {
+  it('blockt Submit, wenn Passwörter nicht übereinstimmen', async () => {
     renderPage('/onboarding/set-password')
 
     fireEvent.change(screen.getByLabelText('Neues Passwort'), {
@@ -96,7 +96,7 @@ describe('SetPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Passwort setzen' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Passwoerter stimmen nicht ueberein.')).toBeInTheDocument()
+      expect(screen.getByText('Passwörter stimmen nicht überein.')).toBeInTheDocument()
     })
     expect(updateUser).not.toHaveBeenCalled()
   })

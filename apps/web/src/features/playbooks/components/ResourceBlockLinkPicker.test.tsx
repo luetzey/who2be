@@ -55,12 +55,12 @@ vi.mock('@/api/useApi', () => {
 let mockedApi: ReturnType<typeof fakeApi>
 
 describe('ResourceBlockLinkPicker', () => {
-  it('zeigt nur Heading-Bloecke und rendert Section-Preview', async () => {
+  it('zeigt nur Heading-Blöcke und rendert Section-Preview', async () => {
     mockedApi = fakeApi()
     render(
       <ResourceBlockLinkPicker existing={[]} saving={false} onSave={() => {}} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
 
     fireEvent.click(await screen.findByRole('button', { name: 'Runbook' }))
 
@@ -84,7 +84,7 @@ describe('ResourceBlockLinkPicker', () => {
     render(
       <ResourceBlockLinkPicker existing={[]} saving={false} onSave={onSave} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Runbook' }))
     await waitFor(() => {
       expect(screen.getByText('Reset-Flow')).toBeInTheDocument()
@@ -92,12 +92,12 @@ describe('ResourceBlockLinkPicker', () => {
 
     // Toggle aktivieren.
     fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Gesamtes Dokument verknuepfen' }),
+      screen.getByRole('checkbox', { name: 'Gesamtes Dokument verknüpfen' }),
     )
 
     // Block-Checkbox ist disabled.
     const headingCheckbox = screen.getByRole('checkbox', {
-      name: /Section Reset-Flow verknuepfen/,
+      name: /Section Reset-Flow verknüpfen/,
     })
     expect(headingCheckbox).toBeDisabled()
 
@@ -137,13 +137,13 @@ describe('ResourceBlockLinkPicker', () => {
         onSave={() => {}}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Runbook' }))
     await waitFor(() => {
       expect(screen.getByText('Gesamtes Dokument')).toBeInTheDocument()
     })
     const toggle = screen.getByRole('checkbox', {
-      name: 'Gesamtes Dokument verknuepfen',
+      name: 'Gesamtes Dokument verknüpfen',
     })
     expect(toggle).toBeChecked()
   })
@@ -159,7 +159,7 @@ describe('ResourceBlockLinkPicker', () => {
     render(
       <ResourceBlockLinkPicker existing={[]} saving={false} onSave={() => {}} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Bloecke verknuepfen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Blöcke verknüpfen' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Runbook' }))
     await waitFor(() => {
       expect(screen.getByText('Eskalation')).toBeInTheDocument()

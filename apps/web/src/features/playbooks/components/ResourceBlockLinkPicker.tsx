@@ -229,7 +229,7 @@ export function ResourceBlockLinkPicker({
                     id={`resource-${activeResource.id}`}
                     checked={resourceScopeSelected}
                     onChange={() => toggleResourceScope(activeResource.id)}
-                    aria-label="Gesamtes Dokument verknuepfen"
+                    aria-label={t('resourcePicker.wholeDocAriaLabel')}
                   />
                   <div className="flex flex-1 flex-col gap-1">
                     <Label
@@ -246,7 +246,7 @@ export function ResourceBlockLinkPicker({
                       <span
                         className="mt-1 inline-flex w-fit overflow-hidden rounded-md border"
                         role="group"
-                        aria-label="Embed-Modus fuer das gesamte Dokument"
+                        aria-label={t('resourcePicker.embedModeGroup')}
                       >
                         <Button
                           type="button"
@@ -281,7 +281,7 @@ export function ResourceBlockLinkPicker({
                     'flex flex-col gap-2',
                     resourceScopeSelected && 'pointer-events-none opacity-60',
                   )}
-                  aria-label="Heading-Bloecke"
+                  aria-label={t('resourcePicker.headingBlocksLabel')}
                 >
                   {headingBlocks.length === 0 ? (
                     <li className="px-1 text-sm text-muted-foreground">
@@ -301,7 +301,7 @@ export function ResourceBlockLinkPicker({
                             checked={selected.includes(key)}
                             onChange={() => toggle(key)}
                             disabled={resourceScopeSelected}
-                            aria-label={`Section ${headingText(block)} verknuepfen`}
+                            aria-label={t('resourcePicker.sectionAriaLabel', { heading: headingText(block) })}
                           />
                           <Label
                             htmlFor={`block-${block.id}`}

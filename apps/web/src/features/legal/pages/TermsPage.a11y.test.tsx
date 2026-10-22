@@ -13,7 +13,7 @@ describe('TermsPage', () => {
         <TermsPage />
       </MemoryRouter>,
     )
-    expect(getByRole('heading', { level: 1, name: /Geschaeftsbedingungen/i })).toBeInTheDocument()
+    expect(getByRole('heading', { level: 1, name: /Geschäftsbedingungen/i })).toBeInTheDocument()
     // Gruppen-Abschnitte als h2 (A. Allgemein, B. Verbraucher, C. Unternehmer).
     expect(getByRole('heading', { level: 2, name: /Verbraucher \(B2C\)/i })).toBeInTheDocument()
     expect(getByRole('heading', { level: 2, name: /Unternehmer \(B2B\)/i })).toBeInTheDocument()

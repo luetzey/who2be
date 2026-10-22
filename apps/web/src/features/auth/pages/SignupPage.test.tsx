@@ -99,7 +99,7 @@ describe('SignupPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konto erstellen' }))
 
     await waitFor(() => {
-      expect(screen.getByText(/Bestaetigungs-Link/i)).toBeInTheDocument()
+      expect(screen.getByText(/Bestätigungs-Link/i)).toBeInTheDocument()
     })
   })
 
@@ -289,7 +289,7 @@ describe('SignupPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Konto erstellen' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal.')).toBeInTheDocument()
+      expect(screen.getByText('Die Bot-Prüfung ist fehlgeschlagen. Bitte versuche es noch einmal.')).toBeInTheDocument()
     })
     expect(screen.queryByText(/request disallowed/i)).not.toBeInTheDocument()
     // Verbrauchtes Token verworfen → Submit wieder gesperrt, Widget neu

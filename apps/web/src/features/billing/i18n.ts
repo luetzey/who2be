@@ -25,7 +25,7 @@ const de = {
       ariaLabel: 'Speicher-Verbrauch',
     },
     rateLimit: 'Rate-Limit',
-    validUntil: 'Gueltig bis',
+    validUntil: 'Gültig bis',
     unlimited: 'unbegrenzt',
     plan: {
       label: 'Plan',
