@@ -27392,7 +27392,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ResourceMarkdownContent",
-        "description": "Resource: `body` als Markdown (GFM-Tabellen erlaubt, ADR-0058 §3.4)."
+        "description": "Resource: `body` als Markdown, GFM-Tabellen erlaubt."
       },
       "ResourceRead": {
         "properties": {
