@@ -36,4 +36,4 @@ Open invitations expire automatically and can be revoked. In a team workspace, i
 
 ## Change a role or remove [#aendern]
 
-In the member list you change the role or remove a member. Existing API tokens of a member keep their old role until they are revoked. So revoke them as well when you take away permissions.
+In the member list you change the role or remove a member. When you do, Who2Be revokes that member's API tokens automatically. New tokens get the new role.

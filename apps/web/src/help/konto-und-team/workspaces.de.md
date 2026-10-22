@@ -36,4 +36,4 @@ Offene Einladungen laufen automatisch ab und lassen sich widerrufen. Im Team-Wor
 
 ## Rolle ändern oder entfernen [#aendern]
 
-In der Mitgliederliste änderst du die Rolle oder entfernst ein Mitglied. Bestehende API-Tokens eines Mitglieds behalten ihre alte Rolle, bis sie widerrufen werden. Widerruf sie also mit, wenn du jemandem Rechte nimmst.
+In der Mitgliederliste änderst du die Rolle oder entfernst ein Mitglied. Dabei widerruft Who2Be die API-Tokens dieses Mitglieds automatisch. Neue Tokens bekommen die neue Rolle.
