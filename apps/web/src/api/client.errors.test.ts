@@ -191,7 +191,7 @@ describe('translateServerError — reason ohne Locale-Key (#509)', () => {
     await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
       status: 403,
       message:
-        'Free-Tarif erreicht das Limit von 500 Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.',
+        'Free-Tarif erreicht das Limit von 500 Einträgen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.',
     })
   })
 
