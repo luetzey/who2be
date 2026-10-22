@@ -52,8 +52,10 @@ Fuer einen Agenten ist dieses JSON in den meisten Faellen **doppelt bezahlt**:
 
 Dazu kommt das Escaping: solange die Antwort ein JSON-Objekt ist, steht jedes
 lesbare Feld darin mit `\n` und `\"` (ADR-0056, Abschnitt 1.3). Wer die Bloecke
-strukturell braucht (ein Editor-Frontend, ein `update_*`-Aufruf), bekommt sie
-weiterhin — siehe `format` unten.
+strukturell braucht (Diagnose, maschinelle Verarbeitung), bekommt sie
+weiterhin mit `format="full"`. Ein `update_*`-Aufruf braucht sie nicht mehr:
+seit ADR-0058 schreiben Agenten Markdown, die Vorlage dafuer liefert
+`format="source"` (siehe unten).
 
 ## Inventar (Messung 2026-09-26, Live-Workspace, vor ADR-0056)
 
@@ -228,8 +230,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-11, nach der Beschreibungs-Diaet (T3) | 90 | **104.290 Bytes** |
 | 2026-10-14, Gespraechs-Werkzeuge (E-MCP-1) | 94 | **109.963 Bytes** |
 | 2026-10-14, Werkzeugluecken D7 (E-MCP-2) | 100 | **114.203 Bytes** |
+| 2026-10-22, Markdown-Schreibweg (ADR-0058 P3) | 101 | **104.777 Bytes** |
 
-Bis zur Grenze bleiben damit 65.797 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 75.223 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -247,16 +250,22 @@ neu erzeugen:
 uv run python -m who2be_mcp.payload_report
 ```
 
-Stand 2026-10-11, 90 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4),
-nach Schema-Diaet (T2) und Beschreibungs-Diaet (T3):
+Stand 2026-10-22, 101 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4),
+nach Schema-Diaet (T2), Beschreibungs-Diaet (T3) und Markdown-Schreibweg
+(ADR-0058 P3):
 
 | Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
 | --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 38 | 29.497 | 4 / 3.811 | 6.003 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 32.971 | 5 / 4.441 | 6.690 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 90 | 104.290 | 5 / 4.441 | 7.671 |
-| Mensch/JWT, Rolle editor | 86 | 100.816 | 4 / 3.811 | 6.984 |
-| alle Werkzeuge (Guard) | 90 | 104.290 | 5 / 4.441 | 7.671 |
+| Agent, Default-Policy | 38 | 29.834 | 4 / 3.870 | 6.190 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 33.308 | 5 / 4.500 | 6.877 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 101 | 104.777 | 5 / 4.500 | 8.059 |
+| Mensch/JWT, Rolle editor | 97 | 101.303 | 4 / 3.870 | 7.372 |
+| alle Werkzeuge (Guard) | 101 | 104.777 | 5 / 4.500 | 8.059 |
+
+Zum Vergleich der Stand 2026-10-11 (90 Werkzeuge, nach T3): Default-Policy
+38 / 29.497, Builder 90 / 104.290, Rolle editor 86 / 100.816 Bytes. Zwischen
+beiden Staenden kamen elf Werkzeuge dazu (E-MCP-1, E-MCP-2, `edit_content`);
+die Ersparnis des Markdown-Schreibwegs gleicht sie beim Builder fast aus.
 
 „Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
 die sichtbaren Werkzeuge mit `alwaysLoad` und deren Bytes. „Start mit Tool
@@ -277,10 +286,12 @@ Client beim Verbinden bekommt.
 | Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 |
 | Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 |
 
-ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um gut 9 KB: die
-zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content` kommt
-mit 1.421 Bytes dazu. Der Default-Start waechst nur um die laengeren
-`instructions` und die `source`-Hinweise der Lesewerkzeuge.
+ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um 9.298 Bytes:
+die zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content`
+kommt mit 1.421 Bytes dazu (Aufschluesselung im Abschnitt
+„Markdown-Schreibweg (W1)“ unten). Der Default-Start waechst um 465 Bytes,
+nur durch die laengeren `instructions` (+128) und die `source`-Hinweise der
+Lesewerkzeuge.
 
 Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
 2026-10-14 auf 120.000 angehoben („1a“), weil die Gespraechs-Werkzeuge aus
@@ -291,24 +302,26 @@ bleibt 35.000.
 Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
 Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an.
 
-Die zehn teuersten Werkzeuge (gleicher Stand, Bytes):
+Die zehn teuersten Werkzeuge (Stand 2026-10-22, 101 Werkzeuge, Bytes):
 
 | # | Werkzeug | gesamt | Beschreibung | Schema |
 | ---: | --- | ---: | ---: | ---: |
 | 1 | `update_agent` | 5.935 | 112 | 5.700 |
 | 2 | `create_agent` | 5.828 | 177 | 5.527 |
-| 3 | `create_persona` | 5.766 | 602 | 4.999 |
-| 4 | `update_persona` | 5.317 | 246 | 4.941 |
-| 5 | `create_external_tool` | 2.862 | 294 | 2.427 |
-| 6 | `update_external_tool` | 2.655 | 208 | 2.305 |
-| 7 | `create_playbook` | 2.456 | 660 | 1.628 |
-| 8 | `create_resource` | 2.243 | 462 | 1.621 |
-| 9 | `update_playbook` | 2.048 | 226 | 1.690 |
-| 10 | `create_system_prompt` | 2.037 | 523 | 1.327 |
+| 3 | `submit_session_protocol` | 3.814 | 398 | 3.268 |
+| 4 | `update_persona` | 2.819 | 290 | 2.398 |
+| 5 | `create_persona` | 2.731 | 415 | 2.186 |
+| 6 | `submit_test_results` | 1.869 | 399 | 1.329 |
+| 7 | `update_playbook` | 1.750 | 339 | 1.278 |
+| 8 | `set_resource_sub_resources` | 1.728 | 204 | 1.372 |
+| 9 | `update_external_tool` | 1.716 | 289 | 1.284 |
+| 10 | `create_external_tool` | 1.684 | 319 | 1.224 |
 
-Bei den vier teuersten liegt das Gewicht im Schema, nicht in der
-Beschreibung: das `inputSchema` traegt das ganze Inhalts- bzw.
-Policy-Modell samt seiner Docstrings.
+Bei den drei teuersten liegt das Gewicht im Schema, nicht in der
+Beschreibung: das `inputSchema` traegt das ganze Policy- bzw.
+Protokoll-Modell samt seiner Docstrings. Die Agent-Werkzeuge tragen kein
+BlockNote; ihr Gewicht ist die `AgentToolPolicy` und damit Sache der
+Werkzeug-Profile (W2, ADR-0059), nicht des Markdown-Schreibwegs.
 
 ### Text-Guards
 
@@ -395,7 +408,55 @@ Die Werkzeugbeschreibung ist der Docstring der Funktion. Regeln:
 | Beschreibungen, Default-Agent | 26.799 | 10.705 (−16.094) |
 
 Die Schemas bleiben unveraendert (67.381 Bytes); bei den vier teuersten
-Schreibwerkzeugen liegt das Gewicht weiter dort (Weiche W1, Markdown-Eingabe).
+Schreibwerkzeugen liegt das Gewicht weiter dort (Weiche W1, Markdown-Eingabe;
+umgesetzt mit ADR-0058, siehe naechster Abschnitt).
+
+### Markdown-Schreibweg (W1, ADR-0058)
+
+Seit ADR-0058 P3 nehmen die zehn `create_*`/`update_*`-Werkzeuge fuer
+Persona, Playbook, Resource, System-Prompt und externes Tool nur noch
+Markdown-Strings, auch `usage_notes` des externen Tools (W58-4). Ein
+BlockNote-Block-Array scheitert an der Schema-Validierung; serialisiertes
+Editor-JSON in einem Markdown-String weist das Werkzeug mit Feldnamen ab,
+bevor die API gefragt wird (harter Schnitt, W58-3 = A). Teiländerungen laufen
+ueber das neue Werkzeug `edit_content`: ein Abschnitt per
+Ueberschriften-Anker `[#id]` oder ein ganzes Feld, mit dem Konflikt-Token
+`base_rev` aus dem `source`-Kopf. Pflicht-Anker stehen nur an Ueberschriften,
+die uebrigen Bloecke ordnet der Server je Abschnitt zu (W58-1 = D).
+
+**Wirkung im Katalog (gemessen mit `payload_report`, vor und nach #1045):**
+
+| Werkzeug | vorher | nachher |
+| --- | ---: | ---: |
+| `create_/update_persona` | 5.766 / 5.317 | 2.731 / 2.819 |
+| `create_/update_playbook` | 2.456 / 2.048 | 1.681 / 1.750 |
+| `create_/update_resource` | 2.243 / 1.868 | 1.350 / 1.433 |
+| `create_/update_external_tool` | 2.862 / 2.655 | 1.684 / 1.716 |
+| `create_/update_system_prompt` | 2.037 / 1.699 | 1.255 / 1.335 |
+| zehn Schreibwerkzeuge zusammen | 28.951 | 17.754 (−11.197) |
+| `create_/update_agent` (unveraendert) | 5.828 / 5.935 | 5.828 / 5.935 |
+| `edit_content` (neu) | — | 1.421 |
+| **Draht `tools/list`, alle Werkzeuge** | **100 / 114.203** | **101 / 104.777 (−9.426)** |
+| Agent, Builder (Start-Ziel) | 115.807 | 106.509 (−9.298) |
+| Agent, Default-Policy (Start-Ziel) | 31.101 | 31.566 (+465) |
+
+ADR-0058 §8.1 hatte netto −1,6 bis −2,7 KB geschaetzt. Gemessen sind es
+−9,4 KB. Die Schaetzung rechnete nur die Block-Listen-Schemas (3.564 Bytes)
+und die JSON-Beispiele als BlockNote-Anteil. Gemessen faellt der Gewinn fast
+ganz im `inputSchema` an: die Schemas der zehn Schreibwerkzeuge schrumpfen
+von 23.768 auf 12.943 Bytes (−10.825), ihre Beschreibungen nur von 3.684 auf
+3.450 Bytes (−234). Die Markdown-Eingabemodelle tragen je Inhalt ein
+String-Feld statt der verschachtelten Inhaltsmodelle samt deren
+Feldbeschreibungen.
+
+**Wirkung je Aufruf:** Der groessere Effekt bleibt der je Schreib- und
+Vorlagenaufruf. M5
+(`packages/models/tests/test_blocknote_markdown_golden.py#M5_MIN_RATIO`)
+misst ueber alle verwalteten Inhaltsdateien das Verhaeltnis von
+Editor-JSON-Argument zu Markdown-Argument: kleinster Wert 1,71, Mittel 2,3.
+Ein Vollstand kostet damit im Mittel gut 40 % der frueheren Argumentgroesse;
+eine Teiländerung mit `edit_content` schickt nur den betroffenen Abschnitt.
+Lesend gilt dasselbe Verhaeltnis fuer die Vorlage (`source` statt `full`).
 
 ### Start bei Tool Search: `instructions` und `alwaysLoad`
 
@@ -489,7 +550,10 @@ faellt er, und der Abschnitt „Offen“ ist nachzuziehen.
 
 - [`mcp-claude-code.md`](mcp-claude-code.md) — den Server anbinden
 - [`adr/0056-mcp-lesende-werkzeuge-text-default.md`](adr/0056-mcp-lesende-werkzeuge-text-default.md)
-  — warum `text` der Default ist und `full` die Vorlage fuer `update_*`
+  — warum `text` der Default ist
+- [`adr/0058-markdown-schreibstandard-agenten.md`](adr/0058-markdown-schreibstandard-agenten.md)
+  — Markdown als Schreibstandard, `format="source"` als Vorlage fuer
+  `update_*` und `edit_content`
 - `apps/mcp/tests/test_tool_payload_budget.py` — haelt zusaetzlich das
   **Katalog**-Budget von `tools/list` (WP10 in
   [`adr/0047-agent-workarea-knowledge-base.md`](adr/0047-agent-workarea-knowledge-base.md)):

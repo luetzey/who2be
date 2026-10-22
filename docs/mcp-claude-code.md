@@ -113,11 +113,31 @@ Nach dem Restart koennen Aufrufe wie folgt aussehen:
 Lesende Werkzeuge mit Inhalt (Persona, Playbook, Resource, System-Prompt,
 externe Tools, Versionen) antworten standardmaessig mit einem
 Markdown-Dokument: ein kurzer Kopf mit `id`, Version und Status, darunter der
-Inhalt als Klartext. Wer die Antwort als Vorlage fuer ein `update_*`-Werkzeug
-braucht oder sie maschinell verarbeitet, setzt `format="full"` und bekommt die
-strukturierte Antwort mit Editor-JSON. Details:
+Inhalt als Klartext. Diese Lesefassung ist **keine** Schreibvorlage.
+
+Geschrieben wird seit ADR-0058 nur noch Markdown, kein Editor-JSON:
+
+- **Vorlage holen:** dasselbe Lesewerkzeug mit `format="source"`
+  (`get_persona`, `fetch_playbook`, `fetch_resource`, `get_system_prompt`,
+  `get_external_tool`, `get_version`). Die Antwort traegt das
+  Quell-Markdown mit Ueberschriften-Ankern `[#id]`, Platzhalter-Tokens und
+  den Konflikt-Token `base_rev` im Kopf.
+- **Ganzes Element ersetzen:** `create_*`/`update_*` mit den Markdown-Feldern
+  (`profile`, `body`, Modus-Felder, `usage_notes`). Ein `update_*` ersetzt den
+  Stand vollstaendig; die Anker `[#id]` an den Ueberschriften der Vorlage
+  stehen lassen, dann behalten die Abschnitte ihre IDs.
+- **Einen Abschnitt oder ein Feld aendern:** `edit_content` mit `entity_type`,
+  `entity_id`, `base_rev`, `op` (`replace`, `insert_after`, `delete`) und
+  `anchor` (Ueberschriften-ID) oder `field`. Hat inzwischen jemand anderes
+  geschrieben, kommt `version_conflict`: Vorlage neu lesen, dann erneut
+  aendern. Jede erfolgreiche Antwort traegt den neuen `base_rev`.
+
+Ein Aufruf mit Editor-JSON scheitert mit einer klaren Meldung.
+`format="full"` liefert die strukturierte Antwort mit Editor-JSON weiterhin,
+aber nur noch fuer Diagnose und maschinelle Verarbeitung. Details:
 [`mcp-payload-budget.md`](mcp-payload-budget.md),
-[ADR-0056](adr/0056-mcp-lesende-werkzeuge-text-default.md).
+[ADR-0056](adr/0056-mcp-lesende-werkzeuge-text-default.md),
+[ADR-0058](adr/0058-markdown-schreibstandard-agenten.md).
 
 ## Caveats
 
