@@ -1,5 +1,6 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Persona, ResourceBlock } from '@/api/types'
@@ -72,13 +73,16 @@ function Harness({
   legacySystemPrompt?: string
 } = {}) {
   const { form } = usePersonaForm(source)
+  // Router noetig: die Profil-Felder tragen den Kontext-Link in die Hilfe (P8).
   return (
-    <PersonaEditorForm
-      form={form}
-      formKey={`${source.id}-${source.current_version}`}
-      initialProfileBlocks={source.content.content?.blocks ?? []}
-      legacySystemPrompt={legacySystemPrompt}
-    />
+    <MemoryRouter>
+      <PersonaEditorForm
+        form={form}
+        formKey={`${source.id}-${source.current_version}`}
+        initialProfileBlocks={source.content.content?.blocks ?? []}
+        legacySystemPrompt={legacySystemPrompt}
+      />
+    </MemoryRouter>
   )
 }
 

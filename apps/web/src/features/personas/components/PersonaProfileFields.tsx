@@ -1,5 +1,6 @@
 import { useFormContext, useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { Link, useParams } from 'react-router-dom'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -21,6 +22,9 @@ import { SkillsComingSoon } from './SkillsComingSoon'
 // scrollt dorthin, wenn kein `onJumpToModes`-Callback vorliegt (Detail-Page
 // wechselt stattdessen in den „Modi"-Tab).
 export const MODES_SECTION_ID = 'persona-modes-section'
+
+// Kontext-Link in die Hilfe (Onboarding P8, Spec §5.3).
+const PERSONA_HELP_PATH = '/help/persona#felder'
 
 /**
  * Read-Only-Info-Pill am Kopf des Profil-Editors. Zeigt Anzahl + Default-Modus.
@@ -116,6 +120,14 @@ export function PersonaProfileFields({
   const { t } = useTranslation('personas')
   const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   const api = useApi()
+  // Workspace aus der Route statt `useWorkspacePath` (braucht die Session):
+  // die Felder rendern auch in Harnessen ohne SessionProvider. Ohne Param
+  // greift der Kurzlink `/help/…`, der in den Default-Workspace weiterleitet.
+  const { workspaceId } = useParams<{ workspaceId?: string }>()
+  const personaHelpHref =
+    workspaceId !== undefined && workspaceId !== ''
+      ? `/w/${workspaceId}${PERSONA_HELP_PATH}`
+      : PERSONA_HELP_PATH
   const showLegacyHint = legacySystemPrompt !== undefined && legacySystemPrompt.trim() !== ''
 
   return (
@@ -193,6 +205,17 @@ export function PersonaProfileFields({
       <FormSection
         title={t('editor.profile.title')}
         description={t('editor.profile.description')}
+        footer={
+          // Kontext-Link (Onboarding P8): eine Quelle fuer New-Page und
+          // Detail-Tab, weil beide diese Komponente teilen.
+          <Link
+            to={personaHelpHref}
+            className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground md:min-h-0"
+            data-testid="persona-help-link"
+          >
+            {t('editor.profile.helpLink')}
+          </Link>
+        }
         help={
           <div className="space-y-2">
             <p>{t('editor.profile.helpLine1')}</p>

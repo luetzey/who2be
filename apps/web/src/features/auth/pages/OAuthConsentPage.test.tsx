@@ -7,6 +7,7 @@ import type { OAuthConsentPreviewAgent } from '@/api/client'
 import type { Agent, Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
+import { findPage, helpIndex } from '@/help/helpIndex'
 
 import { OAuthConsentPage } from './OAuthConsentPage'
 
@@ -199,6 +200,28 @@ describe('OAuthConsentPage', () => {
   it('schickt nicht eingeloggte Nutzer zum Login mit next-Parameter', () => {
     renderConsent(null, `?request=${blobWith('Claude')}`)
     expect(screen.getByText(/^LOGIN next=\/oauth\/consent/)).toBeInTheDocument()
+  })
+
+  it('„Was passiert hier?“: öffentlicher Kurzlink ohne Request und ohne Referrer (Onboarding P8)', async () => {
+    const calls = stubApi({ agents: [builder] })
+    renderConsent(authedSession, `?request=${blobWith('Claude')}`)
+
+    const link = screen.getByRole('link', { name: 'Was passiert hier? (öffnet in neuem Tab)' })
+    // Exaktes Ziel: gleicher Origin, kein `?request=`, kein Token.
+    expect(link).toHaveAttribute('href', '/help/connect-claude#schritte')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('rel')?.split(' ').sort()).toEqual(['noopener', 'noreferrer'])
+    // Der Consent selbst laeuft unveraendert.
+    expect(await screen.findByRole('button', { name: 'Verbinden' })).toBeEnabled()
+    expect(calls.some((call) => call.url.includes('/help'))).toBe(false)
+  })
+
+  it('Kontext-Ziel existiert in der Hilfe (DE und EN)', () => {
+    for (const locale of ['de', 'en'] as const) {
+      expect(findPage(helpIndex, locale, 'connect-claude')?.blocks.map((b) => b.id)).toContain(
+        'schritte',
+      )
+    }
   })
 
   it('zeigt einen Fehler, wenn der request-Parameter fehlt', () => {
