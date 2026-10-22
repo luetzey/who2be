@@ -1,9 +1,9 @@
 # ADR-0059 — Werkzeug-Profile pro Agent (Erweiterung von ADR-0042)
 
-- Status: **Proposed**. Die Richtung hat der Owner am 2026-10-16 entschieden
-  (Wortlaut in Abschnitt 2). Offen sind die Weichen W59-1 bis W59-6, jede mit
-  Empfehlung (Übersicht in Abschnitt 11).
-- Datum: 2026-10-20
+- Status: **Accepted** (Owner, 2026-10-21). Die Richtung hat der Owner am
+  2026-10-16 entschieden (Wortlaut in Abschnitt 2), die Weichen W59-1 bis
+  W59-6 am 2026-10-21 (Wortlaut in Abschnitt 11).
+- Datum: 2026-10-20 (Proposed), 2026-10-22 (Accepted nachgezogen)
 - Gemessen gegen: `origin/main` @ `000a7bd4` (100 Werkzeuge, `tools/list`
   114.203 Bytes, Server-`instructions` 1.604 Bytes). Code-Aussagen tragen einen
   Symbolanker (Konvention `docs/code-references.md`).
@@ -29,7 +29,7 @@
 8. Meldeweg, wenn ein Werkzeug fehlt
 9. Web-Oberfläche (grob)
 10. Paketschnitt
-11. Weichen (offen, mit Empfehlung)
+11. Entscheidungen
 12. Konsequenzen
 
 ## 1. Kontext und Befund
@@ -227,18 +227,19 @@ ALTER TABLE agent
   löschen (409, Abschnitt 7). Kein stilles Zurückfallen auf „Alle“.
 - Bestand: Alle Spalten haben Standardwerte, die „Alle ohne Ausnahmen“
   bedeuten. Bestehende Agenten bleiben damit unverändert (Owner d). Einzige
-  Ausnahme ist der verwaltete Builder, falls W59-3 = A.
+  Ausnahme ist der verwaltete Builder (W59-3 = A, Abschnitt 11).
 - `copy_agent` übernimmt die drei Felder. `create_agent` setzt sie nicht
   (Abschnitt 7.3).
 
 ### 4.3 Migration
 
-Nächste freie Nummer: **0108** (`apps/api/src/who2be_api/migrations`, letzte
-auf `main` ist 0107; kein offener Branch auf `origin` belegt 0108 oder höher,
-geprüft am 2026-10-20). Die Paket-Karte prüft die Nummer vor dem Anlegen erneut
-gegen `origin/main`, weil inzwischen andere Migrationen landen können.
+Nummer: **0110**, vom PM für dieses Vorhaben vergeben
+(`apps/api/src/who2be_api/migrations`, letzte auf `main` ist 0108; kein Branch
+auf `origin` belegt 0109 oder höher, geprüft am 2026-10-22 gegen `fb03322a`).
+Die Paket-Karte prüft die Nummer vor dem Anlegen erneut gegen `origin/main`,
+weil inzwischen andere Migrationen landen können.
 
-`0108_tool_profile.sql` enthält:
+`0110_tool_profile.sql` enthält:
 
 1. Tabelle, Indizes, RLS wie in 4.1.
 2. Agent-Spalten und Fremdschlüssel wie in 4.2.
@@ -246,8 +247,9 @@ gegen `origin/main`, weil inzwischen andere Migrationen landen können.
    `workspace.content_locale` (DE: Lesen, Autor, Kurator, Builder; EN: Read,
    Author, Curator, Builder). Idempotent über `ON CONFLICT (workspace_id,
    builtin_key) DO NOTHING`.
-4. Nur bei W59-3 = A: die verwalteten Builder-Agenten (`is_managed = true`,
-   Builder und Builder-Lite) auf das Profil `builder` ihres Workspace setzen.
+4. Die verwalteten Builder-Agenten (`is_managed = true`, Builder und
+   Builder-Lite) auf das Profil `builder` ihres Workspace setzen (W59-3 = A).
+   Ein Mensch kann sie danach auf „Alle“ zurückstellen (7.3).
 
 Neue Workspaces bekommen dieselben vier Zeilen beim Anlegen in
 `workspace_repository.py`. Beide Schichten bleiben synchron, wie bei 0047 und
@@ -294,7 +296,10 @@ Sichtbarkeit zählen ohnehin beide Achsen (3.1).
 | **Lesen** | `core`, `read`, `feedback_memory`, `workarea_read` | Fach-Agenten, die nur nachschlagen und rückmelden |
 | **Autor** | Lesen + `content_write`, `transition`, `workarea_write` | Agenten, die Inhalte schreiben und recherchieren |
 | **Kurator** | Lesen + `transition`, `curation` | Agenten, die Rückmeldungen und Fälle sichten |
-| **Builder** | `core`, `read`, `feedback_memory`, `content_write`, `transition`, `agent_admin`, `system_prompt`, `curation` | der verwaltete Builder (W59-3) |
+| **Builder** | `core`, `read`, `feedback_memory`, `workarea_read`, `content_write`, `transition`, `agent_admin`, `system_prompt`, `curation` | der verwaltete Builder (W59-3) |
+
+`workarea_read` im Profil „Builder“ hat der Owner am 2026-10-21 entschieden
+(W59-4, Abschnitt 11).
 
 Gemessen mit den Rechten des Builders, also dem größten Fall, und mit den
 Rechten eines Menschen in der Rolle editor **[B]**. „Start“ heißt
@@ -307,22 +312,27 @@ Rechten eines Menschen in der Rolle editor **[B]**. „Start“ heißt
 | Lesen | 42 | 32.971 | 34.575 | 38 | 29.497 |
 | Autor | 77 | 81.702 | 83.306 | 73 | 78.228 |
 | Kurator | 59 | 49.653 | 51.257 | 55 | 46.179 |
-| **Builder** | **75** | **93.986** | **95.590** | 71 | 90.512 |
-| Builder + `workarea_read` (W59-4 B) | 85 | 100.123 | 101.727 | 81 | 96.649 |
+| **Builder** | **85** | **100.123** | **101.727** | 81 | 96.649 |
+| zum Vergleich: Builder ohne `workarea_read` (verworfen) | 75 | 93.986 | 95.590 | 71 | 90.512 |
 
 Die Spalte „editor“ zeigt die Rechte-Seite eines Menschen nur zum Vergleich;
-Menschen haben kein Profil (3.1).
+Menschen haben kein Profil (3.1). Die Zeilen „Alle“, „Builder“ und die
+Vergleichszeile sind am 2026-10-22 mit `payload_report` gegen `000a7bd4` und
+gegen `origin/main` @ `fb03322a` nachgemessen, beide bytegenau gleich.
 
-**Wirkung für den Builder:** von 115.807 auf 95.590 Bytes beim Start, also
-−20.217 Bytes (−17,5 %), bei unveränderten Rechten. Mit W1 (ADR-0058 §8.1)
+**Wirkung für den Builder:** von 115.807 auf 101.727 Bytes beim Start, also
+−14.080 Bytes (−12,2 %), bei unveränderten Rechten. `workarea_read` kostet
+gegenüber der verworfenen Variante 6.137 Bytes. Mit W1 (ADR-0058 §8.1)
 kommen geschätzt weitere −1,6 bis −2,7 KB dazu **[E]**.
 
 **Der Builder verliert keinen Arbeitsschritt.** Geprüft gegen die verwalteten
 Builder-Inhalte, DE und EN (System-Prompt-Templates, Persona, Modi, alle
 Builder-Playbooks und die Resource Konventionen): Sie nennen 71 Werkzeuge, alle
 liegen im Profil „Builder“ **[B]**. Das Profil hat zusätzlich `ping`,
-`report_problem`, `get_version` und `list_resource_blocks`. Ausgeblendet sind
-die 25 Werkzeuge der Gruppen `workarea_read` und `workarea_write`. Keines davon
+`report_problem`, `get_version`, `list_resource_blocks` und die 10 Werkzeuge
+aus `workarea_read`. Damit kann der Builder Rohmaterial, Knowledge Base und
+Tabellen lesen, auch wenn seine Inhalte das heute nicht verlangen.
+Ausgeblendet sind die 15 Werkzeuge der Gruppe `workarea_write`. Keines davon
 nennen die Builder-Inhalte.
 
 **Grenze der Messung:** Für einen Agenten mit Standard-Rechten bringt „Lesen“
@@ -333,10 +343,17 @@ Draht-Bytes, keine Tokens (Faustregel etwa 4 Bytes je Token, **[E]**).
 ### 5.3 Messpunkt im Test
 
 `payload_report.REFERENCE_PROFILES` bekommt ein fünftes Profil „Builder mit
-Profil Builder“. Paket Q3 setzt dafür ein eigenes Startziel. Vorschlag: 100.000
-Bytes, also knapp über dem gemessenen Wert mit Reserve für `edit_content`. Das
-Ziel des Builders ohne Profil (120.000) bleibt als Wert für „Alle“ stehen, bis
-der Owner es senkt.
+Profil Builder“, also Builder-Rechte und die Gruppen aus 5.2 einschließlich
+`workarea_read`. Gemessen sind heute 101.727 Bytes Start.
+
+Paket Q3 setzt dafür ein eigenes Startziel in
+`test_agent_start_meets_target_per_profile`: **104.000 Bytes**. Das ist der
+gemessene Wert plus Reserve für `edit_content` (ADR-0058, +1,2 bis +1,6 KB,
+landet in `content_write`) und knapp 700 Bytes Luft. Das Ziel ist eine
+Obergrenze gegen Wachstum, nicht die Wirkung selbst. Die Wirkung (−12 %
+gegenüber „Alle“) weist Q3 mit `payload_report` in
+`docs/mcp-payload-budget.md` aus. Das Ziel des Builders ohne Profil (120.000)
+bleibt als Wert für „Alle“ stehen, bis der Owner es senkt.
 
 ## 6. `whoami`, Cache und Wirkzeit
 
@@ -379,7 +396,7 @@ Für P3a („ein Mensch passt an“) heißt das: Der Mensch gibt das Werkzeug fr
 und der Agent sieht es noch bis zu fünf Minuten lang nicht. Ein Neuverbinden
 hilft nicht, weil der Cache am Token hängt und nicht an der Verbindung.
 
-**Empfehlung W59-5: TTL auf 60 Sekunden senken**, für den ganzen Eintrag. Ein
+**Entschieden (W59-5): TTL auf 60 Sekunden senken**, für den ganzen Eintrag. Ein
 aktiver Agent erzeugt dann höchstens einen `whoami`-Aufruf je Minute und Token
 an die API statt einen je fünf Minuten. `whoami` ist ein einzelner
 Lesezugriff ohne eigenes Rate-Limit am Router
@@ -422,7 +439,7 @@ Fehler, nach ADR-0051:
 
 ### 7.2 Wer pflegt Profile (W59-2)
 
-**Empfehlung: Profile pflegen nur admins.** Ein Profil wirkt auf jeden Agenten,
+**Entschieden (W59-2): Profile pflegen nur admins.** Ein Profil wirkt auf jeden Agenten,
 der es nutzt, auch auf solche, die der Ändernde nicht angelegt hat. Das ist
 Workspace-Konfiguration, kein Agenten-Detail. Lesen dürfen alle Mitglieder,
 damit ein editor sieht, was er zuordnet.
@@ -493,7 +510,7 @@ melde es mit `report_problem` und `category=\"tool_request\"`.“
 (`apps/mcp/src/who2be_mcp/instructions.py#SERVER_INSTRUCTIONS`, der
 2.048-Zeichen-Test bleibt eingehalten).
 
-**Wohin die Meldung geht.** **Empfehlung W59-6: neue Kategorie `tool_request`
+**Wohin die Meldung geht.** **Entschieden (W59-6): neue Kategorie `tool_request`
 für `report_problem`**
 (`packages/models/src/who2be_models/feedback.py#SystemFeedbackCategory`). Sie
 landet im vorhandenen Kurations-Posteingang. Die Spalte `signal` hat keinen
@@ -552,17 +569,18 @@ in der Middleware.
 4. `packages/models/src/who2be_models/__init__.py` (Export)
 5. `packages/models/tests/test_tool_profiles.py` (neu: jedes Werkzeug in genau
    einer Gruppe, Kern nicht abwählbar, Formel, Rechte gehen vor, mitgelieferte
-   Profile decken die Builder-Inhalte DE und EN, Rot-Probe)
+   Profile decken die Builder-Inhalte DE und EN, Profil „Builder“ enthält
+   `workarea_read` (W59-4), Rot-Probe)
 6. `changelog.d/<slug>.added.md`
 
 **Q2a — Datenbank und Repository** (Domäne `apps/api`, Datenhaltung)
 
-1. `apps/api/src/who2be_api/migrations/0108_tool_profile.sql` (neu, Nummer vor
-   dem Anlegen gegen `origin/main` prüfen)
+1. `apps/api/src/who2be_api/migrations/0110_tool_profile.sql` (neu, Nummer
+   0110 vom PM vergeben, vor dem Anlegen gegen `origin/main` prüfen)
 2. `apps/api/src/who2be_api/migrations/README.md` (Hinweis Doppelschicht)
 3. `apps/api/src/who2be_api/repositories/tool_profile_repository.py` (neu)
 4. `apps/api/src/who2be_api/repositories/workspace_repository.py` (Seed neuer
-   Workspaces, bei W59-3 = A Zuordnung des Builders)
+   Workspaces, Zuordnung des verwalteten Builders nach W59-3 = A)
 5. `apps/api/src/who2be_api/repositories/agent_repository.py` (Spalten lesen,
    `deep_copy` übernimmt sie)
 6. `apps/api/tests/test_tool_profile_repository.py` (neu: RLS, Cascade,
@@ -590,14 +608,15 @@ nach Lage des Codes, die Grenze von acht Dateien gilt.
 **Q3 — MCP-Filter** (Domäne `apps/mcp`, ohne `server.py`)
 
 1. `apps/mcp/src/who2be_mcp/policy_filter.py` (Profil in `tools/list` und
-   `tools/call`, zwei Meldungen, TTL nach W59-5)
+   `tools/call`, zwei Meldungen, TTL 60 s nach W59-5)
 2. `apps/mcp/src/who2be_mcp/instructions.py` (Satz zum Meldeweg)
 3. `apps/mcp/src/who2be_mcp/payload_report.py` (Referenzprofil „Builder mit
-   Profil Builder“)
+   Profil Builder“, Gruppen aus `who2be_models/tool_profiles.py`, keine
+   zweite Kopie)
 4. `apps/mcp/tests/test_policy_filter.py` (Profil, Kern, fail-open, Rechte
    gehen vor)
-5. `apps/mcp/tests/test_tool_payload_budget.py` (Startziel aus 5.3, M2 je
-   Profil)
+5. `apps/mcp/tests/test_tool_payload_budget.py` (Startziel 104.000 Bytes für
+   „Builder mit Profil Builder“ aus 5.3, M2 je Profil)
 6. `docs/mcp-payload-budget.md` (Tabelle je Profil)
 7. `changelog.d/<slug>.changed.md`
 
@@ -630,16 +649,32 @@ gemergt werden, weil das Feld `tool_profile` optional ist und die Middleware
 bei `None` wie heute filtert. Das Ziel „Builder deutlich unter 116 KB“ ist mit
 Q2a (Zuordnung) und Q3 (Filter) erreicht und messbar.
 
-## 11. Weichen (offen, mit Empfehlung)
+## 11. Entscheidungen
 
-| Weiche | Frage | Empfehlung | Alternativen |
+Owner, 2026-10-21 (Telegram), wörtlich:
+
+> „Alle wie empfohlen, aber W59-4 ja“
+
+Damit gilt für diese ADR und alle W2-Pakete:
+
+| Weiche | Frage | Entschieden | Verworfen |
 | --- | --- | --- | --- |
 | **W59-1** (4.1) | Woraus besteht ein Profil? | **C: Gruppen und einzelne Werkzeuge.** Neue Werkzeuge einer Gruppe kommen automatisch an, Einzelwerkzeuge bleiben möglich. | A: nur eine Werkzeugliste (jedes neue Werkzeug muss in jedes Profil nachgetragen werden, angepasste Profile veralten still). B: nur Gruppen (keine Feinsteuerung im Profil, nur am Agenten). |
 | **W59-2** (7.2) | Wer pflegt Profile? | **admin.** Zuordnung am Agenten: editor, nur Menschen. | editor pflegt auch Profile (wirkt auf fremde Agenten). |
 | **W59-3** (4.3) | Bekommt der verwaltete Builder automatisch „Builder“? | **A: ja, neue und bestehende Workspaces**, per Migration und Seed. Einzige Ausnahme von (d), begründet damit, dass der verwaltete Builder ohnehin vom Code gepflegt wird. Ein Mensch kann es zurück auf „Alle“ stellen (7.3). | B: nur neue Workspaces (Bestand behält 115,8 KB). C: nein, ein Mensch ordnet zu (das Ziel hängt dann an Handarbeit je Workspace). |
-| **W59-4** (5.2) | Enthält „Builder“ das Lesen im Arbeitsbereich? | **Nein** (95.590 Bytes). Kein Builder-Inhalt nennt diese Werkzeuge. | Ja, `workarea_read` dazu (101.727 Bytes, +6,1 KB). |
+| **W59-4** (5.2) | Enthält „Builder“ das Lesen im Arbeitsbereich? | **Ja, `workarea_read` dazu** (abweichend von der Empfehlung): 85 Werkzeuge, `tools/list` 100.123 Bytes, Start 101.727 Bytes, −14.080 Bytes (−12,2 %) gegenüber „Alle“. | Nein (75 Werkzeuge, Start 95.590 Bytes, −17,5 %). |
 | **W59-5** (6.2) | Wie schnell wirkt eine Änderung? | **Cache-TTL 60 s** statt 300 s. | 300 s bleiben (bis zu fünf Minuten Wartezeit nach einer Freigabe). |
 | **W59-6** (8) | Wohin meldet der Agent ein fehlendes Werkzeug? | **`report_problem` mit neuer Kategorie `tool_request`**, Posteingang mit Sprung zum Agenten. | A: Kategorie `mcp` wie heute (geht zwischen echten Fehlern unter). B: `report_case` (Fall, fachlich falsch, siehe 8). |
+
+Der Grundsatz vom 2026-10-16 bleibt unverändert (Abschnitt 2): „P1 ok“, P2a,
+P3a, Rechte gehen vor, Standard „Alle“. W59-3 ist die einzige Ausnahme von (d)
+und mit dieser Entscheidung ausdrücklich gedeckt.
+
+Die Formel (3.1), die Gruppen (5.1) und die mitgelieferten Profile (5.2)
+stehen im Code nur an einer Stelle, in `who2be_models/tool_profiles.py`
+(Paket Q1). MCP-Filter, System-Prompt-Block, Workspace-Seed und
+`payload_report` beziehen sie von dort. Die SQL-Migration kann das Modul nicht
+importieren; ihr Seed wird per Paritätstest dagegen geprüft (Q2a).
 
 Alles Übrige in dieser ADR folgt aus dem Owner-Wortlaut in Abschnitt 2 oder
 aus dem Repo und hängt an keiner Weiche.
@@ -648,8 +683,9 @@ aus dem Repo und hängt an keiner Weiche.
 
 **Positiv.**
 
-- Der Builder startet mit 95,6 statt 115,8 KB (−17,5 %), ohne ein Recht zu
-  verlieren und ohne einen Schritt seiner Playbooks (5.2).
+- Der Builder startet mit 101,7 statt 115,8 KB (−14.080 Bytes, −12,2 %),
+  ohne ein Recht zu verlieren und ohne einen Schritt seiner Playbooks (5.2).
+  Er behält das Lesen im Arbeitsbereich (`workarea_read`, W59-4).
 - Auch andere Agenten mit vielen Rechten lassen sich zuschneiden, ohne an den
   Rechten zu drehen. Rechte und Sichtbarkeit sind getrennte Fragen.
 - System-Prompt und `tools/list` bleiben deckungsgleich (3.2).
@@ -664,7 +700,13 @@ aus dem Repo und hängt an keiner Weiche.
   eine Migration entscheidet, welche mitgelieferten Profile die Gruppe
   bekommen.
 - Eine Tabelle, drei Spalten und eine Einstellungsseite mehr.
-- Ausnahme von (d) beim verwalteten Builder, falls W59-3 = A.
+- Ausnahme von (d) beim verwalteten Builder (W59-3 = A): Er bekommt auch in
+  bestehenden Workspaces das Profil „Builder“, ein Mensch kann zurückstellen.
+- W59-4 kostet gegenüber der Empfehlung 6.137 Bytes je Builder-Start
+  (101.727 statt 95.590). Dafür muss kein Mensch `workarea_read` nachträglich
+  freigeben, wenn der Builder Rohmaterial oder Tabellen lesen soll.
+- Die Cache-TTL von 60 s (W59-5) erzeugt bis zu fünfmal so viele
+  `whoami`-Aufrufe je aktivem Token wie heute.
 
 **Neutral.** Die API setzt Profile nicht durch. Wer die REST-API direkt
 aufruft, wird nach Rechten beurteilt wie bisher. Das ist gewollt, weil ein
