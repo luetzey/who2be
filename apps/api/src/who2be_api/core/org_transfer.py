@@ -83,7 +83,7 @@ MANIFEST_NAME = "manifest.json"
 #: Instanzweite Tabellen ohne Mandant — nie Teil einer Org. `routine_run` und
 #: `worker_heartbeat` sind das Laufprotokoll des Workers (Migration 0102).
 #: `tutorial_state`/`tutorial_progress` haengen am Konto, nicht an einer Org
-#: (ADR-0060, Migration 0108).
+#: (ADR-0060, Migration 0108), ebenso `account_state` (Migration 0110).
 GLOBAL_TABLES = frozenset(
     {
         "schema_migrations",
@@ -94,6 +94,7 @@ GLOBAL_TABLES = frozenset(
         "worker_heartbeat",
         "tutorial_state",
         "tutorial_progress",
+        "account_state",
     }
 )
 #: Zugangsdaten (Token-Hashes, OAuth-Codes, offene Einladungen) — nie im

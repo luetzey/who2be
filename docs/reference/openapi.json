@@ -16055,6 +16055,33 @@
         ]
       }
     },
+    "/v1/me/news-seen": {
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Mark News Seen",
+        "description": "„Was ist neu“ geoeffnet: setzt `news_seen_at` des eigenen Kontos auf jetzt.\n\nNur Menschen (`get_current_user` sperrt Tokens mit 403). Wiederholbar ohne\nNebenwirkung ausser dem neuen Zeitpunkt (ADR-0060 §4).",
+        "operationId": "mark_news_seen_v1_me_news_seen_patch",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsSeenRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/me/tutorials": {
       "get": {
         "tags": [
@@ -23180,6 +23207,30 @@
             "type": "boolean",
             "title": "Has Password",
             "default": false
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "news_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "News Seen At"
           }
         },
         "type": "object",
@@ -25343,6 +25394,21 @@
         ],
         "title": "NewRule",
         "description": "Eine mit dem Import mitgelieferte Kategorisierungs-Regel (L).\n\nWird VOR der Anwendung persistiert (`wa_category_rule`, created_by =\nAkteur-Kennung serverseitig); `confidence` traegt die Modell-Konfidenz."
+      },
+      "NewsSeenRead": {
+        "properties": {
+          "news_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "News Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "news_seen_at"
+        ],
+        "title": "NewsSeenRead",
+        "description": "Antwort von `PATCH /v1/me/news-seen`."
       },
       "NodeStatus": {
         "type": "string",

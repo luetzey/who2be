@@ -7,10 +7,13 @@ schickt einen an Workspace B gepinnten Token nach Workspace A.
 """
 
 import asyncio
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from who2be_api.services.me_service import MeService
 from who2be_models import MeRead
+
+_SEEN = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 
 
 class _FakeMeRepository:
@@ -27,6 +30,8 @@ class _FakeMeRepository:
             default_workspace_id=self._default_workspace_id,
             organizations=[],
             has_password=True,
+            created_at=_SEEN,
+            news_seen_at=_SEEN,
         )
 
 
@@ -45,6 +50,9 @@ def test_fetch_reports_token_workspace_alongside_default() -> None:
     # JWT-Pfad, und der bleibt unveraendert (naechster Test).
     assert me.token_workspace_id == token_ws
     assert me.default_workspace_id == token_ws
+    # Personenbezogene Kontofelder gehen nicht an die Credential.
+    assert me.created_at is None
+    assert me.news_seen_at is None
 
 
 def test_fetch_without_token_binding_leaves_field_none() -> None:
@@ -56,3 +64,5 @@ def test_fetch_without_token_binding_leaves_field_none() -> None:
 
     assert me.token_workspace_id is None
     assert me.default_workspace_id == default_ws
+    assert me.created_at == _SEEN
+    assert me.news_seen_at == _SEEN

@@ -70,6 +70,11 @@
     "operationId": "get_me_v1_me_get"
   },
   {
+    "method": "PATCH",
+    "path": "/v1/me/news-seen",
+    "operationId": "mark_news_seen_v1_me_news_seen_patch"
+  },
+  {
     "method": "GET",
     "path": "/v1/me/tutorials",
     "operationId": "list_tutorials_v1_me_tutorials_get"

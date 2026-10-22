@@ -1,0 +1,1 @@
+- Punkt am „?“-Menü (Onboarding P5-API, ADR-0060 §4): `GET /v1/me` liefert zusätzlich `news_seen_at` und `created_at`, neue Route `PATCH /v1/me/news-seen` (nur Menschen) setzt „Was ist neu“ auf gesehen. Wert am Konto (Migration 0110), enthalten im DSGVO-Export und im Konto-Purge.

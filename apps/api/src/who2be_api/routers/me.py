@@ -24,6 +24,7 @@ from who2be_api.services.audit_service import AuditService
 from who2be_api.services.me_service import MeService
 from who2be_api.services.tutorial_service import TutorialService
 from who2be_models import AccountDeletionRead, MeRead
+from who2be_models.me import NewsSeenRead
 from who2be_models.tutorial import (
     TUTORIAL_ID_MAX_LENGTH,
     TUTORIAL_ID_PATTERN,
@@ -59,6 +60,21 @@ LifecycleService = Annotated[AccountLifecycleService, Depends(get_account_lifecy
 @router.get("")
 async def get_me(principal: Principal, service: Service) -> MeRead:
     return await service.fetch(principal.user_id, token_workspace_id=principal.token_workspace_id)
+
+
+@router.patch("/news-seen")
+@limiter.limit(write_limit)
+async def mark_news_seen(
+    request: Request,
+    user_id: UserId,
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> NewsSeenRead:
+    """„Was ist neu“ geoeffnet: setzt `news_seen_at` des eigenen Kontos auf jetzt.
+
+    Nur Menschen (`get_current_user` sperrt Tokens mit 403). Wiederholbar ohne
+    Nebenwirkung ausser dem neuen Zeitpunkt (ADR-0060 §4).
+    """
+    return NewsSeenRead(news_seen_at=await PgMeRepository(pool).mark_news_seen(user_id))
 
 
 @router.delete("")

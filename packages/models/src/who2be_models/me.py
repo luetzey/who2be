@@ -4,6 +4,7 @@ Liefert dem Frontend/MCP nach Login alle Memberships + einen Default-
 Workspace, damit Web auf `/w/{default_workspace_id}/...` redirecten kann.
 """
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -52,3 +53,17 @@ class MeRead(BaseModel):
     # eingeloggt ist (GoTrue-`encrypted_password IS NULL`). Frontend leitet
     # ihn dann beim Invitation-Accept auf `/onboarding/set-password`.
     has_password: bool = False
+    # Kontoanlage (GoTrue `auth.users.created_at`, gelesen ueber
+    # `w2b_self_account()`), Grundlage der 14-Tage-Regel fuer den Punkt am
+    # „?“-Menue (ADR-0060 §4). `None` ohne GoTrue (reine API-Test-DB).
+    created_at: datetime | None = None
+    # Wann das Konto „Was ist neu“ zuletzt geoeffnet hat (Migration 0110),
+    # `None`, solange nie. Beide Felder bleiben auf dem Token-Pfad leer: sie
+    # betreffen die Person, nicht die Credential.
+    news_seen_at: datetime | None = None
+
+
+class NewsSeenRead(BaseModel):
+    """Antwort von `PATCH /v1/me/news-seen`."""
+
+    news_seen_at: datetime
