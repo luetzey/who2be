@@ -14,7 +14,8 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from typing import Literal
+from collections.abc import Awaitable, Callable
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -37,6 +38,20 @@ from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_mcp.instructions import ALWAYS_LOAD_META, SERVER_INSTRUCTIONS
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
+from who2be_mcp.tools import content as content_tools
+from who2be_mcp.tools.content import (
+    ENTITY_PATH,
+    ExternalToolMarkdownCreate,
+    ExternalToolMarkdownUpdate,
+    PersonaMarkdownCreate,
+    PersonaMarkdownUpdate,
+    PlaybookMarkdownCreate,
+    PlaybookMarkdownUpdate,
+    ResourceMarkdownCreate,
+    ResourceMarkdownUpdate,
+    SystemPromptMarkdownCreate,
+    SystemPromptMarkdownUpdate,
+)
 from who2be_mcp.tools.kb import register as register_kb_tools
 from who2be_mcp.tools.learning import FramedMemoryHit, frame_hits
 from who2be_mcp.tools.learning import register as register_learning_tools
@@ -53,9 +68,7 @@ from who2be_models import (
     AgentWithRenderedPrompt,
     ChunkType,
     ContentChunkHit,
-    ExternalToolCreate,
     ExternalToolRead,
-    ExternalToolUpdate,
     ExternalToolVersionRead,
     FeedbackCreate,
     FeedbackResolution,
@@ -67,23 +80,17 @@ from who2be_models import (
     MemoryKind,
     MemoryOrigin,
     MemoryScope,
-    PersonaCreate,
     PersonaPlaybookLinkSet,
     PersonaRead,
-    PersonaUpdate,
     PersonaVersionRead,
     PlaceholderCatalog,
     PlaybookCompositionLinkSet,
-    PlaybookCreate,
     PlaybookRead,
-    PlaybookUpdate,
     PlaybookVersionRead,
     ResourceBlockAnchor,
-    ResourceCreate,
     ResourceLinkRead,
     ResourceLinkSet,
     ResourceRead,
-    ResourceUpdate,
     ResourceVersionRead,
     SearchHit,
     SearchMode,
@@ -91,9 +98,7 @@ from who2be_models import (
     SubResourceLinkSet,
     SubResourceRead,
     SystemFeedbackCreate,
-    SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
-    SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
     TriggerOverview,
     UsageEventCreate,
@@ -104,6 +109,7 @@ from who2be_models import (
     VersionTransitionRequest,
     WhoAmIRead,
 )
+from who2be_models.content_markdown import MarkdownWriteResult
 from who2be_models.error_tracking import init_error_tracking
 from who2be_models.memory import MemorySaveResult
 
@@ -265,10 +271,16 @@ class PlaybookWithResources(BaseModel):
 #
 # ADR-0056 (Option B): `"text"` ist Default und liefert ein Markdown-Dokument
 # (`text_view`) statt eines JSON-Objekts — ohne Editor-JSON und ohne
-# JSON-Escaping. `"full"` liefert bitgleich das Modell der REST-Antwort; das
-# ist die Vorlage fuer die `update_*`-Werkzeuge (PUT). Umgestellt sind
-# alle zwoelf lesenden Werkzeuge mit Editor-JSON (ADR-0056, Abschnitt 1.1).
+# JSON-Escaping. `"full"` liefert bitgleich das Modell der REST-Antwort, seit
+# ADR-0058 nur noch als Diagnose-/Strukturweg. Umgestellt sind alle zwoelf
+# lesenden Werkzeuge mit Editor-JSON (ADR-0056, Abschnitt 1.1).
 _RESPONSE_FORMATS: frozenset[str] = frozenset({"full", "text"})
+
+# ADR-0058 §5.1 B (Owner W58-2 = B): `"source"` ist die Schreibvorlage,
+# Quell-Markdown mit Ueberschriften-Ankern, Platzhalter-Tokens und dem
+# Konflikt-Token `base_rev` im Kopf. Nur fuer die sechs Werkzeuge, deren
+# Inhalt man schreiben kann; die Listen-Werkzeuge kennen ihn nicht.
+_SOURCE_FORMATS: frozenset[str] = _RESPONSE_FORMATS | {"source"}
 
 
 def _validate_response_format(value: str) -> None:
@@ -276,6 +288,28 @@ def _validate_response_format(value: str) -> None:
     if value not in _RESPONSE_FORMATS:
         allowed = ", ".join(sorted(_RESPONSE_FORMATS))
         raise ToolError(f"Ungueltiges format: '{value}'. Erlaubt: {allowed}.")
+
+
+def _validate_source_format(value: str) -> None:
+    """Wie `_validate_response_format`, plus `source` (ADR-0058 §5.1 B)."""
+    if value not in _SOURCE_FORMATS:
+        allowed = ", ".join(sorted(_SOURCE_FORMATS))
+        raise ToolError(f"Ungueltiges format: '{value}'. Erlaubt: {allowed}.")
+
+
+async def _source_document(client: ApiClient, entity_type: str, entity_id: UUID) -> str:
+    """Quellfassung eines Elements als Markdown-Dokument (`format="source"`)."""
+    source = await client.get_markdown_source(ENTITY_PATH[entity_type], entity_id)
+    return text_view.source_text(source)
+
+
+async def _uuid_or(identifier: str, resolve: Callable[[], Awaitable[Any]]) -> UUID:
+    """UUID direkt, sonst die `id` des per Name/Alias aufgeloesten Elements."""
+    try:
+        return UUID(identifier)
+    except ValueError:
+        resolved: UUID = (await resolve()).id
+        return resolved
 
 
 def _playbook_without_body(playbook: PlaybookRead) -> PlaybookRead:
@@ -294,8 +328,9 @@ def _playbook_without_body(playbook: PlaybookRead) -> PlaybookRead:
 #   noch unbekannt sind. Kein Body, kein Editor-JSON.
 # - "text":    Default, Markdown-Dokument (`text_view.playbook_text`), ohne
 #              Editor-JSON, auch fuer Sub-Playbooks und Inline-Resources.
-# - "full":    das Modell der REST-Antwort mit Editor-JSON (Vorlage fuer PUT).
-_PLAYBOOK_FORMATS: frozenset[str] = frozenset({"full", "text", "outline"})
+# - "source":  Schreibvorlage (Quell-Markdown mit Ankern und `base_rev`).
+# - "full":    das Modell der REST-Antwort mit Editor-JSON (Diagnose).
+_PLAYBOOK_FORMATS: frozenset[str] = frozenset({"full", "text", "outline", "source"})
 
 
 def _request_token(settings: Settings) -> str:
@@ -437,10 +472,13 @@ async def get_persona(
     Liste der Modi.
 
     `locale` filtert nur bei der Suche per Name gleichnamige Personae; per UUID wird es
-    ignoriert.
+    ignoriert. `format="source"` ist die Schreibvorlage mit `base_rev`.
     """
-    _validate_response_format(format)
+    _validate_source_format(format)
     client = await build_client()
+    if format == "source":
+        persona_id = await _uuid_or(identifier, lambda: client.get_persona(identifier, locale))
+        return await _source_document(client, "persona", persona_id)
     persona = await client.get_persona(identifier, locale)
     playbooks = await client.get_persona_playbooks(persona.id)
     body_rendered, applied_mode = await client.get_persona_rendered(persona.id, mode=mode)
@@ -499,10 +537,9 @@ async def list_triggers() -> list[TriggerOverview]:
 async def list_placeholders() -> PlaceholderCatalog:
     """Katalog der Platzhalter-Arten fuer System-Prompt-Templates mit Vertrag und Beispiel.
 
-    Platzhalter sind Inline-Elemente `{"type": "placeholder", "props": {"kind": ...,
-    "target_id": ..., "label": ...}}` in einem BlockNote-Block; beim Rendern werden sie
-    expandiert. Vor `create_system_prompt` und `update_system_prompt` aufrufen; unbekannte Arten
-    bleiben ungeloest.
+    Im Markdown stehen Platzhalter als Token `{{kind:target_id}}`; der Server macht daraus
+    beim Speichern Pills und expandiert sie beim Rendern. Vor `create_system_prompt` und
+    `update_system_prompt` aufrufen; unbekannte Arten bleiben ungeloest.
     """
     client = await build_client()
     return await client.list_placeholders()
@@ -526,7 +563,8 @@ async def fetch_playbook(
     Default `format="text"`: Markdown mit Prozedur, Verweisen, eingebetteten Resources und
     Sub-Playbooks. Resource-Verweise sind Pointer fuer `fetch_resource`; nur `inline`-Links
     kommen gleich mit. Ein Composite bringt seine Sub-Playbooks eine Ebene tief mit,
-    abzuarbeiten der Reihe nach. `locale` wird ignoriert.
+    abzuarbeiten der Reihe nach. `format="source"` ist die Schreibvorlage mit `base_rev`.
+    `locale` wird ignoriert.
     """
     if format not in _PLAYBOOK_FORMATS:
         allowed = ", ".join(sorted(_PLAYBOOK_FORMATS))
@@ -536,6 +574,8 @@ async def fetch_playbook(
     except ValueError as exc:
         raise ToolError(f"Ungueltige Playbook-UUID: '{playbook_id}'.") from exc
     client = await build_client()
+    if format == "source":
+        return await _source_document(client, "playbook", parsed)
     # `locale` wird auf den Sub-Calls NICHT weitergereicht (ignoriert, s.o.) —
     # das Playbook ist bereits per UUID eindeutig aufgeloest.
     playbook = await client.get_playbook(parsed)
@@ -671,14 +711,16 @@ async def fetch_resource(
     `inline`-Kinder kommen gleich als Volldokument mit.
 
     Ohne `resource_write` siehst du nur die aktive Version (ohne aktive: 404), mit auch Drafts.
-    `locale` wird ignoriert.
+    `format="source"` ist die Schreibvorlage mit `base_rev`. `locale` wird ignoriert.
     """
-    _validate_response_format(format)
+    _validate_source_format(format)
     try:
         parsed = UUID(resource_id)
     except ValueError as exc:
         raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
     client = await build_client()
+    if format == "source":
+        return await _source_document(client, "resource", parsed)
     # `locale` wird NICHT weitergereicht (ignoriert, s.o.) — die Resource ist
     # bereits per UUID eindeutig aufgeloest.
     resource = await client.get_resource(parsed)
@@ -747,11 +789,14 @@ async def get_system_prompt(
     """Laedt ein System-Prompt-Template mit dem Body der sichtbaren Version.
 
     Default `format="text"`: Platzhalter als `{{kind:target_id}}`. Historie und Diff ueber
-    `list_versions` und `diff_versions` mit `entity_type='system_prompt'`.
+    `list_versions` und `diff_versions` mit `entity_type='system_prompt'`. `format="source"`
+    ist die Schreibvorlage mit `base_rev`.
     """
-    _validate_response_format(format)
+    _validate_source_format(format)
     parsed = _parse_uuid(template_id, "system_prompt")
     client = await build_client()
+    if format == "source":
+        return await _source_document(client, "system_prompt", parsed)
     template = await client.get_system_prompt(parsed)
     if format == "text":
         return text_view.system_prompt_text(template)
@@ -787,9 +832,15 @@ async def get_external_tool(
 
     Default `format="text"`: Markdown mit Nutzungshinweisen. Der Alias ist die stabile Kennung
     fuer `tool-ref`-Platzhalter. `locale` filtert nur bei der Suche per Alias.
+    `format="source"` ist die Schreibvorlage mit `base_rev`.
     """
-    _validate_response_format(format)
+    _validate_source_format(format)
     client = await build_client()
+    if format == "source":
+        tool_id = await _uuid_or(
+            identifier, lambda: client.resolve_external_tool(identifier, locale)
+        )
+        return await _source_document(client, "external_tool", tool_id)
     tool = await client.resolve_external_tool(identifier, locale)
     if format == "text":
         return text_view.external_tool_text(tool)
@@ -847,11 +898,16 @@ async def get_version(
 ) -> AnyVersionRead | str:
     """Laedt einen unveraenderlichen Versions-Snapshot eines Elements.
 
-    `version` zaehlt ab 1; Default `format="text"` (Markdown). `locale` wird ignoriert.
+    `version` zaehlt ab 1; Default `format="text"` (Markdown). `format="source"` ist die
+    Vorlage fuer eine Wiederherstellung per `update_*`, ohne `base_rev`. `locale` wird
+    ignoriert.
     """
-    _validate_response_format(format)
+    _validate_source_format(format)
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
+    if format == "source":
+        source = await client.get_version_markdown_source(ENTITY_PATH[entity_type], parsed, version)
+        return text_view.source_text(source)
     snapshot = await client.get_version(entity_type, parsed, version, locale)
     if format == "text":
         return text_view.version_text(entity_type, entity_id, snapshot)
@@ -886,6 +942,8 @@ async def diff_versions(
 
 # ---------------------------------------------------------------------------
 # Write-Tools (ADR-0012). Verlangen einen API-Token mit editor-Rolle;
+# Inhalte nur als Markdown (ADR-0058 P3, harter Schnitt W58-3 = A):
+# `tools/content.py` haelt Eingabemodelle, JSON-Waechter und `edit_content`.
 # Status-Promote (draft→active) und Retire (active→inactive) brauchen admin.
 # Versionsmodell: PUT auf eine aktive Version legt eine neue Draft an (409,
 # falls bereits ein Draft existiert). Reads (MCP get_*/fetch_*) sehen nur
@@ -923,32 +981,30 @@ async def _default_content_locale(client: ApiClient, locale: str | None) -> str 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_persona")
-async def create_persona(data: PersonaCreate) -> PersonaRead:
+async def create_persona(data: PersonaMarkdownCreate) -> MarkdownWriteResult:
     """Legt eine Persona an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
-    `data.content` traegt Beschreibung, Traits, Tags, Modi und Profil-Bloecke. Ein Modus in
-    `content.modes` (max. 20): `name` (Pflicht, eindeutig), `trigger` (Komma-Stichworte),
-    `is_default` (hoechstens einer), `identity_add`, `output_style_override` und `anti_patterns`
-    (je BlockNote-Bloecke), optional `playbook_id`. Beispiel:
-    `{"name": "Brainstorm", "trigger": "ideen", "is_default": false, "identity_add": [{"id":
-    "b1", "type": "paragraph", "content": [{"type": "text", "text": "Denke divergent.",
-    "styles": {}}]}]}`
+    `data.content`: `description`, `tags`, `skills`, `profile` (Markdown) und `modes` (max.
+    20). Ein Modus: `name` (Pflicht, eindeutig), `trigger` (Komma-Stichworte), `is_default`
+    (hoechstens einer), `identity_add`, `output_style_override`, `anti_patterns` (je Markdown),
+    optional `playbook_id`. Platzhalter als `{{kind:target_id}}`.
     """
     client = await build_client()
-    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
-    return await client.create_persona(data)
+    return await content_tools.create_markdown(
+        client, "persona", data, await _default_content_locale(client, data.locale)
+    )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_persona")
-async def update_persona(persona_id: str, data: PersonaUpdate) -> PersonaRead:
+async def update_persona(persona_id: str, data: PersonaMarkdownUpdate) -> MarkdownWriteResult:
     """Ersetzt den Inhalt einer Persona (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409, wenn schon ein Draft offen ist: diesen weiterbearbeiten. Vorlage im Vollstand lesen
-    (`format="full"`), nie die Lesefassung. Modi wie bei `create_persona`.
+    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
+    Felder wie bei `create_persona`.
     """
-    client = await build_client()
-    return await client.update_persona(_parse_uuid(persona_id, "Persona"), data)
+    return await content_tools.put_markdown("persona", persona_id, "Persona", data)
 
 
 @mcp.tool(
@@ -998,33 +1054,31 @@ async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> lis
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_playbook")
-async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
+async def create_playbook(data: PlaybookMarkdownCreate) -> MarkdownWriteResult:
     """Legt ein Playbook an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
-    `data.content.body` ist ein BlockNote-JSON-Array als String; `type`, `tags` und `triggers`
-    steuern die Auffindbarkeit. Platzhalter im Body werden beim Speichern synchronisiert: Art
-    `playbook` (UUID) setzt Sub-Playbooks, Art `resource` (UUID, optional `#<block_id>`)
-    Resource-Links; `tool-ref` (Alias) wird erst beim Laden aufgeloest. Vertraege:
-    `list_placeholders`. Beispiel-Body:
-    `[{"id": "b1", "type": "paragraph", "props": {}, "content": [{"type": "placeholder",
-    "props": {"kind": "resource", "target_id": "<resource-uuid>", "label": "Resource: Ton"}}],
-    "children": []}]`
+    `data.content.body` ist Markdown; `type`, `tags` und `triggers` steuern die
+    Auffindbarkeit. Platzhalter als `{{kind:target_id}}` werden beim Speichern synchronisiert:
+    `{{playbook:<uuid>}}` setzt Sub-Playbooks, `{{resource:<uuid>#<block_id>}}`
+    Resource-Links; `tool-ref` wird erst beim Laden aufgeloest. Vertraege:
+    `list_placeholders`. Neue Ueberschriften ohne Anker `[#id]`, die vergibt der Server.
     """
     client = await build_client()
-    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
-    return await client.create_playbook(data)
+    return await content_tools.create_markdown(
+        client, "playbook", data, await _default_content_locale(client, data.locale)
+    )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_playbook")
-async def update_playbook(playbook_id: str, data: PlaybookUpdate) -> PlaybookRead:
+async def update_playbook(playbook_id: str, data: PlaybookMarkdownUpdate) -> MarkdownWriteResult:
     """Ersetzt den Inhalt eines Playbooks (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409 bei offenem Draft. Vorlage im Vollstand lesen (`format="full"`), nie die Lesefassung.
-    Body und Platzhalter wie bei `create_playbook`.
+    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
+    Anker bestehender Ueberschriften stehen lassen. Body wie bei `create_playbook`.
     """
-    client = await build_client()
-    return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data)
+    return await content_tools.put_markdown("playbook", playbook_id, "Playbook", data)
 
 
 @mcp.tool(
@@ -1091,31 +1145,29 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_resource")
-async def create_resource(data: ResourceCreate) -> ResourceRead:
-    """Legt eine Resource an (BlockNote-Dokument, Draft, Version 1).
+async def create_resource(data: ResourceMarkdownCreate) -> MarkdownWriteResult:
+    """Legt eine Resource an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
-    Fuer MCP-Reads erst nach `active` sichtbar.
-    `data.content.blocks`: max. 2000 Bloecke, max. 1 MB; jeder Block mit `id` (Anker, max. 100
-    Zeichen) und `type`, weitere BlockNote-Felder frei. Ueberschriften sind verlinkbare Anker
-    (`<resource-uuid>#<block_id>`). Beispiel:
-    `{"id": "b1", "type": "heading", "props": {"level": 1}, "content": [{"type": "text", "text":
-    "Ton", "styles": {}}], "children": []}`
+    `data.content.body` ist Markdown, GFM-Tabellen erlaubt; `description` und `tags` dazu.
+    Ueberschriften werden verlinkbare Anker (`<resource-uuid>#<block_id>`); neue Ueberschriften
+    ohne `[#id]`, die IDs vergibt der Server. `data.slug` optional.
     """
     client = await build_client()
-    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
-    return await client.create_resource(data)
+    return await content_tools.create_markdown(
+        client, "resource", data, await _default_content_locale(client, data.locale)
+    )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_resource")
-async def update_resource(resource_id: str, data: ResourceUpdate) -> ResourceRead:
+async def update_resource(resource_id: str, data: ResourceMarkdownUpdate) -> MarkdownWriteResult:
     """Ersetzt den Inhalt einer Resource (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409 bei offenem Draft. Vorlage im Vollstand lesen (`format="full"`), nie die Lesefassung.
-    Bloecke wie bei `create_resource`.
+    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
+    Anker bestehender Ueberschriften stehen lassen, sonst verlieren Verweise ihr Ziel.
     """
-    client = await build_client()
-    return await client.update_resource(_parse_uuid(resource_id, "Resource"), data)
+    return await content_tools.put_markdown("resource", resource_id, "Resource", data)
 
 
 @mcp.tool(
@@ -1167,28 +1219,31 @@ async def set_resource_sub_resources(
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_external_tool")
-async def create_external_tool(data: ExternalToolCreate) -> ExternalToolRead:
+async def create_external_tool(data: ExternalToolMarkdownCreate) -> MarkdownWriteResult:
     """Legt eine externe Tool-Bindung an (Draft, Version 1).
 
-    Rein beschreibend: Anzeigename, MCP-Server, Werkzeugnamen, Nutzungshinweise; keine URLs oder
-    Zugangsdaten. `data.alias` entsteht aus dem Namen, wenn leer (409 bei Kollision).
-    `tool-ref`-Platzhalter loesen sie erst nach der Aktivierung auf.
+    Rein beschreibend: Anzeigename, MCP-Server, Werkzeugnamen, `usage_notes` (Markdown),
+    `fallback_note`; keine URLs oder Zugangsdaten. `data.alias` entsteht aus dem Namen, wenn
+    leer (409 bei Kollision). `tool-ref`-Platzhalter loesen sie erst nach der Aktivierung auf.
     """
     client = await build_client()
-    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
-    return await client.create_external_tool(data)
+    return await content_tools.create_markdown(
+        client, "external_tool", data, await _default_content_locale(client, data.locale)
+    )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_external_tool")
-async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> ExternalToolRead:
+async def update_external_tool(
+    tool_id: str, data: ExternalToolMarkdownUpdate
+) -> MarkdownWriteResult:
     """Ersetzt den Inhalt einer externen Tool-Bindung (PUT); der Alias bleibt.
 
-    Auf einer aktiven Version entsteht ein Draft, 409 bei offenem Draft. Vorlage im Vollstand
-    lesen (`format="full"`), nie die Lesefassung.
+    Auf einer aktiven Version entsteht ein Draft.
+    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     """
-    client = await build_client()
-    return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data)
+    return await content_tools.put_markdown("external_tool", tool_id, "ExternalTool", data)
 
 
 @mcp.tool(
@@ -1269,34 +1324,33 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_system_prompt")
-async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
+async def create_system_prompt(data: SystemPromptMarkdownCreate) -> MarkdownWriteResult:
     """Legt ein System-Prompt-Template an (Draft).
 
-    `content.body` ist ein BlockNote-JSON-Array als String; Platzhalter-Arten und Beispiele
-    liefert `list_placeholders` (vorher aufrufen). Beispiel:
-    `[{"id": "b1", "type": "paragraph", "props": {}, "content": [{"type": "text", "text": "Du
-    bist ", "styles": {}}, {"type": "placeholder", "props": {"kind": "persona-field",
-    "target_id": "name", "label": "Persona: Name"}}], "children": []}]`
-    Danach per `update_agent` als `system_prompt_template_id` setzen; aktivieren muss ein
-    Mensch.
+    `content.body` ist Markdown, Platzhalter als `{{kind:target_id}}`, etwa
+    `Du bist {{persona-field:name}}.`; Arten und Vertraege liefert `list_placeholders`
+    (vorher aufrufen). Danach per `update_agent` als `system_prompt_template_id` setzen;
+    aktivieren muss ein Mensch.
     """
     client = await build_client()
-    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
-    return await client.create_system_prompt(data)
+    return await content_tools.create_markdown(
+        client, "system_prompt", data, await _default_content_locale(client, data.locale)
+    )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_system_prompt")
 async def update_system_prompt(
-    template_id: str, data: SystemPromptTemplateUpdate
-) -> SystemPromptTemplateRead:
+    template_id: str, data: SystemPromptMarkdownUpdate
+) -> MarkdownWriteResult:
     """Ersetzt den Inhalt eines System-Prompt-Templates (PUT) als neuen Draft.
 
-    409 bei offenem Draft; die aktive Version bleibt, bis ein Mensch freigibt. Vorlage im
-    Vollstand lesen (`format="full"`), nie die Lesefassung. Body wie bei `create_system_prompt`.
+    Die aktive Version bleibt, bis ein Mensch freigibt.
+    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
+    Body wie bei `create_system_prompt`.
     """
-    client = await build_client()
-    return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
+    return await content_tools.put_markdown("system_prompt", template_id, "system_prompt", data)
 
 
 @mcp.tool(output_schema=None)
@@ -1538,6 +1592,7 @@ register_kb_tools(mcp)
 register_table_tools(mcp)
 register_learning_tools(mcp)
 register_session_tools(mcp)
+content_tools.register(mcp)
 
 
 def _init_error_tracking() -> bool:

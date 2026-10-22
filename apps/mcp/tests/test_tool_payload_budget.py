@@ -67,6 +67,7 @@ from who2be_mcp.server import (
     PersonaWithPlaybooks,
     diff_versions,
     fetch_agent,
+    fetch_playbook,
     fetch_resource,
     get_external_tool,
     get_persona,
@@ -79,6 +80,7 @@ from who2be_mcp.server import (
     mcp,
 )
 from who2be_models import AgentToolPolicy, AgentWithRenderedPrompt, MemoryMode, WorkspaceRole
+from who2be_models.blocknote_markdown import to_markdown
 from who2be_models.external_tool import ExternalToolContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
 
@@ -90,6 +92,11 @@ from who2be_models.system_prompt_template import SystemPromptTemplateContent
 # Werkzeugluecken in Phase E schliessen) 180_000: zehn neue Werkzeuge kommen
 # hinzu; die Token-Optimierung aller Werkzeuge ist ein eigenes, spaeteres
 # Vorhaben. Messung vor E-MCP-1: 90 Tools / 104_290 Bytes.
+# ADR-0058 P3 (M1, Markdown-Schreibweg, `edit_content` neu): vorher 100 Tools /
+# 114_203 Bytes, nachher 101 Tools / 104_777 Bytes. Die Schreibwerkzeuge
+# verlieren die BlockNote-Schemata (z. B. `create_persona` 5_766 -> 2_731),
+# `edit_content` kostet 1_421, die `source`-Hinweise der sechs Lesewerkzeuge
+# zusammen ~400.
 _PAYLOAD_BUDGET_BYTES = 180_000
 _NEW_TOOL_DOC_CAP = 1_100
 
@@ -155,7 +162,8 @@ def test_tools_list_payload_counts_wire_only_fields(
 
 # Der Satz, den jede PUT-Beschreibung tragen muss (ADR-0056 Abschnitt 5,
 # Schicht 2): wer die Lesefassung als Vorlage nimmt, leert beim PUT den Inhalt.
-_PUT_FULL_HINT = 'Vorlage im Vollstand lesen (`format="full"`'
+# Seit ADR-0058 (P3) ist die Vorlage die Quellfassung `format="source"`.
+_PUT_FULL_HINT = 'Vorlage mit `format="source"`'
 
 
 def _put_update_tools() -> dict[str, str]:
@@ -182,8 +190,8 @@ def _put_update_tools() -> dict[str, str]:
     return found
 
 
-def test_every_put_update_tool_tells_writers_to_read_full_format() -> None:
-    """Jede PUT-Beschreibung nennt `format="full"` als Vorlage (ADR-0056 §5).
+def test_every_put_update_tool_tells_writers_to_read_source_format() -> None:
+    """Jede PUT-Beschreibung nennt `format="source"` als Vorlage (ADR-0056 §5, ADR-0058).
 
     Rot-Probe ist die Ableitung selbst: die Mindestmenge stellt sicher, dass
     der Guard die fuenf heutigen PUT-Werkzeuge wirklich findet und nicht
@@ -200,7 +208,7 @@ def test_every_put_update_tool_tells_writers_to_read_full_format() -> None:
 
     missing = sorted(name for name, doc in put_tools.items() if _PUT_FULL_HINT not in doc)
     assert not missing, (
-        f'Ohne Hinweis auf `format="full"`: {missing}. Ein PUT auf Basis der '
+        f'Ohne Hinweis auf `format="source"`: {missing}. Ein PUT auf Basis der '
         "Lesefassung leert den Inhalt (ADR-0056 Abschnitt 5)."
     )
 
@@ -616,7 +624,7 @@ def test_server_instructions_reach_the_client_and_name_only_real_tools() -> None
     assert _unknown_tool_refs(instructions + " `fetch_everything`", names) == {"fetch_everything"}
     assert not _unknown_tool_refs(instructions, names)
     # Die Querschnittsregeln stehen drin, nicht nur die Boot-Liste.
-    assert 'format="full"' in instructions
+    assert 'format="source"' in instructions
     assert "draft -> active" in instructions
     assert "data.locale" in instructions
     # Keine Entwickler-Historie: die instructions bezahlt jeder Start.
@@ -1509,3 +1517,182 @@ def test_package_4_tools_reject_unknown_format(tool: str, monkeypatch: pytest.Mo
     with pytest.raises(ToolError, match="Ungueltiges format"):
         asyncio.run(_PACKAGE_4_TOOLS[tool]("plain"))  # type: ignore[arg-type]
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# M6 (ADR-0058 §8.3): die Schreibvorlage `format="source"` je Werkzeug.
+#
+# Derselbe Inhalt in beiden Formen: der `full`-Pfad bekommt das Editor-JSON
+# der REST-Antwort, der `source`-Pfad die `/markdown`-Antwort, deren Feld der
+# P1-Konverter aus denselben Bloecken rendert. Rot-Probe ist wie bei `text`
+# der `full`-Pfad, der die Grenze reissen muss.
+# ---------------------------------------------------------------------------
+
+
+def _markdown_source(entity_type: str, content: dict[str, object]) -> dict[str, object]:
+    return {
+        "entity_type": entity_type,
+        "id": str(uuid4()),
+        "name": "Element",
+        "locale": "de",
+        "version": 1,
+        "status": "active",
+        "base_rev": "rev-1",
+        "content": content,
+    }
+
+
+def _md(blocks: list[dict[str, object]]) -> str:
+    return to_markdown(blocks)
+
+
+def _source_or(
+    source: dict[str, object], other: Callable[[httpx.Request], httpx.Response]
+) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markdown"):
+            return httpx.Response(200, json=source)
+        return other(request)
+
+    return handler
+
+
+def _assert_source_path_fits(full: object, source: object, tool: str) -> None:
+    _assert_text_path_fits(full, source, tool)
+    assert isinstance(source, str)
+    assert "Abschnitt" in source
+    assert '"props"' not in source
+    assert "- base_rev: rev-1" in source
+
+
+def test_get_persona_source_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    persona_id = uuid4()
+    blocks = _fat_blocks(190)
+    payload = _persona_payload(persona_id, blocks)
+    source = _markdown_source(
+        "personas",
+        {"description": "d", "tags": [], "profile": _md(blocks), "modes": [], "skills": []},
+    )
+
+    def rest(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/rendered"):
+            # Wie im `text`-Nachweis: `full` traegt das Profil zweimal (Bloecke
+            # und gerendert) — genau das spart die Vorlage.
+            rendered = "\n\n".join(
+                f"Abschnitt {i}: Profiltext dieses Absatzes." for i in range(190)
+            )
+            return httpx.Response(200, json={"body_rendered": rendered, "unresolved": []})
+        if path.endswith("/playbooks"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, rest)))
+    full = asyncio.run(get_persona(str(persona_id), format="full"))
+    text = asyncio.run(get_persona(str(persona_id), format="source"))
+    _assert_source_path_fits(full, text, "get_persona")
+
+
+def test_fetch_playbook_source_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = _fat_blocks(200)
+    playbook = _playbook_payload("Code-Task-Flow", json.dumps(blocks, ensure_ascii=False))
+    source = _markdown_source(
+        "playbooks", {"description": "d", "body": _md(blocks), "type": "workflow", "tags": []}
+    )
+
+    def rest(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(("/composes", "/resource_links", "/links")):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=playbook)
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, rest)))
+    full = asyncio.run(fetch_playbook(str(playbook["id"]), format="full"))
+    text = asyncio.run(fetch_playbook(str(playbook["id"]), format="source"))
+    _assert_source_path_fits(full, text, "fetch_playbook")
+
+
+def test_fetch_resource_source_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = _fat_blocks(250)
+    resource = _resource_payload(blocks)
+    source = _markdown_source("resources", {"description": "d", "body": _md(blocks), "tags": []})
+
+    def rest(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/sub_resources"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=resource)
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, rest)))
+    full = asyncio.run(fetch_resource(str(resource["id"]), format="full"))
+    text = asyncio.run(fetch_resource(str(resource["id"]), format="source"))
+    _assert_source_path_fits(full, text, "fetch_resource")
+
+
+def test_get_system_prompt_source_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = _fat_blocks(200)
+    template = _template_payload("Agent-Builder", json.dumps(blocks, ensure_ascii=False))
+    source = _markdown_source("system-prompts", {"description": "d", "body": _md(blocks)})
+    rest = _respond_with(template)
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, rest)))
+    full = asyncio.run(get_system_prompt(str(template["id"]), format="full"))
+    text = asyncio.run(get_system_prompt(str(template["id"]), format="source"))
+    _assert_source_path_fits(full, text, "get_system_prompt")
+
+
+def test_get_version_source_format_stays_under_response_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = _fat_blocks(200)
+    snapshot = {
+        "id": str(uuid4()),
+        "version": 3,
+        "status": "active",
+        "locale": "de",
+        "content": {
+            "description": "Stand 3",
+            "body": json.dumps(blocks, ensure_ascii=False),
+            "type": "workflow",
+        },
+        "created_by": str(uuid4()),
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    source = _markdown_source(
+        "playbooks", {"description": "Stand 3", "body": _md(blocks), "type": "workflow"}
+    )
+    source["base_rev"] = "rev-1"
+    rest = _respond_with(snapshot)
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, rest)))
+    entity_id = str(uuid4())
+    full = asyncio.run(get_version("playbook", entity_id, 3, format="full"))
+    text = asyncio.run(get_version("playbook", entity_id, 3, format="source"))
+    _assert_source_path_fits(full, text, "get_version")
+
+
+def test_get_external_tool_source_format_drops_editor_json_at_max_notes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wie beim `text`-Nachweis ohne Rot-Probe: `usage_notes` kann die Grenze nicht reissen."""
+    blocks = _fat_blocks(80)
+    tool = _external_tool_payload("Todoist", json.dumps(blocks, ensure_ascii=False))
+    source = _markdown_source(
+        "external_tools", {"display_name": "Todoist", "usage_notes": _md(blocks)}
+    )
+
+    monkeypatch.setattr(server, "build_client", _factory(_source_or(source, _respond_with(tool))))
+    full = asyncio.run(get_external_tool(str(tool["id"]), format="full"))
+    text = asyncio.run(get_external_tool(str(tool["id"]), format="source"))
+
+    assert isinstance(text, str)
+    assert _chars(text) <= _RESPONSE_CHAR_LIMIT
+    assert _chars(text) < _chars(full) / 3
+    assert "Abschnitt 79: Profiltext dieses Absatzes." in text
+    assert '"props"' not in text

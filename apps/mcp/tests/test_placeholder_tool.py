@@ -86,6 +86,6 @@ def test_server_exposes_list_placeholders_tool() -> None:
     tools = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
     assert "list_placeholders" in tools
     description = tools["list_placeholders"].description or ""
-    # Der Docstring verweist auf das echte BlockNote-Inline-Format.
-    assert '"type": "placeholder"' in description
+    # Der Docstring nennt die Markdown-Schreibweise (ADR-0058 §3.3).
+    assert "{{kind:target_id}}" in description
     assert "create_system_prompt" in description

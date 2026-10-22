@@ -7,7 +7,7 @@ uebersetzt.
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, TypeVar
 from uuid import UUID
 
 import httpx
@@ -70,9 +70,35 @@ from who2be_models import (
     WhoAmIRead,
     WorkspaceRead,
 )
+from who2be_models.content_markdown import (
+    MARKDOWN_CONTENT_MODELS,
+    ContentEdit,
+    MarkdownCreate,
+    MarkdownEntityType,
+    MarkdownSource,
+    MarkdownWrite,
+    MarkdownWriteResult,
+)
 from who2be_models.memory import MemorySaveResult
 
 logger = logging.getLogger(__name__)
+
+
+_M = TypeVar("_M", bound=MarkdownSource)
+
+
+def _markdown_model(model: type[_M], data: Any) -> _M:
+    """Validiert eine Markdown-Antwort mit dem `content`-Modell ihrer Elementart.
+
+    `MarkdownSource.content` ist eine Union ohne Diskriminator; ein
+    Resource-Inhalt passt auch auf das Playbook-Modell und kaeme dann mit
+    `type`/`triggers` zurueck, die `update_resource` (extra=forbid) ablehnt.
+    """
+    parsed = model.model_validate(data)
+    content_model = MARKDOWN_CONTENT_MODELS[parsed.entity_type]
+    content = content_model.model_validate(data["content"])
+    return parsed.model_copy(update={"content": content})
+
 
 _TIMEOUT = 10.0
 
@@ -701,8 +727,59 @@ class ApiClient:
         return VersionDiff.model_validate(data)
 
     # ------------------------------------------------------------------
+    # Markdown-Schreibweg (ADR-0058 §6.2, P3). Ein Routensatz fuer alle fuenf
+    # Elementarten; `entity_path` ist der Pfadwert (`personas`, `playbooks`,
+    # `resources`, `system-prompts`, `external_tools`). Die API wandelt um und
+    # ruft dieselben Services wie der JSON-Weg.
+    # ------------------------------------------------------------------
+
+    async def get_markdown_source(
+        self, entity_path: MarkdownEntityType, entity_id: UUID
+    ) -> MarkdownSource:
+        """Quellfassung (`format=source`) mit `base_rev` im Kopf."""
+        data = await self._get(
+            f"{self._workspace_prefix}/{entity_path}/{entity_id}/markdown",
+            params={"format": "source"},
+        )
+        return _markdown_model(MarkdownSource, data)
+
+    async def get_version_markdown_source(
+        self, entity_path: MarkdownEntityType, entity_id: UUID, version: int
+    ) -> MarkdownSource:
+        """Quellfassung eines Versions-Snapshots (ohne `base_rev`)."""
+        data = await self._get(
+            f"{self._workspace_prefix}/{entity_path}/{entity_id}/versions/{version}/markdown",
+            params={"format": "source"},
+        )
+        return _markdown_model(MarkdownSource, data)
+
+    async def create_markdown(
+        self, entity_path: MarkdownEntityType, data: MarkdownCreate
+    ) -> MarkdownWriteResult:
+        body = await self._write("POST", f"{self._workspace_prefix}/{entity_path}/markdown", data)
+        return _markdown_model(MarkdownWriteResult, body)
+
+    async def put_markdown(
+        self, entity_path: MarkdownEntityType, entity_id: UUID, data: MarkdownWrite
+    ) -> MarkdownWriteResult:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/{entity_path}/{entity_id}/markdown", data
+        )
+        return _markdown_model(MarkdownWriteResult, body)
+
+    async def edit_markdown(
+        self, entity_path: MarkdownEntityType, entity_id: UUID, data: ContentEdit
+    ) -> MarkdownWriteResult:
+        body = await self._write(
+            "PATCH", f"{self._workspace_prefix}/{entity_path}/{entity_id}/markdown", data
+        )
+        return _markdown_model(MarkdownWriteResult, body)
+
+    # ------------------------------------------------------------------
     # Write-Pfad (ADR-0012). Alle Mutationen brauchen einen Token mit
     # editor-Rolle (Status-Promote/Retire: admin) — die API erzwingt das.
+    # Die Inhalts-Writes der MCP-Werkzeuge laufen seit ADR-0058 P3 ueber den
+    # Markdown-Weg oben; diese JSON-Methoden bleiben fuer Tests und Paritaet.
     # ------------------------------------------------------------------
 
     async def create_persona(self, data: PersonaCreate) -> PersonaRead:

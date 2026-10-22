@@ -20,13 +20,17 @@ Woher der Text kommt:
   Klartext-Serialisierung `who2be_models.blocknote_text`. Placeholder-Pills
   erscheinen dort als `{{kind:target_id}}`.
 
-Jedes Dokument traegt den Schreiber-Hinweis `FULL_FORMAT_HINT`: die
-`update_*`-Werkzeuge ersetzen den Inhalt vollstaendig (PUT), und die Vorlage
-dafuer liefert nur `format="full"`.
+Jedes Dokument traegt den Schreiber-Hinweis `FULL_FORMAT_HINT`: die Vorlage
+fuer `update_*` (PUT, ersetzt den Inhalt) und `edit_content` liefert seit
+ADR-0058 nur `format="source"` (Quell-Markdown mit Ankern und `base_rev`).
+Die Lesefassung hier traegt weder Anker noch `base_rev`. Den Namen behaelt die
+Konstante, damit bestehende Importe nicht brechen.
 """
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Iterable, Sequence
 
 from who2be_mcp.client import AnyVersionRead
@@ -51,11 +55,13 @@ from who2be_models.blocknote_text import (
     blocks_plain_text,
     placeholder_token_inline,
 )
+from who2be_models.content_markdown import MarkdownSource
 from who2be_models.persona import PersonaMode
 from who2be_models.resource import ResourceBlock
 
 FULL_FORMAT_HINT = (
-    '> Lesefassung. Vorlage fuer `update_*` (PUT, ersetzt den Inhalt): `format="full"`.'
+    "> Lesefassung. Vorlage fuer `update_*` und `edit_content` (Anker, `base_rev`): "
+    '`format="source"`.'
 )
 
 
@@ -546,8 +552,83 @@ def diff_text(entity_type: str, entity_id: str, diff: VersionDiff) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Quellfassung (`format="source"`, ADR-0058 §5.1 B): die Schreibvorlage
+# ---------------------------------------------------------------------------
+
+SOURCE_HINT = (
+    "> Quellfassung (Vorlage). `update_*`: Strukturfelder aus dem JSON-Block und die "
+    "Markdown-Felder unveraendert als `data.content` uebernehmen, Anker `[#id]` stehen "
+    "lassen. Einzelne Abschnitte oder Felder aendert `edit_content` mit `base_rev`."
+)
+
+_SOURCE_MARKDOWN_FIELDS: dict[str, tuple[str, ...]] = {
+    "personas": ("profile",),
+    "playbooks": ("body",),
+    "resources": ("body",),
+    "system-prompts": ("body",),
+    "external_tools": ("usage_notes",),
+}
+_MODE_MARKDOWN_FIELDS = ("identity_add", "output_style_override", "anti_patterns")
+_BACKTICK_RUN = re.compile(r"`+")
+
+
+def _fence(text: str) -> str:
+    """Fenced Block, dessen Zaun laenger ist als jede Backtick-Folge im Inhalt."""
+    longest = max((len(run) for run in _BACKTICK_RUN.findall(text)), default=0)
+    fence = "`" * max(4, longest + 1)
+    return f"{fence}markdown\n{text}\n{fence}" if text else f"{fence}markdown\n{fence}"
+
+
+def source_text(source: MarkdownSource) -> str:
+    """Quellfassung als Markdown-Dokument: Kopf mit `base_rev`, Felder verlustfrei.
+
+    Strukturfelder (Tags, Trigger, Modus-Kopf, Skills …) stehen als JSON-Block,
+    damit sie sich 1:1 in `data.content` uebernehmen lassen. Jedes
+    Markdown-Feld steht unter seinem Feldnamen (dem `field` von
+    `edit_content`) in einem eigenen Fence.
+    """
+    content = source.content.model_dump(mode="json")
+    md_fields = _SOURCE_MARKDOWN_FIELDS[source.entity_type]
+    structure = {key: value for key, value in content.items() if key not in md_fields}
+    sections: list[str] = []
+    for name in md_fields:
+        sections.append(f"## {name}\n\n{_fence(content.get(name) or '')}")
+    modes = structure.get("modes")
+    if isinstance(modes, list):
+        structure["modes"] = [
+            {key: value for key, value in mode.items() if key not in _MODE_MARKDOWN_FIELDS}
+            for mode in modes
+        ]
+        for mode in modes:
+            for attr in _MODE_MARKDOWN_FIELDS:
+                field = f"modes[{mode['name']}].{attr}"
+                sections.append(f"## {field}\n\n{_fence(mode.get(attr) or '')}")
+    head = _meta(
+        [
+            ("entity_type", source.entity_type),
+            ("id", source.id),
+            ("version", source.version),
+            ("status", _status(source.status)),
+            ("locale", source.locale),
+            ("base_rev", source.base_rev or "keiner (nicht das Schreibziel, nur Vorlage)"),
+        ]
+    )
+    structure_json = json.dumps(structure, ensure_ascii=False, indent=2)
+    return _join(
+        [
+            f"# {source.name}",
+            SOURCE_HINT,
+            head,
+            f"## Strukturfelder\n\n```json\n{structure_json}\n```",
+            *sections,
+        ]
+    )
+
+
 __all__ = [
     "FULL_FORMAT_HINT",
+    "SOURCE_HINT",
     "agent_text",
     "diff_text",
     "external_tool_content_text",
@@ -560,6 +641,7 @@ __all__ = [
     "playbook_text",
     "resource_content_text",
     "resource_text",
+    "source_text",
     "system_prompt_content_text",
     "system_prompt_list_text",
     "system_prompt_text",

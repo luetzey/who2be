@@ -7,7 +7,9 @@ via `asyncio.run`, HTTP ueber `httpx.MockTransport`, `build_client` gepatcht.
 """
 
 import asyncio
+import json
 from collections.abc import Callable
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -24,15 +26,32 @@ from who2be_mcp.server import (
     transition_system_prompt,
     update_system_prompt,
 )
+from who2be_mcp.tools.content import SystemPromptMarkdownCreate, SystemPromptMarkdownUpdate
 from who2be_models import (
-    SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
-    SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
     VersionTransitionRequest,
 )
+from who2be_models.content_markdown import MarkdownWriteResult
 
 _WORKSPACE_ID = uuid4()
+
+
+def _md_result(
+    entity_type: str, content: dict[str, object], name: str = "Neu", locale: str = "de"
+) -> dict[str, object]:
+    """Antwort der `/markdown`-Schreibrouten (`MarkdownWriteResult`, ADR-0058 P2)."""
+    return {
+        "entity_type": entity_type,
+        "id": str(uuid4()),
+        "name": name,
+        "locale": locale,
+        "version": 1,
+        "status": "draft",
+        "base_rev": "rev-1",
+        "content": content,
+        "dangling_refs": [],
+    }
 
 
 def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[], object]:
@@ -174,7 +193,7 @@ def test_list_versions_supports_system_prompt_entity(monkeypatch: pytest.MonkeyP
 
 
 def test_create_system_prompt_posts_template(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         # `create_system_prompt` loest `data.locale=None` zuerst ueber ein
@@ -184,16 +203,20 @@ def test_create_system_prompt_posts_template(monkeypatch: pytest.MonkeyPatch) ->
             return httpx.Response(200, json=_workspace_json())
         seen["method"] = request.method
         seen["path"] = request.url.path
-        return httpx.Response(200, json=_template_payload())
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_md_result("system-prompts", seen["body"]["content"]))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    data = SystemPromptTemplateCreate.model_validate(
-        {"name": "Neu", "content": {"description": "d", "body": "{{persona:profile}}"}}
+    data = SystemPromptMarkdownCreate.model_validate(
+        {"name": "Neu", "content": {"description": "d", "body": "Du bist {{persona-field:name}}."}}
     )
     result = asyncio.run(create_system_prompt(data))
-    assert isinstance(result, SystemPromptTemplateRead)
+    assert isinstance(result, MarkdownWriteResult)
     assert seen["method"] == "POST"
-    assert seen["path"].endswith("/system-prompts")
+    assert seen["path"].endswith("/system-prompts/markdown")
+    # Der Markdown-Body geht unveraendert an die API; umwandeln macht sie.
+    assert seen["body"]["content"]["body"] == "Du bist {{persona-field:name}}."
+    assert seen["body"]["locale"] == "de"
 
 
 def test_create_system_prompt_with_explicit_locale_skips_workspace_lookup(
@@ -205,10 +228,11 @@ def test_create_system_prompt_with_explicit_locale_skips_workspace_lookup(
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(f"{request.method} {request.url.path}")
-        return httpx.Response(200, json=_template_payload())
+        body = json.loads(request.content)
+        return httpx.Response(200, json=_md_result("system-prompts", body["content"], locale="en"))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    data = SystemPromptTemplateCreate.model_validate(
+    data = SystemPromptMarkdownCreate.model_validate(
         {
             "name": "Neu",
             "locale": "en",
@@ -216,26 +240,28 @@ def test_create_system_prompt_with_explicit_locale_skips_workspace_lookup(
         }
     )
     result = asyncio.run(create_system_prompt(data))
-    assert isinstance(result, SystemPromptTemplateRead)
-    assert calls == [f"POST /v1/workspaces/{_WORKSPACE_ID}/system-prompts"]
+    assert isinstance(result, MarkdownWriteResult)
+    assert calls == [f"POST /v1/workspaces/{_WORKSPACE_ID}/system-prompts/markdown"]
 
 
 def test_update_system_prompt_puts_template(monkeypatch: pytest.MonkeyPatch) -> None:
     tid = uuid4()
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["method"] = request.method
         seen["path"] = request.url.path
-        return httpx.Response(200, json=_template_payload())
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_md_result("system-prompts", seen["body"]["content"]))
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
-    data = SystemPromptTemplateUpdate.model_validate(
-        {"name": None, "content": {"description": "d", "body": "{{persona:profile}} v2"}}
+    data = SystemPromptMarkdownUpdate.model_validate(
+        {"name": None, "base_rev": "rev-0", "content": {"description": "d", "body": "v2"}}
     )
     asyncio.run(update_system_prompt(str(tid), data))
     assert seen["method"] == "PUT"
-    assert seen["path"].endswith(f"/system-prompts/{tid}")
+    assert seen["path"].endswith(f"/system-prompts/{tid}/markdown")
+    assert seen["body"]["base_rev"] == "rev-0"
 
 
 def test_transition_to_review_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
