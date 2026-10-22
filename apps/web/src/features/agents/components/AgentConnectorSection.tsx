@@ -1,3 +1,4 @@
+// PROBE t_0d3f4203: nur fuer den Hilfe-Drift-Test-PR, wird nie gemergt.
 import { Copy, ExternalLink } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
