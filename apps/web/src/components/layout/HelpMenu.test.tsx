@@ -7,6 +7,24 @@ import type { Me, WorkspaceRole } from '@/api/types'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
 
+// Feste Eintraege „Was ist neu“ statt des ausgelieferten Inhalts, damit die
+// Punkt-Regel nicht vom naechsten News-Eintrag abhaengt. Es bleibt derselbe
+// Loader (`helpIndex.news`), nur mit anderen Daten.
+vi.mock('@/help/helpIndex', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/help/helpIndex')>()
+  const md = (date: string, lang: string) =>
+    ['---', `date: ${date}`, 'type: new', `title: Neu ${lang}`, '---', '', `Text ${lang}.`].join('\n')
+  return {
+    ...original,
+    helpIndex: original.buildHelpIndex({
+      './news/2026-10-20-neu.de.md': md('2026-10-20', 'de'),
+      './news/2026-10-20-neu.en.md': md('2026-10-20', 'en'),
+      './news/2026-09-01-alt.de.md': md('2026-09-01', 'de'),
+      './news/2026-09-01-alt.en.md': md('2026-09-01', 'en'),
+    }),
+  }
+})
+
 // Radix DropdownMenu braucht PointerCapture/scrollIntoView, die jsdom fehlen.
 beforeAll(() => {
   for (const name of ['hasPointerCapture', 'releasePointerCapture', 'setPointerCapture', 'scrollIntoView']) {
@@ -127,11 +145,11 @@ function LocationProbe() {
   )
 }
 
-function renderShell(role: WorkspaceRole = 'editor') {
+function renderShell(role: WorkspaceRole = 'editor', account: Partial<Me> = {}) {
   return renderInRoutes(<LocationProbe />, {
     path: '/w/:workspaceId/*',
     initialEntries: ['/w/ws-1/agents'],
-    me: meWithRole(role),
+    me: { ...meWithRole(role), ...account },
   })
 }
 
@@ -145,6 +163,82 @@ function tutorialCalls(calls: Call[], method: string) {
 }
 
 describe('HelpMenu', () => {
+  describe('Punkt bei ungesehenen Neuigkeiten (Spec §5.4)', () => {
+    // Nur `Date` faken: Timer bleiben echt, sonst haengen waitFor und Radix.
+    function at(iso: string) {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(iso))
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** Wartet, bis der nachgeladene Hilfe-Index da ist; danach steht der Punkt fest. */
+    async function settled() {
+      await act(async () => {
+        await vi.dynamicImportSettled()
+      })
+    }
+
+    const dot = () => screen.queryByTestId('help-menu-news-dot')
+    const trigger = () => screen.getByTestId('help-menu-trigger')
+
+    it('zeigt den Punkt bei einem Eintrag nach news_seen_at, mit Screenreader-Text, besteht axe', async () => {
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      const { container } = renderShell('editor', {
+        news_seen_at: '2026-10-19T08:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      expect(await screen.findByTestId('help-menu-news-dot')).toHaveAttribute('aria-hidden', 'true')
+      expect(trigger()).toHaveAccessibleName('Hilfe und Neuigkeiten, neue Einträge in „Was ist neu“')
+      expect(await axe(container)).toHaveNoViolations()
+    })
+
+    it('kein Punkt, wenn news_seen_at nach dem neuesten Eintrag liegt (auch am selben Tag)', async () => {
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: '2026-10-20T09:30:00Z', created_at: '2026-01-01T00:00:00Z' })
+      await settled()
+      expect(dot()).toBeNull()
+      expect(trigger()).toHaveAccessibleName('Hilfe und Neuigkeiten')
+    })
+
+    it('ohne news_seen_at: Punkt bei einem Eintrag nach der Kontoanlage, höchstens 14 Tage alt', async () => {
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: null, created_at: '2026-08-01T00:00:00Z' })
+      expect(await screen.findByTestId('help-menu-news-dot')).toBeInTheDocument()
+    })
+
+    it('ohne news_seen_at: kein Punkt, wenn der neueste Eintrag älter als 14 Tage ist', async () => {
+      // 2026-10-20 + 14 Tage = 2026-11-03 00:00 UTC; einen Tag danach ist er zu alt.
+      at('2026-11-04T00:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: null, created_at: '2026-08-01T00:00:00Z' })
+      await settled()
+      expect(dot()).toBeNull()
+    })
+
+    it('ohne news_seen_at: kein Punkt für Einträge vor der Kontoanlage', async () => {
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: null, created_at: '2026-10-21T12:00:00Z' })
+      await settled()
+      expect(dot()).toBeNull()
+    })
+
+    it('kein Punkt, solange das Konto beide Felder nicht kennt (alte API, Token-Pfad)', async () => {
+      at('2026-10-22T10:00:00Z')
+      stubApi([welcome()])
+      renderShell('editor', { news_seen_at: null, created_at: null })
+      await settled()
+      expect(dot()).toBeNull()
+      expect(trigger()).toHaveAccessibleName('Hilfe und Neuigkeiten')
+    })
+  })
+
   it('lädt erst beim Öffnen und zeigt die Einträge in fester Reihenfolge, besteht axe', async () => {
     const calls = stubApi([other(), welcome()])
     const { container } = renderShell()

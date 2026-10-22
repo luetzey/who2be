@@ -4542,6 +4542,7 @@
     },
     "menu": {
       "label": "Help and what's new",
+      "labelUnseen": "Help and what's new, new entries in “What's new”",
       "firstSteps": "Getting started",
       "firstStepsProgress": "{{done}} of {{total}}",
       "tutorials": "Tutorials",

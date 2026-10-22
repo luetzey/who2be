@@ -211,6 +211,11 @@ export interface Me {
   // Optional, weil aeltere Backend-Versionen das Feld nicht liefern; Frontend
   // behandelt `undefined` als „Status unbekannt, nicht umleiten".
   has_password?: boolean
+  // Punkt am „?“-Menue (ADR-0060 §4): Kontoanlage und wann „Was ist neu“
+  // zuletzt geoeffnet wurde. `null`, solange unbekannt bzw. nie; optional, weil
+  // aeltere Backend-Versionen die Felder nicht liefern.
+  created_at?: string | null
+  news_seen_at?: string | null
 }
 
 // Track C — Tenancy-Aggregate (Org/Workspace). Spiegeln `OrganizationRead`

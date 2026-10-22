@@ -1,8 +1,13 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Session } from '@supabase/supabase-js'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { StrictMode } from 'react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Tutorial } from '@/api/client'
 import type { Me, WorkspaceRole } from '@/api/types'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
+import { SessionContext } from '@/auth/session-context'
 import { buildHelpIndex } from '@/help/helpIndex'
 import { axe } from '@/test/a11y'
 import { renderInRoutes } from '@/test/render'
@@ -131,6 +136,9 @@ function stubApi(list: Tutorial[], afterChange?: Tutorial) {
       const payload = method === 'GET' ? list : (afterChange ?? list[0])
       return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }))
     }
+    if (url.endsWith('/v1/me/news-seen') && method === 'PATCH') {
+      return Promise.resolve(new Response('{"news_seen_at":"2026-10-22T10:00:00Z"}', { status: 200 }))
+    }
     return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -257,6 +265,10 @@ describe('HelpHomePage', () => {
 })
 
 describe('HelpNewsPage', () => {
+  beforeEach(() => {
+    stubApi([])
+  })
+
   it('gruppiert nach Monat, neueste zuerst, mit Typ und Link, besteht axe', async () => {
     const { container } = renderInRoutes(<HelpNewsPage index={index} />, {
       path: '/w/:workspaceId/help/neu',
@@ -289,6 +301,72 @@ describe('HelpNewsPage', () => {
       me: meWithRole('editor'),
     })
     expect(screen.getByText(/Noch keine Neuigkeiten/)).toBeInTheDocument()
+  })
+
+  it('setzt beim Öffnen „gesehen“ genau einmal und lädt danach /v1/me neu (Spec §5.4)', async () => {
+    const calls = stubApi([])
+    const refreshMe = vi.fn().mockResolvedValue(undefined)
+    const me = meWithRole('editor')
+    const page = (
+      <SessionContext.Provider
+        value={{
+          session: { access_token: 'tok' } as unknown as Session,
+          me,
+          sessionLoaded: true,
+          signIn: vi.fn(),
+          signOut: vi.fn(),
+          refreshMe,
+        }}
+      >
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/help/neu']}>
+            <Routes>
+              <Route path="/w/:workspaceId/help/neu" element={<HelpNewsPage index={index} />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>
+    )
+    const { rerender } = render(<StrictMode>{page}</StrictMode>)
+    await waitFor(() => expect(refreshMe).toHaveBeenCalledTimes(1))
+    // Neues `me` nach dem Reload (bzw. jedes weitere Rendern) loest keinen
+    // zweiten PATCH aus; der doppelte Effekt im StrictMode auch nicht.
+    rerender(<StrictMode>{page}</StrictMode>)
+    await act(async () => {})
+    const patches = calls.filter((c) => c.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(patches[0].url).toMatch(/\/v1\/me\/news-seen$/)
+    expect(refreshMe).toHaveBeenCalledTimes(1)
+  })
+
+  it('lädt /v1/me nicht neu, wenn das Setzen scheitert', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"detail":"nein"}', { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const refreshMe = vi.fn()
+    render(
+      <SessionContext.Provider
+        value={{
+          session: { access_token: 'tok' } as unknown as Session,
+          me: meWithRole('editor'),
+          sessionLoaded: true,
+          signIn: vi.fn(),
+          signOut: vi.fn(),
+          refreshMe,
+        }}
+      >
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/help/neu']}>
+            <Routes>
+              <Route path="/w/:workspaceId/help/neu" element={<HelpNewsPage index={index} />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    expect(refreshMe).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { level: 1, name: 'Was ist neu' })).toBeInTheDocument()
   })
 })
 

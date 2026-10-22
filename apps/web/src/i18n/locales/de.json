@@ -4542,6 +4542,7 @@
     },
     "menu": {
       "label": "Hilfe und Neuigkeiten",
+      "labelUnseen": "Hilfe und Neuigkeiten, neue Einträge in „Was ist neu“",
       "firstSteps": "Erste Schritte",
       "firstStepsProgress": "{{done}} von {{total}}",
       "tutorials": "Tutorials",
