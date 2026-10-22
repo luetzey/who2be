@@ -28882,7 +28882,7 @@
           "other"
         ],
         "title": "SystemFeedbackCategory",
-        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt), `tool_request` (ein Werkzeug liegt nicht im\nWerkzeug-Profil des Agenten, ADR-0059 §8 / W59-6) oder `other`. Wird in\nderselben `agent_feedback`-Spalte `signal` gespeichert (entity_type=\n'system', entity_id=NULL; die Spalte hat keinen CHECK, Migration 0059) und\nfliesst in den gemeinsamen Kurations-Posteingang."
+        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt), `tool_request` (Werkzeug fehlt im Profil) oder\n`other`. Wird in derselben `agent_feedback`-Spalte `signal` gespeichert\n(entity_type='system', entity_id=NULL) und fliesst in den gemeinsamen\nKurations-Posteingang."
       },
       "SystemFeedbackCreate": {
         "properties": {
