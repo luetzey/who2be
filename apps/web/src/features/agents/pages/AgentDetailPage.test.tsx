@@ -198,14 +198,25 @@ describe('AgentDetailPage', () => {
     expect(screen.getByTestId('delete-agent-trigger')).toBeInTheDocument()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
 
-    // Connector- + Token-Sektion liegen im Tab „Einstellungen“ → „Verbindung".
+    // Verbinden-Baustein steht im Ueberblick (Onboarding P2), vor den Kacheln.
+    const connect = screen.getByTestId('agent-connect')
+    expect(within(connect).getByRole('heading', { name: 'Verbindung' })).toBeInTheDocument()
+    const cta = await within(connect).findByRole('link', { name: /Mit Claude verbinden/ })
+    expect(new URL(cta.getAttribute('href') ?? '').searchParams.get('connectorUrl')).toContain(
+      '/a/a1',
+    )
+    const overview = screen.getByTestId('agent-overview')
+    expect(
+      connect.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // Hoechstens eine Brand-Aktion je Seite: „Kopieren“ im Kopf ist jetzt outline.
+    expect(screen.getByTestId('copy-prompt-primary').className).not.toContain('bg-brand')
+
+    // Token-Sektion liegt weiter im Tab „Einstellungen“ → „Verbindung“, ohne
+    // zweite Connector-Karte.
     fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
-
-    // Connector-Sektion mit agent-eindeutiger URL (Agent im Pfad, Issue #404).
-    expect(screen.getByText('Claude-Connector')).toBeInTheDocument()
-    const urlInput = screen.getByLabelText<HTMLInputElement>('Server-URL')
-    expect(urlInput.value).toContain('/a/a1')
+    expect(screen.queryByTestId('agent-connect')).not.toBeInTheDocument()
 
     // Token-Sektion gerendert.
     expect(screen.getByText('API-Tokens')).toBeInTheDocument()

@@ -666,17 +666,78 @@
       "saved": "Agent gespeichert.",
       "unknownError": "Unbekannter Fehler."
     },
-    "connector": {
-      "title": "Claude-Connector",
-      "description": "Verbindungsparameter für einen Remote-MCP-Connector dieses Agenten. Beim Verbinden meldest du dich per OAuth an — kein Token nötig. Die URL ist pro Agent eindeutig, damit Claude sie nicht als Duplikat ablehnt.",
-      "nameLabel": "Connector-Name",
+    "connect": {
+      "title": "Verbindung",
       "nameValue": "Who2Be – {{name}}",
+      "clientQuestion": "Wo nutzt du deine Agenten?",
+      "client": {
+        "claude": "Claude",
+        "code": "Claude Code",
+        "editor": "Cursor oder VS Code",
+        "other": "Etwas anderes"
+      },
+      "clientName": {
+        "claude": "Claude",
+        "code": "Claude Code",
+        "editor": "deinem Editor",
+        "other": "deinem Programm"
+      },
+      "status": {
+        "connected": "Verbunden",
+        "notConnected": "Noch nicht verbunden"
+      },
+      "steps": {
+        "claude": "Klick auf „Mit Claude verbinden“. Claude öffnet sich mit allem ausgefüllt. Dort auf „Hinzufügen“ und dann „Verbinden“ klicken.",
+        "confirm": "Bestätige in Who2Be, dass {{client}} den Agenten „{{agent}}“ nutzen darf.",
+        "test": "Schreib in einem neuen Chat:",
+        "code": "Kopiere diesen Befehl und führe ihn im Terminal aus:",
+        "editor": "Klick auf „Zu Cursor hinzufügen“ bzw. „In VS Code installieren“. Der Editor fragt einmal nach.",
+        "login": "Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
+        "otherIntro": "Dein Programm muss Remote-MCP mit Anmeldung (OAuth) können. Trag dort diese Adresse ein:",
+        "otherTest": "Danach schreibst du deinem Agenten:"
+      },
+      "cta": {
+        "claude": "Mit Claude verbinden",
+        "code": "Befehl kopieren",
+        "cursor": "Zu Cursor hinzufügen",
+        "vscode": "In VS Code installieren",
+        "other": "Ich habe die Adresse eingetragen"
+      },
+      "newTab": "(öffnet in neuem Tab)",
+      "reopenClaude": "Claude erneut öffnen",
+      "testLabel": "Test-Satz",
+      "testSentence": "Wer bist du? Lade deine Persona aus Who2Be.",
+      "copySentence": "Satz kopieren",
+      "commandLabel": "Befehl",
+      "nameLabel": "Name",
       "urlLabel": "Server-URL",
-      "urlHint": "In Claude unter „Connector hinzufügen\" als URL einfügen. Die URL legt den Agenten fest, beim Login bestätigst du ihn nur noch.",
-      "copyUrl": "URL kopieren",
       "copyName": "Namen kopieren",
+      "copyUrl": "URL kopieren",
       "copied": "In Zwischenablage kopiert.",
-      "error": "Kopieren fehlgeschlagen."
+      "copyError": "Kopieren fehlgeschlagen.",
+      "manual": {
+        "summary": "Klappt der Knopf nicht? Von Hand eintragen",
+        "claudePath": "In Claude: Einstellungen › Connectors › „Eigenen Connector hinzufügen“. Auf dem iPhone öffnet der Knopf den Dialog manchmal nicht, dann hilft dieser Weg.",
+        "editorPath": "Im Editor als Remote-MCP-Server mit dieser URL eintragen (Transport HTTP). Angemeldet wird beim ersten Aufruf."
+      },
+      "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectors hinzu.",
+      "free": "Claude Free erlaubt nur einen eigenen Connector. Entferne dort vorher den Builder.",
+      "waiting": "Warte auf „{{agent}}“ …",
+      "waitingHint": "Sobald er in {{client}} seine Persona lädt, hakt sich der Schritt ab. Du kannst diese Seite offen lassen.",
+      "expired": "Noch kein Abruf angekommen. Who2Be fragt nicht mehr von selbst nach.",
+      "confirmQuestion": "Hat er geantwortet?",
+      "confirmYes": "Ja, weiter",
+      "checkAgain": "Erneut prüfen",
+      "troubleshoot": "Klappt es nicht? Häufige Ursachen",
+      "success": "Verbunden. „{{agent}}“ hat seine Persona geladen.",
+      "lastFetch": "Zuletzt abgerufen am {{date}}",
+      "confirmedHint": "Du hast die Verbindung bestätigt. Der erste Abruf erscheint hier, sobald er ankommt.",
+      "addAnother": "Verbindung hinzufügen",
+      "collapse": "Einklappen",
+      "notReady": {
+        "disabled": "Der Agent ist nicht aktiv.",
+        "fix": "Zu den Einstellungen"
+      }
     },
     "filter": {
       "searchPlaceholder": "Agents durchsuchen…",
