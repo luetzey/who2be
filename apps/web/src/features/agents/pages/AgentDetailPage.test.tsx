@@ -465,6 +465,7 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
     ['#memory', '?tab=memory#memory', 'Gedächtnis'],
     ['#sessions', '?tab=evolution', /^Weiterentwicklung/],
     ['#delegations', '#delegations', 'Überblick'],
+    ['#connect', '#connect', 'Überblick'],
   ])('alter Anker %s leitet auf „%s“ um', async (anchor, expected, tabName) => {
     stubTolerant()
     renderPage(`/w/ws-1/agents/a1${anchor}`, editorMe)
@@ -476,6 +477,32 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
       'aria-selected',
       'true',
     )
+  })
+
+  it('#connect springt die Karte „Verbindung“ an: Scroll und Fokus auf die Überschrift', async () => {
+    stubTolerant()
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    renderPage('/w/ws-1/agents/a1#connect', editorMe)
+
+    const connect = await screen.findByTestId('agent-connect')
+    const heading = within(connect).getByRole('heading', { level: 2 })
+    await waitFor(() => expect(heading).toHaveFocus())
+    expect(heading).toHaveAttribute('tabindex', '-1')
+    // Gescrollt wird der Rahmen um die Karte, an den oberen Rand.
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+    expect(scroll.mock.contexts.some((el) => (el as Element).contains(connect))).toBe(true)
+  })
+
+  it('ohne #connect kein Sprung zur Karte „Verbindung“', async () => {
+    stubTolerant()
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    renderPage('/w/ws-1/agents/a1', editorMe)
+
+    const connect = await screen.findByTestId('agent-connect')
+    expect(within(connect).getByRole('heading', { level: 2 })).not.toHaveFocus()
+    expect(scroll.mock.contexts.some((el) => (el as Element).contains(connect))).toBe(false)
   })
 
   it('ein expliziter ?tab= gewinnt gegen den Anker', async () => {
