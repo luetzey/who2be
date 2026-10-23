@@ -1116,9 +1116,11 @@ def test_sync_v20_distributes_lengths_section_and_checkpoints() -> None:
     """Content-Stand 20: ein Bestands-Workspace auf Stempel 19 bekommt den
     Abschnitt „Laengen & Wohin\" und die beiden Pruefpunkte per Sync.
 
-    Der Stempel steht bewusst auf `BUILDER_CONTENT_VERSION - 1`: so belegt der
-    Test, dass genau der Bump die Verteilung ausloest. Der alte Inhalt (ohne
-    Abschnitt) wird vorher eingespielt, damit der Sync sichtbar etwas aendert.
+    Der Stempel steht bewusst als Literal auf 19 (Stand vor B1), nicht auf
+    `BUILDER_CONTENT_VERSION - 1`: fehlt der Bump auf 20, findet der Sync
+    nichts zu tun und der Test wird rot. So belegt er, dass genau der Bump die
+    Verteilung ausloest. Der alte Inhalt (ohne Abschnitt) wird vorher
+    eingespielt, damit der Sync sichtbar etwas aendert.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -1158,13 +1160,13 @@ def test_sync_v20_distributes_lengths_section_and_checkpoints() -> None:
                 "UPDATE resource SET managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                19,
             )
             await conn.execute(
                 "UPDATE playbook SET managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND name = ANY($3::text[])",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                19,
                 [by_key["persona"].name, by_key["consistency"].name],
             )
             updated = await sync_managed_builder_content(conn)
