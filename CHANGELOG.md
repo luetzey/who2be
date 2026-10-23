@@ -270,17 +270,6 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Security
 
-- Bumped `fastmcp` from 4.1.1 to 4.1.3 and `pypdf` from 6.21.1 to 6.21.2 in
-  `uv.lock`, clearing five advisories the CI `audit` job started reporting on
-  2026-10-23 (GHSA-7xgj-8392-5q4r and GHSA-vqqp-x5qm-5qp4 for fastmcp;
-  CVE-2026-115572, CVE-2026-115585 and CVE-2026-115580 for pypdf). The resolver
-  took fastmcp to 4.1.3 rather than 4.1.2 and pulled along `fastmcp-slim`
-  4.1.3, `openapi-pydantic` 0.6.0 and a direct `certifi` dependency of the
-  fastmcp server extra (already locked at 2026.10.19). The declared lower
-  bounds in `apps/mcp/pyproject.toml` and `apps/api/pyproject.toml` are
-  unchanged, and no advisory is ignored. pypdf is reachable from user input:
-  the WorkArea ingest extracts text from uploaded PDFs in the API image.
-
 - A server `detail` whose `reason` has no locale key now reaches the UI
   verbatim: the client returns it directly instead of passing it through
   i18next as a `defaultValue`. i18next evaluates its own syntax inside a
