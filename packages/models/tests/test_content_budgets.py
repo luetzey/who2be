@@ -56,6 +56,7 @@ def _number(text: str) -> int | None:
     return int(re.sub(r"\D", "", found[0])) if found else None
 
 
+# effect-exempt: Drift-Guard; Konventionen-Tabelle (Builder-Text) gleich den Konstanten
 @pytest.mark.parametrize("locale", ["de", "en"])
 def test_conventions_table_matches_constants(locale: str) -> None:
     rows = _table_rows(locale)
@@ -65,6 +66,7 @@ def test_conventions_table_matches_constants(locale: str) -> None:
         assert _number(warn) == budget.warn, (locale, _label, warn)
 
 
+# effect-exempt: Drift-Guard; Einheiten der Konventionen-Tabelle gegen die Konstanten
 @pytest.mark.parametrize("locale", ["de", "en"])
 def test_conventions_table_units_match(locale: str) -> None:
     unit_words = {
