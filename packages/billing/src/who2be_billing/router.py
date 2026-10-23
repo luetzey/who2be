@@ -14,6 +14,9 @@ Dazu ``POST /v1/workspaces/{ws}/billing/override``: befristetes `manual_override
 — **Betreiber-only** (Operator-Allowlist `WHO2BE_BILLING_OVERRIDE_OPERATORS` +
 aal2), kein Kunden-Self-Service (LIC-1).
 
+Und ``GET``/``PUT /v1/workspaces/{ws}/billing/profile`` (admin): Rechnungsdaten
+der Organisation mit VIES-Pruefung der USt-IdNr. (ADR-0061 §10, Paket R1).
+
 Guardrails (ADR-0028): kein Webhook ohne Signaturpruefung; Schreiben ausschliesslich
 in `org_entitlement` ueber `EntitlementRepository`; Zugriff am Entitlement, nicht am
 rohen Zahlungsstatus.
@@ -23,6 +26,8 @@ from __future__ import annotations
 
 import hmac
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -44,9 +49,20 @@ from who2be_api.licensing.edition import is_cloud
 from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
 from who2be_api.routers.entitlement import resolve_org_id
+from who2be_billing.billing_profile import (
+    COUNTRY_CODES,
+    BillingProfile,
+    BillingProfileInput,
+    BillingProfileRepository,
+    PgBillingProfileRepository,
+    VatChecker,
+    ViesVatChecker,
+    save_billing_profile,
+)
 from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
 from who2be_billing.plans import plan_by_code
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
+from who2be_billing.tax import EU_COUNTRIES
 from who2be_billing.webhook import (
     WebhookError,
     extract_event_id,
@@ -333,6 +349,87 @@ async def create_checkout(
         webhook_url=settings.mollie_webhook_url or None,
     )
     return CheckoutResponse(checkout_url=checkout_url)
+
+
+# --- Rechnungsdaten (ADR-0061 §10, Paket R1) --------------------------------------
+
+
+@dataclass(frozen=True)
+class BillingProfileDeps:
+    """Org-Aufloesung, Repository und VIES-Pruefer der Rechnungsdaten.
+
+    Gebuendelt in einer Dependency, damit Endpunkt-Tests alle drei durch Fakes
+    ersetzen koennen, ohne einen Pool zu brauchen.
+    """
+
+    resolve_org: Callable[[UUID], Awaitable[UUID]]
+    repo: BillingProfileRepository
+    checker: VatChecker
+
+
+def get_billing_profile_deps() -> BillingProfileDeps:
+    """Dependency: Cloud-Check zuerst (404 On-Prem), dann lazy Pool (503)."""
+    _require_cloud()
+    try:
+        pool = get_pool()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Datenbank nicht verfuegbar.",
+        ) from exc
+
+    async def _resolve(workspace_id: UUID) -> UUID:
+        return await resolve_org_id(pool, workspace_id)
+
+    return BillingProfileDeps(_resolve, PgBillingProfileRepository(pool), ViesVatChecker())
+
+
+ProfileDeps = Annotated[BillingProfileDeps, Depends(get_billing_profile_deps)]
+
+
+class BillingProfileResponse(BaseModel):
+    """Gespeicherte Rechnungsdaten plus die Laenderlisten fuer das Formular.
+
+    `countries` und `eu_countries` kommen mit, damit der Client gegen dieselbe
+    Liste validiert wie der Server (eine Quelle). `profile` ist `null`, solange
+    die Organisation nichts gespeichert hat.
+    """
+
+    profile: BillingProfile | None
+    countries: list[str]
+    eu_countries: list[str]
+
+
+def _profile_response(profile: BillingProfile | None) -> BillingProfileResponse:
+    return BillingProfileResponse(
+        profile=profile,
+        countries=list(COUNTRY_CODES),
+        eu_countries=sorted(EU_COUNTRIES),
+    )
+
+
+@router.get("/profile")
+async def get_billing_profile(ctx: Ctx, deps: ProfileDeps) -> BillingProfileResponse:
+    """Rechnungsdaten der Organisation dieses Workspace (admin-only)."""
+    require_role(ctx, WorkspaceRole.admin)
+    org_id = await deps.resolve_org(ctx.workspace_id)
+    return _profile_response(await deps.repo.get(org_id))
+
+
+@router.put("/profile")
+async def put_billing_profile(
+    body: BillingProfileInput, ctx: Ctx, deps: ProfileDeps
+) -> BillingProfileResponse:
+    """Speichert die Rechnungsdaten (admin-only) und prueft die USt-IdNr. bei VIES.
+
+    Ein VIES-Ausfall blockiert nicht: die Nummer wird als `unchecked`
+    gespeichert (ADR-0061 §6). Die Org kommt aus dem Workspace-Kontext, nie
+    aus dem Body.
+    """
+    require_role(ctx, WorkspaceRole.admin)
+    org_id = await deps.resolve_org(ctx.workspace_id)
+    profile = await save_billing_profile(deps.repo, deps.checker, org_id, body)
+    return _profile_response(profile)
 
 
 # --- Manual-Override (kontrollierter Cloud-Ausnahmepfad, ADR-0028) ----------------

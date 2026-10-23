@@ -1046,6 +1046,44 @@ export interface Api {
   getEntitlement: () => Promise<EntitlementInfo>
   // Track J: startet einen Mollie-Checkout und liefert die Hosted-Checkout-URL.
   createCheckout: (input: CheckoutInput) => Promise<CheckoutResult>
+  // ADR-0061 R1: Rechnungsdaten der Organisation (admin, cloud-only).
+  getBillingProfile: () => Promise<BillingProfileResponse>
+  saveBillingProfile: (input: BillingProfileInput) => Promise<BillingProfileResponse>
+}
+
+// --- Rechnungsdaten (ADR-0061 §10, Paket R1) -------------------------------
+// Bewusst hier und nicht in `./types`: die Typen gehoeren zum cloud-only
+// Billing-Pfad und halten das Paket in seiner Dateigrenze. Spiegel von
+// `who2be_billing.billing_profile.BillingProfileInput`/`BillingProfile`.
+
+export type BillingCustomerType = 'business' | 'consumer'
+export type BillingVatStatus = 'valid' | 'invalid' | 'unchecked'
+
+export interface BillingProfileInput {
+  customer_type: BillingCustomerType
+  given_name: string | null
+  family_name: string | null
+  company_name: string | null
+  street: string
+  postal_code: string
+  city: string
+  /** ISO 3166-1 alpha-2. */
+  country: string
+  vat_id: string | null
+}
+
+export interface BillingProfile extends BillingProfileInput {
+  vat_status: BillingVatStatus | null
+  vat_checked_at: string | null
+  updated_at: string | null
+}
+
+export interface BillingProfileResponse {
+  /** `null`, solange die Organisation keine Rechnungsdaten gespeichert hat. */
+  profile: BillingProfile | null
+  /** Zulaessige Laendercodes (eine Quelle: der Server). */
+  countries: string[]
+  eu_countries: string[]
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -1772,6 +1810,13 @@ export function createApi(token: string, workspaceId: string): Api {
     createCheckout: (input) =>
       request<CheckoutResult>(token, apiPath`${ws}/billing/checkout`, {
         method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    getBillingProfile: () =>
+      request<BillingProfileResponse>(token, apiPath`${ws}/billing/profile`),
+    saveBillingProfile: (input) =>
+      request<BillingProfileResponse>(token, apiPath`${ws}/billing/profile`, {
+        method: 'PUT',
         body: JSON.stringify(input),
       }),
   }
