@@ -4539,6 +4539,7 @@
       "hideFailed": "Ausblenden hat nicht ganz geklappt. Die Liste ist neu geladen, versuch es bitte noch einmal.",
       "error": "Erste Schritte konnten nicht geladen werden.",
       "openAgents": "Zu den Agents",
+      "connectBuilder": "Builder verbinden",
       "state": {
         "done": "erledigt",
         "skipped": "übersprungen",

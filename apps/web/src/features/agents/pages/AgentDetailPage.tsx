@@ -1,5 +1,5 @@
 import { Bot } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
@@ -22,6 +22,7 @@ import {
   EvolutionTabCount,
 } from '@/components/evolution/AgentEvolutionTab'
 import { useInboxCounts } from '@/hooks/useInboxCounts'
+import { AGENT_CONNECT_HASH } from '@/lib/installLinks'
 
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
@@ -49,6 +50,8 @@ const ANCHOR_TABS: Record<string, { tab: AgentTab; keepHash: boolean }> = {
   // Alter Abschnitt „Gespraeche“ (E5-Delta) → Tab „Weiterentwicklung“ (Neuschnitt §2).
   '#sessions': { tab: 'evolution', keepHash: false },
   '#delegations': { tab: 'overview', keepHash: true },
+  // Startliste „Builder verbinden“ (UX-Audit B1): Karte „Verbindung“ im Ueberblick.
+  [AGENT_CONNECT_HASH]: { tab: 'overview', keepHash: true },
 }
 
 /** Schreibt einen alten Anker einmalig in `?tab=` um (History ersetzt). */
@@ -66,6 +69,32 @@ function useLegacyAnchorRedirect() {
     if (nextSearch === search && nextHash === hash) return
     void navigate({ search: nextSearch, hash: nextHash }, { replace: true })
   }, [hash, search, navigate])
+}
+
+/**
+ * Sprung `#connect` (Startliste „Builder verbinden“, UX-Audit B1+B3): sobald
+ * die Karte „Verbindung“ steht, an den oberen Rand scrollen und den Fokus auf
+ * ihre Ueberschrift setzen — einmal je Navigation (`location.key`), nicht bei
+ * jedem Tab-Wechsel zurueck in den Ueberblick.
+ */
+function useConnectJump(ready: boolean) {
+  const { hash, key } = useLocation()
+  const ref = useRef<HTMLDivElement>(null)
+  const handled = useRef<string | null>(null)
+  useEffect(() => {
+    if (!ready || hash !== AGENT_CONNECT_HASH || handled.current === key) return
+    const target = ref.current
+    if (target === null) return
+    handled.current = key
+    target.scrollIntoView?.({ block: 'start' })
+    const heading = target.querySelector<HTMLElement>('h2')
+    if (heading !== null) {
+      // Ueberschrift nur programmatisch fokussierbar, nicht in der Tab-Folge.
+      heading.tabIndex = -1
+      heading.focus({ preventScroll: true })
+    }
+  }, [ready, hash, key])
+  return ref
 }
 
 // Agent-Status als bordered Capsule fuer den Detail-Header (Design-Handoff
@@ -115,6 +144,7 @@ export function AgentDetailPage() {
   const isEditor = role === 'editor' || role === 'admin'
   const { tab, setTab } = useVersionDeepLink(tabs, 'overview')
   useLegacyAnchorRedirect()
+  const connectRef = useConnectJump(agent !== null && tab === 'overview')
 
   useEffect(() => {
     void Promise.all([api.listPersonas(), api.listSystemPromptTemplates()]).then(
@@ -145,6 +175,10 @@ export function AgentDetailPage() {
                   title={agent.name}
                   badges={<AgentStatusBadge agent={agent} />}
                   description={agent.description || undefined}
+                  // UX-Audit B3: unter `md` liegen Kopieren, Duplizieren,
+                  // Rueckmeldung und Loeschen hinter „…“, damit die Karte
+                  // „Verbindung“ (die Brand-Aktion der Seite) frueher kommt.
+                  collapseActionsBelowMd
                   actions={
                     <>
                       <CopyPromptButton
@@ -181,7 +215,10 @@ export function AgentDetailPage() {
                         Verbindung → Briefing (Editor-Spec §6.1, folgt) →
                         Kennzahlen. */}
                     <Stack gap="lg">
-                      <AgentConnectorSection agent={agent} />
+                      {/* Sprungziel `#connect`; `scroll-mt` laesst Luft zum Rand. */}
+                      <div ref={connectRef} className="scroll-mt-4">
+                        <AgentConnectorSection agent={agent} />
+                      </div>
                       {/* Navigation W2-b (Spec §3.2): Aufgaben-Zeile, Kacheln,
                           Zusammensetzung und Arbeitsbereiche. */}
                       <AgentOverview

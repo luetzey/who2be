@@ -15,6 +15,13 @@ export type ConnectClient = 'claude' | 'code' | 'editor' | 'other'
 
 export const CONNECT_CLIENTS: readonly ConnectClient[] = ['claude', 'code', 'editor', 'other']
 
+/**
+ * Anker der Karte „Verbindung“ auf der Agent-Seite (UX-Audit B1):
+ * `/agents/<id>#connect` oeffnet den Ueberblick und springt die Karte an.
+ * Ziel des Startlisten-Knopfs „Builder verbinden“.
+ */
+export const AGENT_CONNECT_HASH = '#connect'
+
 /** Server-URL eines Agenten: der Agent steht im Pfad (`/a/<id>`, Issue #404). */
 export function agentConnectorUrl(mcpUrl: string, agentId: string): string {
   return `${mcpUrl.replace(/\/+$/, '')}/a/${encodeURIComponent(agentId)}`

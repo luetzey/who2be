@@ -4539,6 +4539,7 @@
       "hideFailed": "Hiding didn't fully work. The list has been reloaded, please try again.",
       "error": "Getting started could not be loaded.",
       "openAgents": "Go to Agents",
+      "connectBuilder": "Connect the Builder",
       "state": {
         "done": "done",
         "skipped": "skipped",
