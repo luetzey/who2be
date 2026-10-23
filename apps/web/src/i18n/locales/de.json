@@ -2114,9 +2114,16 @@
         "colActions": "Aktionen",
         "roleAriaLabel": "Rolle von {{email}}",
         "removeButton": "Entfernen",
-        "removedToast": "Mitglied entfernt.",
+        "removedToast": "{{name}} entfernt. Die API-Tokens sind widerrufen.",
+        "selfHint": "Das bist du",
         "roleUpdatedToast": "Rolle aktualisiert.",
         "tokensRevokedInfo": "Die API-Tokens dieses Mitglieds wurden widerrufen. Neue Tokens erhalten die neue Rolle."
+      },
+      "remove": {
+        "title": "{{name}} entfernen?",
+        "body": "Die API-Tokens dieser Person für diesen Workspace werden widerrufen.",
+        "confirm": "Entfernen",
+        "cancel": "Abbrechen"
       },
       "invite": {
         "cardTitle": "Einladen",
