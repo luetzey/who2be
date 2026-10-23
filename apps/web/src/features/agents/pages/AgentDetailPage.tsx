@@ -1,5 +1,5 @@
 import { Bot } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
@@ -15,6 +15,16 @@ import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { AgentMemoryCard } from '@/components/memory/AgentMemoryCard'
 import { AgentTestCasesSection, TESTS_TAB } from '@/components/testcases/TestCasesTab'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useVersionDeepLink } from '@/components/version/versionDeepLink'
 import {
@@ -23,6 +33,7 @@ import {
 } from '@/components/evolution/AgentEvolutionTab'
 import { useInboxCounts } from '@/hooks/useInboxCounts'
 import { AGENT_CONNECT_HASH } from '@/lib/installLinks'
+import { notify } from '@/lib/feedback'
 
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
@@ -97,6 +108,30 @@ function useConnectJump(ready: boolean) {
   return ref
 }
 
+/**
+ * Frisch angelegter Agent (UX-Audit B4): die Liste springt mit
+ * `state.focusPersona` direkt in Einstellungen › Konfiguration, hier wird der
+ * Fokus auf „Persona“ gesetzt — einmal je Navigation (`location.key`).
+ */
+function useFocusPersonaOnCreate(ready: boolean, focus: () => void) {
+  const { state, key } = useLocation()
+  const handled = useRef<string | null>(null)
+  const wanted =
+    typeof state === 'object' && state !== null && (state as { focusPersona?: unknown }).focusPersona === true
+  useEffect(() => {
+    if (!ready || !wanted || handled.current === key) return
+    // Erst im naechsten Task: `form.reset()` (useAgentForm) leert im selben
+    // Commit die Feld-Refs von react-hook-form, sie stehen erst nach dem
+    // folgenden Render wieder bereit. `handled` erst im Timer setzen, sonst
+    // verliert ein StrictMode-Doppellauf (Cleanup + Re-Run) den Fokus.
+    const timer = window.setTimeout(() => {
+      handled.current = key
+      focus()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [ready, wanted, key, focus])
+}
+
 // Agent-Status als bordered Capsule fuer den Detail-Header (Design-Handoff
 // „Detail-Redesign"). Unvollstaendig hat Vorrang; Farbe aus `--status-*`,
 // nie als alleiniges Signal (Punkt + Label, design-language §11).
@@ -125,9 +160,25 @@ export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const wsPath = useWorkspacePath()
   const api = useApi()
+  const navigate = useNavigate()
   const role = useCurrentWorkspaceRole()
+  const isEditor = role === 'editor' || role === 'admin'
   const { agent, persona, template, playbooks, loading, error, reload } = useAgent(id)
-  const { form, onSubmit, saveError } = useAgentForm(agent, reload)
+  // UX-Audit B4 / Owner W-D: nach dem Speichern eines vollstaendigen, aber
+  // inaktiven Agenten nachfragen statt automatisch zu aktivieren. Den Status
+  // aendern darf wie im Formular nur editor/admin, verwaltete Agenten nie.
+  const [activateOpen, setActivateOpen] = useState(false)
+  const [activating, setActivating] = useState(false)
+  const onSaved = useCallback(
+    (saved: Agent) => {
+      reload()
+      if (isEditor && saved.is_managed !== true && saved.activatable && saved.status === 'disabled') {
+        setActivateOpen(true)
+      }
+    },
+    [reload, isEditor],
+  )
+  const { form, onSubmit, saveError } = useAgentForm(agent, onSaved)
   const [personas, setPersonas] = useState<Persona[]>([])
   const [templates, setTemplates] = useState<SystemPromptTemplate[]>([])
 
@@ -141,10 +192,29 @@ export function AgentDetailPage() {
   // Tab-Zaehler „Weiterentwicklung“ (Neuschnitt §3.1): dieselbe Quelle wie die
   // Aufgaben-Zeile im Ueberblick; der Tab bekommt die Zahl fuer ④ mit.
   const inbox = useInboxCounts(id)
-  const isEditor = role === 'editor' || role === 'admin'
   const { tab, setTab } = useVersionDeepLink(tabs, 'overview')
   useLegacyAnchorRedirect()
   const connectRef = useConnectJump(agent !== null && tab === 'overview')
+  const focusPersona = useCallback(() => form.setFocus('persona_id'), [form])
+  useFocusPersonaOnCreate(agent !== null && tab === 'settings', focusPersona)
+
+  // „Aktivieren“ nutzt den vorhandenen Status-Weg (PUT nur mit `status`),
+  // danach Ueberblick mit Sprung auf die Karte „Verbindung“ (`#connect`).
+  const activate = async () => {
+    if (agent === null) return
+    setActivating(true)
+    try {
+      await api.updateAgent(agent.id, { status: 'enabled' })
+      notify.success(t('activatePrompt.success'))
+      setActivateOpen(false)
+      reload()
+      void navigate({ search: '', hash: AGENT_CONNECT_HASH })
+    } catch (cause: unknown) {
+      notify.error(cause instanceof Error ? cause.message : t('agents:toast.unknownError'))
+    } finally {
+      setActivating(false)
+    }
+  }
 
   useEffect(() => {
     void Promise.all([api.listPersonas(), api.listSystemPromptTemplates()]).then(
@@ -261,6 +331,23 @@ export function AgentDetailPage() {
                     />
                   </TabsContent>
                 </Tabs>
+
+                <Dialog open={activateOpen} onOpenChange={setActivateOpen}>
+                  <DialogContent data-testid="agent-activate-prompt">
+                    <DialogHeader>
+                      <DialogTitle>{t('activatePrompt.title')}</DialogTitle>
+                      <DialogDescription>{t('activatePrompt.body')}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">{t('activatePrompt.later')}</Button>
+                      </DialogClose>
+                      <Button onClick={() => void activate()} disabled={activating}>
+                        {t('activatePrompt.confirm')}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </Stack>
             )
           })()

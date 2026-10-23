@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -22,6 +22,18 @@ vi.mock('@/lib/feedback', () => ({
 }))
 
 const session = { access_token: 'jwt' } as unknown as Session
+
+// Ziel der Anlege-Navigation: zeigt Pfad, Query und Router-State.
+function DetailRouteProbe() {
+  const location = useLocation()
+  return (
+    <div>
+      Agent-Detail-Route
+      <output data-testid="detail-location">{`${location.pathname}${location.search}`}</output>
+      <output data-testid="detail-state">{JSON.stringify(location.state)}</output>
+    </div>
+  )
+}
 const me: Me = {
   user_id: 'u1',
   default_workspace_id: 'ws-1',
@@ -101,7 +113,7 @@ function renderPage(currentMe: Me = me, initialEntry = '/w/ws-1/agents') {
             <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
             <Route
               path="/w/:workspaceId/agents/:id"
-              element={<div>Agent-Detail-Route</div>}
+              element={<DetailRouteProbe />}
             />
           </Routes>
         </MemoryRouter>
@@ -369,7 +381,7 @@ describe('AgentsPage', () => {
     expect(await screen.findByText('Who2Be-API-Fehler (500).')).toBeInTheDocument()
   })
 
-  it('legt per Klick einen leeren Agent an und navigiert zur Detailseite', async () => {
+  it('legt per Klick einen leeren Agent an und öffnet Einstellungen mit Fokus-Wunsch „Persona“', async () => {
     const postCalls: Array<{ body: unknown }> = []
     vi.stubGlobal(
       'fetch',
@@ -398,6 +410,9 @@ describe('AgentsPage', () => {
     })
     expect(postCalls).toHaveLength(1)
     expect(postCalls[0].body).toEqual({ name: 'Neuer Agent' })
+    // UX-Audit B4: direkt Einstellungen › Konfiguration, Fokus-Wunsch im State.
+    expect(screen.getByTestId('detail-location')).toHaveTextContent('/w/ws-1/agents/a9?tab=settings')
+    expect(screen.getByTestId('detail-state')).toHaveTextContent('{"focusPersona":true}')
     expect(notify.success).toHaveBeenCalledWith(
       'Agent angelegt — jetzt Persona und Systemprompt zuweisen.',
     )

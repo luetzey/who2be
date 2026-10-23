@@ -3,7 +3,7 @@ title: Eigenen Agenten bauen
 description: Lass dir vom Builder im Chat einen Agenten bauen, oder leg ihn selbst an.
 section: erste-schritte
 order: 40
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -27,9 +27,10 @@ Danach findest du den neuen Agenten unter **Agents**.
 
 Du kannst einen Agenten auch ohne Builder anlegen:
 
-1. Klick unter **Agents** auf **Neuen Agent erstellen**.
-2. Gib ihm einen Namen und wähle eine **Persona** und einen **Systemprompt**.
+1. Klick unter **Agents** auf **Neuen Agent erstellen**. Who2Be öffnet gleich **Einstellungen › Konfiguration**, der Cursor steht im Feld **Persona**.
+2. Gib ihm einen Namen und wähle eine **Persona** und einen **Systemprompt**. Dann **Speichern**.
 3. Die Persona muss aktiv sein. Solange etwas fehlt, zeigt Who2Be „Noch nicht aktivierbar“ und nennt, was fehlt.
+4. Ist alles gesetzt, fragt Who2Be „Agent jetzt aktivieren?“. Mit **Aktivieren** ist er sofort abrufbar, und du landest im Überblick bei der Karte **Verbindung**. Mit **Später** bleibt er deaktiviert; den Status änderst du dann unter **Einstellungen**.
 
 ## Den neuen Agenten verbinden [#verbinden]
 
