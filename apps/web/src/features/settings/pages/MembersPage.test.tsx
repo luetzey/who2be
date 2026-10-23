@@ -320,40 +320,95 @@ describe('MembersPage — Rollen-Aenderung', () => {
 })
 
 describe('MembersPage — Mitglied entfernen', () => {
-  it('entfernt das Mitglied via DELETE und laedt die Liste neu', async () => {
+  function stubRemovable() {
     let removed = false
     const base = settingsHandlers({
-      members: () => (removed ? [] : [member()]),
+      members: () =>
+        removed
+          ? [member({ user_id: 'u1', email: 'admin@who2be.dev', role: 'admin' })]
+          : [member({ user_id: 'u1', email: 'admin@who2be.dev', role: 'admin' }), member()],
     })
-    stubFetch((path, method, init) => {
+    return stubFetch((path, method, init) => {
       if (method === 'DELETE' && path === `${WS_PREFIX}/members/m1`) {
         removed = true
         return new Response(null, { status: 204 })
       }
       return base(path, method, init)
     })
+  }
 
+  function deleteCalls(fetchMock: ReturnType<typeof stubFetch>) {
+    return fetchMock.mock.calls.filter(
+      (call: Parameters<typeof fetch>) => call[1]?.method === 'DELETE',
+    )
+  }
+
+  it('fragt vor dem Entfernen nach und nennt den Token-Widerruf', async () => {
+    const fetchMock = stubRemovable()
     renderMembers('admin')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Entfernen' }))
 
+    const dialog = await screen.findByRole('dialog', { name: 'coder@who2be.dev entfernen?' })
+    expect(
+      within(dialog).getByText(
+        'Die API-Tokens dieser Person für diesen Workspace werden widerrufen.',
+      ),
+    ).toBeInTheDocument()
+    // Der Klick auf den Zeilen-Knopf allein loest kein DELETE aus.
+    expect(deleteCalls(fetchMock)).toHaveLength(0)
+  })
+
+  it('Abbrechen entfernt nicht', async () => {
+    const fetchMock = stubRemovable()
+    renderMembers('admin')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Entfernen' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(deleteCalls(fetchMock)).toHaveLength(0)
+    expect(notify.success).not.toHaveBeenCalled()
+    expect(screen.getByText('coder@who2be.dev')).toBeInTheDocument()
+  })
+
+  it('Bestaetigen ruft DELETE genau einmal, meldet den Widerruf und laedt neu', async () => {
+    const fetchMock = stubRemovable()
+    renderMembers('admin')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Entfernen' }))
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Entfernen' })
+    // Doppelklick: der zweite Klick darf kein zweites DELETE ausloesen.
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+
     await waitFor(() => {
-      expect(notify.success).toHaveBeenCalledWith('Mitglied entfernt.')
+      expect(notify.success).toHaveBeenCalledWith(
+        'coder@who2be.dev entfernt. Die API-Tokens sind widerrufen.',
+      )
     })
-    await waitFor(() => {
-      expect(screen.getByText('Noch keine Mitglieder.')).toBeInTheDocument()
-    })
+    expect(deleteCalls(fetchMock)).toHaveLength(1)
+    await waitFor(() => expect(screen.queryByText('coder@who2be.dev')).not.toBeInTheDocument())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('die eigene Zeile hat keinen Entfernen-Knopf', async () => {
+    stubFetch(
+      settingsHandlers({
+        members: () => [member({ user_id: 'u1', email: 'admin@who2be.dev', role: 'admin' })],
+      }),
+    )
+    renderMembers('admin')
+
+    expect(await screen.findByText('admin@who2be.dev')).toBeInTheDocument()
+    expect(screen.getByText('Das bist du')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Entfernen' })).not.toBeInTheDocument()
   })
 
   it('faellt bei Nicht-Error-Ursachen auf die generische Meldung zurueck', async () => {
-    const base = settingsHandlers()
-    stubFetch((path, method, init) => {
-      if (method === 'DELETE' && path === `${WS_PREFIX}/members/m1`) {
-        return new Response(null, { status: 204 })
-      }
-      return base(path, method, init)
-    })
-
+    stubRemovable()
     renderMembers('admin')
 
     // Non-Error-Rejection im try-Block: der Success-Toast wirft einen String.
@@ -362,10 +417,14 @@ describe('MembersPage — Mitglied entfernen', () => {
     })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Entfernen' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Entfernen' }),
+    )
 
     await waitFor(() => {
       expect(notify.error).toHaveBeenCalledWith('Aktion fehlgeschlagen.')
     })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('zeigt die user_id, wenn das Mitglied keine E-Mail hat', async () => {
@@ -731,7 +790,24 @@ describe('MembersPage — Mitglieder als Liste (unter md)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mehr anzeigen' }))
     fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Entfernen' }),
+    )
     await waitFor(() => expect(screen.queryByText('coder@who2be.dev')).not.toBeInTheDocument())
+  })
+
+  it('zeigt in der eigenen Zeile keinen Entfernen-Knopf', async () => {
+    viewport.mobile = true
+    stubFetch(
+      settingsHandlers({
+        members: () => [member({ user_id: 'u1', email: 'admin@who2be.dev', role: 'admin' })],
+      }),
+    )
+    renderMembers('admin')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mehr anzeigen' }))
+    expect(screen.getByText('Das bist du')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Entfernen' })).not.toBeInTheDocument()
   })
 
   it('zeigt die user_id, wenn das Mitglied keine E-Mail hat', async () => {

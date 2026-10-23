@@ -2114,9 +2114,16 @@
         "colActions": "Actions",
         "roleAriaLabel": "Role of {{email}}",
         "removeButton": "Remove",
-        "removedToast": "Member removed.",
+        "removedToast": "{{name}} removed. Their API tokens are revoked.",
+        "selfHint": "That's you",
         "roleUpdatedToast": "Role updated.",
         "tokensRevokedInfo": "This member's API tokens have been revoked. New tokens get the new role."
+      },
+      "remove": {
+        "title": "Remove {{name}}?",
+        "body": "This person's API tokens for this workspace will be revoked.",
+        "confirm": "Remove",
+        "cancel": "Cancel"
       },
       "invite": {
         "cardTitle": "Invite",
