@@ -55,14 +55,19 @@ class SystemFeedbackCategory(StrEnum):
     Anders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert
     dies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler
     in der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu
-    langsam/haengt) oder `other`. Wird in derselben `agent_feedback`-Spalte
-    `signal` gespeichert (entity_type='system', entity_id=NULL) und fliesst in
-    den gemeinsamen Kurations-Posteingang.
+    langsam/haengt), `tool_request` (Werkzeug fehlt im Profil) oder
+    `other`. Wird in derselben `agent_feedback`-Spalte `signal` gespeichert
+    (entity_type='system', entity_id=NULL) und fliesst in den gemeinsamen
+    Kurations-Posteingang.
     """
 
     technical = "technical"
     mcp = "mcp"
     performance = "performance"
+    # Werkzeug-Profile (ADR-0059 §8, W59-6). Kein Datenbank-CHECK auf
+    # `signal` (Migration 0059), daher ohne Migration. Verweise stehen hier im
+    # Kommentar, weil der Docstring ins Draht-Schema von `report_problem` geht.
+    tool_request = "tool_request"
     other = "other"
 
 
