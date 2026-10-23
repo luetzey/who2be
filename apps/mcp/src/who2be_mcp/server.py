@@ -733,9 +733,9 @@ async def fetch_resource(
     """Laedt eine Resource per UUID, ganz oder nur einzelne Abschnitte.
 
     Default `format="text"`: Markdown mit Inhalt und Sub-Resources. `block_ids` (Anker aus
-    `list_resource_blocks` oder einem Verweis) schneidet den eigenen Body auf diese Abschnitte:
-    Ueberschrift bis vor die naechste gleicher oder hoeherer Ebene. Sub-Resources: Pointer
-    mit `fetch_call` in `sub_resources`; `inline`-Kinder kommen als Volldokument mit.
+    `list_resource_blocks` oder Verweis) schneidet den Body auf diese Abschnitte: Ueberschrift
+    bis vor die naechste gleicher oder hoeherer Ebene. Sub-Resources: Pointer mit `fetch_call`;
+    `inline`-Kinder kommen ganz mit.
 
     Ohne `resource_write` siehst du nur die aktive Version (ohne aktive: 404), mit auch Drafts.
     `format="source"` ist die Schreibvorlage mit `base_rev`. `locale` wird ignoriert.
