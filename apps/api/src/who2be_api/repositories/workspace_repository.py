@@ -513,7 +513,13 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Teilaenderungen, Platzhalter als `{{kind:target_id}}`, `usage_notes` als
 # Markdown (W58-4) — DE + EN. Muss im selben Release wie P3 (MCP nimmt nur
 # noch Markdown) verteilt sein.
-BUILDER_CONTENT_VERSION = 19
+# v20: Builder schlank B1 (Owner 2026-10-22, W1 b / W2 / W4 b) — neuer Abschnitt
+# „Laengen & Wohin\" in den Agent-Bau-Konventionen (Richtwerte je Element,
+# Wohin-Tabelle, vier Schreibregeln; einzige Stelle mit den Zahlen, stabile
+# Anker `res-conv-h-laengen*`), Laengen-Pruefpunkt im Persona-Playbook (Phase
+# Vorschlag + Update) und im Konsistenz-Check (Pflege-Fund, kein Verstoss) —
+# DE + EN.
+BUILDER_CONTENT_VERSION = 20
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

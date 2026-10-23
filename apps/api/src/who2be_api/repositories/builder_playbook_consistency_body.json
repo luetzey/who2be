@@ -83,6 +83,16 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [{"type": "text", "text": "Liefert get_persona die erwarteten verknuepften Playbooks? Gegenpruefen mit list_playbooks: gibt es Playbooks ohne Persona-Bindung (Vakuum-Playbooks)?", "styles": {}}],
         "children": []
+      },
+      {
+        "id": "pb-check-li-persona-laenge",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Laenge: ", "styles": {"bold": true}},
+          {"type": "text", "text": "Woerter im Profil, Woerter je Modus und Zahl der Modi gegen die Richtwerte der Agent-Bau-Konventionen (Abschnitt 'Laengen & Wohin', Anker res-conv-h-laengen). Ueber der Warnschwelle: ⚠ Pflege-Fund mit gemessener Zahl, Richtwert und Wohin-Hinweis (was in ein Playbook oder eine Resource gehoert). Kein ❌ — Laenge ist kein Strukturfehler.", "styles": {}}
+        ],
+        "children": []
       }
     ]
   },
@@ -121,6 +131,16 @@
         "type": "bulletListItem",
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [{"type": "text", "text": "Sind die triggers kommagetrennt normalisiert (keine Semikolons, keine Duplikate)? Der Write-Pfad normalisiert automatisch — Semikolons oder Dubletten im Bestand sind Drift aus Alt-Daten.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-pb-laenge",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Laenge: ", "styles": {"bold": true}},
+          {"type": "text", "text": "Woerter im Body sowie Zeichen von Beschreibung und Trigger gegen dieselben Richtwerte; bei verlinkten Resources nur Abschnitte ueber der Warnschwelle. Funde wie bei der Persona als ⚠ Pflege-Fund.", "styles": {}}
+        ],
         "children": []
       }
     ]
@@ -267,7 +287,7 @@
     "id": "pb-check-code-report",
     "type": "codeBlock",
     "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Konsistenz-Check fuer [Agent-Name] — Stand [Datum]\n\n### Persona \"[Name]\"\n✅ Aktive Version vorhanden (v[X], status=active)\n⚠ Modus \"[X]\" ohne trigger\n⚠ description leer\n\n### Playbooks ([n] verlinkt)\n✅ [Playbook A] — aktiv, verlinkt\n❌ [Playbook B] — keine aktive Version\n⚠ [Composite C] — Sub-Sequenz hat inaktive/fehlende Kinder\n⚠ [Playbook D] — ohne Persona-Bindung (Vakuum)\n⚠ [Playbook E] — triggers nicht normalisiert (Semikolon/Duplikat)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System-Prompt: offener Platzhalter rendert als <Playbook nicht verfuegbar>\n\n### Template\n✅ Alle Placeholder-Kinds im Katalog (list_placeholders)\n❌ Unbekannter Placeholder-Kind \"[kind]\" bzw. ungueltige target_id \"[wert]\"\n\n### Empfehlung\n1. [konkret, was tun — verweise auf das passende CRUD-Playbook]\n2. ...", "styles": {}}],
+    "content": [{"type": "text", "text": "## Konsistenz-Check fuer [Agent-Name] — Stand [Datum]\n\n### Persona \"[Name]\"\n✅ Aktive Version vorhanden (v[X], status=active)\n⚠ Modus \"[X]\" ohne trigger\n⚠ description leer\n⚠ Profil [n] Woerter, ueber der Warnschwelle — Pflege-Fund: [was auslagern]\n\n### Playbooks ([n] verlinkt)\n✅ [Playbook A] — aktiv, verlinkt\n❌ [Playbook B] — keine aktive Version\n⚠ [Composite C] — Sub-Sequenz hat inaktive/fehlende Kinder\n⚠ [Playbook D] — ohne Persona-Bindung (Vakuum)\n⚠ [Playbook E] — triggers nicht normalisiert (Semikolon/Duplikat)\n⚠ [Playbook F] — Body [n] Woerter, ueber der Warnschwelle (Pflege-Fund)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System-Prompt: offener Platzhalter rendert als <Playbook nicht verfuegbar>\n\n### Template\n✅ Alle Placeholder-Kinds im Katalog (list_placeholders)\n❌ Unbekannter Placeholder-Kind \"[kind]\" bzw. ungueltige target_id \"[wert]\"\n\n### Empfehlung\n1. [konkret, was tun — verweise auf das passende CRUD-Playbook]\n2. ...", "styles": {}}],
     "children": []
   },
   {
@@ -395,6 +415,15 @@
     "children": []
   },
   {
+    "id": "pb-check-li-ap-kuerzen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Zu lange Elemente selbst kuerzen oder das Kuerzen als Pflicht melden — der Check meldet Laenge als Pflege-Fund; gekuerzt wird nur auf Wunsch des Nutzers ueber das Persona- bzw. Playbook-Playbook.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-check-li-ap-persist",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -414,7 +443,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V1-Scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter) inklusive der strukturellen Zusammenhangs-Checks (verwaiste Resources, Wissens-Drift, Vakuum-Playbooks, Composite-Kinder, Trigger-Kollisionen/-Vakuum, Sprach-Konsistenz).", "styles": {}}
+      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter) inklusive der strukturellen Zusammenhangs-Checks (verwaiste Resources, Wissens-Drift, Vakuum-Playbooks, Composite-Kinder, Trigger-Kollisionen/-Vakuum, Sprach-Konsistenz) und die Laengen-Richtwerte als Pflege-Fund.", "styles": {}}
     ],
     "children": []
   },
@@ -434,7 +463,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "die Pruef-Massstaebe fuer Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Referenzrahmen fuer den Sweep. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: vor dem Sweep via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
+      {"type": "text", "text": "die Pruef-Massstaebe fuer Trigger-Hygiene, Naming, Modi-Regel, Laengen & Wohin, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Referenzrahmen fuer den Sweep. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: vor dem Sweep via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
     ],
     "children": []
   },
