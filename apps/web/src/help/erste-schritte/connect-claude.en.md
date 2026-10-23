@@ -9,6 +9,8 @@ audience: all
 
 For Claude to use your agent, you add it to Claude once as a connector. Who2Be fills in everything for you. It takes about two minutes.
 
+The connector belongs to your Claude account. You add it once, and then it works in claude.ai, in the Claude app on your computer and on your phone, and in Claude Code.
+
 ## Step by step [#schritte]
 
 1. Under **Agents**, open your agent, for example the Builder. The **Overview** tab shows the **Connection** card.
@@ -29,11 +31,11 @@ Once the agent loads its persona, Who2Be shows the connection as **Connected**. 
 
 If the button doesn't work, open "Button not working? Add it manually" in the **Connection** card. It shows the **Name** and the **Server URL** to copy.
 
-In Claude, go to **Settings › Connectors › Add custom connector** and paste both. On the iPhone the button sometimes doesn't open the dialog. Then use this way.
+In Claude, go to **Customize › Connectors**, click **+ Add** and then **Add custom connector**. Paste both there. On the iPhone the button sometimes doesn't open the dialog. Then use this way.
 
 ## Team and Enterprise plans [#team-plan]
 
-On Claude plans for teams and companies, the owner of the Claude organization usually adds connectors. Send them the name and server URL from the **Connection** card.
+On Claude plans for teams and companies, the owner of the Claude organization adds the connector under **Organization settings › Connectors**. Send them the name and server URL from the **Connection** card. After that, each member connects on their own in Claude under **Customize › Connectors**.
 
 ## If it doesn't work [#troubleshooting]
 
