@@ -45,7 +45,7 @@
     "id": "pb-persona-li-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Capabilities), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (aktiv pruefen — Kriterien in der Sektion Modi; sobald mehrere Einsatz-Stimmen oder Output-Formate gebraucht werden, Multi-Mode statt Misch-Persona).", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Faehigkeiten, keine Werkzeugliste), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (aktiv pruefen — Kriterien in der Sektion Modi; sobald mehrere Einsatz-Stimmen oder Output-Formate gebraucht werden, Multi-Mode statt Misch-Persona).", "styles": {}}],
     "children": [
       {
         "id": "pb-persona-li-modi-regel",
@@ -64,7 +64,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Create — Vorschlag: Persona-Body konsolidieren (description + Profil als Markdown mit den Abschnitten Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Dem Nutzer zeigen, Trade-offs erklaeren, Bestaetigung einholen.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Laenge pruefen: ", "styles": {"bold": true}},
+          {"type": "text", "text": "Profil, jeden Modus und die Zahl der Modi gegen die Richtwerte der Agent-Bau-Konventionen pruefen (Abschnitt 'Laengen & Wohin', Anker res-conv-h-laengen). Ablaeufe, Checklisten und Werkzeug-Anleitungen wandern nach der Wohin-Tabelle in ein Playbook, Schemata und Nachschlagewissen in eine Resource; im Profil bleiben Rolle, Ton, wenige Regeln mit Begruendung und harte Grenzen. Liegt der Entwurf ueber der Warnschwelle, nenne dem Nutzer Wortzahl und Richtwert, bevor du schreibst.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-3",
@@ -78,7 +89,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Update — Verstehen & Vorschlag: get_persona(identifier) lesen, betroffene Sektion (Identity / Tone & Style / Allowed / Forbidden / Output Style / Modi) zeigen, Aenderungswunsch klaeren, Edit-Vorschlag konsolidieren und bestaetigen lassen.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen-update",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Laenge beim Update: ", "styles": {"bold": true}},
+          {"type": "text", "text": "dieselbe Pruefung fuer den Stand nach der Aenderung. Waechst das Profil oder ein Modus ueber die Warnschwelle, schlage Auslagern vor. Eine schon zu lange Persona kuerzt du nur, wenn der Nutzer es will.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-5",
@@ -226,7 +248,7 @@
     "id": "pb-persona-li-t7-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen'. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
+    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Laengen & Wohin, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen'. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
     "children": []
   },
   {

@@ -45,7 +45,7 @@
     "id": "pb-persona-li-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Understand: Ask clarifying questions in phases, 1-2 per turn, never all at once. Identity (one concise line), Tone & Style (with example phrases), Allowed (4-6 concrete capabilities), Forbidden (domain boundaries + anti-patterns), Output Style (form, length), Mode decision (actively check — criteria in the Modes section; as soon as multiple usage voices or output formats are needed, use Multi-Mode instead of a mixed persona).", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Understand: Ask clarifying questions in phases, 1-2 per turn, never all at once. Identity (one concise line), Tone & Style (with example phrases), Allowed (4-6 concrete capabilities, no tool list), Forbidden (domain boundaries + anti-patterns), Output Style (form, length), Mode decision (actively check — criteria in the Modes section; as soon as multiple usage voices or output formats are needed, use Multi-Mode instead of a mixed persona).", "styles": {}}],
     "children": [
       {
         "id": "pb-persona-li-modi-regel",
@@ -64,7 +64,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Create — Propose: Consolidate the persona body (description + profile as Markdown with the sections Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Show it to the user, explain trade-offs, get confirmation.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Check length: ", "styles": {"bold": true}},
+          {"type": "text", "text": "check the profile, every mode and the number of modes against the guide values in the Agent-Building Conventions (section 'Lengths & Placement', anchor res-conv-h-laengen). Procedures, checklists and tool instructions move into a playbook according to the placement table, schemas and reference knowledge into a resource; the profile keeps role, tone, a few rules with reasons and hard limits. If the draft is above the warning threshold, tell the user the word count and the guide value before you write.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-3",
@@ -78,7 +89,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Update — Understand & Propose: Read get_persona(identifier), show the affected section (Identity / Tone & Style / Allowed / Forbidden / Output Style / Modes), clarify the change request, consolidate the edit proposal and have it confirmed.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen-update",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Length on update: ", "styles": {"bold": true}},
+          {"type": "text", "text": "the same check for the state after the change. If the profile or a mode grows above the warning threshold, propose moving content out. Shorten a persona that is already too long only if the user wants it.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-5",
@@ -226,7 +248,7 @@
     "id": "pb-persona-li-t7-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, lengths & placement, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
     "children": []
   },
   {

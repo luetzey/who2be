@@ -36,6 +36,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from who2be_api.blobstore.service import build_blob_store
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.operators import parse_uuid_allowlist
@@ -59,6 +60,7 @@ from who2be_billing.billing_profile import (
     ViesVatChecker,
     save_billing_profile,
 )
+from who2be_billing.invoice import HttpSalesInvoiceGateway, InvoiceService, PgInvoiceRepository
 from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
 from who2be_billing.plans import plan_by_code
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
@@ -124,11 +126,23 @@ def get_mollie_service() -> MollieBillingService:
             detail="Datenbank nicht verfuegbar.",
         ) from exc
     gateway = SdkMollieGateway(settings.mollie_api_key)
+    # Rechnung je bezahlter Zahlung (ADR-0061 §3, Paket R2a). Ohne Steuermodus
+    # haelt der Service jede Rechnung zurueck (fail closed), ohne BlobStore
+    # bleibt sie `issued` bis zum Archiv — der Webhook laeuft in beiden Faellen.
+    invoices = InvoiceService(
+        PgInvoiceRepository(pool),
+        PgBillingProfileRepository(pool),
+        HttpSalesInvoiceGateway(settings.mollie_api_key),
+        build_blob_store(settings),
+        tax_mode=settings.invoice_tax_mode,
+        price_basis=settings.invoice_price_basis,
+    )
     return MollieBillingService(
         gateway,
         PgEntitlementRepository(pool),
         PgProcessedEventRepository(pool),
         grace_days=settings.mollie_grace_days,
+        invoices=invoices,
     )
 
 
