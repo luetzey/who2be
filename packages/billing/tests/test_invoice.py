@@ -582,10 +582,14 @@ def test_unclear_lookup_never_posts() -> None:
         create_error=InvoiceUncertainError("ReadTimeout"),
         lookup_error=InvoiceUncertainError("list_page_limit"),
     )
-    service, _, _, _ = _service(gateway=gateway)
+    profiles = FakeProfiles(_profile(_DE_CONSUMER))
+    service, _, _, _ = _service(gateway=gateway, profiles=profiles)
     first = _issue(service, uuid4())
     assert first is not None
     gateway.create_error = None
+    # Fehlen die Daten inzwischen, darf die unklare Suche trotzdem nicht in die
+    # Vorbereitung durchfallen: der Grund bleibt die Suche, nicht ein Hold.
+    profiles.profile = None
     again = asyncio.run(service.issue(first.id, now=_NOW))
     assert again is not None
     assert again.status == "pending"
@@ -1342,8 +1346,25 @@ def test_repository_lifecycle_and_guards() -> None:
         assert failed.attempts == MAX_ATTEMPTS
         assert failed.created_at is not None and failed.updated_at is not None
         assert await repo.record_failure(open_row.id, "uncertain:x") is None  # endgueltig
-        # Archiviert und failed sind nicht offen.
-        assert await repo.open_invoices() == []
+
+        # Eine ausgestellte Zeile (Archiv fehlt) wird nie `failed`: die Rechnung existiert.
+        issued_row = await repo.reserve(_reservation(org, payment_id="tr_Ausgestellt"))
+        assert await repo.start_post(issued_row.id) is True
+        assert (
+            await repo.mark_issued(
+                issued_row.id,
+                CreatedInvoice("invoice_Zweite", "I-2026-00002", _PDF_URL),
+                tax_mode="regular",
+                price_basis="net",
+                decision=decision,
+                issued_at=_NOW,
+            )
+            is not None
+        )
+        for _ in range(MAX_ATTEMPTS + 1):
+            assert await repo.record_failure(issued_row.id, "archive:pdf_http_500") == "issued"
+        # Archiviert und failed sind nicht offen, die ausgestellte schon.
+        assert [row.id for row in await repo.open_invoices()] == [issued_row.id]
 
     _run_in_schema("billinvrepo", body)
 
