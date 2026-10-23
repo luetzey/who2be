@@ -242,10 +242,27 @@ class BillingProfileRepository(Protocol):
 
 
 class PgBillingProfileRepository:
-    """asyncpg-Implementierung auf dem App-Pool (RLS ueber `app.current_org`)."""
+    """asyncpg-Implementierung (RLS ueber `app.current_org`; der Worker liest ohne Scope)."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool | asyncpg.Connection) -> None:
         self._pool = pool
+
+    async def update_vat_status(
+        self, org_id: UUID, vat_id: str, status: VatStatus, checked_at: datetime
+    ) -> None:
+        """Nachgepruefter VIES-Stand (Rechnungs-Worker, R2b).
+
+        Nur wenn die Nummer noch dieselbe ist: hat die Org sie inzwischen
+        geaendert, gehoert das Ergebnis nicht mehr zu ihr.
+        """
+        await self._pool.execute(
+            "UPDATE billing_profile SET vat_status = $3, vat_checked_at = $4 "
+            "WHERE org_id = $1 AND vat_id = $2",
+            org_id,
+            vat_id,
+            status,
+            checked_at,
+        )
 
     async def get(self, org_id: UUID) -> BillingProfile | None:
         row = await self._pool.fetchrow(

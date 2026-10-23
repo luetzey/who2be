@@ -452,9 +452,10 @@ class MollieBillingService:
     einmal verarbeitet (Replay ⇒ No-Op). `grace_days` steuert die Dunning-Frist
     bei fehlgeschlagener Folgezahlung.
 
-    `invoices` stellt zu jeder bezahlten Erst- und Folgezahlung eine Rechnung
-    aus (ADR-0061 §3, Paket R2a). `None` ⇒ keine Rechnungsstellung (Tests,
-    Installationen ohne Invoicing).
+    `invoices` merkt zu jeder bezahlten Erst- und Folgezahlung eine Rechnung vor
+    (ADR-0061 §3). Ausgestellt und archiviert wird ausschliesslich im Worker
+    (`invoice-retry`, R2b), damit der Webhook nie auf Mollie Invoicing wartet.
+    `None` ⇒ keine Rechnungsstellung (Tests, Installationen ohne Invoicing).
     """
 
     def __init__(
@@ -530,7 +531,6 @@ class MollieBillingService:
                 return False
             if not await self._processed.claim(_PROVIDER, payment.id):
                 return False
-            invoice: InvoiceRecord | None = None
             async with self._released_on_error(payment.id):
                 update = subscription_to_update(
                     subscription,
@@ -541,7 +541,7 @@ class MollieBillingService:
                 # Rechnung haengt an `is_paid`, nicht am verarbeiteten Ping: der
                 # Claim faellt auch bei fehlgeschlagener Folgezahlung (ADR-0061 §3).
                 if payment.is_paid:
-                    invoice = await self._reserve_invoice(
+                    await self._reserve_invoice(
                         payment, update.org_id, subscription.metadata, reference
                     )
                 await self._repo.upsert(
@@ -550,7 +550,6 @@ class MollieBillingService:
                     source="mollie",
                     external_ref=update.external_ref,
                 )
-            await self._issue_invoice(invoice, reference)
             return True
 
         if payment.is_paid and payment.customer_id and payment.mandate_id:
@@ -560,9 +559,8 @@ class MollieBillingService:
                 org_id = metadata_org_id(payment.metadata)
                 # Vor der nicht-idempotenten Subscription-Anlage: scheitert das
                 # Vormerken, ist noch nichts passiert und der Retry ist sauber.
-                invoice = await self._reserve_invoice(payment, org_id, payment.metadata, reference)
+                await self._reserve_invoice(payment, org_id, payment.metadata, reference)
                 applied = await self._activate_from_first_payment(payment, webhook_url=webhook_url)
-            await self._issue_invoice(invoice, reference)
             return applied
 
         return False
@@ -607,12 +605,6 @@ class MollieBillingService:
                 period_end=end,
             )
         )
-
-    async def _issue_invoice(self, invoice: InvoiceRecord | None, reference: datetime) -> None:
-        """Stellt aus und archiviert. Wirft nie: das Entitlement steht schon."""
-        if self._invoices is None or invoice is None:
-            return
-        await self._invoices.issue(invoice.id, now=reference)
 
     @asynccontextmanager
     async def _released_on_error(self, payment_id: str) -> AsyncIterator[None]:

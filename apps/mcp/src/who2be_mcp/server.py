@@ -52,6 +52,7 @@ from who2be_mcp.tools.content import (
     ResourceMarkdownUpdate,
     SystemPromptMarkdownCreate,
     SystemPromptMarkdownUpdate,
+    ToolWriteResult,
 )
 from who2be_mcp.tools.kb import register as register_kb_tools
 from who2be_mcp.tools.learning import FramedMemoryHit, frame_hits
@@ -110,7 +111,6 @@ from who2be_models import (
     VersionTransitionRequest,
     WhoAmIRead,
 )
-from who2be_models.content_markdown import MarkdownWriteResult
 from who2be_models.error_tracking import init_error_tracking
 from who2be_models.memory import MemorySaveResult
 
@@ -985,7 +985,7 @@ async def _default_content_locale(client: ApiClient, locale: str | None) -> str 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_persona")
-async def create_persona(data: PersonaMarkdownCreate) -> MarkdownWriteResult:
+async def create_persona(data: PersonaMarkdownCreate) -> ToolWriteResult:
     """Legt eine Persona an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
     `data.content`: `description`, `tags`, `skills`, `profile` (Markdown) und `modes` (max.
@@ -1001,7 +1001,7 @@ async def create_persona(data: PersonaMarkdownCreate) -> MarkdownWriteResult:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_persona")
-async def update_persona(persona_id: str, data: PersonaMarkdownUpdate) -> MarkdownWriteResult:
+async def update_persona(persona_id: str, data: PersonaMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt einer Persona (PUT); auf einer aktiven Version entsteht ein Draft.
 
     409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
@@ -1058,7 +1058,7 @@ async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> lis
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_playbook")
-async def create_playbook(data: PlaybookMarkdownCreate) -> MarkdownWriteResult:
+async def create_playbook(data: PlaybookMarkdownCreate) -> ToolWriteResult:
     """Legt ein Playbook an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
     `data.content.body` ist Markdown; `type`, `tags` und `triggers` steuern die
@@ -1075,7 +1075,7 @@ async def create_playbook(data: PlaybookMarkdownCreate) -> MarkdownWriteResult:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_playbook")
-async def update_playbook(playbook_id: str, data: PlaybookMarkdownUpdate) -> MarkdownWriteResult:
+async def update_playbook(playbook_id: str, data: PlaybookMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt eines Playbooks (PUT); auf einer aktiven Version entsteht ein Draft.
 
     409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
@@ -1149,7 +1149,7 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_resource")
-async def create_resource(data: ResourceMarkdownCreate) -> MarkdownWriteResult:
+async def create_resource(data: ResourceMarkdownCreate) -> ToolWriteResult:
     """Legt eine Resource an (Draft, Version 1; fuer MCP-Reads erst nach `active` sichtbar).
 
     `data.content.body` ist Markdown, GFM-Tabellen erlaubt; `description` und `tags` dazu.
@@ -1164,7 +1164,7 @@ async def create_resource(data: ResourceMarkdownCreate) -> MarkdownWriteResult:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_resource")
-async def update_resource(resource_id: str, data: ResourceMarkdownUpdate) -> MarkdownWriteResult:
+async def update_resource(resource_id: str, data: ResourceMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt einer Resource (PUT); auf einer aktiven Version entsteht ein Draft.
 
     409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
@@ -1223,7 +1223,7 @@ async def set_resource_sub_resources(
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_external_tool")
-async def create_external_tool(data: ExternalToolMarkdownCreate) -> MarkdownWriteResult:
+async def create_external_tool(data: ExternalToolMarkdownCreate) -> ToolWriteResult:
     """Legt eine externe Tool-Bindung an (Draft, Version 1).
 
     Rein beschreibend: Anzeigename, MCP-Server, Werkzeugnamen, `usage_notes` (Markdown),
@@ -1238,9 +1238,7 @@ async def create_external_tool(data: ExternalToolMarkdownCreate) -> MarkdownWrit
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_external_tool")
-async def update_external_tool(
-    tool_id: str, data: ExternalToolMarkdownUpdate
-) -> MarkdownWriteResult:
+async def update_external_tool(tool_id: str, data: ExternalToolMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt einer externen Tool-Bindung (PUT); der Alias bleibt.
 
     Auf einer aktiven Version entsteht ein Draft.
@@ -1328,7 +1326,7 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("create_system_prompt")
-async def create_system_prompt(data: SystemPromptMarkdownCreate) -> MarkdownWriteResult:
+async def create_system_prompt(data: SystemPromptMarkdownCreate) -> ToolWriteResult:
     """Legt ein System-Prompt-Template an (Draft).
 
     `content.body` ist Markdown, Platzhalter als `{{kind:target_id}}`, etwa
@@ -1346,7 +1344,7 @@ async def create_system_prompt(data: SystemPromptMarkdownCreate) -> MarkdownWrit
 @with_tool_log("update_system_prompt")
 async def update_system_prompt(
     template_id: str, data: SystemPromptMarkdownUpdate
-) -> MarkdownWriteResult:
+) -> ToolWriteResult:
     """Ersetzt den Inhalt eines System-Prompt-Templates (PUT) als neuen Draft.
 
     Die aktive Version bleibt, bis ein Mensch freigibt.

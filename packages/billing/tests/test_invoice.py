@@ -18,7 +18,7 @@ import json
 import secrets
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -38,25 +38,38 @@ from who2be_billing.billing_profile import (
     PgBillingProfileRepository,
 )
 from who2be_billing.invoice import (
+    MAX_ATTEMPTS,
+    RETRY_BATCH,
     CreatedInvoice,
+    FoundInvoice,
     HttpSalesInvoiceGateway,
     InvoiceArchiveError,
     InvoiceRecord,
     InvoiceRejectedError,
     InvoiceReservation,
     InvoiceService,
+    InvoiceStatus,
     InvoiceUncertainError,
     PgInvoiceRepository,
     archive_key,
     build_sales_invoice_payload,
     expected_total,
+    is_due,
     line_description,
+    retry_backoff,
     service_period,
 )
 from who2be_billing.mollie import MollieBillingService, MolliePayment, MollieSubscription
 from who2be_billing.plans import PRO_PLAN
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
-from who2be_billing.tax import PriceBasis, TaxDecision, TaxInput, TaxMode, decide_tax
+from who2be_billing.tax import (
+    PriceBasis,
+    TaxDecision,
+    TaxInput,
+    TaxMode,
+    VatStatus,
+    decide_tax,
+)
 
 _NOW = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
 _PDF = b"%PDF-1.7\n% Platzhalter-PDF fuer Tests\n%%EOF\n"
@@ -107,11 +120,18 @@ def _decision(profile: BillingProfile, tax_mode: TaxMode = "regular") -> TaxDeci
 
 
 class FakeInvoiceRepository:
-    """In-Memory-Spiegel von `PgInvoiceRepository` (gleiche Bedingungen in WHERE)."""
+    """In-Memory-Spiegel von `PgInvoiceRepository` (gleiche Bedingungen in WHERE).
+
+    `now` spielt den Trigger, der bei jedem UPDATE `updated_at` setzt.
+    """
 
     def __init__(self) -> None:
         self.rows: dict[UUID, InvoiceRecord] = {}
-        self.issued_with: dict[UUID, tuple[str, str]] = {}
+        self.issued_with: dict[UUID, tuple[str | None, str]] = {}
+        self.now = _NOW
+
+    def _set(self, invoice_id: UUID, **changes: Any) -> None:
+        self.rows[invoice_id] = replace(self.rows[invoice_id], updated_at=self.now, **changes)
 
     async def reserve(self, data: InvoiceReservation) -> InvoiceRecord:
         for row in self.rows.values():
@@ -127,6 +147,8 @@ class FakeInvoiceRepository:
             period_start=data.period_start,
             period_end=data.period_end,
             status="pending",
+            created_at=self.now,
+            updated_at=self.now,
         )
         self.rows[record.id] = record
         return record
@@ -134,24 +156,28 @@ class FakeInvoiceRepository:
     async def get(self, invoice_id: UUID) -> InvoiceRecord | None:
         return self.rows.get(invoice_id)
 
+    async def open_invoices(self, limit: int = 500) -> list[InvoiceRecord]:
+        rows = [r for r in self.rows.values() if r.status in ("pending", "issued")]
+        return sorted(rows, key=lambda r: r.updated_at or _NOW)[:limit]
+
     async def start_post(self, invoice_id: UUID) -> bool:
         row = self.rows[invoice_id]
         if row.status != "pending" or row.post_started_at is not None:
             return False
-        self.rows[invoice_id] = replace(row, post_started_at=_NOW)
+        self._set(invoice_id, post_started_at=self.now)
         return True
 
     async def release_post(self, invoice_id: UUID, error: str) -> None:
         row = self.rows[invoice_id]
         if row.status == "pending":
-            self.rows[invoice_id] = replace(row, post_started_at=None, last_error=error)
+            self._set(invoice_id, post_started_at=None, last_error=error)
 
     async def mark_issued(
         self,
         invoice_id: UUID,
         created: CreatedInvoice,
         *,
-        tax_mode: TaxMode,
+        tax_mode: TaxMode | None,
         price_basis: PriceBasis,
         decision: TaxDecision,
         issued_at: datetime,
@@ -160,8 +186,8 @@ class FakeInvoiceRepository:
         if row.status != "pending":
             return None
         self.issued_with[invoice_id] = (tax_mode, price_basis)
-        self.rows[invoice_id] = replace(
-            row,
+        self._set(
+            invoice_id,
             status="issued",
             mollie_invoice_id=created.id,
             invoice_number=created.invoice_number,
@@ -173,54 +199,118 @@ class FakeInvoiceRepository:
     async def mark_archived(self, invoice_id: UUID, *, pdf_key: str, pdf_sha256: str) -> None:
         row = self.rows[invoice_id]
         if row.status == "issued":
-            self.rows[invoice_id] = replace(
-                row, status="archived", pdf_key=pdf_key, pdf_sha256=pdf_sha256, last_error=None
+            self._set(
+                invoice_id,
+                status="archived",
+                pdf_key=pdf_key,
+                pdf_sha256=pdf_sha256,
+                last_error=None,
             )
 
     async def record_error(self, invoice_id: UUID, error: str) -> None:
-        self.rows[invoice_id] = replace(self.rows[invoice_id], last_error=error)
+        self._set(invoice_id, last_error=error)
+
+    async def record_failure(self, invoice_id: UUID, error: str) -> InvoiceStatus | None:
+        row = self.rows[invoice_id]
+        if row.status not in ("pending", "issued"):
+            return None
+        attempts = row.attempts + 1
+        status: InvoiceStatus = (
+            "failed" if row.status == "pending" and attempts >= MAX_ATTEMPTS else row.status
+        )
+        self._set(invoice_id, attempts=attempts, last_error=error, status=status)
+        return status
 
 
 class FakeProfiles:
     def __init__(self, profile: BillingProfile | None) -> None:
         self.profile = profile
+        self.vat_updates: list[tuple[str, str]] = []
 
     async def get(self, org_id: UUID) -> BillingProfile | None:
         return self.profile
 
-    async def save(self, *args: Any, **kwargs: Any) -> BillingProfile:  # pragma: no cover
-        raise NotImplementedError
+    async def update_vat_status(
+        self, org_id: UUID, vat_id: str, status: VatStatus, checked_at: datetime
+    ) -> None:
+        self.vat_updates.append((vat_id, status))
+        if self.profile is not None and self.profile.vat_id == vat_id:
+            self.profile = self.profile.model_copy(
+                update={"vat_status": status, "vat_checked_at": checked_at}
+            )
+
+
+class FakeVatChecker:
+    def __init__(self, status: VatStatus = "unchecked") -> None:
+        self.status: VatStatus = status
+        self.calls = 0
+
+    async def check(self, vat_id: str) -> VatStatus:
+        self.calls += 1
+        return self.status
 
 
 class FakeInvoiceGateway:
-    """Fake der Sales Invoices API mit steuerbaren Fehlern."""
+    """Fake der Sales Invoices API mit steuerbaren Fehlern.
+
+    Die List-API (`find_invoice_for_payment`) sieht, was `create_sales_invoice`
+    angelegt hat, auch wenn der POST danach als unklar geworfen hat — genau
+    der Fall eines Lese-Timeouts nach erfolgreicher Anlage.
+    """
 
     def __init__(
         self,
         *,
         email: str | None = _EMAIL,
         create_error: Exception | None = None,
+        created_before_error: bool = False,
+        lookup_error: Exception | None = None,
         pdf_error: Exception | None = None,
         pdf: bytes = _PDF,
         pdf_url: str | None = _PDF_URL,
     ) -> None:
         self.email = email
         self.create_error = create_error
+        self.created_before_error = created_before_error
+        self.lookup_error = lookup_error
         self.pdf_error = pdf_error
         self.pdf = pdf
         self.url = pdf_url
         self.payloads: list[dict[str, Any]] = []
         self.pdf_fetches: list[str] = []
+        self.lookups: list[str] = []
+        self.at_mollie: dict[str, tuple[CreatedInvoice, dict[str, Any]]] = {}
 
     async def customer_email(self, customer_id: str) -> str | None:
         return self.email
 
     async def create_sales_invoice(self, payload: dict[str, Any]) -> CreatedInvoice:
         self.payloads.append(payload)
+        number = f"I-2026-{len(self.payloads):05d}"
+        created = CreatedInvoice(id=_INVOICE_ID, invoice_number=number, pdf_url=self.url)
+        if self.create_error is not None and not self.created_before_error:
+            raise self.create_error
+        self.at_mollie[payload["paymentDetails"]["sourceReference"]] = (created, payload)
         if self.create_error is not None:
             raise self.create_error
-        number = f"I-2026-{len(self.payloads):05d}"
-        return CreatedInvoice(id=_INVOICE_ID, invoice_number=number, pdf_url=self.url)
+        return created
+
+    async def find_invoice_for_payment(self, payment_id: str) -> FoundInvoice | None:
+        self.lookups.append(payment_id)
+        if self.lookup_error is not None:
+            raise self.lookup_error
+        hit = self.at_mollie.get(payment_id)
+        if hit is None:
+            return None
+        created, payload = hit
+        return FoundInvoice(
+            created=created,
+            vat_rate=Decimal(payload["lines"][0]["vatRate"]),
+            vat_mode=payload["vatMode"],
+            recipient_type=payload["recipient"]["type"],
+            has_vat_number="vatNumber" in payload["recipient"],
+            memo_key=None,
+        )
 
     async def pdf_url(self, invoice_id: str) -> str | None:
         return self.url
@@ -255,17 +345,20 @@ def _service(
     blob: MemoryBlobStore | None = None,
     tax_mode: TaxMode | None = "regular",
     with_blob: bool = True,
+    profiles: FakeProfiles | None = None,
+    vat_checker: FakeVatChecker | None = None,
 ) -> tuple[InvoiceService, FakeInvoiceRepository, FakeInvoiceGateway, MemoryBlobStore | None]:
     repo = repo or FakeInvoiceRepository()
     gateway = gateway or FakeInvoiceGateway()
     store = (blob or MemoryBlobStore()) if with_blob else None
     service = InvoiceService(
         repo,
-        FakeProfiles(profile if profile is not None else _profile(_DE_CONSUMER)),
+        profiles or FakeProfiles(profile if profile is not None else _profile(_DE_CONSUMER)),
         gateway,
         store,
         tax_mode=tax_mode,
         price_basis="net",
+        vat_checker=vat_checker,
     )
     return service, repo, gateway, store
 
@@ -442,9 +535,16 @@ def test_mollie_422_leaves_the_row_pending_and_retryable() -> None:
     assert result.last_error == "rejected:http_422:paymentDetails.sourceReference"
 
 
-def test_timeout_keeps_the_post_marker_and_never_posts_twice() -> None:
-    """Nach einem Timeout ist offen, ob Mollie angelegt hat: kein zweiter POST."""
-    gateway = FakeInvoiceGateway(create_error=InvoiceUncertainError("ReadTimeout"))
+def test_timeout_after_creation_is_resolved_by_lookup_without_a_second_post() -> None:
+    """Rot-Probe der Karte R2b: Lese-Timeout, aber Mollie HAT angelegt.
+
+    Der naechste Lauf findet die Rechnung ueber die List-API und uebernimmt ID
+    und Nummer. Wird die Suche neutralisiert (z. B. `_lookup` liefert immer
+    „sicher keine“), POSTet der Lauf ein zweites Mal und dieser Test wird rot.
+    """
+    gateway = FakeInvoiceGateway(
+        create_error=InvoiceUncertainError("ReadTimeout"), created_before_error=True
+    )
     service, repo, _, _ = _service(gateway=gateway)
     org = uuid4()
     first = _issue(service, org)
@@ -452,12 +552,51 @@ def test_timeout_keeps_the_post_marker_and_never_posts_twice() -> None:
     assert first.status == "pending"
     assert first.post_started_at is not None
     assert first.last_error == "uncertain:ReadTimeout"
+    assert first.attempts == 1
 
     gateway.create_error = None
     again = asyncio.run(service.issue(first.id, now=_NOW))
     assert again is not None
+    assert gateway.lookups == [_PAYMENT]
+    assert len(gateway.payloads) == 1, "zweiter POST trotz vorhandener Rechnung"
+    assert again.status == "archived"
+    assert again.invoice_number == "I-2026-00001"
+    assert repo.issued_with[first.id] == ("regular", "net")
+
+
+def test_timeout_without_creation_posts_again_after_a_clean_lookup() -> None:
+    gateway = FakeInvoiceGateway(create_error=InvoiceUncertainError("ReadTimeout"))
+    service, _, _, _ = _service(gateway=gateway)
+    first = _issue(service, uuid4())
+    assert first is not None
+    gateway.create_error = None
+    again = asyncio.run(service.issue(first.id, now=_NOW))
+    assert again is not None
+    assert gateway.lookups == [_PAYMENT]
+    assert len(gateway.payloads) == 2  # sicher keine Rechnung ⇒ neuer POST erlaubt
+    assert again.status == "archived"
+
+
+def test_unclear_lookup_never_posts() -> None:
+    gateway = FakeInvoiceGateway(
+        create_error=InvoiceUncertainError("ReadTimeout"),
+        lookup_error=InvoiceUncertainError("list_page_limit"),
+    )
+    profiles = FakeProfiles(_profile(_DE_CONSUMER))
+    service, _, _, _ = _service(gateway=gateway, profiles=profiles)
+    first = _issue(service, uuid4())
+    assert first is not None
+    gateway.create_error = None
+    # Fehlen die Daten inzwischen, darf die unklare Suche trotzdem nicht in die
+    # Vorbereitung durchfallen: der Grund bleibt die Suche, nicht ein Hold.
+    profiles.profile = None
+    again = asyncio.run(service.issue(first.id, now=_NOW))
+    assert again is not None
     assert again.status == "pending"
-    assert len(gateway.payloads) == 1  # nur die List-API-Suche (R2b) darf weiter
+    assert again.post_started_at is not None
+    assert again.last_error == "lookup:list_page_limit"
+    assert again.attempts == 2
+    assert len(gateway.payloads) == 1
 
 
 def test_pdf_failure_leaves_the_invoice_issued() -> None:
@@ -531,6 +670,176 @@ def test_parallel_issue_posts_only_once() -> None:
     assert len(gateway.payloads) == 1
     (row,) = repo.rows.values()
     assert row.status == "archived"
+
+
+# --- Worker `invoice-retry`: Backoff, failed, Hold, VIES (R2b) ----------------------
+
+
+def test_backoff_doubles_from_five_minutes_and_caps_at_six_hours() -> None:
+    assert retry_backoff(0) == timedelta(0)
+    assert retry_backoff(1) == timedelta(minutes=5)
+    assert retry_backoff(2) == timedelta(minutes=10)
+    assert retry_backoff(4) == timedelta(minutes=40)
+    assert retry_backoff(7) == timedelta(hours=5, minutes=20)
+    assert retry_backoff(8) == timedelta(hours=6)
+    assert retry_backoff(50) == timedelta(hours=6)
+
+
+def test_due_respects_backoff_and_hourly_hold_recheck() -> None:
+    record, _ = _reserved_record()
+    failed_once = replace(record, attempts=1, updated_at=_NOW, last_error="uncertain:x")
+    assert not is_due(failed_once, _NOW + timedelta(minutes=4, seconds=59))
+    assert is_due(failed_once, _NOW + timedelta(minutes=5))
+    held = replace(record, attempts=0, updated_at=_NOW, last_error="hold:email_missing")
+    assert not is_due(held, _NOW + timedelta(minutes=59))
+    assert is_due(held, _NOW + timedelta(hours=1))
+    assert not is_due(replace(record, status="archived"), _NOW + timedelta(days=1))
+    assert not is_due(replace(record, status="failed"), _NOW + timedelta(days=1))
+
+
+def _run_worker(
+    service: InvoiceService, repo: FakeInvoiceRepository, at: datetime
+) -> dict[str, int]:
+    repo.now = at
+    return asyncio.run(service.retry_open_invoices(at))
+
+
+def test_worker_issues_a_reserved_invoice() -> None:
+    service, repo, gateway, _ = _service()
+    asyncio.run(service.reserve(_reservation(uuid4())))
+    counters = _run_worker(service, repo, _NOW)
+    assert counters == {
+        "open": 1,
+        "due": 1,
+        "issued": 0,
+        "archived": 1,
+        "held": 0,
+        "failed": 0,
+        "vies_fallback": 0,
+    }
+    assert len(gateway.payloads) == 1
+    # Archiviert ⇒ beim naechsten Lauf nicht mehr offen.
+    assert _run_worker(service, repo, _NOW + timedelta(minutes=5))["open"] == 0
+
+
+def test_worker_retries_with_backoff_and_fails_after_max_attempts(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Gefaelschte Uhr: ein Lauf je faelligem Zeitpunkt, nach 8 Fehlern `failed` + ERROR."""
+    gateway = FakeInvoiceGateway(create_error=InvoiceRejectedError("ConnectError"))
+    service, repo, _, _ = _service(gateway=gateway)
+    record = asyncio.run(service.reserve(_reservation(uuid4())))
+    at = _NOW
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        assert _run_worker(service, repo, at)["due"] == 1
+        assert repo.rows[record.id].attempts == attempt
+        # Eine Sekunde vor Ablauf des Backoffs passiert nichts.
+        early = at + retry_backoff(attempt) - timedelta(seconds=1)
+        if attempt < MAX_ATTEMPTS:
+            assert _run_worker(service, repo, early)["due"] == 0
+        at = at + retry_backoff(attempt)
+    row = repo.rows[record.id]
+    assert row.status == "failed"
+    assert len(gateway.payloads) == MAX_ATTEMPTS
+    assert "endgueltig fehlgeschlagen" in caplog.text
+    # failed ist endgueltig: kein weiterer Versuch.
+    assert _run_worker(service, repo, at + timedelta(days=1))["open"] == 0
+
+
+def test_archive_failures_never_turn_an_issued_invoice_into_failed() -> None:
+    gateway = FakeInvoiceGateway(pdf_error=InvoiceArchiveError("pdf_http_500"))
+    service, repo, _, _ = _service(gateway=gateway)
+    record = asyncio.run(service.reserve(_reservation(uuid4())))
+    at = _NOW
+    for _ in range(MAX_ATTEMPTS + 2):
+        _run_worker(service, repo, at)
+        at += timedelta(hours=6)
+    row = repo.rows[record.id]
+    assert row.status == "issued"
+    assert row.attempts == MAX_ATTEMPTS + 2
+    assert len(gateway.payloads) == 1
+
+
+def test_held_rows_count_no_attempt() -> None:
+    service, repo, gateway, _ = _service(gateway=FakeInvoiceGateway(email=None))
+    record = asyncio.run(service.reserve(_reservation(uuid4())))
+    for hours in range(0, 30):
+        _run_worker(service, repo, _NOW + timedelta(hours=hours))
+    row = repo.rows[record.id]
+    assert row.status == "pending"
+    assert row.last_error == "hold:email_missing"
+    assert row.attempts == 0
+    assert gateway.payloads == []
+
+
+def test_worker_batch_is_limited() -> None:
+    service, repo, gateway, _ = _service()
+    for index in range(RETRY_BATCH + 3):
+        asyncio.run(service.reserve(_reservation(uuid4(), payment_id=f"tr_Batch{index}")))
+    counters = _run_worker(service, repo, _NOW)
+    assert counters["open"] == RETRY_BATCH + 3
+    assert counters["due"] == RETRY_BATCH
+    assert _run_worker(service, repo, _NOW + timedelta(minutes=5))["due"] == 3
+
+
+def test_vies_recheck_valid_issues_reverse_charge_and_stores_the_result() -> None:
+    profiles = FakeProfiles(_profile(_AT_BUSINESS, "unchecked"))
+    checker = FakeVatChecker("valid")
+    service, repo, gateway, _ = _service(
+        profiles=profiles, vat_checker=checker, repo=FakeInvoiceRepository()
+    )
+    asyncio.run(service.reserve(_reservation(uuid4(), amount="9.99")))
+    counters = _run_worker(service, repo, _NOW + timedelta(hours=1))
+    assert counters["archived"] == 1
+    assert profiles.vat_updates == [("ATU00000000", "valid")]
+    (payload,) = gateway.payloads
+    assert payload["lines"][0]["vatRate"] == "0.00"
+    assert payload["recipient"]["vatNumber"] == "ATU00000000"
+
+
+def test_vies_recheck_invalid_issues_with_19_percent() -> None:
+    profiles = FakeProfiles(_profile(_AT_BUSINESS, "unchecked"))
+    service, repo, gateway, _ = _service(profiles=profiles, vat_checker=FakeVatChecker("invalid"))
+    asyncio.run(service.reserve(_reservation(uuid4(), amount="11.89")))
+    _run_worker(service, repo, _NOW)
+    assert profiles.vat_updates == [("ATU00000000", "invalid")]
+    (payload,) = gateway.payloads
+    assert payload["lines"][0]["vatRate"] == "19.00"
+
+
+def test_vies_silent_holds_until_72_hours_then_option_b(caplog: pytest.LogCaptureFixture) -> None:
+    """W61-3 A mit gefaelschter Uhr: bis 72 h zurueckhalten, danach 19 % + WARN."""
+    profiles = FakeProfiles(_profile(_AT_BUSINESS, "unchecked"))
+    checker = FakeVatChecker("unchecked")
+    service, repo, gateway, _ = _service(profiles=profiles, vat_checker=checker)
+    record = asyncio.run(service.reserve(_reservation(uuid4(), amount="11.89")))
+
+    just_before = _NOW + timedelta(hours=71, minutes=59, seconds=59)
+    assert _run_worker(service, repo, just_before)["held"] == 1
+    assert repo.rows[record.id].last_error == "hold:vat_id_unchecked"
+    assert gateway.payloads == []
+    # Naechste Nachpruefung erst nach einer Stunde, dann ist die Frist vorbei.
+    assert _run_worker(service, repo, _NOW + timedelta(hours=72))["due"] == 0
+
+    counters = _run_worker(service, repo, just_before + timedelta(hours=1))
+    assert counters["vies_fallback"] == 1
+    assert counters["archived"] == 1
+    (payload,) = gateway.payloads
+    assert payload["lines"][0]["vatRate"] == "19.00"
+    assert "memo" not in payload
+    assert profiles.vat_updates == []  # Rechnungsdaten bleiben `unchecked`
+    assert profiles.profile is not None
+    assert profiles.profile.vat_status == "unchecked"
+    assert "W61-3" in caplog.text
+    assert checker.calls == 2
+
+
+def test_vies_grace_boundary_is_exactly_72_hours() -> None:
+    for offset, expected in ((timedelta(hours=72, seconds=-1), 0), (timedelta(hours=72), 1)):
+        profiles = FakeProfiles(_profile(_AT_BUSINESS, "unchecked"))
+        service, repo, _, _ = _service(profiles=profiles, vat_checker=FakeVatChecker())
+        asyncio.run(service.reserve(_reservation(uuid4(), amount="11.89")))
+        assert _run_worker(service, repo, _NOW + offset)["vies_fallback"] == expected
 
 
 # --- HTTP-Gateway gegen gemockte Mollie-API -----------------------------------------
@@ -662,6 +971,100 @@ def test_gateway_reads_customer_email_and_pdf_link() -> None:
     assert asyncio.run(gateway.customer_email("../etwas")) is None  # keine ungepruefte ID
     assert asyncio.run(gateway.pdf_url(_INVOICE_ID)) == _PDF_URL
     assert asyncio.run(gateway.pdf_url("invoice_../x")) is None
+
+
+def _listed(payment_id: str, **extra: Any) -> dict[str, Any]:
+    return {
+        **_created_body(),
+        "vatMode": "exclusive",
+        "recipient": {"type": "business", "vatNumber": "ATU00000000"},
+        "lines": [{"vatRate": "0.00"}],
+        "memo": "Steuerschuldnerschaft des Leistungsempfängers.",
+        "paymentDetails": [{"source": "payment", "sourceReference": payment_id}],
+        **extra,
+    }
+
+
+def _page(items: list[dict[str, Any]], next_href: str | None = None) -> dict[str, Any]:
+    links: dict[str, Any] = {"next": {"href": next_href} if next_href else None}
+    return {"count": len(items), "_embedded": {"sales_invoices": items}, "_links": links}
+
+
+def test_gateway_finds_the_invoice_on_a_later_page() -> None:
+    seen: list[str] = []
+    next_url = "https://api.mollie.com/v2/sales-invoices?from=invoice_B&limit=250"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if "from=" not in str(request.url):
+            return httpx.Response(200, json=_page([_listed("tr_Anders")], next_url))
+        return httpx.Response(200, json=_page([_listed(_PAYMENT)]))
+
+    found = asyncio.run(_gateway(handler).find_invoice_for_payment(_PAYMENT))
+    assert found is not None
+    assert found.created.invoice_number == "I-2026-00001"
+    assert found.vat_rate == Decimal("0.00")
+    assert found.vat_mode == "exclusive"
+    assert found.recipient_type == "business"
+    assert found.has_vat_number is True
+    assert found.memo_key == "reverse_charge"
+    decision = found.decision()
+    assert (decision.action, decision.include_vat_number) == ("issue", True)
+    assert seen == ["https://api.mollie.com/v2/sales-invoices?limit=250", next_url]
+
+
+def test_gateway_reports_none_only_after_the_last_page() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_page([_listed("tr_Anders")]))
+
+    assert asyncio.run(_gateway(handler).find_invoice_for_payment(_PAYMENT)) is None
+
+
+@pytest.mark.parametrize(
+    ("handler", "reason"),
+    [
+        (
+            lambda r: httpx.Response(
+                200, json=_page([], "https://api.mollie.com/v2/sales-invoices?from=x")
+            ),
+            "list_page_limit",
+        ),
+        (
+            lambda r: httpx.Response(200, json=_page([], "https://evil.example/next")),
+            "list_next_foreign",
+        ),
+        (lambda r: httpx.Response(503), "list_http_503"),
+        (lambda r: httpx.Response(200, json={"_embedded": {}}), "list_unreadable"),
+        (
+            lambda r: httpx.Response(200, json=_page([_listed(_PAYMENT, memo="frei erfunden")])),
+            "found_memo_unknown",
+        ),
+        (
+            lambda r: httpx.Response(200, json=_page([_listed(_PAYMENT, vatMode=None)])),
+            "found_fields_missing",
+        ),
+        (
+            lambda r: httpx.Response(200, json=_page([_listed(_PAYMENT, lines=[])])),
+            "found_fields_missing",
+        ),
+    ],
+)
+def test_gateway_lookup_is_uncertain_rather_than_not_found(
+    handler: Callable[[httpx.Request], httpx.Response], reason: str
+) -> None:
+    with pytest.raises(InvoiceUncertainError) as err:
+        asyncio.run(_gateway(handler).find_invoice_for_payment(_PAYMENT))
+    assert err.value.reason == reason
+
+
+def test_gateway_lookup_timeout_is_uncertain() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timeout", request=request)
+
+    with pytest.raises(InvoiceUncertainError, match="ReadTimeout"):
+        asyncio.run(_gateway(handler).find_invoice_for_payment(_PAYMENT))
+    with pytest.raises(InvoiceUncertainError, match="payment_id_unusable"):
+        asyncio.run(_gateway(handler).find_invoice_for_payment("tr_../x"))
 
 
 def test_gateway_requires_a_key() -> None:
@@ -806,8 +1209,8 @@ def test_double_webhook_creates_one_invoice_row_and_one_post() -> None:
         invoice_gateway = FakeInvoiceGateway()
         store = MemoryBlobStore()
 
-        def _billing() -> MollieBillingService:
-            invoices = InvoiceService(
+        def _billing_invoices() -> InvoiceService:
+            return InvoiceService(
                 PgInvoiceRepository(pool),
                 PgBillingProfileRepository(pool),
                 invoice_gateway,
@@ -815,11 +1218,13 @@ def test_double_webhook_creates_one_invoice_row_and_one_post() -> None:
                 tax_mode="regular",
                 price_basis="net",
             )
+
+        def _billing() -> MollieBillingService:
             return MollieBillingService(
                 _PaidRecurringGateway(org),
                 _NoopEntitlements(),
                 None,  # je Service ein eigener In-Memory-Ledger
-                invoices=invoices,
+                invoices=_billing_invoices(),
             )
 
         results = await asyncio.gather(
@@ -829,6 +1234,14 @@ def test_double_webhook_creates_one_invoice_row_and_one_post() -> None:
         assert list(results) == [True, True]
         again = await _billing().handle_webhook(_PAYMENT, webhook_url=None, now=_NOW)
         assert again is True
+        assert invoice_gateway.payloads == [], "der Webhook stellt nicht selbst aus (N1)"
+
+        # Zwei Worker-Laeufe parallel (zwei Instanzen), dann ein dritter.
+        await asyncio.gather(
+            _billing_invoices().retry_open_invoices(_NOW),
+            _billing_invoices().retry_open_invoices(_NOW),
+        )
+        await _billing_invoices().retry_open_invoices(_NOW)
 
         rows = await owner.fetch("SELECT status, payment_id FROM billing_invoice")
         assert len(rows) == 1, "zweite Rechnungszeile zur selben Zahlung"
@@ -877,7 +1290,7 @@ def test_repository_lifecycle_and_guards() -> None:
             "tax_mode": "regular",
             "price_basis": "net",
             "vat_rate": Decimal("19.00"),
-            "attempts": 2,
+            "attempts": 0,  # POST-Starts zaehlen nicht, nur Fehlversuche (R2b)
         }
         digest = hashlib.sha256(_PDF).hexdigest()
         await repo.mark_archived(record.id, pdf_key="invoices/x.pdf", pdf_sha256=digest)
@@ -924,7 +1337,65 @@ def test_repository_lifecycle_and_guards() -> None:
         with pytest.raises(asyncpg.CheckViolationError):
             await repo.reserve(_reservation(org, payment_id="tr_../x"))
 
+        # Fehlversuche: pending wird nach MAX_ATTEMPTS `failed`, updated_at laeuft mit.
+        for _ in range(1, MAX_ATTEMPTS):
+            assert await repo.record_failure(open_row.id, "uncertain:x") == "pending"
+        assert await repo.record_failure(open_row.id, "uncertain:x") == "failed"
+        failed = await repo.get(open_row.id)
+        assert failed is not None
+        assert failed.attempts == MAX_ATTEMPTS
+        assert failed.created_at is not None and failed.updated_at is not None
+        assert await repo.record_failure(open_row.id, "uncertain:x") is None  # endgueltig
+
+        # Eine ausgestellte Zeile (Archiv fehlt) wird nie `failed`: die Rechnung existiert.
+        issued_row = await repo.reserve(_reservation(org, payment_id="tr_Ausgestellt"))
+        assert await repo.start_post(issued_row.id) is True
+        assert (
+            await repo.mark_issued(
+                issued_row.id,
+                CreatedInvoice("invoice_Zweite", "I-2026-00002", _PDF_URL),
+                tax_mode="regular",
+                price_basis="net",
+                decision=decision,
+                issued_at=_NOW,
+            )
+            is not None
+        )
+        for _ in range(MAX_ATTEMPTS + 1):
+            assert await repo.record_failure(issued_row.id, "archive:pdf_http_500") == "issued"
+        # Archiviert und failed sind nicht offen, die ausgestellte schon.
+        assert [row.id for row in await repo.open_invoices()] == [issued_row.id]
+
     _run_in_schema("billinvrepo", body)
+
+
+@pytest.mark.integration
+def test_worker_entry_on_a_single_connection() -> None:
+    """`run_invoice_retry` laeuft auf der Worker-Connection; ohne Mollie-Key No-Op."""
+    from who2be_billing.invoice import run_invoice_retry
+
+    async def body(owner: asyncpg.Connection, pool: asyncpg.Pool) -> None:
+        org = await _seed_org_with_profile(owner, pool)
+        await PgInvoiceRepository(pool).reserve(_reservation(org))
+        settings = Settings(mollie_api_key="")
+        counters = await run_invoice_retry(owner, _NOW, settings)
+        assert counters == {"open": 1, "unconfigured": 1}
+        assert await owner.fetchval("SELECT status FROM billing_invoice") == "pending"
+
+        # VIES-Ergebnis zurueckschreiben, aber nur zur selben Nummer.
+        profiles = PgBillingProfileRepository(owner)
+        await profiles.save(
+            org, BillingProfileInput.model_validate(_AT_BUSINESS), "unchecked", None
+        )
+        await profiles.update_vat_status(org, "ATU11111111", "valid", _NOW)
+        stale = await profiles.get(org)
+        assert stale is not None and stale.vat_status == "unchecked"
+        await profiles.update_vat_status(org, "ATU00000000", "valid", _NOW)
+        fresh = await profiles.get(org)
+        assert fresh is not None
+        assert (fresh.vat_status, fresh.vat_checked_at) == ("valid", _NOW)
+
+    _run_in_schema("billinvworker", body)
 
 
 @pytest.mark.integration
@@ -1005,6 +1476,8 @@ def test_ledger_release_then_redelivery_still_yields_one_invoice() -> None:
         with pytest.raises(RuntimeError):
             await billing.handle_webhook(_PAYMENT, webhook_url=None, now=_NOW)
         assert await billing.handle_webhook(_PAYMENT, webhook_url=None, now=_NOW) is True
+        await invoices.retry_open_invoices(_NOW)
+        await invoices.retry_open_invoices(_NOW)
         assert await owner.fetchval("SELECT count(*) FROM billing_invoice") == 1
         assert len(invoice_gateway.payloads) == 1
 
