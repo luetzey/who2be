@@ -4500,6 +4500,12 @@
       "next": "Weiter: {{title}} →",
       "notFound": "Diese Hilfe-Seite gibt es nicht."
     },
+    "public": {
+      "brand": "Who2Be",
+      "home": "Zur Hilfe-Startseite",
+      "signIn": "Anmelden",
+      "moreAfterLogin": "Tutorials, deinen Fortschritt und „Was ist neu“ siehst du nach der Anmeldung."
+    },
     "tutorial": {
       "notFound": "Dieses Tutorial gibt es nicht.",
       "stepNumber": "Schritt {{number}}:",
