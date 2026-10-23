@@ -3342,7 +3342,27 @@
       "helpLabel": "Wie wird die Länge geschätzt?",
       "tooltip": "Schätzung: etwa {{perToken}} Zeichen je Token. Eingebettete Verweise sind nicht eingerechnet.",
       "longTooltip": "Sehr lange Anweisungen werden oft schlechter befolgt.",
-      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)"
+      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)",
+      "budget": {
+        "measure": {
+          "profile_one": "{{value}} Wort",
+          "profile_other": "{{value}} Wörter",
+          "mode_one": "Modus: {{value}} Wort",
+          "mode_other": "Modus: {{value}} Wörter",
+          "mode_count_one": "{{value}} Modus",
+          "mode_count_other": "{{value}} Modi",
+          "playbook_body_one": "{{value}} Wort",
+          "playbook_body_other": "{{value}} Wörter"
+        },
+        "target": "Richtwert {{target}}",
+        "over": {
+          "profile": "über dem Richtwert {{target}}, Abläufe besser in ein Playbook",
+          "mode": "über dem Richtwert {{target}}, Arbeitsschritte besser in ein Playbook",
+          "mode_count": "über dem Richtwert {{target}}, Modi zusammenlegen oder als Playbook führen",
+          "playbook_body": "über dem Richtwert {{target}}, besser teilen oder Nachschlagewissen in eine Resource"
+        },
+        "helpLink": "Richtwerte erklärt"
+      }
     }
   },
   "learning": {

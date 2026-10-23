@@ -206,3 +206,23 @@ def test_write_result_has_empty_length_hints_by_default() -> None:
     field = MarkdownWriteResult.model_fields["length_hints"]
     assert field.default_factory is not None
     assert field.default_factory() == []  # type: ignore[call-arg]
+
+
+# --- Web-Konstante (B5) ------------------------------------------------------
+
+
+def test_typescript_constant_carries_every_budget() -> None:
+    text = cb.typescript_constant()
+    for element, budget in cb.BUDGETS.items():
+        target = "null" if budget.target is None else str(budget.target)
+        assert f"  {element}: {{ target: {target}, warn: {budget.warn}, " in text, element
+    assert "resource_section: { target: null, warn: 600, unit: 'words', strict: true }" in text
+
+
+def test_web_constant_is_generated_from_python() -> None:
+    """Die eingecheckte Web-Konstante ist genau die Ausgabe des Generators."""
+    path = _REPO_ROOT / cb.WEB_CONSTANT_PATH
+    assert path.read_text(encoding="utf-8") == cb.typescript_constant(), (
+        "Web-Konstante veraltet. Behebung im Repo-Root: "
+        "uv run python -m who2be_models.content_budgets"
+    )

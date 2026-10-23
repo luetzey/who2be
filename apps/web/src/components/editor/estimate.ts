@@ -14,6 +14,8 @@
 //   10, damit nie „≈ 0 Token“ neben Text steht.
 // - Ab LONG_TOKEN_THRESHOLD geschätzten Token gilt der Text als lang.
 
+import { CONTENT_BUDGETS } from './contentBudgets.generated'
+
 /** Ab dieser Token-Schätzung zeigt die Fußzeile „· lang“ (Spec §3.1). */
 export const LONG_TOKEN_THRESHOLD = 8000
 
@@ -100,6 +102,87 @@ export function countChars(text: string): number {
 export function estimateTokens(chars: number): number {
   if (chars <= 0) return 0
   return Math.max(10, Math.round(chars / CHARS_PER_TOKEN / 10) * 10)
+}
+
+// --- Wörter für die Richtwerte (ADR-0063, Builder schlank B5) ---------------
+//
+// Gleiche Regel wie die Schreibantwort der API (`content_budgets.count_words`):
+// ein Wort ist eine durch Leerraum getrennte Folge mit mindestens einem
+// Buchstaben oder einer Ziffer. Codeblöcke zählen nicht, Überschriften-Anker
+// gibt es im Blockbaum nicht. Anders als bei den Zeichen zählt eine Pill hier
+// als EIN Wort, denn die API sieht sie als Token `{{kind:id}}`.
+
+/** Steht im Wort-Text für eine Pill (ein Wort, wie `{{kind:id}}` in der API). */
+const PILL_WORD = '{{pill}}'
+const WORD_CHAR = /[\p{L}\p{N}]/u
+
+function inlineWords(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((node) => {
+      if (typeof node === 'string') return node
+      if (!isNode(node)) return ''
+      if (node.type === PILL_TYPE) return PILL_WORD
+      if (typeof node.text === 'string') return node.text
+      return inlineWords(node.content)
+    })
+    .join('')
+}
+
+function wordLines(blocks: unknown): string[] {
+  if (!Array.isArray(blocks)) return []
+  const lines: string[] = []
+  for (const block of blocks) {
+    if (!isNode(block) || block.type === 'codeBlock') continue
+    const content = block.content
+    if (isNode(content) && !Array.isArray(content) && content.type === 'tableContent') {
+      const rows = Array.isArray(content.rows) ? content.rows : []
+      for (const row of rows) {
+        const cells = isNode(row) && Array.isArray(row.cells) ? row.cells : []
+        lines.push(
+          cells
+            .map((cell) => (isNode(cell) && !Array.isArray(cell) ? inlineWords(cell.content) : inlineWords(cell)))
+            .join(' | '),
+        )
+      }
+    } else {
+      // Die API zählt den Markdown-Text; dort steht vor jedem Eintrag einer
+      // nummerierten Liste „1.“, und das enthält eine Ziffer, ist also ein Wort.
+      const marker = block.type === 'numberedListItem' ? '1. ' : ''
+      lines.push(marker + inlineWords(content))
+    }
+    lines.push(...wordLines(block.children))
+  }
+  return lines
+}
+
+/** Wörter eines BlockNote-Dokuments nach der Zählregel der API (ADR-0063 §3). */
+export function countWords(blocks: unknown): number {
+  return wordLines(blocks)
+    .join('\n')
+    .split(/\s+/)
+    .filter((token) => WORD_CHAR.test(token)).length
+}
+
+/** Hilfe-Abschnitt „Wie lang darf eine Persona sein?“ (Kurzlink, `/help/*` löst ihn auf). */
+export const LENGTH_HELP_HREF = '/help/persona#laenge'
+
+/** Elemente mit Richtwert in der Fußzeile bzw. auf der Moduskarte. */
+export type BudgetElement = 'profile' | 'mode' | 'mode_count' | 'playbook_body'
+
+/** `true`, wenn `value` die Warnschwelle erreicht (bei `strict`: überschreitet), wie die API. */
+export function overBudget(element: BudgetElement, value: number): boolean {
+  const budget: { warn: number; strict: boolean } = CONTENT_BUDGETS[element]
+  return budget.strict ? value > budget.warn : value >= budget.warn
+}
+
+/** Ganze Zahl mit Tausendertrennung; DE mit geschütztem Leerzeichen („1 450“, wie die API). */
+export function formatCount(value: number, language: string): string {
+  if (language.startsWith('de')) {
+    return new Intl.NumberFormat('de').format(value).replace(/\./g, '\u00a0')
+  }
+  return new Intl.NumberFormat(language).format(value)
 }
 
 /** Längenschätzung eines BlockNote-Dokuments für die Fußzeile. */
