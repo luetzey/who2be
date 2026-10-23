@@ -218,6 +218,119 @@ def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [b.id for b in filtered.content.blocks] == ["b3", "b1"]
 
 
+def _sectioned_resource_fixture(monkeypatch: pytest.MonkeyPatch) -> UUID:
+    """Resource mit verschachtelten Abschnitten (h1 > h2 > h3) fuer den Schnitt."""
+    rid = uuid4()
+    payload = _resource_payload(
+        blocks=[
+            _heading_block("h-intro", "Einleitung", 1),
+            _block("p-intro", "Worum es geht"),
+            _heading_block("h-trigger", "Trigger", 2),
+            _block("p-trigger", "Wann laden"),
+            _heading_block("h-trigger-neg", "Negativ", 3),
+            _block("p-trigger-neg", "Wann nicht"),
+            _heading_block("h-naming", "Namen", 2),
+            _block("p-naming", "Wie benennen"),
+            _heading_block("h-anhang", "Anhang", 1),
+            _block("p-anhang", "Rest"),
+        ]
+    )
+    payload["id"] = str(rid)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(f"/resources/{rid}/sub_resources"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    return rid
+
+
+def _fetch_ids(rid: UUID, block_ids: list[str]) -> list[str]:
+    result = asyncio.run(fetch_resource(str(rid), block_ids=block_ids, format="full"))
+    assert isinstance(result, ResourceRead)
+    return [b.id for b in result.content.blocks]
+
+
+def test_fetch_resource_heading_anchor_returns_its_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rot-Probe: ein Ueberschriften-Anker liefert den ganzen Abschnitt, nicht nur die Zeile.
+
+    Mit dem alten Exakt-Filter kaeme nur `["h-trigger"]` zurueck.
+    """
+    rid = _sectioned_resource_fixture(monkeypatch)
+    assert _fetch_ids(rid, ["h-trigger"]) == [
+        "h-trigger",
+        "p-trigger",
+        "h-trigger-neg",
+        "p-trigger-neg",
+    ]
+    text = asyncio.run(fetch_resource(str(rid), block_ids=["h-trigger"]))
+    assert isinstance(text, str)
+    assert "Wann nicht" in text
+    assert "Wie benennen" not in text
+
+
+def test_fetch_resource_nested_levels_end_at_same_or_higher_heading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rid = _sectioned_resource_fixture(monkeypatch)
+    # h1 umfasst seine h2/h3 und endet am naechsten h1.
+    assert _fetch_ids(rid, ["h-intro"]) == [
+        "h-intro",
+        "p-intro",
+        "h-trigger",
+        "p-trigger",
+        "h-trigger-neg",
+        "p-trigger-neg",
+        "h-naming",
+        "p-naming",
+    ]
+    # h3 endet am folgenden h2 (hoehere Ebene).
+    assert _fetch_ids(rid, ["h-trigger-neg"]) == ["h-trigger-neg", "p-trigger-neg"]
+    # Letztes h2 endet am folgenden h1.
+    assert _fetch_ids(rid, ["h-naming"]) == ["h-naming", "p-naming"]
+
+
+def test_fetch_resource_non_heading_anchor_stays_single_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rid = _sectioned_resource_fixture(monkeypatch)
+    assert _fetch_ids(rid, ["p-trigger", "p-intro"]) == ["p-trigger", "p-intro"]
+
+
+def test_fetch_resource_sections_keep_request_order_and_dedupe_overlaps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rid = _sectioned_resource_fixture(monkeypatch)
+    # Angefragte Reihenfolge: Anhang zuerst, dann Trigger.
+    assert _fetch_ids(rid, ["h-anhang", "h-trigger"]) == [
+        "h-anhang",
+        "p-anhang",
+        "h-trigger",
+        "p-trigger",
+        "h-trigger-neg",
+        "p-trigger-neg",
+    ]
+    # Ueberlappung: h-trigger-neg liegt in h-trigger, h-trigger in h-intro.
+    assert _fetch_ids(rid, ["h-trigger-neg", "h-intro", "h-trigger"]) == [
+        "h-trigger-neg",
+        "p-trigger-neg",
+        "h-intro",
+        "p-intro",
+        "h-trigger",
+        "p-trigger",
+        "h-naming",
+        "p-naming",
+    ]
+
+
+def test_fetch_resource_unknown_anchor_yields_no_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wie bisher: unbekannte Anker treffen nichts, kein stiller Vollabruf."""
+    rid = _sectioned_resource_fixture(monkeypatch)
+    assert _fetch_ids(rid, ["fehlt"]) == []
+    assert _fetch_ids(rid, ["fehlt", "p-naming"]) == ["p-naming"]
+
+
 def test_fetch_resource_old_client_explicit_locale_still_works(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
