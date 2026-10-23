@@ -1213,3 +1213,95 @@ def test_sync_v20_distributes_lengths_section_and_checkpoints() -> None:
         body = json.dumps(res["bodies"][by_key[key].name], ensure_ascii=False)
         assert block_id in body, key
         assert "res-conv-h-laengen" in body, key
+
+
+@pytest.mark.integration
+def test_sync_v21_distributes_lean_persona_and_builder_template() -> None:
+    """Content-Stand 21 (Builder schlank B2): ein Bestands-Workspace auf
+    Stempel 20 bekommt die gestraffte Builder-Persona und das Builder-Template
+    ohne `tools-overview`, mit `persona-ref`.
+
+    Der Stempel steht bewusst als Literal auf 20 (Stand vor B2): fehlt der
+    Bump auf 21, findet der Sync nichts zu tun und der Test wird rot.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    pack = get_content_pack("de")
+    canonical_profile = json.loads(pack.persona.load_content("de"))
+    template = next(t for t in pack.templates if t.slug == "agent-builder")
+    canonical_template = json.loads(template.load_body("de"))
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE persona_version pv SET content = $2::jsonb "
+                "FROM persona p WHERE pv.persona_id = p.id AND p.workspace_id = $1 "
+                "AND p.is_managed = true AND pv.status = 'active'",
+                ws,
+                _JUNK_PERSONA,
+            )
+            await conn.execute(
+                "UPDATE persona SET managed_content_version = 20 "
+                "WHERE workspace_id = $1 AND is_managed = true",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE system_prompt_template_version tv SET content = $2::jsonb "
+                "FROM system_prompt_template t WHERE tv.template_id = t.id "
+                "AND t.workspace_id = $1 AND t.slug = 'agent-builder' AND tv.status = 'active'",
+                ws,
+                json.dumps({"description": "", "body": _JUNK}),
+            )
+            await conn.execute(
+                "UPDATE system_prompt_template SET managed_content_version = 20 "
+                "WHERE workspace_id = $1 AND slug = 'agent-builder'",
+                ws,
+            )
+            updated = await sync_managed_builder_content(conn)
+            again = await sync_managed_builder_content(conn)
+            persona = await conn.fetchrow(
+                "SELECT p.managed_content_version AS stamp, pv.content AS content "
+                "FROM persona p JOIN persona_version pv "
+                "  ON pv.persona_id = p.id AND pv.status = 'active' "
+                "WHERE p.workspace_id = $1 AND p.is_managed = true",
+                ws,
+            )
+            tmpl = await conn.fetchrow(
+                "SELECT t.managed_content_version AS stamp, tv.content ->> 'body' AS body "
+                "FROM system_prompt_template t JOIN system_prompt_template_version tv "
+                "  ON tv.template_id = t.id AND tv.status = 'active' "
+                "WHERE t.workspace_id = $1 AND t.slug = 'agent-builder'",
+                ws,
+            )
+            return {
+                "updated": updated,
+                "again": again,
+                "persona_stamp": persona["stamp"],
+                "persona": json.loads(persona["content"]),
+                "template_stamp": tmpl["stamp"],
+                "template": json.loads(tmpl["body"]),
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert res["updated"] == 2, res["updated"]
+    assert res["again"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
+    assert res["template_stamp"] == BUILDER_CONTENT_VERSION
+    assert res["persona"]["content"]["blocks"] == canonical_profile
+    assert res["template"] == canonical_template
+    kinds = json.dumps(res["template"])
+    assert '"persona-ref"' in kinds
+    assert "tools-overview" not in kinds

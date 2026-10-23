@@ -368,3 +368,52 @@ def test_no_rolled_out_template_body_contains_its_own_language_instruction() -> 
                         f"({pack.locale!r}): {text!r} — gehoert nur in "
                         "services/agent_language.py"
                     )
+
+
+# Builder schlank B2 (Content-Stand 21): Budget aus den Agent-Bau-Konventionen
+# („Laengen & Wohin“): Profil <= 600 Woerter (Warnschwelle), Modus <= 250.
+_PROFILE_WORD_LIMIT = 600
+_MODE_WORD_LIMIT = 250
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_persona_stays_within_length_budget(pack: ContentPack) -> None:
+    """Profil und Modi der Builder-Persona halten die eigenen Richtwerte ein;
+    der Builder soll vorleben, was er beim Bauen prueft."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    words = len(" ".join(_collect_block_texts(profile)).split())
+    assert words <= _PROFILE_WORD_LIMIT, words
+    for mode in json.loads(pack.persona.load_modes(pack.locale)):
+        mode_words = len(" ".join(_collect_block_texts(mode)).split())
+        assert mode_words <= _MODE_WORD_LIMIT, (mode["name"], mode_words)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_persona_profile_has_no_duplicate_modes_or_tool_lists(pack: ContentPack) -> None:
+    """B2: der Modi-Absatz steht nicht mehr im Profil (get_persona liefert die
+    Modi selbst), und „Erlaubt“ zaehlt keine Werkzeuge auf (tools/list)."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    ids = [block["id"] for block in profile]
+    assert "bp-h-modes" not in ids
+    assert "bp-li-allowed-fb" in ids, "Feedback-Regel (Migration 0055) muss bleiben"
+    text = " ".join(_collect_block_texts(profile))
+    tools = ("create_persona", "set_playbook_composes", "transition_persona", "restore_playbook")
+    for tool in tools:
+        assert tool not in text, tool
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_template_loads_persona_at_runtime_without_tools_block(pack: ContentPack) -> None:
+    """B2 (W5 a): das Builder-Template laedt die Persona per `persona-ref` und
+    traegt keinen `tools-overview`-Block mehr; Lite bleibt unveraendert."""
+    template = next(t for t in pack.templates if t.slug == "agent-builder")
+    blocks = json.loads(template.load_body(pack.locale))
+    pills = [
+        (item["props"]["kind"], item["props"]["target_id"])
+        for block in blocks
+        for item in block.get("content") or []
+        if isinstance(item, dict) and item.get("type") == "placeholder"
+    ]
+    assert ("persona-ref", "") in pills
+    assert ("persona-field", "profile") not in pills
+    assert all(kind != "tools-overview" for kind, _ in pills)
