@@ -677,13 +677,25 @@
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "Cursor or VS Code",
+        "hermes": "Hermes Agent",
         "other": "Something else"
+      },
+      "clientSuffix": {
+        "claude": "(web, app, mobile)"
       },
       "clientName": {
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "your editor",
+        "hermes": "Hermes",
         "other": "your app"
+      },
+      "lead": {
+        "claude": "Web, desktop app and mobile.",
+        "code": "In the terminal, with one command.",
+        "editor": "One click adds the agent to your editor.",
+        "hermes": "In the terminal of the machine Hermes runs on.",
+        "other": "Gemini, Le Chat, Windsurf, Zed and other programs with remote MCP."
       },
       "status": {
         "connected": "Connected",
@@ -697,7 +709,9 @@
         "editor": "Click “Add to Cursor” or “Install in VS Code”. The editor asks once.",
         "login": "Sign in to Who2Be and confirm the agent “{{agent}}”.",
         "otherIntro": "Your app needs to support remote MCP with sign-in (OAuth). Enter this address there:",
-        "otherTest": "Then write to your agent:"
+        "otherTest": "Then write to your agent:",
+        "hermesLogin": "Hermes opens sign-in in the browser or prints a link for it. Sign in to Who2Be and approve the agent “{{agent}}”.",
+        "hermesTest": "Start a new session or type {{cmd}}. Then write:"
       },
       "cta": {
         "claude": "Connect to Claude",
@@ -725,6 +739,10 @@
       },
       "teamPlan": "On a Team or Enterprise plan? There, your Claude organization owner adds connectors.",
       "free": "Claude Free allows only one custom connector. Remove the Builder there first.",
+      "hermesProfile": "Several profiles? {{cmd}} puts the agent in the right one.",
+      "hermesProfileCommand": "hermes -p <profile> mcp add …",
+      "hermesHeadless": "Hermes runs on a server without a browser? Open the link on your computer and paste the address the browser ends up on into the terminal.",
+      "otherProfiles": "How it works in Gemini, Le Chat, Windsurf, Zed and Copilot",
       "waiting": "Waiting for “{{agent}}” …",
       "waitingHint": "As soon as it loads its persona in {{client}}, this step is checked off. You can leave this page open.",
       "expired": "No request has arrived yet. Who2Be has stopped checking on its own.",
