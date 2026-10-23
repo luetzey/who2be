@@ -190,14 +190,6 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
-- The purge run no longer aborts when a workspace holds two or more expired,
-  never-accepted invitations. Redacting their e-mail addresses to the shared
-  marker `<redacted>` collided in the partial unique index on open invitations
-  (expired rows are neither accepted nor revoked, so they stay in it), and the
-  `UniqueViolationError` stopped `purge_expired` before any later cleanup step.
-  The marker is now unique per row (`<redacted>:<id>`); rows already redacted
-  with the old marker are left as they are, and `revoked_at` is not touched.
-
 - A failed offsite backup no longer reports success. `restic backup` and
   `restic forget` were deliberately non-fatal, so a full storage box, an expired
   SSH key or a network outage ended the cron run with exit 0 — nobody found out
