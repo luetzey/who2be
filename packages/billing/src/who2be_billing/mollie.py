@@ -35,17 +35,28 @@ Schnittstelle isoliert die SDK vom Kern und macht den Service ohne Netz testbar.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from mollie.api.client import Client
 
 from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement
 from who2be_api.repositories.entitlement_repository import EntitlementRepository
+from who2be_billing.invoice import (
+    CUSTOMER_ID_PATTERN,
+    PAYMENT_ID_PATTERN,
+    InvoiceRecord,
+    InvoiceReservation,
+    InvoiceService,
+    service_period,
+)
 from who2be_billing.plans import (
     META_LICENSE_POLICY,
     META_MCP_MONTHLY_QUOTA,
@@ -69,6 +80,10 @@ _PROVIDER = "mollie"
 # Default-Grace bei fehlgeschlagener Folgezahlung (Tage), falls der Service ohne
 # expliziten Wert gebaut wird. Der Router reicht `Settings.mollie_grace_days` durch.
 _DEFAULT_GRACE_DAYS = 7
+# Leistungszeitraum der Rechnung im Kalender des Betreibers (Sitz DE).
+_INVOICE_TZ = ZoneInfo("Europe/Berlin")
+
+logger = logging.getLogger(__name__)
 
 
 class MollieError(Exception):
@@ -88,6 +103,9 @@ class MolliePayment:
     subscription_id: str | None
     mandate_id: str | None
     metadata: dict[str, Any]
+    # Fuer die Rechnung (ADR-0061 §3): bezahlter Betrag in EUR und Zeitpunkt.
+    amount_value: Decimal | None = None
+    paid_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +181,23 @@ def _parse_optional_date(raw: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _parse_eur_amount(raw: Any) -> Decimal | None:
+    """Liest Mollies `amount` (`{"currency": "EUR", "value": "9.99"}`) defensiv.
+
+    Nur EUR zaehlt; alles andere ergibt `None`, die Rechnung bleibt dann
+    zurueckgehalten statt ueber einen falschen Betrag ausgestellt.
+    """
+    if not isinstance(raw, dict) or raw.get("currency") != "EUR":
+        return None
+    value = raw.get("value")
+    if not isinstance(value, str):
+        return None
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        return None
 
 
 def metadata_org_id(metadata: dict[str, Any]) -> UUID:
@@ -335,6 +370,8 @@ class SdkMollieGateway:
                 subscription_id=payment.subscription_id,
                 mandate_id=payment.mandate_id,
                 metadata=_metadata(payment.metadata),
+                amount_value=_parse_eur_amount(payment.amount),
+                paid_at=_parse_optional_date(payment.paid_at),
             )
 
         return await asyncio.to_thread(_call)
@@ -414,6 +451,10 @@ class MollieBillingService:
     `processed` ist der Idempotenz-/Dedupe-Ledger: jeder Webhook-Ping wird genau
     einmal verarbeitet (Replay ⇒ No-Op). `grace_days` steuert die Dunning-Frist
     bei fehlgeschlagener Folgezahlung.
+
+    `invoices` stellt zu jeder bezahlten Erst- und Folgezahlung eine Rechnung
+    aus (ADR-0061 §3, Paket R2a). `None` ⇒ keine Rechnungsstellung (Tests,
+    Installationen ohne Invoicing).
     """
 
     def __init__(
@@ -423,11 +464,13 @@ class MollieBillingService:
         processed: ProcessedEventRepository | None = None,
         *,
         grace_days: int = _DEFAULT_GRACE_DAYS,
+        invoices: InvoiceService | None = None,
     ) -> None:
         self._gateway = gateway
         self._repo = repo
         self._processed: ProcessedEventRepository = processed or _InMemoryProcessedEvents()
         self._grace_days = grace_days
+        self._invoices = invoices
 
     async def start_checkout(
         self,
@@ -487,6 +530,7 @@ class MollieBillingService:
                 return False
             if not await self._processed.claim(_PROVIDER, payment.id):
                 return False
+            invoice: InvoiceRecord | None = None
             async with self._released_on_error(payment.id):
                 update = subscription_to_update(
                     subscription,
@@ -494,21 +538,81 @@ class MollieBillingService:
                     now=reference,
                     grace_days=self._grace_days,
                 )
+                # Rechnung haengt an `is_paid`, nicht am verarbeiteten Ping: der
+                # Claim faellt auch bei fehlgeschlagener Folgezahlung (ADR-0061 §3).
+                if payment.is_paid:
+                    invoice = await self._reserve_invoice(
+                        payment, update.org_id, subscription.metadata, reference
+                    )
                 await self._repo.upsert(
                     update.org_id,
                     update.entitlement,
                     source="mollie",
                     external_ref=update.external_ref,
                 )
+            await self._issue_invoice(invoice, reference)
             return True
 
         if payment.is_paid and payment.customer_id and payment.mandate_id:
             if not await self._processed.claim(_PROVIDER, payment.id):
                 return False
             async with self._released_on_error(payment.id):
-                return await self._activate_from_first_payment(payment, webhook_url=webhook_url)
+                org_id = metadata_org_id(payment.metadata)
+                # Vor der nicht-idempotenten Subscription-Anlage: scheitert das
+                # Vormerken, ist noch nichts passiert und der Retry ist sauber.
+                invoice = await self._reserve_invoice(payment, org_id, payment.metadata, reference)
+                applied = await self._activate_from_first_payment(payment, webhook_url=webhook_url)
+            await self._issue_invoice(invoice, reference)
+            return applied
 
         return False
+
+    async def _reserve_invoice(
+        self,
+        payment: MolliePayment,
+        org_id: UUID,
+        metadata: dict[str, Any],
+        reference: datetime,
+    ) -> InvoiceRecord | None:
+        """Merkt die Rechnung zur bezahlten Zahlung vor (eine je `payment_id`).
+
+        Laeuft innerhalb des Claims: wirft das Vormerken, gibt der Webhook den
+        Claim frei und Mollie stellt erneut zu. So geht keine Rechnung verloren.
+        """
+        if self._invoices is None:
+            return None
+        if not PAYMENT_ID_PATTERN.fullmatch(payment.id):
+            logger.warning("Rechnung nicht vorgemerkt: Payment-ID hat kein Mollie-Format.")
+            return None
+        code = metadata.get(META_PLAN_CODE)
+        plan = plan_by_code(code) if isinstance(code, str) else None
+        if plan is None:
+            logger.error("Rechnung nicht vorgemerkt: kein bekannter 'plan_code' (%s).", payment.id)
+            return None
+        paid_at = payment.paid_at or reference
+        start, end = service_period(plan, paid_at.astimezone(_INVOICE_TZ).date())
+        customer_id = payment.customer_id
+        return await self._invoices.reserve(
+            InvoiceReservation(
+                org_id=org_id,
+                payment_id=payment.id,
+                customer_id=(
+                    customer_id
+                    if customer_id and CUSTOMER_ID_PATTERN.fullmatch(customer_id)
+                    else None
+                ),
+                plan_code=plan.code,
+                amount_value=payment.amount_value,
+                period_start=start,
+                period_end=end,
+            )
+        )
+
+    async def _issue_invoice(self, invoice: InvoiceRecord | None, reference: datetime) -> None:
+        """Stellt aus und archiviert. Wirft nie: das Entitlement steht schon."""
+        if self._invoices is None or invoice is None:
+            return
+        await self._invoices.issue(invoice.id, now=reference)
 
     @asynccontextmanager
     async def _released_on_error(self, payment_id: str) -> AsyncIterator[None]:
