@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 import asyncpg
@@ -996,3 +997,217 @@ def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
         assert agent["workarea_write"] is True, agent
         assert agent["kb_write"] is True, agent
         assert agent["kb_edge_write"] is True, agent
+
+
+# --- Content-Stand 20: Laengen & Wohin (Builder schlank B1) -----------------
+
+# Stabile Anker des Abschnitts; Playbooks laden ihn spaeter gezielt per
+# `fetch_resource(block_ids=...)` bzw. `{{resource:<uuid>#<anker>}}` (K4, B3).
+_LENGTHS_ANCHORS = (
+    "res-conv-h-laengen",
+    "res-conv-h-laengen-budgets",
+    "res-conv-h-laengen-wohin",
+    "res-conv-h-laengen-schreibregeln",
+)
+# W2 (Owner 2026-10-22): acht Budget-Zeilen; die Zahlen aus Ziel- und Warnspalte.
+_W2_BUDGET_ROWS = 8
+_W2_NUMBERS = {"400", "600", "150", "250", "3", "5", "1000", "1500", "300", "500", "8", "6", "9"}
+
+
+def _md_section(blocks: list[dict[str, Any]], anchor: str) -> str:
+    """Markdown eines Abschnitts (Anker-Ueberschrift bis zur naechsten gleicher Ebene)."""
+    from who2be_api.repositories.playbook_resource_link_repository import block_section_text
+    from who2be_models.blocknote_markdown import to_markdown
+
+    ids, _ = block_section_text(blocks, anchor)
+    assert ids, f"Anker {anchor!r} fehlt"
+    by_id = {b["id"]: b for b in blocks}
+    return to_markdown([by_id[i] for i in ids if i in by_id])
+
+
+def _table_rows(md: str) -> list[list[str]]:
+    rows = []
+    for line in md.splitlines():
+        if line.startswith("| ") and not line.startswith("| ---"):
+            rows.append([cell.strip() for cell in line.strip().strip("|").split(" | ")])
+    return rows
+
+
+@pytest.mark.parametrize("locale", ["de", "en"])
+def test_conventions_lengths_section_is_one_readable_section(locale: str) -> None:
+    """Der Abschnitt ist ueber seinen Anker als eine Einheit ladbar und im
+    Markdown-Dialekt (ADR-0058) vollstaendig abbildbar: zwei GFM-Tabellen, vier
+    Schreibregeln, keine geschuetzten Marker. Der Rundlauf ueber den Konverter
+    ist bitgleich — sonst koennte ein Agent den Abschnitt nicht per
+    `edit_content` aendern, ohne ihn zu zerstoeren."""
+    from who2be_api.repositories.builder_content import get_content_pack
+    from who2be_models.blocknote_markdown import from_markdown, to_markdown
+
+    pack = get_content_pack(locale)
+    blocks = json.loads(pack.resource.load_body(locale))
+    md = _md_section(blocks, "res-conv-h-laengen")
+    for anchor in _LENGTHS_ANCHORS:
+        assert f"[#{anchor}]" in md, anchor
+    assert "<!-- w2b:" not in md
+    budgets = _table_rows(_md_section(blocks, "res-conv-h-laengen-budgets"))
+    assert len(budgets) == 1 + _W2_BUDGET_ROWS, budgets
+    numbers = {n for row in budgets[1:] for cell in row[1:] for n in re.findall(r"\d+", cell)}
+    assert numbers == _W2_NUMBERS, numbers
+    placement = _table_rows(_md_section(blocks, "res-conv-h-laengen-wohin"))
+    assert len(placement) == 11, placement  # Kopf + 10 Zeilen (Bericht §5.2)
+    rules = _md_section(blocks, "res-conv-h-laengen-schreibregeln")
+    assert rules.count("\n1. ") == 4, rules
+    whole = to_markdown(blocks)
+    assert from_markdown(whole, base=blocks, allow_tables=True) == blocks
+
+
+def test_conventions_lengths_section_matches_across_locales() -> None:
+    """DE und EN tragen dieselben Block-IDs in derselben Ordnung und dieselben
+    Zahlen in jeder Budget-Zeile — inhaltsgleich, nur uebersetzt."""
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    def section(locale: str) -> tuple[list[str], list[list[str]]]:
+        pack = get_content_pack(locale)
+        blocks = json.loads(pack.resource.load_body(locale))
+        from who2be_api.repositories.playbook_resource_link_repository import (
+            block_section_text,
+        )
+
+        ids, _ = block_section_text(blocks, "res-conv-h-laengen")
+        rows = _table_rows(_md_section(blocks, "res-conv-h-laengen-budgets"))
+        numbers = [re.findall(r"\d+", " ".join(row[1:])) for row in rows[1:]]
+        return ids, numbers
+
+    assert section("de") == section("en")
+
+
+@pytest.mark.parametrize("locale", ["de", "en"])
+def test_budget_numbers_live_only_in_the_conventions(locale: str) -> None:
+    """Single Source (Karte B1): die W2-Zahlen stehen genau einmal, in den
+    Konventionen. Die Pruefpunkte in Persona-Playbook und Konsistenz-Check
+    verweisen per Anker dorthin, statt Zahlen zu wiederholen."""
+    from who2be_api.repositories.builder_content import get_content_pack, load_sidecar
+    from who2be_models.blocknote_markdown import to_markdown
+
+    pack = get_content_pack(locale)
+    unit = r"(?:Woerter|Wörter|words|Zeichen|characters|KB)"
+    budget_re = re.compile(r"\b(?:400|600|150|250|1000|1 000|1500|1 500|300|500)\s?" + unit)
+    others = [t.sidecar for t in pack.templates] + [
+        pack.persona.content_sidecar,
+        pack.persona.modes_sidecar,
+        *[p.sidecar for p in pack.playbooks],
+    ]
+    for sidecar in others:
+        text = load_sidecar(sidecar, locale)
+        assert not budget_re.search(text), f"{locale}/{sidecar}: {budget_re.search(text)}"
+    by_key = {p.key: p for p in pack.playbooks}
+    for key, block_ids in (
+        ("persona", ("pb-persona-li-laengen", "pb-persona-li-laengen-update")),
+        ("consistency", ("pb-check-li-persona-laenge", "pb-check-li-pb-laenge")),
+    ):
+        md = to_markdown(json.loads(by_key[key].load_body(locale)))
+        for block_id in block_ids:
+            assert block_id in by_key[key].load_body(locale), (key, block_id)
+        assert "res-conv-h-laengen" in md, key
+
+
+@pytest.mark.integration
+def test_sync_v20_distributes_lengths_section_and_checkpoints() -> None:
+    """Content-Stand 20: ein Bestands-Workspace auf Stempel 19 bekommt den
+    Abschnitt „Laengen & Wohin\" und die beiden Pruefpunkte per Sync.
+
+    Der Stempel steht bewusst auf `BUILDER_CONTENT_VERSION - 1`: so belegt der
+    Test, dass genau der Bump die Verteilung ausloest. Der alte Inhalt (ohne
+    Abschnitt) wird vorher eingespielt, damit der Sync sichtbar etwas aendert.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    pack = get_content_pack("de")
+    canonical = json.loads(pack.resource.load_body("de"))
+    old_blocks = [b for b in canonical if "laengen" not in b["id"]]
+    assert len(old_blocks) < len(canonical)
+    by_key = {p.key: p for p in pack.playbooks}
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE resource_version rv "
+                "SET content = jsonb_set(rv.content, '{blocks}', $2::jsonb) "
+                "FROM resource r WHERE rv.resource_id = r.id AND r.workspace_id = $1 "
+                "AND r.name = 'Agent-Bau-Konventionen' AND rv.status = 'active'",
+                ws,
+                json.dumps(old_blocks),
+            )
+            await conn.execute(
+                "UPDATE playbook_version pv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
+                "AND pb.name = ANY($3::text[]) AND pv.status = 'active'",
+                ws,
+                _JUNK,
+                [by_key["persona"].name, by_key["consistency"].name],
+            )
+            await conn.execute(
+                "UPDATE resource SET managed_content_version = $2 "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                ws,
+                BUILDER_CONTENT_VERSION - 1,
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = $2 "
+                "WHERE workspace_id = $1 AND name = ANY($3::text[])",
+                ws,
+                BUILDER_CONTENT_VERSION - 1,
+                [by_key["persona"].name, by_key["consistency"].name],
+            )
+            updated = await sync_managed_builder_content(conn)
+            again = await sync_managed_builder_content(conn)
+            resource = await conn.fetchrow(
+                "SELECT r.managed_content_version AS stamp, rv.content -> 'blocks' AS blocks "
+                "FROM resource r JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.status = 'active' "
+                "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
+            bodies = await conn.fetch(
+                "SELECT pb.name, pv.content ->> 'body' AS body FROM playbook_version pv "
+                "JOIN playbook pb ON pb.id = pv.playbook_id "
+                "WHERE pb.workspace_id = $1 AND pb.name = ANY($2::text[]) "
+                "AND pv.status = 'active'",
+                ws,
+                [by_key["persona"].name, by_key["consistency"].name],
+            )
+            return {
+                "updated": updated,
+                "again": again,
+                "stamp": resource["stamp"],
+                "blocks": json.loads(resource["blocks"]),
+                "bodies": {r["name"]: json.loads(r["body"]) for r in bodies},
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    # Genau die drei zurueckgestempelten Aggregate (1 Resource + 2 Playbooks).
+    assert res["updated"] == 3, res["updated"]
+    assert res["again"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    assert res["stamp"] == BUILDER_CONTENT_VERSION
+    assert [b["id"] for b in res["blocks"]] == [b["id"] for b in canonical]
+    for key, block_id in (
+        ("persona", "pb-persona-li-laengen"),
+        ("consistency", "pb-check-li-persona-laenge"),
+    ):
+        body = json.dumps(res["bodies"][by_key[key].name], ensure_ascii=False)
+        assert block_id in body, key
+        assert "res-conv-h-laengen" in body, key
