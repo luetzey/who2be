@@ -578,6 +578,90 @@ def test_resource_allows_tables_and_reports_dangling_refs_shape(env: _Env) -> No
     )
     assert "| a | b |" in created["content"]["body"]
     assert created["dangling_refs"] == []
+    assert created["length_hints"] == []
+
+
+# --- Laengen-Hinweise (ADR-0063) ----------------------------------------------
+
+
+def _words(n: int) -> str:
+    return " ".join(["wort"] * n)
+
+
+def test_length_hints_on_persona_create_put_and_patch_never_block(env: _Env) -> None:
+    modes = [{"name": f"M{i}", "identity_add": "kurz"} for i in range(5)]
+    modes[0]["identity_add"] = _words(250)
+    created = env.create(
+        "personas",
+        {"name": "Lang", "content": {"description": "d", "profile": _words(600), "modes": modes}},
+    )
+    hints = {(h["element"], h["ref"]): h for h in created["length_hints"]}
+    assert set(hints) == {("profile", None), ("mode", "M0"), ("mode_count", None)}
+    assert hints[("profile", None)]["value"] == 600
+    assert hints[("profile", None)]["target"] == 400
+    assert "600" in hints[("profile", None)]["message"]
+    pid = created["id"]
+    env.activate("personas", pid)
+
+    # Vollstand knapp unter jeder Schwelle (Profil 599, 4 Modi): nur M0 meldet.
+    put = env.client.put(
+        f"{env.base}/personas/{pid}/markdown",
+        json={"content": {"description": "d", "profile": _words(599), "modes": modes[:4]}},
+        headers=env.owner,
+    )
+    assert put.status_code == 200, put.text
+    assert [h["element"] for h in put.json()["length_hints"]] == ["mode"]
+
+    # Teilaenderung: Hinweis spiegelt den ganzen Stand nach dem Schreiben.
+    src = env.source("personas", pid)
+    patched = env.client.patch(
+        f"{env.base}/personas/{pid}/markdown",
+        json={
+            "base_rev": src["base_rev"],
+            "op": "replace",
+            "field": "modes[M0].identity_add",
+            "markdown": "kurz",
+        },
+        headers=env.owner,
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["length_hints"] == []
+
+
+def test_length_hints_on_playbook_and_resource(env: _Env) -> None:
+    playbook = env.create(
+        "playbooks",
+        {
+            "name": "Langes Playbook",
+            "content": {
+                "description": "d" * 400,
+                "triggers": "t" * 100,
+                "body": f"# Ablauf\n\n{_words(1500)}\n\n```\n{_words(50)}\n```",
+                "type": "workflow",
+            },
+        },
+    )
+    got = {h["element"]: h["value"] for h in playbook["length_hints"]}
+    assert got == {"playbook_body": 1501, "playbook_summary": 500}
+
+    resource = env.create(
+        "resources",
+        {"name": "Lange Resource", "content": {"body": f"# Kurz\n\nx\n\n# Lang\n\n{_words(601)}"}},
+    )
+    (hint,) = resource["length_hints"]
+    assert hint["element"] == "resource_section"
+    assert hint["value"] == 601
+    assert hint["ref"] == _anchor(resource["content"]["body"], "Lang")
+
+
+def test_length_hints_absent_for_system_prompt(env: _Env) -> None:
+    res = env.client.post(
+        f"{env.base}/system-prompts/markdown",
+        json={"name": "Lang", "content": {"body": _words(2000)}},
+        headers=env.owner,
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["length_hints"] == []
 
 
 def test_deleted_heading_reports_dangling_refs_from_playbook_and_resource(env: _Env) -> None:

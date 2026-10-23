@@ -22834,6 +22834,76 @@
         "title": "KbSearchHit",
         "description": "Ein Treffer der KB-Suche — nie WorkArea-Inhalte (getrennte Indizes)."
       },
+      "LengthHint": {
+        "properties": {
+          "element": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "mode",
+              "mode_count",
+              "playbook_body",
+              "playbook_summary",
+              "resource_section"
+            ],
+            "title": "Element"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "words",
+              "chars",
+              "count"
+            ],
+            "title": "Unit"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "warn": {
+            "type": "integer",
+            "title": "Warn"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "element",
+          "value",
+          "unit",
+          "target",
+          "warn",
+          "message"
+        ],
+        "title": "LengthHint",
+        "description": "Weicher Laengen-Hinweis in einer Schreibantwort (ADR-0063).\n\n`target` ist der Richtwert (`null` bei der Resource: nur Warnschwelle),\n`ref` der Modusname bzw. der Anker des Resource-Abschnitts."
+      },
       "MarkdownCreate": {
         "properties": {
           "name": {
@@ -23107,6 +23177,14 @@
             },
             "type": "array",
             "title": "Dangling Refs"
+          },
+          "length_hints": {
+            "items": {
+              "$ref": "#/components/schemas/LengthHint"
+            },
+            "type": "array",
+            "title": "Length Hints",
+            "description": "Weiche Laengen-Hinweise (ADR-0063): Inhalt ueber der Warnschwelle, gespeichert wurde trotzdem."
           }
         },
         "type": "object",
