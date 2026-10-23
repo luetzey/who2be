@@ -18305,6 +18305,7 @@
               "invitation_email_mismatch",
               "invitation_email_required",
               "invitation_email_unconfirmed",
+              "invitation_already_pending",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
