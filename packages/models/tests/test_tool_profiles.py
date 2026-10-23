@@ -218,7 +218,10 @@ def test_builder_profile_covers_managed_builder_content_de_and_en() -> None:
     mentioned: set[str] = set()
     for path in files:
         mentioned |= set(pattern.findall(path.read_text(encoding="utf-8")))
-    assert len(mentioned) >= 70, sorted(mentioned)
+    # Untergrenze gegen einen leer laufenden Scan. Seit Content-Stand 22
+    # (Builder schlank B3, K2) zaehlen die Playbooks keine Werkzeuge mehr auf,
+    # die tools/list schon beschreibt — 69 statt 70 genannte Werkzeuge.
+    assert len(mentioned) >= 65, sorted(mentioned)
     missing = mentioned - builtin_profile_tools(BuiltinProfileKey.builder)
     assert missing == set()
 
