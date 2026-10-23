@@ -500,3 +500,77 @@ def test_account_purge_removes_the_personal_org_billing_profile() -> None:
         assert await repo.get(other) is not None
 
     _run_in_schema("billacct", body)
+
+
+# Test-only Passwort fuer die App-Rolle, wie in apps/api/tests/test_rls_isolation.py.
+_APP_PASSWORD = "rls_test_secret"  # noqa: S105 — Test-Fixture, kein echtes Secret
+
+
+@pytest.mark.integration
+def test_rls_isolates_billing_profile_per_org_for_app_role() -> None:
+    """Der generische RLS-Guard migriert den Billing-Pfad nicht mit; deshalb
+    hier die Fremd-Org-Probe: who2be_app mit app.current_org=A sieht B nicht
+    und kann B weder aendern noch per Upsert ueberschreiben noch loeschen."""
+
+    async def body(owner: asyncpg.Connection, pool: asyncpg.Pool) -> None:
+        org_a = await _seed_org(owner, kind="company", slug=f"a-{secrets.token_hex(4)}")
+        org_b = await _seed_org(owner, kind="company", slug=f"b-{secrets.token_hex(4)}")
+        org_c = await _seed_org(owner, kind="company", slug=f"c-{secrets.token_hex(4)}")
+        repo = PgBillingProfileRepository(pool)
+        data = BillingProfileInput.model_validate(_BUSINESS)
+        await repo.save(org_a, data, "valid", _NOW)
+        await repo.save(org_b, data, "valid", _NOW)
+
+        schema = await owner.fetchval("SELECT current_schema()")
+        await owner.execute(f"ALTER ROLE who2be_app WITH PASSWORD '{_APP_PASSWORD}'")
+        app = await asyncpg.connect(
+            get_settings().database_url, user="who2be_app", password=_APP_PASSWORD
+        )
+        try:
+            await app.execute(f'SET search_path TO "{schema}"')
+            await app.execute("SELECT set_config('app.current_org', $1, false)", str(org_a))
+
+            # Lesen: nur die eigene Org, auch ohne WHERE.
+            rows = await app.fetch("SELECT org_id FROM billing_profile")
+            assert {row["org_id"] for row in rows} == {org_a}, "RLS leakt fremde Rechnungsdaten"
+
+            # UPDATE auf B trifft keine Zeile (USING filtert sie weg).
+            status = await app.execute(
+                "UPDATE billing_profile SET city = 'Andere Stadt' WHERE org_id = $1", org_b
+            )
+            assert status == "UPDATE 0"
+
+            # Upsert auf B: der Konflikt-Zweig darf B nicht ueberschreiben.
+            with pytest.raises(asyncpg.PostgresError):
+                await app.execute(
+                    "INSERT INTO billing_profile "
+                    "(org_id, customer_type, company_name, street, postal_code, city, country) "
+                    "VALUES ($1, 'business', 'Fremd', 'x', '1', 'y', 'DE') "
+                    "ON CONFLICT (org_id) DO UPDATE SET city = EXCLUDED.city",
+                    org_b,
+                )
+
+            # Neue Zeile fuer eine fremde Org: WITH CHECK weist ab.
+            with pytest.raises(asyncpg.PostgresError):
+                await app.execute(
+                    "INSERT INTO billing_profile "
+                    "(org_id, customer_type, company_name, street, postal_code, city, country) "
+                    "VALUES ($1, 'business', 'Fremd', 'x', '1', 'y', 'DE')",
+                    org_c,
+                )
+
+            # Kein DELETE-Grant: die Zeile faellt nur mit der Organisation.
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await app.execute("DELETE FROM billing_profile WHERE org_id = $1", org_a)
+        finally:
+            await app.close()
+
+        # B ist unveraendert, fuer C ist nichts entstanden.
+        b_city = await owner.fetchval("SELECT city FROM billing_profile WHERE org_id = $1", org_b)
+        assert b_city == _BUSINESS["city"]
+        assert (
+            await owner.fetchval("SELECT count(*) FROM billing_profile WHERE org_id = $1", org_c)
+            == 0
+        )
+
+    _run_in_schema("billrls", body)
