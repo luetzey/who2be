@@ -126,9 +126,8 @@ def get_mollie_service() -> MollieBillingService:
             detail="Datenbank nicht verfuegbar.",
         ) from exc
     gateway = SdkMollieGateway(settings.mollie_api_key)
-    # Rechnung je bezahlter Zahlung (ADR-0061 §3, Paket R2a). Ohne Steuermodus
-    # haelt der Service jede Rechnung zurueck (fail closed), ohne BlobStore
-    # bleibt sie `issued` bis zum Archiv — der Webhook laeuft in beiden Faellen.
+    # Rechnung je bezahlter Zahlung (ADR-0061 §3): der Webhook merkt nur vor,
+    # ausgestellt und archiviert wird im Worker (`invoice-retry`, R2b).
     invoices = InvoiceService(
         PgInvoiceRepository(pool),
         PgBillingProfileRepository(pool),
