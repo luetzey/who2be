@@ -6,5 +6,7 @@
   Richtwert. Gespeichert wird immer. Die Werte kommen aus
   `who2be_models.content_budgets` über die erzeugte Datei
   `apps/web/src/components/editor/contentBudgets.generated.ts`, gezählt wird
-  wie in der Schreibantwort der API. Neuer Hilfe-Abschnitt „Wie lang darf
+  wie in der Schreibantwort der API. Geändert: In der Schreibantwort zählen
+  die Schutz-Marker gesperrter Blöcke (`<!-- w2b:… -->`) nicht mehr als
+  Wörter, ihr zitierter Text zählt weiter. Neuer Hilfe-Abschnitt „Wie lang darf
   eine Persona sein?“ (DE/EN), verlinkt aus der Fußzeile.
