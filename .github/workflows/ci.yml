@@ -82,6 +82,28 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Hilfe-Drift (Warnung, UI geändert ohne Hilfe)
+        # Doku-Drift Stufe 2 (Owner-Entscheidung 2026-10-22): ein PR, der
+        # nutzersichtbare Web-Pfade aendert, ohne `apps/web/src/help/` zu
+        # aendern, bekommt eine Annotation `warning` + eine Zeile im
+        # Job-Summary — ausser die PR-Beschreibung traegt
+        # `Hilfe: n/a – <Grund>` mit Grund aus der festen Liste. Bewusst KEINE
+        # Sperre: das Skript endet immer mit Exit 0, und `continue-on-error`
+        # haelt den Job auch dann gruen, wenn Python selbst scheitert. Der Step
+        # laeuft NACH `classify` und schreibt keine Outputs, kann also weder
+        # `code` noch `all-green` beeinflussen. Logik und Tests:
+        # `scripts/ci/help_drift.py`, `scripts/tests/test_help_drift.py`.
+        # Der Body kommt nur ueber `env:` in den Prozess (kein `${{ }}` in der
+        # Shell, keine Script-Injection). Grenze: eine spaetere Aenderung der
+        # PR-Beschreibung wirkt erst mit dem naechsten Push — der Trigger
+        # `edited` startete sonst die volle CI je Textkorrektur.
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/ci/help_drift.py --base "$BASE_SHA" --head "$HEAD_SHA"
 
   python:
     needs: changes

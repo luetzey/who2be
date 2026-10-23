@@ -14,6 +14,19 @@ Issue: Closes #___
      Selbstprüfung (muss `true` liefern):
        gh pr view <n> --json body -q '.body|test("(?m)^Issue:")' -->
 
+Hilfe: geändert | n/a – <Grund>
+
+<!-- Hilfe-Zeile (CONTRIBUTING.md §Hilfe aktuell halten). Auf GENAU EINE Form
+     kürzen — bleibt die Zeile so stehen, zählt sie als ungültig:
+
+       Hilfe: geändert            apps/web/src/help/ ist im Diff mitgeändert
+       Hilfe: n/a – <Grund>       Grund aus der festen Liste: intern | kein UI-Text |
+                                  nur Tests | Folgekarte <id> (t_… oder #NNN)
+
+     Ändert der PR Komponenten unter apps/web/src/features/*/components/ oder
+     bestehende Werte in apps/web/src/i18n/locales/*.json ohne Hilfe-Änderung
+     und ohne gültige n/a-Zeile, warnt der CI-Job `changes` (keine Sperre). -->
+
 ## Zusammenfassung
 
 <!-- Was ändert dieser PR und warum? Bei Befund-/Plan-Bezug: IDs bzw. Plan-Datei verlinken. -->
