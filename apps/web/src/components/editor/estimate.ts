@@ -38,6 +38,7 @@ interface NodeLike {
   children?: unknown
   rows?: unknown
   cells?: unknown
+  props?: unknown
 }
 
 /** Inline-Typ der Verweis-Pills (ADR-0058 3.2, `PlaceholderBlock.tsx`). */
@@ -148,8 +149,15 @@ function wordLines(blocks: unknown): string[] {
       }
     } else {
       // Die API zählt den Markdown-Text; dort steht vor jedem Eintrag einer
-      // nummerierten Liste „1.“, und das enthält eine Ziffer, ist also ein Wort.
-      const marker = block.type === 'numberedListItem' ? '1. ' : ''
+      // nummerierten Liste „1.“ und vor einem angehakten Checklisten-Eintrag
+      // „[x]“. Beides enthält eine Ziffer bzw. einen Buchstaben, ist also ein Wort.
+      const props = isNode(block.props) ? (block.props as { checked?: unknown }) : {}
+      const marker =
+        block.type === 'numberedListItem'
+          ? '1. '
+          : block.type === 'checkListItem' && props.checked === true
+            ? '[x] '
+            : ''
       lines.push(marker + inlineWords(content))
     }
     lines.push(...wordLines(block.children))

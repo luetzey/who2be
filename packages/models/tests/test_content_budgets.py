@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from who2be_models import content_budgets as cb
+from who2be_models.blocknote_markdown import to_markdown
 from who2be_models.content_markdown import MarkdownWriteResult
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -99,6 +100,22 @@ def test_count_words_skips_code_blocks_anchors_and_markup() -> None:
 
 def test_count_words_unclosed_fence_counts_nothing_after_it() -> None:
     assert cb.count_words("eins zwei\n```\ndrei vier") == 2
+
+
+def test_count_words_skips_protection_markers_but_counts_quoted_text() -> None:
+    markdown = "<!-- w2b:locked p1 -->\n> rot gefaerbt\n\n  <!-- w2b:block img image -->\n\nnormal"
+    assert cb.count_words(markdown) == 3
+
+
+#: Gemeinsame Fixture mit dem Web-Laengenzaehler (`EditorFooter.test.tsx`).
+_PARITY_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "word_count_parity.json"
+_PARITY_CASES = json.loads(_PARITY_FIXTURE.read_text(encoding="utf-8"))["cases"]
+
+
+@pytest.mark.parametrize("case", _PARITY_CASES, ids=[c["name"] for c in _PARITY_CASES])
+def test_count_words_matches_web_fixture(case: dict[str, Any]) -> None:
+    """Server zaehlt dieselben Bloecke gleich wie `countWords` im Web."""
+    assert cb.count_words(to_markdown(case["blocks"])) == case["expected_words"]
 
 
 def test_sections_split_at_every_heading_with_anchor() -> None:

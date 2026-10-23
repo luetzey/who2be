@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -198,6 +202,40 @@ describe('countWords (Zählregel der API)', () => {
 
   it('zählt die Nummer einer nummerierten Liste wie das Markdown der API', () => {
     expect(countWords([{ type: 'numberedListItem', content: [text('eins zwei')], children: [] }])).toBe(3)
+  })
+
+  it('zählt das „[x]“ eines angehakten Checklisten-Eintrags wie die API, offene nicht', () => {
+    const item = (checked: boolean) => ({
+      type: 'checkListItem',
+      props: { checked },
+      content: [text('Erledigt hier')],
+      children: [],
+    })
+    expect(countWords([item(true)])).toBe(3)
+    expect(countWords([item(false)])).toBe(2)
+  })
+})
+
+// Gemeinsame Fixture mit dem Server (packages/models/tests/test_content_budgets.py):
+// Python prüft count_words(to_markdown(blocks)), hier countWords(blocks), beide
+// gegen dieselbe erwartete Zahl.
+const parityFixture = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../../packages/models/tests/fixtures/word_count_parity.json',
+)
+const parityCases = (
+  JSON.parse(readFileSync(parityFixture, 'utf-8')) as {
+    cases: { name: string; expected_words: number; blocks: unknown[] }[]
+  }
+).cases
+
+describe('countWords zählt gleich wie der Server (gemeinsame Fixture)', () => {
+  it('Fixture hat Fälle', () => {
+    expect(parityCases.length).toBeGreaterThan(0)
+  })
+
+  it.each(parityCases.map((c) => [c.name, c] as const))('%s', (_name, c) => {
+    expect(countWords(c.blocks)).toBe(c.expected_words)
   })
 })
 

@@ -11,7 +11,8 @@ Zeile fuer den Schreibenden. Missbrauchsschutz ist die bestehende
 Feldgrenze des Markdown-Wegs (200 000 Zeichen je Feld, `content_markdown`).
 
 Gezaehlt werden Woerter im Markdown-Text (Normalform nach ADR-0058) ohne
-Codebloecke und ohne Ueberschriften-Anker ` [#id]`. Ein Wort ist eine durch
+Codebloecke, ohne Ueberschriften-Anker ` [#id]` und ohne Schutz-Marker
+`<!-- w2b:... -->` (der zitierte Klartext darunter zaehlt). Ein Wort ist eine durch
 Leerraum getrennte Folge mit mindestens einem Buchstaben oder einer Ziffer;
 reine Markdown-Zeichen (`-`, `#`, `|`, `---`) zaehlen nicht.
 """
@@ -93,6 +94,10 @@ _FENCE_RE = re.compile(r"^[ ]{0,3}(`{3,}|~{3,})")
 _ANCHOR_ID = r"[A-Za-z0-9_.:-]+"
 _ANCHOR_RE = re.compile(r"[ \t]\[#" + _ANCHOR_ID + r"\][ \t]*$")
 _HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+(.*)$")
+#: Schutz-Marker eines gesperrten bzw. nicht abbildbaren Blocks (ADR-0058 3.3),
+#: allein auf einer Zeile. Er ist kein Inhalt und zaehlt nicht; der zitierte
+#: Klartext darunter (`> ...`) zaehlt weiter, wie im Web-Laengenzaehler.
+_MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*w2b:[^>]*-->[ \t]*$")
 _WORD_RE = re.compile(r"\S+")
 _ALNUM_RE = re.compile(r"[^\W_]")
 
@@ -108,6 +113,8 @@ def _prose_lines(markdown: str) -> Iterable[str]:
             continue
         if match:
             fence = match.group(1)
+            continue
+        if _MARKER_RE.match(line):
             continue
         yield _ANCHOR_RE.sub("", line)
 
