@@ -11,10 +11,15 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Feedback-getriebener Pflege-Lauf ueber die Agent-Library. Dieser Lauf sammelt die aufgelaufenen Feedback- und Nutzungs-Signale (", "styles": {}},
-      {"type": "text", "text": "get_feedback", "styles": {"code": true}},
-      {"type": "text", "text": " liefert usage_count, by_outcome, by_signal und recent_notes), prueft Zusammenhaenge und strukturelle Luecken in der Library und setzt Funde nach User-Freigabe als Drafts um. Er ist die wiederkehrende Aufraeum-Routine des Builders: nicht bauen, sondern pflegen — Veraltetes aktualisieren, Verwaistes anbinden oder zurueckziehen, Luecken sichtbar machen. Die Kurations-Hoheit bleibt durchgehend beim User: kein Fund wird ohne Freigabe geschrieben, keine Aktivierung ohne dessen Entscheidung.", "styles": {}}
+      {"type": "text", "text": "Wiederkehrender, feedback-getriebener Pflege-Lauf ueber die Agent-Library: Signale einsammeln, Zusammenhaenge pruefen und Funde erst nach Freigabe des Users als Drafts umsetzen.", "styles": {}}
     ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Lade aus der Resource 'Agent-Bau-Konventionen' nur die Abschnitte, die dieses Playbook braucht — in Phase 1, mit einem Aufruf: fetch_resource(resource_id, block_ids=[\"res-conv-h-status\", \"res-conv-h-managed\", \"res-conv-h-graph\"]). Ein Ueberschriften-Anker liefert den ganzen Abschnitt; die resource_id steht in den Verweisen dieses Playbooks (linked_blocks). Weitere Abschnitte nur bei Bedarf (Anker via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -321,27 +326,7 @@
     "id": "pb-maint-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-tools-read",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (Inventar); get_feedback(entity_type, entity_id) (Signale und Notes); find_usages (eingehende Referenzen, Verwaisung); list_versions, diff_versions (Note gegen aktuelle Version pruefen); fetch_playbook, fetch_resource, get_persona (Ist-Stand vor jedem set_*); search (Elemente bei Verdachtsfaellen); search_content (Passagen-Gegenprobe bei vermuteten Luecken und Wissens-Drift).", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-tools-write",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Write (nur nach Freigabe): ", "styles": {"bold": true}},
-      {"type": "text", "text": "update_persona / update_playbook / update_resource (neuer Draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (Replace-Semantik — vollstaendigen Zielzustand setzen); transition_persona / transition_playbook / transition_resource (nur freigegebene Uebergaenge); record_usage und submit_feedback (Nachhalten); resolve_feedback (Signale schliessen — addressed/in_progress/dismissed, dismissed nur mit note; nur nach Freigabe).", "styles": {}}
-    ],
+    "content": [{"type": "text", "text": "Fallen", "styles": {}}],
     "children": []
   },
   {
@@ -349,8 +334,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Verboten: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Delete existiert nicht ueber MCP — nicht versuchen, nicht simulieren. create_* ohne expliziten Bau-Auftrag des Users (semantische Luecken sind Beobachtungen, keine Auftraege). Jeder Schreibversuch an managed Inhalten (is_managed=true liefert 409) — diese Funde gehoeren in den Repo-Hand-Off.", "styles": {}}
+      {"type": "text", "text": "set_persona_playbooks, set_playbook_resource_links, set_playbook_composes und set_resource_sub_resources haben Replace-Semantik — vollstaendigen Zielzustand setzen. Delete gibt es ueber MCP nicht (nicht simulieren); create_* nur mit ausdruecklichem Bau-Auftrag; Schreibversuche an managed Inhalten liefern 409 und gehoeren in den Repo-Hand-Off; resolve_feedback nur nach Freigabe, dismissed nur mit note.", "styles": {}}
     ],
     "children": []
   },
@@ -428,30 +412,6 @@
       {"type": "text", "text": "Feedback-Schliessung via MCP und Web-UI: ", "styles": {"bold": true}},
       {"type": "text", "text": "Signale werden jetzt auch via MCP geschlossen (resolve_feedback, Capability feedback_resolve — Erweiterung von ADR-0038); die Web-UI-Triage (Posteingang) bleibt gleichberechtigt. Der Abschluss-Report muss die geschlossenen Signale mit Resolution enthalten — er bleibt der Uebergabepunkt zwischen Agent-Lauf und Kuration.", "styles": {}}
     ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-notes-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow, Auffindbarkeit/Retrieval und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Massstab fuer Triage und Umsetzung. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: in Phase 1 via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-h-feedback",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-maint-p-feedback",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Faellt dir beim Ausfuehren dieses Playbooks Veraltetes oder Falsches an ihm selbst auf, melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen — dieses Playbook ist managed, die Korrektur laeuft dann ueber den Repo-Hand-Off. Genutzte Playbooks/Resources via record_usage (applied/skipped/error). So wird die AgentDB selbst-verbessernd.", "styles": {}}],
     "children": []
   }
 ]
