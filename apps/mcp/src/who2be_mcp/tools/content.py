@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from who2be_mcp.client import ApiClient
 from who2be_mcp.core_logging import with_tool_log
+from who2be_models.content_budgets import LengthHint
 from who2be_models.content_markdown import (
     ContentEdit,
     ExternalToolMarkdownContent,
@@ -186,6 +187,24 @@ def reject_editor_json(fields: list[tuple[str, str | None]]) -> None:
 # --- gemeinsame Schreibschritte -----------------------------------------------
 
 
+class ToolWriteResult(MarkdownWriteResult):
+    """Schreibantwort der Werkzeuge: Laengen-Hinweise als eine Zeile (ADR-0063, Token-Budget).
+
+    Die API liefert `length_hints[]` strukturiert; das Werkzeug zeigt nur die
+    Meldungen als `length_note` (`null`, wenn alles im Richtwert liegt).
+    """
+
+    length_hints: list[LengthHint] = Field(default_factory=list, exclude=True)
+    length_note: str | None = None
+
+
+def tool_write_result(result: MarkdownWriteResult) -> ToolWriteResult:
+    """Schreibantwort der API -> Werkzeug-Antwort mit `length_note`."""
+    note = " ".join(hint.message for hint in result.length_hints) or None
+    fields = {name: getattr(result, name) for name in MarkdownWriteResult.model_fields}
+    return ToolWriteResult.model_construct(**fields, length_note=note)
+
+
 async def _client() -> ApiClient:
     """API-Client ueber `server.build_client` (Laufzeit-Import, Muster `tools/tables.py`)."""
     from who2be_mcp import server
@@ -202,7 +221,7 @@ def _parse_uuid(value: str, label: str) -> UUID:
 
 async def create_markdown(
     client: ApiClient, entity_type: ContentEntityType, data: AnyMarkdownCreate, locale: str | None
-) -> MarkdownWriteResult:
+) -> ToolWriteResult:
     """Legt ein Element aus Markdown an (`POST …/{entity_type}/markdown`)."""
     reject_editor_json(list(_markdown_fields(data.content)))
     body = MarkdownCreate(
@@ -212,12 +231,12 @@ async def create_markdown(
         alias=getattr(data, "alias", None),
         content=data.content.model_dump(mode="json"),
     )
-    return await client.create_markdown(ENTITY_PATH[entity_type], body)
+    return tool_write_result(await client.create_markdown(ENTITY_PATH[entity_type], body))
 
 
 async def put_markdown(
     entity_type: ContentEntityType, entity_id: str, label: str, data: AnyMarkdownUpdate
-) -> MarkdownWriteResult:
+) -> ToolWriteResult:
     """Vollstand per Markdown (`PUT …/{entity_type}/{id}/markdown`)."""
     parsed = _parse_uuid(entity_id, label)
     reject_editor_json(list(_markdown_fields(data.content)))
@@ -228,7 +247,7 @@ async def put_markdown(
         content=data.content.model_dump(mode="json"),
     )
     client = await _client()
-    return await client.put_markdown(ENTITY_PATH[entity_type], parsed, body)
+    return tool_write_result(await client.put_markdown(ENTITY_PATH[entity_type], parsed, body))
 
 
 # --- edit_content ---------------------------------------------------------------
@@ -243,7 +262,7 @@ async def edit_content(
     anchor: str | None = None,
     field: str | None = None,
     markdown: str | None = None,
-) -> MarkdownWriteResult:
+) -> ToolWriteResult:
     """Aendert einen Abschnitt oder ein Feld eines Elements als Draft, der Rest bleibt bitgleich.
 
     Ziel ist genau eines: `anchor` (ID einer Ueberschrift; der Abschnitt reicht bis vor die
@@ -262,7 +281,7 @@ async def edit_content(
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     client = await _client()
-    return await client.edit_markdown(ENTITY_PATH[entity_type], parsed, data)
+    return tool_write_result(await client.edit_markdown(ENTITY_PATH[entity_type], parsed, data))
 
 
 def register(mcp: FastMCP) -> None:
