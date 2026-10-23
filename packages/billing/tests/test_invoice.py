@@ -882,15 +882,43 @@ def test_repository_lifecycle_and_guards() -> None:
         digest = hashlib.sha256(_PDF).hexdigest()
         await repo.mark_archived(record.id, pdf_key="invoices/x.pdf", pdf_sha256=digest)
 
-        # Unveraenderbarkeit: Hash, Nummer, Status zurueck — alles abgewiesen.
+        # Unveraenderbarkeit: Hash, Nummer, Status zurueck und die Steuer- und
+        # Rechnungsangaben der ausgestellten Rechnung — alles abgewiesen.
         for statement in (
             "UPDATE billing_invoice SET pdf_sha256 = repeat('0', 64)",
             "UPDATE billing_invoice SET invoice_number = 'I-2026-99999'",
             "UPDATE billing_invoice SET status = 'issued'",
             "UPDATE billing_invoice SET payment_id = 'tr_Anders'",
+            "UPDATE billing_invoice SET vat_rate = 0",
+            "UPDATE billing_invoice SET tax_mode = 'small_business'",
+            "UPDATE billing_invoice SET price_basis = 'gross'",
+            "UPDATE billing_invoice SET memo_key = 'other'",
+            "UPDATE billing_invoice SET issued_at = now() - interval '400 days'",
+            "UPDATE billing_invoice SET amount_value = 1.00",
+            "UPDATE billing_invoice SET period_end = period_end + 1",
+            "UPDATE billing_invoice SET plan_code = 'other'",
+            "UPDATE billing_invoice SET customer_id = NULL",
         ):
             with pytest.raises(asyncpg.RaiseError):
                 await owner.execute(statement)
+        frozen = await owner.fetchrow(
+            "SELECT tax_mode, vat_rate, issued_at FROM billing_invoice WHERE id = $1",
+            record.id,
+        )
+        assert dict(frozen) == {
+            "tax_mode": "regular",
+            "vat_rate": Decimal("19.00"),
+            "issued_at": _NOW,
+        }
+
+        # Eine pending-Zeile darf der Worker (R2b) dagegen noch korrigieren.
+        open_row = await repo.reserve(_reservation(org, payment_id="tr_Offen"))
+        await owner.execute(
+            "UPDATE billing_invoice SET amount_value = 9.99 WHERE id = $1", open_row.id
+        )
+        corrected = await repo.get(open_row.id)
+        assert corrected is not None
+        assert corrected.amount_value == Decimal("9.99")
 
         # Ungepruefte IDs kommen gar nicht erst in die Tabelle.
         with pytest.raises(asyncpg.CheckViolationError):

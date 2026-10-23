@@ -19,7 +19,9 @@
 --
 -- Unveraenderbarkeit (ADR-0061 §7): die Laufzeitrolle darf Zeilen anlegen und
 -- den Status nur nach vorn setzen. Mollie-ID, Rechnungsnummer, Ablageort und
--- SHA-256 des PDF sind nach dem ersten Setzen fest (Trigger unten). Kein
+-- SHA-256 des PDF sind nach dem ersten Setzen fest; Steuerangaben (Schalter,
+-- Satz, Memo), Betrag, Zeitraum, Plan, Kunde und Ausstellungszeit sind ab
+-- Status 'issued' fest (Trigger unten). Kein
 -- DELETE-Grant: loeschen darf nur die Owner-Rolle nach Ablauf der Frist.
 --
 -- Billing-only (migrations/README.md), nur Cloud (ADR-0029). Idempotent.
@@ -108,6 +110,24 @@ BEGIN
        OR (OLD.pdf_sha256 IS NOT NULL AND NEW.pdf_sha256 IS DISTINCT FROM OLD.pdf_sha256)
     THEN
         RAISE EXCEPTION 'billing_invoice: Rechnung und PDF sind nach dem Setzen unveraenderlich';
+    END IF;
+    -- Ab 'issued' ist die Rechnung ausgestellt: Schalterwerte, Steuerfall,
+    -- Betrag, Zeitraum und Ausstellungszeit (steuert das Archivjahr) sind fest.
+    -- Nur eine pending-Zeile darf der Worker (R2b) noch korrigieren.
+    IF OLD.status <> 'pending' AND (
+           NEW.tax_mode     IS DISTINCT FROM OLD.tax_mode
+        OR NEW.price_basis  IS DISTINCT FROM OLD.price_basis
+        OR NEW.vat_rate     IS DISTINCT FROM OLD.vat_rate
+        OR NEW.memo_key     IS DISTINCT FROM OLD.memo_key
+        OR NEW.issued_at    IS DISTINCT FROM OLD.issued_at
+        OR NEW.amount_value IS DISTINCT FROM OLD.amount_value
+        OR NEW.period_start IS DISTINCT FROM OLD.period_start
+        OR NEW.period_end   IS DISTINCT FROM OLD.period_end
+        OR NEW.plan_code    IS DISTINCT FROM OLD.plan_code
+        OR NEW.customer_id  IS DISTINCT FROM OLD.customer_id)
+    THEN
+        RAISE EXCEPTION 'billing_invoice: Steuer- und Rechnungsangaben sind ab Status % unveraenderlich',
+            OLD.status;
     END IF;
     NEW.updated_at := now();
     RETURN NEW;

@@ -7,9 +7,11 @@
 
   Neue Tabelle `billing_invoice` (Migration `billing_0111`) mit genau einer
   Zeile je Zahlung (`UNIQUE (payment_id)`), die vor dem Aufruf bei Mollie
-  angelegt wird. Ein doppelter Webhook ergibt so keine zweite Rechnung. Nummer,
-  Steuerangaben und Prüfsumme sind per Trigger unveränderlich, die Zeile
-  überlebt den Org-Purge (Aufbewahrung). Neue Einstellungen
+  angelegt wird. Ein doppelter Webhook ergibt so keine zweite Rechnung.
+  Mollie-ID, Nummer, Ablageort und Prüfsumme sind nach dem ersten Setzen per
+  Trigger unveränderlich; Steuerangaben (Schalterwerte, Satz, Memo), Betrag,
+  Leistungszeitraum, Plan, Kunde und Ausstellungszeit ab Status `issued`. Die
+  Zeile überlebt den Org-Purge (Aufbewahrung). Neue Einstellungen
   `WHO2BE_INVOICE_TAX_MODE` (`regular` oder `small_business`, bewusst ohne
   Default: leer heißt, es wird keine Rechnung ausgestellt) und
   `WHO2BE_INVOICE_PRICE_BASIS` (`net`, Default, oder `gross`). Fehlen Daten
