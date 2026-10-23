@@ -11,7 +11,7 @@ import json
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -221,6 +221,35 @@ class Settings(BaseSettings):
         ge=0,
         validation_alias=AliasChoices("MOLLIE_GRACE_DAYS", "mollie_grace_days"),
     )
+    # Rechnungsstellung ueber Mollie Invoicing (ADR-0061 §5). Steuermodus
+    # `regular` (Regelbesteuerung) oder `small_business` (§19 UStG). Bewusst
+    # OHNE Default: leer ⇒ keine Rechnung, die Zeilen bleiben `pending` (fail
+    # closed statt einer Rechnung mit geratener Steuer). Festlegung mit dem
+    # Steuerberater; ein Wechsel wirkt nur fuer neue Rechnungen.
+    invoice_tax_mode: Literal["regular", "small_business"] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WHO2BE_INVOICE_TAX_MODE", "invoice_tax_mode"),
+    )
+    # Ob der Plan-Preis netto (`net`, Mollie `vatMode=exclusive`) oder brutto
+    # (`gross`, `vatMode=inclusive`) gemeint ist (ADR-0061 §5, Default `net`).
+    invoice_price_basis: Literal["net", "gross"] = Field(
+        default="net",
+        validation_alias=AliasChoices("WHO2BE_INVOICE_PRICE_BASIS", "invoice_price_basis"),
+    )
+
+    @field_validator("invoice_tax_mode", "invoice_price_basis", mode="before")
+    @classmethod
+    def _blank_invoice_switch(cls, value: object, info: ValidationInfo) -> object:
+        """Leerer Wert (Compose reicht `${VAR:-}` durch) zaehlt als nicht gesetzt.
+
+        Steuermodus leer ⇒ `None` (keine Rechnung), Preisbasis leer ⇒ `net`.
+        Ein Tippfehler bleibt ein Startfehler: lieber kein Start als eine
+        Rechnung mit falschem Steuermodus.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None if info.field_name == "invoice_tax_mode" else "net"
+        return value.strip().lower() if isinstance(value, str) else value
+
     # On-Prem-Bootstrap: beim ersten Boot ohne Tenant wird fuer diese Email ein
     # Admin + Personal-Org + Workspace deterministisch geseedet.
     bootstrap_admin_email: str = Field(
