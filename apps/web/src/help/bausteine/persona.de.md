@@ -3,7 +3,7 @@ title: Persona
 description: Wer dein Agent ist, wie er klingt und wo seine Grenzen liegen.
 section: bausteine
 order: 10
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -30,7 +30,7 @@ Passt kein Trigger, arbeitet der Agent im Standard-Modus.
 
 ## Versionen und Aktivieren [#versionen]
 
-Jede Änderung an einer Persona erzeugt eine neue Version. Ein Entwurf wirkt noch nicht. Erst wenn eine Version aktiv ist, lädt der Agent sie. Aktivieren dürfen nur Admins.
+Jede Änderung erzeugt eine neue Version, zuerst als Entwurf. Ein Entwurf wirkt noch nicht. Bist du fertig, klickst du auf **Zur Freigabe einreichen**. Ein Admin prüft die Version und klickt auf **Aktivieren** oder schickt sie mit **Zurück in den Entwurf** zurück. Erst die aktive Version lädt der Agent.
 
 Ein Agent lässt sich nur einschalten, wenn seine Persona aktiv ist. Fehlt das, zeigt die Agent-Seite „Noch nicht aktivierbar“.
 

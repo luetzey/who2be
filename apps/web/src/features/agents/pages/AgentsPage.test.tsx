@@ -399,7 +399,7 @@ describe('AgentsPage', () => {
     expect(postCalls).toHaveLength(1)
     expect(postCalls[0].body).toEqual({ name: 'Neuer Agent' })
     expect(notify.success).toHaveBeenCalledWith(
-      'Agent angelegt — jetzt Persona und Systemprompt zuweisen.',
+      'Agent angelegt — jetzt Persona und System-Prompt zuweisen.',
     )
   })
 
@@ -459,7 +459,7 @@ describe('AgentsPage — Favoriten (#427)', () => {
 
     expect(await screen.findByText('Mit Stern')).toBeInTheDocument()
     const favSection = screen.getByRole('region', { name: 'Favoriten' })
-    const otherSection = screen.getByRole('region', { name: 'Weitere Agents' })
+    const otherSection = screen.getByRole('region', { name: 'Weitere Agenten' })
     expect(within(favSection).getByText('Mit Stern')).toBeInTheDocument()
     expect(within(favSection).queryByText('Ohne Stern')).not.toBeInTheDocument()
     expect(within(otherSection).getByText('Ohne Stern')).toBeInTheDocument()
@@ -479,7 +479,7 @@ describe('AgentsPage — Favoriten (#427)', () => {
 
     expect(await screen.findByText('Ohne Stern')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Favoriten' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Weitere Agents' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Weitere Agenten' })).not.toBeInTheDocument()
   })
 
   it('spiegelt den Zustand in aria-pressed und setzt den Stern per PUT', async () => {
