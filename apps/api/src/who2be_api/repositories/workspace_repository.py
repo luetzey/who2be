@@ -519,7 +519,13 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Anker `res-conv-h-laengen*`), Laengen-Pruefpunkt im Persona-Playbook (Phase
 # Vorschlag + Update) und im Konsistenz-Check (Pflege-Fund, kein Verstoss) —
 # DE + EN.
-BUILDER_CONTENT_VERSION = 20
+# v21: Builder schlank B2 (Owner 2026-10-22, W2 / W3 b / W5 a) — Builder-
+# Persona gestrafft: „Erlaubt“ als Faehigkeits-Saetze statt Werkzeug-Listen,
+# Modi-Absatz im Profil entfaellt (doppelt zu den Modi), Vier-Phasen nur noch
+# im Output-Stil; Architekt-Modus ohne Phasen-Wiederholung. Builder-Template
+# ohne `tools-overview` (doppelt zu tools/list), Profil per `persona-ref`
+# statt `persona-field:profile`; Lite unveraendert — DE + EN.
+BUILDER_CONTENT_VERSION = 21
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
