@@ -621,6 +621,39 @@ describe('BillingPanel – Rechnungsdaten', () => {
     expect(screen.getByRole('button', { name: 'Jetzt upgraden' })).not.toBeDisabled()
   })
 
+  it('ignoriert eine ausgeblendete USt-IdNr. nach Landwechsel (AT -> CH) und speichert ohne vat_id', async () => {
+    const puts: BillingProfileInput[] = []
+    const fetchMock = billingFetch({
+      profile: null,
+      onPut: (body) => {
+        puts.push(body)
+        return new Response(JSON.stringify(profileResponse({ ...savedProfile, country: 'CH', vat_id: null, vat_status: null })))
+      },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderAdminPanel()
+
+    const form = await screen.findByRole('form', { name: 'Rechnungsdaten' })
+    fireEvent.change(within(form).getByLabelText('Firmenname'), { target: { value: 'Beispiel AG' } })
+    fireEvent.change(within(form).getByLabelText('Straße und Hausnummer'), {
+      target: { value: 'Musterstrasse 1' },
+    })
+    fireEvent.change(within(form).getByLabelText('PLZ'), { target: { value: '8000' } })
+    fireEvent.change(within(form).getByLabelText('Ort'), { target: { value: 'Musterstadt' } })
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'AT' } })
+    fireEvent.change(within(form).getByLabelText('USt-IdNr. (optional)'), {
+      target: { value: 'ATU00000000' },
+    })
+    // Landwechsel blendet das Feld aus; der Rest-Wert bleibt im Form-State.
+    fireEvent.change(within(form).getByLabelText('Land'), { target: { value: 'CH' } })
+    expect(within(form).queryByLabelText('USt-IdNr. (optional)')).not.toBeInTheDocument()
+    fireEvent.click(within(form).getByRole('button', { name: 'Rechnungsdaten speichern' }))
+
+    await waitFor(() => expect(puts).toHaveLength(1))
+    expect(puts[0]).toMatchObject({ customer_type: 'business', country: 'CH', vat_id: null })
+    expect(await screen.findByTestId('billing-details-summary')).toHaveTextContent('Beispiel GmbH')
+  })
+
   it('zeigt einen Server-Fehler und behaelt die Eingaben', async () => {
     vi.stubGlobal(
       'fetch',

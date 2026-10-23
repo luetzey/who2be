@@ -118,6 +118,14 @@ function normalizeVatId(raw: string): string {
 
 const VAT_ID_PATTERN = /^[A-Z]{2}[A-Z0-9]{2,13}$/
 
+/**
+ * Die USt-IdNr. gilt nur bei Firma + EU-Land. Eine Quelle fuer Anzeige,
+ * Validierung und `toInput`, damit ein ausgeblendetes Feld nie mitzaehlt.
+ */
+function vatVisible(customerType: string, country: string, euCountries: Set<string>): boolean {
+  return customerType === 'business' && euCountries.has(country)
+}
+
 const formSchemaShape = {
   customer_type: z.enum(['business', 'consumer']),
   given_name: z.string(),
@@ -158,11 +166,12 @@ function makeSchema(t: TFunction, countries: Set<string>, euCountries: Set<strin
     if (!countries.has(values.country)) {
       ctx.addIssue({ code: 'custom', path: ['country'], message: required })
     }
+    // Das Feld steht nur bei Firma + EU-Land im Formular (`vatVisible`). Ist es
+    // ausgeblendet, zaehlt ein Rest-Wert im Form-State nicht: sonst laege der
+    // Fehler auf einem unsichtbaren Feld und das Speichern scheiterte stumm.
     const vat = normalizeVatId(values.vat_id)
-    if (values.customer_type === 'business' && vat !== '') {
-      if (!euCountries.has(values.country)) {
-        ctx.addIssue({ code: 'custom', path: ['vat_id'], message: t('details.validation.vatEuOnly') })
-      } else if (!VAT_ID_PATTERN.test(vat)) {
+    if (vatVisible(values.customer_type, values.country, euCountries) && vat !== '') {
+      if (!VAT_ID_PATTERN.test(vat)) {
         ctx.addIssue({ code: 'custom', path: ['vat_id'], message: t('details.validation.vatFormat') })
       } else if (!vat.startsWith(vatPrefix(values.country))) {
         ctx.addIssue({
@@ -175,10 +184,12 @@ function makeSchema(t: TFunction, countries: Set<string>, euCountries: Set<strin
   })
 }
 
-function toInput(values: FormValues): BillingProfileInput {
+function toInput(values: FormValues, euCountries: Set<string>): BillingProfileInput {
   const consumer = values.customer_type === 'consumer'
   const opt = (value: string) => (value.trim() === '' ? null : value.trim())
-  const vat = normalizeVatId(values.vat_id)
+  const vat = vatVisible(values.customer_type, values.country, euCountries)
+    ? normalizeVatId(values.vat_id)
+    : ''
   return {
     customer_type: values.customer_type,
     given_name: consumer ? opt(values.given_name) : null,
@@ -296,12 +307,12 @@ export function BillingDetailsForm({
   })
   const customerType = form.watch('customer_type')
   const country = form.watch('country')
-  const showVat = customerType === 'business' && euCountries.has(country)
+  const showVat = vatVisible(customerType, country, euCountries)
 
   async function submit(values: FormValues) {
     // `saving` sperrt den Knopf; der Guard faengt den Doppel-Submit per Enter.
     if (saving) return
-    await onSubmit(toInput(values))
+    await onSubmit(toInput(values, euCountries))
   }
 
   const text = (

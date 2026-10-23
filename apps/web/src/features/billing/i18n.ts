@@ -88,7 +88,6 @@ const de = {
     validation: {
       required: 'Pflichtfeld.',
       tooLong: 'Höchstens {{max}} Zeichen.',
-      vatEuOnly: 'Eine USt-IdNr. gibt es nur für Adressen in der EU.',
       vatFormat: 'Das sieht nicht wie eine USt-IdNr. aus.',
       vatPrefix: 'Die USt-IdNr. muss zum Land passen und mit {{prefix}} beginnen.',
     },
@@ -175,7 +174,6 @@ const en = {
     validation: {
       required: 'Required.',
       tooLong: 'At most {{max}} characters.',
-      vatEuOnly: 'VAT IDs exist only for addresses in the EU.',
       vatFormat: 'This does not look like a VAT ID.',
       vatPrefix: 'The VAT ID must match the country and start with {{prefix}}.',
     },
