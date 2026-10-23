@@ -173,11 +173,13 @@ def test_builder_profile_contains_workarea_read_w59_4() -> None:
 
 def test_builtin_profile_sizes() -> None:
     # ADR-0059 §5.2, gemessen bei 100 Werkzeugen. `edit_content` (ADR-0058)
-    # kam danach in `content_write` und zaehlt bei Autor und Builder mit.
+    # kam danach in `content_write` und zaehlt bei Autor und Builder mit;
+    # `update_rows`/`delete_rows` (ADR-0049-Nachtrag) kamen in `workarea_write`
+    # und zaehlen nur beim Autor (Builder schreibt keine WorkArea).
     sizes = {key: len(builtin_profile_tools(key)) for key in BuiltinProfileKey}
     assert sizes == {
         BuiltinProfileKey.read: 42,
-        BuiltinProfileKey.author: 77 + 1,
+        BuiltinProfileKey.author: 77 + 1 + 2,
         BuiltinProfileKey.curator: 59,
         BuiltinProfileKey.builder: 85 + 1,
     }

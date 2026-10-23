@@ -228,7 +228,7 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     # ADR-0053: `list_test_cases`/`submit_test_results`) + C4b
     # `propose_memory_change` + 4 Fall-Tools (D4) + 4 Gespraechs-Tools (E-MCP-1)
     # + 6 Werkzeugluecken D7 (E-MCP-2) + `edit_content` (ADR-0058 P3).
-    assert len(names) == 101
+    assert len(names) == 103
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -288,8 +288,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    # 101 Tools minus die 4 Memory-Tools (ohne Agent-Bindung kein Namespace).
-    assert len(names) == 97
+    # 103 Tools minus die 4 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 99
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

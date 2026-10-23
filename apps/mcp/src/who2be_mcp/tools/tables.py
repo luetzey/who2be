@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from who2be_mcp.client import ApiClient
 from who2be_mcp.clients import tables as tables_api
-from who2be_mcp.clients.tables import RowsInsertResult
+from who2be_mcp.clients.tables import RowsDeleteResult, RowsInsertResult, RowsUpdateResult
 from who2be_mcp.core_logging import with_tool_log
 from who2be_mcp.tools.area_ref import parse_area_id, resolve_private_area_id
 from who2be_models import (
@@ -48,6 +48,7 @@ from who2be_models import (
     WaTableCreate,
     WaTableRead,
 )
+from who2be_models.tables import CellValue, RowsDelete, RowsUpdate
 
 
 async def _client() -> ApiClient:
@@ -124,6 +125,46 @@ async def insert_rows(
     except ValidationError as exc:
         raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
     return await tables_api.insert_rows(client, _parse_uuid(table_id, "Tabellen"), data)
+
+
+@with_tool_log("update_rows")
+async def update_rows(
+    table_id: str,
+    match: dict[str, CellValue],
+    set: dict[str, CellValue],
+    expected_count: int | None = None,
+) -> RowsUpdateResult:
+    """Aendert Zeilen einer Tabelle, z. B. um einen falschen Eintrag zu korrigieren.
+
+    `match`: Spalte -> Wert, alle muessen gleich sein (null trifft leere Zellen); `set`: neue
+    Werte. Max. 100 Zeilen; mit `expected_count` bricht der Server bei abweichender Trefferzahl
+    ab (409, nichts geaendert). Kategorie-Spalte nicht setzbar. Antwort {updated, note}.
+    """
+    client = await _client()
+    try:
+        data = RowsUpdate(match=match, set=set, expected_count=expected_count)
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    return await tables_api.update_rows(client, _parse_uuid(table_id, "Tabellen"), data)
+
+
+@with_tool_log("delete_rows")
+async def delete_rows(
+    table_id: str,
+    match: dict[str, CellValue],
+    expected_count: int | None = None,
+) -> RowsDeleteResult:
+    """Loescht Zeilen einer Tabelle, deren Spalten `match` gleichen (Spalte -> Wert).
+
+    Leeres `match` ist verboten. Max. 100 Zeilen; `expected_count` schuetzt vor Fehltreffern
+    (409, nichts geloescht). Vorher mit `query_table` pruefen. Antwort {deleted, note}.
+    """
+    client = await _client()
+    try:
+        data = RowsDelete(match=match, expected_count=expected_count)
+    except ValidationError as exc:
+        raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
+    return await tables_api.delete_rows(client, _parse_uuid(table_id, "Tabellen"), data)
 
 
 @with_tool_log("query_table")
@@ -280,7 +321,7 @@ async def list_category_rules(area_id: str) -> list[CategoryRuleRead]:
 
 
 def register(mcp: FastMCP) -> None:
-    """Registriert die 11 Tabellen-/Timeline-Tools an der FastMCP-Instanz.
+    """Registriert die 13 Tabellen-/Timeline-Tools an der FastMCP-Instanz.
 
     Die Tool-Funktionen bleiben modulweite, direkt importier- und aufrufbare
     async-Funktionen (Test-Muster A); hier werden sie lediglich mit
@@ -293,6 +334,8 @@ def register(mcp: FastMCP) -> None:
         list_tables,
         delete_table,
         insert_rows,
+        update_rows,
+        delete_rows,
         query_table,
         describe_table,
         save_query_result,

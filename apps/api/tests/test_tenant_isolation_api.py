@@ -579,6 +579,10 @@ PROBES: dict[str, Probe] = {
     f"POST {_WS}/wa-tables/{{table_id}}/rows": Probe(
         body={"rows": [{"occurred_at": "2026-08-02T00:00:00+00:00", "amount": 2, "purpose": "x"}]}
     ),
+    f"POST {_WS}/wa-tables/{{table_id}}/rows/update": Probe(
+        body={"match": {"purpose": "x"}, "set": {"amount": 5}}
+    ),
+    f"POST {_WS}/wa-tables/{{table_id}}/rows/delete": Probe(body={"match": {"purpose": "x"}}),
     f"POST {_WS}/wa-tables/{{table_id}}/save-result": Probe(
         body={"sql": "SELECT 1", "title": "iso", "occurred_at": "2026-08-01T00:00:00Z"}
     ),
