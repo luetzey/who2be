@@ -89,6 +89,7 @@ from who2be_models import (
     PlaybookCompositionLinkSet,
     PlaybookRead,
     PlaybookVersionRead,
+    ResourceBlock,
     ResourceBlockAnchor,
     ResourceLinkRead,
     ResourceLinkSet,
@@ -111,6 +112,7 @@ from who2be_models import (
     VersionTransitionRequest,
     WhoAmIRead,
 )
+from who2be_models.blocknote_text import section_blocks
 from who2be_models.error_tracking import init_error_tracking
 from who2be_models.memory import MemorySaveResult
 
@@ -699,6 +701,27 @@ async def get_agent(agent_id: str) -> AgentRead:
     return await client.get_agent(parsed)
 
 
+def _resource_sections(blocks: list[ResourceBlock], block_ids: list[str]) -> list[ResourceBlock]:
+    """Schneidet Resource-Bloecke auf die Abschnitte der angefragten Anker.
+
+    Die Abschnittsregel ist `who2be_models.blocknote_text.section_blocks`, dieselbe wie
+    beim Playbook-Schnitt (ADR-0021). Abschnitte folgen der angefragten Reihenfolge;
+    ueberlappen sie, kommt jeder Block nur einmal. Unbekannte Anker bleiben wie bisher
+    ohne Treffer, eine Auswahl ohne Treffer ergibt einen leeren Body.
+    """
+    raw = [block.model_dump() for block in blocks]
+    by_id = {block.id: block for block in blocks}
+    picked: list[ResourceBlock] = []
+    seen: set[str] = set()
+    for anchor in block_ids:
+        for section_block in section_blocks(raw, anchor):
+            block_id = section_block["id"]
+            if block_id not in seen:
+                seen.add(block_id)
+                picked.append(by_id[block_id])
+    return picked
+
+
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_resource")
 async def fetch_resource(
@@ -709,10 +732,10 @@ async def fetch_resource(
 ) -> ResourceRead | str:
     """Laedt eine Resource per UUID, ganz oder nur einzelne Abschnitte.
 
-    Default `format="text"`: Markdown mit Inhalt und Sub-Resources. `block_ids` schneidet den
-    eigenen Body auf diese Bloecke zu (Anker aus `list_resource_blocks` oder einem Verweis).
-    Sub-Resources stehen als Pointer mit fertigem `fetch_call` in `sub_resources`; nur
-    `inline`-Kinder kommen gleich als Volldokument mit.
+    Default `format="text"`: Markdown mit Inhalt und Sub-Resources. `block_ids` (Anker aus
+    `list_resource_blocks` oder einem Verweis) schneidet den eigenen Body auf diese Abschnitte:
+    Ueberschrift bis vor die naechste gleicher oder hoeherer Ebene. Sub-Resources: Pointer
+    mit `fetch_call` in `sub_resources`; `inline`-Kinder kommen als Volldokument mit.
 
     Ohne `resource_write` siehst du nur die aktive Version (ohne aktive: 404), mit auch Drafts.
     `format="source"` ist die Schreibvorlage mit `base_rev`. `locale` wird ignoriert.
@@ -729,8 +752,7 @@ async def fetch_resource(
     # bereits per UUID eindeutig aufgeloest.
     resource = await client.get_resource(parsed)
     if block_ids is not None:
-        by_id = {block.id: block for block in resource.content.blocks}
-        resource.content.blocks = [by_id[bid] for bid in block_ids if bid in by_id]
+        resource.content.blocks = _resource_sections(resource.content.blocks, block_ids)
     # Direkte Sub-Resources als Pointer-Tabelle anhaengen (keine Expansion).
     subs = await client.get_resource_sub_resources(parsed)
     resource.sub_resources = subs
