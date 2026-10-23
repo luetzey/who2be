@@ -39,6 +39,7 @@ from who2be_api.tablestore import (
     row_hash,
     sql_type_for,
 )
+from who2be_api.tablestore.engine import RowMutationRejected
 
 _WS = UUID("00000000-0000-0000-0000-00000000000a")
 _AREA = UUID("00000000-0000-0000-0000-00000000000b")
@@ -614,3 +615,164 @@ def test_row_hash_field_boundaries_are_unambiguous() -> None:
     assert row_hash({"a": "ab", "b": "c"}, ["a", "b"]) != row_hash(
         {"a": "a", "b": "bc"}, ["a", "b"]
     )
+
+
+# --- update_rows / delete_rows (ADR-0049-Nachtrag 2026-10-23) ------------------
+
+
+def _rows_of(store: TableStore) -> list[list[object]]:
+    result = asyncio.run(
+        store.run_readonly_query(
+            _WS,
+            _AREA,
+            'SELECT booked_on, amount, purpose, account FROM "transactions" ORDER BY rowid',
+            limit=100,
+        )
+    )
+    return result.rows
+
+
+def test_update_rows_changes_matching_rows_and_rehashes(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    updated = asyncio.run(
+        store.update_rows(
+            _WS,
+            _AREA,
+            "transactions",
+            _COLUMN_NAMES,
+            {"purpose": "Kaffee", "account": "giro"},
+            {"purpose": "Golf-Check Wochenende"},
+            max_rows=100,
+            dedupe_hash_fn=_hash_fn,
+        )
+    )
+    assert updated == 1
+    assert _rows_of(store)[1] == ["2026-08-02", -3.2, "Golf-Check Wochenende", "giro"]
+    # Neu berechneter Hash == Import-Hash: derselbe Import ist jetzt ein Duplikat.
+    again = asyncio.run(
+        store.insert_rows(
+            _WS,
+            _AREA,
+            "transactions",
+            _COLUMN_NAMES,
+            [{**_ROWS[1], "purpose": "Golf-Check Wochenende"}],
+            _hash_fn,
+        )
+    )
+    assert again == InsertResult(inserted=0, skipped=1)
+
+
+def test_update_rows_without_match_returns_zero(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    updated = asyncio.run(
+        store.update_rows(
+            _WS,
+            _AREA,
+            "transactions",
+            _COLUMN_NAMES,
+            {"purpose": "gibt es nicht"},
+            {"account": "x"},
+            max_rows=100,
+        )
+    )
+    assert updated == 0
+    assert [row[3] for row in _rows_of(store)] == ["giro", "giro", "spar"]
+
+
+def test_match_null_hits_null_cells(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, [*_ROWS, {**_ROWS[0], "purpose": None}])
+    deleted = asyncio.run(
+        store.delete_rows(_WS, _AREA, "transactions", {"purpose": None}, max_rows=100)
+    )
+    assert deleted == 1
+    assert len(_rows_of(store)) == 3
+
+
+def test_mutations_over_max_rows_change_nothing(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    before = _rows_of(store)
+    with pytest.raises(RowMutationRejected) as update_exc:
+        asyncio.run(
+            store.update_rows(
+                _WS,
+                _AREA,
+                "transactions",
+                _COLUMN_NAMES,
+                {"account": "giro"},
+                {"account": "x"},
+                max_rows=1,
+            )
+        )
+    assert update_exc.value.kind == "too_many"
+    with pytest.raises(RowMutationRejected) as delete_exc:
+        asyncio.run(store.delete_rows(_WS, _AREA, "transactions", {"account": "giro"}, max_rows=1))
+    assert delete_exc.value.kind == "too_many"
+    assert _rows_of(store) == before
+
+
+def test_expected_count_mismatch_changes_nothing(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    with pytest.raises(RowMutationRejected) as exc:
+        asyncio.run(
+            store.delete_rows(
+                _WS, _AREA, "transactions", {"account": "giro"}, max_rows=100, expected_count=1
+            )
+        )
+    assert (exc.value.kind, exc.value.matched) == ("count_mismatch", 2)
+    assert len(_rows_of(store)) == 3
+    deleted = asyncio.run(
+        store.delete_rows(
+            _WS, _AREA, "transactions", {"account": "giro"}, max_rows=100, expected_count=2
+        )
+    )
+    assert deleted == 2
+    assert _rows_of(store) == [["2026-08-02", 100, "Gehalt", "spar"]]
+
+
+def test_update_dedupe_collision_rolls_back_everything(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    before = _rows_of(store)
+    # Zeile 2 soll exakt Zeile 1 werden → gleicher Hash → UNIQUE → nichts geaendert.
+    with pytest.raises(RowMutationRejected) as exc:
+        asyncio.run(
+            store.update_rows(
+                _WS,
+                _AREA,
+                "transactions",
+                _COLUMN_NAMES,
+                {"purpose": "Kaffee"},
+                {"booked_on": "2026-08-01", "amount": 12.5, "purpose": "Miete"},
+                max_rows=100,
+                dedupe_hash_fn=_hash_fn,
+            )
+        )
+    assert exc.value.kind == "dedupe_collision"
+    assert _rows_of(store) == before
+
+
+def test_empty_match_is_rejected_not_all_rows(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    with pytest.raises(ValueError, match="match"):
+        asyncio.run(store.delete_rows(_WS, _AREA, "transactions", {}, max_rows=100))
+    with pytest.raises(ValueError, match="match"):
+        asyncio.run(
+            store.update_rows(
+                _WS, _AREA, "transactions", _COLUMN_NAMES, {}, {"account": "x"}, max_rows=100
+            )
+        )
+    assert len(_rows_of(store)) == 3
+
+
+def test_mutation_rejects_injected_column_names(tmp_path: Path) -> None:
+    store = _seeded_store(tmp_path, _ROWS)
+    with pytest.raises(SchemaError):
+        asyncio.run(
+            store.delete_rows(_WS, _AREA, "transactions", {'purpose" OR 1=1 --': "x"}, max_rows=100)
+        )
+    assert len(_rows_of(store)) == 3
+
+
+def test_mutation_on_missing_area_raises_domain_error(tmp_path: Path) -> None:
+    store = TableStore(base_dir=tmp_path)
+    with pytest.raises(AreaStoreMissingError):
+        asyncio.run(store.delete_rows(_WS, _AREA, "transactions", {"a": 1}, max_rows=100))

@@ -6,6 +6,9 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
 - ``GET /work-areas/{area_id}/tables`` — Katalog-Liste der Area.
 - ``POST /wa-tables/{table_id}/rows`` — idempotenter Zeilen-Import
   (``{inserted, skipped}``, Spec K).
+- ``POST /wa-tables/{table_id}/rows/update`` / ``.../rows/delete`` — Zeilen per
+  Gleichheits-`match` aendern bzw. loeschen (ADR-0049-Nachtrag 2026-10-23;
+  RPC-Stil wie `/query`, kein DELETE mit Body).
 - ``POST /wa-tables/{table_id}/query`` — read-only SQL (Engine-Garantie;
   Formate json|markdown|csv, Zeilen-Cap + `truncated`).
 - ``POST /wa-tables/{table_id}/save-result`` — Query + eingefrorenes Ergebnis
@@ -65,6 +68,7 @@ from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import WaRuleService
 from who2be_api.services.wa_tables import (
+    NO_ROW_MATCHED,
     TableExportFormat,
     TableQueryInvalid,
     TableRowsInvalid,
@@ -85,6 +89,7 @@ from who2be_models import (
     WaTableCreate,
     WaTableRead,
 )
+from who2be_models.tables import RowsDelete, RowsUpdate
 
 router = APIRouter(tags=["wa-tables"])
 
@@ -214,6 +219,56 @@ async def insert_rows(
     if result is None:
         raise _table_not_found()
     return RowsInsertResult(inserted=result.inserted, skipped=result.skipped)
+
+
+class RowsUpdateResult(BaseModel):
+    """Antwort von `rows/update`: Zahl der geaenderten Zeilen (ADR-0049-Nachtrag).
+
+    `note` steht nur bei 0 Treffern („keine Zeile passt zu match") — kein
+    Fehler, aber auch kein stilles Erfolgssignal.
+    """
+
+    updated: int
+    note: str | None = None
+
+
+class RowsDeleteResult(BaseModel):
+    """Antwort von `rows/delete`: Zahl der geloeschten Zeilen, `note` wie oben."""
+
+    deleted: int
+    note: str | None = None
+
+
+@router.post("/wa-tables/{table_id}/rows/update")
+@limiter.limit(write_limit)
+async def update_rows(
+    request: Request, table_id: UUID, data: RowsUpdate, ctx: Ctx, service: Service
+) -> RowsUpdateResult:
+    """Aendert Zeilen per Gleichheits-`match` (UND, nur Schema-Spalten).
+    Mehr als 100 Treffer, abweichendes `expected_count` oder Dedupe-Kollision
+    → 409 ohne Aenderung; unbekannte Spalte, Kategorie-Spalte in `set` → 422."""
+    try:
+        updated = await service.update_rows(ctx, table_id, data)
+    except TableRowsInvalid as exc:
+        raise _rows_invalid(exc) from exc
+    if updated is None:
+        raise _table_not_found()
+    return RowsUpdateResult(updated=updated, note=None if updated else NO_ROW_MATCHED)
+
+
+@router.post("/wa-tables/{table_id}/rows/delete")
+@limiter.limit(write_limit)
+async def delete_rows(
+    request: Request, table_id: UUID, data: RowsDelete, ctx: Ctx, service: Service
+) -> RowsDeleteResult:
+    """Loescht Zeilen per Gleichheits-`match`; Grenzen und Fehler wie `rows/update`."""
+    try:
+        deleted = await service.delete_rows(ctx, table_id, data)
+    except TableRowsInvalid as exc:
+        raise _rows_invalid(exc) from exc
+    if deleted is None:
+        raise _table_not_found()
+    return RowsDeleteResult(deleted=deleted, note=None if deleted else NO_ROW_MATCHED)
 
 
 @router.post("/wa-tables/{table_id}/query", dependencies=[Depends(enforce_mcp_read_limit)])

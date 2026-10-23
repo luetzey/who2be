@@ -579,6 +579,8 @@ _TOOLS: list[_ToolDoc] = [
     _ToolDoc(
         signature=(
             "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
+            "update_rows(table_id, match, set, expected_count?) / "
+            "delete_rows(table_id, match, expected_count?) / "
             "save_query_result(table_id, sql, title, occurred_at, ...) / "
             "delete_table(table_id) / set_convention(area_id, source_name, convention) / "
             "upsert_category_rule(area_id, pattern, category, confidence?)"
@@ -586,6 +588,8 @@ _TOOLS: list[_ToolDoc] = [
         tool_names=(
             "create_table",
             "insert_rows",
+            "update_rows",
+            "delete_rows",
             "save_query_result",
             "delete_table",
             "set_convention",
@@ -595,6 +599,10 @@ _TOOLS: list[_ToolDoc] = [
             "Strukturierte Zahlen gehoeren in eine Tabelle, nicht in Prosa: "
             "create_table (Spalte `occurred_at` ist Pflicht), insert_rows "
             "(idempotent ueber den Dedupe-Hash, Antwort {inserted, skipped}). "
+            "Falsche Zeilen korrigiert update_rows, ueberzaehlige entfernt "
+            "delete_rows — beide waehlen per `match` (Spalte -> Wert, nur "
+            "Gleichheit), hoechstens 100 Zeilen; vorher mit query_table pruefen "
+            "und `expected_count` mitgeben. "
             "Soll ein Ergebnis belegbar sein, friert save_query_result Abfrage "
             "+ Ergebnis als Artifact ein (dessen ID ist der `source_ref` fuer "
             "einen KB-Node). Einheiten und Notation je Quelle einmalig ueber "

@@ -416,6 +416,16 @@
       "reason": "Zeilen des Tabellen-Stores. Der Store zaehlt bewusst in keinem Speicherkontingent (ADR-0049, derselbe Vorbehalt steht in storage_quota_service)."
     },
     {
+      "path": "/wa-tables/{table_id}/rows/delete",
+      "name": "delete_rows",
+      "reason": "Loescht Zeilen des Tabellen-Stores, gibt also hoechstens Platz frei; der Store zaehlt ohnehin in keinem Speicherkontingent (ADR-0049, ADR-0049-Nachtrag)."
+    },
+    {
+      "path": "/wa-tables/{table_id}/rows/update",
+      "name": "update_rows",
+      "reason": "Aendert hoechstens 100 bestehende Zeilen des Tabellen-Stores, legt keine an; der Store zaehlt wie insert_rows in keinem Speicherkontingent (ADR-0049, ADR-0049-Nachtrag)."
+    },
+    {
       "path": "/work-areas",
       "name": "create_work_area",
       "reason": "WorkArea ist ein Container, keine Inhalts-Entity und steht nicht in _COUNT_QUERY. Gedeckelt wird der Inhalt (Ingest via enforce_storage_quota), nicht die Huelle."

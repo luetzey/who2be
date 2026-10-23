@@ -949,3 +949,226 @@ def test_steuerzeichen_zelle_wird_beim_schreiben_abgewiesen(
             assert exported.status_code == 200, exported.text
     finally:
         cleanup_workspaces([owner])
+
+
+# --- rows/update + rows/delete (ADR-0049-Nachtrag 2026-10-23) ----------------
+
+
+def _mutate(
+    client: TestClient,
+    prefix: str,
+    headers: dict[str, str],
+    table_id: str,
+    op: str,
+    body: dict[str, Any],
+) -> Any:
+    return client.post(f"{prefix}/wa-tables/{table_id}/rows/{op}", json=body, headers=headers)
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_rows_update_und_delete_roundtrip(make_auth_headers: AuthFactory) -> None:
+    """Atlas-Fall: eine falsche Zeile wird korrigiert, eine ueberzaehlige
+    geloescht; 0 Treffer ist kein Fehler, traegt aber `note`. Nach dem Update
+    zaehlt derselbe Import als Duplikat (Hash neu berechnet)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Korrektur")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+
+            updated = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "update",
+                {
+                    "match": {"purpose": "Kaffee"},
+                    "set": {"purpose": "Golf-Check Wochenende"},
+                    "expected_count": 1,
+                },
+            )
+            assert updated.status_code == 200, updated.text
+            assert updated.json() == {"updated": 1, "note": None}
+            sql = 'SELECT purpose FROM "transactions" ORDER BY occurred_at'
+            assert _query(client, prefix, auth, table_id, sql).json()["rows"] == [
+                ["Miete"],
+                ["Golf-Check Wochenende"],
+                ["Gehalt"],
+            ]
+            again = _insert(
+                client, prefix, auth, table_id, [{**_ROWS[1], "purpose": "Golf-Check Wochenende"}]
+            )
+            assert again.json() == {"inserted": 0, "skipped": 1}
+
+            nothing = _mutate(
+                client, prefix, auth, table_id, "delete", {"match": {"purpose": "gibt es nicht"}}
+            )
+            assert nothing.status_code == 200, nothing.text
+            assert nothing.json() == {"deleted": 0, "note": "keine Zeile passt zu match"}
+
+            deleted = _mutate(
+                client, prefix, auth, table_id, "delete", {"match": {"account": "spar"}}
+            )
+            assert deleted.json() == {"deleted": 1, "note": None}
+            count = _query(client, prefix, auth, table_id, 'SELECT count(*) FROM "transactions"')
+            assert count.json()["rows"] == [[2]]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_rows_mutation_grenzen_aendern_nichts(make_auth_headers: AuthFactory) -> None:
+    """Leeres match / unbekannte Spalte / interne Spalte → 422; mehr als 100
+    Treffer, abweichendes expected_count, Dedupe-Kollision → 409
+    `concurrent_conflict`. In keinem Fall wurde etwas geaendert."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    many = [
+        {
+            "occurred_at": f"2026-07-01T{i // 60:02d}:{i % 60:02d}:00+00:00",
+            "amount": i,
+            "account": "x",
+        }
+        for i in range(101)
+    ]
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Grenzen")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, [*_ROWS, *many]).status_code == 200
+            sql = "SELECT count(*), sum(amount) FROM \"transactions\" WHERE account = 'x'"
+            before = _query(client, prefix, auth, table_id, sql).json()["rows"]
+
+            invalid_bodies: list[dict[str, Any]] = [
+                {"match": {}},
+                {"match": {"kommentar": "?"}},
+                {"match": {"_dedupe_hash": "abc"}},
+                {"match": {"purpose": ["Miete"]}},
+            ]
+            for body in invalid_bodies:
+                rejected = _mutate(client, prefix, auth, table_id, "delete", body)
+                assert rejected.status_code == 422, (body, rejected.text)
+            internal = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "update",
+                {"match": {"purpose": "Miete"}, "set": {"_source_artifact": "x"}},
+            )
+            assert internal.status_code == 422, internal.text
+            not_null = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "update",
+                {"match": {"purpose": "Miete"}, "set": {"amount": None}},
+            )
+            assert not_null.status_code == 422, not_null.text
+
+            too_many = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "update",
+                {"match": {"account": "x"}, "set": {"purpose": "y"}},
+            )
+            assert too_many.status_code == 409, too_many.text
+            assert too_many.json()["reason"] == "concurrent_conflict"
+            assert "100" in too_many.json()["detail"]
+
+            mismatch = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "delete",
+                {"match": {"account": "giro"}, "expected_count": 1},
+            )
+            assert mismatch.status_code == 409, mismatch.text
+            assert "trifft 2 Zeilen" in mismatch.json()["detail"]
+
+            collision = _mutate(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "update",
+                {"match": {"purpose": "Kaffee"}, "set": {**_ROWS[0]}},
+            )
+            assert collision.status_code == 409, collision.text
+            assert "Dedupe" in collision.json()["detail"]
+
+            assert _query(client, prefix, auth, table_id, sql).json()["rows"] == before
+            purposes = _query(
+                client,
+                prefix,
+                auth,
+                table_id,
+                "SELECT purpose FROM \"transactions\" WHERE account <> 'x' ORDER BY occurred_at",
+            ).json()["rows"]
+            assert purposes == [["Miete"], ["Kaffee"], ["Gehalt"]]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_rows_mutation_gates(make_auth_headers: AuthFactory) -> None:
+    """Gates wie beim Import: ohne Grant 404, Read-Grant 403 `area_forbidden`,
+    ohne Capability 403 `missing_capability`, viewer 403 `insufficient_role`,
+    fremder Workspace 404 — und keine Zeile hat sich geaendert."""
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    ws_other = setup_workspace(other)
+    auth = make_auth_headers(owner)
+    other_auth = make_auth_headers(other)
+    prefix = f"/v1/workspaces/{ws}"
+    delete_body: dict[str, Any] = {"match": {"purpose": "Miete"}}
+    update_body: dict[str, Any] = {"match": {"purpose": "Miete"}, "set": {"amount": 1}}
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "MutGates")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+
+            _, no_grant = agent_token(client, prefix, "mut-nogrant", {"workarea_write": True}, auth)
+            ro_id, ro_tok = agent_token(client, prefix, "mut-ro", {"workarea_write": True}, auth)
+            grant(client, prefix, auth, area_id, ro_id, "read")
+            no_cap_id, no_cap = agent_token(client, prefix, "mut-nocap", {}, auth)
+            grant(client, prefix, auth, area_id, no_cap_id, "write")
+            viewer_id, viewer_tok = agent_token(
+                client, prefix, "mut-viewer", {"workarea_write": True}, auth, role="viewer"
+            )
+            grant(client, prefix, auth, area_id, viewer_id, "write")
+
+            for op, body in (("update", update_body), ("delete", delete_body)):
+                assert _mutate(client, prefix, no_grant, table_id, op, body).status_code == 404
+                ro = _mutate(client, prefix, ro_tok, table_id, op, body)
+                assert (ro.status_code, ro.json()["reason"]) == (403, "area_forbidden")
+                cap = _mutate(client, prefix, no_cap, table_id, op, body)
+                assert (cap.status_code, cap.json()["reason"]) == (403, "missing_capability")
+                viewer = _mutate(client, prefix, viewer_tok, table_id, op, body)
+                assert (viewer.status_code, viewer.json()["reason"]) == (403, "insufficient_role")
+                foreign = _mutate(
+                    client, f"/v1/workspaces/{ws_other}", other_auth, table_id, op, body
+                )
+                assert foreign.status_code == 404
+                assert _mutate(client, prefix, auth, _GHOST, op, body).status_code == 404
+
+            sql = 'SELECT purpose, amount FROM "transactions" ORDER BY occurred_at'
+            assert _query(client, prefix, auth, table_id, sql).json()["rows"][0] == ["Miete", 12.5]
+    finally:
+        cleanup_workspaces([owner, other])

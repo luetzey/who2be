@@ -32,6 +32,7 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.tools.kb import promote_artifact
 from who2be_mcp.tools.tables import (
     create_table,
+    delete_rows,
     delete_table,
     describe_table,
     insert_rows,
@@ -41,6 +42,7 @@ from who2be_mcp.tools.tables import (
     save_query_result,
     set_convention,
     timeline,
+    update_rows,
     upsert_category_rule,
 )
 from who2be_models import (
@@ -362,6 +364,82 @@ def test_insert_rows_surfaces_rule_required_detail(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(server, "build_client", _factory(handler))
     with pytest.raises(ToolError, match="rule_required"):
         asyncio.run(insert_rows(table_id=str(uuid4()), rows=[{"occurred_at": "2026-08-01"}]))
+
+
+# --- update_rows / delete_rows (ADR-0049-Nachtrag) ---------------------------
+
+
+def test_update_rows_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    table_id = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = _body(request)
+        return httpx.Response(200, json={"updated": 1, "note": None})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(
+        update_rows(
+            table_id=str(table_id),
+            match={"purpose": "Golf-Check Wochenende"},
+            set={"purpose": "Golf-Check Sonntag"},
+            expected_count=1,
+        )
+    )
+    assert (result.updated, result.note) == (1, None)
+    assert seen["method"] == "POST"
+    assert seen["path"] == f"{_PREFIX}/wa-tables/{table_id}/rows/update"
+    assert seen["body"] == {
+        "match": {"purpose": "Golf-Check Wochenende"},
+        "set": {"purpose": "Golf-Check Sonntag"},
+        "expected_count": 1,
+    }
+
+
+def test_delete_rows_roundtrip_reports_zero_with_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    table_id = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = _body(request)
+        return httpx.Response(200, json={"deleted": 0, "note": "keine Zeile passt zu match"})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(delete_rows(table_id=str(table_id), match={"purpose": None}))
+    assert (result.deleted, result.note) == (0, "keine Zeile passt zu match")
+    assert seen["path"] == f"{_PREFIX}/wa-tables/{table_id}/rows/delete"
+    assert seen["body"] == {"match": {"purpose": None}, "expected_count": None}
+
+
+def test_empty_match_is_rejected_before_any_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"deleted": 99})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="Ungueltige Eingabe"):
+        asyncio.run(delete_rows(table_id=str(uuid4()), match={}))
+    with pytest.raises(ToolError, match="Ungueltige Eingabe"):
+        asyncio.run(update_rows(table_id=str(uuid4()), match={}, set={"a": 1}))
+    with pytest.raises(ToolError, match="Ungueltige Eingabe"):
+        asyncio.run(update_rows(table_id=str(uuid4()), match={"a": 1}, set={}))
+    assert calls == []
+
+
+def test_update_rows_surfaces_conflict_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            409, json={"detail": "match trifft mehr als 100 Zeilen — nichts wurde geaendert."}
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError, match="mehr als 100 Zeilen"):
+        asyncio.run(update_rows(table_id=str(uuid4()), match={"a": 1}, set={"b": 2}))
 
 
 # --- query_table -------------------------------------------------------------

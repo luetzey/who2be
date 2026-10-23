@@ -231,8 +231,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-14, Gespraechs-Werkzeuge (E-MCP-1) | 94 | **109.963 Bytes** |
 | 2026-10-14, Werkzeugluecken D7 (E-MCP-2) | 100 | **114.203 Bytes** |
 | 2026-10-22, Markdown-Schreibweg (ADR-0058 P3) | 101 | **104.777 Bytes** |
+| 2026-10-23, `update_rows`/`delete_rows` (ADR-0049-Nachtrag) | 103 | **108.262 Bytes** |
 
-Bis zur Grenze bleiben damit 75.223 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 71.738 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -289,6 +290,13 @@ Client beim Verbinden bekommt.
 Die Annotation `readOnlyHint: true` an den 42 Lesewerkzeugen kostet je
 Werkzeug 39 Bytes, zusammen 1.638 Bytes im Gesamtkatalog (104.777 -> 106.415).
 Schreibwerkzeuge bekommen keine Annotation und kosten nichts.
+
+`update_rows` und `delete_rows` (ADR-0049-Nachtrag, 2026-10-23) kosten
+zusammen 1.847 Bytes im Gesamtkatalog (106.415 -> 108.262). Sie gehoeren zu
+`workarea_write` und erscheinen darum nicht im Default-Profil. Neuer Stand
+der Start-Ziele: Default-Policy 32.874 (Ziel 35.000), Builder 109.994 Bytes
+(Ziel 120.000), je mit `instructions`. Zum Gesamtkatalog-Guard (180.000
+Bytes) bleiben 71.738 Bytes.
 
 ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um 9.298 Bytes:
 die zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content`

@@ -12337,6 +12337,144 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/update": {
+      "post": {
+        "tags": [
+          "wa-tables"
+        ],
+        "summary": "Update Rows",
+        "description": "Aendert Zeilen per Gleichheits-`match` (UND, nur Schema-Spalten).\nMehr als 100 Treffer, abweichendes `expected_count` oder Dedupe-Kollision\n→ 409 ohne Aenderung; unbekannte Spalte, Kategorie-Spalte in `set` → 422.",
+        "operationId": "update_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_update_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowsUpdateResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/delete": {
+      "post": {
+        "tags": [
+          "wa-tables"
+        ],
+        "summary": "Delete Rows",
+        "description": "Loescht Zeilen per Gleichheits-`match`; Grenzen und Fehler wie `rows/update`.",
+        "operationId": "delete_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_delete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowsDelete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowsDeleteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/query": {
       "post": {
         "tags": [
@@ -27890,6 +28028,80 @@
         "title": "RoutinesOverview",
         "description": "Alle registrierten Routinen plus „Worker zuletzt gesehen“."
       },
+      "RowsDelete": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Match"
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "match"
+        ],
+        "title": "RowsDelete",
+        "description": "Eingabe fuer `POST .../wa-tables/{id}/rows/delete` (ADR-0049-Nachtrag).\n\n`match` waehlt die Zeilen: Spalte -> Wert, UND-verknuepft, nur Gleichheit,\nnur Spalten aus dem Schema (prueft der Server). Leer ist verboten\n(`min_length=1`), damit kein Aufruf versehentlich alle Zeilen trifft.\n`expected_count` ist optional: weicht die Trefferzahl ab, antwortet der\nServer 409 und loescht nichts. Unabhaengig davon gilt die Obergrenze\n`ROWS_MUTATE_MAX_ROWS` je Aufruf."
+      },
+      "RowsDeleteResult": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "RowsDeleteResult",
+        "description": "Antwort von `rows/delete`: Zahl der geloeschten Zeilen, `note` wie oben."
+      },
       "RowsInsert": {
         "properties": {
           "rows": {
@@ -27960,6 +28172,106 @@
         ],
         "title": "RowsInsertResult",
         "description": "Bilanz eines Imports: wie viele Zeilen neu, wie viele Duplikate.\n\nLokales Antwort-Modell (Router-Ebene, wie `Health` in `main.py`) — das\nMCP-Tool `insert_rows` (WP19) reicht es unveraendert durch."
+      },
+      "RowsUpdate": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Match"
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          },
+          "set": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Set"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "match",
+          "set"
+        ],
+        "title": "RowsUpdate",
+        "description": "Eingabe fuer `POST .../wa-tables/{id}/rows/update` (ADR-0049-Nachtrag).\n\nWie `RowsDelete`, dazu `set`: die neuen Werte (Spalte -> Wert, nicht\nleer). Der Server prueft sie wie beim Import; `category_column` ist nicht\nsetzbar (Kategorien kommen nur aus Regeln), interne Spalten sind keine\nSchema-Spalten und damit ebenfalls abgelehnt."
+      },
+      "RowsUpdateResult": {
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated"
+        ],
+        "title": "RowsUpdateResult",
+        "description": "Antwort von `rows/update`: Zahl der geaenderten Zeilen (ADR-0049-Nachtrag).\n\n`note` steht nur bei 0 Treffern („keine Zeile passt zu match\") — kein\nFehler, aber auch kein stilles Erfolgssignal."
       },
       "RunRate": {
         "properties": {
