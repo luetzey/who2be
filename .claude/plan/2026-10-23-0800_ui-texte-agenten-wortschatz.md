@@ -29,7 +29,7 @@ Freigabe-Aktion, „Deaktivieren“ statt „Zurückziehen“, „Entwurf“ sta
   systemPrompts.statusBar.toast.backToDraft). „Reaktivieren als Draft“ →
   „Als Entwurf reaktivieren“.
 - Werkzeug-Satz (B5): OAuth-Tokens sind immer an den Agenten gebunden
-  (apps/api/src/who2be_api/services/oauth_service.py:438), die Tool-Policy
+  (`apps/api/src/who2be_api/services/oauth_service.py#_issue`), die Tool-Policy
   gilt also für beide Wege → „Gilt für jedes verbundene Programm, ob über die
   Anmeldung (OAuth) oder einen API-Token.“
 - Unter-Tab Einstellungen › „Verbindung“ → „API-Tokens“ (B6), nur DE-Text.
@@ -70,3 +70,10 @@ Fotos 1280/390 hell/dunkel: Nav (Agenten-Liste), Persona-Seite mit Banner.
 
 PR #1060 (offen, freigegeben) ändert de.json, connect-claude.de.md und
 TutorialChecklist.test.tsx. Wer später merged, merged main nach.
+
+## Review-Runde 1 (Nacharbeit)
+
+- PR-Body: Issue-Zeile zuerst, grep-Nachweis, Mutationsliste.
+- Fotos Persona-Detail mit Banner (Entwurf und Freigabe), 1280/390 hell/dunkel.
+- AgentsPage.test.tsx prüft jetzt die Überschrift „Agenten“; vorher fiel eine
+  Rückdrehung von `agents.page.title` keinem Test auf (Mutationsprobe).

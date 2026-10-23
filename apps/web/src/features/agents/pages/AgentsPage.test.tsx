@@ -309,6 +309,8 @@ describe('AgentsPage', () => {
     renderPage()
 
     expect(await screen.findByText('Noch keine eigenen Agenten')).toBeInTheDocument()
+    // Seitentitel DE „Agenten“ (Owner 2026-10-22, Karte t_c54bcfaf)
+    expect(screen.getByRole('heading', { level: 1, name: 'Agenten' })).toBeInTheDocument()
     expect(
       screen.getByText('Der Builder baut dir einen im Chat, oder du legst ihn hier selbst an.'),
     ).toBeInTheDocument()
