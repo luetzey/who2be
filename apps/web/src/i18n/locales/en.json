@@ -165,6 +165,7 @@
       "invitation_email_mismatch": "This invitation is for a different email address.",
       "invitation_email_required": "This invitation can only be accepted with an account that has a confirmed email address.",
       "invitation_email_unconfirmed": "Confirm your account's email address first, then you can accept the invitation.",
+      "invitation_already_pending": "There is already an open invitation for this address.",
       "personal_organization_undeletable": "Personal organizations are removed through account deletion.",
       "organization_owner_required": "Only the owner can delete this organization.",
       "workspace_org_missing": "Workspace without an organization.",

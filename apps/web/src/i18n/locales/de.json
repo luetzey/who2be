@@ -165,6 +165,7 @@
       "invitation_email_mismatch": "Diese Einladung ist für eine andere Email-Adresse.",
       "invitation_email_required": "Diese Einladung lässt sich nur mit einem Konto annehmen, das eine bestätigte E-Mail-Adresse trägt.",
       "invitation_email_unconfirmed": "Bestätige zuerst die E-Mail-Adresse deines Kontos, dann kannst du die Einladung annehmen.",
+      "invitation_already_pending": "Für diese Adresse gibt es bereits eine offene Einladung.",
       "personal_organization_undeletable": "Persönliche Organisationen werden über die Konto-Löschung entfernt.",
       "organization_owner_required": "Nur der Owner kann diese Organisation löschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
