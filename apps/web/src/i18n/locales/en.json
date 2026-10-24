@@ -2429,6 +2429,7 @@
     },
     "overview": {
       "nav": "Feedback",
+      "helpLink": "Feedback explained",
       "title": "Feedback",
       "description": "Manage all your agents' feedback in one place.",
       "sectionTitle": "Overview (elements)",
@@ -4117,6 +4118,7 @@
     "evolution": {
       "title": "Evolution",
       "stepsAria": "Steps of the evolution",
+      "helpLink": "How a review works",
       "waiting_one": "1 waiting for you",
       "waiting_other": "{{count}} waiting for you",
       "unavailable": "Not available",

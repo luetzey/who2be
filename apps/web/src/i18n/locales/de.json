@@ -2429,6 +2429,7 @@
     },
     "overview": {
       "nav": "Feedback",
+      "helpLink": "Rückmeldungen erklärt",
       "title": "Feedback",
       "description": "Alle Rückmeldungen deiner Agenten an einem Ort verwalten.",
       "sectionTitle": "Überblick (Elemente)",
@@ -4117,6 +4118,7 @@
     "evolution": {
       "title": "Weiterentwicklung",
       "stepsAria": "Schritte der Weiterentwicklung",
+      "helpLink": "So läuft ein Review",
       "waiting_one": "1 wartet auf dich",
       "waiting_other": "{{count}} warten auf dich",
       "unavailable": "Nicht verfügbar",
