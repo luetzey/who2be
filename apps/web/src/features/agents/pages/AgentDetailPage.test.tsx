@@ -212,14 +212,16 @@ describe('AgentDetailPage', () => {
     // Hoechstens eine Brand-Aktion je Seite: „Kopieren“ im Kopf ist jetzt outline.
     expect(screen.getByTestId('copy-prompt-primary').className).not.toContain('bg-brand')
 
-    // Token-Sektion liegt weiter im Tab „Einstellungen“ → „Verbindung“, ohne
+    // Token-Sektion liegt weiter im Tab „Einstellungen“ → „API-Tokens“, ohne
     // zweite Connector-Karte.
     fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
-    fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
+    const tokensTab = screen.getByRole('tab', { name: 'API-Tokens' })
+    fireEvent.click(tokensTab)
     expect(screen.queryByTestId('agent-connect')).not.toBeInTheDocument()
 
-    // Token-Sektion gerendert.
-    expect(screen.getByText('API-Tokens')).toBeInTheDocument()
+    // Token-Sektion gerendert: Ueberschrift im Tab-Panel, nicht nur der Tab selbst.
+    const panel = screen.getByRole('tabpanel', { name: 'API-Tokens' })
+    expect(within(panel).getByText('API-Tokens')).toBeInTheDocument()
   })
 
   it('leere Huelle: Missing-Zweige, gesperrtes Aktiv-Setzen und Duplizieren', async () => {
@@ -255,7 +257,7 @@ describe('AgentDetailPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
     const missingNotice = await screen.findByTestId('agent-missing-notice')
     expect(missingNotice).toHaveTextContent('Persona verknüpfen')
-    expect(missingNotice).toHaveTextContent('Systemprompt verknüpfen')
+    expect(missingNotice).toHaveTextContent('System-Prompt verknüpfen')
 
     // "Aktiv" ist im Status-Select gesperrt, Duplizieren ausgegraut.
     expect(screen.getByRole('option', { name: 'Aktiv' })).toBeDisabled()
