@@ -102,6 +102,23 @@ const de = {
       action: 'Zu den Rechnungsdaten',
     },
   },
+  invoices: {
+    title: 'Rechnungen',
+    emptyTitle: 'Noch keine Rechnungen',
+    emptyDescription: 'Nach jeder Zahlung erscheint die Rechnung hier zum Herunterladen.',
+    listLabel: 'Rechnungen der Organisation',
+    number: 'Rechnungsnummer',
+    date: 'Datum',
+    amount: 'Betrag',
+    status: 'Status',
+    amountUnknown: '–',
+    statusArchived: 'PDF verfügbar',
+    statusIssued: 'PDF wird vorbereitet',
+    download: 'PDF',
+    downloadLabel: 'Rechnung {{number}} als PDF herunterladen',
+    downloading: 'Lädt…',
+    downloadFailed: 'Das PDF konnte nicht geladen werden.',
+  },
 } as const
 
 const en = {
@@ -193,6 +210,23 @@ const en = {
         'To upgrade, we need your billing details, but none are saved. Please save them under “Billing details” and then try again.',
       action: 'Go to billing details',
     },
+  },
+  invoices: {
+    title: 'Invoices',
+    emptyTitle: 'No invoices yet',
+    emptyDescription: 'After each payment, the invoice appears here for download.',
+    listLabel: 'Invoices of the organization',
+    number: 'Invoice number',
+    date: 'Date',
+    amount: 'Amount',
+    status: 'Status',
+    amountUnknown: '–',
+    statusArchived: 'PDF available',
+    statusIssued: 'PDF in preparation',
+    download: 'PDF',
+    downloadLabel: 'Download invoice {{number}} as PDF',
+    downloading: 'Loading…',
+    downloadFailed: 'The PDF could not be loaded.',
   },
 } as const
 

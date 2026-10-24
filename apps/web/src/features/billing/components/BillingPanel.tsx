@@ -15,6 +15,7 @@ import { useCheckout } from '../hooks/useCheckout'
 import { useEntitlement } from '../hooks/useEntitlement'
 
 import { BillingDetailsForm, BillingDetailsSummary, useBillingProfile } from './BillingDetailsForm'
+import { InvoiceListCard } from './InvoiceList'
 
 interface BillingTier {
   code: string
@@ -202,6 +203,9 @@ function DetailsMissingAlert({ canJump }: { canJump: boolean }) {
  * UStG braucht Name und Adresse. Der Checkout sperrt serverseitig ebenfalls
  * (409, R2c); die Meldung dazu verweist auf die Rechnungsdaten-Karte. Fuer
  * Nicht-Admins aendert sich nichts (der Checkout ist ohnehin admin-only).
+ *
+ * Ganz unten fuer Admins die Rechnungen mit PDF-Download (ADR-0061 R3). Die
+ * Karte erscheint nur hier, also nur in der Cloud-Edition.
  */
 export function BillingPanel() {
   const { t } = useTranslation('billing')
@@ -318,6 +322,7 @@ export function BillingPanel() {
       </CardContent>
     </Card>
     {isAdmin ? <BillingDetailsCard details={details} /> : null}
+    {isAdmin ? <InvoiceListCard /> : null}
     </div>
   )
 }
