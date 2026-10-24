@@ -13,6 +13,7 @@ from who2be_api.services.placeholders._core import (
     table_cell,
 )
 from who2be_api.services.placeholders._scope import render_visible_resource_ids
+from who2be_api.services.placeholders._texts import texts
 
 logger = logging.getLogger(__name__)
 
@@ -94,22 +95,17 @@ class PlaybooksCatalogResolver:
                 )
             )
 
+        t = texts(ctx)
         if not entries:
             if only_triggered:
-                return ResolveResult(
-                    text="_Dir sind aktuell keine Playbooks mit Triggern zugeordnet._"
-                )
-            return ResolveResult(text="_Dir sind aktuell keine Playbooks zugeordnet._")
+                return ResolveResult(text=t.playbooks_empty_triggered)
+            return ResolveResult(text=t.playbooks_empty)
 
         lines = [
-            "## Deine Playbooks",
-            (
-                "Diese Playbooks stehen dir zur Verfuegung. Wenn der Nutzer eines der "
-                "Trigger-Stichworte anspricht, lade das Playbook ueber die Aufruf-Spalte "
-                "(`fetch_playbook(...)`) und folge seinen Schritten."
-            ),
+            t.playbooks_heading,
+            t.playbooks_intro,
             "",
-            "| Playbook | Trigger | Aufruf | Beschreibung |",
+            t.playbooks_table_header,
             "|---|---|---|---|",
         ]
         for name, triggers, call, description in entries:
@@ -193,24 +189,22 @@ class ResourcesCatalogResolver:
                 )
             )
 
+        t = texts(ctx)
         if not entries:
             if tag_filter is not None:
-                return ResolveResult(text=f"_Keine aktiven Resources mit dem Tag „{tag_filter}“._")
-            return ResolveResult(text="_Im Workspace gibt es aktuell keine aktiven Resources._")
+                return ResolveResult(text=t.resources_empty_tag.format(tag=tag_filter))
+            return ResolveResult(text=t.resources_empty)
 
         scope_note = (
-            f"Wissens-Resources mit dem Tag „{tag_filter}“."
+            t.resources_scope_tag.format(tag=tag_filter)
             if tag_filter is not None
-            else "Diese Wissens-Resources stehen dir im Workspace zur Verfuegung."
+            else t.resources_scope_all
         )
         lines = [
-            "## Verfuegbare Resources",
-            (
-                f"{scope_note} Lade eine Resource ueber die Aufruf-Spalte "
-                "(`fetch_resource(...)`), wenn du ihren Inhalt brauchst."
-            ),
+            t.resources_heading,
+            t.resources_intro.format(scope_note=scope_note),
             "",
-            "| Resource | Tags | Aufruf | Beschreibung |",
+            t.resources_table_header,
             "|---|---|---|---|",
         ]
         for name, tags_str, call, description in entries:
@@ -220,8 +214,5 @@ class ResourcesCatalogResolver:
             )
         if overflow:
             lines.append("")
-            lines.append(
-                f"_… und weitere — gefiltert auf die {_CATALOG_LIMIT} juengsten Resources. "
-                "Nutze `list_resources(tag?)` fuer den vollstaendigen Katalog._"
-            )
+            lines.append(t.resources_overflow.format(limit=_CATALOG_LIMIT))
         return ResolveResult(text="\n".join(lines))
