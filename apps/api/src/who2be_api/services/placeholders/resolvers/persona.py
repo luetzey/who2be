@@ -18,6 +18,7 @@ from who2be_api.services.placeholders._core import (
     blocks_plain_text,
     table_cell,
 )
+from who2be_api.services.placeholders._texts import texts
 
 logger = logging.getLogger(__name__)
 
@@ -313,18 +314,8 @@ class PersonaRefResolver:
             logger.warning("PersonaRefResolver: Persona %s nicht gefunden", ctx.persona_id)
             return ResolveResult(text="", unresolved_key=miss_key)
 
-        name = str(row["name"])
-        text = (
-            f"Deine Persona ist **{name}** (id: `{ctx.persona_id}`). "
-            f"Lade dein vollstaendiges Profil und deine Modi zu Beginn der Sitzung via "
-            f'MCP-Tool `get_persona("{ctx.persona_id}")`. '
-            "Pruefe danach die Sektion `## Modi`: Waehle anhand des Modus-Triggers den "
-            "passenden Modus und wende dessen Identitaets-Ergaenzung und Output-Stil "
-            "an; ohne Trigger-Match gilt der Default-Modus. "
-            f'Alternativ liefert `get_persona("{ctx.persona_id}", mode="<Modus-Name>")` '
-            "das Profil bereits serverseitig im gewaehlten Modus (identity_add "
-            "angehaengt, Output-Stil ersetzt, Anti-Patterns ergaenzt)."
-        )
+        # Wortlaut in der Template-Sprache (`ctx.locale`), Quelle `_texts`.
+        text = texts(ctx).persona_ref.format(name=str(row["name"]), persona_id=ctx.persona_id)
         return ResolveResult(text=text)
 
 
