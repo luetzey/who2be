@@ -16,7 +16,7 @@ Betreiber-Doku beschreibt Rechnung, Archiv, Storno und Löschung nach ADR-0061.
   Steuermodus 503) und im `worker` (Routine `invoice-retry`, R2b).
 - Der `worker` bekommt in keinem Cloud-Overlay `MOLLIE_API_KEY`. Die Routine
   `invoice-retry` bricht dann mit `MOLLIE_API_KEY fehlt` ab
-  (`who2be_billing/invoice.py#run_invoice_retry`): ohne die Zeile entsteht in
+  (`packages/billing/src/who2be_billing/invoice.py#run_invoice_retry`): ohne die Zeile entsteht in
   Produktion nie eine Rechnung. Gehört zum Durchreichen dazu.
 - Doku: GoBD §1/§4/§5/§6 beschreiben noch „keine eigenen Rechnungen“;
   `cloud-erstinbetriebnahme` nennt den 503 ohne Steuermodus nicht und hat
