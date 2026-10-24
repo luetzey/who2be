@@ -525,7 +525,21 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # im Output-Stil; Architekt-Modus ohne Phasen-Wiederholung. Builder-Template
 # ohne `tools-overview` (doppelt zu tools/list), Profil per `persona-ref`
 # statt `persona-field:profile`; Lite unveraendert — DE + EN.
-BUILDER_CONTENT_VERSION = 21
+# v22: Builder schlank B3 (Owner 2026-10-22, W3 b; PM 2026-10-22/23) — alle acht
+# Builder-Playbooks entdoppelt: Feedback-Absatz entfaellt (K1, steht in
+# Server-instructions, Persona und Template), „Tools & Operations“/„Werkzeuge“
+# heisst „Fallen“ und nennt nur nicht offensichtliche Fallen (K2), „Zweck“ ist
+# ein Satz (K3). Konventionen werden nicht mehr ganz geladen: jedes Playbook
+# nennt 2-3 Abschnitts-Anker und laedt sie mit einem `fetch_resource`-Aufruf
+# (K4, Abschnittsregel ADR-0021-Nachtrag). Agent-Playbook: `tools-overview`
+# standardmaessig nicht ins Template; Playbook-Playbook gibt „Zweck“ und
+# „Tools & Operations“ nicht mehr als Gliederung vor — DE + EN.
+# v23: Builder schlank B6 (PM 2026-10-24, Option b: Teilabruf statt Teilen) —
+# Profil-Laderegel (outline + block_ids ueber der Warnschwelle, Abschnitte
+# nicht doppelt holen), Wegweiser der Fall-Triage (nur den eigenen Weg laden),
+# Agent-Playbook tool_policy gegen die Konventionen entdoppelt, Persona-
+# Playbook laedt res-conv-h-sprache mit — DE + EN.
+BUILDER_CONTENT_VERSION = 23
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

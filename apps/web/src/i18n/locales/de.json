@@ -64,18 +64,18 @@
       "promote": "Aktivieren",
       "submit": "Zur Freigabe einreichen",
       "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
+      "reactivate": "Als Entwurf reaktivieren",
       "adminOnly": "Nur Admins können aktivieren",
       "adminOnlyHint": "Nur Admins können aktivieren.",
       "mfa": {
-        "notice": "Veröffentlichen erfordert Zwei-Faktor-Anmeldung.",
+        "notice": "Aktivieren erfordert Zwei-Faktor-Anmeldung.",
         "setup": "Zwei-Faktor einrichten"
       },
       "viewChanges": "Änderungen und Prüffälle ansehen",
       "fallback": "Aktion fehlgeschlagen.",
       "error": {
         "promoteFill": "Vor dem Aktivieren ausfüllen: {{fields}}.",
-        "promoteTitle": "Promote nicht möglich"
+        "promoteTitle": "Aktivieren nicht möglich"
       },
       "toast": {
         "activated": "Version aktiviert.",
@@ -152,8 +152,8 @@
       "resource_not_found": "Resource nicht gefunden.",
       "external_tool_not_found": "Externes Tool nicht gefunden.",
       "external_tool_alias_conflict": "Ein externes Tool mit diesem Alias existiert bereits.",
-      "system_prompt_template_not_found": "System-Prompt-Template nicht gefunden.",
-      "system_prompt_template_slug_conflict": "Ein Template mit diesem Slug existiert bereits.",
+      "system_prompt_template_not_found": "System-Prompt nicht gefunden.",
+      "system_prompt_template_slug_conflict": "Ein System-Prompt mit diesem Slug existiert bereits.",
       "feedback_element_not_found": "Element nicht gefunden.",
       "invalid_against_param": "Ungültiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
       "workspace_not_found": "Workspace nicht gefunden.",
@@ -165,6 +165,7 @@
       "invitation_email_mismatch": "Diese Einladung ist für eine andere Email-Adresse.",
       "invitation_email_required": "Diese Einladung lässt sich nur mit einem Konto annehmen, das eine bestätigte E-Mail-Adresse trägt.",
       "invitation_email_unconfirmed": "Bestätige zuerst die E-Mail-Adresse deines Kontos, dann kannst du die Einladung annehmen.",
+      "invitation_already_pending": "Für diese Adresse gibt es bereits eine offene Einladung.",
       "personal_organization_undeletable": "Persönliche Organisationen werden über die Konto-Löschung entfernt.",
       "organization_owner_required": "Nur der Owner kann diese Organisation löschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
@@ -180,7 +181,7 @@
       "composition_cycle": "Verknüpfung würde einen Zyklus erzeugen.",
       "heading_anchor_required": "Nur Heading-Blöcke sind als Anker erlaubt.",
       "invalid_credentials": "Ungültige oder fehlende Anmeldedaten.",
-      "write_rate_limited": "Schreib-Rate-Limit dieses Agenten erreicht ({{limit}}/min) — bitte später erneut versuchen.",
+      "write_rate_limited": "Dieser Agent hat sein Limit von {{limit}} Änderungen pro Minute erreicht — bitte später erneut versuchen.",
       "token_management_forbidden": "Agent-gebundene Tokens dürfen keine API-Tokens verwalten.",
       "account_route_requires_human": "Diese Aktion betrifft dein gesamtes Konto und ist nur als angemeldete Person möglich — ein API-Token kann sie nicht ausführen.",
       "agent_bound_role_capped": "Ein an einen Agenten gebundener Token erhält höchstens die Rolle 'editor'. Führe Aktionen, die mehr verlangen, als angemeldete Person aus.",
@@ -193,25 +194,25 @@
       "mcp_quota_exceeded": "Monatliches MCP-Kontingent erschöpft ({{limit}}/Monat).",
       "consent_requires_session": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
       "invalid_cursor": "Ungültiger Cursor.",
-      "draft_conflict": "Es existiert bereits ein Draft. Promote oder verwirf den bestehenden Draft, bevor du erneut editierst.",
+      "draft_conflict": "Es gibt bereits einen Entwurf. Aktiviere oder verwirf ihn, bevor du erneut bearbeitest.",
       "review_conflict": "Diese Version liegt zur Freigabe — Auto-Save ist deaktiviert. Lehne die Version erst ab, bevor du weiter editierst.",
       "mfa_required": "Diese Admin-Aktion erfordert Zwei-Faktor-Anmeldung. Richte unter Einstellungen → Konto einen Authenticator ein; hast du schon einen, melde dich erneut an.",
       "area_id_required_for_human": "Ohne area_id kann nur ein agent-gebundener Token schreiben oder ingestieren (private Area). Menschen nutzen den area-spezifischen Endpunkt (POST /work-areas/{area_id}/...).",
-      "template_version_inactive": "Das verlinkte System-Prompt-Template hat keine aktive Version — bitte erst veröffentlichen.",
-      "agent_incomplete": "Agent ist eine unvollständige Hülle (Persona oder Template fehlt) — es gibt nichts zu rendern.",
-      "agent_reference_not_found": "Persona oder Template existiert nicht in diesem Workspace.",
+      "template_version_inactive": "Der verknüpfte System-Prompt hat keine aktive Version — bitte erst aktivieren.",
+      "agent_incomplete": "Agent ist eine unvollständige Hülle (Persona oder System-Prompt fehlt) — es gibt nichts zu rendern.",
+      "agent_reference_not_found": "Persona oder System-Prompt existiert nicht in diesem Workspace.",
       "agent_privilege_escalation": "Ein Agent darf keinen Agenten mit mehr Rechten als seinen eigenen anlegen oder ändern.",
       "last_admin_undeletable": "Der letzte Admin kann nicht herabgestuft oder entfernt werden.",
       "workspace_member_not_found": "Mitglied nicht gefunden.",
       "read_scope_forbidden": "Dieser Agent darf keine {{domain}} lesen. Der Workspace-Besitzer kann den Lesezugriff in der Agent-Konfiguration freischalten.",
       "invalid_locale": "Ungültiger locale-Parameter: {{locale}}.",
       "sole_owner_deletion_blocked": "Du bist alleiniger Owner folgender Organisationen: {{organizations}}. Übertrage sie an ein anderes Mitglied oder lösche sie zuerst, bevor du dein Konto löschst.",
-      "agent_not_activatable": "Agent ist noch nicht vollständig — fehlt: {{missing}}. Aktivieren und Kopieren sind erst möglich, wenn Persona und Template gesetzt sind und die Persona eine aktive Version hat.",
+      "agent_not_activatable": "Agent ist noch nicht vollständig — fehlt: {{missing}}. Aktivieren und Kopieren sind erst möglich, wenn Persona und System-Prompt gesetzt sind und die Persona eine aktive Version hat.",
       "memory_importance_too_low": "Nicht gespeichert — importance {{importance}} liegt unter der Schwelle {{minimum}}. Nur dauerhaft relevante Fakten vorschlagen (wäre er in 3 Monaten noch nützlich?).",
       "memory_duplicate": "Nicht gespeichert — zu ähnlich zu vorhandenem Memory [{{duplicate_id}}]: „{{duplicate_fact}}“. Duplikate (auch bereits abgelehnte Vorschläge) werden nicht erneut aufgenommen.",
       "memory_cap_reached": "Nicht gespeichert — das Gedächtnis dieses Agenten ist voll ({{maximum}} Einträge). Der Workspace-Besitzer muss zuerst aufräumen (Agent-Detailseite → Gedächtnis).",
       "persona_mode_unknown": "Unbekannter Modus '{{mode}}'. Verfügbare Modi: {{available}}.",
-      "placeholder_kind_unknown": "Unbekannter Placeholder-Typ: {{kind}}",
+      "placeholder_kind_unknown": "Unbekannter Platzhalter-Typ: {{kind}}",
       "entity_version_not_found": "{{label}}-Version nicht gefunden."
     },
     "fieldLabels": {
@@ -219,7 +220,7 @@
       "description": "Beschreibung",
       "body": "Inhalt",
       "persona_id": "Persona",
-      "system_prompt_template_id": "System-Prompt-Template",
+      "system_prompt_template_id": "System-Prompt",
       "type": "Typ",
       "tags": "Tags",
       "triggers": "Trigger"
@@ -238,7 +239,7 @@
       "openMenu": "Menü öffnen",
       "menuDescription": "Vollständige Navigation und Workspace-Wechsler.",
       "dashboard": "Dashboard",
-      "agents": "Agents",
+      "agents": "Agenten",
       "systemPrompts": "System-Prompts",
       "personas": "Personas",
       "playbooks": "Playbooks",
@@ -357,8 +358,8 @@
       "diff": "Diff",
       "whyActive": "Warum aktiv?",
       "history": "Verlauf",
-      "restoreHint": "Diese Version als neuen Draft wiederherstellen",
-      "restoreBlockedHint": "Es existiert bereits ein Draft — erst abschließen oder verwerfen.",
+      "restoreHint": "Diese Version als neuen Entwurf wiederherstellen",
+      "restoreBlockedHint": "Es gibt bereits einen Entwurf — erst einreichen oder verwerfen.",
       "loadFailed": "Laden fehlgeschlagen.",
       "restoreFailed": "Wiederherstellen fehlgeschlagen."
     },
@@ -388,10 +389,10 @@
   },
   "agents": {
     "page": {
-      "title": "Agents",
-      "description": "Konfigurierte Agents — Persona × Template, einmal klicken zum Kopieren.",
-      "newAgent": "Neuen Agent erstellen",
-      "viewerNoCreate": "Viewer können keine Agents anlegen",
+      "title": "Agenten",
+      "description": "Deine Agenten: je eine Persona mit einem System-Prompt.",
+      "newAgent": "Neuen Agenten erstellen",
+      "viewerNoCreate": "Viewer können keine Agenten anlegen",
       "empty": {
         "title": "Noch keine eigenen Agenten",
         "description": "Der Builder baut dir einen im Chat, oder du legst ihn hier selbst an.",
@@ -400,7 +401,7 @@
         "viewerHelpLink": "Wer darf was? Die Rollen erklärt"
       },
       "favoritesSection": "Favoriten",
-      "othersSection": "Weitere Agents"
+      "othersSection": "Weitere Agenten"
     },
     "status": {
       "enabled": "Aktiv",
@@ -408,7 +409,7 @@
       "incomplete": "Unvollständig"
     },
     "detail": {
-      "back": "Agents",
+      "back": "Agenten",
       "submitLabel": "Speichern",
       "pageTabsAria": "Bereiche des Agenten",
       "pageTabs": {
@@ -422,14 +423,14 @@
       "tabs": {
         "config": "Konfiguration",
         "tools": "Werkzeuge & Rechte",
-        "connection": "Verbindung"
+        "connection": "API-Tokens"
       }
     },
     "card": {
       "setup": "Einrichten",
       "personaMissing": "Persona fehlt",
-      "templateMissing": "Systemprompt fehlt",
-      "countAria": "{{count}} Agents",
+      "templateMissing": "System-Prompt fehlt",
+      "countAria": "{{count}} Agenten",
       "templateWithVersion": "{{name}} · v{{version}}",
       "playbookCount_one": "{{count}} Playbook",
       "playbookCount_other": "{{count}} Playbooks",
@@ -449,8 +450,8 @@
       },
       "config": {
         "title": "Konfiguration",
-        "description": "Welche Persona und welcher Systemprompt der Agent verwendet.",
-        "help": "Die ausgewählte Persona liefert Name, Profil, Tags und ihre Playbooks. Der Systemprompt definiert den eigentlichen System-Prompt mit Platzhaltern."
+        "description": "Welche Persona und welcher System-Prompt der Agent verwendet.",
+        "help": "Die ausgewählte Persona liefert Name, Profil, Tags und ihre Playbooks. Der System-Prompt ist der eigentliche Prompt-Text mit Platzhaltern."
       },
       "persona": {
         "label": "Persona",
@@ -458,7 +459,7 @@
         "notActive": " (nicht aktiv)"
       },
       "template": {
-        "label": "Systemprompt",
+        "label": "System-Prompt",
         "none": "— keiner —"
       },
       "statusField": {
@@ -469,14 +470,14 @@
       "missing": {
         "notice": "Noch nicht aktivierbar — fehlt: {{items}}.",
         "persona": "Persona verknüpfen",
-        "template": "Systemprompt verknüpfen",
+        "template": "System-Prompt verknüpfen",
         "persona_active": "verknüpfte Persona aktiv schalten"
       },
-      "viewerReadOnly": "Viewer können Agents nur ansehen",
+      "viewerReadOnly": "Viewer können Agenten nur ansehen",
       "nameRequired": "Name erforderlich.",
       "policy": {
         "title": "Werkzeuge & Rechte",
-        "description": "Welche MCP-Tools dieser Agent nutzen darf. Gilt, wenn ein API-Token an den Agenten gebunden ist.",
+        "description": "Welche Werkzeuge dieser Agent nutzen darf. Gilt für jedes verbundene Programm, ob über die Anmeldung (OAuth) oder einen API-Token.",
         "help": "Standardmäßig darf der Agent alles lesen, aber nichts verändern. Schalte Schreibrechte gezielt frei. Der System-Prompt listet automatisch nur die freigegebenen Tools; gesperrte Tools werden serverseitig abgelehnt.",
         "reads": "Lesen",
         "writes": "Schreiben",
@@ -490,11 +491,11 @@
           },
           "editorNoApproval": {
             "label": "Editor ohne Freigabe",
-            "description": "Darf Inhalte anlegen/ändern und zur Freigabe einreichen (Entwurf → Zur Freigabe), aber keine Version aktivieren oder zurückziehen."
+            "description": "Darf Inhalte anlegen/ändern und zur Freigabe einreichen (Entwurf → Zur Freigabe), aber keine Version aktivieren oder deaktivieren."
           },
           "editorWithApproval": {
             "label": "Editor mit Freigabe",
-            "description": "Wie „Editor ohne Freigabe“, zusätzlich darf der Agent Versionen selbst aktivieren/zurückziehen."
+            "description": "Wie „Editor ohne Freigabe“, zusätzlich darf der Agent Versionen selbst aktivieren/deaktivieren."
           },
           "custom": {
             "label": "Benutzerdefiniert"
@@ -526,7 +527,7 @@
           "agent_write": "Agenten erstellen/ändern",
           "system_prompt_write": "System-Prompts verfassen (zur Freigabe einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
-          "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
+          "feedback_resolve": "Feedback einordnen und schließen",
           "promote_retire": "Versionen aktivieren/deaktivieren",
           "external_tool_write": "Externe Tools erstellen/ändern",
           "workarea_write": "Arbeitsbereich schreiben (Notizen, Ingest, Tabellen)",
@@ -534,22 +535,22 @@
           "kb_edge_write": "Knowledge-Base-Kanten anlegen (nicht mehr löschbar)"
         },
         "writeTags": {
-          "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",
+          "hint": "Nur bestimmte Tags (optional): leer = alle Tags. Sonst darf der Agent in diesem Bereich nur Inhalte mit diesen Tags schreiben.",
           "placeholder": "z. B. support, billing",
           "persona": "Persona-Tags",
           "playbook": "Playbook-Tags",
           "resource": "Resource-Tags"
         },
         "transitionGrants": {
-          "hint": "Promote/Retire je Domain (nur mit aktivem „Versionen aktivieren/deaktivieren“ wirksam). Abwählen schränkt die Richtung ein.",
-          "promote": "Promoten (→ aktiv)",
-          "retire": "Zurückziehen (→ inaktiv)",
+          "hint": "Aktivieren und Deaktivieren je Bereich (wirkt nur, wenn „Versionen aktivieren/deaktivieren“ eingeschaltet ist). Abwählen schränkt die Richtung ein.",
+          "promote": "Aktivieren",
+          "retire": "Deaktivieren",
           "persona": "Persona",
           "playbook": "Playbook",
           "resource": "Resource"
         },
         "rateLimit": {
-          "label": "Schreib-Rate-Limit (Mutationen/Minute)",
+          "label": "Höchstens so viele Änderungen pro Minute",
           "placeholder": "leer = unbegrenzt"
         }
       },
@@ -585,7 +586,7 @@
       "persona": "Persona",
       "playbooksLinked_one": "{{count}} verknüpftes Playbook",
       "playbooksLinked_other": "{{count}} verknüpfte Playbooks",
-      "templateLabel": "Template:",
+      "templateLabel": "System-Prompt:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
       "noPlaybooks": "Keine Playbooks verknüpft."
@@ -644,7 +645,7 @@
         "markdown": "Prompt als Markdown in Zwischenablage.",
         "html": "Prompt als HTML in Zwischenablage."
       },
-      "unresolvedHint": "Hinweis: {{count}} unbekannte Placeholder(s) — {{list}}",
+      "unresolvedHint": "Hinweis: {{count}} unbekannte Platzhalter — {{list}}",
       "error": "Kopieren fehlgeschlagen."
     },
     "duplicate": {
@@ -652,7 +653,7 @@
       "success": "Agent dupliziert.",
       "error": "Duplizieren fehlgeschlagen.",
       "notCopyable": "Noch nicht kopierbar — fehlt: {{items}}.",
-      "viewerReadOnly": "Viewer können Agents nur ansehen"
+      "viewerReadOnly": "Viewer können Agenten nur ansehen"
     },
     "delete": {
       "label": "Löschen",
@@ -661,13 +662,20 @@
       "dialogDescription": "{{name}} wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "success": "Agent gelöscht.",
       "error": "Löschen fehlgeschlagen.",
-      "viewerReadOnly": "Viewer können Agents nur ansehen"
+      "viewerReadOnly": "Viewer können Agenten nur ansehen"
     },
     "toast": {
-      "created": "Agent angelegt — jetzt Persona und Systemprompt zuweisen.",
+      "created": "Agent angelegt — jetzt Persona und System-Prompt zuweisen.",
       "createError": "Anlegen fehlgeschlagen.",
       "saved": "Agent gespeichert.",
       "unknownError": "Unbekannter Fehler."
+    },
+    "activatePrompt": {
+      "title": "Agent jetzt aktivieren?",
+      "body": "Danach können verbundene Programme ihn abrufen.",
+      "confirm": "Aktivieren",
+      "later": "Später",
+      "success": "Agent aktiviert."
     },
     "connect": {
       "title": "Verbindung",
@@ -677,13 +685,25 @@
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "Cursor oder VS Code",
+        "hermes": "Hermes Agent",
         "other": "Etwas anderes"
+      },
+      "clientSuffix": {
+        "claude": "(Web, App, Handy)"
       },
       "clientName": {
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "deinem Editor",
+        "hermes": "Hermes",
         "other": "deinem Programm"
+      },
+      "lead": {
+        "claude": "Web, App am Computer und am Handy.",
+        "code": "Im Terminal, mit einem Befehl.",
+        "editor": "Ein Klick trägt den Agenten im Editor ein.",
+        "hermes": "Im Terminal des Rechners, auf dem Hermes läuft.",
+        "other": "Gemini, Le Chat, Windsurf, Zed und andere Programme mit Remote-MCP."
       },
       "status": {
         "connected": "Verbunden",
@@ -697,7 +717,9 @@
         "editor": "Klick auf „Zu Cursor hinzufügen“ bzw. „In VS Code installieren“. Der Editor fragt einmal nach.",
         "login": "Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
         "otherIntro": "Dein Programm muss Remote-MCP mit Anmeldung (OAuth) können. Trag dort diese Adresse ein:",
-        "otherTest": "Danach schreibst du deinem Agenten:"
+        "otherTest": "Danach schreibst du deinem Agenten:",
+        "hermesLogin": "Hermes öffnet die Anmeldung im Browser oder zeigt einen Link dafür. Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
+        "hermesTest": "Starte eine neue Sitzung oder tippe {{cmd}}. Dann schreib:"
       },
       "cta": {
         "claude": "Mit Claude verbinden",
@@ -725,6 +747,10 @@
       },
       "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectors hinzu.",
       "free": "Claude Free erlaubt nur einen eigenen Connector. Entferne dort vorher den Builder.",
+      "hermesProfile": "Mehrere Profile? Mit {{cmd}} landet der Agent im richtigen Profil.",
+      "hermesProfileCommand": "hermes -p <profil> mcp add …",
+      "hermesHeadless": "Hermes läuft auf einem Server ohne Browser? Öffne den Link auf deinem Rechner und füg die Adresse, auf der der Browser landet, im Terminal ein.",
+      "otherProfiles": "So geht es in Gemini, Le Chat, Windsurf, Zed und Copilot",
       "waiting": "Warte auf „{{agent}}“ …",
       "waitingHint": "Sobald er in {{client}} seine Persona lädt, hakt sich der Schritt ab. Du kannst diese Seite offen lassen.",
       "expired": "Noch kein Abruf angekommen. Who2Be fragt nicht mehr von selbst nach.",
@@ -743,7 +769,7 @@
       }
     },
     "filter": {
-      "searchPlaceholder": "Agents durchsuchen…",
+      "searchPlaceholder": "Agenten durchsuchen…",
       "emptyDescription": "Kein Agent passt zu Filter und Suche."
     },
     "memory": {
@@ -1302,16 +1328,16 @@
     "detail": {
       "back": "Personas",
       "description": {
-        "activeDraft": " · Du arbeitest auf Draft v{{version}}",
-        "activeReview": " · Zur Freigabe: v{{version}}",
-        "active": "Active: v{{version}}",
+        "activeDraft": " · Entwurf v{{version}} in Arbeit",
+        "activeReview": " · v{{version}} wartet auf Freigabe durch einen Admin",
+        "active": "Aktiv: v{{version}}",
         "currentVersion": "Aktuelle Version: v{{version}} ({{status}})"
       },
       "branch": {
-        "submit": "Entwurf abschließen",
-        "publish": "Veröffentlichen",
-        "reject": "Zurück zu Draft",
-        "reactivate": "Reaktivieren als Draft"
+        "submit": "Zur Freigabe einreichen",
+        "publish": "Aktivieren",
+        "reject": "Zurück in den Entwurf",
+        "reactivate": "Als Entwurf reaktivieren"
       },
       "toast": {
         "submitted": "Zur Freigabe eingereicht.",
@@ -1372,8 +1398,8 @@
       },
       "legacy": {
         "ariaLabel": "Veralteter System-Prompt",
-        "title": "Veraltet — Inhalt in Template übernehmen",
-        "body": "Persona-eigene System-Prompts laufen jetzt über das verknüpfte Agent-Template. Übernimm den Text manuell in dein Template, danach kannst du das Feld leer lassen."
+        "title": "Veraltet — Inhalt in den System-Prompt übernehmen",
+        "body": "Persona-eigene System-Prompts laufen jetzt über den System-Prompt, den der Agent verknüpft. Übernimm den Text manuell dorthin, danach kannst du das Feld leer lassen."
       },
       "profile": {
         "title": "Profil",
@@ -1489,7 +1515,7 @@
       "playbookCount_one": "{{count}} Playbook",
       "playbookCount_other": "{{count}} Playbooks",
       "agentCount_one": "Verwendet von {{count}} Agent",
-      "agentCount_other": "Verwendet von {{count}} Agents",
+      "agentCount_other": "Verwendet von {{count}} Agenten",
       "noAgent": "Kein Agent"
     }
   },
@@ -1549,9 +1575,9 @@
     },
     "detail": {
       "back": "Playbooks",
-      "activeBadge": "Active: v{{version}}",
-      "draftNote": " · Du arbeitest auf Draft v{{version}}",
-      "reviewNote": " · Zur Freigabe: v{{version}}",
+      "activeBadge": "Aktiv: v{{version}}",
+      "draftNote": " · Entwurf v{{version}} in Arbeit",
+      "reviewNote": " · v{{version}} wartet auf Freigabe durch einen Admin",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "triggerList": "Trigger-Liste",
       "triggerLabel": "Trigger",
@@ -1574,8 +1600,8 @@
       },
       "banner": {
         "activeNode": "Aktiv: v{{version}}",
-        "reviewWaiting": "v{{version}} wartet auf Freigabe",
-        "draftOpen": "Entwurf: v{{version}}",
+        "reviewWaiting": "v{{version}} wartet auf Freigabe durch einen Admin",
+        "draftOpen": "Entwurf v{{version}} in Arbeit",
         "inactiveCurrent": "Inaktiv: v{{version}}"
       },
       "usedInDescription": "Personas, die dieses Playbook nutzen.",
@@ -1616,10 +1642,10 @@
     },
     "actions": {
       "activateAdminOnly": "Nur Admins können aktivieren",
-      "draftSubmit": "Entwurf abschließen",
-      "publish": "Veröffentlichen",
-      "rejectDraft": "Zurück zu Draft",
-      "reactivateDraft": "Reaktivieren als Draft"
+      "draftSubmit": "Zur Freigabe einreichen",
+      "publish": "Aktivieren",
+      "rejectDraft": "Zurück in den Entwurf",
+      "reactivateDraft": "Als Entwurf reaktivieren"
     },
     "toast": {
       "created": "Playbook angelegt.",
@@ -1654,10 +1680,10 @@
       "empty": "Noch keine Blöcke verknüpft.",
       "ariaLabel": "Verknüpfte Blöcke",
       "statusActive": "Aktiv",
-      "statusDraft": "Nur in Draft",
+      "statusDraft": "Nur im Entwurf",
       "statusDeleted": "Block gelöscht",
       "emptyActive": "(leer)",
-      "emptyDraft": "(leer — Draft)",
+      "emptyDraft": "(leer — Entwurf)",
       "emptyDeleted": "Block nicht mehr verfügbar",
       "resourceScopeLabel": "Ganzes Dokument",
       "resourceScopeEmpty": "Resource nicht mehr verfügbar",
@@ -1732,9 +1758,9 @@
       "nameRequired": "Name ist erforderlich."
     },
     "detail": {
-      "activeVersion": "Active: v{{version}}",
-      "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "Zur Freigabe: v{{version}}",
+      "activeVersion": "Aktiv: v{{version}}",
+      "workingOnDraft": "Entwurf v{{version}} in Arbeit",
+      "inReview": "v{{version}} wartet auf Freigabe durch einen Admin",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "linkedIn": "Verlinkt in",
       "block_one": "{{count}} Block",
@@ -2088,7 +2114,7 @@
       },
       "dangerZone": {
         "title": "Danger-Zone",
-        "description": "Das Löschen entfernt den Workspace samt aller Personas, Playbooks, Resources, Templates, Agenten und Tokens. Diese Aktion ist unwiderruflich.",
+        "description": "Das Löschen entfernt den Workspace samt aller Personas, Playbooks, Resources, System-Prompts, Agenten und Tokens. Diese Aktion ist unwiderruflich.",
         "lastWorkspace": "Dies ist der letzte Workspace der Organisation und kann nicht gelöscht werden.",
         "triggerButton": "Workspace löschen",
         "dialogTitle": "Workspace löschen",
@@ -2157,19 +2183,19 @@
     "page": {
       "list": {
         "title": "System-Prompts",
-        "description": "Wiederverwendbare Template-Bibliothek für deine Agents — mit Liquid-Placeholders.",
-        "newTemplate": "Neues Template",
+        "description": "Wiederverwendbare System-Prompts für deine Agenten — mit Platzhaltern.",
+        "newTemplate": "Neuer System-Prompt",
         "empty": {
-          "title": "Noch keine Templates",
-          "description": "Lege dein erstes System-Prompt-Template an."
+          "title": "Noch keine System-Prompts",
+          "description": "Lege deinen ersten System-Prompt an."
         }
       },
       "new": {
-        "title": "Neues Template",
-        "description": "Lege ein wiederverwendbares System-Prompt-Template an.",
+        "title": "Neuer System-Prompt",
+        "description": "Lege einen wiederverwendbaren System-Prompt an.",
         "submit": "Anlegen",
         "toast": {
-          "created": "Template angelegt."
+          "created": "System-Prompt angelegt."
         },
         "error": {
           "unknown": "Unbekannter Fehler."
@@ -2196,9 +2222,9 @@
       "identity": {
         "title": "Identität",
         "description": {
-          "placeholder": "z. B. Standard-Template für Support-Agenten"
+          "placeholder": "z. B. Standard-Prompt für Support-Agenten"
         },
-        "help": "Beispiel: „Customer-Support-Agent v1\". Beschreibung taucht in der Template-Liste und im Agent-Picker auf.",
+        "help": "Beispiel: „Customer-Support-Agent v1\". Die Beschreibung steht in der Liste der System-Prompts und in der Auswahl am Agenten.",
         "name": {
           "placeholder": "z. B. Customer-Support-Agent"
         }
@@ -2225,14 +2251,14 @@
       "ariaLabel": "Status-Aktionen",
       "submitForReview": "Zur Freigabe einreichen",
       "activate": "Aktivieren",
-      "backToDraft": "Zurück zu Draft",
-      "reactivateAsDraft": "Als Draft reaktivieren",
+      "backToDraft": "Zurück in den Entwurf",
+      "reactivateAsDraft": "Als Entwurf reaktivieren",
       "adminOnlyTooltip": "Nur Admins können aktivieren",
       "toast": {
         "submittedForReview": "Zur Freigabe eingereicht.",
         "activated": "Version aktiviert.",
         "backToDraft": "Zurück in den Entwurf.",
-        "reactivatedAsDraft": "Als Draft reaktiviert.",
+        "reactivatedAsDraft": "Als Entwurf reaktiviert.",
         "actionFailed": "Aktion fehlgeschlagen."
       }
     },
@@ -2240,9 +2266,9 @@
       "triggerLabel": "Welche Verweise gibt es?",
       "docsLink": "Mehr in der Doku →",
       "intro": {
-        "heading": "Was ist ein Placeholder?",
-        "body": "Placeholders sind Platzhalter im Template, die der Server beim MCP-Read durch echten Inhalt ersetzt — z. B. den Namen der Persona oder den Body eines verknüpften Playbooks. So bleibt der Prompt klein und aktuell.",
-        "usage": "Öffne im Editor das Slash-Menü mit / und wähle einen Placeholder als Pill aus."
+        "heading": "Was ist ein Platzhalter?",
+        "body": "Platzhalter stehen im System-Prompt. Ruft ein Agent ihn ab, ersetzt Who2Be sie durch echten Inhalt, z. B. den Namen der Persona oder den Text eines verknüpften Playbooks. So bleibt der Prompt klein und aktuell.",
+        "usage": "Öffne im Editor das Slash-Menü mit / und wähle einen Platzhalter als Pill aus."
       },
       "slashSection": {
         "heading": "BlockNote-Editor (Slash-Menü)"
@@ -2273,7 +2299,7 @@
     },
     "card": {
       "usedByAgents_one": "Verwendet von {{count}} Agent",
-      "usedByAgents_other": "Verwendet von {{count}} Agents",
+      "usedByAgents_other": "Verwendet von {{count}} Agenten",
       "usedByNone": "Von keinem Agent verwendet"
     },
     "reviewNotice": "Prüfe die Änderungen und aktiviere die Version oder schicke sie zurück in den Entwurf.",
@@ -2296,7 +2322,7 @@
     },
     "agentSection": {
       "title": "API-Tokens",
-      "description": "Tokens für diesen Agenten. Jeder Token ist an den Agenten gebunden und erbt seine MCP-Tool-Policy (Lesezugriffe gescoped, Schreibrechte gegated). Die Rolle steuert davon unabhängig die REST-Mutationen."
+      "description": "Tokens für diesen Agenten. Jeder Token ist an den Agenten gebunden und erbt seine Werkzeug-Rechte. Die Rolle legt davon unabhängig fest, was der Token über die REST-API ändern darf."
     },
     "active": {
       "title": "Aktive Tokens"
@@ -2374,7 +2400,7 @@
       "empty": "Noch kein Feedback. Agenten melden Nutzung und Qualität über den MCP-Server.",
       "loadError": "Feedback konnte nicht geladen werden.",
       "revise": "Überarbeiten",
-      "reviseHint": "Negative Signale auf der aktiven Version — bearbeite sie in einem neuen Draft.",
+      "reviseHint": "Negative Signale auf der aktiven Version — bearbeite sie in einem neuen Entwurf.",
       "showEvents": "Einzelne Ereignisse anzeigen",
       "hideEvents": "Einzelne Ereignisse ausblenden",
       "eventsEmpty": "Keine Einzel-Ereignisse.",
@@ -2428,6 +2454,7 @@
     },
     "overview": {
       "nav": "Feedback",
+      "helpLink": "Rückmeldungen erklärt",
       "title": "Feedback",
       "description": "Alle Rückmeldungen deiner Agenten an einem Ort verwalten.",
       "sectionTitle": "Überblick (Elemente)",
@@ -2593,7 +2620,7 @@
         "agentPlaceholder": "Agent wählen …",
         "agentsLoading": "Agenten werden geladen …",
         "noAgents": "Noch kein Agent im Workspace. Eine Rückmeldung gehört immer zu einem Agenten.",
-        "toAgents": "Zu den Agents",
+        "toAgents": "Zu den Agenten",
         "situation": "Was war die Lage?",
         "situationHelp": "Was hast du gefragt oder was sollte der Agent tun?",
         "behavior": "Was hat der Agent getan?",
@@ -2892,9 +2919,9 @@
       "nameRequired": "Name ist erforderlich."
     },
     "detail": {
-      "activeVersion": "Active: v{{version}}",
-      "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
-      "inReview": "Zur Freigabe: v{{version}}",
+      "activeVersion": "Aktiv: v{{version}}",
+      "workingOnDraft": "Entwurf v{{version}} in Arbeit",
+      "inReview": "v{{version}} wartet auf Freigabe durch einen Admin",
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
       "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
@@ -2935,7 +2962,7 @@
     },
     "list": {
       "title": "Arbeitsbereich",
-      "description": "Was deine Agenten gesammelt und abgelegt haben. Unversioniert und bewusst getrennt von den Resources — hier liegt Rohmaterial, keine veröffentlichten Inhalte.",
+      "description": "Was deine Agenten gesammelt und abgelegt haben. Unversioniert und bewusst getrennt von den Resources — hier liegt Rohmaterial, keine aktivierten Inhalte.",
       "newArea": "Bereich anlegen",
       "emptyTitle": "Noch keine Bereiche",
       "emptyDescription": "Private Bereiche entstehen automatisch, sobald ein Agent das erste Mal etwas ablegt. Geteilte Bereiche legst du hier an und gibst sie dann gezielt für einzelne Agenten frei.",
@@ -3342,7 +3369,27 @@
       "helpLabel": "Wie wird die Länge geschätzt?",
       "tooltip": "Schätzung: etwa {{perToken}} Zeichen je Token. Eingebettete Verweise sind nicht eingerechnet.",
       "longTooltip": "Sehr lange Anweisungen werden oft schlechter befolgt.",
-      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)"
+      "announce": "Länge: etwa {{chars}} Zeichen, etwa {{tokens}} Token (geschätzt)",
+      "budget": {
+        "measure": {
+          "profile_one": "{{value}} Wort",
+          "profile_other": "{{value}} Wörter",
+          "mode_one": "Modus: {{value}} Wort",
+          "mode_other": "Modus: {{value}} Wörter",
+          "mode_count_one": "{{value}} Modus",
+          "mode_count_other": "{{value}} Modi",
+          "playbook_body_one": "{{value}} Wort",
+          "playbook_body_other": "{{value}} Wörter"
+        },
+        "target": "Richtwert {{target}}",
+        "over": {
+          "profile": "über dem Richtwert {{target}}, Abläufe besser in ein Playbook",
+          "mode": "über dem Richtwert {{target}}, Arbeitsschritte besser in ein Playbook",
+          "mode_count": "über dem Richtwert {{target}}, Modi zusammenlegen oder als Playbook führen",
+          "playbook_body": "über dem Richtwert {{target}}, besser teilen oder Nachschlagewissen in eine Resource"
+        },
+        "helpLink": "Richtwerte erklärt"
+      }
     }
   },
   "learning": {
@@ -4096,6 +4143,7 @@
     "evolution": {
       "title": "Weiterentwicklung",
       "stepsAria": "Schritte der Weiterentwicklung",
+      "helpLink": "So läuft ein Review",
       "waiting_one": "1 wartet auf dich",
       "waiting_other": "{{count}} warten auf dich",
       "unavailable": "Nicht verfügbar",
@@ -4500,6 +4548,12 @@
       "next": "Weiter: {{title}} →",
       "notFound": "Diese Hilfe-Seite gibt es nicht."
     },
+    "public": {
+      "brand": "Who2Be",
+      "home": "Zur Hilfe-Startseite",
+      "signIn": "Anmelden",
+      "moreAfterLogin": "Tutorials, deinen Fortschritt und „Was ist neu“ siehst du nach der Anmeldung."
+    },
     "tutorial": {
       "notFound": "Dieses Tutorial gibt es nicht.",
       "stepNumber": "Schritt {{number}}:",
@@ -4538,7 +4592,7 @@
       "hidden": "Ausgeblendet. Du findest „{{title}}“ jederzeit im Fragezeichen-Menü oben rechts.",
       "hideFailed": "Ausblenden hat nicht ganz geklappt. Die Liste ist neu geladen, versuch es bitte noch einmal.",
       "error": "Erste Schritte konnten nicht geladen werden.",
-      "openAgents": "Zu den Agents",
+      "openAgents": "Zu den Agenten",
       "connectBuilder": "Builder verbinden",
       "state": {
         "done": "erledigt",

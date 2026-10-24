@@ -1171,6 +1171,16 @@
   },
   {
     "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/delete",
+    "operationId": "delete_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_delete_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/update",
+    "operationId": "update_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_update_post"
+  },
+  {
+    "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/save-result",
     "operationId": "save_query_result_v1_workspaces__workspace_id__wa_tables__table_id__save_result_post"
   },

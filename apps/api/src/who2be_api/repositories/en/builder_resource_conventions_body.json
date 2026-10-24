@@ -1725,7 +1725,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side.",
+        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side (editor for writing, admin for promote/retire).",
         "styles": {}
       }
     ],
@@ -1904,7 +1904,7 @@
       },
       {
         "type": "text",
-        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
+        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'read_only' for agents that should benefit from curated knowledge but not contribute; 'off' for tool-like agents with no personalization benefit; 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
         "styles": {}
       }
     ],
@@ -1928,7 +1928,7 @@
       },
       {
         "type": "text",
-        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that). If your own level is too low, enabling it belongs in the hand-off to the user — that's by design, not a bug.",
+        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that; if your own level is 'off', any unlock). If your own level is too low, enabling it belongs in the hand-off to the user (agent detail page → Tools → Memory) — that's by design, not a bug.",
         "styles": {}
       }
     ],
@@ -1952,7 +1952,7 @@
       },
       {
         "type": "text",
-        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — no instructions to AI systems, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
+        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — user data, no instructions to AI systems, no repo/code facts, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
         "styles": {}
       }
     ],

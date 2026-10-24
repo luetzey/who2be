@@ -249,3 +249,52 @@ für den dokumentierten Cron-Pfad, weil der nachts gegen Areas läuft, die
 tagelang niemand angefasst hat. Sie hilft **nicht** gegen zwei API-Container
 und ersetzt den Postgres-Advisory-Lock nicht — der bleibt der offene Punkt aus
 dem Nachtrag 2026-08-16 und wird durch die Karenzfrist nicht verbaut.
+
+## Nachtrag 2026-10-23 — Zeilen ändern und löschen (`update_rows`, `delete_rows`)
+
+Anlass: Atlas konnte eine falsch importierte Zeile („Golf-Check Wochenende")
+nicht korrigieren. Der Store kannte nur Anhängen (`insert_rows`) und das
+Löschen der ganzen Tabelle. Owner-Entscheidung 2026-10-23; die Weichen unten
+hat das Projektmanagement bestätigt.
+
+### Entscheidung
+
+- **Routen im RPC-Stil:** `POST /wa-tables/{id}/rows/update` und
+  `.../rows/delete`, wie `/query` und `/save-result`. Kein `DELETE` mit Body,
+  den Proxies und Clients uneinheitlich behandeln.
+- **Auswahl per `match`:** Spalte -> Wert, UND-verknüpft, nur Gleichheit
+  (``IS ?``, damit `null` leere Zellen trifft), nur Spalten aus dem Schema.
+  Ein leeres `match` lehnen Modell und Engine ab (422) — es trifft nie „alle
+  Zeilen". Kein Aufrufer-SQL; die Engine baut feste, parametrisierte
+  Statements. `query_table` bleibt unverändert read-only.
+- **Grenzen:** höchstens 100 Treffer je Aufruf, optional `expected_count`.
+  Mehr Treffer oder eine abweichende Zahl → 409 `concurrent_conflict`, und
+  nichts ist geändert. Lesen, Prüfen und Schreiben laufen in einer
+  ``BEGIN IMMEDIATE``-Transaktion unter dem Area-Lock.
+- **`set` wie beim Import geprüft:** Schema-Spalten, Skalare, Zell-Grenzen,
+  Steuerzeichen, NOT NULL, `occurred_at`. Interne Spalten (`_dedupe_hash`,
+  `_source_artifact`) sind keine Schema-Spalten und darum abgelehnt.
+  `category_column` ist nicht setzbar (422): Kategorien kommen nur aus Regeln.
+- **Dedupe:** berührt `set` eine Dedupe-Spalte, berechnet die Engine
+  `_dedupe_hash` aus der neuen Zeile neu (gleiche Normalform wie beim Import,
+  boolean-Spalten aus 0/1 zurück nach `bool`). Trifft er eine andere Zeile,
+  rollt der UNIQUE-Index die ganze Änderung zurück → 409.
+- **Kategorie folgt der Regel:** ändert `set` die `match_column`, läuft die
+  Regel-Phase des Imports auf dem neuen Wert. Weil `set` allen Treffern
+  denselben Wert gibt, ist das Ergebnis für alle gleich und wird in derselben
+  Änderung geschrieben. Kein Treffer → NULL, Regel-Konflikt → NULL plus
+  Konflikt-Meldung, wie beim Import.
+- **Gates:** wie `insert_rows` — Rolle ≥ editor, Capability
+  `workarea_write`, Write-Grant auf die Area; ohne Sichtbarkeit 404.
+- **Antwort:** `{updated|deleted: n, note}`; bei 0 Treffern ist `note` =
+  „keine Zeile passt zu match". Kein Fehler, aber auch kein stilles
+  Erfolgssignal.
+- **Protokoll:** Zugriffslog `(table, write)` wie beim Import, nur wenn n > 0.
+  `agent_access_log` hat keine Zählerspalte (eine Zeile je Tag und
+  Operation); die Zahl der betroffenen Zeilen steht im App-Log, ohne Inhalte.
+
+### Bewusst nicht entschieden
+
+- **Bereichs-/Muster-Bedingungen** (`<`, `LIKE`) in `match` — erst bei
+  belegtem Bedarf; Gleichheit deckt den Korrekturfall ab.
+- **Eine Zählerspalte im Zugriffslog** — bräuchte eine Migration.

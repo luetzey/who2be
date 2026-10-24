@@ -3,7 +3,7 @@ title: Build your own agent
 description: Let the Builder build an agent for you in chat, or create one yourself.
 section: erste-schritte
 order: 40
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -27,9 +27,10 @@ You'll then find the new agent under **Agents**.
 
 You can also create an agent without the Builder:
 
-1. Under **Agents**, click **Create new agent**.
-2. Give it a name and choose a **Persona** and a **System prompt**.
+1. Under **Agents**, click **Create new agent**. Who2Be opens **Settings › Configuration** right away, with the cursor in the **Persona** field.
+2. Give it a name and choose a **Persona** and a **System prompt**. Then click **Save**.
 3. The persona must be active. As long as something is missing, Who2Be shows "Not yet activatable" and names what is missing.
+4. Once everything is set, Who2Be asks "Activate the agent now?". With **Activate** it can be fetched right away, and you land in the overview at the **Connection** card. With **Later** it stays deactivated; you can change the status under **Settings**.
 
 ## Connect the new agent [#verbinden]
 

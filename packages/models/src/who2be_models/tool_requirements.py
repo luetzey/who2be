@@ -315,6 +315,10 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "delete_table": _WORKAREA_WRITE,
     "list_tables": _WORKAREA_READ,
     "insert_rows": _WORKAREA_WRITE,
+    # update_rows/delete_rows (ADR-0049-Nachtrag 2026-10-23): dasselbe Gate
+    # wie der Import — wer Zeilen schreiben darf, darf sie korrigieren.
+    "update_rows": _WORKAREA_WRITE,
+    "delete_rows": _WORKAREA_WRITE,
     "query_table": _WORKAREA_READ,
     "describe_table": _WORKAREA_READ,
     "save_query_result": _WORKAREA_WRITE,

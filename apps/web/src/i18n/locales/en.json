@@ -165,6 +165,7 @@
       "invitation_email_mismatch": "This invitation is for a different email address.",
       "invitation_email_required": "This invitation can only be accepted with an account that has a confirmed email address.",
       "invitation_email_unconfirmed": "Confirm your account's email address first, then you can accept the invitation.",
+      "invitation_already_pending": "There is already an open invitation for this address.",
       "personal_organization_undeletable": "Personal organizations are removed through account deletion.",
       "organization_owner_required": "Only the owner can delete this organization.",
       "workspace_org_missing": "Workspace without an organization.",
@@ -669,6 +670,13 @@
       "saved": "Agent saved.",
       "unknownError": "Unknown error."
     },
+    "activatePrompt": {
+      "title": "Activate the agent now?",
+      "body": "Connected programs can then fetch it.",
+      "confirm": "Activate",
+      "later": "Later",
+      "success": "Agent activated."
+    },
     "connect": {
       "title": "Connection",
       "nameValue": "Who2Be – {{name}}",
@@ -677,13 +685,25 @@
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "Cursor or VS Code",
+        "hermes": "Hermes Agent",
         "other": "Something else"
+      },
+      "clientSuffix": {
+        "claude": "(web, app, mobile)"
       },
       "clientName": {
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "your editor",
+        "hermes": "Hermes",
         "other": "your app"
+      },
+      "lead": {
+        "claude": "Web, desktop app and mobile.",
+        "code": "In the terminal, with one command.",
+        "editor": "One click adds the agent to your editor.",
+        "hermes": "In the terminal of the machine Hermes runs on.",
+        "other": "Gemini, Le Chat, Windsurf, Zed and other programs with remote MCP."
       },
       "status": {
         "connected": "Connected",
@@ -697,7 +717,9 @@
         "editor": "Click “Add to Cursor” or “Install in VS Code”. The editor asks once.",
         "login": "Sign in to Who2Be and confirm the agent “{{agent}}”.",
         "otherIntro": "Your app needs to support remote MCP with sign-in (OAuth). Enter this address there:",
-        "otherTest": "Then write to your agent:"
+        "otherTest": "Then write to your agent:",
+        "hermesLogin": "Hermes opens sign-in in the browser or prints a link for it. Sign in to Who2Be and approve the agent “{{agent}}”.",
+        "hermesTest": "Start a new session or type {{cmd}}. Then write:"
       },
       "cta": {
         "claude": "Connect to Claude",
@@ -725,6 +747,10 @@
       },
       "teamPlan": "On a Team or Enterprise plan? There, your Claude organization owner adds connectors.",
       "free": "Claude Free allows only one custom connector. Remove the Builder there first.",
+      "hermesProfile": "Several profiles? {{cmd}} puts the agent in the right one.",
+      "hermesProfileCommand": "hermes -p <profile> mcp add …",
+      "hermesHeadless": "Hermes runs on a server without a browser? Open the link on your computer and paste the address the browser ends up on into the terminal.",
+      "otherProfiles": "How it works in Gemini, Le Chat, Windsurf, Zed and Copilot",
       "waiting": "Waiting for “{{agent}}” …",
       "waitingHint": "As soon as it loads its persona in {{client}}, this step is checked off. You can leave this page open.",
       "expired": "No request has arrived yet. Who2Be has stopped checking on its own.",
@@ -2428,6 +2454,7 @@
     },
     "overview": {
       "nav": "Feedback",
+      "helpLink": "Feedback explained",
       "title": "Feedback",
       "description": "Manage all your agents' feedback in one place.",
       "sectionTitle": "Overview (elements)",
@@ -3342,7 +3369,27 @@
       "helpLabel": "How is the length estimated?",
       "tooltip": "Estimate: about {{perToken}} characters per token. Embedded references are not included.",
       "longTooltip": "Very long instructions are often followed less well.",
-      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)"
+      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)",
+      "budget": {
+        "measure": {
+          "profile_one": "{{value}} word",
+          "profile_other": "{{value}} words",
+          "mode_one": "Mode: {{value}} word",
+          "mode_other": "Mode: {{value}} words",
+          "mode_count_one": "{{value}} mode",
+          "mode_count_other": "{{value}} modes",
+          "playbook_body_one": "{{value}} word",
+          "playbook_body_other": "{{value}} words"
+        },
+        "target": "guide value {{target}}",
+        "over": {
+          "profile": "over the guide value {{target}}, procedures belong in a playbook",
+          "mode": "over the guide value {{target}}, steps belong in a playbook",
+          "mode_count": "over the guide value {{target}}, merge modes or run them as playbooks",
+          "playbook_body": "over the guide value {{target}}, split it or move reference knowledge into a resource"
+        },
+        "helpLink": "About guide values"
+      }
     }
   },
   "learning": {
@@ -4096,6 +4143,7 @@
     "evolution": {
       "title": "Evolution",
       "stepsAria": "Steps of the evolution",
+      "helpLink": "How a review works",
       "waiting_one": "1 waiting for you",
       "waiting_other": "{{count}} waiting for you",
       "unavailable": "Not available",
@@ -4499,6 +4547,12 @@
       "allPages": "All help pages",
       "next": "Next: {{title}} →",
       "notFound": "This help page does not exist."
+    },
+    "public": {
+      "brand": "Who2Be",
+      "home": "Go to the help home page",
+      "signIn": "Sign in",
+      "moreAfterLogin": "Tutorials, your progress and “What's new” are available after signing in."
     },
     "tutorial": {
       "notFound": "This tutorial does not exist.",

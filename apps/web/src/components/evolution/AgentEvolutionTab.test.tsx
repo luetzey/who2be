@@ -272,6 +272,10 @@ describe('AgentEvolutionTab — editor', () => {
     expect(guide.tagName).toBe('DETAILS')
     expect(guide).not.toHaveAttribute('open')
     expect(within(guide).getByText('So entwickelst du einen Agenten weiter')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'So läuft ein Review' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/evolution#besprechen',
+    )
 
     const steps = screen.getByRole('list', { name: 'Schritte der Weiterentwicklung' })
     expect(steps.tagName).toBe('OL')
@@ -597,6 +601,10 @@ describe('AgentEvolutionTab — Rechte', () => {
     expect(screen.getByRole('button', { name: 'Rückmeldung geben' })).toBeInTheDocument()
     expect(screen.getByTestId('evolution-viewer-explain')).toHaveTextContent(
       'Reviews, Änderungen und Nachkontrollen führen Editoren.',
+    )
+    expect(within(viewer).getByRole('link', { name: 'So läuft ein Review' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/evolution#besprechen',
     )
     expect(screen.queryByTestId('evolution-guide')).toBeNull()
     expect(screen.queryByTestId('evolution-reviews')).toBeNull()

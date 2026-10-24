@@ -6,6 +6,7 @@ import asyncpg
 from pydantic import BaseModel
 
 from who2be_api.services.placeholders._core import RenderContext, ResolveResult
+from who2be_api.services.placeholders._texts import PlaceholderTexts, texts, texts_for
 from who2be_api.services.placeholders.resolvers.memory import memory_prompt_block
 from who2be_models import (
     MCP_TOOL_REQUIREMENTS,
@@ -44,33 +45,34 @@ class ToolsOverviewResolver:
         db: asyncpg.Connection,  # noqa: ARG002
     ) -> ResolveResult:
         policy = ctx.tool_policy
-        lines = ["## Verfuegbare Werkzeuge", ""]
+        t = texts(ctx)
+        lines = [t.tools_heading, ""]
         any_write = False
         for tool in _TOOLS:
             if not tool.is_visible(policy):
                 continue
             if tool.has_visible_write(policy):
                 any_write = True
-            suffix = tool.scope_suffix(policy)
+            suffix = tool.scope_suffix(policy, t)
             lines.append(f"- **{tool.signature}** — {tool.description}{suffix}")
         lines.append("")
-        lines.append(_TOOLS_APPLIED_NOTE)
+        lines.append(t.tools_applied_note)
         if any_write:
             lines.append("")
-            lines.append(_TOOLS_WRITE_NOTE)
+            lines.append(t.tools_write_note)
         # Rueckmelde-Protokoll: nur wenn der Agent das Flywheel auch bedienen darf.
         # `policy is None` (z. B. Persona-Body) zeigt ohnehin keine Schreib-/
         # Feedback-Tools — dann auch keinen Protokoll-Hinweis.
         if policy is not None and policy.allows(AgentCapability.feedback_write):
             lines.append("")
-            lines.append(_TOOLS_FEEDBACK_NOTE)
+            lines.append(t.tools_feedback_note)
         # Gedaechtnis-Hinweis (ADR-0044): nur bei freigeschaltetem Memory und
         # nur als FALLBACK — enthaelt der Template-Body einen expliziten
         # `memory`-Placeholder (ctx.has_explicit_memory, vom Renderer gesetzt),
         # rendert der an seiner Position und dieser Auto-Append entfaellt
         # (kein Doppel-Hinweis). Texte: eine Quelle (`memory_prompt_block`).
         if policy is not None and not ctx.has_explicit_memory:
-            block = memory_prompt_block(policy)
+            block = memory_prompt_block(policy, ctx.locale)
             if block:
                 lines.append("")
                 lines.append(block)
@@ -117,16 +119,19 @@ class _ToolDoc(BaseModel):
             if name in MCP_TOOL_REQUIREMENTS
         )
 
-    def scope_suffix(self, policy: AgentToolPolicy | None) -> str:
-        """Hinweis „(nur zugewiesene…)" bei Read-Scope `assigned`."""
+    def scope_suffix(
+        self, policy: AgentToolPolicy | None, t: PlaceholderTexts | None = None
+    ) -> str:
+        """Hinweis „(nur zugewiesene…)" bei Read-Scope `assigned`, in der Sprache `t`."""
         if policy is None:
             return ""
+        t = t or texts_for(None)
         if self.read_domain == "playbook" and policy.playbook_read == ReadScope.assigned:
-            return " — **nur die dir zugewiesenen Playbooks**."
+            return t.tools_scope_playbook
         if self.read_domain == "resource" and policy.resource_read == ReadScope.assigned:
-            return " — **nur die dir zugewiesenen Resources**."
+            return t.tools_scope_resource
         if self.read_domain == "agent" and policy.agent_read == ReadScope.assigned:
-            return " — **nur dein eigener Agent**."
+            return t.tools_scope_agent
         return ""
 
 
@@ -579,6 +584,8 @@ _TOOLS: list[_ToolDoc] = [
     _ToolDoc(
         signature=(
             "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
+            "update_rows(table_id, match, set, expected_count?) / "
+            "delete_rows(table_id, match, expected_count?) / "
             "save_query_result(table_id, sql, title, occurred_at, ...) / "
             "delete_table(table_id) / set_convention(area_id, source_name, convention) / "
             "upsert_category_rule(area_id, pattern, category, confidence?)"
@@ -586,6 +593,8 @@ _TOOLS: list[_ToolDoc] = [
         tool_names=(
             "create_table",
             "insert_rows",
+            "update_rows",
+            "delete_rows",
             "save_query_result",
             "delete_table",
             "set_convention",
@@ -595,6 +604,10 @@ _TOOLS: list[_ToolDoc] = [
             "Strukturierte Zahlen gehoeren in eine Tabelle, nicht in Prosa: "
             "create_table (Spalte `occurred_at` ist Pflicht), insert_rows "
             "(idempotent ueber den Dedupe-Hash, Antwort {inserted, skipped}). "
+            "Falsche Zeilen korrigiert update_rows, ueberzaehlige entfernt "
+            "delete_rows — beide waehlen per `match` (Spalte -> Wert, nur "
+            "Gleichheit), hoechstens 100 Zeilen; vorher mit query_table pruefen "
+            "und `expected_count` mitgeben. "
             "Soll ein Ergebnis belegbar sein, friert save_query_result Abfrage "
             "+ Ergebnis als Artifact ein (dessen ID ist der `source_ref` fuer "
             "einen KB-Node). Einheiten und Notation je Quelle einmalig ueber "
@@ -720,40 +733,5 @@ _TOOLS: list[_ToolDoc] = [
     ),
 ]
 
-# Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks
-# (Pill / applied) gelten immer und sind bereits expandiert — kein MCP-Call noetig.
-# Triggered Playbooks werden via list_triggers() entdeckt und nur bei
-# Trigger-Match via fetch_playbook() geladen.
-_TOOLS_APPLIED_NOTE = (
-    "**Invocation-Wege:** Fest eingebettete Playbooks (applied, bereits im "
-    "System-Prompt) gelten immer. Weitere Playbooks nur bei Trigger-Match laden "
-    "— erst list_triggers(), dann fetch_playbook(id)."
-)
-
-# Erscheint nur, wenn dem Agenten mindestens ein Schreib-Tool freigeschaltet ist.
-_TOOLS_WRITE_NOTE = (
-    "**Schreibzugriff:** Die oben gelisteten Schreib-Tools sind fuer dich "
-    "freigeschaltet. Tools, die hier nicht stehen, sind fuer diesen Agenten "
-    "gesperrt und werden serverseitig abgelehnt — versuche sie nicht."
-)
-
-
-# Rueckmelde-Protokoll (ADR-0038). Erscheint nur, wenn `feedback_write` aktiv ist
-# — macht aus der reinen Tool-Liste eine Handlungsanweisung: WANN melde ich was?
-# Bewusst instruktiv, nicht erzwungen (append-only „Vorschlag, kein Auto-Edit").
-_TOOLS_FEEDBACK_NOTE = (
-    "**Rueckmeldung (mach das routinemaessig):** Damit die AgentDB lernt, welche "
-    "Inhalte wirklich helfen, melde nach JEDEM Einsatz eines Playbooks oder einer "
-    "Resource kurz zurueck:\n"
-    "- `record_usage(entity_type, entity_id, version?, outcome)` mit outcome "
-    "`applied` (angewandt), `skipped` (bewusst verworfen) oder `error` "
-    "(fehlgeschlagen).\n"
-    "- Wirkt ein Inhalt veraltet, falsch oder unklar? `submit_feedback(entity_type, "
-    "entity_id, signal, note?)` mit signal `outdated`/`incorrect`/`unclear` (oder "
-    "`helpful`, wenn es gut gepasst hat) — statt selbst umzuschreiben; ein Kurator "
-    "entscheidet ueber die Pflege.\n"
-    "Beispiel: nach fetch_playbook(P) angewandt → "
-    "record_usage('playbook', P, outcome='applied'); fiel ein veralteter Schritt "
-    "auf → submit_feedback('playbook', P, signal='outdated', note='Schritt 4 …'). "
-    "Diese Rueckmeldungen aendern nie selbst Inhalte und sind fuer den User unsichtbar."
-)
+# Rahmen-Saetze (Ueberschrift, Invocation, Schreibzugriff, Rueckmeldung,
+# Scope-Hinweise) liegen DE/EN in `placeholders/_texts.py`.

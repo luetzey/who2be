@@ -14,8 +14,11 @@ from who2be_models.blocknote_text import (
     blocks_plain_text,
     format_link,
     format_table,
+    heading_level,
+    is_heading_block,
     parse_blocknote_blocks,
     placeholder_token_inline,
+    section_blocks,
     table_cells,
     text_inline_only,
 )
@@ -209,3 +212,68 @@ def test_format_helpers() -> None:
     assert table_cells([{"type": "text"}]) is None
     broken_cell = {"type": "tableContent", "rows": [{"cells": [{"content": "x"}]}]}
     assert table_cells(broken_cell) == [[[]]]
+
+
+# --- Abschnittsregel (ADR-0021): eine Quelle fuer Playbook- und Resource-Schnitt ---
+
+
+def _h(block_id: str, level: int | None = 1) -> dict[str, object]:
+    props: dict[str, object] = {} if level is None else {"level": level}
+    return {"id": block_id, "type": "heading", "props": props, "content": [], "children": []}
+
+
+def _ids(blocks: list[dict[str, object]]) -> list[object]:
+    return [b["id"] for b in blocks]
+
+
+_DOC = [
+    _h("a", 1),
+    _para("a1", "x"),
+    _h("a-b", 2),
+    _para("ab1", "x"),
+    _h("a-b-c", 3),
+    _para("abc1", "x"),
+    _h("a-d", 2),
+    _para("ad1", "x"),
+    _h("e", 1),
+    _para("e1", "x"),
+]
+
+
+def test_section_blocks_heading_runs_to_next_heading_of_same_or_higher_level() -> None:
+    # h1: tiefere Ebenen bleiben drin, das naechste h1 beendet.
+    assert _ids(section_blocks(_DOC, "a")) == [
+        "a",
+        "a1",
+        "a-b",
+        "ab1",
+        "a-b-c",
+        "abc1",
+        "a-d",
+        "ad1",
+    ]
+    # h2: das h3 bleibt drin, das naechste h2 beendet.
+    assert _ids(section_blocks(_DOC, "a-b")) == ["a-b", "ab1", "a-b-c", "abc1"]
+    # h3 direkt vor einem h2: endet an der HOEHEREN Ebene, nicht erst am naechsten h3.
+    assert _ids(section_blocks(_DOC, "a-b-c")) == ["a-b-c", "abc1"]
+    # Letztes h2 vor einem h1: endet am h1, nicht am Dokumentende.
+    assert _ids(section_blocks(_DOC, "a-d")) == ["a-d", "ad1"]
+    # Letzter Abschnitt laeuft bis zum Dokumentende.
+    assert _ids(section_blocks(_DOC, "e")) == ["e", "e1"]
+
+
+def test_section_blocks_non_heading_and_unknown_anchor() -> None:
+    assert _ids(section_blocks(_DOC, "ab1")) == ["ab1"]
+    assert section_blocks(_DOC, "fehlt") == []
+    assert section_blocks([], "a") == []
+
+
+def test_heading_helpers_default_level_and_type() -> None:
+    assert heading_level(_h("x", None)) == 1
+    assert heading_level({"id": "x", "type": "heading", "props": {"level": "2"}}) == 1
+    assert heading_level(_h("x", 3)) == 3
+    assert is_heading_block(_h("x"))
+    assert not is_heading_block(_para("p", "x"))
+    assert not is_heading_block("heading")
+    # Ohne `level` gilt h1: ein h2 davor endet am levellosen Heading.
+    assert _ids(section_blocks([_h("s", 2), _para("p", "x"), _h("t", None)], "s")) == ["s", "p"]

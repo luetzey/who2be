@@ -13,7 +13,7 @@ Der Builder ist schon da. Er hilft dir im Chat, eigene Agenten zu bauen, und bra
 
 ## Mit Claude verbinden [#connect-claude]
 
-Öffne den Builder unter **Agents** und verbinde ihn mit Claude. Danach schreibst du in Claude einen Test-Satz:
+Öffne den Builder unter **Agenten** und verbinde ihn mit Claude. Danach schreibst du in Claude einen Test-Satz:
 
 ```
 Wer bist du? Lade deine Persona aus Who2Be.

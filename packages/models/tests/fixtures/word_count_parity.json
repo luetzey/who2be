@@ -1,0 +1,147 @@
+{
+  "_comment": "Paritaet der Wortzaehlung Web/Server (ADR-0063, Builder schlank B5). Python: count_words(to_markdown(blocks)), vitest: countWords(blocks). Beide pruefen gegen expected_words.",
+  "cases": [
+    {
+      "name": "gemischtes Dokument",
+      "expected_words": 28,
+      "blocks": [
+        {
+          "id": "h1",
+          "type": "heading",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "level": 2},
+          "content": [{"type": "text", "text": "Rolle und Ton", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "p1",
+          "type": "paragraph",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [
+            {"type": "text", "text": "Lies ", "styles": {}},
+            {"type": "placeholder", "props": {"kind": "playbook", "target_id": "b1f0c9b8-0000-4000-8000-000000000001", "label": "Onboarding-Leitfaden mit vielen Wörtern"}},
+            {"type": "text", "text": " zuerst, ", "styles": {}},
+            {"type": "text", "text": "wirklich", "styles": {"bold": true}},
+            {"type": "text", "text": " - siehe ", "styles": {}},
+            {"type": "link", "href": "https://example.org/hilfe", "content": [{"type": "text", "text": "die Hilfe", "styles": {}}]},
+            {"type": "text", "text": ".", "styles": {}}
+          ],
+          "children": []
+        },
+        {
+          "id": "b1",
+          "type": "bulletListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Oben", "styles": {}}],
+          "children": [
+            {
+              "id": "b2",
+              "type": "bulletListItem",
+              "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+              "content": [{"type": "text", "text": "Unten drunter", "styles": {}}],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "n1",
+          "type": "numberedListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Erster Schritt", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "n2",
+          "type": "numberedListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Zweiter", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "c1",
+          "type": "checkListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "checked": false},
+          "content": [{"type": "text", "text": "Offen hier", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "c2",
+          "type": "checkListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "checked": true},
+          "content": [{"type": "text", "text": "Erledigt hier", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "code1",
+          "type": "codeBlock",
+          "props": {"language": "python"},
+          "content": [{"type": "text", "text": "print('nicht gezaehlt')\nmehr code", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "t1",
+          "type": "table",
+          "props": {"textColor": "default"},
+          "content": {
+            "type": "tableContent",
+            "columnWidths": [null, null],
+            "rows": [
+              {"cells": [[{"type": "text", "text": "Spalte", "styles": {}}], [{"type": "text", "text": "B", "styles": {}}]]},
+              {"cells": [[{"type": "text", "text": "vier", "styles": {}}], [{"type": "text", "text": "fünf sechs", "styles": {}}]]}
+            ]
+          },
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "gesperrte und nicht abbildbare Bloecke",
+      "expected_words": 12,
+      "blocks": [
+        {
+          "id": "farbe",
+          "type": "paragraph",
+          "props": {"textColor": "red", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Rot gefärbter Absatz", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "unter",
+          "type": "paragraph",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [
+            {"type": "text", "text": "wichtig", "styles": {"underline": true}},
+            {"type": "text", "text": " Hinweis", "styles": {}}
+          ],
+          "children": []
+        },
+        {
+          "id": "zitat",
+          "type": "quote",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Ein kurzes Zitat", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "klapp",
+          "type": "toggleListItem",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Mehr dazu", "styles": {}}],
+          "children": []
+        },
+        {
+          "id": "bild",
+          "type": "image",
+          "props": {"url": "https://example.org/bild.png", "caption": "", "showPreview": true, "previewWidth": 512},
+          "children": []
+        },
+        {
+          "id": "p2",
+          "type": "paragraph",
+          "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+          "content": [{"type": "text", "text": "Normal danach", "styles": {}}],
+          "children": []
+        }
+      ]
+    }
+  ]
+}

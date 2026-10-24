@@ -591,7 +591,7 @@ def _block_shaped_inputs(name: str, schema: dict[str, Any]) -> list[str]:
 def test_no_tool_input_schema_accepts_blocknote_json() -> None:
     """Ueber den ganzen Katalog: kein Eingabeschema nimmt ein Editor-Dokument an."""
     tools = asyncio.run(mcp.list_tools(run_middleware=False))
-    assert len(tools) == 101
+    assert len(tools) == 103
     findings: list[str] = []
     for tool in tools:
         findings += _block_shaped_inputs(tool.name, tool.parameters or {})

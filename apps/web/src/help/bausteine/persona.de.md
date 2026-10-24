@@ -3,7 +3,7 @@ title: Persona
 description: Wer dein Agent ist, wie er klingt und wo seine Grenzen liegen.
 section: bausteine
 order: 10
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -28,9 +28,26 @@ Ein Modus ist eine situative Variante der Persona, etwa „Coaching“ und „An
 
 Passt kein Trigger, arbeitet der Agent im Standard-Modus.
 
+## Wie lang darf eine Persona sein? [#laenge]
+
+Die Persona lädt der Agent in jedem Chat ganz. Je länger sie ist, desto mehr Platz nimmt sie ein und desto schlechter befolgt er einzelne Regeln. Deshalb gibt es Richtwerte:
+
+- **Profil:** Richtwert 400 Wörter, Hinweis ab 600.
+- **Ein Modus** (alle drei Felder zusammen): Richtwert 150 Wörter, Hinweis ab 250.
+- **Zahl der Modi:** Richtwert 3, Hinweis ab 5.
+- **Playbook-Inhalt:** Richtwert 1 000 Wörter, Hinweis ab 1 500.
+
+Unter dem Editor siehst du, wo du stehst, etwa „412 Wörter · Richtwert 400“. Ab der Hinweis-Schwelle steht dort „über dem Richtwert“ mit einem Vorschlag. Das ist keine Grenze: Who2Be speichert trotzdem. Codeblöcke zählen nicht mit, ein eingefügter Verweis zählt als ein Wort.
+
+Wird es zu lang, hilft meist eins davon:
+
+- **Abläufe** („erst …, dann …“) gehören in ein [Playbook](/help/playbooks). Im Profil bleibt ein Verweis darauf.
+- **Nachschlagewissen** wie Tabellen, Listen und Vorlagen gehört in eine [Resource](/help/resources).
+- **Modi**, die sich kaum unterscheiden, legst du zusammen.
+
 ## Versionen und Aktivieren [#versionen]
 
-Jede Änderung an einer Persona erzeugt eine neue Version. Ein Entwurf wirkt noch nicht. Erst wenn eine Version aktiv ist, lädt der Agent sie. Aktivieren dürfen nur Admins.
+Jede Änderung erzeugt eine neue Version, zuerst als Entwurf. Ein Entwurf wirkt noch nicht. Bist du fertig, klickst du auf **Zur Freigabe einreichen**. Ein Admin prüft die Version und klickt auf **Aktivieren** oder schickt sie mit **Zurück in den Entwurf** zurück. Erst die aktive Version lädt der Agent.
 
 Ein Agent lässt sich nur einschalten, wenn seine Persona aktiv ist. Fehlt das, zeigt die Agent-Seite „Noch nicht aktivierbar“.
 

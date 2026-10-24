@@ -11,6 +11,7 @@ hier unangetastet.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 
 import pytest
@@ -293,7 +294,7 @@ def test_agent_playbook_markdown_example_converts_to_pills(pack: ContentPack) ->
         for item in block.get("content") or []
         if isinstance(item, dict) and item.get("type") == "placeholder"
     ]
-    assert pills == [("persona-field", "name"), ("tools-overview", ""), ("memory", "")]
+    assert pills == [("persona-field", "name"), ("memory", "")]
     assert converted[0]["type"] == "heading"
 
 
@@ -417,3 +418,175 @@ def test_builder_template_loads_persona_at_runtime_without_tools_block(pack: Con
     assert ("persona-ref", "") in pills
     assert ("persona-field", "profile") not in pills
     assert all(kind != "tools-overview" for kind, _ in pills)
+
+
+# Builder schlank B3 (Content-Stand 22): je Playbook die Konventions-Abschnitte,
+# die es laedt (K4). Die Liste ist die Erwartung; der Test liest die Anker aus
+# dem Playbook-Text und prueft sie gegen die Resource.
+_CONVENTION_ANCHORS = {
+    "persona": [
+        "res-conv-h-modi",
+        "res-conv-h-laengen",
+        "res-conv-h-trigger",
+        "res-conv-h-sprache",
+    ],
+    "playbook": ["res-conv-h-trigger", "res-conv-h-naming", "res-conv-h-laengen-budgets"],
+    "agent": ["res-conv-h-policy", "res-conv-h-memory", "res-conv-h-managed"],
+    "consistency": [
+        "res-conv-h-trigger",
+        "res-conv-h-modi",
+        "res-conv-h-policy",
+        "res-conv-h-laengen-budgets",
+    ],
+    "maintenance": ["res-conv-h-status", "res-conv-h-managed", "res-conv-h-graph"],
+    "external_tool": ["res-conv-h-exttool", "res-conv-h-status"],
+    "cases": ["res-conv-h-status", "res-conv-h-managed"],
+    "feedback_session": ["res-conv-h-status", "res-conv-h-managed"],
+}
+_ANCHOR_PATTERN = re.compile(r"res-conv-[a-z0-9-]+")
+_FETCH_CALL_PATTERN = re.compile(r"fetch_resource\(resource_id, block_ids=\[[^\]]*\]\)")
+
+
+def _playbook_blocks(pack: ContentPack, key: str) -> list[dict[str, object]]:
+    playbook = next(p for p in pack.playbooks if p.key == key)
+    blocks: list[dict[str, object]] = json.loads(playbook.load_body(pack.locale))
+    return blocks
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbook_convention_anchors_exist_as_resource_headings(pack: ContentPack) -> None:
+    """K4: jedes Builder-Playbook laedt nur seine Konventions-Abschnitte, mit
+    genau einem `fetch_resource(..., block_ids=[...])`-Aufruf. Jeder genannte
+    Anker ist eine Ueberschrift der Resource (die Abschnittsregel schneidet nur
+    Ueberschriften-Anker auf den ganzen Abschnitt). Rot, sobald ein Anker in der
+    Resource umbenannt wird oder ein Playbook einen Anker verliert."""
+    resource = json.loads(pack.resource.load_body(pack.locale))
+    headings = {b["id"] for b in resource if b["type"] == "heading"}
+    for key, expected in _CONVENTION_ANCHORS.items():
+        text = " ".join(_collect_block_texts(_playbook_blocks(pack, key)))
+        calls = _FETCH_CALL_PATTERN.findall(text)
+        assert len(calls) == 1, (key, calls)
+        assert _ANCHOR_PATTERN.findall(calls[0]) == expected, (key, calls[0])
+        # Auch jeder andere Verweis im Playbook-Text zeigt auf eine Ueberschrift.
+        missing = [a for a in _ANCHOR_PATTERN.findall(text) if a not in headings]
+        assert not missing, (pack.locale, key, missing)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbooks_drop_feedback_paragraph_and_full_conventions_load(pack: ContentPack) -> None:
+    """K1 + K4: kein Builder-Playbook traegt mehr den Feedback-Absatz oder die
+    Anweisung, die Konventionen ganz zu laden."""
+    gone_ids = {
+        "pb-feedback-h",
+        "pb-feedback-p",
+        "pb-maint-h-feedback",
+        "pb-exttool-h-feedback",
+        "d7-p81",
+        "fg-p54",
+    }
+    for playbook in pack.playbooks:
+        blocks = _playbook_blocks(pack, playbook.key)
+        assert not gone_ids & {b["id"] for b in blocks}, playbook.key
+        text = " ".join(_collect_block_texts(blocks))
+        assert "NICHT automatisch mit" not in text, playbook.key
+        assert "does NOT come along" not in text, playbook.key
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_playbook_keeps_tools_overview_out_of_templates(pack: ContentPack) -> None:
+    """PM 2026-10-22 (1): tools-overview gehoert standardmaessig nicht ins
+    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg."""
+    blocks = _playbook_blocks(pack, "agent")
+    rule = next(b for b in blocks if b["id"] == "pb-agent-li-placeholder-tools")
+    text = " ".join(_collect_block_texts(rule))
+    assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
+    whole = " ".join(_collect_block_texts(blocks))
+    assert "praktisch jedes Template" not in whole
+    assert "practically every template" not in whole
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbook_playbook_no_longer_prescribes_purpose_and_tools_sections(
+    pack: ContentPack,
+) -> None:
+    """PM 2026-10-22 (2): die Bauanleitung gibt „Zweck“ und „Tools &
+    Operations“ nicht mehr als Pflichtgliederung vor, nur noch „Fallen“."""
+    blocks = _playbook_blocks(pack, "playbook")
+    atomic = next(b for b in blocks if b["id"] == "pb-playbook-create-p2-atomic")
+    text = " ".join(_collect_block_texts(atomic))
+    assert "Tools & Operations" not in text
+    assert ("Fallen" in text) or ("Pitfalls" in text)
+
+
+# Builder schlank B6 (Content-Stand 23, PM 2026-10-24 Option b): Teilabruf
+# statt Teilen. Die Tests schneiden mit derselben Funktion, die der Server fuer
+# `fetch_playbook(block_ids=...)` nutzt.
+_WEG_IDS = ("d7-h-weg-a", "d7-h-weg-b", "d7-h-weg-c")
+_BLOCK_IDS_PATTERN = re.compile(r"block_ids=\[([^\]]*)\]")
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_cases_signpost_loads_one_path_with_frame(pack: ContentPack) -> None:
+    """Der Wegweiser der Fall-Triage nennt Rahmen + einen Weg. Je Weg schneidet
+    `slice_playbook_body` genau diesen Weg heraus (Weg B zusaetzlich A5, auf den
+    B4 verweist), Rahmen und Anti-Patterns bleiben, und der Teilabruf ist
+    deutlich kleiner als der ganze Body."""
+    from who2be_api.services.playbook_service import slice_playbook_body
+    from who2be_models.blocknote_text import blocks_plain_text
+
+    blocks = _playbook_blocks(pack, "cases")
+    headings = {b["id"] for b in blocks if b["type"] == "heading"}
+    sign = next(b for b in blocks if b["id"] == "d7-p-wegweiser")
+    anchors = re.findall(
+        r'"([^"]+)"', _BLOCK_IDS_PATTERN.findall(" ".join(_collect_block_texts(sign)))[0]
+    )
+    frame = [a for a in anchors if not a.startswith("<")]
+    assert set(frame) <= headings, set(frame) - headings
+    assert "d7-h-anti" in frame and "d7-h-grenzen" in frame and "d7-h-datenschutz" in frame
+    full = len(blocks_plain_text(blocks).encode())
+    for weg in _WEG_IDS:
+        extra = ["d7-h-a5"] if weg == "d7-h-weg-b" else []
+        sliced = json.loads(slice_playbook_body(json.dumps(blocks), [*frame, weg, *extra]))
+        ids = {b["id"] for b in sliced}
+        assert weg in ids
+        assert not ids & (set(_WEG_IDS) - {weg}), weg
+        assert {b["id"] for b in blocks if str(b["id"]).startswith("d7-b7")} <= ids
+        size = len(blocks_plain_text(sliced).encode())
+        assert size <= 0.7 * full, (weg, size, full)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_profile_carries_outline_rule_at_warn_threshold(pack: ContentPack) -> None:
+    """Die Lade-Regel steht im immer geladenen Profil (nicht im Body, den sie
+    erst steuern soll). Die Schwelle selbst nennt sie nicht: Budgetzahlen
+    stehen nur in den Konventionen (test_budget_numbers_live_only_in_the_
+    conventions), den Ueberschreitungs-Hinweis liefert der Server."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    rule = " ".join(_collect_block_texts(next(b for b in profile if b["id"] == "bp-p-output-load")))
+    assert 'format="outline"' in rule and "block_ids" in rule
+    assert ("Warnschwelle" in rule) or ("warning threshold" in rule)
+    assert ("nicht erneut holen" in rule) or ("again" in rule)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_policy_section_keeps_only_field_meaning(pack: ContentPack) -> None:
+    """tool_policy ist gegen die Konventionen entdoppelt: Muster, Empfehlung und
+    Eskalationsgrenzen stehen nur noch in res-conv-h-policy/-memory, die das
+    Agent-Playbook ohnehin laedt; was nur im Playbook stand, steht jetzt dort."""
+    from who2be_models.blocknote_text import section_blocks
+
+    blocks = _playbook_blocks(pack, "agent")
+    ids = {b["id"] for b in section_blocks(blocks, "pb-agent-h-policy")}
+    for gone in ("pb-agent-li-policy-escalation", "pb-agent-li-policy-memory-empfehlung"):
+        assert gone not in ids
+    assert "pb-agent-li-policy-memory-grenze" not in ids
+    resource = json.loads(pack.resource.load_body(pack.locale))
+    conv = " ".join(
+        _collect_block_texts(
+            section_blocks(resource, "res-conv-h-policy")
+            + section_blocks(resource, "res-conv-h-memory")
+        )
+    )
+    for fact in ("admin", "read_only", "403", "is_within"):
+        assert fact in conv, fact
+    assert ("Repo-/Code-Fakten" in conv) or ("repo/code facts" in conv)
