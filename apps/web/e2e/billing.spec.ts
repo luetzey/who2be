@@ -214,3 +214,42 @@ test('Billing: fehlgeschlagener Checkout-Aufruf zeigt eine sichtbare Fehlermeldu
 
   await expect(page.getByTestId('error-alert')).toBeVisible()
 })
+
+test('Billing: Checkout ohne Rechnungsdaten (409) verweist auf das Formular', async ({
+  page,
+  request,
+}) => {
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  // Der Client sieht gespeicherte Rechnungsdaten, der Server nicht (z. B. in
+  // einem zweiten Tab geloescht): genau dann antwortet der Checkout mit 409.
+  await stubBillingProfile(page, {
+    ...PLACEHOLDER_BILLING,
+    vat_status: null,
+    vat_checked_at: null,
+    updated_at: '2026-10-23T00:00:00Z',
+  })
+  await page.route('**/billing/checkout', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        detail: 'Rechnungsdaten fehlen. Bitte zuerst die Rechnungsdaten speichern.',
+      }),
+    }),
+  )
+
+  await page.goto(`/w/${workspaceId}/settings/org`)
+  const billingSlot = page.getByTestId('billing-slot')
+  await billingSlot.getByRole('button', { name: UPGRADE_BUTTON_NAME }).click()
+
+  const notice = billingSlot.getByTestId('checkout-details-missing')
+  await expect(notice).toBeVisible()
+  await expect(notice).toContainText(/Rechnungsdaten fehlen|Billing details missing/)
+  await expect(page.getByTestId('error-alert')).toHaveCount(0)
+
+  await notice.getByRole('button', { name: /Zu den Rechnungsdaten|Go to billing details/ }).click()
+  await expect(billingSlot.locator('#billing-details')).toBeFocused()
+})

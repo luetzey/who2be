@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next'
+import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,6 +8,7 @@ import '../i18n'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { formatDate } from '@/lib/dates'
 
 import { useCheckout } from '../hooks/useCheckout'
@@ -155,6 +157,41 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
 }
 
 /**
+ * Anker der Rechnungsdaten-Karte: die 409-Meldung des Checkouts springt dorthin.
+ */
+const BILLING_DETAILS_ID = 'billing-details'
+
+/**
+ * 409 vom Checkout (R2c): der Server kennt keine Rechnungsdaten der Org. Das
+ * passiert, wenn der Client einen veralteten Stand zeigt (z. B. in einem
+ * zweiten Tab geloescht). Statt der rohen Servermeldung eine eigene Meldung
+ * mit Sprung zur Rechnungsdaten-Karte aus R1.
+ */
+function DetailsMissingAlert({ canJump }: { canJump: boolean }) {
+  const { t } = useTranslation('billing')
+  const jump = () => {
+    const card = document.getElementById(BILLING_DETAILS_ID)
+    if (!card) return
+    card.scrollIntoView?.({ block: 'start' })
+    card.focus()
+  }
+  return (
+    <Alert variant="destructive" data-testid="checkout-details-missing">
+      <AlertCircle />
+      <AlertTitle>{t('error.detailsMissing.title')}</AlertTitle>
+      <AlertDescription className="space-y-3">
+        <p>{t('error.detailsMissing.message')}</p>
+        {canJump ? (
+          <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={jump}>
+            {t('error.detailsMissing.action')}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
+/**
  * Billing-Slot der Org-Settings (Track D). Bewusst **cloud-only**: in der
  * On-Prem-Edition liefert der Endpoint `edition='onprem'` und das Panel rendert
  * `null` — On-Prem ist unbegrenzt und ohne Billing. Zeigt Plan-Status, Features,
@@ -162,9 +199,9 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
  *
  * Darunter fuer Admins die Rechnungsdaten (ADR-0061 R1). Solange keine
  * gespeichert sind, bleibt der Upgrade-Knopf gesperrt: eine Rechnung nach §14
- * UStG braucht Name und Adresse. Die serverseitige Sperre im Checkout folgt
- * mit R2; fuer Nicht-Admins aendert sich nichts (der Checkout ist ohnehin
- * admin-only).
+ * UStG braucht Name und Adresse. Der Checkout sperrt serverseitig ebenfalls
+ * (409, R2c); die Meldung dazu verweist auf die Rechnungsdaten-Karte. Fuer
+ * Nicht-Admins aendert sich nichts (der Checkout ist ohnehin admin-only).
  */
 export function BillingPanel() {
   const { t } = useTranslation('billing')
@@ -273,7 +310,11 @@ export function BillingPanel() {
             ) : null}
           </>
         )}
-        {checkout.error ? <ErrorAlert message={checkout.error} /> : null}
+        {checkout.errorStatus === 409 ? (
+          <DetailsMissingAlert canJump={isAdmin} />
+        ) : checkout.error ? (
+          <ErrorAlert message={checkout.error} />
+        ) : null}
       </CardContent>
     </Card>
     {isAdmin ? <BillingDetailsCard details={details} /> : null}
@@ -291,7 +332,7 @@ function BillingDetailsCard({ details }: { details: ReturnType<typeof useBilling
   const profile = details.data?.profile ?? null
 
   return (
-    <Card>
+    <Card id={BILLING_DETAILS_ID} tabIndex={-1} className="scroll-mt-4">
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="min-w-0 truncate">{t('details.title')}</CardTitle>

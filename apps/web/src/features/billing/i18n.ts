@@ -95,6 +95,12 @@ const de = {
   error: {
     checkoutFailed: 'Checkout fehlgeschlagen.',
     unknown: 'Unbekannter Fehler.',
+    detailsMissing: {
+      title: 'Rechnungsdaten fehlen',
+      message:
+        'Für das Upgrade brauchen wir deine Rechnungsdaten, es sind aber keine gespeichert. Bitte speichere sie unter „Rechnungsdaten“ und versuche es dann erneut.',
+      action: 'Zu den Rechnungsdaten',
+    },
   },
 } as const
 
@@ -181,6 +187,12 @@ const en = {
   error: {
     checkoutFailed: 'Checkout failed.',
     unknown: 'Unknown error.',
+    detailsMissing: {
+      title: 'Billing details missing',
+      message:
+        'To upgrade, we need your billing details, but none are saved. Please save them under “Billing details” and then try again.',
+      action: 'Go to billing details',
+    },
   },
 } as const
 
