@@ -8,3 +8,8 @@
   bounds in `apps/mcp/pyproject.toml` and `apps/api/pyproject.toml` are
   unchanged, and no advisory is ignored. pypdf is reachable from user input:
   the WorkArea ingest extracts text from uploaded PDFs in the API image.
+- Bumped `undici` from 6.29.0 to 6.29.1 in `apps/web/package-lock.json`,
+  clearing GHSA-4qv8-2p9j-2685 and GHSA-xjj6-f33q-929c reported by the OSV
+  scan. undici is a dev-only transitive dependency (license gate tooling via
+  `node-gyp`, range `^6.25.0`) and is not part of the shipped web bundle;
+  `package.json` is unchanged and no other package moved.
