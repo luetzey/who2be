@@ -10,7 +10,14 @@
     "id": "d7-p02",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Turn a pattern of the learning loop (ADR-0053, 3.7) into a case and prepare open cases for the human. Patterns are a computed view: the server counts deterministically (threshold n = 3), the Builder does not reinterpret, it phrases. The Builder moderates, assigns, triages, creates test cases and drafts — it never decides and never closes cases. If a measure comes out of the cases, that runs through a feedback conversation (playbook “Moderate Feedback Conversation (Review)”).", "styles": {}}],
+    "content": [{"type": "text", "text": "Turn a pattern of the learning loop (ADR-0053, 3.7) into a case and prepare open cases for the human — the server counts the patterns (threshold n = 3), the Builder phrases, assigns, and never decides.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before the first write step, in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-status\", \"res-conv-h-managed\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -493,21 +500,14 @@
     "id": "d7-h-werkzeuge",
     "type": "heading",
     "props": {"level": 2},
-    "content": [{"type": "text", "text": "Tools", "styles": {}}],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
     "id": "d7-p70",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Read: list_patterns, list_cases (status as a list, cursor/next_cursor), get_case, get_lesson, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_test_cases, get_feedback, find_usages. Write (after approval): assign_case_elements, triage_case, convert_lesson_to_case, create_test_case, report_case (own observation only, on request), update_* and transition_* up to review, submit_feedback, record_usage. All case tools except report_case require case_triage.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "d7-p71",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Human-only in the web UI: dismiss or delete a case, reject a learning suggestion, activate a version, rate a follow-up. Measure, record and draft link: playbook “Moderate Feedback Conversation (Review)”.", "styles": {}}],
+    "content": [{"type": "text", "text": "All case tools except report_case require case_triage. list_cases takes status as a list and pages via cursor/next_cursor. report_case only for your own observation and on request — not for learning suggestions (see A4). update_* and transition_* only up to review, writing only after approval.", "styles": {}}],
     "children": []
   },
   {
@@ -584,14 +584,7 @@
     "id": "d7-p80",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Basis: ADR-0053 sections 3.3 (case, status, permissions), 3.6 (measure, test case mandatory), 3.7 (patterns, reporter_kind pattern), 3.8 (case_triage), 6.5 to 6.7 (MCP tools); phase E tools per W-E1 b and PM-2/PM-4; delta spec phase D, S5 (copy blocks). Conventions for triggers, managed boundaries and the status workflow are in the resource Agent-Building Conventions.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "d7-p81",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Follow-through: report the playbooks and resources used with record_usage; if something on this playbook looks outdated, submit_feedback with signal outdated.", "styles": {}}],
+    "content": [{"type": "text", "text": "Basis: ADR-0053 sections 3.3 (case, status, permissions), 3.6 (measure, test case mandatory), 3.7 (patterns, reporter_kind pattern), 3.8 (case_triage), 6.5 to 6.7 (MCP tools); phase E tools per W-E1 b and PM-2/PM-4; delta spec phase D, S5 (copy blocks).", "styles": {}}],
     "children": []
   }
 ]

@@ -67,7 +67,7 @@ import asyncio
 import logging
 import re
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import date, datetime
 from typing import Final, Literal, NamedTuple
@@ -109,6 +109,7 @@ from who2be_api.tablestore import (
     TableStore,
     row_hash,
 )
+from who2be_api.tablestore.engine import RowMutationRejected
 from who2be_models import (
     AgentCapability,
     ArtifactCreate,
@@ -126,7 +127,12 @@ from who2be_models import (
     WorkAreaGrantLevel,
     WorkspaceRole,
 )
-from who2be_models.tables import TableColumnType
+from who2be_models.tables import (
+    ROWS_MUTATE_MAX_ROWS,
+    RowsDelete,
+    RowsUpdate,
+    TableColumnType,
+)
 from who2be_models.workarea import ARTIFACT_CONTENT_MAX_LENGTH
 
 # JSON-Zeilenwerte, die SQLite parametrisiert tragen kann — Listen/Objekte in
@@ -467,6 +473,121 @@ def _column_specs(schema: TableSchema) -> list[ColumnSpec]:
     ]
 
 
+# Antwort-Zeile bei 0 Treffern (ADR-0049-Nachtrag, Vorgabe 6): kein Fehler, aber
+# auch kein stilles Erfolgssignal — ein Agent soll nicht glauben, er habe
+# korrigiert, wenn sein `match` nichts traf.
+NO_ROW_MATCHED: Final = "keine Zeile passt zu match"
+
+
+def _validate_match(schema: TableSchema, match: Mapping[str, object]) -> None:
+    """`match` fuer update/delete: nicht leer, nur Schema-Spalten, nur Skalare.
+
+    Leer ist schon im Modell verboten (`min_length=1`); die Pruefung hier ist
+    die zweite Linie fuer jeden Aufrufer, der das Modell umgeht. Interne
+    Spalten (`_dedupe_hash`, `_source_artifact`, `rowid`) sind keine
+    Schema-Spalten und fallen damit als „unbekannt" heraus.
+    """
+    if not match:
+        raise TableRowsInvalid("match darf nicht leer sein — sonst traefe der Aufruf alle Zeilen.")
+    known = {column.name for column in schema.columns}
+    unknown = sorted(set(match) - known)
+    if unknown:
+        raise TableRowsInvalid(
+            f"match: unbekannte Spalten {', '.join(unknown)} — das Schema kennt nur: "
+            f"{', '.join(sorted(known))}."
+        )
+    for name, value in match.items():
+        if value is not None and not isinstance(value, _SCALAR_TYPES):
+            raise TableRowsInvalid(
+                f"match: Spalte '{name}' traegt {type(value).__name__} — erlaubt ist nur "
+                "Gleichheit mit einem Skalar (string/number/boolean/null)."
+            )
+
+
+def _validate_set(schema: TableSchema, values: Mapping[str, object]) -> None:
+    """`set` fuer update: Schema-Spalten, keine Kategorie, Werte wie beim Import.
+
+    `category_column` ist nicht setzbar: Kategorien kommen nur aus Regeln
+    (Spec L); der Weg ist `upsert_category_rule`. Zell-Grenzen, Steuerzeichen,
+    NOT NULL und `occurred_at` pruefen dieselben Helfer wie `_validate_rows`.
+    """
+    known = {column.name: column for column in schema.columns}
+    unknown = sorted(set(values) - set(known))
+    if unknown:
+        raise TableRowsInvalid(
+            f"set: unbekannte Spalten {', '.join(unknown)} — das Schema kennt nur: "
+            f"{', '.join(known)}."
+        )
+    if schema.category_column is not None and schema.category_column in values:
+        raise TableRowsInvalid(
+            f"set: '{schema.category_column}' ist die Kategorie-Spalte — Kategorien kommen "
+            "nur aus Regeln (`upsert_category_rule`), nie aus einem direkten Wert."
+        )
+    for name, value in values.items():
+        if value is not None and not isinstance(value, _SCALAR_TYPES):
+            raise TableRowsInvalid(
+                f"set: Spalte '{name}' traegt {type(value).__name__} — "
+                "erlaubt sind nur Skalare (string/number/boolean/null)."
+            )
+        if value is None and not known[name].nullable:
+            raise TableRowsInvalid(f"set: Spalte '{name}' ist NOT NULL.")
+        _validate_cell_size(0, name, value)
+        _validate_cell_text(0, name, value)
+    if "occurred_at" in values:
+        _validate_occurred_at(0, values["occurred_at"], known["occurred_at"].type)
+
+
+def _hash_fn(schema: TableSchema) -> Callable[[Mapping[str, object]], str]:
+    """Dedupe-Hash wie beim Import, fuer eine Zeile aus SQLite plus `set`.
+
+    SQLite liefert boolean-Spalten als 0/1 zurueck; der Import hat aber mit
+    `bool` gehasht (``b:1`` statt ``d:1``). Ohne die Rueckwandlung bekaeme
+    eine geaenderte Zeile einen anderen Hash als dieselbe Zeile frisch
+    importiert — und ein spaeterer Import wuerde sie doppeln.
+    """
+    dedupe_columns = schema.dedupe_columns or [column.name for column in schema.columns]
+    booleans = {c.name for c in schema.columns if c.type is TableColumnType.boolean}
+
+    def compute(row: Mapping[str, object]) -> str:
+        normalised = {
+            key: bool(value) if key in booleans and isinstance(value, int) else value
+            for key, value in row.items()
+        }
+        return row_hash(normalised, dedupe_columns)
+
+    return compute
+
+
+def _mutation_rejected(exc: RowMutationRejected, expected: int | None) -> ApiGateError:
+    """409 fuer update/delete, die NICHTS geschrieben haben (ADR-0049-Nachtrag).
+
+    Reason `concurrent_conflict` aus dem bestehenden Vokabular (wie bei der
+    Namens-Kollision): „der Zustand passt nicht zum Auftrag" — der `detail`
+    sagt, welcher der drei Faelle vorliegt und was zu tun ist.
+    """
+    if exc.kind == "too_many":
+        detail = (
+            f"match trifft mehr als {ROWS_MUTATE_MAX_ROWS} Zeilen — nichts wurde geaendert. "
+            "match enger fassen (weitere Spalten)."
+        )
+    elif exc.kind == "count_mismatch":
+        detail = (
+            f"match trifft {exc.matched} Zeilen, expected_count ist {expected} — "
+            "nichts wurde geaendert. Erst mit `query_table` pruefen."
+        )
+    else:
+        detail = (
+            "Die geaenderten Werte ergeben denselben Dedupe-Schluessel wie eine andere "
+            "Zeile — nichts wurde geaendert. Die doppelte Zeile erst loeschen (`delete_rows`)."
+        )
+    return ApiGateError(
+        status=status.HTTP_409_CONFLICT,
+        reason="concurrent_conflict",
+        actionable_by="agent",
+        detail=detail,
+    )
+
+
 class WaTableService:
     """Tabellen-Katalog + SQLite-Store hinter den Workspace-Gates."""
 
@@ -653,6 +774,131 @@ class WaTableService:
             raise TableRowsInvalid(f"Import verletzt das Tabellen-Schema: {exc}") from exc
         await self._log(ctx, table.id, "write")
         return result
+
+    async def update_rows(
+        self, ctx: WorkspaceContext, table_id: UUID, data: RowsUpdate
+    ) -> int | None:
+        """Aendert Zeilen per Gleichheits-`match` (ADR-0049-Nachtrag); `None` → 404.
+
+        Gates wie `insert_rows`. Validierung VOR jedem Write: `match` und `set`
+        nur gegen Schema-Spalten, `set` mit denselben Wert-Pruefungen wie der
+        Import, `category_column` nicht setzbar (422).
+
+        Kategorie: aendert `set` die `match_column` einer Tabelle mit
+        Kategorie-Regeln, laeuft die Regel-Phase des Imports (`categorize_rows`)
+        auf dem neuen Wert. Weil `set` allen Treffern denselben Wert gibt, ist
+        das Ergebnis fuer alle gleich und geht als `category_column` mit in
+        dieselbe Aenderung — die Kategorie veraltet nicht still. Die
+        Postgres-Transaktion der Regel-Phase umschliesst den SQLite-Write: lehnt
+        die Engine ab (409), rollt auch ein dabei gemeldeter Regel-Konflikt
+        zurueck.
+
+        Dedupe: beruehrt die Aenderung eine Dedupe-Spalte, berechnet die Engine
+        `_dedupe_hash` neu; eine Kollision ist 409 ohne Teilaenderung.
+        Rueckgabe: Zahl der geaenderten Zeilen.
+        """
+        table = await self._visible_table(ctx, table_id)
+        if table is None:
+            return None
+        self._require_write(ctx)
+        await ensure_area_access(self._pool, ctx, table.area_id, WorkAreaGrantLevel.write)
+        schema = table.schema_
+        _validate_match(schema, data.match)
+        _validate_set(schema, data.set)
+        values: dict[str, object] = dict(data.set)
+        column_names = [column.name for column in schema.columns]
+        dedupe_columns = set(schema.dedupe_columns or column_names)
+
+        async def _write() -> int:
+            hash_fn = _hash_fn(schema) if dedupe_columns & set(values) else None
+            with _store_failures():
+                return await self._store.update_rows(
+                    ctx.workspace_id,
+                    table.area_id,
+                    table.name,
+                    column_names,
+                    data.match,
+                    values,
+                    max_rows=ROWS_MUTATE_MAX_ROWS,
+                    expected_count=data.expected_count,
+                    dedupe_hash_fn=hash_fn,
+                )
+
+        try:
+            if (
+                schema.category_column is not None
+                and schema.match_column is not None
+                and schema.match_column in values
+            ):
+                async with self._pool.acquire() as conn, conn.transaction():
+                    probe: list[dict[str, object]] = [
+                        {schema.match_column: values[schema.match_column]}
+                    ]
+                    await categorize_rows(
+                        conn,
+                        ctx,
+                        area_id=table.area_id,
+                        schema=schema,
+                        rows=probe,
+                        new_rules=[],
+                        repo=self._rules,
+                    )
+                    values[schema.category_column] = probe[0].get(schema.category_column)
+                    updated = await _write()
+            else:
+                updated = await _write()
+        except RowMutationRejected as exc:
+            raise _mutation_rejected(exc, data.expected_count) from exc
+        except AreaStoreMissingError:
+            return None
+        except sqlite3.IntegrityError as exc:
+            raise TableRowsInvalid(f"Aenderung verletzt das Tabellen-Schema: {exc}") from exc
+        await self._log_mutation(ctx, table.id, "update", updated)
+        return updated
+
+    async def delete_rows(
+        self, ctx: WorkspaceContext, table_id: UUID, data: RowsDelete
+    ) -> int | None:
+        """Loescht Zeilen per Gleichheits-`match` (ADR-0049-Nachtrag); `None` → 404.
+
+        Gates, Grenzen und Fehlerbild wie `update_rows`. Rueckgabe: Zahl der
+        geloeschten Zeilen.
+        """
+        table = await self._visible_table(ctx, table_id)
+        if table is None:
+            return None
+        self._require_write(ctx)
+        await ensure_area_access(self._pool, ctx, table.area_id, WorkAreaGrantLevel.write)
+        _validate_match(table.schema_, data.match)
+        try:
+            with _store_failures():
+                deleted = await self._store.delete_rows(
+                    ctx.workspace_id,
+                    table.area_id,
+                    table.name,
+                    data.match,
+                    max_rows=ROWS_MUTATE_MAX_ROWS,
+                    expected_count=data.expected_count,
+                )
+        except RowMutationRejected as exc:
+            raise _mutation_rejected(exc, data.expected_count) from exc
+        except AreaStoreMissingError:
+            return None
+        await self._log_mutation(ctx, table.id, "delete", deleted)
+        return deleted
+
+    async def _log_mutation(
+        self, ctx: WorkspaceContext, table_id: UUID, action: str, count: int
+    ) -> None:
+        """Zugriffslog ``(table, write)`` wie beim Import, nur wenn etwas geschah.
+
+        `agent_access_log` fuehrt je Tag eine Zeile pro Agent/Element/Operation
+        und hat kein Zaehlerfeld; die Zahl der betroffenen Zeilen steht deshalb
+        im App-Log — ohne Zeileninhalte, nur Tabelle, Aktion und Anzahl.
+        """
+        logger.info("wa_table %s: %s %d Zeilen", table_id, action, count)
+        if count > 0:
+            await self._log(ctx, table_id, "write")
 
     async def save_query_result(
         self, ctx: WorkspaceContext, table_id: UUID, data: SaveQueryResult

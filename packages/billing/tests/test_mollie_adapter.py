@@ -12,18 +12,21 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 
 from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement, Feature
+from who2be_billing.invoice import InvoiceRecord, InvoiceReservation
 from who2be_billing.mollie import (
     MollieBillingService,
     MollieError,
     MolliePayment,
     MollieSubscription,
+    _parse_eur_amount,
     metadata_org_id,
     metadata_to_entitlement,
     subscription_to_update,
@@ -448,3 +451,157 @@ def test_handle_webhook_releases_claim_on_failure() -> None:
     # Mollie-Retry desselben Pings verarbeitet jetzt erfolgreich.
     assert asyncio.run(service.handle_webhook("tr_1", webhook_url=None)) is True
     assert len(repo.calls) == 1
+
+
+# --- Rechnungs-Hook (ADR-0061 §3, Paket R2a) --------------------------------------
+
+
+class FakeInvoices:
+    """Faengt `reserve`/`issue` ab; Schnittstelle wie `InvoiceService`."""
+
+    def __init__(self, *, reserve_error: Exception | None = None) -> None:
+        self.reserved: list[InvoiceReservation] = []
+        self.issued: list[UUID] = []
+        self.reserve_error = reserve_error
+
+    async def reserve(self, data: InvoiceReservation) -> InvoiceRecord:
+        if self.reserve_error is not None:
+            raise self.reserve_error
+        self.reserved.append(data)
+        return InvoiceRecord(
+            id=uuid4(),
+            org_id=data.org_id,
+            payment_id=data.payment_id,
+            customer_id=data.customer_id,
+            plan_code=data.plan_code,
+            amount_value=data.amount_value,
+            period_start=data.period_start,
+            period_end=data.period_end,
+            status="pending",
+        )
+
+    async def issue(self, invoice_id: UUID, *, now: datetime | None = None) -> None:
+        # Seit R2b stellt nur der Worker aus; ein Aufruf hier waere ein Rueckfall.
+        self.issued.append(invoice_id)
+
+
+_PAID_AT = datetime(2026, 10, 20, 23, 30, tzinfo=UTC)  # in Berlin schon der 21.10.
+
+
+def _paid(payment_id: str, metadata: dict[str, Any], *, sub: str | None) -> MolliePayment:
+    return MolliePayment(
+        id=payment_id,
+        is_paid=True,
+        customer_id="cst_Platzhalter",
+        subscription_id=sub,
+        mandate_id="mdt_Platzhalter",
+        metadata=metadata,
+        amount_value=Decimal("11.89"),
+        paid_at=_PAID_AT,
+    )
+
+
+def test_recurring_paid_payment_only_reserves_one_invoice() -> None:
+    org_id = uuid4()
+    invoices = FakeInvoices()
+    gateway = FakeMollieGateway(
+        payment=_paid("tr_Folge1", {}, sub="sub_1"),
+        subscription=MollieSubscription("sub_1", "active", _pro_metadata(org_id)),
+    )
+    service = MollieBillingService(
+        gateway,
+        FakeEntitlementRepository(),
+        FakeProcessedEventRepository(),
+        invoices=invoices,  # type: ignore[arg-type]
+    )
+    assert asyncio.run(service.handle_webhook("tr_Folge1", webhook_url=None)) is True
+    # Replay desselben Pings: kein zweites Vormerken.
+    assert asyncio.run(service.handle_webhook("tr_Folge1", webhook_url=None)) is False
+    (reservation,) = invoices.reserved
+    assert reservation.org_id == org_id
+    assert reservation.payment_id == "tr_Folge1"
+    assert reservation.customer_id == "cst_Platzhalter"
+    assert reservation.plan_code == "pro"
+    assert reservation.amount_value == Decimal("11.89")
+    # Leistungszeitraum im Berliner Kalender: 23:30 UTC am 20.10. ist der 21.10.
+    assert (reservation.period_start, reservation.period_end) == (
+        date(2026, 10, 21),
+        date(2026, 11, 20),
+    )
+    assert invoices.issued == []  # N1: ausgestellt wird im Worker, nie im Webhook
+
+
+def test_first_payment_reserves_before_creating_the_subscription() -> None:
+    org_id = uuid4()
+    invoices = FakeInvoices()
+    gateway = FakeMollieGateway(payment=_paid("tr_Erst1", _pro_metadata(org_id), sub=None))
+    repo = FakeEntitlementRepository()
+    service = MollieBillingService(gateway, repo, invoices=invoices)  # type: ignore[arg-type]
+    assert asyncio.run(service.handle_webhook("tr_Erst1", webhook_url="https://api/hook")) is True
+    assert [r.payment_id for r in invoices.reserved] == ["tr_Erst1"]
+    assert invoices.issued == []
+    assert gateway.subscription_create_count == 1
+    assert repo.calls[0].entitlement.status == "active"
+
+
+def test_failed_reservation_releases_the_claim_and_creates_no_subscription() -> None:
+    org_id = uuid4()
+    invoices = FakeInvoices(reserve_error=RuntimeError("DB weg"))
+    processed = FakeProcessedEventRepository()
+    gateway = FakeMollieGateway(payment=_paid("tr_Erst2", _pro_metadata(org_id), sub=None))
+    service = MollieBillingService(
+        gateway,
+        FakeEntitlementRepository(),
+        processed,
+        invoices=invoices,  # type: ignore[arg-type]
+    )
+    with pytest.raises(RuntimeError):
+        asyncio.run(service.handle_webhook("tr_Erst2", webhook_url=None))
+    assert ("mollie", "tr_Erst2") not in processed.claimed  # Mollie stellt erneut zu
+    assert gateway.subscription_create_count == 0
+
+
+def test_unpaid_recurring_payment_reserves_no_invoice() -> None:
+    org_id = uuid4()
+    invoices = FakeInvoices()
+    gateway = FakeMollieGateway(
+        payment=MolliePayment("tr_Offen1", False, "cst_1", "sub_1", "mdt_1", {}),
+        subscription=MollieSubscription("sub_1", "active", _pro_metadata(org_id)),
+    )
+    repo = FakeEntitlementRepository()
+    service = MollieBillingService(gateway, repo, invoices=invoices)  # type: ignore[arg-type]
+    assert asyncio.run(service.handle_webhook("tr_Offen1", webhook_url=None)) is True
+    assert invoices.reserved == []
+    assert len(repo.calls) == 1  # Dunning laeuft wie bisher
+
+
+@pytest.mark.parametrize(
+    ("payment_id", "metadata_patch"),
+    [
+        ("tr_../x", {}),  # ungepruefte ID kommt nie in die Tabelle
+        ("tr_Plan1", {"plan_code": "unbekannt"}),
+    ],
+)
+def test_invoice_is_skipped_but_entitlement_still_written(
+    payment_id: str, metadata_patch: dict[str, str]
+) -> None:
+    org_id = uuid4()
+    invoices = FakeInvoices()
+    gateway = FakeMollieGateway(
+        payment=_paid(payment_id, {}, sub="sub_1"),
+        subscription=MollieSubscription(
+            "sub_1", "active", {**_pro_metadata(org_id), **metadata_patch}
+        ),
+    )
+    repo = FakeEntitlementRepository()
+    service = MollieBillingService(gateway, repo, invoices=invoices)  # type: ignore[arg-type]
+    assert asyncio.run(service.handle_webhook(payment_id, webhook_url=None)) is True
+    assert invoices.reserved == []
+    assert len(repo.calls) == 1
+
+
+def test_sdk_amount_parser_accepts_only_eur() -> None:
+    assert _parse_eur_amount({"currency": "EUR", "value": "11.89"}) == Decimal("11.89")
+    assert _parse_eur_amount({"currency": "USD", "value": "11.89"}) is None
+    assert _parse_eur_amount({"currency": "EUR", "value": "elf"}) is None
+    assert _parse_eur_amount(None) is None

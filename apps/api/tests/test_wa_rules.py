@@ -585,3 +585,61 @@ def test_gates_regel_und_konventions_routen(make_auth_headers: AuthFactory) -> N
             assert agent_rule.json()["created_by"] == f"agent:{ok_id}"
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_update_rows_kategorie_folgt_der_regel(make_auth_headers: AuthFactory) -> None:
+    """ADR-0049-Nachtrag: aendert `set` die `match_column`, setzt die
+    Regel-Phase die Kategorie neu (Treffer → Regel-Kategorie, kein Treffer →
+    NULL) — sie veraltet nicht still. `category_column` direkt in `set` → 422."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    url = f"{prefix}/wa-tables/{{table_id}}/rows/update"
+    try:
+        with TestClient(app) as client:
+            area_id, table_id = _setup_table(client, prefix, auth, "KategorieUpdate")
+            imported = _insert(
+                client,
+                prefix,
+                auth,
+                table_id,
+                [_row("REWE Markt")],
+                new_rules=[
+                    {"pattern": "rewe", "category": "lebensmittel"},
+                    {"pattern": "golf", "category": "freizeit"},
+                ],
+            )
+            assert imported.status_code == 200, imported.text
+            sql = 'SELECT merchant, category FROM "transactions"'
+            rows = _query_rows(client, prefix, auth, table_id, sql)
+            assert rows == [["REWE Markt", "lebensmittel"]]
+
+            moved = client.post(
+                url.format(table_id=table_id),
+                json={"match": {"merchant": "REWE Markt"}, "set": {"merchant": "Golfclub"}},
+                headers=auth,
+            )
+            assert moved.status_code == 200, moved.text
+            assert _query_rows(client, prefix, auth, table_id, sql) == [["Golfclub", "freizeit"]]
+
+            unmatched = client.post(
+                url.format(table_id=table_id),
+                json={"match": {"merchant": "Golfclub"}, "set": {"merchant": "Unbekannt"}},
+                headers=auth,
+            )
+            assert unmatched.status_code == 200, unmatched.text
+            assert _query_rows(client, prefix, auth, table_id, sql) == [["Unbekannt", None]]
+
+            direct = client.post(
+                url.format(table_id=table_id),
+                json={"match": {"merchant": "Unbekannt"}, "set": {"category": "freizeit"}},
+                headers=auth,
+            )
+            assert direct.status_code == 422, direct.text
+            assert "upsert_category_rule" in direct.text
+            assert _query_rows(client, prefix, auth, table_id, sql) == [["Unbekannt", None]]
+    finally:
+        cleanup_workspaces([owner])

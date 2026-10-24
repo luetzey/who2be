@@ -11,6 +11,7 @@ hier unangetastet.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 
 import pytest
@@ -293,7 +294,7 @@ def test_agent_playbook_markdown_example_converts_to_pills(pack: ContentPack) ->
         for item in block.get("content") or []
         if isinstance(item, dict) and item.get("type") == "placeholder"
     ]
-    assert pills == [("persona-field", "name"), ("tools-overview", ""), ("memory", "")]
+    assert pills == [("persona-field", "name"), ("memory", "")]
     assert converted[0]["type"] == "heading"
 
 
@@ -368,3 +369,145 @@ def test_no_rolled_out_template_body_contains_its_own_language_instruction() -> 
                         f"({pack.locale!r}): {text!r} — gehoert nur in "
                         "services/agent_language.py"
                     )
+
+
+# Builder schlank B2 (Content-Stand 21): Budget aus den Agent-Bau-Konventionen
+# („Laengen & Wohin“): Profil <= 600 Woerter (Warnschwelle), Modus <= 250.
+_PROFILE_WORD_LIMIT = 600
+_MODE_WORD_LIMIT = 250
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_persona_stays_within_length_budget(pack: ContentPack) -> None:
+    """Profil und Modi der Builder-Persona halten die eigenen Richtwerte ein;
+    der Builder soll vorleben, was er beim Bauen prueft."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    words = len(" ".join(_collect_block_texts(profile)).split())
+    assert words <= _PROFILE_WORD_LIMIT, words
+    for mode in json.loads(pack.persona.load_modes(pack.locale)):
+        mode_words = len(" ".join(_collect_block_texts(mode)).split())
+        assert mode_words <= _MODE_WORD_LIMIT, (mode["name"], mode_words)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_persona_profile_has_no_duplicate_modes_or_tool_lists(pack: ContentPack) -> None:
+    """B2: der Modi-Absatz steht nicht mehr im Profil (get_persona liefert die
+    Modi selbst), und „Erlaubt“ zaehlt keine Werkzeuge auf (tools/list)."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    ids = [block["id"] for block in profile]
+    assert "bp-h-modes" not in ids
+    assert "bp-li-allowed-fb" in ids, "Feedback-Regel (Migration 0055) muss bleiben"
+    text = " ".join(_collect_block_texts(profile))
+    tools = ("create_persona", "set_playbook_composes", "transition_persona", "restore_playbook")
+    for tool in tools:
+        assert tool not in text, tool
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_template_loads_persona_at_runtime_without_tools_block(pack: ContentPack) -> None:
+    """B2 (W5 a): das Builder-Template laedt die Persona per `persona-ref` und
+    traegt keinen `tools-overview`-Block mehr; Lite bleibt unveraendert."""
+    template = next(t for t in pack.templates if t.slug == "agent-builder")
+    blocks = json.loads(template.load_body(pack.locale))
+    pills = [
+        (item["props"]["kind"], item["props"]["target_id"])
+        for block in blocks
+        for item in block.get("content") or []
+        if isinstance(item, dict) and item.get("type") == "placeholder"
+    ]
+    assert ("persona-ref", "") in pills
+    assert ("persona-field", "profile") not in pills
+    assert all(kind != "tools-overview" for kind, _ in pills)
+
+
+# Builder schlank B3 (Content-Stand 22): je Playbook die Konventions-Abschnitte,
+# die es laedt (K4). Die Liste ist die Erwartung; der Test liest die Anker aus
+# dem Playbook-Text und prueft sie gegen die Resource.
+_CONVENTION_ANCHORS = {
+    "persona": ["res-conv-h-modi", "res-conv-h-laengen", "res-conv-h-trigger"],
+    "playbook": ["res-conv-h-trigger", "res-conv-h-naming", "res-conv-h-laengen-budgets"],
+    "agent": ["res-conv-h-policy", "res-conv-h-memory", "res-conv-h-managed"],
+    "consistency": [
+        "res-conv-h-trigger",
+        "res-conv-h-modi",
+        "res-conv-h-policy",
+        "res-conv-h-laengen-budgets",
+    ],
+    "maintenance": ["res-conv-h-status", "res-conv-h-managed", "res-conv-h-graph"],
+    "external_tool": ["res-conv-h-exttool", "res-conv-h-status"],
+    "cases": ["res-conv-h-status", "res-conv-h-managed"],
+    "feedback_session": ["res-conv-h-status", "res-conv-h-managed"],
+}
+_ANCHOR_PATTERN = re.compile(r"res-conv-[a-z0-9-]+")
+_FETCH_CALL_PATTERN = re.compile(r"fetch_resource\(resource_id, block_ids=\[[^\]]*\]\)")
+
+
+def _playbook_blocks(pack: ContentPack, key: str) -> list[dict[str, object]]:
+    playbook = next(p for p in pack.playbooks if p.key == key)
+    blocks: list[dict[str, object]] = json.loads(playbook.load_body(pack.locale))
+    return blocks
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbook_convention_anchors_exist_as_resource_headings(pack: ContentPack) -> None:
+    """K4: jedes Builder-Playbook laedt nur seine Konventions-Abschnitte, mit
+    genau einem `fetch_resource(..., block_ids=[...])`-Aufruf. Jeder genannte
+    Anker ist eine Ueberschrift der Resource (die Abschnittsregel schneidet nur
+    Ueberschriften-Anker auf den ganzen Abschnitt). Rot, sobald ein Anker in der
+    Resource umbenannt wird oder ein Playbook einen Anker verliert."""
+    resource = json.loads(pack.resource.load_body(pack.locale))
+    headings = {b["id"] for b in resource if b["type"] == "heading"}
+    for key, expected in _CONVENTION_ANCHORS.items():
+        text = " ".join(_collect_block_texts(_playbook_blocks(pack, key)))
+        calls = _FETCH_CALL_PATTERN.findall(text)
+        assert len(calls) == 1, (key, calls)
+        assert _ANCHOR_PATTERN.findall(calls[0]) == expected, (key, calls[0])
+        # Auch jeder andere Verweis im Playbook-Text zeigt auf eine Ueberschrift.
+        missing = [a for a in _ANCHOR_PATTERN.findall(text) if a not in headings]
+        assert not missing, (pack.locale, key, missing)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbooks_drop_feedback_paragraph_and_full_conventions_load(pack: ContentPack) -> None:
+    """K1 + K4: kein Builder-Playbook traegt mehr den Feedback-Absatz oder die
+    Anweisung, die Konventionen ganz zu laden."""
+    gone_ids = {
+        "pb-feedback-h",
+        "pb-feedback-p",
+        "pb-maint-h-feedback",
+        "pb-exttool-h-feedback",
+        "d7-p81",
+        "fg-p54",
+    }
+    for playbook in pack.playbooks:
+        blocks = _playbook_blocks(pack, playbook.key)
+        assert not gone_ids & {b["id"] for b in blocks}, playbook.key
+        text = " ".join(_collect_block_texts(blocks))
+        assert "NICHT automatisch mit" not in text, playbook.key
+        assert "does NOT come along" not in text, playbook.key
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_playbook_keeps_tools_overview_out_of_templates(pack: ContentPack) -> None:
+    """PM 2026-10-22 (1): tools-overview gehoert standardmaessig nicht ins
+    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg."""
+    blocks = _playbook_blocks(pack, "agent")
+    rule = next(b for b in blocks if b["id"] == "pb-agent-li-placeholder-tools")
+    text = " ".join(_collect_block_texts(rule))
+    assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
+    whole = " ".join(_collect_block_texts(blocks))
+    assert "praktisch jedes Template" not in whole
+    assert "practically every template" not in whole
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_playbook_playbook_no_longer_prescribes_purpose_and_tools_sections(
+    pack: ContentPack,
+) -> None:
+    """PM 2026-10-22 (2): die Bauanleitung gibt „Zweck“ und „Tools &
+    Operations“ nicht mehr als Pflichtgliederung vor, nur noch „Fallen“."""
+    blocks = _playbook_blocks(pack, "playbook")
+    atomic = next(b for b in blocks if b["id"] == "pb-playbook-create-p2-atomic")
+    text = " ".join(_collect_block_texts(atomic))
+    assert "Tools & Operations" not in text
+    assert ("Fallen" in text) or ("Pitfalls" in text)

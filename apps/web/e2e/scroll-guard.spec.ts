@@ -891,7 +891,10 @@ test('M9/M11: Mitglieder als Liste, Auswahllisten ohne Scroll-in-Scroll unter md
     await expect(page.getByTestId('members-list').getByRole('listitem')).toHaveCount(1)
     await expect(page.getByRole('table')).toHaveCount(0)
     await page.getByRole('button', { name: /Mehr anzeigen|Show more/ }).click()
-    await expect(page.getByRole('button', { name: /Entfernen|Remove/ })).toBeVisible()
+    // Das einzige Mitglied ist man selbst: der Aufklapper zeigt den Hinweis,
+    // keinen Entfernen-Knopf (UX-Audit K1, keine Selbst-Entfernung).
+    await expect(page.getByText(/Das bist du|That's you/)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Entfernen|Remove/ })).toHaveCount(0)
   } else {
     await expect(page.getByRole('table')).toHaveCount(1)
   }

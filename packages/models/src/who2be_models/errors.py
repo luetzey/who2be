@@ -85,6 +85,7 @@ ProblemReason = Literal[
     "invitation_email_mismatch",  # 403 — Einladung gehoert zu einer anderen Email-Adresse
     "invitation_email_required",  # 403 — Annahme nur mit Email im Login (Abgleich fail-closed)
     "invitation_email_unconfirmed",  # 403 — offene Einladungen erst mit bestaetigter Konto-Email
+    "invitation_already_pending",  # 409 — fuer die Adresse liegt schon eine offene Einladung vor
     "personal_organization_undeletable",  # 400 — Personal-Org nur ueber Konto-Loeschung
     "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)

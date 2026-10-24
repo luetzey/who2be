@@ -276,7 +276,8 @@ class ResourceLinkRead(BaseModel):
     - `available_in=None` — Anker existiert nirgends mehr (Block geloescht).
     `available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).
     `section_block_ids` und `section_preview` traegt die Section ab dem
-    Anker-Heading bis (exklusive) zum naechsten Heading desselben Levels.
+    Anker-Heading bis (exklusive) zum naechsten Heading gleicher oder hoeherer
+    Ebene (`blocknote_text.section_blocks`, ADR-0021).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -301,7 +302,7 @@ class LinkedBlockSection(ResourceLinkRead):
     (Phase 3-0 Helper-Shape, fuer Section-Aware-Picker/Preview in Track 3-A/B).
 
     Die Section reicht vom Heading-Block mit `block_id` bis (ausschliesslich)
-    zum naechsten Heading desselben Levels. `section_blocks` enthaelt alle
+    zum naechsten Heading gleicher oder hoeherer Ebene. `section_blocks` enthaelt alle
     dieser Bloecke in Dokument-Reihenfolge — inklusive des Anker-Headings.
     Leere Liste = Resource enthielt den Anker nicht (mehr).
     """

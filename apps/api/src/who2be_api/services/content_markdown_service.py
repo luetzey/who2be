@@ -74,6 +74,12 @@ from who2be_models import (
 )
 from who2be_models.blocknote_markdown import default_new_block_id
 from who2be_models.blocknote_text import block_plain_text, parse_blocknote_blocks
+from who2be_models.content_budgets import (
+    LengthHint,
+    persona_hints,
+    playbook_hints,
+    resource_hints,
+)
 from who2be_models.content_markdown import (
     MARKDOWN_CONTENT_MODELS,
     ContentEdit,
@@ -118,6 +124,23 @@ _STATIC_LABELS: dict[tuple[str, str], str] = {
     ("tools-overview", ""): "MCP-Tools-Übersicht",
     ("memory", ""): "Gedächtnis-Hinweis",
 }
+
+
+# --- Laengen-Hinweise (ADR-0063) ---------------------------------------------
+
+
+def _length_hints(content: Any, locale: str) -> list[LengthHint]:
+    """Weiche Hinweise zum geschriebenen Stand; blockiert nie ein Schreiben."""
+    if isinstance(content, PersonaMarkdownContent):
+        modes = [
+            (mode.name, [getattr(mode, attr) for attr in _MODE_FIELDS]) for mode in content.modes
+        ]
+        return persona_hints(content.profile, modes, locale)
+    if isinstance(content, PlaybookMarkdownContent):
+        return playbook_hints(content.body, content.description, content.triggers, locale)
+    if isinstance(content, ResourceMarkdownContent):
+        return resource_hints(content.body, locale)
+    return []
 
 
 # --- Fehler -----------------------------------------------------------------
@@ -705,9 +728,11 @@ class ContentMarkdownService:
         removed: set[str],
     ) -> MarkdownWriteResult:
         version, rev = await self._base_rev(ctx, et, read.id)
+        source = self._source(et, read, rev if version == read.current_version else None)
         return MarkdownWriteResult(
-            **self._source(et, read, rev if version == read.current_version else None),
+            **source,
             dangling_refs=await self._dangling_refs(et, read.id, ctx, removed),
+            length_hints=_length_hints(source["content"], str(read.locale)),
         )
 
     # --- Anlegen -------------------------------------------------------------

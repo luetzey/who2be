@@ -74,6 +74,22 @@ const VIEWER_STATUSES: readonly CaseStatus[] = [
 
 const DAY_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
 
+// Hilfe-Seite zum Review-Ablauf (Kontext-Link, Muster MemoryPage/AgentsPage).
+const REVIEW_HELP_PATH = '/help/evolution#besprechen'
+
+const HELP_LINK =
+  'inline-flex min-h-11 items-center self-start text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground md:min-h-0'
+
+function ReviewHelpLink() {
+  const { t } = useTranslation('sessions')
+  const wsPath = useWorkspacePath()
+  return (
+    <Link to={wsPath(REVIEW_HELP_PATH)} className={HELP_LINK} data-testid="evolution-help-link">
+      {t('evolution.helpLink')}
+    </Link>
+  )
+}
+
 /** `YYYY-MM-DD` (lokal) bzw. ISO-Zeitstempel als Datum der Oberflaeche. */
 function formatDay(value: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -382,6 +398,7 @@ function ViewerEvolution({ agent }: { agent: { id: string; name: string } }) {
       <p className="rounded-xl border px-4 py-3 text-sm break-words" data-testid="evolution-viewer-explain">
         {t('evolution.viewer.explain')}
       </p>
+      <ReviewHelpLink />
     </div>
   )
 }
@@ -497,13 +514,16 @@ function EditorEvolution({ agent, inbox }: AgentEvolutionTabProps) {
   return (
     <div className="flex flex-col gap-8" data-testid="agent-evolution">
       <h2 className="sr-only">{t('evolution.title')}</h2>
-      <details className="group min-w-0 rounded-xl border px-4 py-3" data-testid="evolution-guide">
-        <summary className="flex min-h-11 cursor-pointer items-center gap-1 text-sm md:min-h-9">
-          <span className="font-semibold">{t('evolution.guide.summary')}</span>
-          <span className="text-muted-foreground"> · {t('evolution.guide.steps')}</span>
-        </summary>
-        <p className="mt-2 text-sm break-words text-muted-foreground">{t('evolution.guide.body')}</p>
-      </details>
+      <div className="flex flex-col gap-2">
+        <details className="group min-w-0 rounded-xl border px-4 py-3" data-testid="evolution-guide">
+          <summary className="flex min-h-11 cursor-pointer items-center gap-1 text-sm md:min-h-9">
+            <span className="font-semibold">{t('evolution.guide.summary')}</span>
+            <span className="text-muted-foreground"> · {t('evolution.guide.steps')}</span>
+          </summary>
+          <p className="mt-2 text-sm break-words text-muted-foreground">{t('evolution.guide.body')}</p>
+        </details>
+        <ReviewHelpLink />
+      </div>
 
       <ol aria-label={t('evolution.stepsAria')} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StepCard

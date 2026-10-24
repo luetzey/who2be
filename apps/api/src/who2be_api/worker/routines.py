@@ -9,6 +9,7 @@ Angebunden werden die bestehenden Nachtlaeufe; ihre Logik bleibt in `core/`:
 | `audit-retention`       | `0 4 * * *`    | 15 min  | ja       | nein           |
 | `usage-retention`       | `10 4 * * *`   | 15 min  | ja       | nein           |
 | `routine-run-retention` | `15 4 * * *`   | 15 min  | nein     | nein           |
+| `invoice-retry`         | `@every 5m`    | 4 min   | nein     | nein           |
 
 Purge und Verfall tragen dieselben Zeiten wie bisher die Hetzner-Crontab und
 die Dokploy-Schedules (RUNBOOK §Retention-Cron, Cloud-Inbetriebnahme
@@ -20,6 +21,11 @@ E4b/E4c-b, `core/usage_retention.py`) loescht `usage_event`-Rohzeilen und
 `routine-run-retention` laeuft danach und
 vor der Access-Log-Rotation (04:30). Jeder Zeitplan ist per
 `WHO2BE_ROUTINE_<NAME>_SCHEDULE` ueberschreibbar.
+
+`invoice-retry` (ADR-0061 §4, Paket R2b) stellt die vom Mollie-Webhook
+vorgemerkten Rechnungen aus und archiviert sie: Backoff je Zeile, Suche ueber
+die List-API nach unklarem POST, VIES-Nachpruefung mit 72-h-Frist. Nur Cloud;
+`who2be_billing` wird dynamisch geladen (ADR-0029).
 
 Jede Routine rechnet mit `ctx.slot` statt `datetime.now` und liefert **nur
 Zaehler**.
@@ -37,9 +43,11 @@ WARN-Zeile. Die Abfrage selbst liegt im Store, damit der Betreiber-Endpunkt
 
 from __future__ import annotations
 
+import importlib
 import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from types import ModuleType
 
 import asyncpg
 
@@ -51,6 +59,7 @@ from who2be_api.core.usage_retention import (
     delete_expired_access_log,
     delete_expired_usage_events,
 )
+from who2be_api.licensing.edition import is_cloud
 from who2be_api.repositories.account_repository import PgAccountPurgeRepository
 from who2be_api.worker import store
 from who2be_api.worker.registry import REGISTRY, Registry, RoutineContext, routine
@@ -63,6 +72,7 @@ MEMORY_EXPIRE = "memory-expire"
 AUDIT_RETENTION = "audit-retention"
 USAGE_RETENTION = "usage-retention"
 ROUTINE_RUN_RETENTION = "routine-run-retention"
+INVOICE_RETRY = "invoice-retry"
 
 
 @routine(
@@ -148,6 +158,36 @@ async def routine_run_retention(ctx: RoutineContext) -> dict[str, int]:
             last_day.isoformat(),
         )
     return {"deleted_runs": deleted, "external_schedules": len(external)}
+
+
+def _load_billing_invoice() -> ModuleType | None:
+    """`who2be_billing.invoice` dynamisch laden; `None`, wenn nicht installiert (On-Prem)."""
+    try:
+        return importlib.import_module("who2be_billing.invoice")
+    except ImportError:
+        return None
+
+
+@routine(
+    INVOICE_RETRY,
+    schedule="@every 5m",
+    timeout=timedelta(minutes=4),
+)
+async def invoice_retry(ctx: RoutineContext) -> dict[str, int]:
+    """Stellt vorgemerkte Rechnungen aus und archiviert sie (ADR-0061 §4, R2b).
+
+    Nur Cloud und nur mit installiertem `who2be_billing`; sonst No-Op mit
+    `skipped=1`. Das Paket wird dynamisch geladen, der Kern haengt nicht davon
+    ab (ADR-0029, wie `main._register_billing_if_present`).
+    """
+    settings = get_settings()
+    if not is_cloud(settings):
+        return {"skipped": 1}
+    invoice = _load_billing_invoice()
+    if invoice is None:
+        return {"skipped": 1}
+    counters: dict[str, int] = await invoice.run_invoice_retry(ctx.conn, ctx.slot, settings)
+    return counters
 
 
 # --- CLI-Pfad ----------------------------------------------------------------

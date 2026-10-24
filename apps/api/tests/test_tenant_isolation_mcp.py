@@ -343,6 +343,10 @@ MCP_PROBES: dict[str, ToolProbe] = {
             "rows": [{"occurred_at": "2026-08-03T00:00:00+00:00", "amount": 3, "purpose": "x"}],
         }
     ),
+    "update_rows": ToolProbe(
+        {"table_id": "<<table_id>>", "match": {"purpose": "x"}, "set": {"amount": 4}}
+    ),
+    "delete_rows": ToolProbe({"table_id": "<<table_id>>", "match": {"purpose": "x"}}),
     "save_query_result": ToolProbe(
         {"table_id": "<<table_id>>", "sql": "SELECT 1", "title": "iso", "occurred_at": _WHEN}
     ),

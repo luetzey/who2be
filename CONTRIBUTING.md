@@ -230,6 +230,27 @@ zu löschen — die Signatur eines `collect`-Laufs beim Release. Lokal nachprüf
 uv run python scripts/changelog_fragments.py guard --base origin/main
 ```
 
+## Hilfe aktuell halten: die Zeile `Hilfe:`
+
+Ändert ein PR nutzersichtbare Oberfläche, zieht er die In-App-Hilfe unter
+`apps/web/src/help/` im selben PR nach. Damit das nicht vergessen wird, prüft
+der CI-Job `changes` (Step „Hilfe-Drift“) jeden PR:
+
+- **Auslöser** (bewusst eng): Komponenten unter
+  `apps/web/src/features/*/components/` (ohne Testdateien) und **geänderte
+  Werte** bestehender Schlüssel in `apps/web/src/i18n/locales/*.json`. Neue
+  Schlüssel lösen nicht aus.
+- **Ausweg**: eine Zeile in der PR-Beschreibung, `Hilfe: geändert` oder
+  `Hilfe: n/a – <Grund>` mit genau einem dieser Gründe:
+  `intern`, `kein UI-Text`, `nur Tests`, `Folgekarte <id>` (`t_…` oder `#NNN`).
+  Eine Erläuterung darf folgen (`Hilfe: n/a – intern: nur Betreiber-Ansicht`).
+- **Wirkung**: eine Warnung (Annotation + Zeile im Job-Summary), **keine
+  Sperre** und kein Required Check. Die Review prüft, ob der Grund stimmt.
+
+Die Beschreibung wird beim Push gelesen; wer sie später korrigiert, sieht die
+Wirkung erst mit dem nächsten Push. Logik und Tests:
+`scripts/ci/help_drift.py`, `scripts/tests/test_help_drift.py`.
+
 ## i18n: die Locale-Dateien prüfen lassen
 
 `de.json` und `en.json` sind aus demselben Grund gefährdet wie der CHANGELOG,

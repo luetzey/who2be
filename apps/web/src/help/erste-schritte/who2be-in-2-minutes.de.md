@@ -3,7 +3,7 @@ title: Who2Be in 2 Minuten
 description: Was Who2Be ist, woraus ein Agent besteht und wie Claude ihn hier abholt.
 section: erste-schritte
 order: 10
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -22,7 +22,7 @@ Jeder Baustein hat Versionen. Du kannst also jederzeit sehen, was sich geändert
 
 ## Dein erster Agent ist schon da [#builder]
 
-Unter **Agents** wartet der **Builder**. Er ist fertig eingerichtet und hilft dir im Chat, eigene Agenten zu bauen. Du beschreibst, wofür dein Agent da sein soll. Der Builder fragt nach und legt die Bausteine in Who2Be an.
+Unter **Agenten** wartet der **Builder**. Er ist fertig eingerichtet und hilft dir im Chat, eigene Agenten zu bauen. Du beschreibst, wofür dein Agent da sein soll. Der Builder fragt nach und legt die Bausteine in Who2Be an.
 
 ## So holt Claude deinen Agenten ab [#abruf]
 

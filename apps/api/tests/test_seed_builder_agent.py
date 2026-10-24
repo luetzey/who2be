@@ -390,7 +390,7 @@ def test_builder_agent_seeded_english_workspace() -> None:
         assert all(p["version_locale"] == "en" for p in playbooks), playbooks
         # Body-Stichprobe: der EN-Sidecar (nicht der DE-Text) wurde geladen.
         persona_pb = next(p for p in playbooks if p["name"] == "Create & Maintain Persona")
-        assert "CRUD workflow for personas" in persona_pb["body"]
+        assert "Create, update, and retire personas" in persona_pb["body"]
 
         resource = data["resource"]
         assert resource is not None, "Managed-Resource wurde nicht geseedet."

@@ -242,6 +242,58 @@ def blocknote_body_text(body: str, inline_text: InlineTextFn = placeholder_token
     return blocks_plain_text(blocks, inline_text)
 
 
+_HEADING_TYPE = "heading"
+# BlockNote-Default fuer ein Heading ohne `props.level` — entspricht <h1>.
+_DEFAULT_HEADING_LEVEL = 1
+
+
+def is_heading_block(block: object) -> bool:
+    """True, wenn der Block ein BlockNote-Heading ist (Anker, ADR-0021)."""
+    return isinstance(block, dict) and block.get("type") == _HEADING_TYPE
+
+
+def heading_level(block: dict[str, Any]) -> int:
+    """Liest `props.level` eines Heading-Blocks; Default 1 (BlockNote-h1)."""
+    props = block.get("props")
+    if isinstance(props, dict):
+        level = props.get("level")
+        if isinstance(level, int):
+            return level
+    return _DEFAULT_HEADING_LEVEL
+
+
+def section_blocks(blocks: list[dict[str, Any]], anchor_block_id: str) -> list[dict[str, Any]]:
+    """Abschnittsregel (ADR-0021): die Bloecke ab dem Anker in Dokument-Reihenfolge.
+
+    Die einzige Implementierung der Regel; Playbook-Schnitt, Resource-Schnitt
+    (MCP `fetch_resource`) und Block-Ref-Vorschau nutzen sie gemeinsam.
+
+    - Anker nicht gefunden → `[]`.
+    - Anker kein Heading → nur der Anker-Block.
+    - Anker ist Heading → der Anker plus alle folgenden Bloecke bis exklusive
+      zum naechsten Heading gleicher oder hoeherer Ebene (`level <=` Anker).
+      Tiefere Headings bleiben im Abschnitt.
+    """
+    anchor_index = next(
+        (i for i, b in enumerate(blocks) if isinstance(b, dict) and b.get("id") == anchor_block_id),
+        None,
+    )
+    if anchor_index is None:
+        return []
+    anchor = blocks[anchor_index]
+    if not is_heading_block(anchor):
+        return [anchor]
+    anchor_level = heading_level(anchor)
+    section: list[dict[str, Any]] = [anchor]
+    for block in blocks[anchor_index + 1 :]:
+        if not isinstance(block, dict):
+            continue
+        if is_heading_block(block) and heading_level(block) <= anchor_level:
+            break
+        section.append(block)
+    return section
+
+
 __all__ = [
     "InlineTextFn",
     "block_plain_text",
@@ -249,8 +301,11 @@ __all__ = [
     "blocks_plain_text",
     "format_link",
     "format_table",
+    "heading_level",
+    "is_heading_block",
     "parse_blocknote_blocks",
     "placeholder_token_inline",
+    "section_blocks",
     "table_cells",
     "text_inline_only",
 ]

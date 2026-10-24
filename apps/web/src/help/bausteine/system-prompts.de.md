@@ -3,7 +3,7 @@ title: System-Prompts und Platzhalter
 description: Die Vorlage, die ein Agent bei jedem Start liest, und welche Platzhalter du darin nutzen kannst.
 section: bausteine
 order: 40
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -35,9 +35,9 @@ Einfügen: Tippe im Editor `/` und wähle den Platzhalter aus dem Menü.
 - **MCP-Tools:** Liste der Werkzeuge mit Aufruf und Kurzbeschreibung. Schreib dazu, in welcher Reihenfolge der Agent sie nutzen soll, etwa „zuerst `list_triggers`, dann `fetch_playbook`“.
 - **Gedächtnis:** ein Hinweis zum Gedächtnis, passend zur Einstellung des Agenten.
 
-## Versionen und Freigabe [#versionen]
+## Versionen und Aktivieren [#versionen]
 
-Jedes Speichern erzeugt eine neue Version. Ein Agent nutzt nur die aktive Version. Liegt eine Version zur Freigabe, prüfst du die Änderungen und aktivierst sie oder schickst sie zurück in den Entwurf.
+Jede Änderung erzeugt eine neue Version, zuerst als Entwurf. Ein Entwurf wirkt noch nicht. Bist du fertig, klickst du auf **Zur Freigabe einreichen**. Ein Admin prüft die Version und klickt auf **Aktivieren** oder schickt sie mit **Zurück in den Entwurf** zurück. Erst die aktive Version nutzt der Agent.
 
 ## Tipps [#tipps]
 

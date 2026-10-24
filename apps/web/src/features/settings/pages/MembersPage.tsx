@@ -10,6 +10,7 @@ import i18n from '@/i18n'
 
 import type { Invitation, Member, WorkspaceRole } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useSession } from '@/auth/session-context'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataList } from '@/components/data/DataList'
@@ -20,6 +21,15 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Form,
   FormControl,
@@ -67,10 +77,55 @@ function acceptUrl(token: string): string {
   return `${origin}/invitations/accept#${new URLSearchParams({ token }).toString()}`
 }
 
+// Anzeigename eines Mitglieds: die E-Mail, ein eigenes Namensfeld hat
+// `Member` nicht; ohne E-Mail die user_id.
+function memberName(member: Member): string {
+  return member.email ? member.email : member.user_id
+}
+
 interface MemberListItemProps {
   member: Member
+  isSelf: boolean
   onChangeRole: (userId: string, currentRole: WorkspaceRole, nextRole: WorkspaceRole) => Promise<void>
-  onRemove: (userId: string) => Promise<void>
+  onRemove: (member: Member) => void
+}
+
+interface RemoveMemberDialogProps {
+  member: Member | null
+  busy: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}
+
+/**
+ * Rueckfrage vor dem Entfernen (UX-Audit K1). Der Server widerruft dabei die
+ * API-Tokens des Mitglieds fuer diesen Workspace
+ * (WorkspaceMemberService.remove), das sagt der Dialog vorher. `busy` sperrt
+ * die Bestaetigung, solange das DELETE laeuft (kein Doppel-Aufruf).
+ */
+function RemoveMemberDialog({ member, busy, onOpenChange, onConfirm }: RemoveMemberDialogProps) {
+  const { t } = useTranslation('settings')
+  const name = member === null ? '' : memberName(member)
+  return (
+    <Dialog open={member !== null} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="wrap-anywhere">
+            {t('members.remove.title', { name })}
+          </DialogTitle>
+          <DialogDescription>{t('members.remove.body')}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">{t('members.remove.cancel')}</Button>
+          </DialogClose>
+          <Button variant="destructive" onClick={onConfirm} disabled={busy}>
+            {t('members.remove.confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 /**
@@ -84,12 +139,12 @@ interface MemberListItemProps {
  * welches Mitglied gemeint ist, sagt `aria-describedby` auf den Namen. Ein
  * eigenes `aria-label` wuerde den sichtbaren Text verdecken (WCAG 2.5.3).
  */
-function MemberListItem({ member, onChangeRole, onRemove }: MemberListItemProps) {
+function MemberListItem({ member, isSelf, onChangeRole, onRemove }: MemberListItemProps) {
   const { t } = useTranslation('settings')
   const [open, setOpen] = useState(false)
   const nameId = useId()
   const detailsId = useId()
-  const name = member.email ? member.email : member.user_id
+  const name = memberName(member)
 
   return (
     <li className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
@@ -132,15 +187,19 @@ function MemberListItem({ member, onChangeRole, onRemove }: MemberListItemProps)
           <dt className="text-muted-foreground">{t('members.list.colJoined')}</dt>
           <dd>{formatDate(member.joined_at)}</dd>
         </dl>
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
-          className="h-10"
-          onClick={() => void onRemove(member.user_id)}
-        >
-          {t('members.list.removeButton')}
-        </Button>
+        {isSelf ? (
+          <span className="text-sm text-muted-foreground">{t('members.list.selfHint')}</span>
+        ) : (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="h-10"
+            onClick={() => onRemove(member)}
+          >
+            {t('members.list.removeButton')}
+          </Button>
+        )}
       </div>
     </li>
   )
@@ -150,12 +209,16 @@ export function MembersPage() {
   const { t } = useTranslation('settings')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
+  const { me } = useSession()
   const wsPath = useWorkspacePath()
   const members = useMembers()
   const invitations = useInvitations()
   // Klartext-Token der in dieser Sitzung erstellten Invitations — das Backend
   // liefert ihn nur einmal bei der Erstellung (Hash-only, ADR-0023).
   const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({})
+  // Mitglied, dessen Entfernen gerade im Dialog bestaetigt wird (null = zu).
+  const [pendingRemoval, setPendingRemoval] = useState<Member | null>(null)
+  const [removing, setRemoving] = useState(false)
   const isMobile = useIsMobile()
   const listTitleId = useId()
 
@@ -211,13 +274,30 @@ export function MembersPage() {
     }
   }
 
-  async function onRemove(userId: string) {
+  // Die eigene Zeile hat keinen Entfernen-Knopf (UX-Audit K1). Den Workspace
+  // zu verlassen ist ein eigener Ablauf, kein Admin-Klick in der Liste.
+  function isSelf(member: Member): boolean {
+    return me !== null && member.user_id === me.user_id
+  }
+
+  async function confirmRemove() {
+    const target = pendingRemoval
+    // Ein zweites DELETE verhindert `disabled={busy}` am Bestaetigen-Knopf.
+    if (target === null) {
+      return
+    }
+    setRemoving(true)
     try {
-      await api.removeMember(userId)
-      notify.success(t('members.list.removedToast'))
+      await api.removeMember(target.user_id)
+      // Der Server widerruft beim Entfernen die API-Tokens des Mitglieds fuer
+      // diesen Workspace (WorkspaceMemberService.remove, ADR-0023).
+      notify.success(t('members.list.removedToast', { name: memberName(target) }))
       members.reload()
     } catch (cause) {
       notify.error(describeError(cause, t('members.invite.actionFailed')))
+    } finally {
+      setRemoving(false)
+      setPendingRemoval(null)
     }
   }
 
@@ -279,8 +359,9 @@ export function MembersPage() {
                     <MemberListItem
                       key={member.user_id}
                       member={member}
+                      isSelf={isSelf(member)}
                       onChangeRole={onChangeRole}
-                      onRemove={onRemove}
+                      onRemove={setPendingRemoval}
                     />
                   ))}
                 </ul>
@@ -297,9 +378,7 @@ export function MembersPage() {
                 <TableBody>
                   {members.members.map((member) => (
                     <TableRow key={member.user_id}>
-                      <TableCell className="font-medium">
-                        {member.email ? member.email : member.user_id}
-                      </TableCell>
+                      <TableCell className="font-medium">{memberName(member)}</TableCell>
                       <TableCell>
                         <Select
                           aria-label={t('members.list.roleAriaLabel', { email: member.email })}
@@ -324,14 +403,20 @@ export function MembersPage() {
                         {formatDate(member.joined_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => void onRemove(member.user_id)}
-                        >
-                          {t('members.list.removeButton')}
-                        </Button>
+                        {isSelf(member) ? (
+                          <span className="text-sm text-muted-foreground">
+                            {t('members.list.selfHint')}
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setPendingRemoval(member)}
+                          >
+                            {t('members.list.removeButton')}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -339,6 +424,16 @@ export function MembersPage() {
               </Table>
               )}
             </DataView>
+            <RemoveMemberDialog
+              member={pendingRemoval}
+              busy={removing}
+              onOpenChange={(next) => {
+                if (!next && !removing) {
+                  setPendingRemoval(null)
+                }
+              }}
+              onConfirm={() => void confirmRemove()}
+            />
           </CardContent>
         </Card>
 

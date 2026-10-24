@@ -10,7 +10,14 @@
     "id": "pb-persona-p-zweck",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "CRUD workflow for personas in Who2Be: create, maintain, or retire a persona — with schema discipline and phase separation (Understand → Propose → Write → Hand-Off). Three modes: Create (new persona), Update (change an existing one), Retire (deactivate). Writing happens exclusively through the Who2Be MCP write tools; the draft→active workflow stays server-side.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create, update, and retire personas (Create / Update / Retire) — writes only produce drafts; the user decides on activation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before Phase 2 (Propose), in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-modi\", \"res-conv-h-laengen\", \"res-conv-h-trigger\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -45,7 +52,7 @@
     "id": "pb-persona-li-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Understand: Ask clarifying questions in phases, 1-2 per turn, never all at once. Identity (one concise line), Tone & Style (with example phrases), Allowed (4-6 concrete capabilities), Forbidden (domain boundaries + anti-patterns), Output Style (form, length), Mode decision (actively check — criteria in the Modes section; as soon as multiple usage voices or output formats are needed, use Multi-Mode instead of a mixed persona).", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Understand: Ask clarifying questions in phases, 1-2 per turn, never all at once. Identity (one concise line), Tone & Style (with example phrases), Allowed (4-6 concrete capabilities, no tool list), Forbidden (domain boundaries + anti-patterns), Output Style (form, length), Mode decision (actively check — criteria in the Modes section; as soon as multiple usage voices or output formats are needed, use Multi-Mode instead of a mixed persona).", "styles": {}}],
     "children": [
       {
         "id": "pb-persona-li-modi-regel",
@@ -64,7 +71,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Create — Propose: Consolidate the persona body (description + profile as Markdown with the sections Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Show it to the user, explain trade-offs, get confirmation.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Check length: ", "styles": {"bold": true}},
+          {"type": "text", "text": "check the profile, every mode and the number of modes against the guide values in the Agent-Building Conventions (section 'Lengths & Placement', anchor res-conv-h-laengen). Procedures, checklists and tool instructions move into a playbook according to the placement table, schemas and reference knowledge into a resource; the profile keeps role, tone, a few rules with reasons and hard limits. If the draft is above the warning threshold, tell the user the word count and the guide value before you write.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-3",
@@ -78,7 +96,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Update — Understand & Propose: Read get_persona(identifier), show the affected section (Identity / Tone & Style / Allowed / Forbidden / Output Style / Modes), clarify the change request, consolidate the edit proposal and have it confirmed.", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-laengen-update",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Length on update: ", "styles": {"bold": true}},
+          {"type": "text", "text": "the same check for the state after the change. If the profile or a mode grows above the warning threshold, propose moving content out. Shorten a persona that is already too long only if the user wants it.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-5",
@@ -177,56 +206,21 @@
     "id": "pb-persona-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t1",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "create_persona — create a new persona as draft version 1.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t2",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "update_persona — change a persona's content as a new draft.", "styles": {}}],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-persona-li-t3",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "transition_persona — transition a version (draft/review requires persona_write; active/inactive requires promote_retire).", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t4",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "restore_persona — restore an earlier version as a new draft.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t5",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "set_persona_playbooks — set the playbooks assigned to a persona (replace semantics).", "styles": {}}],
+    "content": [{"type": "text", "text": "transition_persona: draft/review requires persona_write, active/inactive requires promote_retire — without that right, activation stays with the user.", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-persona-li-t6",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Reads: get_persona, list_playbooks for preparation. Forbidden: setting status directly to active on creation, as well as writing to other aggregates beyond this playbook's scope.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t7-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "content": [{"type": "text", "text": "Don't activate on creation, and don't write to other aggregates through this playbook (playbooks, resources, and agents have their own playbooks).", "styles": {}}],
     "children": []
   },
   {
@@ -262,20 +256,6 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "For behavior-relevant updates: running sessions keep the old state cached — start a new chat for the new voice to take effect. For topics outside persona maintenance, politely redirect to the responsible playbook.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-h",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-p",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is what makes the AgentDB self-improving.", "styles": {}}],
     "children": []
   }
 ]

@@ -12337,6 +12337,144 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/update": {
+      "post": {
+        "tags": [
+          "wa-tables"
+        ],
+        "summary": "Update Rows",
+        "description": "Aendert Zeilen per Gleichheits-`match` (UND, nur Schema-Spalten).\nMehr als 100 Treffer, abweichendes `expected_count` oder Dedupe-Kollision\n→ 409 ohne Aenderung; unbekannte Spalte, Kategorie-Spalte in `set` → 422.",
+        "operationId": "update_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_update_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowsUpdateResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows/delete": {
+      "post": {
+        "tags": [
+          "wa-tables"
+        ],
+        "summary": "Delete Rows",
+        "description": "Loescht Zeilen per Gleichheits-`match`; Grenzen und Fehler wie `rows/update`.",
+        "operationId": "delete_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_delete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RowsDelete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowsDeleteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/query": {
       "post": {
         "tags": [
@@ -18305,6 +18443,7 @@
               "invitation_email_mismatch",
               "invitation_email_required",
               "invitation_email_unconfirmed",
+              "invitation_already_pending",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
@@ -22834,6 +22973,76 @@
         "title": "KbSearchHit",
         "description": "Ein Treffer der KB-Suche — nie WorkArea-Inhalte (getrennte Indizes)."
       },
+      "LengthHint": {
+        "properties": {
+          "element": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "mode",
+              "mode_count",
+              "playbook_body",
+              "playbook_summary",
+              "resource_section"
+            ],
+            "title": "Element"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "words",
+              "chars",
+              "count"
+            ],
+            "title": "Unit"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "warn": {
+            "type": "integer",
+            "title": "Warn"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "element",
+          "value",
+          "unit",
+          "target",
+          "warn",
+          "message"
+        ],
+        "title": "LengthHint",
+        "description": "Weicher Laengen-Hinweis in einer Schreibantwort (ADR-0063).\n\n`target` ist der Richtwert (`null` bei der Resource: nur Warnschwelle),\n`ref` der Modusname bzw. der Anker des Resource-Abschnitts."
+      },
       "MarkdownCreate": {
         "properties": {
           "name": {
@@ -23107,6 +23316,14 @@
             },
             "type": "array",
             "title": "Dangling Refs"
+          },
+          "length_hints": {
+            "items": {
+              "$ref": "#/components/schemas/LengthHint"
+            },
+            "type": "array",
+            "title": "Length Hints",
+            "description": "Weiche Laengen-Hinweise (ADR-0063): Inhalt ueber der Warnschwelle, gespeichert wurde trotzdem."
           }
         },
         "type": "object",
@@ -27346,7 +27563,7 @@
           "available"
         ],
         "title": "ResourceLinkRead",
-        "description": "Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe).\n\nPhase 3-A erweitert das Read-Modell um Section-Sicht und Available-\nFallback:\n- `available_in='active'` — Anker in der aktiven Version aufgeloest.\n- `available_in='draft'` — keine aktive Version, aber die aktuelle\n  (Draft-/Review-/Inactive-)Version traegt den Anker → UI rendert\n  \"Nur in Draft\".\n- `available_in=None` — Anker existiert nirgends mehr (Block geloescht).\n`available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).\n`section_block_ids` und `section_preview` traegt die Section ab dem\nAnker-Heading bis (exklusive) zum naechsten Heading desselben Levels."
+        "description": "Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe).\n\nPhase 3-A erweitert das Read-Modell um Section-Sicht und Available-\nFallback:\n- `available_in='active'` — Anker in der aktiven Version aufgeloest.\n- `available_in='draft'` — keine aktive Version, aber die aktuelle\n  (Draft-/Review-/Inactive-)Version traegt den Anker → UI rendert\n  \"Nur in Draft\".\n- `available_in=None` — Anker existiert nirgends mehr (Block geloescht).\n`available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).\n`section_block_ids` und `section_preview` traegt die Section ab dem\nAnker-Heading bis (exklusive) zum naechsten Heading gleicher oder hoeherer\nEbene (`blocknote_text.section_blocks`, ADR-0021)."
       },
       "ResourceLinkSet": {
         "properties": {
@@ -27812,6 +28029,80 @@
         "title": "RoutinesOverview",
         "description": "Alle registrierten Routinen plus „Worker zuletzt gesehen“."
       },
+      "RowsDelete": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Match"
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "match"
+        ],
+        "title": "RowsDelete",
+        "description": "Eingabe fuer `POST .../wa-tables/{id}/rows/delete` (ADR-0049-Nachtrag).\n\n`match` waehlt die Zeilen: Spalte -> Wert, UND-verknuepft, nur Gleichheit,\nnur Spalten aus dem Schema (prueft der Server). Leer ist verboten\n(`min_length=1`), damit kein Aufruf versehentlich alle Zeilen trifft.\n`expected_count` ist optional: weicht die Trefferzahl ab, antwortet der\nServer 409 und loescht nichts. Unabhaengig davon gilt die Obergrenze\n`ROWS_MUTATE_MAX_ROWS` je Aufruf."
+      },
+      "RowsDeleteResult": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "RowsDeleteResult",
+        "description": "Antwort von `rows/delete`: Zahl der geloeschten Zeilen, `note` wie oben."
+      },
       "RowsInsert": {
         "properties": {
           "rows": {
@@ -27882,6 +28173,106 @@
         ],
         "title": "RowsInsertResult",
         "description": "Bilanz eines Imports: wie viele Zeilen neu, wie viele Duplikate.\n\nLokales Antwort-Modell (Router-Ebene, wie `Health` in `main.py`) — das\nMCP-Tool `insert_rows` (WP19) reicht es unveraendert durch."
+      },
+      "RowsUpdate": {
+        "properties": {
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Match"
+          },
+          "expected_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Count"
+          },
+          "set": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 40,
+            "minProperties": 1,
+            "title": "Set"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "match",
+          "set"
+        ],
+        "title": "RowsUpdate",
+        "description": "Eingabe fuer `POST .../wa-tables/{id}/rows/update` (ADR-0049-Nachtrag).\n\nWie `RowsDelete`, dazu `set`: die neuen Werte (Spalte -> Wert, nicht\nleer). Der Server prueft sie wie beim Import; `category_column` ist nicht\nsetzbar (Kategorien kommen nur aus Regeln), interne Spalten sind keine\nSchema-Spalten und damit ebenfalls abgelehnt."
+      },
+      "RowsUpdateResult": {
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated"
+        ],
+        "title": "RowsUpdateResult",
+        "description": "Antwort von `rows/update`: Zahl der geaenderten Zeilen (ADR-0049-Nachtrag).\n\n`note` steht nur bei 0 Treffern („keine Zeile passt zu match\") — kein\nFehler, aber auch kein stilles Erfolgssignal."
       },
       "RunRate": {
         "properties": {
@@ -28878,10 +29269,11 @@
           "technical",
           "mcp",
           "performance",
+          "tool_request",
           "other"
         ],
         "title": "SystemFeedbackCategory",
-        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt) oder `other`. Wird in derselben `agent_feedback`-Spalte\n`signal` gespeichert (entity_type='system', entity_id=NULL) und fliesst in\nden gemeinsamen Kurations-Posteingang."
+        "description": "Kategorie eines System-/Plattform-Problems (zielloses Feedback).\n\nAnders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert\ndies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler\nin der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu\nlangsam/haengt), `tool_request` (Werkzeug fehlt im Profil) oder\n`other`. Wird in derselben `agent_feedback`-Spalte `signal` gespeichert\n(entity_type='system', entity_id=NULL) und fliesst in den gemeinsamen\nKurations-Posteingang."
       },
       "SystemFeedbackCreate": {
         "properties": {
@@ -30357,6 +30749,61 @@
         "title": "TokenRename",
         "description": "Eingabe fuer `PATCH /v1/tokens/{id}` — nur der Name ist editierbar.\n\nSecret, Rolle und Agent-Bindung bleiben bewusst unveraenderlich (ADR-0023-\nSnapshot). Fuer ein neues Secret gibt es `POST /v1/tokens/{id}/rotate`."
       },
+      "ToolProfileGrant": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "tools_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Added"
+          },
+          "tools_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Removed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ToolProfileGrant",
+        "description": "Das Werkzeug-Profil eines agent-gebundenen Tokens (`whoami`, §6.1).\n\n`id is None` heisst „Alle\" (mit Ausnahmen in `tools_added`/\n`tools_removed`). Kein Profil und keine Ausnahmen liefert `whoami` als\n`tool_profile=None`. Die ausgerechnete Werkzeugliste steht bewusst NICHT\nhier — der Aufrufer rechnet sie mit `effective_tool_set` aus (§6.1).\n\nGruppen und Werkzeuge sind `str`, nicht `ToolGroup`: Ein Name, den der\nCode nicht mehr kennt, darf das Lesen nicht brechen, er wird bei der\nAuswertung uebergangen (§3.3)."
+      },
       "TransitionGrant": {
         "properties": {
           "promote": {
@@ -31324,6 +31771,16 @@
               }
             ],
             "title": "Work Areas"
+          },
+          "tool_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolProfileGrant"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

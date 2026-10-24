@@ -21,6 +21,7 @@ from who2be_models.tool_policy import (
     ReadScope,
     TransitionGrant,
 )
+from who2be_models.tool_profiles import ToolProfileGrant
 from who2be_models.workarea import WorkAreaAssignment
 from who2be_models.workspace_member import WorkspaceRole
 
@@ -82,3 +83,9 @@ class WhoAmIRead(BaseModel):
     # Area. `None` fuer Menschen/ungebundene Tokens — die haben keine
     # Grant-Menge (editor+ liest ohnehin alles, viewer die shared Areas).
     work_areas: list[WorkAreaAssignment] | None = None
+    # Werkzeug-Profil des gebundenen Agenten (ADR-0059 §6.1): Gruppen,
+    # Einzelwerkzeuge und Ausnahmen, NICHT die ausgerechnete Liste — der
+    # MCP-Adapter rechnet sie mit `tool_profiles.effective_tool_set` aus.
+    # `None` = keine Einschraenkung durch ein Profil (Mensch, ungebundener
+    # Token, Agent auf „Alle" ohne Ausnahmen). Ein Profil ist kein Recht.
+    tool_profile: ToolProfileGrant | None = None

@@ -513,7 +513,28 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Teilaenderungen, Platzhalter als `{{kind:target_id}}`, `usage_notes` als
 # Markdown (W58-4) — DE + EN. Muss im selben Release wie P3 (MCP nimmt nur
 # noch Markdown) verteilt sein.
-BUILDER_CONTENT_VERSION = 19
+# v20: Builder schlank B1 (Owner 2026-10-22, W1 b / W2 / W4 b) — neuer Abschnitt
+# „Laengen & Wohin\" in den Agent-Bau-Konventionen (Richtwerte je Element,
+# Wohin-Tabelle, vier Schreibregeln; einzige Stelle mit den Zahlen, stabile
+# Anker `res-conv-h-laengen*`), Laengen-Pruefpunkt im Persona-Playbook (Phase
+# Vorschlag + Update) und im Konsistenz-Check (Pflege-Fund, kein Verstoss) —
+# DE + EN.
+# v21: Builder schlank B2 (Owner 2026-10-22, W2 / W3 b / W5 a) — Builder-
+# Persona gestrafft: „Erlaubt“ als Faehigkeits-Saetze statt Werkzeug-Listen,
+# Modi-Absatz im Profil entfaellt (doppelt zu den Modi), Vier-Phasen nur noch
+# im Output-Stil; Architekt-Modus ohne Phasen-Wiederholung. Builder-Template
+# ohne `tools-overview` (doppelt zu tools/list), Profil per `persona-ref`
+# statt `persona-field:profile`; Lite unveraendert — DE + EN.
+# v22: Builder schlank B3 (Owner 2026-10-22, W3 b; PM 2026-10-22/23) — alle acht
+# Builder-Playbooks entdoppelt: Feedback-Absatz entfaellt (K1, steht in
+# Server-instructions, Persona und Template), „Tools & Operations“/„Werkzeuge“
+# heisst „Fallen“ und nennt nur nicht offensichtliche Fallen (K2), „Zweck“ ist
+# ein Satz (K3). Konventionen werden nicht mehr ganz geladen: jedes Playbook
+# nennt 2-3 Abschnitts-Anker und laedt sie mit einem `fetch_resource`-Aufruf
+# (K4, Abschnittsregel ADR-0021-Nachtrag). Agent-Playbook: `tools-overview`
+# standardmaessig nicht ins Template; Playbook-Playbook gibt „Zweck“ und
+# „Tools & Operations“ nicht mehr als Gliederung vor — DE + EN.
+BUILDER_CONTENT_VERSION = 22
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
