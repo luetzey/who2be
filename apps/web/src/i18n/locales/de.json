@@ -678,13 +678,25 @@
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "Cursor oder VS Code",
+        "hermes": "Hermes Agent",
         "other": "Etwas anderes"
+      },
+      "clientSuffix": {
+        "claude": "(Web, App, Handy)"
       },
       "clientName": {
         "claude": "Claude",
         "code": "Claude Code",
         "editor": "deinem Editor",
+        "hermes": "Hermes",
         "other": "deinem Programm"
+      },
+      "lead": {
+        "claude": "Web, App am Computer und am Handy.",
+        "code": "Im Terminal, mit einem Befehl.",
+        "editor": "Ein Klick trägt den Agenten im Editor ein.",
+        "hermes": "Im Terminal des Rechners, auf dem Hermes läuft.",
+        "other": "Gemini, Le Chat, Windsurf, Zed und andere Programme mit Remote-MCP."
       },
       "status": {
         "connected": "Verbunden",
@@ -698,7 +710,9 @@
         "editor": "Klick auf „Zu Cursor hinzufügen“ bzw. „In VS Code installieren“. Der Editor fragt einmal nach.",
         "login": "Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
         "otherIntro": "Dein Programm muss Remote-MCP mit Anmeldung (OAuth) können. Trag dort diese Adresse ein:",
-        "otherTest": "Danach schreibst du deinem Agenten:"
+        "otherTest": "Danach schreibst du deinem Agenten:",
+        "hermesLogin": "Hermes öffnet die Anmeldung im Browser oder zeigt einen Link dafür. Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
+        "hermesTest": "Starte eine neue Sitzung oder tippe {{cmd}}. Dann schreib:"
       },
       "cta": {
         "claude": "Mit Claude verbinden",
@@ -726,6 +740,10 @@
       },
       "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectors hinzu.",
       "free": "Claude Free erlaubt nur einen eigenen Connector. Entferne dort vorher den Builder.",
+      "hermesProfile": "Mehrere Profile? Mit {{cmd}} landet der Agent im richtigen Profil.",
+      "hermesProfileCommand": "hermes -p <profil> mcp add …",
+      "hermesHeadless": "Hermes läuft auf einem Server ohne Browser? Öffne den Link auf deinem Rechner und füg die Adresse, auf der der Browser landet, im Terminal ein.",
+      "otherProfiles": "So geht es in Gemini, Le Chat, Windsurf, Zed und Copilot",
       "waiting": "Warte auf „{{agent}}“ …",
       "waitingHint": "Sobald er in {{client}} seine Persona lädt, hakt sich der Schritt ab. Du kannst diese Seite offen lassen.",
       "expired": "Noch kein Abruf angekommen. Who2Be fragt nicht mehr von selbst nach.",
