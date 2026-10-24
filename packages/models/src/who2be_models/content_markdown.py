@@ -23,6 +23,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from who2be_models.content_budgets import LengthHint
 from who2be_models.external_tool import ToolNameStr
 from who2be_models.locale import ContentLocale
 from who2be_models.persona import SkillRef
@@ -170,6 +171,13 @@ class MarkdownWriteResult(MarkdownSource):
     """
 
     dangling_refs: list[DanglingRef] = Field(default_factory=list)
+    length_hints: list[LengthHint] = Field(
+        default_factory=list,
+        description=(
+            "Weiche Laengen-Hinweise (ADR-0063): Inhalt ueber der Warnschwelle, "
+            "gespeichert wurde trotzdem."
+        ),
+    )
 
 
 class MarkdownCreate(BaseModel):

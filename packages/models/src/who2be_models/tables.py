@@ -48,6 +48,14 @@ ROWS_INSERT_MAX_ROWS = 1_000
 TABLE_QUERY_SQL_MAX_LENGTH = 4_000
 TABLE_QUERY_MAX_LIMIT = 1_000
 CONVENTION_MAX_KEYS = 50
+# Obergrenze fuer `update_rows`/`delete_rows` je Aufruf (ADR-0049-Nachtrag):
+# trifft `match` mehr Zeilen, antwortet der Server 409 und aendert nichts.
+ROWS_MUTATE_MAX_ROWS = 100
+
+# Zellwert in `match`/`set`: nur Skalare. Typisiert (statt `object`), damit das
+# Eingabeschema keine offenen Objekte annimmt (ADR-0058 W58-3 A) und Listen/
+# Objekte schon am Modell scheitern.
+CellValue = str | int | float | bool | None
 
 
 class TableColumnType(StrEnum):
@@ -186,6 +194,35 @@ class RowsInsert(BaseModel):
     source_artifact_id: UUID | None = None
     source_name: str | None = Field(default=None, max_length=100)
     new_rules: list[NewRule] = Field(default_factory=list)
+
+
+class RowsDelete(BaseModel):
+    """Eingabe fuer `POST .../wa-tables/{id}/rows/delete` (ADR-0049-Nachtrag).
+
+    `match` waehlt die Zeilen: Spalte -> Wert, UND-verknuepft, nur Gleichheit,
+    nur Spalten aus dem Schema (prueft der Server). Leer ist verboten
+    (`min_length=1`), damit kein Aufruf versehentlich alle Zeilen trifft.
+    `expected_count` ist optional: weicht die Trefferzahl ab, antwortet der
+    Server 409 und loescht nichts. Unabhaengig davon gilt die Obergrenze
+    `ROWS_MUTATE_MAX_ROWS` je Aufruf.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    match: dict[str, CellValue] = Field(min_length=1, max_length=TABLE_MAX_COLUMNS)
+    expected_count: int | None = Field(default=None, ge=0, le=ROWS_MUTATE_MAX_ROWS)
+
+
+class RowsUpdate(RowsDelete):
+    """Eingabe fuer `POST .../wa-tables/{id}/rows/update` (ADR-0049-Nachtrag).
+
+    Wie `RowsDelete`, dazu `set`: die neuen Werte (Spalte -> Wert, nicht
+    leer). Der Server prueft sie wie beim Import; `category_column` ist nicht
+    setzbar (Kategorien kommen nur aus Regeln), interne Spalten sind keine
+    Schema-Spalten und damit ebenfalls abgelehnt.
+    """
+
+    set: dict[str, CellValue] = Field(min_length=1, max_length=TABLE_MAX_COLUMNS)
 
 
 class QueryFormat(StrEnum):

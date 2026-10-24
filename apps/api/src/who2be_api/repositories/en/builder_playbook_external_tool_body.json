@@ -10,7 +10,14 @@
     "id": "pb-exttool-p-zweck",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "CRUD workflow for external tool bindings (ADR-0043): versioned, PURELY INSTRUCTIVE bindings to external MCP servers (e.g., a to-do app, a calendar) — they describe when and how an agent uses an external tool; they connect nothing. Three modes: Create (new binding), Update/Rebind (change the content or swap the concrete tool behind the alias), Retire (deactivate). Writing happens exclusively through the Who2Be MCP write tools; the draft→active workflow stays server-side.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create, rebind, and retire purely instructive bindings to external MCP servers (ADR-0043) — they describe when and how an agent uses an external tool; they connect nothing.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before writing, in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-exttool\", \"res-conv-h-status\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -84,13 +91,6 @@
     "children": []
   },
   {
-    "id": "pb-exttool-li-konv",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: The alias contract, the instructive boundary, the rebind pattern, and tool-ref rules are binding in the 'Agent-Building Conventions' resource (External Tools section). It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before writing.", "styles": {}}],
-    "children": []
-  },
-  {
     "id": "pb-exttool-h-anti",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -130,20 +130,6 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "After writing, report: alias + display name, version status (draft/review/active), and the next step (review/activation — only promote yourself after explicit approval). Show where the binding is used or should be used (tool-ref pills), and whether domain agents need policy changes.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-exttool-h-feedback",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-exttool-p-feedback",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing bindings (e.g., dead tool identifiers after a server update), report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error).", "styles": {}}],
     "children": []
   }
 ]

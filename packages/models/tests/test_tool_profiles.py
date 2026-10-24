@@ -173,11 +173,13 @@ def test_builder_profile_contains_workarea_read_w59_4() -> None:
 
 def test_builtin_profile_sizes() -> None:
     # ADR-0059 §5.2, gemessen bei 100 Werkzeugen. `edit_content` (ADR-0058)
-    # kam danach in `content_write` und zaehlt bei Autor und Builder mit.
+    # kam danach in `content_write` und zaehlt bei Autor und Builder mit;
+    # `update_rows`/`delete_rows` (ADR-0049-Nachtrag) kamen in `workarea_write`
+    # und zaehlen nur beim Autor (Builder schreibt keine WorkArea).
     sizes = {key: len(builtin_profile_tools(key)) for key in BuiltinProfileKey}
     assert sizes == {
         BuiltinProfileKey.read: 42,
-        BuiltinProfileKey.author: 77 + 1,
+        BuiltinProfileKey.author: 77 + 1 + 2,
         BuiltinProfileKey.curator: 59,
         BuiltinProfileKey.builder: 85 + 1,
     }
@@ -216,7 +218,10 @@ def test_builder_profile_covers_managed_builder_content_de_and_en() -> None:
     mentioned: set[str] = set()
     for path in files:
         mentioned |= set(pattern.findall(path.read_text(encoding="utf-8")))
-    assert len(mentioned) >= 70, sorted(mentioned)
+    # Untergrenze gegen einen leer laufenden Scan. Seit Content-Stand 22
+    # (Builder schlank B3, K2) zaehlen die Playbooks keine Werkzeuge mehr auf,
+    # die tools/list schon beschreibt — 69 statt 70 genannte Werkzeuge.
+    assert len(mentioned) >= 65, sorted(mentioned)
     missing = mentioned - builtin_profile_tools(BuiltinProfileKey.builder)
     assert missing == set()
 

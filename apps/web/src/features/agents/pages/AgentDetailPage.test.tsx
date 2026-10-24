@@ -140,7 +140,10 @@ const editorMe: Me = {
   ],
 } as Me
 
-function renderPage(entry = '/w/ws-1/agents/a1', currentMe: Me = me) {
+function renderPage(
+  entry: string | { pathname: string; search?: string; state?: unknown } = '/w/ws-1/agents/a1',
+  currentMe: Me = me,
+) {
   return render(
     <SessionContext.Provider
       value={{ session, me: currentMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
@@ -212,14 +215,16 @@ describe('AgentDetailPage', () => {
     // Hoechstens eine Brand-Aktion je Seite: „Kopieren“ im Kopf ist jetzt outline.
     expect(screen.getByTestId('copy-prompt-primary').className).not.toContain('bg-brand')
 
-    // Token-Sektion liegt weiter im Tab „Einstellungen“ → „Verbindung“, ohne
+    // Token-Sektion liegt weiter im Tab „Einstellungen“ → „API-Tokens“, ohne
     // zweite Connector-Karte.
     fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
-    fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
+    const tokensTab = screen.getByRole('tab', { name: 'API-Tokens' })
+    fireEvent.click(tokensTab)
     expect(screen.queryByTestId('agent-connect')).not.toBeInTheDocument()
 
-    // Token-Sektion gerendert.
-    expect(screen.getByText('API-Tokens')).toBeInTheDocument()
+    // Token-Sektion gerendert: Ueberschrift im Tab-Panel, nicht nur der Tab selbst.
+    const panel = screen.getByRole('tabpanel', { name: 'API-Tokens' })
+    expect(within(panel).getByText('API-Tokens')).toBeInTheDocument()
   })
 
   it('leere Huelle: Missing-Zweige, gesperrtes Aktiv-Setzen und Duplizieren', async () => {
@@ -255,7 +260,7 @@ describe('AgentDetailPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Einstellungen' }))
     const missingNotice = await screen.findByTestId('agent-missing-notice')
     expect(missingNotice).toHaveTextContent('Persona verknüpfen')
-    expect(missingNotice).toHaveTextContent('Systemprompt verknüpfen')
+    expect(missingNotice).toHaveTextContent('System-Prompt verknüpfen')
 
     // "Aktiv" ist im Status-Select gesperrt, Duplizieren ausgegraut.
     expect(screen.getByRole('option', { name: 'Aktiv' })).toBeDisabled()
@@ -356,6 +361,140 @@ describe('AgentDetailPage', () => {
 
     expect(await screen.findByText('Name bereits vergeben.')).toBeInTheDocument()
     expect(notify.success).not.toHaveBeenCalled()
+  })
+})
+
+// UX-Audit B4 / Owner W-D: nach dem Speichern eines vollstaendigen, aber
+// inaktiven Agenten fragt die Seite „Agent jetzt aktivieren?“ — nur mit dem
+// Recht, den Status zu aendern (editor/admin), nie automatisch.
+describe('AgentDetailPage — Aktivieren nach dem Speichern (UX-Audit B4)', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  function meWithRole(role: 'viewer' | 'editor' | 'admin'): Me {
+    return {
+      ...editorMe,
+      organizations: [
+        {
+          ...editorMe.organizations[0],
+          workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role }],
+        },
+      ],
+    } as Me
+  }
+
+  // `saved` = Antwort des Formular-PUT; jeder PUT-Body wird mitgeschrieben.
+  function stubSave(loaded: Agent, saved: Agent) {
+    const puts: unknown[] = []
+    const handlers = fullHandlers(loaded)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? 'GET'
+        const path = new URL(String(input)).pathname
+        if (method === 'PUT' && path === `${WS_PREFIX}/agents/a1`) {
+          puts.push(JSON.parse(String(init?.body)))
+          return jsonResponse(puts.length === 1 ? saved : { ...saved, status: 'enabled' })
+        }
+        const handler = handlers[`${method} ${path}`]
+        if (!handler) throw new Error(`Unmocked ${method} ${path}`)
+        return handler()
+      }),
+    )
+    return puts
+  }
+
+  async function save() {
+    const submit = await screen.findByRole('button', { name: 'Speichern' })
+    await waitFor(() => expect(screen.getByDisplayValue('Carla Bot')).toBeInTheDocument())
+    fireEvent.click(submit)
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('Agent gespeichert.'))
+  }
+
+  const inactive = agent({ status: 'disabled' })
+
+  it('vollständig + inaktiv + editor: Dialog erscheint', async () => {
+    stubSave(inactive, inactive)
+    renderPage('/w/ws-1/agents/a1?tab=settings', editorMe)
+    await save()
+
+    const dialog = await screen.findByRole('dialog', { name: 'Agent jetzt aktivieren?' })
+    expect(
+      within(dialog).getByText('Danach können verbundene Programme ihn abrufen.'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: 'Später' })).toBeEnabled()
+  })
+
+  it.each<[string, Agent, 'viewer' | 'editor' | 'admin']>([
+    ['unvollständig', agent({ status: 'disabled', activatable: false, missing: ['persona_active'] }), 'editor'],
+    ['schon aktiv', agent({ status: 'enabled' }), 'editor'],
+    ['verwaltet', agent({ status: 'disabled', is_managed: true }), 'admin'],
+    ['viewer ohne Recht', inactive, 'viewer'],
+  ])('kein Dialog: %s', async (_case, saved, role) => {
+    stubSave(inactive, saved)
+    renderPage('/w/ws-1/agents/a1?tab=settings', meWithRole(role))
+    await waitFor(() => expect(screen.getByDisplayValue('Carla Bot')).toBeInTheDocument())
+    // Auch ohne Speichern-Knopf (viewer) den Submit-Pfad treffen.
+    const form = document.querySelector('form')
+    if (form !== null) fireEvent.submit(form)
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('Agent gespeichert.'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('„Später“ lässt den Agenten inaktiv: kein zweiter PUT, Dialog zu', async () => {
+    const puts = stubSave(inactive, inactive)
+    renderPage('/w/ws-1/agents/a1?tab=settings', editorMe)
+    await save()
+
+    const dialog = await screen.findByRole('dialog', { name: 'Agent jetzt aktivieren?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Später' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(puts).toHaveLength(1)
+    expect(puts[0]).toMatchObject({ status: 'disabled' })
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=settings')
+    expect(notify.success).not.toHaveBeenCalledWith('Agent aktiviert.')
+  })
+
+  it('„Aktivieren“ ruft den Status-Weg genau einmal und springt zur Karte „Verbindung“', async () => {
+    const puts = stubSave(inactive, inactive)
+    renderPage('/w/ws-1/agents/a1?tab=settings', editorMe)
+    await save()
+
+    const dialog = await screen.findByRole('dialog', { name: 'Agent jetzt aktivieren?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Aktivieren' }))
+
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('Agent aktiviert.'))
+    // Formular-PUT + genau ein Status-PUT, der nur den Status traegt.
+    expect(puts).toHaveLength(2)
+    expect(puts[1]).toEqual({ status: 'enabled' })
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^#connect$/))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(await screen.findByTestId('agent-connect')).toBeInTheDocument()
+  })
+
+  it('frisch angelegt (state.focusPersona): Fokus steht im Feld „Persona“', async () => {
+    stubFetchRoutes(
+      fullHandlers(
+        agent({ persona_id: null, system_prompt_template_id: null, status: 'disabled', activatable: false }),
+      ),
+    )
+    renderPage(
+      { pathname: '/w/ws-1/agents/a1', search: '?tab=settings', state: { focusPersona: true } },
+      editorMe,
+    )
+    const persona = await screen.findByRole('combobox', { name: 'Persona' })
+    await waitFor(() => expect(persona).toHaveFocus())
+  })
+
+  it('ohne state.focusPersona kein Fokus-Sprung', async () => {
+    stubFetchRoutes(fullHandlers(inactive))
+    renderPage('/w/ws-1/agents/a1?tab=settings', editorMe)
+    const persona = await screen.findByRole('combobox', { name: 'Persona' })
+    await waitFor(() => expect(screen.getByDisplayValue('Carla Bot')).toBeInTheDocument())
+    expect(persona).not.toHaveFocus()
   })
 })
 
@@ -465,6 +604,7 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
     ['#memory', '?tab=memory#memory', 'Gedächtnis'],
     ['#sessions', '?tab=evolution', /^Weiterentwicklung/],
     ['#delegations', '#delegations', 'Überblick'],
+    ['#connect', '#connect', 'Überblick'],
   ])('alter Anker %s leitet auf „%s“ um', async (anchor, expected, tabName) => {
     stubTolerant()
     renderPage(`/w/ws-1/agents/a1${anchor}`, editorMe)
@@ -476,6 +616,32 @@ describe('AgentDetailPage — Tabs (Navigation §3.1)', () => {
       'aria-selected',
       'true',
     )
+  })
+
+  it('#connect springt die Karte „Verbindung“ an: Scroll und Fokus auf die Überschrift', async () => {
+    stubTolerant()
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    renderPage('/w/ws-1/agents/a1#connect', editorMe)
+
+    const connect = await screen.findByTestId('agent-connect')
+    const heading = within(connect).getByRole('heading', { level: 2 })
+    await waitFor(() => expect(heading).toHaveFocus())
+    expect(heading).toHaveAttribute('tabindex', '-1')
+    // Gescrollt wird der Rahmen um die Karte, an den oberen Rand.
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+    expect(scroll.mock.contexts.some((el) => (el as Element).contains(connect))).toBe(true)
+  })
+
+  it('ohne #connect kein Sprung zur Karte „Verbindung“', async () => {
+    stubTolerant()
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    renderPage('/w/ws-1/agents/a1', editorMe)
+
+    const connect = await screen.findByTestId('agent-connect')
+    expect(within(connect).getByRole('heading', { level: 2 })).not.toHaveFocus()
+    expect(scroll.mock.contexts.some((el) => (el as Element).contains(connect))).toBe(false)
   })
 
   it('ein expliziter ?tab= gewinnt gegen den Anker', async () => {

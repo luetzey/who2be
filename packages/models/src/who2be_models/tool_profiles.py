@@ -134,6 +134,8 @@ TOOL_GROUPS: Mapping[ToolGroup, tuple[str, ...]] = {
         "create_table",
         "delete_table",
         "insert_rows",
+        "update_rows",
+        "delete_rows",
         "save_query_result",
         "set_convention",
         "upsert_category_rule",

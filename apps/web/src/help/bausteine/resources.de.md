@@ -3,7 +3,7 @@ title: Resources
 description: Wissen in Blöcken, das dein Agent gezielt nachliest.
 section: bausteine
 order: 30
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -29,9 +29,9 @@ Gliedere eine Resource deshalb mit klaren Überschriften, zum Beispiel eine je F
 
 Auf der Seite einer Resource siehst du unter „Verlinkt in“, wo sie schon verwendet wird.
 
-## Versionen [#versionen]
+## Versionen und Aktivieren [#versionen]
 
-Jede Änderung erzeugt eine neue Version. Wenn du fertig bist, reichst du sie zur Freigabe ein. Nach der Prüfung wird sie aktiviert, erst dann liest der Agent die neue Fassung.
+Jede Änderung erzeugt eine neue Version, zuerst als Entwurf. Ein Entwurf wirkt noch nicht. Bist du fertig, klickst du auf **Zur Freigabe einreichen**. Ein Admin prüft die Version und klickt auf **Aktivieren** oder schickt sie mit **Zurück in den Entwurf** zurück. Erst die aktive Version liest der Agent.
 
 ## Tipps [#tipps]
 

@@ -216,6 +216,465 @@
     "children": []
   },
   {
+    "id": "res-conv-h-laengen",
+    "type": "heading",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "level": 2},
+    "content": [{"type": "text", "text": "Laengen & Wohin", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-laengen-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Was immer geladen wird (Persona-Profil, Modi, Katalogzeilen), kostet in jedem Turn und senkt mit wachsender Laenge die Befolgung. Deshalb gelten Richtwerte je Element und eine feste Regel, was wohin gehoert. Die Richtwerte sind keine harte Grenze: gespeichert wird auch darueber. Dieser Abschnitt ist die einzige Stelle mit den Zahlen — Playbooks verweisen hierher, statt sie zu wiederholen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-budgets",
+    "type": "heading",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "level": 3},
+    "content": [{"type": "text", "text": "Richtwerte je Element", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-tab-laengen-budgets",
+    "type": "table",
+    "props": {"textColor": "default"},
+    "content": {
+      "type": "tableContent",
+      "columnWidths": [null, null, null],
+      "rows": [
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Element", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Ziel (hoechstens)", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Warnung ab", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Persona-Profil", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "400 Woerter", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "600 Woerter", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "je Modus (alle Textfelder zusammen)", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "150 Woerter", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "250 Woerter", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Zahl der Modi", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "3", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "5", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Playbook-Body", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "1000 Woerter", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "1500 Woerter", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Playbook-Beschreibung + Trigger", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "300 Zeichen", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "500 Zeichen", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Resource", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "keine Grenze", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Abschnitt ueber 600 Woerter", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "Inhalts-Startlast Fach-Agent (", "styles": {}},
+                {"type": "text", "text": "get_persona", "styles": {"code": true}},
+                {"type": "text", "text": " ohne Gedaechtnis)", "styles": {}}
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "5 KB", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "8 KB", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Inhalts-Startlast Builder", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "6 KB", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "9 KB", "styles": {}}]
+            }
+          ]
+        }
+      ],
+      "headerRows": 1
+    },
+    "children": []
+  },
+  {
+    "id": "res-conv-p-laengen-zaehlen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Gezaehlt werden Woerter im Markdown-Text ohne Codebloecke; bei Beschreibung und Trigger die Zeichen beider Felder zusammen. Ueber dem Ziel: pruefen, ob etwas nach der Wohin-Tabelle woanders hingehoert. Ueber der Warnschwelle: auslagern oder dem Nutzer Wortzahl, Richtwert und Grund nennen. Bestehende Elemente kuerzt der Builder nicht eigenmaechtig — der Konsistenz-Check meldet sie als Pflege-Fund, gekuerzt wird nur auf Wunsch des Nutzers.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-wohin",
+    "type": "heading",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "level": 3},
+    "content": [{"type": "text", "text": "Was wohin gehoert", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-tab-laengen-wohin",
+    "type": "table",
+    "props": {"textColor": "default"},
+    "content": {
+      "type": "tableContent",
+      "columnWidths": [null, null],
+      "rows": [
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Inhalt", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "gehoert in", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Rolle, Zweck, Zielnutzer, Ton (2–4 Saetze)", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Persona-Profil", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "wenige allgemeingueltige Regeln mit Begruendung, harte Grenzen (z. B. nie ohne Freigabe schreiben)", "styles": {}}
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Persona-Profil", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Ausgabeform (Laenge, Struktur)", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "Persona-Profil bzw. ", "styles": {}},
+                {"type": "text", "text": "output_style_override", "styles": {"code": true}},
+                {"type": "text", "text": " im Modus", "styles": {}}
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Ablaeufe mit Schritten, Checklisten, Gates", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Playbook (mit Trigger)", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "Schemata, Kataloge, Klassen, Schwellen, Pfade, IDs, Konventionen", "styles": {}}
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Resource (gegliedert)", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "Werkzeug-Aufzaehlungen und Werkzeug-Anleitungen", "styles": {}}
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "gar nicht: das Schema in ", "styles": {}},
+                {"type": "text", "text": "tools/list", "styles": {"code": true}},
+                {"type": "text", "text": " beschreibt die Werkzeuge; nur nicht offensichtliche Fallen (Replace-Semantik, 409) ins Playbook", "styles": {}}
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Zusammenfassung einer vorhandenen Resource", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "gar nicht: auf die Resource verweisen", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Text, den zwei Personas gleich brauchen", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "ein gemeinsames Playbook oder eine Resource", "styles": {}}
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Fakten ueber den Nutzer", "styles": {}}]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [{"type": "text", "text": "Gedaechtnis", "styles": {}}]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "Regeln fuer alle Agenten (", "styles": {}},
+                {"type": "text", "text": "record_usage", "styles": {"code": true}},
+                {"type": "text", "text": ", Feedback, Versionen)", "styles": {}}
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {"backgroundColor": "default", "textColor": "default", "textAlignment": "left", "colspan": 1, "rowspan": 1},
+              "content": [
+                {"type": "text", "text": "gar nicht: stehen in den Server-Instructions", "styles": {}}
+              ]
+            }
+          ]
+        }
+      ],
+      "headerRows": 1
+    },
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-schreibregeln",
+    "type": "heading",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left", "level": 3},
+    "content": [{"type": "text", "text": "Schreibregeln", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Jeder Satz besteht die Pruef-Frage: Wuerde der Agent ohne ihn einen Fehler machen?", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Begruendung statt Grossbuchstaben — wer vieles betont, betont nichts.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Keine Liste von Sonderfaellen, lieber ein bis zwei Beispiele.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Bei Unklarheit kuerzer bauen und nach dem ersten Feedback ergaenzen (klein anfangen).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-policy",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -226,7 +685,7 @@
     "id": "res-conv-p-policy-intro",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig.", "styles": {}}],
+    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig (editor fuer Schreiben, admin fuer Promote/Retire).", "styles": {}}],
     "children": []
   },
   {
@@ -299,7 +758,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Default-Empfehlung: ", "styles": {"bold": true}},
-      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
+      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen; 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
     ],
     "children": []
   },
@@ -309,7 +768,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Anti-Eskalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User — das ist Design, kein Fehler.", "styles": {}}
+      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber; steht die eigene Stufe auf 'off', jede Freischaltung). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User (Agent-Detailseite → Tools → Gedaechtnis) — das ist Design, kein Fehler.", "styles": {}}
     ],
     "children": []
   },
@@ -319,7 +778,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Inhalts-Hygiene: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — keine Anweisungen an KI-Systeme, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
+      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — Nutzerdaten, keine Anweisungen an KI-Systeme, keine Repo-/Code-Fakten, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
     ],
     "children": []
   },

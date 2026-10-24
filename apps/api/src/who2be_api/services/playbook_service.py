@@ -31,12 +31,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.feedback_repository import record_server_usage
 from who2be_api.repositories.playbook_repository import PlaybookRepository
-from who2be_api.repositories.playbook_resource_link_repository import (
-    _heading_level,
-    block_plain_text,
-    block_section_text,
-    is_heading_block,
-)
+from who2be_api.repositories.playbook_resource_link_repository import block_plain_text
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.repositories.workspace_repository import WorkspaceRepository
 from who2be_api.services.content_locale import resolve_content_locale
@@ -66,6 +61,7 @@ from who2be_models import (
     WorkspaceRole,
     encode_cursor,
 )
+from who2be_models.blocknote_text import heading_level, is_heading_block, section_blocks
 
 
 class PlaybookRenderResponse(BaseModel):
@@ -119,7 +115,7 @@ def playbook_sections(body: str) -> list[ResourceBlockAnchor]:
     return [
         ResourceBlockAnchor(
             block_id=block_id,
-            level=_heading_level(block),
+            level=heading_level(block),
             text=block_plain_text(block),
         )
         for block in blocks
@@ -130,10 +126,11 @@ def playbook_sections(body: str) -> list[ResourceBlockAnchor]:
 def slice_playbook_body(body: str, block_ids: list[str]) -> str:
     """Schneidet den BlockNote-Body auf die Sections der gewaehlten Anker.
 
-    Die Section-Regel kommt aus `block_section_text` — derselben Funktion, die
-    der Resource-Pfad fuer Block-Refs nutzt (ADR-0021): Anker-Heading plus alle
-    folgenden Bloecke bis exklusive zum naechsten Heading gleicher Ebene,
-    tiefere Headings bleiben drin. Keine zweite Kopie dieser Regel.
+    Die Section-Regel kommt aus `who2be_models.blocknote_text.section_blocks`
+    — derselben Funktion, die `fetch_resource` und die Block-Refs nutzen
+    (ADR-0021): Anker-Heading plus alle folgenden Bloecke bis exklusive zum
+    naechsten Heading gleicher oder hoeherer Ebene, tiefere Headings bleiben
+    drin. Keine zweite Kopie dieser Regel.
 
     Die Ausgabe folgt der Dokument-Reihenfolge, nicht der Anfrage-Reihenfolge;
     ueberlappende Auswahlen werden dedupliziert. Unbekannte Anker werden
@@ -145,8 +142,8 @@ def slice_playbook_body(body: str, block_ids: list[str]) -> str:
         return body
     keep: set[str] = set()
     for block_id in block_ids:
-        section_ids, _ = block_section_text(blocks, block_id)
-        keep.update(section_ids)
+        section = section_blocks(blocks, block_id)
+        keep.update(bid for block in section if isinstance(bid := block.get("id"), str))
     return json.dumps(
         [block for block in blocks if block.get("id") in keep],
         ensure_ascii=False,

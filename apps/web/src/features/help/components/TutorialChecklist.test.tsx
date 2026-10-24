@@ -136,7 +136,11 @@ interface Call {
  * antwortet mit dem Tutorial, in dem der Schritt umgestellt ist — ausser der
  * Schritt steht in `failOn`.
  */
-function stubApi(lists: Array<Tutorial[] | 'fail'>, failOn: string[] = []) {
+function stubApi(
+  lists: Array<Tutorial[] | 'fail'>,
+  failOn: string[] = [],
+  agents?: Array<{ id: string; is_managed: boolean; status: string }>,
+) {
   const calls: Call[] = []
   let current = lists[0] === 'fail' ? [] : lists[0]
   let gets = 0
@@ -147,6 +151,8 @@ function stubApi(lists: Array<Tutorial[] | 'fail'>, failOn: string[] = []) {
     calls.push({ url, method, body })
     const json = (payload: unknown, status = 200) =>
       Promise.resolve(new Response(JSON.stringify(payload), { status }))
+    // Agentenliste fuer „Builder verbinden“; ohne `agents` scheitert sie (Rueckfall).
+    if (agents !== undefined && method === 'GET' && /\/agents$/.test(url)) return json(agents)
     if (!url.includes('/v1/me/tutorials')) return json({ detail: 'nope' }, 500)
     if (method === 'GET') {
       const answer = gets < lists.length ? lists[gets] : current
@@ -196,7 +202,7 @@ describe('TutorialChecklist', () => {
     const next = within(card).getByRole('button', { name: 'Verbinden (als Nächstes)' })
     expect(next).toHaveAttribute('aria-expanded', 'true')
     expect(within(card).getByText('Verbinde den Agenten.')).toBeVisible()
-    expect(within(card).getByRole('link', { name: 'Zu den Agents' })).toHaveAttribute(
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
       'href',
       '/w/ws-1/agents',
     )
@@ -207,6 +213,53 @@ describe('TutorialChecklist', () => {
     expect(within(card).getByText('Hake das selbst ab.')).not.toBeVisible()
 
     expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('Verbinden-Schritt: „Builder verbinden“ führt zur Verbindungs-Karte des Builders', async () => {
+    stubApi([[probe()]], [], [
+      { id: 'own-1', is_managed: false, status: 'enabled' },
+      { id: 'old-builder', is_managed: true, status: 'disabled' },
+      { id: 'builder 1', is_managed: true, status: 'enabled' },
+    ])
+    renderChecklist()
+    const card = await screen.findByRole('region', { name: 'Probe-Liste de' })
+
+    // Aktiver Builder vor deaktiviertem; die ID wird kodiert, Anker `#connect`.
+    expect(await within(card).findByRole('link', { name: 'Builder verbinden' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents/builder%201#connect',
+    )
+    expect(within(card).queryByRole('link', { name: 'Zu den Agenten' })).not.toBeInTheDocument()
+    // Andere automatische Schritte bleiben bei der Agentenliste.
+    fireEvent.click(within(card).getByRole('button', { name: 'Agent anlegen' }))
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents',
+    )
+  })
+
+  it('Verbinden-Schritt ohne verwalteten Agenten: Rückfall auf die Agentenliste', async () => {
+    const calls = stubApi([[probe()]], [], [{ id: 'own-1', is_managed: false, status: 'enabled' }])
+    renderChecklist()
+    const card = await screen.findByRole('region', { name: 'Probe-Liste de' })
+    await waitFor(() => expect(calls.some((c) => /\/agents$/.test(c.url))).toBe(true))
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents',
+    )
+    expect(within(card).queryByRole('link', { name: 'Builder verbinden' })).not.toBeInTheDocument()
+  })
+
+  it('Verbinden-Schritt erledigt: keine Agentenliste laden', async () => {
+    const base = probe()
+    const calls = stubApi(
+      [[{ ...base, steps: base.steps.map((s) => (s.id === 'connect' ? { ...s, state: 'done' as const } : s)) }]],
+      [],
+      [{ id: 'builder', is_managed: true, status: 'enabled' }],
+    )
+    renderChecklist()
+    await screen.findByRole('region', { name: 'Probe-Liste de' })
+    expect(calls.some((c) => /\/agents$/.test(c.url))).toBe(false)
   })
 
   it('zeigt je Schritt-Typ die passende Aktion', async () => {

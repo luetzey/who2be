@@ -3,7 +3,7 @@ title: Claude Free and several agents
 description: What the limit of one custom connector means and how to work with it.
 section: konto-und-team
 order: 20
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -19,7 +19,7 @@ Nothing gets lost in Who2Be. Personas, playbooks and memory stay as they are.
 
 ## Swap the connector [#tauschen]
 
-1. In Claude, open **Settings › Connectors**.
+1. In Claude, open **Customize › Connectors**.
 2. Remove the current Who2Be connector.
 3. In Who2Be, connect the other agent via the **Connection** card, see [Connect to Claude](/help/connect-claude#schritte).
 4. Send the test sentence in a new chat.
@@ -29,6 +29,6 @@ Nothing gets lost in Who2Be. Personas, playbooks and memory stay as they are.
 If you want to use several agents in parallel, you have these options:
 
 - A paid Claude plan allows several custom connectors.
-- Claude Code, Cursor and VS Code don't have this limit, see [Connect other programs](/help/connect-other-clients).
+- Claude Code, Cursor, VS Code and Hermes Agent don't have this limit, see [Connect other programs](/help/connect-other-clients).
 
 For teams and companies, the owner of the Claude organization usually adds connectors, see [Team and Enterprise plans](/help/connect-claude#team-plan).

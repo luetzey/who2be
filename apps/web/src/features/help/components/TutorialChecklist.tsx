@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
 
 import type { Tutorial, TutorialStep, TutorialStepState } from '@/api/client'
+import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -19,6 +20,7 @@ import {
   toHelpLocale,
 } from '@/help/helpIndex'
 import { notify } from '@/lib/feedback'
+import { AGENT_CONNECT_HASH } from '@/lib/installLinks'
 import { cn } from '@/lib/utils'
 
 import {
@@ -110,13 +112,45 @@ function stepPage(step: TutorialStep): string | null {
   return safe !== null && safe.startsWith('/') ? safe : null
 }
 
+/**
+ * ID des mitgelieferten Builders (verwalteter Agent, `is_managed`) fuer den
+ * Verbinden-Schritt (UX-Audit B1). Geladen wird nur, solange ein solcher
+ * Schritt offen ist. `null` heisst: keiner da oder Laden gescheitert — dann
+ * bleibt der Knopf beim Rueckfall auf die Agentenliste.
+ */
+function useBuilderId(enabled: boolean): string | null {
+  const api = useApi()
+  const [builderId, setBuilderId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!enabled) return
+    let alive = true
+    api.listAgents().then(
+      (agents) => {
+        if (!alive) return
+        // Ein aktiver Builder zuerst; sonst irgendein verwalteter Agent.
+        const managed = agents.filter((agent) => agent.is_managed === true)
+        const found = managed.find((agent) => agent.status === 'enabled') ?? managed[0]
+        setBuilderId(found?.id ?? null)
+      },
+      () => {
+        if (alive) setBuilderId(null)
+      },
+    )
+    return () => {
+      alive = false
+    }
+  }, [api, enabled])
+  return enabled ? builderId : null
+}
+
 interface StepActionsProps {
   step: TutorialStep
   busy: boolean
+  builderId: string | null
   onSet: (state: TutorialStepState) => void
 }
 
-function StepActions({ step, busy, onSet }: StepActionsProps) {
+function StepActions({ step, busy, builderId, onSet }: StepActionsProps) {
   const { t } = useTranslation('help')
   const wsPath = useWorkspacePath()
   if (step.type === 'head_start') return null
@@ -124,9 +158,18 @@ function StepActions({ step, busy, onSet }: StepActionsProps) {
   const full = 'w-full sm:w-auto'
   if (step.state === 'open') {
     if (step.automatic) {
+      // Verbinden-Schritt: ein Klick bis zur Karte „Verbindung“ des Builders
+      // (Ueberblick, Anker `#connect`). Ohne Builder: die Agentenliste.
+      const toBuilder = step.type === 'first_mcp_call' && builderId !== null
       actions.push(
         <Button key="agents" asChild size="sm" className={full}>
-          <Link to={wsPath('/agents')}>{t('checklist.openAgents')}</Link>
+          {toBuilder ? (
+            <Link to={wsPath(`/agents/${encodeURIComponent(builderId)}${AGENT_CONNECT_HASH}`)}>
+              {t('checklist.connectBuilder')}
+            </Link>
+          ) : (
+            <Link to={wsPath('/agents')}>{t('checklist.openAgents')}</Link>
+          )}
         </Button>,
       )
     }
@@ -187,11 +230,12 @@ interface StepRowProps {
   next: boolean
   expanded: boolean
   busy: boolean
+  builderId: string | null
   onToggle: () => void
   onSet: (state: TutorialStepState) => void
 }
 
-function StepRow({ step, text, next, expanded, busy, onToggle, onSet }: StepRowProps) {
+function StepRow({ step, text, next, expanded, busy, builderId, onToggle, onSet }: StepRowProps) {
   const { t } = useTranslation('help')
   const panelId = useId()
   const block = text.blocks.find((item) => item.id === step.id)
@@ -235,7 +279,7 @@ function StepRow({ step, text, next, expanded, busy, onToggle, onSet }: StepRowP
       </Button>
       <div id={panelId} hidden={!expanded} className="space-y-3 px-6 pb-4 sm:pl-15">
         {block !== undefined ? <HelpMarkdown>{block.body}</HelpMarkdown> : null}
-        <StepActions step={step} busy={busy} onSet={onSet} />
+        <StepActions step={step} busy={busy} builderId={builderId} onSet={onSet} />
       </div>
     </li>
   )
@@ -262,6 +306,10 @@ function OpenCard({ tutorial, text, steps, state }: ChecklistCardProps) {
   const expandedId = choice === null ? (nextStep?.id ?? null) : choice.id
   const done = finishedSteps({ steps })
   const busy = pending !== null || hiding
+  // Builder nur nachschlagen, solange der Verbinden-Schritt offen ist.
+  const builderId = useBuilderId(
+    steps.some((step) => step.type === 'first_mcp_call' && step.state === 'open'),
+  )
 
   // Sprung aus dem „?“-Menue („Erste Schritte“): Fokus auf die Ueberschrift,
   // einmal je Navigation (`location.key`).
@@ -334,6 +382,7 @@ function OpenCard({ tutorial, text, steps, state }: ChecklistCardProps) {
             next={step.id === nextStep?.id}
             expanded={step.id === expandedId}
             busy={busy}
+            builderId={builderId}
             onToggle={() => setChoice({ id: step.id === expandedId ? null : step.id })}
             onSet={(next) => void setStep(tutorial.id, step.id, next)}
           />

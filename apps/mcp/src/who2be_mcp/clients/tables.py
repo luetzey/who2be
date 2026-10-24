@@ -37,6 +37,7 @@ from who2be_models import (
     WaTableCreate,
     WaTableRead,
 )
+from who2be_models.tables import RowsDelete, RowsUpdate
 
 
 class RowsInsertResult(BaseModel):
@@ -79,6 +80,37 @@ async def insert_rows(client: ApiClient, table_id: UUID, data: RowsInsert) -> Ro
         "POST", f"{client._workspace_prefix}/wa-tables/{table_id}/rows", data
     )
     return RowsInsertResult.model_validate(payload)
+
+
+class RowsUpdateResult(BaseModel):
+    """Antwort von `rows/update` (``{updated, note}``, ADR-0049-Nachtrag); client-lokal wie oben."""
+
+    updated: int
+    note: str | None = None
+
+
+class RowsDeleteResult(BaseModel):
+    """Antwort von `rows/delete` (``{deleted, note}``, ADR-0049-Nachtrag)."""
+
+    deleted: int
+    note: str | None = None
+
+
+async def update_rows(client: ApiClient, table_id: UUID, data: RowsUpdate) -> RowsUpdateResult:
+    """`POST .../wa-tables/{id}/rows/update` — Zeilen per `match` aendern;
+    Grenze/Zaehler/Dedupe → 409, Schema-Verstoss → 422 als `ToolError`."""
+    payload = await client._write(
+        "POST", f"{client._workspace_prefix}/wa-tables/{table_id}/rows/update", data
+    )
+    return RowsUpdateResult.model_validate(payload)
+
+
+async def delete_rows(client: ApiClient, table_id: UUID, data: RowsDelete) -> RowsDeleteResult:
+    """`POST .../wa-tables/{id}/rows/delete` — Zeilen per `match` loeschen; Fehler wie update."""
+    payload = await client._write(
+        "POST", f"{client._workspace_prefix}/wa-tables/{table_id}/rows/delete", data
+    )
+    return RowsDeleteResult.model_validate(payload)
 
 
 async def query_table(client: ApiClient, table_id: UUID, data: TableQuery) -> QueryResult:

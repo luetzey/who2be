@@ -10,10 +10,40 @@
 // - VS Code: https://code.visualstudio.com/api/extension-guides/ai/mcp
 //   (`vscode:mcp/install?<urlencoded JSON>`).
 // - Claude Code: `claude mcp add --transport http <name> <url>`.
+// - Hermes Agent: `hermes mcp add <name> --url <url> --auth oauth`
+//   (`hermes mcp add --help`; Hermes-Doku user-guide/features/mcp,
+//   „OAuth-authenticated HTTP servers“).
 
-export type ConnectClient = 'claude' | 'code' | 'editor' | 'other'
+export type ConnectClient = 'claude' | 'code' | 'editor' | 'hermes' | 'other'
 
-export const CONNECT_CLIENTS: readonly ConnectClient[] = ['claude', 'code', 'editor', 'other']
+/**
+ * Reihenfolge der Auswahl (Client-Auswahl-Spec §1): erst das Chat-Programm,
+ * dann die Entwickler-Werkzeuge, dann der Agent-Rahmen, der Rueckfall zuletzt.
+ * Einzige Quelle — Baustein und Begruessung lesen beide von hier.
+ */
+export const CONNECT_CLIENTS: readonly ConnectClient[] = ['claude', 'code', 'editor', 'hermes', 'other']
+
+/**
+ * Ziel von „Klappt es nicht? Häufige Ursachen“ je Programm (Spec §2.5),
+ * relativ zum Workspace.
+ */
+export const CONNECT_HELP_PATHS: Readonly<Record<ConnectClient, string>> = {
+  claude: '/help/connect-claude#troubleshooting',
+  code: '/help/connect-other-clients#claude-code',
+  editor: '/help/connect-other-clients#cursor-vscode',
+  hermes: '/help/connect-other-clients#hermes',
+  other: '/help/connect-other-clients#andere',
+}
+
+/** Steckbriefe weiterer Programme (Gemini, Le Chat, …) in der Hilfe. */
+export const OTHER_CLIENTS_HELP_PATH = '/help/connect-other-clients#steckbriefe'
+
+/**
+ * Anker der Karte „Verbindung“ auf der Agent-Seite (UX-Audit B1):
+ * `/agents/<id>#connect` oeffnet den Ueberblick und springt die Karte an.
+ * Ziel des Startlisten-Knopfs „Builder verbinden“.
+ */
+export const AGENT_CONNECT_HASH = '#connect'
 
 /** Server-URL eines Agenten: der Agent steht im Pfad (`/a/<id>`, Issue #404). */
 export function agentConnectorUrl(mcpUrl: string, agentId: string): string {
@@ -52,6 +82,15 @@ export function claudeInstallLink(connectorName: string, connectorUrl: string): 
 
 export function claudeCodeCommand(serverName: string, connectorUrl: string): string {
   return `claude mcp add --transport http ${serverName} ${connectorUrl}`
+}
+
+/**
+ * Hermes Agent traegt den Server per OAuth ein. `--auth oauth` ist Pflicht:
+ * ohne meldet sich Hermes nicht per OAuth an, und einen anderen Weg (etwa ein
+ * festes Token) bietet Who2Be nicht.
+ */
+export function hermesCommand(serverName: string, connectorUrl: string): string {
+  return `hermes mcp add ${serverName} --url ${connectorUrl} --auth oauth`
 }
 
 /** base64 eines ASCII-Strings ohne `btoa`-Abhaengigkeit vom DOM-Zeichensatz. */

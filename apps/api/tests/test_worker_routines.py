@@ -56,6 +56,7 @@ _EXPECTED = {
     "audit-retention": "0 4 * * *",
     "usage-retention": "10 4 * * *",
     "routine-run-retention": "15 4 * * *",
+    "invoice-retry": "@every 5m",
 }
 
 
@@ -101,6 +102,64 @@ def test_routine_attributes_match_adr() -> None:
     r = REGISTRY.get("routine-run-retention")
     assert (r.catch_up, r.touches_tablestore) == (False, False)
     assert store.ROUTINE_RUN_RETENTION == timedelta(days=90)
+
+
+# --- invoice-retry (ADR-0061 §4, Paket R2b) ---------------------------------------
+
+
+def test_invoice_retry_runs_every_five_minutes_without_catch_up() -> None:
+    i = REGISTRY.get(routines.INVOICE_RETRY)
+    assert (i.catch_up, i.touches_tablestore) == (False, False)
+    assert i.schedule.expr == "@every 5m"
+    # Kuerzer als das Intervall: ein haengender Lauf blockiert den naechsten nicht.
+    assert i.timeout < timedelta(minutes=5)
+
+
+def _ctx() -> RoutineContext:
+    return RoutineContext(conn=None, slot=_T0, trigger="schedule", worker_id="w")
+
+
+async def _invoice_retry() -> dict[str, int]:
+    return await routines.invoice_retry(_ctx())
+
+
+def test_invoice_retry_is_a_noop_on_prem(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(routines, "is_cloud", lambda _settings=None: False)
+
+    def _no_import() -> types.ModuleType:  # pragma: no cover — darf nicht laufen
+        raise AssertionError("On-Prem laedt kein Billing")
+
+    monkeypatch.setattr(routines, "_load_billing_invoice", _no_import)
+    assert asyncio.run(_invoice_retry()) == {"skipped": 1}
+
+
+def test_invoice_retry_without_billing_package_is_a_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(routines, "is_cloud", lambda _settings=None: True)
+    monkeypatch.setattr(routines, "_load_billing_invoice", lambda: None)
+    assert asyncio.run(_invoice_retry()) == {"skipped": 1}
+
+
+def test_billing_loader_returns_none_without_the_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _missing(name: str) -> types.ModuleType:
+        raise ImportError(name)
+
+    monkeypatch.setattr("importlib.import_module", _missing)
+    assert routines._load_billing_invoice() is None
+
+
+def test_invoice_retry_delegates_to_the_billing_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[object, datetime]] = []
+
+    async def run_invoice_retry(conn: object, now: datetime, settings: object) -> dict[str, int]:
+        seen.append((conn, now))
+        return {"open": 2, "archived": 2}
+
+    fake = types.ModuleType("who2be_billing.invoice")
+    fake.run_invoice_retry = run_invoice_retry  # type: ignore[attr-defined]
+    monkeypatch.setattr(routines, "is_cloud", lambda _settings=None: True)
+    monkeypatch.setattr(routines, "_load_billing_invoice", lambda: fake)
+    assert asyncio.run(_invoice_retry()) == {"open": 2, "archived": 2}
+    assert seen == [(None, _T0)]  # rechnet mit dem Slot, nicht mit datetime.now
 
 
 def test_purge_counters_are_counters_only_and_round_trip() -> None:

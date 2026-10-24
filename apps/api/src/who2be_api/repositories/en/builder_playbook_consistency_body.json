@@ -14,6 +14,13 @@
     "children": []
   },
   {
+    "id": "pb-check-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before the sweep, in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-trigger\", \"res-conv-h-modi\", \"res-conv-h-policy\", \"res-conv-h-laengen-budgets\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
+    "children": []
+  },
+  {
     "id": "pb-check-h-scope",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -83,6 +90,16 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [{"type": "text", "text": "Does get_persona return the expected linked playbooks? Cross-check with list_playbooks: are there playbooks without a persona binding (vacuum playbooks)?", "styles": {}}],
         "children": []
+      },
+      {
+        "id": "pb-check-li-persona-laenge",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Length: ", "styles": {"bold": true}},
+          {"type": "text", "text": "words in the profile, words per mode and number of modes against the guide values in the Agent-Building Conventions (section 'Lengths & Placement', anchor res-conv-h-laengen). Above the warning threshold: ⚠ maintenance finding with the measured number, the guide value and a placement hint (what belongs in a playbook or a resource). No ❌ — length is not a structural error.", "styles": {}}
+        ],
+        "children": []
       }
     ]
   },
@@ -121,6 +138,16 @@
         "type": "bulletListItem",
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [{"type": "text", "text": "Are triggers normalized as comma-separated (no semicolons, no duplicates)? The write path normalizes automatically — semicolons or duplicates in existing data are drift from legacy data.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-pb-laenge",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Length: ", "styles": {"bold": true}},
+          {"type": "text", "text": "words in the body and characters of description and triggers against the same guide values; for linked resources, only sections above the warning threshold. Report findings as ⚠ maintenance findings, as for the persona.", "styles": {}}
+        ],
         "children": []
       }
     ]
@@ -267,7 +294,7 @@
     "id": "pb-check-code-report",
     "type": "codeBlock",
     "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Consistency Check for [Agent Name] — as of [Date]\n\n### Persona \"[Name]\"\n✅ Active version present (v[X], status=active)\n⚠ Mode \"[X]\" without trigger\n⚠ description empty\n\n### Playbooks ([n] linked)\n✅ [Playbook A] — active, linked\n❌ [Playbook B] — no active version\n⚠ [Composite C] — sub-sequence has inactive/missing children\n⚠ [Playbook D] — no persona binding (vacuum)\n⚠ [Playbook E] — triggers not normalized (semicolon/duplicate)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System prompt: open placeholder renders as <Playbook unavailable>\n\n### Template\n✅ All placeholder kinds in the catalog (list_placeholders)\n❌ Unknown placeholder kind \"[kind]\" or invalid target_id \"[value]\"\n\n### Recommendation\n1. [concrete action — reference the appropriate CRUD playbook]\n2. ...", "styles": {}}],
+    "content": [{"type": "text", "text": "## Consistency Check for [Agent Name] — as of [Date]\n\n### Persona \"[Name]\"\n✅ Active version present (v[X], status=active)\n⚠ Mode \"[X]\" without trigger\n⚠ description empty\n⚠ Profile [n] words, above the warning threshold — maintenance finding: [what to move out]\n\n### Playbooks ([n] linked)\n✅ [Playbook A] — active, linked\n❌ [Playbook B] — no active version\n⚠ [Composite C] — sub-sequence has inactive/missing children\n⚠ [Playbook D] — no persona binding (vacuum)\n⚠ [Playbook E] — triggers not normalized (semicolon/duplicate)\n⚠ [Playbook F] — body [n] words, above the warning threshold (maintenance finding)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System prompt: open placeholder renders as <Playbook unavailable>\n\n### Template\n✅ All placeholder kinds in the catalog (list_placeholders)\n❌ Unknown placeholder kind \"[kind]\" or invalid target_id \"[value]\"\n\n### Recommendation\n1. [concrete action — reference the appropriate CRUD playbook]\n2. ...", "styles": {}}],
     "children": []
   },
   {
@@ -316,37 +343,7 @@
     "id": "pb-check-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-check-li-tools-read",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "get_persona, list_playbooks, fetch_playbook, fetch_agent, list_triggers — plus list_resources / fetch_resource if a playbook references resources; list_system_prompts / get_system_prompt and list_placeholders for the template check.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-check-li-tools-write",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Write: ", "styles": {"bold": true}},
-      {"type": "text", "text": "none. The consistency check is strictly read-only reporting; the drift report goes to the user as a reply and is not persisted.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-check-li-tools-search",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Search: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_playbooks(tag?, trigger?) to narrow down, list_triggers() to find trigger drift and vacuum playbooks.", "styles": {}}
-    ],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
@@ -354,8 +351,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Forbidden: ", "styles": {"bold": true}},
-      {"type": "text", "text": "any write operation (create_*, update_*, transition_*, restore_*, set_*). No auto-fix without user confirmation. Do not write the drift report into an entity.", "styles": {}}
+      {"type": "text", "text": "Strictly read-only: ", "styles": {"bold": true}},
+      {"type": "text", "text": "no create_*, update_*, transition_*, restore_*, or set_*, no auto-fix without user confirmation. The drift report goes to the user as a reply and is not written into an entity.", "styles": {}}
     ],
     "children": []
   },
@@ -395,6 +392,15 @@
     "children": []
   },
   {
+    "id": "pb-check-li-ap-kuerzen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Shortening elements that are too long yourself, or reporting shortening as mandatory — the check reports length as a maintenance finding; shortening happens only at the user's request, via the persona or playbook playbook.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-check-li-ap-persist",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -414,7 +420,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V1 scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "structural + activatability check (active persona version, playbook links, fetch_agent.activatable/missing, rendering without open placeholders) including the structural relationship checks (orphaned resources, knowledge drift, vacuum playbooks, composite children, trigger collisions/vacuum, language consistency).", "styles": {}}
+      {"type": "text", "text": "structural + activatability check (active persona version, playbook links, fetch_agent.activatable/missing, rendering without open placeholders) including the structural relationship checks (orphaned resources, knowledge drift, vacuum playbooks, composite children, trigger collisions/vacuum, language consistency) and the length guide values as a maintenance finding.", "styles": {}}
     ],
     "children": []
   },
@@ -426,30 +432,6 @@
       {"type": "text", "text": "V2 scope: ", "styles": {"bold": true}},
       {"type": "text", "text": "semantic content check, cross-reference against non-existent references. Structural trigger conflicts have belonged to V1 scope since the relationship checks were added.", "styles": {}}
     ],
-    "children": []
-  },
-  {
-    "id": "pb-check-p-notes-konventionen",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
-      {"type": "text", "text": "the check criteria for trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the reference frame for the sweep. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource before the sweep; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-h",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-p",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is what makes the AgentDB self-improving.", "styles": {}}],
     "children": []
   }
 ]

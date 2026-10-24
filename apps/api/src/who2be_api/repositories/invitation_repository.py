@@ -129,18 +129,39 @@ class PgInvitationRepository:
         expires_at: datetime,
         created_by: UUID,
     ) -> InvitationRead:
-        row = await self._pool.fetchrow(
-            "INSERT INTO workspace_invitation "
-            "(workspace_id, email, role, token_hash, expires_at, created_by) "
-            "VALUES ($1, $2, $3, $4, $5, $6) "
-            f"RETURNING {_READ_COLUMNS}",
-            workspace_id,
-            email,
-            role.value,
-            token_hash,
-            expires_at,
-            created_by,
-        )
+        """Legt die Einladung an; eine noch offene, gueltige fuer dieselbe
+        Adresse laesst den INSERT mit `asyncpg.UniqueViolationError` scheitern.
+
+        Der Partial-Unique-Index `workspace_invitation_open_uniq` (Migration
+        0017) zaehlt nur `accepted_at`/`revoked_at`, nicht `expires_at` — eine
+        abgelaufene, vom Purge noch nicht geschwaerzte Einladung sperrte die
+        Adresse sonst bis zum naechsten Purge-Lauf. Deshalb schwaerzt dieselbe
+        Transaktion solche Zeilen vorab mit dem Purge-Marker `'<redacted>:' ||
+        id` (eindeutig je Zeile, Entscheidung t_5cb4dded) und nimmt sie so aus
+        dem Index. `revoked_at` bleibt unberuehrt: es heisst ausschliesslich
+        "vom Admin widerrufen".
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "UPDATE workspace_invitation SET email = '<redacted>:' || id::text "
+                "WHERE workspace_id = $1 AND lower(email) = lower($2) "
+                "AND accepted_at IS NULL AND revoked_at IS NULL "
+                "AND expires_at <= now()",
+                workspace_id,
+                email,
+            )
+            row = await conn.fetchrow(
+                "INSERT INTO workspace_invitation "
+                "(workspace_id, email, role, token_hash, expires_at, created_by) "
+                "VALUES ($1, $2, $3, $4, $5, $6) "
+                f"RETURNING {_READ_COLUMNS}",
+                workspace_id,
+                email,
+                role.value,
+                token_hash,
+                expires_at,
+                created_by,
+            )
         return InvitationRead.model_validate(dict(row))
 
     async def list_pending_by_workspace(self, workspace_id: UUID) -> list[InvitationRead]:

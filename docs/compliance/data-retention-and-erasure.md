@@ -135,6 +135,23 @@ Hard-Purge **bewusst nicht** geloescht oder anonymisiert:
 Ablauf der gesetzlichen Frist ist auch dieses Journal zu loeschen; das Verfahren
 dafuer ist vom Betreiber festzulegen.
 
+### Abgrenzung: Rechnungsdaten der Organisation (`billing_profile`)
+
+Die Rechnungsstammdaten aus ADR-0061 R1 (Kundentyp, Name bzw. Firma, Adresse,
+Land, optional USt-IdNr. mit VIES-Pruefstand) fallen **nicht** unter diese
+Ausnahme. Sie sind Vertragsdaten der lebenden Organisation:
+
+- `billing_profile.org_id` hat `ON DELETE CASCADE` auf `organization`
+  (Migration `billing_0109`, Billing-Pfad). Der Org-Purge (§1) entfernt die
+  Zeile mit der Organisation, der Konto-Purge mit der persoenlichen
+  Organisation des Nutzers. Belegt in
+  `packages/billing/tests/test_billing_profile.py` (Org- und Konto-Purge).
+- Einen eigenen Loeschpfad gibt es nicht; ein Admin kann die Angaben jederzeit
+  ueberschreiben. Es wird kein Verlauf gefuehrt.
+- Gesetzlich aufzubewahren sind erst die **ausgestellten Rechnungen**
+  (Archivzeile und PDF, ADR-0061 §7 und §9, Paket R2). Sie kopieren die
+  Angaben zum Ausstellungszeitpunkt und haengen nicht an `billing_profile`.
+
 ---
 
 ## 4 · Backups & „Restore-only-Re-Deletion"
@@ -561,6 +578,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Faelle (`agent_case` + Verlauf, Zuordnung, Schilderung, 0100) | bis Loeschung durch einen Menschen (ab `editor`) bzw. Agent-/Workspace-Purge; Owner-Entscheidung 2026-10-08: keine eigene Frist | Einzel-Loeschung: Hard-Delete samt Verlauf + `case.deleted` ohne Inhalt, umgewandelter Lernvorschlag faellt mit; Org-/Workspace-Purge: **CASCADE**; Account-Purge: `reporter_user_id`, menschliche `actor_id` und `assigned_by` **anonymisiert** (Sentinel), s. §4d |
 | Gespraechsprotokolle + Massnahmen (`feedback_session`, `measure` + Faelle und Verlauf, 0103) | ohne eigene Frist wie Faelle (PM-6); kein Einzel-Loeschen (unveraenderlich) | Fall-Loeschung: nur die Verknuepfungen per **CASCADE**; Agent-/Org-/Workspace-Purge: **CASCADE**; Account-Purge: `submitted_by` (nur `human`), menschliche IDs in `participants`/`dissent` und menschliche `actor_id` **anonymisiert** (Sentinel), s. §4e |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
+| Rechnungsdaten der Organisation (`billing_profile`, `billing_0109`) | bis Org-Purge (Konto-Purge: persoenliche Org) | Org-/Konto-Purge: **CASCADE** auf `organization`, s. §3 Abgrenzung |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
 

@@ -525,6 +525,1178 @@
     "children": []
   },
   {
+    "id": "res-conv-h-laengen",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 2
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Lengths & Placement",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-laengen-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Whatever is always loaded (persona profile, modes, catalog lines) costs tokens in every turn and lowers adherence as it grows. That is why there are guide values per element and a fixed rule for what goes where. The guide values are not a hard limit: content above them is still saved. This section is the only place with the numbers — playbooks point here instead of repeating them.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-budgets",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Guide Values per Element",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-tab-laengen-budgets",
+    "type": "table",
+    "props": {
+      "textColor": "default"
+    },
+    "content": {
+      "type": "tableContent",
+      "columnWidths": [
+        null,
+        null,
+        null
+      ],
+      "rows": [
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Element",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Target (at most)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Warning from",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Persona profile",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "400 words",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "600 words",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "per mode (all text fields together)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "150 words",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "250 words",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Number of modes",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "3",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "5",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Playbook body",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "1000 words",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "1500 words",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Playbook description + triggers",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "300 characters",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "500 characters",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Resource",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "no limit",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "section above 600 words",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Content start load, specialist agent (",
+                  "styles": {}
+                },
+                {
+                  "type": "text",
+                  "text": "get_persona",
+                  "styles": {
+                    "code": true
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": " without memory)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "5 KB",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "8 KB",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Content start load, Builder",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "6 KB",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "9 KB",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "headerRows": 1
+    },
+    "children": []
+  },
+  {
+    "id": "res-conv-p-laengen-zaehlen",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Words are counted in the Markdown text without code blocks; for description and triggers, the characters of both fields together. Above the target: check whether something belongs elsewhere according to the placement table. Above the warning threshold: move content out, or tell the user the word count, the guide value and the reason. The Builder does not shorten existing elements on its own — the consistency check reports them as a maintenance finding, and shortening happens only at the user's request.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-wohin",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "What Goes Where",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-tab-laengen-wohin",
+    "type": "table",
+    "props": {
+      "textColor": "default"
+    },
+    "content": {
+      "type": "tableContent",
+      "columnWidths": [
+        null,
+        null
+      ],
+      "rows": [
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Content",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "belongs in",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Role, purpose, target users, tone (2–4 sentences)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Persona profile",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "A few general rules with reasons, hard limits (e.g. never write without approval)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Persona profile",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Output form (length, structure)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Persona profile or ",
+                  "styles": {}
+                },
+                {
+                  "type": "text",
+                  "text": "output_style_override",
+                  "styles": {
+                    "code": true
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": " in the mode",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Procedures with steps, checklists, gates",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Playbook (with trigger)",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Schemas, catalogs, classes, thresholds, paths, IDs, conventions",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Resource (structured)",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Tool lists and tool instructions",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "nowhere: the schema in ",
+                  "styles": {}
+                },
+                {
+                  "type": "text",
+                  "text": "tools/list",
+                  "styles": {
+                    "code": true
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": " describes the tools; only non-obvious pitfalls (replace semantics, 409) go into the playbook",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Summary of an existing resource",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "nowhere: point to the resource",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Text that two personas need in the same form",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "a shared playbook or resource",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Facts about the user",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Memory",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "cells": [
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Rules for all agents (",
+                  "styles": {}
+                },
+                {
+                  "type": "text",
+                  "text": "record_usage",
+                  "styles": {
+                    "code": true
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": ", feedback, versions)",
+                  "styles": {}
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "props": {
+                "backgroundColor": "default",
+                "textColor": "default",
+                "textAlignment": "left",
+                "colspan": 1,
+                "rowspan": 1
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "nowhere: they are in the server instructions",
+                  "styles": {}
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "headerRows": 1
+    },
+    "children": []
+  },
+  {
+    "id": "res-conv-h-laengen-schreibregeln",
+    "type": "heading",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left",
+      "level": 3
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Writing Rules",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-1",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Every sentence passes the test question: would the agent make a mistake without it?",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-2",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Reasons instead of capital letters — emphasizing everything emphasizes nothing.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-3",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "No list of special cases; one or two examples instead.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-ol-laengen-regel-4",
+    "type": "numberedListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "When in doubt, build shorter and add after the first feedback (start small).",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-policy",
     "type": "heading",
     "props": {
@@ -553,7 +1725,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side.",
+        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side (editor for writing, admin for promote/retire).",
         "styles": {}
       }
     ],
@@ -732,7 +1904,7 @@
       },
       {
         "type": "text",
-        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
+        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'read_only' for agents that should benefit from curated knowledge but not contribute; 'off' for tool-like agents with no personalization benefit; 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
         "styles": {}
       }
     ],
@@ -756,7 +1928,7 @@
       },
       {
         "type": "text",
-        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that). If your own level is too low, enabling it belongs in the hand-off to the user — that's by design, not a bug.",
+        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that; if your own level is 'off', any unlock). If your own level is too low, enabling it belongs in the hand-off to the user (agent detail page → Tools → Memory) — that's by design, not a bug.",
         "styles": {}
       }
     ],
@@ -780,7 +1952,7 @@
       },
       {
         "type": "text",
-        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — no instructions to AI systems, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
+        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — user data, no instructions to AI systems, no repo/code facts, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
         "styles": {}
       }
     ],
