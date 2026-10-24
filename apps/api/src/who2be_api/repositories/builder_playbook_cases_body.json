@@ -21,6 +21,20 @@
     "children": []
   },
   {
+    "id": "d7-h-wegweiser",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Wegweiser — lade nur den Weg, den du gehst (d7-h-weg-a | d7-h-weg-b | d7-h-weg-c)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p-wegweiser",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "Ein Lauf geht genau einen Weg (siehe Einstiege). Hol das Playbook mit format=\"outline\" und dann Rahmen plus deinen Weg: fetch_playbook(playbook_id, block_ids=[\"d7-h-zweck\", \"d7-h-einstiege\", \"d7-h-grenzen\", \"d7-h-datenschutz\", \"d7-h-wegweiser\", \"<weg>\", \"d7-h-vorlagen\", \"d7-h-werkzeuge\", \"d7-h-anti\"]). Weg B braucht zusätzlich d7-h-a5 (Prüffall). Wechselt der Lauf den Weg, lade den neuen Weg nach.", "styles": {}}],
+    "children": []
+  },
+  {
     "id": "d7-h-einstiege",
     "type": "heading",
     "props": {"level": 2},
@@ -360,7 +374,7 @@
     "id": "d7-b49",
     "type": "bulletListItem",
     "props": {},
-    "content": [{"type": "text", "text": "Ein Prüffall wie in A5; fehlt einer, nach Freigabe mit create_test_case aus einem der Fälle anlegen.", "styles": {}}],
+    "content": [{"type": "text", "text": "Ein Prüffall wie in A5 (d7-h-a5); fehlt einer, nach Freigabe mit create_test_case aus einem der Fälle anlegen.", "styles": {}}],
     "children": []
   },
   {

@@ -1,3 +1,34 @@
+# Builder schlank B6 — Teilabruf statt Teilen (Karte t_a4b4b9f8)
+
+Neuer Zuschnitt: PM-Entscheidung 2026-10-24 (Option b) nach M1-Messung
+(`builder-schlank-2026-10-nachher.md` §1.4, §3.3, §5.2). Die 25-KB-Grenze
+entfällt; der erste Zuschnitt unten ist verworfen (Commit 1e2ffbc1 im
+Branch, Inhalte per Folgecommit auf main-Stand zurückgesetzt).
+
+## Umgesetzt (Option b)
+1. Profil-Laderegel `bp-p-output-load`: über der Warnschwelle
+   (res-conv-h-laengen-budgets; Budgetzahlen leben nur in den Konventionen)
+   erst outline, dann block_ids; geladene Konventions-Abschnitte nicht erneut holen.
+2. Fall-Triage: `d7-h-wegweiser` + fertiger block_ids-Aufruf (Rahmen + ein Weg,
+   Weg B + d7-h-a5).
+3. Agent-PB tool_policy nur Feldbedeutung; Exklusiv-Fakten in res-conv-h-policy/-memory.
+4. PB Persona lädt res-conv-h-sprache.
+Nicht: Bündeln der 8 Lade-Sätze (16 Sidecars, sprengt Dateibudget 8).
+
+## Messung DE (b6_prozedur.py, Methodik prozedur.py, gegen origin/main)
+| Bau | vorher | nachher | Diff |
+|---|---:|---:|---:|
+| Nur Persona | 13037 | 14283 | +1246 (Sprache-Abschnitt) |
+| Agent bauen, minimal | 18609 | 17345 | −1264 (−6,8 %) |
+| Agent bauen, typisch | 43890 | 43872 | −18; mit Nicht-erneut-holen −1509 |
+| Fall-Triage ganz | 16894 | 17393 | +499 |
+| Fall-Triage Weg A / B / C | 16894 | 11481 / 12017 / 10536 | −32 / −29 / −38 % |
+| Pflege, Feedback, External Tool | gleich | | 0 |
+| Konsistenz | 14128 | 14179 | +51 |
+| Profil | 3241 | 3460 | +219 |
+
+## Verworfener erster Zuschnitt (Historie)
+
 # Builder schlank B6: Agent-Playbook entschlacken, Agenten-Bau ≤ 25 KB (K6)
 
 Kanban: t_a4b4b9f8 (Eltern t_e8518965 / PR #1073, gemergt cb1c6547). Grundlage:

@@ -21,6 +21,20 @@
     "children": []
   },
   {
+    "id": "d7-h-wegweiser",
+    "type": "heading",
+    "props": {"level": 2},
+    "content": [{"type": "text", "text": "Signpost — load only the path you take (d7-h-weg-a | d7-h-weg-b | d7-h-weg-c)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p-wegweiser",
+    "type": "paragraph",
+    "props": {},
+    "content": [{"type": "text", "text": "A run takes exactly one path (see Entry points). Fetch the playbook with format=\"outline\", then the frame plus your path: fetch_playbook(playbook_id, block_ids=[\"d7-h-zweck\", \"d7-h-einstiege\", \"d7-h-grenzen\", \"d7-h-datenschutz\", \"d7-h-wegweiser\", \"<path>\", \"d7-h-vorlagen\", \"d7-h-werkzeuge\", \"d7-h-anti\"]). Path B also needs d7-h-a5 (test case). If the run switches paths, load the new path.", "styles": {}}],
+    "children": []
+  },
+  {
     "id": "d7-h-einstiege",
     "type": "heading",
     "props": {"level": 2},
@@ -360,7 +374,7 @@
     "id": "d7-b49",
     "type": "bulletListItem",
     "props": {},
-    "content": [{"type": "text", "text": "A test case as in A5; if one is missing, create it after approval with create_test_case from one of the cases.", "styles": {}}],
+    "content": [{"type": "text", "text": "A test case as in A5 (d7-h-a5); if one is missing, create it after approval with create_test_case from one of the cases.", "styles": {}}],
     "children": []
   },
   {

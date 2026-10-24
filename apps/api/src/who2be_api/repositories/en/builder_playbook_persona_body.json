@@ -17,7 +17,7 @@
     "id": "pb-persona-p-konventionen",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before Phase 2 (Propose), in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-modi\", \"res-conv-h-laengen\", \"res-conv-h-trigger\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before Phase 2 (Propose), in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-modi\", \"res-conv-h-laengen\", \"res-conv-h-trigger\", \"res-conv-h-sprache\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {

@@ -534,12 +534,11 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # (K4, Abschnittsregel ADR-0021-Nachtrag). Agent-Playbook: `tools-overview`
 # standardmaessig nicht ins Template; Playbook-Playbook gibt „Zweck“ und
 # „Tools & Operations“ nicht mehr als Gliederung vor — DE + EN.
-# v23: Builder schlank B6 (K6, Owner 2026-10-22: ein Bau 15-25 KB) — Agent-
-# Playbook entschlackt: Nachschlagewissen wandert in die Konventionen
-# (Template-Schreibweg + Platzhalter als neuer Abschnitt `res-conv-h-templates`,
-# nur bei Bedarf geladen; Policy-/Memory-Fakten in `res-conv-h-policy` und
-# `res-conv-h-memory`). Ablaeufe bleiben im Playbook, Standard-Anker nur noch
-# policy + memory — DE + EN.
+# v23: Builder schlank B6 (PM 2026-10-24, Option b: Teilabruf statt Teilen) —
+# Profil-Laderegel (outline + block_ids ueber der Warnschwelle, Abschnitte
+# nicht doppelt holen), Wegweiser der Fall-Triage (nur den eigenen Weg laden),
+# Agent-Playbook tool_policy gegen die Konventionen entdoppelt, Persona-
+# Playbook laedt res-conv-h-sprache mit — DE + EN.
 BUILDER_CONTENT_VERSION = 23
 
 

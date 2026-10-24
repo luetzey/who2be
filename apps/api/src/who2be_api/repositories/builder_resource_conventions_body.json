@@ -685,7 +685,7 @@
     "id": "res-conv-p-policy-intro",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Ohne Angabe gilt der Default „alles lesen, nichts schreiben“. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig (editor fuer Schreiben, admin fuer Promote/Retire).", "styles": {}}],
+    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig (editor fuer Schreiben, admin fuer Promote/Retire).", "styles": {}}],
     "children": []
   },
   {
@@ -694,7 +694,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Lese-Scopes: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbook_read und resource_read sind dreistufig. Fach-Agenten lesen 'assigned' (nur die der eigenen Persona zugewiesenen Playbooks/Resources); 'all' ist Meta-Agenten vorbehalten, die den ganzen Workspace ueberblicken muessen (Builder, Pflege-Laeufe). 'none' blendet das Werkzeug aus. persona_read und agent_read sind An/Aus-Schalter.", "styles": {}}
+      {"type": "text", "text": "Fach-Agenten lesen 'assigned' (nur die der eigenen Persona zugewiesenen Playbooks/Resources); 'all' ist Meta-Agenten vorbehalten, die den ganzen Workspace ueberblicken muessen (Builder, Pflege-Laeufe). 'none' blendet das Werkzeug aus.", "styles": {}}
     ],
     "children": []
   },
@@ -704,7 +704,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Schreib-Capabilities: ", "styles": {"bold": true}},
-      {"type": "text", "text": "einzeln und minimal vergeben, Default jeweils aus — nur die Domains freischalten, in die der Agent fuer seine Aufgabe tatsaechlich schreiben muss (persona_write, playbook_write, resource_write, agent_write je fuer sich). Niemals pauschal alles oeffnen, niemals mehr gewaehren, als der anlegende Agent selbst hat.", "styles": {}}
+      {"type": "text", "text": "einzeln und minimal vergeben — nur die Domains freischalten, in die der Agent fuer seine Aufgabe tatsaechlich schreiben muss (persona_write, playbook_write, resource_write, agent_write je fuer sich). Niemals pauschal alles oeffnen, niemals mehr gewaehren, als der anlegende Agent selbst hat.", "styles": {}}
     ],
     "children": []
   },
@@ -714,7 +714,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
-      {"type": "text", "text": "nur vergeben, wenn der Agent Versionen aktiv auf active/inactive schalten koennen MUSS. Fuer draft und review genuegt die Schreib-Capability der Domain — das Promoten bleibt beim Kurator.", "styles": {}}
+      {"type": "text", "text": "nur vergeben, wenn der Agent Versionen aktiv auf active/inactive schalten koennen MUSS. Fuer die meisten Agenten reicht das Anlegen von Drafts — das Promoten bleibt beim Kurator.", "styles": {}}
     ],
     "children": []
   },
@@ -749,7 +749,7 @@
     "id": "res-conv-p-memory-intro",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Agent-Memory (ADR-0044) ist ein kuratiertes Langzeitgedaechtnis pro Agent und folgt demselben Kurator-Prinzip wie Feedback: der Agent schlaegt vor, der Mensch entscheidet. memory_mode hat vier Stufen (Default off): 'off' (Memory-Werkzeuge existieren fuer den Agenten nicht), 'read_only' (nur search_memory/list_memories ueber freigegebene Fakten), 'suggest' (save_memory legt Vorschlaege an) und 'auto' (sofort aktiv). memory_directive: 'required' (zu Gespraechsbeginn abrufen) oder 'recommended' (nutzen, wenn Kontext hilft). System-Prompt und get_persona tragen die Anweisung automatisch, sobald der Modus nicht 'off' ist.", "styles": {}}],
+    "content": [{"type": "text", "text": "Agent-Memory (ADR-0044) ist ein kuratiertes Langzeitgedaechtnis pro Agent und folgt demselben Kurator-Prinzip wie Feedback: der Agent schlaegt vor, der Mensch entscheidet. Gesteuert ueber zwei Policy-Felder: memory_mode (off < read_only < suggest < auto, Default off) und memory_directive (required/recommended).", "styles": {}}],
     "children": []
   },
   {
@@ -758,7 +758,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Default-Empfehlung: ", "styles": {"bold": true}},
-      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen; 'auto' nur auf ausdruecklichen User-Wunsch. Nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
+      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen; 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
     ],
     "children": []
   },
@@ -768,7 +768,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Anti-Eskalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber; bei eigener Stufe 'off' jede Freischaltung). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User (Agent-Detailseite → Tools → Gedaechtnis) — das ist Design, kein Fehler.", "styles": {}}
+      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber; steht die eigene Stufe auf 'off', jede Freischaltung). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User (Agent-Detailseite → Tools → Gedaechtnis) — das ist Design, kein Fehler.", "styles": {}}
     ],
     "children": []
   },
@@ -778,7 +778,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Inhalts-Hygiene: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — Nutzerdaten, keine Anweisungen an KI-Systeme, kein Smalltalk, keine Repo-/Code-Fakten, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
+      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — Nutzerdaten, keine Anweisungen an KI-Systeme, keine Repo-/Code-Fakten, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
     ],
     "children": []
   },
@@ -789,112 +789,6 @@
     "content": [
       {"type": "text", "text": "Semantisches Wiederfinden: ", "styles": {"bold": true}},
       {"type": "text", "text": "search_memory findet Eintraege auch ueber Umschreibungen und ueber Sprachgrenzen hinweg (ADR-0046), nicht nur ueber woertliche Treffer. Dieselbe Aehnlichkeit greift beim Schreiben: ein sinngleich umformulierter Eintrag wird mit 409 abgelehnt, auch wenn kein Wort uebereinstimmt — das ist der Dedup-Waechter, kein Fehler. Die Persona-Injektion bleibt davon unberuehrt: sie haengt die Top-Fakten nach importance an, ohne Query.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-h-templates",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "System-Prompt-Templates verfassen", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "res-conv-p-templates-intro",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Templates duerfen via MCP verfasst werden (ADR-0040); aktivieren darf nur ein Mensch in der Web-UI. Ohne Angabe gilt die Workspace-Sprache; locale nur bei bewusster Abweichung setzen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "res-conv-p-templates-format",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Der Body ist Markdown. Platzhalter stehen darin als Token ", "styles": {}},
-      {"type": "text", "text": "{{kind:target_id}}", "styles": {"code": true}},
-      {"type": "text", "text": " (Resource-Abschnitt: ", "styles": {}},
-      {"type": "text", "text": "{{resource:<uuid>#<block_id>}}", "styles": {"code": true}},
-      {"type": "text", "text": "); der Server macht daraus beim Speichern Pills und expandiert sie beim Rendern. ", "styles": {}},
-      {"type": "text", "text": "Rufe zuerst list_placeholders auf", "styles": {"bold": true}},
-      {"type": "text", "text": " — es liefert alle gueltigen kinds, ihre target_id-Vertraege und je ein Beispiel. Unbekannte kinds oder falsche target_id rendern als ungeloeste Platzhalter.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-persona",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Identitaet: ", "styles": {"bold": true}},
-      {"type": "text", "text": "persona-ref (Anweisung, die Persona zur Laufzeit per get_persona zu laden — schlanker Default) oder persona-field (eingebetteter Snapshot, z. B. 'profile' oder 'name').", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-tools",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Werkzeuge: ", "styles": {"bold": true}},
-      {"type": "text", "text": "tools-overview gehoert standardmaessig NICHT ins Template — tools/list beschreibt die Werkzeuge schon. Ausnahme ist nur ein Prompt, der ausdruecklich ohne MCP-Werkzeugliste genutzt wird (kopierter Prompt); dann mit Begruendung einsetzen.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-catalog",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Kataloge: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbooks-catalog und resources-catalog rendern Briefing-Tabellen mit fetch-Aufrufen (target_id-Werte: list_placeholders).", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-memory",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Gedaechtnis: ", "styles": {"bold": true}},
-      {"type": "text", "text": "der memory-Platzhalter (target_id '') rendert den Gedaechtnis-Hinweis passend zum memory_mode — bei 'off' bleibt die Stelle leer. Setze ihn in jedes Template eines Agenten mit Gedaechtnis; der automatische Anhang greift nur, wenn das Template tools-overview traegt.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-inline",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Einzel-Einbettung: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbook / resource mit einer UUID als target_id betten ein Element fest ein — sparsam einsetzen, Kataloge + fetch zur Laufzeit sind der Token-sparende Default.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-bootstrap",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Bootstrap: ", "styles": {"bold": true}},
-      {"type": "text", "text": "der Bootstrap-Loop (Persona laden, Trigger pruefen, Playbook folgen) lebt im Template und wird beim Rendern aus Platzhaltern befuellt — nicht von Hand in den Prompt schreiben.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "res-conv-code-templates",
-    "type": "codeBlock",
-    "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Identitaet\n\nDu bist {{persona-field:name}}.\n\n{{memory:}}", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "res-conv-li-templates-workflow",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Ablauf: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_placeholders lesen, Body als Markdown verfassen, create_system_prompt (Draft), transition_system_prompt(to='review') (nur draft nach review). Aendern: update_system_prompt legt einen neuen Draft an; Vorlage mit get_system_prompt(format=\"source\") lesen und per edit_content (Abschnitt per Anker oder field='body') oder update_system_prompt (Vollstand) schreiben.", "styles": {}}
     ],
     "children": []
   },

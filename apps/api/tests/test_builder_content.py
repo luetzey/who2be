@@ -278,15 +278,14 @@ def test_builder_content_describes_no_json_write_path(pack: ContentPack) -> None
 
 
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
-def test_template_markdown_example_converts_to_pills(pack: ContentPack) -> None:
-    """Das Template-Beispiel (seit Content-Stand 23 im Konventions-Abschnitt
-    `res-conv-h-templates`, vorher im Agent-Playbook) ist gueltiges Markdown
-    des Schreibwegs (ADR-0058 §3.2): der Konverter, den die API beim Schreiben
+def test_agent_playbook_markdown_example_converts_to_pills(pack: ContentPack) -> None:
+    """Das Template-Beispiel im Agent-Playbook ist gueltiges Markdown des
+    Schreibwegs (ADR-0058 §3.2): der Konverter, den die API beim Schreiben
     nutzt, macht aus den Tokens echte Placeholder-Pills."""
     from who2be_models.blocknote_markdown import from_markdown
 
-    blocks = json.loads(pack.resource.load_body(pack.locale))
-    example = next(b for b in blocks if b["id"] == "res-conv-code-templates")
+    blocks = json.loads(load_sidecar("builder_playbook_agent_body.json", pack.locale))
+    example = next(b for b in blocks if b["id"] == "pb-agent-code-placeholder")
     assert example["props"]["language"] == "markdown"
     converted = from_markdown(example["content"][0]["text"])
     pills = [
@@ -425,10 +424,14 @@ def test_builder_template_loads_persona_at_runtime_without_tools_block(pack: Con
 # die es laedt (K4). Die Liste ist die Erwartung; der Test liest die Anker aus
 # dem Playbook-Text und prueft sie gegen die Resource.
 _CONVENTION_ANCHORS = {
-    "persona": ["res-conv-h-modi", "res-conv-h-laengen", "res-conv-h-trigger"],
+    "persona": [
+        "res-conv-h-modi",
+        "res-conv-h-laengen",
+        "res-conv-h-trigger",
+        "res-conv-h-sprache",
+    ],
     "playbook": ["res-conv-h-trigger", "res-conv-h-naming", "res-conv-h-laengen-budgets"],
-    # Content-Stand 23 (B6): managed und templates nur bei Bedarf (im Text genannt).
-    "agent": ["res-conv-h-policy", "res-conv-h-memory"],
+    "agent": ["res-conv-h-policy", "res-conv-h-memory", "res-conv-h-managed"],
     "consistency": [
         "res-conv-h-trigger",
         "res-conv-h-modi",
@@ -492,16 +495,12 @@ def test_playbooks_drop_feedback_paragraph_and_full_conventions_load(pack: Conte
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
 def test_agent_playbook_keeps_tools_overview_out_of_templates(pack: ContentPack) -> None:
     """PM 2026-10-22 (1): tools-overview gehoert standardmaessig nicht ins
-    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg.
-    Seit Content-Stand 23 steht die Regel im Abschnitt `res-conv-h-templates`
-    und als Kurzform im Agent-Playbook (Phase 1)."""
-    resource = json.loads(pack.resource.load_body(pack.locale))
-    rule = next(b for b in resource if b["id"] == "res-conv-li-templates-tools")
-    step = next(b for b in _playbook_blocks(pack, "agent") if b["id"] == "pb-agent-li-create-p1-3")
-    for block in (rule, step):
-        text = " ".join(_collect_block_texts(block))
-        assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
-    whole = " ".join(_collect_block_texts(_playbook_blocks(pack, "agent") + resource))
+    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg."""
+    blocks = _playbook_blocks(pack, "agent")
+    rule = next(b for b in blocks if b["id"] == "pb-agent-li-placeholder-tools")
+    text = " ".join(_collect_block_texts(rule))
+    assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
+    whole = " ".join(_collect_block_texts(blocks))
     assert "praktisch jedes Template" not in whole
     assert "practically every template" not in whole
 
@@ -519,29 +518,75 @@ def test_playbook_playbook_no_longer_prescribes_purpose_and_tools_sections(
     assert ("Fallen" in text) or ("Pitfalls" in text)
 
 
-# Owner 2026-10-22: ein Bau laedt 15–25 KB Prozedur. Gemessen wie im B3-Review:
-# Klartext (`blocks_plain_text`) von Persona- + Agent-Playbook plus der
-# Konventions-Abschnitte, die ihre `fetch_resource`-Aufrufe laden; dazu der
-# Bedarfs-Abschnitt `res-conv-h-templates` (Template verfassen) als schlimmster Fall.
-_AGENT_BUILD_MAX_BYTES = 25_000
+# Builder schlank B6 (Content-Stand 23, PM 2026-10-24 Option b): Teilabruf
+# statt Teilen. Die Tests schneiden mit derselben Funktion, die der Server fuer
+# `fetch_playbook(block_ids=...)` nutzt.
+_WEG_IDS = ("d7-h-weg-a", "d7-h-weg-b", "d7-h-weg-c")
+_BLOCK_IDS_PATTERN = re.compile(r"block_ids=\[([^\]]*)\]")
 
 
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
-def test_agent_build_stays_within_owner_budget(pack: ContentPack) -> None:
-    """B6 (K6): der Agenten-Bau bleibt auch mit Template-Abschnitt <= 25 KB, das
-    Agent-Playbook unter dem Playbook-Ziel von 1 000 Woertern (ADR-0063)."""
-    from who2be_models.blocknote_markdown import to_markdown
-    from who2be_models.blocknote_text import blocks_plain_text, section_blocks
-    from who2be_models.content_budgets import count_words
+def test_cases_signpost_loads_one_path_with_frame(pack: ContentPack) -> None:
+    """Der Wegweiser der Fall-Triage nennt Rahmen + einen Weg. Je Weg schneidet
+    `slice_playbook_body` genau diesen Weg heraus (Weg B zusaetzlich A5, auf den
+    B4 verweist), Rahmen und Anti-Patterns bleiben, und der Teilabruf ist
+    deutlich kleiner als der ganze Body."""
+    from who2be_api.services.playbook_service import slice_playbook_body
+    from who2be_models.blocknote_text import blocks_plain_text
 
+    blocks = _playbook_blocks(pack, "cases")
+    headings = {b["id"] for b in blocks if b["type"] == "heading"}
+    sign = next(b for b in blocks if b["id"] == "d7-p-wegweiser")
+    anchors = re.findall(
+        r'"([^"]+)"', _BLOCK_IDS_PATTERN.findall(" ".join(_collect_block_texts(sign)))[0]
+    )
+    frame = [a for a in anchors if not a.startswith("<")]
+    assert set(frame) <= headings, set(frame) - headings
+    assert "d7-h-anti" in frame and "d7-h-grenzen" in frame and "d7-h-datenschutz" in frame
+    full = len(blocks_plain_text(blocks).encode())
+    for weg in _WEG_IDS:
+        extra = ["d7-h-a5"] if weg == "d7-h-weg-b" else []
+        sliced = json.loads(slice_playbook_body(json.dumps(blocks), [*frame, weg, *extra]))
+        ids = {b["id"] for b in sliced}
+        assert weg in ids
+        assert not ids & (set(_WEG_IDS) - {weg}), weg
+        assert {b["id"] for b in blocks if str(b["id"]).startswith("d7-b7")} <= ids
+        size = len(blocks_plain_text(sliced).encode())
+        assert size <= 0.7 * full, (weg, size, full)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_builder_profile_carries_outline_rule_at_warn_threshold(pack: ContentPack) -> None:
+    """Die Lade-Regel steht im immer geladenen Profil (nicht im Body, den sie
+    erst steuern soll). Die Schwelle selbst nennt sie nicht: Budgetzahlen
+    stehen nur in den Konventionen (test_budget_numbers_live_only_in_the_
+    conventions), den Ueberschreitungs-Hinweis liefert der Server."""
+    profile = json.loads(pack.persona.load_content(pack.locale))
+    rule = " ".join(_collect_block_texts(next(b for b in profile if b["id"] == "bp-p-output-load")))
+    assert 'format="outline"' in rule and "block_ids" in rule
+    assert ("Warnschwelle" in rule) or ("warning threshold" in rule)
+    assert ("nicht erneut holen" in rule) or ("again" in rule)
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_policy_section_keeps_only_field_meaning(pack: ContentPack) -> None:
+    """tool_policy ist gegen die Konventionen entdoppelt: Muster, Empfehlung und
+    Eskalationsgrenzen stehen nur noch in res-conv-h-policy/-memory, die das
+    Agent-Playbook ohnehin laedt; was nur im Playbook stand, steht jetzt dort."""
+    from who2be_models.blocknote_text import section_blocks
+
+    blocks = _playbook_blocks(pack, "agent")
+    ids = {b["id"] for b in section_blocks(blocks, "pb-agent-h-policy")}
+    for gone in ("pb-agent-li-policy-escalation", "pb-agent-li-policy-memory-empfehlung"):
+        assert gone not in ids
+    assert "pb-agent-li-policy-memory-grenze" not in ids
     resource = json.loads(pack.resource.load_body(pack.locale))
-    total = 0
-    for key in ("persona", "agent"):
-        blocks = _playbook_blocks(pack, key)
-        total += len(blocks_plain_text(blocks).encode())
-        calls = _FETCH_CALL_PATTERN.findall(" ".join(_collect_block_texts(blocks)))
-        for anchor in _ANCHOR_PATTERN.findall(calls[0]):
-            total += len(blocks_plain_text(section_blocks(resource, anchor)).encode())
-    total += len(blocks_plain_text(section_blocks(resource, "res-conv-h-templates")).encode())
-    assert total <= _AGENT_BUILD_MAX_BYTES, total
-    assert count_words(to_markdown(_playbook_blocks(pack, "agent"))) <= 1_000
+    conv = " ".join(
+        _collect_block_texts(
+            section_blocks(resource, "res-conv-h-policy")
+            + section_blocks(resource, "res-conv-h-memory")
+        )
+    )
+    for fact in ("admin", "read_only", "403", "is_within"):
+        assert fact in conv, fact
+    assert ("Repo-/Code-Fakten" in conv) or ("repo/code facts" in conv)
