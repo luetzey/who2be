@@ -62,3 +62,7 @@ eigenen Archiv. Erfüllt, wenn:
 - [x] 1 Backend (18 Tests inkl. Integrationstest am echten SQL)
 - [x] 2 Web (11 Vitest inkl. axe, DE/EN)
 - [x] 3 DoD / Fotos / PR — Mutationsliste und Ergebnisse im PR-Text
+- [x] 4 Review-Fix B1: `e2e/billing.spec.ts` stubbt `**/billing/invoices`
+  (CI-Cloud-Stack ohne `who2be-billing` antwortet 404), plus zwei e2e-Fälle:
+  Leerzustand ohne `error-alert` und Fehlerfall bleibt sichtbar in der Karte.
+  Budget-Ausnahme 9 Code-Dateien laut PM-Entscheidung 2026-10-25.
