@@ -59,6 +59,6 @@ eigenen Archiv. Erfüllt, wenn:
 
 ## Stand
 
-- [ ] 1 Backend
-- [ ] 2 Web
-- [ ] 3 DoD / Fotos / PR
+- [x] 1 Backend (18 Tests inkl. Integrationstest am echten SQL)
+- [x] 2 Web (11 Vitest inkl. axe, DE/EN)
+- [x] 3 DoD / Fotos / PR — Mutationsliste und Ergebnisse im PR-Text
