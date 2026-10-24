@@ -146,6 +146,22 @@ async def _scope_to_new_workspace(
     )
 
 
+async def seed_new_workspace_profiles(
+    conn: asyncpg.Connection, workspace_id: UUID, org_id: UUID, content_locale: str
+) -> None:
+    """Mitgelieferte Werkzeug-Profile fuer einen frisch angelegten Workspace.
+
+    Fuer die Anlage-Wege ohne Agenten-Seed: `PgOrganizationRepository.
+    create_company` (Default-Workspace einer Firmen-Org) und
+    `seed_bootstrap_tenant` (On-Prem-Bootstrap). Sie haben denselben
+    RLS-Bedarf wie `_seed_default_agents`, daher erst transaktionslokal auf
+    den neuen Workspace scopen, dann seeden (ADR-0059 §4.3). **Setzt eine
+    umgebende Transaktion voraus**, siehe `_scope_to_new_workspace`.
+    """
+    await _scope_to_new_workspace(conn, workspace_id, org_id)
+    await seed_builtin_profiles(conn, workspace_id, content_locale)
+
+
 async def ensure_personal_workspace(
     conn: asyncpg.Connection,
     user_id: UUID,

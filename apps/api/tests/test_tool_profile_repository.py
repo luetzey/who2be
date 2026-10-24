@@ -41,6 +41,7 @@ from who2be_api.repositories.agent_repository import (
     AgentToolProfileColumns,
     PgAgentRepository,
 )
+from who2be_api.repositories.organization_repository import PgOrganizationRepository
 from who2be_api.repositories.tool_profile_repository import (
     PgToolProfileRepository,
     ToolProfileBuiltinError,
@@ -50,6 +51,7 @@ from who2be_api.repositories.tool_profile_repository import (
     seed_builtin_profiles,
 )
 from who2be_api.repositories.workspace_repository import ensure_personal_workspace
+from who2be_api.services.bootstrap_service import seed_bootstrap_tenant
 from who2be_models import AgentStatus, AgentToolPolicy
 from who2be_models.tool_profiles import (
     BUILTIN_PROFILES,
@@ -275,6 +277,55 @@ def test_new_workspace_seeds_profiles_and_builders_under_rls() -> None:
             assert await _agent_columns(owner, row["id"]) == ("builder", [], [])
 
     _in_schema(body, "tp_newws")
+
+
+def test_company_org_default_workspace_seeds_profiles_under_rls() -> None:
+    """`create_company` als `who2be_app`: der Default-Workspace bekommt die vier Profile."""
+
+    async def body(owner: asyncpg.Connection, schema: str) -> None:
+        await apply_migrations(owner, MIGRATIONS_DIR)
+        await owner.execute(f"ALTER ROLE who2be_app WITH PASSWORD '{_APP_PASSWORD}'")
+        pool = await _app_pool(schema)
+        try:
+            tag = secrets.token_hex(4)
+            _org, ws = await PgOrganizationRepository(pool).create_company(
+                uuid4(), f"Firma {tag}", f"firma-{tag}", "Standard"
+            )
+        finally:
+            await pool.close()
+
+        locale = await owner.fetchval("SELECT content_locale FROM workspace WHERE id = $1", ws)
+        assert await _profiles(owner, ws) == _expected(locale)
+
+    _in_schema(body, "tp_company")
+
+
+def test_onprem_bootstrap_workspace_seeds_profiles_under_rls() -> None:
+    """`seed_bootstrap_tenant` als `who2be_app`: Bootstrap-Workspace mit vier Profilen."""
+
+    async def body(owner: asyncpg.Connection, schema: str) -> None:
+        await apply_migrations(owner, MIGRATIONS_DIR)
+        await owner.execute(f"ALTER ROLE who2be_app WITH PASSWORD '{_APP_PASSWORD}'")
+        app = await asyncpg.connect(
+            get_settings().database_url, user="who2be_app", password=_APP_PASSWORD
+        )
+        try:
+            await app.execute(f'SET search_path TO "{schema}"')
+            await init_connection(app)
+            async with app.transaction():
+                org_id = await seed_bootstrap_tenant(
+                    app, f"boot-{secrets.token_hex(4)}@example.com"
+                )
+        finally:
+            await app.close()
+
+        assert org_id is not None
+        row = await owner.fetchrow(
+            "SELECT id, content_locale FROM workspace WHERE org_id = $1", org_id
+        )
+        assert await _profiles(owner, row["id"]) == _expected(row["content_locale"])
+
+    _in_schema(body, "tp_boot")
 
 
 # --- Schema: RLS, Cascade, RESTRICT, FK ------------------------------------------
