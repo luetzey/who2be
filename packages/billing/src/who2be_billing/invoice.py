@@ -296,6 +296,22 @@ class InvoiceRepository(Protocol):
         ...
 
 
+class OrgInvoiceReader(Protocol):
+    """Lesesicht einer Organisation auf ihre Rechnungen (Paket R3).
+
+    Beide Methoden filtern ausdruecklich nach `org_id`; die Org kommt immer aus
+    dem Workspace-Kontext, nie aus der URL.
+    """
+
+    async def list_for_org(self, org_id: UUID, limit: int = ...) -> list[InvoiceRecord]:
+        """Ausgestellte Rechnungen (`issued`, `archived`), neueste zuerst."""
+        ...
+
+    async def get_for_org(self, org_id: UUID, invoice_id: UUID) -> InvoiceRecord | None:
+        """Die Rechnung, wenn sie dieser Org gehoert und ausgestellt ist, sonst None."""
+        ...
+
+
 class InvoiceProfileRepository(Protocol):
     """Was der Rechnungsweg an den Rechnungsdaten braucht."""
 
@@ -803,6 +819,14 @@ _COLUMNS = (
     "pdf_sha256, last_error, attempts, created_at, updated_at"
 )
 
+#: Obergrenze der Rechnungsliste einer Org (R3). Eine Rechnung je Monat, also
+#: reichen 240 Zeilen fuer 20 Jahre; eine Pagination lohnt sich nicht.
+ORG_LIST_LIMIT = 240
+
+#: Nur diese Status tragen eine Rechnungsnummer (`billing_invoice_issued_check`)
+#: und sind fuer die Org sichtbar; `pending`/`failed` sind Betreiber-Zustaende.
+_VISIBLE = "status IN ('issued', 'archived')"
+
 #: Obergrenze, wie viele offene Zeilen ein Worker-Lauf liest (Faelligkeit
 #: entscheidet danach `is_due`). Mehr offene Zeilen sind kein Normalbetrieb.
 OPEN_SCAN_LIMIT = 500
@@ -873,6 +897,24 @@ class PgInvoiceRepository:
         row = await self._pool.fetchrow(
             f"SELECT {_COLUMNS} FROM billing_invoice WHERE id = $1",  # noqa: S608
             invoice_id,
+        )
+        return _record(row) if row is not None else None
+
+    async def list_for_org(self, org_id: UUID, limit: int = ORG_LIST_LIMIT) -> list[InvoiceRecord]:
+        rows = await self._pool.fetch(
+            f"SELECT {_COLUMNS} FROM billing_invoice WHERE org_id = $1 AND {_VISIBLE} "  # noqa: S608
+            "ORDER BY issued_at DESC, id DESC LIMIT $2",
+            org_id,
+            limit,
+        )
+        return [_record(row) for row in rows]
+
+    async def get_for_org(self, org_id: UUID, invoice_id: UUID) -> InvoiceRecord | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {_COLUMNS} FROM billing_invoice "  # noqa: S608
+            f"WHERE id = $1 AND org_id = $2 AND {_VISIBLE}",
+            invoice_id,
+            org_id,
         )
         return _record(row) if row is not None else None
 
