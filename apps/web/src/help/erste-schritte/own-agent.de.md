@@ -21,14 +21,14 @@ Bau mir in Who2Be einen Agenten für Kundenanfragen per E-Mail. Frag mich vorher
 3. Beantworte die Rückfragen. Je konkreter du bist, desto besser passt der Agent.
 4. Der Builder legt Persona, Playbooks und den Agenten in Who2Be an. Erlaube dafür die Werkzeug-Aufrufe, wenn Claude fragt.
 
-Danach findest du den neuen Agenten unter **Agents**.
+Danach findest du den neuen Agenten unter **Agenten**.
 
 ## Selbst anlegen [#formular]
 
 Du kannst einen Agenten auch ohne Builder anlegen:
 
-1. Klick unter **Agents** auf **Neuen Agent erstellen**. Who2Be öffnet gleich **Einstellungen › Konfiguration**, der Cursor steht im Feld **Persona**.
-2. Gib ihm einen Namen und wähle eine **Persona** und einen **Systemprompt**. Dann **Speichern**.
+1. Klick unter **Agenten** auf **Neuen Agenten erstellen**. Who2Be öffnet gleich **Einstellungen › Konfiguration**, der Cursor steht im Feld **Persona**.
+2. Gib ihm einen Namen und wähle eine **Persona** und einen **System-Prompt**. Dann **Speichern**.
 3. Die Persona muss aktiv sein. Solange etwas fehlt, zeigt Who2Be „Noch nicht aktivierbar“ und nennt, was fehlt.
 4. Ist alles gesetzt, fragt Who2Be „Agent jetzt aktivieren?“. Mit **Aktivieren** ist er sofort abrufbar, und du landest im Überblick bei der Karte **Verbindung**. Mit **Später** bleibt er deaktiviert; den Status änderst du dann unter **Einstellungen**.
 

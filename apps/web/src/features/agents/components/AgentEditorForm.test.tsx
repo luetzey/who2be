@@ -146,7 +146,7 @@ describe('AgentEditorForm', () => {
 
     const notice = screen.getByTestId('agent-missing-notice')
     expect(notice).toHaveTextContent('Persona verknüpfen')
-    expect(notice).toHaveTextContent('Systemprompt verknüpfen')
+    expect(notice).toHaveTextContent('System-Prompt verknüpfen')
     expect(notice).toHaveTextContent('verknüpfte Persona aktiv schalten')
 
     expect(screen.getByRole('option', { name: 'Aktiv' })).toBeDisabled()
@@ -189,7 +189,7 @@ describe('AgentEditorForm', () => {
     expect(screen.getByLabelText('Externe Tools erstellen/ändern')).not.toBeChecked()
     // Feedback-Triage (Signale schliessen) ist secure-by-default AUS.
     expect(
-      screen.getByLabelText('Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)'),
+      screen.getByLabelText('Feedback einordnen und schließen'),
     ).not.toBeChecked()
   })
 
@@ -273,8 +273,8 @@ describe('AgentEditorForm', () => {
     render(<Harness agent={agent} />)
     openToolsTab()
     // Playbook: promoten erlaubt, retiren abgewaehlt; Persona ohne Eintrag = beide an.
-    const promotes = screen.getAllByLabelText('Promoten (→ aktiv)')
-    const retires = screen.getAllByLabelText('Zurückziehen (→ inaktiv)')
+    const promotes = screen.getAllByLabelText('Aktivieren')
+    const retires = screen.getAllByLabelText('Deaktivieren')
     // Reihenfolge: persona, playbook, resource.
     expect(promotes[1]).toBeChecked()
     expect(retires[1]).not.toBeChecked()

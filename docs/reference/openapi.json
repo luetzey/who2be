@@ -18443,6 +18443,7 @@
               "invitation_email_mismatch",
               "invitation_email_required",
               "invitation_email_unconfirmed",
+              "invitation_already_pending",
               "personal_organization_undeletable",
               "organization_owner_required",
               "workspace_org_missing",
@@ -27562,7 +27563,7 @@
           "available"
         ],
         "title": "ResourceLinkRead",
-        "description": "Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe).\n\nPhase 3-A erweitert das Read-Modell um Section-Sicht und Available-\nFallback:\n- `available_in='active'` — Anker in der aktiven Version aufgeloest.\n- `available_in='draft'` — keine aktive Version, aber die aktuelle\n  (Draft-/Review-/Inactive-)Version traegt den Anker → UI rendert\n  \"Nur in Draft\".\n- `available_in=None` — Anker existiert nirgends mehr (Block geloescht).\n`available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).\n`section_block_ids` und `section_preview` traegt die Section ab dem\nAnker-Heading bis (exklusive) zum naechsten Heading desselben Levels."
+        "description": "Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe).\n\nPhase 3-A erweitert das Read-Modell um Section-Sicht und Available-\nFallback:\n- `available_in='active'` — Anker in der aktiven Version aufgeloest.\n- `available_in='draft'` — keine aktive Version, aber die aktuelle\n  (Draft-/Review-/Inactive-)Version traegt den Anker → UI rendert\n  \"Nur in Draft\".\n- `available_in=None` — Anker existiert nirgends mehr (Block geloescht).\n`available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).\n`section_block_ids` und `section_preview` traegt die Section ab dem\nAnker-Heading bis (exklusive) zum naechsten Heading gleicher oder hoeherer\nEbene (`blocknote_text.section_blocks`, ADR-0021)."
       },
       "ResourceLinkSet": {
         "properties": {

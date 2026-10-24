@@ -10,7 +10,14 @@
     "id": "d7-p02",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Aus einem Muster der Lernschleife (ADR-0053, 3.7) einen Fall formulieren und offene Fälle für den Menschen vorbereiten. Muster sind eine berechnete Sicht: der Server zählt deterministisch (Schwelle n = 3), der Builder deutet nicht nach, er formuliert. Der Builder moderiert, ordnet zu, triagiert, legt Prüffälle und Entwürfe an — er entscheidet nie und schließt keine Fälle. Wird aus den Fällen eine Maßnahme, läuft das über ein Feedback-Gespräch (Playbook „Feedback-Gespräch (Review) moderieren“).", "styles": {}}],
+    "content": [{"type": "text", "text": "Aus einem Muster der Lernschleife (ADR-0053, 3.7) einen Fall formulieren und offene Fälle für den Menschen vorbereiten — der Server zählt die Muster (Schwelle n = 3), der Builder formuliert, ordnet zu und entscheidet nie.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "d7-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Lade aus der Resource 'Agent-Bau-Konventionen' nur die Abschnitte, die dieses Playbook braucht — vor dem ersten Schreibschritt, mit einem Aufruf: fetch_resource(resource_id, block_ids=[\"res-conv-h-status\", \"res-conv-h-managed\"]). Ein Überschriften-Anker liefert den ganzen Abschnitt; die resource_id steht in den Verweisen dieses Playbooks (linked_blocks). Weitere Abschnitte nur bei Bedarf (Anker via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -493,21 +500,14 @@
     "id": "d7-h-werkzeuge",
     "type": "heading",
     "props": {"level": 2},
-    "content": [{"type": "text", "text": "Werkzeuge", "styles": {}}],
+    "content": [{"type": "text", "text": "Fallen", "styles": {}}],
     "children": []
   },
   {
     "id": "d7-p70",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Lesen: list_patterns, list_cases (status als Liste, cursor/next_cursor), get_case, get_lesson, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_test_cases, get_feedback, find_usages. Schreiben (nach Freigabe): assign_case_elements, triage_case, convert_lesson_to_case, create_test_case, report_case (nur eigene Beobachtung, auf Wunsch), update_* und transition_* bis review, submit_feedback, record_usage. Alle Fall-Werkzeuge außer report_case brauchen case_triage.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "d7-p71",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Nur Mensch in der Web-UI: Fall verwerfen oder löschen, Lernvorschlag ablehnen, Version aktivieren, Nachschau einstufen. Maßnahme, Protokoll und Entwurfs-Verknüpfung: Playbook „Feedback-Gespräch (Review) moderieren“.", "styles": {}}],
+    "content": [{"type": "text", "text": "Alle Fall-Werkzeuge außer report_case brauchen case_triage. list_cases nimmt status als Liste und blättert über cursor/next_cursor. report_case nur für eine eigene Beobachtung und auf Wunsch — nicht für Lernvorschläge (siehe A4). update_* und transition_* nur bis review, Schreiben erst nach Freigabe.", "styles": {}}],
     "children": []
   },
   {
@@ -584,14 +584,7 @@
     "id": "d7-p80",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Grundlage: ADR-0053 Abschnitte 3.3 (Fall, Status, Rechte), 3.6 (Maßnahme, Prüffall Pflicht), 3.7 (Muster, reporter_kind pattern), 3.8 (case_triage), 6.5 bis 6.7 (MCP-Werkzeuge); Phase-E-Werkzeuge nach W-E1 b und PM-2/PM-4; Delta-Spec Phase D, S5 (Kopierblöcke). Konventionen für Trigger, Managed-Grenzen und Status-Workflow stehen in der Resource Agent-Bau-Konventionen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "d7-p81",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Nachhalten: genutzte Playbooks und Resources mit record_usage melden; fällt an diesem Playbook etwas Veraltetes auf, submit_feedback mit signal outdated.", "styles": {}}],
+    "content": [{"type": "text", "text": "Grundlage: ADR-0053 Abschnitte 3.3 (Fall, Status, Rechte), 3.6 (Maßnahme, Prüffall Pflicht), 3.7 (Muster, reporter_kind pattern), 3.8 (case_triage), 6.5 bis 6.7 (MCP-Werkzeuge); Phase-E-Werkzeuge nach W-E1 b und PM-2/PM-4; Delta-Spec Phase D, S5 (Kopierblöcke).", "styles": {}}],
     "children": []
   }
 ]

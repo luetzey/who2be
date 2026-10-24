@@ -519,7 +519,7 @@ describe('ReportCaseDialog ohne festen Agenten (D6b0)', () => {
     ).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Rückmeldung geben' })).toBeNull()
     expect(screen.queryByLabelText(/Was war die Lage\?/)).toBeNull()
-    fireEvent.click(within(dialog).getByRole('link', { name: 'Zu den Agents' }))
+    fireEvent.click(within(dialog).getByRole('link', { name: 'Zu den Agenten' }))
     expect(await screen.findByTestId('agents-target')).toBeInTheDocument()
   })
 

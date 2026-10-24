@@ -321,6 +321,8 @@ describe('AgentsPage', () => {
     renderPage()
 
     expect(await screen.findByText('Noch keine eigenen Agenten')).toBeInTheDocument()
+    // Seitentitel DE „Agenten“ (Owner 2026-10-22, Karte t_c54bcfaf)
+    expect(screen.getByRole('heading', { level: 1, name: 'Agenten' })).toBeInTheDocument()
     expect(
       screen.getByText('Der Builder baut dir einen im Chat, oder du legst ihn hier selbst an.'),
     ).toBeInTheDocument()
@@ -414,7 +416,7 @@ describe('AgentsPage', () => {
     expect(screen.getByTestId('detail-location')).toHaveTextContent('/w/ws-1/agents/a9?tab=settings')
     expect(screen.getByTestId('detail-state')).toHaveTextContent('{"focusPersona":true}')
     expect(notify.success).toHaveBeenCalledWith(
-      'Agent angelegt — jetzt Persona und Systemprompt zuweisen.',
+      'Agent angelegt — jetzt Persona und System-Prompt zuweisen.',
     )
   })
 
@@ -474,7 +476,7 @@ describe('AgentsPage — Favoriten (#427)', () => {
 
     expect(await screen.findByText('Mit Stern')).toBeInTheDocument()
     const favSection = screen.getByRole('region', { name: 'Favoriten' })
-    const otherSection = screen.getByRole('region', { name: 'Weitere Agents' })
+    const otherSection = screen.getByRole('region', { name: 'Weitere Agenten' })
     expect(within(favSection).getByText('Mit Stern')).toBeInTheDocument()
     expect(within(favSection).queryByText('Ohne Stern')).not.toBeInTheDocument()
     expect(within(otherSection).getByText('Ohne Stern')).toBeInTheDocument()
@@ -494,7 +496,7 @@ describe('AgentsPage — Favoriten (#427)', () => {
 
     expect(await screen.findByText('Ohne Stern')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Favoriten' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Weitere Agents' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Weitere Agenten' })).not.toBeInTheDocument()
   })
 
   it('spiegelt den Zustand in aria-pressed und setzt den Stern per PUT', async () => {

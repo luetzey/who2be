@@ -239,7 +239,7 @@ describe('SystemPromptDetailPage', () => {
       expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
     })
     const activate = screen.getByRole('button', { name: 'Aktivieren' })
-    expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zurück in den Entwurf' })).toBeInTheDocument()
 
     fireEvent.click(activate)
 
@@ -260,7 +260,7 @@ describe('SystemPromptDetailPage', () => {
     renderPage()
 
     expect(await screen.findByRole('button', { name: 'Aktivieren' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Zurück in den Entwurf' })).toBeEnabled()
   })
 
   it('Inactive-Status: bietet die Reaktivierung als Draft an', async () => {
@@ -274,7 +274,7 @@ describe('SystemPromptDetailPage', () => {
     renderPage()
 
     expect(
-      await screen.findByRole('button', { name: 'Als Draft reaktivieren' }),
+      await screen.findByRole('button', { name: 'Als Entwurf reaktivieren' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),

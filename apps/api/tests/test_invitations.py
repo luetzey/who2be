@@ -228,6 +228,98 @@ def test_invitation_revoked_is_gone() -> None:
 
 
 @pytest.mark.integration
+def test_reinvite_while_open_invitation_is_valid_conflicts() -> None:
+    """Zweite Einladung derselben Adresse, solange die erste offen und gueltig
+    ist: 409 `invitation_already_pending` statt 500 aus dem Unique-Index.
+    Gross-/Kleinschreibung zaehlt nicht; die erste Einladung bleibt die einzige.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+    base = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            first = client.post(
+                f"{base}/invitations",
+                json={"email": "twice@example.com", "role": "editor"},
+                headers=_auth(admin_id),
+            )
+            assert first.status_code == 201
+
+            second = client.post(
+                f"{base}/invitations",
+                json={"email": "Twice@Example.com", "role": "viewer"},
+                headers=_auth(admin_id),
+            )
+            assert second.status_code == 409
+            assert second.json()["reason"] == "invitation_already_pending"
+
+            pending = client.get(f"{base}/invitations", headers=_auth(admin_id)).json()
+            assert [i["id"] for i in pending] == [first.json()["id"]]
+    finally:
+        cleanup_workspaces([admin_id])
+
+
+@pytest.mark.integration
+def test_reinvite_after_expiry_succeeds_without_revoking() -> None:
+    """Abgelaufene, vom Purge noch nicht geschwaerzte Einladung sperrt die
+    Adresse nicht: die Neueinladung gelingt (201), die alte Zeile traegt danach
+    den eindeutigen Purge-Marker und bleibt unwiderrufen (`revoked_at` leer).
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    invitee_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+    base = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            old = client.post(
+                f"{base}/invitations",
+                json={"email": "again@example.com", "role": "viewer"},
+                headers=_auth(admin_id),
+            )
+            assert old.status_code == 201
+            old_id = old.json()["id"]
+            _expire_invitation(old_id)
+
+            new = client.post(
+                f"{base}/invitations",
+                json={"email": "again@example.com", "role": "editor"},
+                headers=_auth(admin_id),
+            )
+            assert new.status_code == 201
+            assert new.json()["id"] != old_id
+
+            old_email = db_fetchval(
+                "SELECT email FROM workspace_invitation WHERE id = $1", UUID(old_id)
+            )
+            assert old_email == f"<redacted>:{old_id}"
+            assert (
+                db_fetchval(
+                    "SELECT revoked_at FROM workspace_invitation WHERE id = $1", UUID(old_id)
+                )
+                is None
+            )
+
+            # Die neue Einladung ist voll gueltig und annehmbar.
+            accepted = client.post(
+                f"/v1/invitations/{new.json()['token']}/accept",
+                headers=_auth(invitee_id, email="again@example.com"),
+            )
+            assert accepted.status_code == 200
+    finally:
+        cleanup_workspaces([admin_id, invitee_id])
+
+
+@pytest.mark.integration
 def test_invitation_unknown_token_is_not_found() -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")

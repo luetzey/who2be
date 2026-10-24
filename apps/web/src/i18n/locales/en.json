@@ -165,6 +165,7 @@
       "invitation_email_mismatch": "This invitation is for a different email address.",
       "invitation_email_required": "This invitation can only be accepted with an account that has a confirmed email address.",
       "invitation_email_unconfirmed": "Confirm your account's email address first, then you can accept the invitation.",
+      "invitation_already_pending": "There is already an open invitation for this address.",
       "personal_organization_undeletable": "Personal organizations are removed through account deletion.",
       "organization_owner_required": "Only the owner can delete this organization.",
       "workspace_org_missing": "Workspace without an organization.",
@@ -2435,6 +2436,7 @@
     },
     "overview": {
       "nav": "Feedback",
+      "helpLink": "Feedback explained",
       "title": "Feedback",
       "description": "Manage all your agents' feedback in one place.",
       "sectionTitle": "Overview (elements)",
@@ -3349,7 +3351,27 @@
       "helpLabel": "How is the length estimated?",
       "tooltip": "Estimate: about {{perToken}} characters per token. Embedded references are not included.",
       "longTooltip": "Very long instructions are often followed less well.",
-      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)"
+      "announce": "Length: about {{chars}} characters, about {{tokens}} tokens (estimated)",
+      "budget": {
+        "measure": {
+          "profile_one": "{{value}} word",
+          "profile_other": "{{value}} words",
+          "mode_one": "Mode: {{value}} word",
+          "mode_other": "Mode: {{value}} words",
+          "mode_count_one": "{{value}} mode",
+          "mode_count_other": "{{value}} modes",
+          "playbook_body_one": "{{value}} word",
+          "playbook_body_other": "{{value}} words"
+        },
+        "target": "guide value {{target}}",
+        "over": {
+          "profile": "over the guide value {{target}}, procedures belong in a playbook",
+          "mode": "over the guide value {{target}}, steps belong in a playbook",
+          "mode_count": "over the guide value {{target}}, merge modes or run them as playbooks",
+          "playbook_body": "over the guide value {{target}}, split it or move reference knowledge into a resource"
+        },
+        "helpLink": "About guide values"
+      }
     }
   },
   "learning": {
@@ -4103,6 +4125,7 @@
     "evolution": {
       "title": "Evolution",
       "stepsAria": "Steps of the evolution",
+      "helpLink": "How a review works",
       "waiting_one": "1 waiting for you",
       "waiting_other": "{{count}} waiting for you",
       "unavailable": "Not available",
@@ -4506,6 +4529,12 @@
       "allPages": "All help pages",
       "next": "Next: {{title}} →",
       "notFound": "This help page does not exist."
+    },
+    "public": {
+      "brand": "Who2Be",
+      "home": "Go to the help home page",
+      "signIn": "Sign in",
+      "moreAfterLogin": "Tutorials, your progress and “What's new” are available after signing in."
     },
     "tutorial": {
       "notFound": "This tutorial does not exist.",

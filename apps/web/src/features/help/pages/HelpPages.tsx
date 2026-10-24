@@ -12,8 +12,10 @@ import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LoadingState } from '@/components/data/LoadingState'
 import { Container } from '@/components/layout/Container'
+import { Footer } from '@/components/layout/Footer'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
+import { Wordmark } from '@/components/layout/Wordmark'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -43,6 +45,7 @@ import { formatDate } from '@/lib/dates'
 import { notify } from '@/lib/feedback'
 
 import { HelpMarkdown } from '../components/HelpMarkdown'
+import { PublicHelpContext, useHelpPath, usePublicHelp } from '../publicHelp'
 import { TutorialProgressBar as ProgressBar } from '../components/TutorialChecklist'
 import {
   finishedSteps,
@@ -102,18 +105,24 @@ function useSectionLabel(): (section: HelpSection) => string {
   return (section) => labels[section]
 }
 
-/** Seiten, die die aktuelle Rolle sehen darf (`audience: admin` nur fuer admin). */
+/**
+ * Seiten, die die aktuelle Rolle sehen darf (`audience: admin` nur fuer
+ * admin). Ohne Sitzung (oeffentliche Hilfe) nur `audience: all` — fuer
+ * Uebersicht, Navigation, Suche und Artikel gleichermassen.
+ */
 function useVisiblePages(index: HelpIndex): HelpPage[] {
   const locale = useHelpLocale()
   const role = useCurrentWorkspaceRole()
+  const isPublic = usePublicHelp()
   return index.pages.filter(
-    (page) => page.locale === locale && (page.audience === 'all' || role === 'admin'),
+    (page) =>
+      page.locale === locale && (page.audience === 'all' || (!isPublic && role === 'admin')),
   )
 }
 
 function BackToHelp() {
   const { t } = useTranslation('help')
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
   return (
     <Button asChild variant="ghost" size="sm" className="self-start">
       <Link to={wsPath('/help')}>
@@ -259,10 +268,12 @@ function entryPath(entry: HelpEntry): string {
 function SearchResults({ query, index }: { query: string; index: HelpIndex }) {
   const { t } = useTranslation('help')
   const locale = useHelpLocale()
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
+  const isPublic = usePublicHelp()
   const visible = new Set(useVisiblePages(index).map((page) => page.slug))
-  const hits = searchHelp(index, locale, query).filter(
-    (entry) => entry.kind === 'tutorial' || visible.has(entry.slug),
+  // Tutorials leben vom Fortschritt am Konto und bleiben hinter dem Login.
+  const hits = searchHelp(index, locale, query).filter((entry) =>
+    entry.kind === 'tutorial' ? !isPublic : visible.has(entry.slug),
   )
   return (
     <section aria-labelledby="help-search-results" className="space-y-3">
@@ -292,7 +303,7 @@ function SearchResults({ query, index }: { query: string; index: HelpIndex }) {
 
 function ReferenceSection({ index }: { index: HelpIndex }) {
   const { t } = useTranslation('help')
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
   const sectionLabel = useSectionLabel()
   const pages = useVisiblePages(index)
   const groups = HELP_SECTIONS.map((section) => ({
@@ -469,6 +480,7 @@ export function HelpNewsPage({ index = defaultIndex }: { index?: HelpIndex }) {
 export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
   const { t } = useTranslation('help')
   const wsPath = useWorkspacePath()
+  const isPublic = usePublicHelp()
   const location = useLocation()
   const searchId = useId()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -505,6 +517,18 @@ export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
         </div>
         {searching ? (
           <SearchResults query={query} index={index} />
+        ) : isPublic ? (
+          // Ohne Sitzung: nur Nachschlagen. Tutorials, Fortschritt und „Was
+          // ist neu“ (setzt „gesehen“ am Konto) brauchen den Login.
+          <>
+            <ReferenceSection index={index} />
+            <p className="text-sm text-muted-foreground">
+              {t('public.moreAfterLogin')}{' '}
+              <Link to={loginPath('/help')} className={LINK}>
+                {t('public.signIn')}
+              </Link>
+            </p>
+          </>
         ) : (
           <>
             <TutorialsSection
@@ -516,12 +540,14 @@ export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
             <NewsTeaser index={index} />
           </>
         )}
-        <p className="text-sm text-muted-foreground">
-          {t('home.footer.prefix')}{' '}
-          <Link to={wsPath('/feedback/report')} className={LINK}>
-            {t('home.footer.link')}
-          </Link>
-        </p>
+        {isPublic ? null : (
+          <p className="text-sm text-muted-foreground">
+            {t('home.footer.prefix')}{' '}
+            <Link to={wsPath('/feedback/report')} className={LINK}>
+              {t('home.footer.link')}
+            </Link>
+          </p>
+        )}
       </Stack>
     </Container>
   )
@@ -531,7 +557,7 @@ export function HelpHomePage({ index = defaultIndex }: { index?: HelpIndex }) {
 
 function NotFound({ message }: { message: string }) {
   const { t } = useTranslation('help')
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
   return (
     <Container>
       <Stack gap="md">
@@ -569,9 +595,15 @@ function usePageVisit(path: string | null) {
   }, [path, tutorials, setStep])
 }
 
+/** Eigene Komponente, damit die oeffentliche Hilfe den Tutorial-Abruf gar nicht erst startet. */
+function PageVisit({ path }: { path: string }) {
+  usePageVisit(path)
+  return null
+}
+
 function HelpNav({ pages, current }: { pages: HelpPage[]; current: string }) {
   const { t } = useTranslation('help')
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
   const sectionLabel = useSectionLabel()
   const groups = HELP_SECTIONS.map((section) => ({
     section,
@@ -630,9 +662,17 @@ function readingMinutes(markdown: string): number {
 
 function ArticleBody({ page, pages }: { page: HelpPage; pages: HelpPage[] }) {
   const { t } = useTranslation('help')
-  const wsPath = useWorkspacePath()
+  const wsPath = useHelpPath()
+  const isPublic = usePublicHelp()
   const sectionLabel = useSectionLabel()
-  usePageVisit(`/help/${page.slug}`)
+  const { hash } = useLocation()
+  // Sprung auf den Anker aus der URL (`/help/connect-claude#schritte`): die
+  // Seite kommt aus einem Lazy-Chunk, beim Laden findet der Browser das Ziel
+  // noch nicht.
+  useEffect(() => {
+    if (hash.length < 2) return
+    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView?.()
+  }, [hash, page.slug])
   const ordered = HELP_SECTIONS.flatMap((section) => pages.filter((p) => p.section === section))
   const next = ordered[ordered.indexOf(page) + 1] as HelpPage | undefined
 
@@ -647,6 +687,7 @@ function ArticleBody({ page, pages }: { page: HelpPage; pages: HelpPage[] }) {
 
   return (
     <Container>
+      {isPublic ? null : <PageVisit path={`/help/${page.slug}`} />}
       <Stack gap="lg">
         <nav aria-label={t('article.breadcrumb')} className="text-sm text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-1">
@@ -901,4 +942,57 @@ export function HelpTutorialPage({ index = defaultIndex }: { index?: HelpIndex }
   const text = tutorial === undefined ? null : findTutorial(index, locale, tutorial.id)
   if (tutorial === undefined || text === null) return <NotFound message={t('tutorial.notFound')} />
   return <TutorialBody tutorial={tutorial} text={text} state={state} />
+}
+
+// --- Oeffentliche Hilfe (ohne Sitzung, UX-Audit K5) ------------------------------
+
+/** Login mit Ruecksprung auf `target` (Pfad samt Anker). */
+function loginPath(target: string): string {
+  return `/login?next=${encodeURIComponent(target)}`
+}
+
+function PublicHelpHeader() {
+  const { t } = useTranslation('help')
+  const { pathname, search, hash } = useLocation()
+  return (
+    <header className="border-b">
+      {/* Rechts Platz fuer die feste Sprach-Insel aus `PublicLayout`. */}
+      <div className="mx-auto flex w-full max-w-5xl items-center gap-4 py-3 pr-28 pl-4 sm:pl-6">
+        <Link to="/help" aria-label={t('public.home')} className="rounded-md">
+          <Wordmark label={t('public.brand')} className="h-7" />
+        </Link>
+        <Button asChild size="sm" className="ml-auto">
+          <Link to={loginPath(`${pathname}${search}${hash}`)}>{t('public.signIn')}</Link>
+        </Button>
+      </div>
+    </header>
+  )
+}
+
+function PublicArticle({ slug, index }: { slug: string; index: HelpIndex }) {
+  const { t } = useTranslation('help')
+  const locale = useHelpLocale()
+  const visible = useVisiblePages(index)
+  const page = findPage(index, locale, slug)
+  if (page === null || !visible.includes(page)) return <NotFound message={t('article.notFound')} />
+  return <ArticleBody page={page} pages={visible} />
+}
+
+/**
+ * `/help` und `/help/<slug>` ohne Sitzung (Owner W-B): nur Seiten mit
+ * `audience: all`, keine Tutorials, kein Fortschritt, kein „Was ist neu“, kein
+ * API-Aufruf. `slug` leer = Startseite.
+ */
+export function PublicHelpPage({ slug, index = defaultIndex }: { slug: string; index?: HelpIndex }) {
+  return (
+    <PublicHelpContext.Provider value={true}>
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <PublicHelpHeader />
+        <main className="flex-1">
+          {slug === '' ? <HelpHomePage index={index} /> : <PublicArticle slug={slug} index={index} />}
+        </main>
+        <Footer />
+      </div>
+    </PublicHelpContext.Provider>
+  )
 }

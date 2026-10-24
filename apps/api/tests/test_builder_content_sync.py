@@ -264,21 +264,13 @@ def test_sync_restores_outdated_builder() -> None:
     # Content-Stand 11: External-Tools-Sektion in den Konventionen.
     assert "res-conv-h-exttool" in res["resource_block_ids"]
     assert res["resource_tags"] == ["konventionen", "agent-building", "meta"]
-    # Die vier klassischen Playbooks tragen die 0056-Feedback-Sektion; Pflege-
-    # (Content-Stand 4) und External-Tool-Playbook (Content-Stand 11) haben
-    # eigene Feedback-Sektionen, die Lernschleifen-Playbooks (Content-Stand 18)
-    # eine Nachhalte-Zeile in den Notes.
+    # Feedback-Sektionen (0056, Content-Stand 4/11/18) entfallen seit
+    # Content-Stand 22 (Builder schlank B3, K1): Server-instructions, Persona
+    # und Template sagen es schon. Kein Builder-Playbook traegt sie mehr.
+    gone_ids = ("pb-feedback-h", "pb-maint-h-feedback", "pb-exttool-h-feedback", "d7-p81", "fg-p54")
     for name, ids in res["playbook_body_idsets"].items():
-        if name == "Library-Pflege & Feedback-Lauf":
-            assert "pb-maint-h-feedback" in ids
-        elif name == "External Tool anlegen & pflegen":
-            assert "pb-exttool-h-feedback" in ids
-        elif name == "Fall aus Muster & Fall-Triage":
-            assert "d7-p81" in ids
-        elif name == "Feedback-Gespräch (Review) moderieren":
-            assert "fg-p54" in ids
-        else:
-            assert "pb-feedback-h" in ids, name
+        for gone in gone_ids:
+            assert gone not in ids, (name, gone)
     # WP-A (Content-Stand 3): die neuen Builder-Befaehigungs-Sektionen sind
     # nach dem Sync in den jeweiligen Playbook-Bodies vorhanden.
     all_playbook_ids = set().union(*res["playbook_body_idsets"].values())
@@ -506,7 +498,7 @@ def test_sync_is_locale_scoped_between_de_and_en_workspaces() -> None:
     # Content-Restore stellt den EN-Body wieder her (nicht den DE-Text).
     restored_body = res["restored_body"]
     assert isinstance(restored_body, str)
-    assert "CRUD workflow for personas" in restored_body
+    assert "Create, update, and retire personas" in restored_body
     assert "junk" not in restored_body
 
     # Insert-missing im EN-Workspace nutzt EN-Namen und schreibt `locale='en'`
@@ -517,7 +509,7 @@ def test_sync_is_locale_scoped_between_de_and_en_workspaces() -> None:
     assert row["managed_content_version"] == BUILDER_CONTENT_VERSION
     assert row["locale"] == "en"
     assert row["version_locale"] == "en"
-    assert "Feedback-driven maintenance run across the agent library" in row["body"]
+    assert "feedback-driven maintenance run across the agent library" in row["body"]
 
     # Kein Cross-Locale-Bleed: kein DE-Pack-Element im EN-Workspace, keines
     # der EN-Pack-Elemente im DE-Workspace.
@@ -825,6 +817,13 @@ def test_sync_v18_links_new_playbooks_and_keeps_existing_links() -> None:
     Builder-Persona haengen — und zwar additiv: die sechs bisherigen
     Builder-Links und ein vom Owner selbst gesetzter Link auf ein eigenes
     Playbook bleiben mit identischen Playbook-IDs bestehen.
+
+    Die Stempel stehen als Literal auf 17 (Stand vor dem Bump auf 18), nicht
+    auf `BUILDER_CONTENT_VERSION - 1`, damit der simulierte Altstand nicht mit
+    jedem spaeteren Bump mitwandert. Eine Rot-Probe auf den Bump belegt dieser
+    Test nicht: der Insert-missing-Zweig laeuft ohne Stempel-Guard, die
+    fehlenden Playbooks kommen also auch ohne Bump an. Er belegt die additive
+    Verlinkung und das Anlegen der fehlenden Playbooks.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -854,13 +853,13 @@ def test_sync_v18_links_new_playbooks_and_keeps_existing_links() -> None:
                     f"UPDATE {table} SET managed_content_version = $2 "  # noqa: S608
                     "WHERE workspace_id = $1 AND is_managed = true",
                     ws,
-                    BUILDER_CONTENT_VERSION - 1,
+                    17,
                 )
             await conn.execute(
                 "UPDATE system_prompt_template SET managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND is_managed = true",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                17,
             )
             persona_id = await conn.fetchval(
                 "SELECT id FROM persona WHERE workspace_id = $1 AND name = 'Builder'", ws
@@ -936,11 +935,12 @@ def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
     """Content-Stand 15 (ADR-0047): ein Bestands-Builder auf Stempel 14 kennt
     `workarea_write`/`kb_write`/`kb_edge_write` nicht — der Sync zieht sie nach.
 
-    Der Test setzt den Stempel bewusst auf `BUILDER_CONTENT_VERSION - 1` statt
-    auf 0: damit belegt er, dass GENAU der Versions-Bump die Verteilung
-    ausloest. Ohne ihn bliebe der Stempel-Guard `<` unerfuellt und die neue
-    Policy erreichte kein einziges bestehendes Deployment — die Flags waeren
-    nur in frisch geseedeten Workspaces vorhanden.
+    Der Stempel steht bewusst als Literal auf 14 (Stand vor dem Bump auf 15),
+    nicht auf `BUILDER_CONTENT_VERSION - 1` und nicht auf 0: damit belegt er,
+    dass GENAU der Versions-Bump die Verteilung ausloest. Ohne ihn bliebe der
+    Stempel-Guard `<` unerfuellt und die neue Policy erreichte kein einziges
+    bestehendes Deployment — die Flags waeren nur in frisch geseedeten
+    Workspaces vorhanden.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -952,14 +952,14 @@ def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             # v14-Stand simulieren: die drei Keys fehlen ganz (so sah die
-            # Policy vor ADR-0047 aus), Stempel exakt eins zurueck.
+            # Policy vor ADR-0047 aus), Stempel auf 14 (Stand vor dem Bump).
             await conn.execute(
                 "UPDATE agent SET tool_policy = "
                 "  tool_policy - 'workarea_write' - 'kb_write' - 'kb_edge_write', "
                 "  managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND name IN ('Builder', 'Builder-Lite')",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                14,
             )
             before = await conn.fetch(
                 "SELECT name, tool_policy ? 'workarea_write' AS has_key "
@@ -1305,3 +1305,76 @@ def test_sync_v21_distributes_lean_persona_and_builder_template() -> None:
     kinds = json.dumps(res["template"])
     assert '"persona-ref"' in kinds
     assert "tools-overview" not in kinds
+
+
+@pytest.mark.integration
+def test_sync_v22_distributes_lean_playbooks() -> None:
+    """Content-Stand 22 (Builder schlank B3): ein Bestands-Workspace auf
+    Stempel 21 bekommt alle acht entdoppelten Builder-Playbooks.
+
+    Der Stempel steht bewusst als Literal auf 21 (Stand vor B3): fehlt der
+    Bump auf 22, findet der Sync nichts zu tun und der Test wird rot.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    pack = get_content_pack("de")
+    names = [p.name for p in pack.playbooks]
+    canonical = {p.name: json.loads(p.load_body("de")) for p in pack.playbooks}
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE playbook_version pv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
+                "AND pb.name = ANY($3::text[]) AND pv.status = 'active'",
+                ws,
+                _JUNK,
+                names,
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = 21 "
+                "WHERE workspace_id = $1 AND name = ANY($2::text[])",
+                ws,
+                names,
+            )
+            updated = await sync_managed_builder_content(conn)
+            again = await sync_managed_builder_content(conn)
+            rows = await conn.fetch(
+                "SELECT pb.name, pb.managed_content_version AS stamp, "
+                "  pv.content ->> 'body' AS body FROM playbook_version pv "
+                "JOIN playbook pb ON pb.id = pv.playbook_id "
+                "WHERE pb.workspace_id = $1 AND pb.name = ANY($2::text[]) "
+                "AND pv.status = 'active'",
+                ws,
+                names,
+            )
+            return {
+                "updated": updated,
+                "again": again,
+                "rows": {r["name"]: (r["stamp"], json.loads(r["body"])) for r in rows},
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert res["updated"] == len(names) == 8, res["updated"]
+    assert res["again"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    for name in names:
+        stamp, body = res["rows"][name]
+        assert stamp == BUILDER_CONTENT_VERSION, name
+        assert body == canonical[name], name
+        text = json.dumps(body, ensure_ascii=False)
+        assert "fetch_resource(resource_id, block_ids=[" in text, name
+        assert "pb-feedback-h" not in text, name
