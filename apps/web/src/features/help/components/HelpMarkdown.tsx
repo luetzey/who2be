@@ -2,8 +2,9 @@ import Markdown, { type MarkdownToJSX } from 'markdown-to-jsx'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { safeHelpHref } from '@/help/helpIndex'
+
+import { useHelpPath } from '../publicHelp'
 
 /*
  * Markdown-Darstellung des Hilfe-Dialekts (ADR-0058), geteilt von den
@@ -14,7 +15,8 @@ import { safeHelpHref } from '@/help/helpIndex'
 const LINK = 'font-medium text-brand underline-offset-4 hover:underline'
 
 function HelpLink({ href, children }: { href?: string; children?: ReactNode }) {
-  const wsPath = useWorkspacePath()
+  // In der oeffentlichen Hilfe `/help/…`, sonst `/w/<id>/help/…`.
+  const wsPath = useHelpPath()
   const safe = href === undefined ? null : safeHelpHref(href)
   if (safe === null) return <span>{children}</span>
   if (/^https?:\/\//i.test(safe)) {

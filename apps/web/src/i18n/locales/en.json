@@ -4523,6 +4523,12 @@
       "next": "Next: {{title}} →",
       "notFound": "This help page does not exist."
     },
+    "public": {
+      "brand": "Who2Be",
+      "home": "Go to the help home page",
+      "signIn": "Sign in",
+      "moreAfterLogin": "Tutorials, your progress and “What's new” are available after signing in."
+    },
     "tutorial": {
       "notFound": "This tutorial does not exist.",
       "stepNumber": "Step {{number}}:",
