@@ -60,7 +60,40 @@ dort wie bisher (Plan-Preis), siehe unten. Die Karte nennt die Testdatei mit „
 5. Subscription wieder mit `plan.price_eur` ⇒ Subscription-Test rot.
 6. `start_checkout` wieder mit `plan.price_eur` ⇒ Steuerfall-Tests rot.
 7. Panel: 409-Zweig entfernt ⇒ Vitest rot.
+8. Router ohne `pricing=CheckoutPricing(...)` ⇒ Verdrahtungs-Test rot.
+
+Ergebnis 2026-10-24: alle acht rot (Einzelläufe, Ausgaben im PR). M4 allein macht nur den
+Verdrahtungs-Test rot, weil `decide_tax` ohne Steuermodus selbst `hold` liefert und der
+Service dann ebenfalls 503 gibt (doppelte Sicherung, gewollt).
 
 ## Nicht in R2c
 
 Compose/.env, Doku (R2d); Rechnungen im Web (R3).
+
+## Übergabe-Bericht
+
+**Betroffene Elemente** (rg über `start_checkout`, `_activate_from_first_payment`,
+`get_mollie_service`, `create_checkout`, `useCheckout`):
+
+- DIREKT: `router.create_checkout` (einziger Aufrufer von `start_checkout`),
+  `router.get_mollie_service` (baut `CheckoutPricing`), `MollieBillingService.handle_webhook`
+  (ruft `_activate_from_first_payment`), `BillingPanel` (einziger Nutzer von `useCheckout`).
+- TRANSITIV: `POST /v1/workspaces/{ws}/billing/checkout`, `POST /v1/billing/mollie/webhook`,
+  `OrgSettingsPage` (Billing-Slot), Worker `invoice-retry` (prüft den Betrag gegen
+  `expected_total`, unverändert).
+- VERMUTET (unsicher): Betriebsumgebung ohne `WHO2BE_INVOICE_TAX_MODE` — der Checkout
+  antwortet dort ab jetzt 503. Den Schalter reicht R2d in Compose/Dokploy durch.
+
+**Diff-Coverage** (lokal, `pytest packages/billing … --cov=who2be_billing`): alle neuen
+Zeilen in `router.py` gedeckt; in `mollie.py` zwei Zeilen ungedeckt (siehe unten). Web:
+Vitest-Suite grün, neue Zweige im Panel durch drei Tests gedeckt.
+
+**Ungedeckt, manuell zu prüfen:**
+
+- `CheckoutPricing.amount`, Zweig „nach Nachprüfung weiter `hold`“ (503): nicht erreichbar,
+  solange `tax.decide_tax` nur `tax_mode_missing` und `vat_id_unchecked` als Hold kennt.
+  Schutz, falls `tax.py` einen neuen Hold-Fall bekommt.
+- `CheckoutPricing._recheck_vat`, Zweig `vat_id is None`: nicht erreichbar, weil
+  `vat_id_unchecked` eine Nummer voraussetzt.
+- Fokus-Ring der Rechnungsdaten-Karte nach dem Sprung: programmatischer Fokus, der Browser
+  zeigt keinen Ring (Fokus selbst per Test und Foto-Messung belegt).
