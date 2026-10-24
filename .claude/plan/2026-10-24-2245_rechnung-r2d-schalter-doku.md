@@ -49,5 +49,17 @@ Betreiber-Doku beschreibt Rechnung, Archiv, Storno und Löschung nach ADR-0061.
 ## Datei-Deckel (≤ 8, Changelog und Plan zählen nicht)
 
 3 Compose + `.env.example` + 4 Doku = 8. Nicht enthalten, weil über dem
-Deckel: ein Regressionstest im Repo für die Durchreichung und
-`deploy/hetzner/.env.example`. Beides als Frage an den PM (needs_input).
+Deckel und von der Akzeptanz („Config-Test oder Compose-Lint grün“) nicht
+verlangt: ein Regressionstest im Repo für die Durchreichung und der Eintrag in
+`deploy/hetzner/.env.example`. Als Vorschlag für eine Folgekarte an den PM.
+
+## Ergebnis (2026-10-24)
+
+- Compose-Lint: `docker compose … config` für Root-, Hetzner- und
+  Dokploy-Stack rc=0; in `api` und `worker` je
+  `WHO2BE_INVOICE_TAX_MODE=''`, `WHO2BE_INVOICE_PRICE_BASIS='net'`,
+  `MOLLIE_API_KEY=''` (ohne `.env`).
+- Config: `Settings` liest `''` → `None`, `regular`/`small_business` →
+  Wert, `regulr` → Startfehler.
+- Bestehende Compose-Tests: 302 passed, 1 skipped.
+- Scratch-Prüfung plus 7 Mutationen, alle rot.
