@@ -165,7 +165,7 @@ export function PlaybookBodyEditor({
           <ProfileSideMenu />
         </BlockNoteView>
       </div>
-      <EditorFooter blocks={doc} />
+      <EditorFooter blocks={doc} budget="playbook_body" />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover
