@@ -9,7 +9,7 @@ Phase 3-A: Heading-Only-Anker). `list_links` reichert jeden Link an:
 - `preview` (~200 Zeichen Klartext des Anker-Blocks) bleibt fuer
   Backward-Compat erhalten.
 - `section_block_ids` + `section_preview` (~400 Zeichen) tragen die Section
-  vom Anker-Heading bis zum naechsten Heading desselben Levels.
+  vom Anker-Heading bis zum naechsten Heading gleicher oder hoeherer Ebene.
 
 `set_links` fuehrt Workspace-Pruefung und Set-Replace in einer Transaktion
 aus (`FOR UPDATE` auf der Playbook-Zeile); die Composite-FKs aus 0016
@@ -24,13 +24,22 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import ResourceLinkItem, ResourceLinkRead
-from who2be_models.blocknote_text import format_table, table_cells, text_inline_only
+from who2be_models.blocknote_text import (
+    format_table,
+    is_heading_block,
+    section_blocks,
+    table_cells,
+    text_inline_only,
+)
+from who2be_models.blocknote_text import heading_level as _heading_level
+
+# Heading-Erkennung und Abschnittsregel liegen in `who2be_models.blocknote_text`
+# (eine Quelle fuer API und MCP). `is_heading_block`/`_heading_level` bleiben
+# hier fuer die bestehenden Importeure re-exportiert — keine zweite Kopie.
+__all__ = ["_heading_level", "block_plain_text", "block_section_text", "is_heading_block"]
 
 _PREVIEW_LEN = 200
 _SECTION_PREVIEW_LEN = 400
-_HEADING_TYPE = "heading"
-# BlockNote-Default fuer ein Heading ohne `props.level` — entspricht <h1>.
-_DEFAULT_HEADING_LEVEL = 1
 
 
 def block_plain_text(block: dict[str, Any]) -> str:
@@ -86,56 +95,20 @@ def block_plain_text(block: dict[str, Any]) -> str:
     return "".join(parts)
 
 
-def _heading_level(block: dict[str, Any]) -> int:
-    """Liest `props.level` eines Heading-Blocks; Default 1 (BlockNote-h1)."""
-    props = block.get("props")
-    if isinstance(props, dict):
-        level = props.get("level")
-        if isinstance(level, int):
-            return level
-    return _DEFAULT_HEADING_LEVEL
-
-
-def is_heading_block(block: dict[str, Any]) -> bool:
-    """True, wenn der Block ein BlockNote-Heading ist."""
-    return isinstance(block, dict) and block.get("type") == _HEADING_TYPE
-
-
 def block_section_text(blocks: list[dict[str, Any]], anchor_block_id: str) -> tuple[list[str], str]:
-    """Sammelt eine Section ab dem Anker-Heading.
+    """Sammelt eine Section ab dem Anker (Regel: `blocknote_text.section_blocks`).
 
     Liefert `(block_ids, preview_text)`:
     - Anker-Block nicht gefunden → `([], "")`.
-    - Anker kein Heading → fallback auf nur den Anker-Block (defensive
-      Lese-Schicht; die Heading-Pflicht greift im Service vor dem PUT).
-    - Anker ist Heading → alle Bloecke vom Anker (inkl.) bis exklusive zum
-      naechsten Heading mit dem gleichen `props.level`. Tiefere Headings
-      (groesseres Level) bleiben in der Section.
+    - Anker kein Heading → nur der Anker-Block (defensive Lese-Schicht; die
+      Heading-Pflicht greift im Service vor dem PUT).
+    - Anker ist Heading → Anker bis exklusive zum naechsten Heading gleicher
+      oder hoeherer Ebene; tiefere Headings bleiben in der Section.
 
     `preview_text` ist der mit `"\\n\\n"` verbundene Klartext der Section,
     abgeschnitten auf `_SECTION_PREVIEW_LEN` Zeichen.
     """
-    anchor_index = next(
-        (i for i, b in enumerate(blocks) if isinstance(b, dict) and b.get("id") == anchor_block_id),
-        None,
-    )
-    if anchor_index is None:
-        return [], ""
-
-    anchor = blocks[anchor_index]
-    if not is_heading_block(anchor):
-        text = block_plain_text(anchor)
-        return [anchor_block_id], text[:_SECTION_PREVIEW_LEN]
-
-    anchor_level = _heading_level(anchor)
-    section: list[dict[str, Any]] = [anchor]
-    for block in blocks[anchor_index + 1 :]:
-        if not isinstance(block, dict):
-            continue
-        if is_heading_block(block) and _heading_level(block) == anchor_level:
-            break
-        section.append(block)
-
+    section = section_blocks(blocks, anchor_block_id)
     block_ids = [block_id for block in section if isinstance(block_id := block.get("id"), str)]
     chunks = [block_plain_text(block) for block in section]
     text = "\n\n".join(chunk for chunk in chunks if chunk)
