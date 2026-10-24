@@ -27,9 +27,10 @@ Danach findest du den neuen Agenten unter **Agenten**.
 
 Du kannst einen Agenten auch ohne Builder anlegen:
 
-1. Klick unter **Agenten** auf **Neuen Agenten erstellen**.
-2. Gib ihm einen Namen und wähle eine **Persona** und einen **System-Prompt**.
+1. Klick unter **Agenten** auf **Neuen Agenten erstellen**. Who2Be öffnet gleich **Einstellungen › Konfiguration**, der Cursor steht im Feld **Persona**.
+2. Gib ihm einen Namen und wähle eine **Persona** und einen **System-Prompt**. Dann **Speichern**.
 3. Die Persona muss aktiv sein. Solange etwas fehlt, zeigt Who2Be „Noch nicht aktivierbar“ und nennt, was fehlt.
+4. Ist alles gesetzt, fragt Who2Be „Agent jetzt aktivieren?“. Mit **Aktivieren** ist er sofort abrufbar, und du landest im Überblick bei der Karte **Verbindung**. Mit **Später** bleibt er deaktiviert; den Status änderst du dann unter **Einstellungen**.
 
 ## Den neuen Agenten verbinden [#verbinden]
 

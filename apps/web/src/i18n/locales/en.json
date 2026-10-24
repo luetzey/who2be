@@ -670,6 +670,13 @@
       "saved": "Agent saved.",
       "unknownError": "Unknown error."
     },
+    "activatePrompt": {
+      "title": "Activate the agent now?",
+      "body": "Connected programs can then fetch it.",
+      "confirm": "Activate",
+      "later": "Later",
+      "success": "Agent activated."
+    },
     "connect": {
       "title": "Connection",
       "nameValue": "Who2Be – {{name}}",

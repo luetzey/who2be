@@ -670,6 +670,13 @@
       "saved": "Agent gespeichert.",
       "unknownError": "Unbekannter Fehler."
     },
+    "activatePrompt": {
+      "title": "Agent jetzt aktivieren?",
+      "body": "Danach können verbundene Programme ihn abrufen.",
+      "confirm": "Aktivieren",
+      "later": "Später",
+      "success": "Agent aktiviert."
+    },
     "connect": {
       "title": "Verbindung",
       "nameValue": "Who2Be – {{name}}",
