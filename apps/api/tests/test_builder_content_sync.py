@@ -817,6 +817,13 @@ def test_sync_v18_links_new_playbooks_and_keeps_existing_links() -> None:
     Builder-Persona haengen — und zwar additiv: die sechs bisherigen
     Builder-Links und ein vom Owner selbst gesetzter Link auf ein eigenes
     Playbook bleiben mit identischen Playbook-IDs bestehen.
+
+    Die Stempel stehen als Literal auf 17 (Stand vor dem Bump auf 18), nicht
+    auf `BUILDER_CONTENT_VERSION - 1`, damit der simulierte Altstand nicht mit
+    jedem spaeteren Bump mitwandert. Eine Rot-Probe auf den Bump belegt dieser
+    Test nicht: der Insert-missing-Zweig laeuft ohne Stempel-Guard, die
+    fehlenden Playbooks kommen also auch ohne Bump an. Er belegt die additive
+    Verlinkung und das Anlegen der fehlenden Playbooks.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -846,13 +853,13 @@ def test_sync_v18_links_new_playbooks_and_keeps_existing_links() -> None:
                     f"UPDATE {table} SET managed_content_version = $2 "  # noqa: S608
                     "WHERE workspace_id = $1 AND is_managed = true",
                     ws,
-                    BUILDER_CONTENT_VERSION - 1,
+                    17,
                 )
             await conn.execute(
                 "UPDATE system_prompt_template SET managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND is_managed = true",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                17,
             )
             persona_id = await conn.fetchval(
                 "SELECT id FROM persona WHERE workspace_id = $1 AND name = 'Builder'", ws
@@ -928,11 +935,12 @@ def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
     """Content-Stand 15 (ADR-0047): ein Bestands-Builder auf Stempel 14 kennt
     `workarea_write`/`kb_write`/`kb_edge_write` nicht — der Sync zieht sie nach.
 
-    Der Test setzt den Stempel bewusst auf `BUILDER_CONTENT_VERSION - 1` statt
-    auf 0: damit belegt er, dass GENAU der Versions-Bump die Verteilung
-    ausloest. Ohne ihn bliebe der Stempel-Guard `<` unerfuellt und die neue
-    Policy erreichte kein einziges bestehendes Deployment — die Flags waeren
-    nur in frisch geseedeten Workspaces vorhanden.
+    Der Stempel steht bewusst als Literal auf 14 (Stand vor dem Bump auf 15),
+    nicht auf `BUILDER_CONTENT_VERSION - 1` und nicht auf 0: damit belegt er,
+    dass GENAU der Versions-Bump die Verteilung ausloest. Ohne ihn bliebe der
+    Stempel-Guard `<` unerfuellt und die neue Policy erreichte kein einziges
+    bestehendes Deployment — die Flags waeren nur in frisch geseedeten
+    Workspaces vorhanden.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -944,14 +952,14 @@ def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             # v14-Stand simulieren: die drei Keys fehlen ganz (so sah die
-            # Policy vor ADR-0047 aus), Stempel exakt eins zurueck.
+            # Policy vor ADR-0047 aus), Stempel auf 14 (Stand vor dem Bump).
             await conn.execute(
                 "UPDATE agent SET tool_policy = "
                 "  tool_policy - 'workarea_write' - 'kb_write' - 'kb_edge_write', "
                 "  managed_content_version = $2 "
                 "WHERE workspace_id = $1 AND name IN ('Builder', 'Builder-Lite')",
                 ws,
-                BUILDER_CONTENT_VERSION - 1,
+                14,
             )
             before = await conn.fetch(
                 "SELECT name, tool_policy ? 'workarea_write' AS has_key "
