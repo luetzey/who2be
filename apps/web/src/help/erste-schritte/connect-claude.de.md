@@ -3,7 +3,7 @@ title: Mit Claude verbinden
 description: Ein Klick, eine Bestätigung, ein Test-Satz.
 section: erste-schritte
 order: 20
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -13,7 +13,7 @@ Der Connector hängt an deinem Claude-Konto. Du trägst ihn einmal ein, dann gil
 
 ## Schritt für Schritt [#schritte]
 
-1. Öffne unter **Agents** deinen Agenten, zum Beispiel den Builder. Im Tab **Überblick** steht die Karte **Verbindung**.
+1. Öffne unter **Agenten** deinen Agenten, zum Beispiel den Builder. Im Tab **Überblick** steht die Karte **Verbindung**.
 2. Wähle bei „Wo nutzt du deine Agenten?“ **Claude** und klick auf **Mit Claude verbinden**. Claude öffnet sich in einem neuen Tab, Name und Adresse sind schon ausgefüllt.
 3. Klick in Claude auf **Hinzufügen** und dann auf **Verbinden**.
 4. Who2Be fragt, ob Claude diesen Agenten nutzen darf. Bestätige das.

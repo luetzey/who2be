@@ -3,7 +3,7 @@ title: Playbooks
 description: Wiederholbare Abläufe, die dein Agent bei Bedarf lädt.
 section: bausteine
 order: 20
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -37,6 +37,8 @@ Ein Playbook kann auch fest an eine [Persona](/help/persona) gebunden sein, etwa
 
 Ein Playbook kann andere Playbooks enthalten. Das nennt Who2Be **Composite**. Der Agent arbeitet die Teil-Playbooks der Reihe nach ab. So pflegst du einen Baustein einmal und nutzt ihn in mehreren Abläufen.
 
-## Versionen [#versionen]
+## Versionen und Aktivieren [#versionen]
 
-Jede Änderung erzeugt eine neue Version, alte Versionen bleiben erhalten. Erst eine aktive Version lädt der Agent. Wissen, auf das ein Playbook verweist, liegt am besten in einer [Resource](/help/resources).
+Jede Änderung erzeugt eine neue Version, zuerst als Entwurf. Ein Entwurf wirkt noch nicht. Bist du fertig, klickst du auf **Zur Freigabe einreichen**. Ein Admin prüft die Version und klickt auf **Aktivieren** oder schickt sie mit **Zurück in den Entwurf** zurück. Erst die aktive Version lädt der Agent. Alte Versionen bleiben erhalten.
+
+Wissen, auf das ein Playbook verweist, liegt am besten in einer [Resource](/help/resources).

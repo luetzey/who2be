@@ -29,7 +29,7 @@ describe('SystemPromptNewPage (a11y)', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Neues Template' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Neuer System-Prompt' })).toBeInTheDocument()
     })
 
     const results = await axe(container)
