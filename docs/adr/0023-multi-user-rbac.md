@@ -203,3 +203,45 @@ gilt unveraendert. Massgeblich ist der Code:
 `apps/api/tests/test_tokens.py::test_member_downgrade_revokes_their_tokens`.
 Die Mitglieder-Seite meldet den Widerruf nach jedem Rollenwechsel
 (`members.list.tokensRevokedInfo`).
+
+## Nachtrag 2026-10-24 — viewer über den OAuth-Connector
+
+Owner-Entscheidung vom 2026-10-24 (Option A, Kanban-Karte t_b36bf77f): Ein
+`viewer` darf einen Agenten über den OAuth-Connector **nutzen**. Das ist der
+Weg „Kollegen nur nutzen lassen“. Die Leitlinie „viewer = read-only“ oben
+gilt für Inhalte, Versionen, Tokens und Verwaltung unverändert. Über den
+Connector kommen zwei Ausnahmen dazu, die bewusst gewollt sind:
+
+- **Lesen inklusive Agentengedächtnis.** `search_memory` und `list_memories`
+  liefern dem `viewer` auch Einträge mit `scope='agent'`. Ohne sie arbeitet
+  der Agent beim Kollegen schlechter als beim Editor, und das Gedächtnis ist
+  Teil dessen, was der Agent zur Nutzung braucht.
+- **Gedächtnis-Vorschläge.** `save_memory` und `propose_memory_change` legen
+  auch für einen `viewer` einen Eintrag bzw. Vorschlag an. Unter
+  `memory_mode=suggest` ist er `pending` und wirkt erst nach menschlicher
+  Freigabe. Agentengedächtnis gibt ein `editor` oder `admin` frei, das eigene
+  Nutzergedächtnis die Person selbst (ADR-0053 3.1.1, 3.1.4). Das ist
+  dieselbe Linie wie „Fall melden ab `viewer`“ (ADR-0053 F-W4): Der Kollege
+  darf fürs Agentengedächtnis etwas vorschlagen, entscheiden darf er nicht. Unter
+  `memory_mode=auto` gelten die Automatik-Zellen, die ein `admin`
+  eingeschaltet hat, unabhängig von der Rolle des Nutzers am Connector
+  (`memory_service.decide_memory_status`). Die Freigabe hat dann der Admin
+  vorab erteilt.
+- `record_usage` (Telemetrie) und `report_case` laufen wie bisher ab `viewer`.
+
+Alles andere bleibt verboten. Der Connector-Token trägt die Rolle `viewer`,
+ohne Anhebung. Schreibwerkzeuge (`update_agent`, `create_playbook`,
+`create_persona`, `submit_feedback` …) stehen beim agent-gebundenen Token in
+`tools/list`, weil der Filter dort der Agent-Policy folgt und nicht der Rolle.
+Sie enden aber serverseitig mit `insufficient_role` und ohne Wirkung.
+
+**Offen benannte Abweichung, nicht angeglichen:** Über REST ist das
+Agentengedächtnis für einen `viewer` unsichtbar (`GET /memories` ohne
+`scope='agent'`, `GET /memories/{id}` → `404 memory_not_found`, ADR-0053
+6.4.1). Über MCP sieht derselbe `viewer` es. Begründung: In der Web-Oberfläche
+verwaltet man das Gedächtnis, und das ist Editor-Arbeit. Über den Connector
+nutzt man den Agenten. Wer das angleichen will, ändert einen Vertrag und
+braucht eine eigene Entscheidung.
+
+Beleg: `apps/api/tests/test_viewer_connector.py::test_viewer_nutzt_agent_per_connector_aendert_aber_nichts`
+(voller DCR → authorize → consent → token, danach echte MCP-Aufrufe).

@@ -18,9 +18,11 @@ Festgehaltenes Verhalten:
 - Schreibwerkzeuge sind unsichtbar oder verboten: jeder Aufruf endet mit
   `insufficient_role`, und es entsteht nichts (Agent unveraendert, kein
   neues Playbook, keine neue Persona).
-- Gedaechtnis, Stand heute: `search_memory`/`list_memories` liefern auch das
+- Gedaechtnis (Owner-Entscheidung A, 2026-10-24; ADR-0023 Nachtrag 2026-10-24,
+  ADR-0053 6.4.2): `search_memory`/`list_memories` liefern auch das
   Agentengedaechtnis; `save_memory` und `propose_memory_change` legen einen
   Vorschlag `pending` an, der erst nach Freigabe durch einen Menschen wirkt.
+  Ueber REST bleibt das Agentengedaechtnis fuer viewer unsichtbar (bewusst).
 
 Rot-Probe: in `playbook_service.create` `require_role(ctx, WorkspaceRole.editor)`
 auf `WorkspaceRole.viewer` setzen — `create_playbook` geht dann durch und der
@@ -269,7 +271,7 @@ def test_viewer_nutzt_agent_per_connector_aendert_aber_nichts(
         assert _db("SELECT name FROM agent WHERE id = $1", agent_id)[0]["name"] == builder["name"]
         assert dict(_db(counts_sql, ws)[0]) == before
 
-        # Gedaechtnis (Stand heute): lesen inkl. Agentengedaechtnis, Vorschlaege nur `pending`.
+        # Gedaechtnis (Owner-Entscheidung A): lesen inkl. Agentengedaechtnis, Vorschlaege `pending`.
         for name in ("search_memory", "list_memories"):
             assert results[name][0] is False, results[name][1][:300]
             assert str(memory_id) in results[name][1]
