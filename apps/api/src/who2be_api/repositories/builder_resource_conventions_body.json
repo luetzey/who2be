@@ -685,7 +685,7 @@
     "id": "res-conv-p-policy-intro",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig.", "styles": {}}],
+    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig (editor fuer Schreiben, admin fuer Promote/Retire).", "styles": {}}],
     "children": []
   },
   {
@@ -758,7 +758,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Default-Empfehlung: ", "styles": {"bold": true}},
-      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
+      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen; 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
     ],
     "children": []
   },
@@ -768,7 +768,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Anti-Eskalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User — das ist Design, kein Fehler.", "styles": {}}
+      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber; steht die eigene Stufe auf 'off', jede Freischaltung). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User (Agent-Detailseite → Tools → Gedaechtnis) — das ist Design, kein Fehler.", "styles": {}}
     ],
     "children": []
   },
@@ -778,7 +778,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Inhalts-Hygiene: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — keine Anweisungen an KI-Systeme, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
+      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — Nutzerdaten, keine Anweisungen an KI-Systeme, keine Repo-/Code-Fakten, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
     ],
     "children": []
   },

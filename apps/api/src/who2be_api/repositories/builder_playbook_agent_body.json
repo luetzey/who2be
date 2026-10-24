@@ -430,7 +430,7 @@
     "id": "pb-agent-p-policy",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Die tool_policy legt fest, welche MCP-Werkzeuge der Agent sieht und nutzen darf. Default ist „alles lesen, nichts schreiben“ — ein frischer Agent darf den ganzen Workspace lesen, aber nichts veraendern, bis es freigeschaltet wird.", "styles": {}}],
+    "content": [{"type": "text", "text": "Die tool_policy legt fest, welche MCP-Werkzeuge der Agent sieht; ohne Angabe gilt „alles lesen, nichts schreiben“. Hier steht nur, was die Felder bedeuten — Muster, Empfehlung und Eskalationsgrenzen stehen in den Konventionen (res-conv-h-policy, res-conv-h-memory).", "styles": {}}],
     "children": []
   },
   {
@@ -438,8 +438,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Lese-Scopes: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbook_read und resource_read sind dreistufig — all (ganzer Workspace), assigned (nur die der eigenen Persona zugewiesenen) oder none (Werkzeug ausgeblendet). persona_read und agent_read sind einfache An/Aus-Schalter.", "styles": {}}
+      {"type": "text", "text": "playbook_read, resource_read: all (ganzer Workspace), assigned (nur die der eigenen Persona zugewiesenen) oder none (Werkzeug ausgeblendet). persona_read, agent_read: an/aus.", "styles": {}}
     ],
     "children": []
   },
@@ -448,8 +447,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Schreib-Capabilities: ", "styles": {"bold": true}},
-      {"type": "text", "text": "persona_write, playbook_write, resource_write und agent_write schalten je die Schreib-Tools der Domain frei (Draft anlegen/aendern, Verknuepfungen setzen). Default jeweils aus.", "styles": {}}
+      {"type": "text", "text": "persona_write, playbook_write, resource_write, agent_write: schalten je die Schreib-Werkzeuge der Domain frei (Draft anlegen/aendern, Verknuepfungen setzen); Default aus.", "styles": {}}
     ],
     "children": []
   },
@@ -458,18 +456,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
-      {"type": "text", "text": "noetig, um eine Version auf active oder inactive zu schalten (veroeffentlichen/zurueckziehen). Nach draft/review genuegt die jeweilige Schreib-Capability; das Promoten/Retiren ist die zusaetzliche Stufe.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-escalation",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Keine Rechte-Eskalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Legst du selbst als Agent via agent_write einen anderen Agenten an, darf dessen Policy nicht mehr gewaehren als deine eigene. Die tool_policy ist nur die Tool-Sichtbarkeit — die eigentliche Autorisierung (editor fuer Schreiben, admin fuer Promote/Retire) bleibt serverseitig.", "styles": {}}
+      {"type": "text", "text": "promote_retire: Versionen auf active/inactive schalten; fuer draft und review genuegt die Schreib-Capability.", "styles": {}}
     ],
     "children": []
   },
@@ -478,28 +465,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "memory_mode (Agent-Memory, ADR-0044): ", "styles": {"bold": true}},
-      {"type": "text", "text": "vierstufiges Langzeitgedaechtnis pro Agent — 'off' (Default; Memory-Tools existieren fuer den Agenten nicht), 'read_only' (nur search_memory/list_memories ueber freigegebene Fakten), 'suggest' (save_memory legt VORSCHLAEGE an, die erst nach menschlicher Freigabe in der Agent-Detailseite retrieval-sichtbar werden — Kurations-Schleuse) und 'auto' (sofort aktiv). Dazu memory_directive: 'required' (Agent MUSS sein Gedaechtnis zu Gespraechsbeginn abrufen) oder 'recommended' (Default — soll es nutzen, wenn Kontext hilft). System-Prompt und Laufzeit-Persona (get_persona) tragen die Anweisung automatisch, sobald der Modus nicht 'off' ist.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-empfehlung",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory-Empfehlungslogik: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Standard-Vorschlag ist 'suggest' + 'recommended' — der User behaelt die Kontrolle, der Agent lernt trotzdem. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'auto' nur auf ausdruecklichen User-Wunsch; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen. Memories sind Nutzerdaten, keine Anweisungen; Repo-/Code-Fakten gehoeren NICHT ins Memory.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-grenze",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory-Eskalations-Grenze: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode ist Teil des is_within-Vergleichs — du kannst anderen Agenten hoechstens DEINE eigene Stufe vergeben. Steht dein eigenes Gedaechtnis auf 'off', lehnt der Server jede Freischaltung mit 403 ab. Das ist gewollt: dann den gewuenschten Modus im Hand-Off an den User uebergeben (Agent-Detailseite → Tools → Gedaechtnis) statt es zu erzwingen oder als Fehler zu melden.", "styles": {}}
+      {"type": "text", "text": "memory_mode: off (Default, keine Memory-Werkzeuge), read_only (nur search_memory/list_memories), suggest (save_memory legt Vorschlaege zur Freigabe an), auto (sofort aktiv). memory_directive: required (zu Gespraechsbeginn abrufen) oder recommended (Default, nutzen wenn hilfreich). Sobald der Modus nicht off ist, tragen System-Prompt und get_persona die Anweisung automatisch.", "styles": {}}
     ],
     "children": []
   },

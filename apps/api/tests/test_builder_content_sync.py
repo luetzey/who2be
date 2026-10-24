@@ -1378,3 +1378,116 @@ def test_sync_v22_distributes_lean_playbooks() -> None:
         text = json.dumps(body, ensure_ascii=False)
         assert "fetch_resource(resource_id, block_ids=[" in text, name
         assert "pb-feedback-h" not in text, name
+
+
+@pytest.mark.integration
+def test_sync_v23_distributes_partial_fetch_rules() -> None:
+    """Content-Stand 23 (Builder schlank B6, Teilabruf): ein Bestands-Workspace
+    auf Stempel 22 bekommt Profil-Laderegel, Wegweiser der Fall-Triage, das
+    entdoppelte Agent-Playbook und die ergaenzten Konventionen.
+
+    Der Stempel steht bewusst als Literal auf 22 (Stand vor B6): fehlt der
+    Bump auf 23, findet der Sync nichts zu tun und der Test wird rot.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    pack = get_content_pack("de")
+    by_key = {p.key: p for p in pack.playbooks}
+    cases = by_key["cases"].name
+    agent = by_key["agent"].name
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE persona_version pv SET content = $2::jsonb FROM persona p "
+                "WHERE pv.persona_id = p.id AND p.workspace_id = $1 AND p.name = 'Builder' "
+                "AND pv.status = 'active'",
+                ws,
+                _JUNK_PERSONA,
+            )
+            await conn.execute(
+                "UPDATE persona SET managed_content_version = 22 "
+                "WHERE workspace_id = $1 AND name = 'Builder'",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE playbook_version pv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
+                "AND pb.name = ANY($3::text[]) AND pv.status = 'active'",
+                ws,
+                _JUNK,
+                [cases, agent],
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = 22 "
+                "WHERE workspace_id = $1 AND is_managed = true",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE resource_version rv SET content = $2::jsonb FROM resource r "
+                "WHERE rv.resource_id = r.id AND r.workspace_id = $1 "
+                "AND r.name = 'Agent-Bau-Konventionen' AND rv.status = 'active'",
+                ws,
+                _JUNK_RESOURCE,
+            )
+            await conn.execute(
+                "UPDATE resource SET managed_content_version = 22 "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
+            updated = await sync_managed_builder_content(conn)
+            again = await sync_managed_builder_content(conn)
+            profile = await conn.fetchval(
+                "SELECT pv.content #> '{content,blocks}' FROM persona_version pv "
+                "JOIN persona p ON p.id = pv.persona_id "
+                "WHERE p.workspace_id = $1 AND p.name = 'Builder' AND pv.status = 'active'",
+                ws,
+            )
+            rows = await conn.fetch(
+                "SELECT pb.name, pv.content ->> 'body' AS body FROM playbook_version pv "
+                "JOIN playbook pb ON pb.id = pv.playbook_id "
+                "WHERE pb.workspace_id = $1 AND pb.name = ANY($2::text[]) AND pv.status = 'active'",
+                ws,
+                [cases, agent],
+            )
+            res_blocks = await conn.fetchval(
+                "SELECT rv.content -> 'blocks' FROM resource_version rv "
+                "JOIN resource r ON r.id = rv.resource_id "
+                "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen' "
+                "AND rv.status = 'active'",
+                ws,
+            )
+            return {
+                "updated": updated,
+                "again": again,
+                "profile": json.loads(profile) if isinstance(profile, str) else profile,
+                "bodies": {r["name"]: json.loads(r["body"]) for r in rows},
+                "resource": json.loads(res_blocks) if isinstance(res_blocks, str) else res_blocks,
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert res["updated"] >= 10, res["updated"]
+    assert res["again"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    assert "bp-p-output-load" in {b["id"] for b in res["profile"]}
+    assert res["bodies"][cases] == json.loads(by_key["cases"].load_body("de"))
+    assert res["bodies"][agent] == json.loads(by_key["agent"].load_body("de"))
+    assert "d7-h-wegweiser" in {b["id"] for b in res["bodies"][cases]}
+    agent_ids = {b["id"] for b in res["bodies"][agent]}
+    assert "pb-agent-li-policy-escalation" not in agent_ids
+    assert "pb-agent-li-policy-reads" in agent_ids
+    conv = json.dumps(res["resource"], ensure_ascii=False)
+    assert "keine Repo-/Code-Fakten" in conv

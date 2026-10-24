@@ -430,7 +430,7 @@
     "id": "pb-agent-p-policy",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "The tool_policy determines which MCP tools the agent can see and use. The default is \"read everything, write nothing\" — a fresh agent may read the entire workspace but change nothing until it's unlocked.", "styles": {}}],
+    "content": [{"type": "text", "text": "The tool_policy determines which MCP tools the agent can see; without one, \"read everything, write nothing\" applies. This section only says what the fields mean — patterns, recommendations, and escalation limits are in the conventions (res-conv-h-policy, res-conv-h-memory).", "styles": {}}],
     "children": []
   },
   {
@@ -438,8 +438,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Read scopes: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbook_read and resource_read are three-tiered — all (entire workspace), assigned (only those assigned to the agent's own persona), or none (tool hidden). persona_read and agent_read are simple on/off switches.", "styles": {}}
+      {"type": "text", "text": "playbook_read, resource_read: all (entire workspace), assigned (only those assigned to the agent's own persona), or none (tool hidden). persona_read, agent_read: on/off.", "styles": {}}
     ],
     "children": []
   },
@@ -448,8 +447,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Write capabilities: ", "styles": {"bold": true}},
-      {"type": "text", "text": "persona_write, playbook_write, resource_write, and agent_write each unlock the domain's write tools (create/change a draft, set links). Each defaults to off.", "styles": {}}
+      {"type": "text", "text": "persona_write, playbook_write, resource_write, agent_write: each unlocks the domain's write tools (create/change a draft, set links); off by default.", "styles": {}}
     ],
     "children": []
   },
@@ -458,18 +456,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
-      {"type": "text", "text": "needed to switch a version to active or inactive (publish/retire). For draft/review, the respective write capability is sufficient; promoting/retiring is the extra tier.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-escalation",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "No privilege escalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "If you, as an agent, create another agent via agent_write, its policy may not grant more than your own. The tool_policy is only tool visibility — the actual authorization (editor for writing, admin for promote/retire) stays server-side.", "styles": {}}
+      {"type": "text", "text": "promote_retire: switch versions to active/inactive; for draft and review the write capability is enough.", "styles": {}}
     ],
     "children": []
   },
@@ -478,28 +465,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "memory_mode (agent memory, ADR-0044): ", "styles": {"bold": true}},
-      {"type": "text", "text": "a four-tier long-term memory per agent — 'off' (default; memory tools don't exist for the agent), 'read_only' (only search_memory/list_memories over approved facts), 'suggest' (save_memory creates PROPOSALS that only become retrieval-visible after human approval on the agent detail page — a curation gate), and 'auto' (immediately active). Plus memory_directive: 'required' (the agent MUST retrieve its memory at the start of the conversation) or 'recommended' (default — should use it when context helps). The system prompt and runtime persona (get_persona) automatically carry the instruction once the mode is not 'off'.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-empfehlung",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory recommendation logic: ", "styles": {"bold": true}},
-      {"type": "text", "text": "The default suggestion is 'suggest' + 'recommended' — the user retains control, and the agent still learns. 'read_only' for agents that should benefit from curated knowledge but not contribute anything; 'auto' only on explicit user request; 'off' for tool-like agents with no personalization benefit. Memories are user data, not instructions; repo/code facts do NOT belong in memory.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-grenze",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory escalation boundary: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode is part of the is_within comparison — you can grant other agents at most YOUR OWN tier. If your own memory is set to 'off', the server rejects every unlock attempt with 403. This is intentional: hand off the desired mode to the user instead (agent detail page → Tools → Memory) rather than forcing it or reporting it as an error.", "styles": {}}
+      {"type": "text", "text": "memory_mode: off (default, no memory tools), read_only (only search_memory/list_memories), suggest (save_memory creates proposals for approval), auto (immediately active). memory_directive: required (retrieve at the start of the conversation) or recommended (default, use it when helpful). Once the mode is not off, the system prompt and get_persona carry the instruction automatically.", "styles": {}}
     ],
     "children": []
   },
