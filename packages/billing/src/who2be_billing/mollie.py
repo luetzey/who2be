@@ -49,12 +49,15 @@ from mollie.api.client import Client
 
 from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement
 from who2be_api.repositories.entitlement_repository import EntitlementRepository
+from who2be_billing.billing_profile import BillingProfile, VatChecker
 from who2be_billing.invoice import (
     CUSTOMER_ID_PATTERN,
     PAYMENT_ID_PATTERN,
+    InvoiceProfileRepository,
     InvoiceRecord,
     InvoiceReservation,
     InvoiceService,
+    expected_total,
     service_period,
 )
 from who2be_billing.plans import (
@@ -70,6 +73,7 @@ from who2be_billing.plans import (
     plan_by_code,
 )
 from who2be_billing.processed_event_repository import ProcessedEventRepository
+from who2be_billing.tax import PriceBasis, TaxDecision, TaxInput, TaxMode, decide_tax
 from who2be_billing.webhook import EntitlementUpdate
 
 _STATUS_ACTIVE = "active"
@@ -88,6 +92,14 @@ logger = logging.getLogger(__name__)
 
 class MollieError(Exception):
     """Mollie-Objekt ist fuer das Entitlement unbrauchbar (fehlende/ungueltige Metadata)."""
+
+
+class CheckoutNotConfiguredError(Exception):
+    """Kein Steuermodus gesetzt: ohne ihn ist jeder Betrag geraten (ADR-0061 §3, W-R2c-2 A)."""
+
+
+class BillingProfileMissingError(Exception):
+    """Die Organisation hat keine Rechnungsdaten gespeichert (ADR-0061 §10, R2c)."""
 
 
 # --- Value-Objects (entkoppeln den Kern von der SDK) -----------------------------
@@ -421,6 +433,80 @@ class SdkMollieGateway:
         return await asyncio.to_thread(_call)
 
 
+# --- Checkout-Betrag (ADR-0061 §5, §6; R2c) --------------------------------------
+
+
+@dataclass(frozen=True)
+class CheckoutPricing:
+    """Rechnet den Checkout-Betrag aus Schaltern und Rechnungsdaten der Org.
+
+    Derselbe Betrag wie im Worker (`invoice.expected_total`): der Worker stellt
+    nur aus, wenn die Zahlung genau diesen Betrag traegt, sonst haelt er die
+    Rechnung mit `amount_mismatch` zurueck.
+
+    EU-B2B mit ungepruefter USt-IdNr. (W-R2c-1 A): VIES wird einmal neu
+    gefragt (`vat_checker`, Timeout 5 s) und das Ergebnis in die
+    Rechnungsdaten geschrieben. Bleibt VIES stumm, wird mit 19 % abgebucht wie
+    bei ungueltiger Nummer. So wird nie zu wenig Steuer erhoben; wird die Nummer
+    spaeter gueltig, haelt der Worker die Rechnung sichtbar zurueck.
+
+    > **Keine Steuer- oder Rechtsberatung.** Die Tabelle steht in `tax.py`.
+    """
+
+    profiles: InvoiceProfileRepository
+    vat_checker: VatChecker
+    tax_mode: TaxMode | None
+    price_basis: PriceBasis
+
+    async def amount(self, org_id: UUID, plan: Plan, *, now: datetime | None = None) -> Decimal:
+        """Bruttobetrag der Erstzahlung. Wirft, statt einen Betrag zu raten."""
+        if self.tax_mode is None:
+            raise CheckoutNotConfiguredError("WHO2BE_INVOICE_TAX_MODE ist nicht gesetzt.")
+        profile = await self.profiles.get(org_id)
+        if profile is None:
+            raise BillingProfileMissingError("Keine Rechnungsdaten gespeichert.")
+        decision = self._decide(profile)
+        if decision.hold_reason == "vat_id_unchecked":
+            profile = await self._recheck_vat(org_id, profile, now or datetime.now(UTC))
+            decision = self._decide(profile)
+        if decision.action == "hold":
+            # Nach der Nachpruefung bleibt kein Hold-Fall uebrig; falls doch,
+            # wird nicht abgebucht.
+            raise CheckoutNotConfiguredError(f"Steuerfall offen: {decision.hold_reason}")
+        return expected_total(plan, decision)
+
+    async def _recheck_vat(
+        self, org_id: UUID, profile: BillingProfile, now: datetime
+    ) -> BillingProfile:
+        vat_id = profile.vat_id
+        if vat_id is None:
+            return profile
+        status = await self.vat_checker.check(vat_id)
+        if status == "unchecked":
+            logger.info("Checkout: USt-IdNr. weiter ungeprueft, Betrag mit 19 %% (W-R2c-1 A).")
+            # Nur fuer diesen Betrag; die Rechnungsdaten bleiben `unchecked`.
+            return profile.model_copy(update={"vat_status": "invalid"})
+        await self.profiles.update_vat_status(org_id, vat_id, status, now)
+        return profile.model_copy(update={"vat_status": status, "vat_checked_at": now})
+
+    def _decide(self, profile: BillingProfile) -> TaxDecision:
+        return decide_tax(
+            TaxInput(
+                tax_mode=self.tax_mode,
+                price_basis=self.price_basis,
+                country=profile.country,
+                customer_type=profile.customer_type,
+                vat_id=profile.vat_id,
+                vat_status=profile.vat_status,
+            )
+        )
+
+
+def _eur(amount: Decimal) -> str:
+    """Mollie-Betrag: String mit genau zwei Nachkommastellen."""
+    return f"{amount:.2f}"
+
+
 # --- Service (Orchestrierung Gateway + Entitlement-Persistenz) -------------------
 
 
@@ -456,6 +542,10 @@ class MollieBillingService:
     (ADR-0061 §3). Ausgestellt und archiviert wird ausschliesslich im Worker
     (`invoice-retry`, R2b), damit der Webhook nie auf Mollie Invoicing wartet.
     `None` ⇒ keine Rechnungsstellung (Tests, Installationen ohne Invoicing).
+
+    `pricing` rechnet den Checkout-Betrag je Steuerfall (R2c). Der Router setzt
+    es immer. `None` gehoert zu `invoices=None`: ohne Rechnungsstellung bucht
+    der Checkout den Plan-Preis.
     """
 
     def __init__(
@@ -466,12 +556,14 @@ class MollieBillingService:
         *,
         grace_days: int = _DEFAULT_GRACE_DAYS,
         invoices: InvoiceService | None = None,
+        pricing: CheckoutPricing | None = None,
     ) -> None:
         self._gateway = gateway
         self._repo = repo
         self._processed: ProcessedEventRepository = processed or _InMemoryProcessedEvents()
         self._grace_days = grace_days
         self._invoices = invoices
+        self._pricing = pricing
 
     async def start_checkout(
         self,
@@ -483,7 +575,16 @@ class MollieBillingService:
         redirect_url: str,
         webhook_url: str | None,
     ) -> str:
-        """Legt Customer + Erstzahlung an und liefert die Hosted-Checkout-URL."""
+        """Legt Customer + Erstzahlung an und liefert die Hosted-Checkout-URL.
+
+        Der Betrag steht fest, bevor bei Mollie etwas angelegt wird: fehlen
+        Steuermodus oder Rechnungsdaten, wirft `pricing` und Mollie sieht nichts.
+        """
+        amount_eur = (
+            _eur(await self._pricing.amount(org_id, plan))
+            if self._pricing is not None
+            else plan.price_eur
+        )
         metadata = plan.metadata(org_id)
         customer_id = await self._gateway.create_customer(
             name=customer_name,
@@ -492,7 +593,7 @@ class MollieBillingService:
         )
         return await self._gateway.create_first_payment(
             customer_id=customer_id,
-            amount_eur=plan.price_eur,
+            amount_eur=amount_eur,
             description=f"Who2Be {plan.name}",
             redirect_url=redirect_url,
             webhook_url=webhook_url,
@@ -620,9 +721,14 @@ class MollieBillingService:
     ) -> bool:
         org_id = metadata_org_id(payment.metadata)
         plan = self._plan_for(payment.metadata)
+        # Folgezahlungen mit dem bezahlten Erstbetrag (Steuerfall aus dem
+        # Checkout), sonst passt ab der zweiten Zahlung keine Rechnung mehr.
+        amount_eur = (
+            _eur(payment.amount_value) if payment.amount_value is not None else plan.price_eur
+        )
         subscription_id = await self._gateway.create_subscription(
             customer_id=payment.customer_id or "",
-            amount_eur=plan.price_eur,
+            amount_eur=amount_eur,
             interval=plan.interval,
             description=f"Who2Be {plan.name}",
             webhook_url=webhook_url,

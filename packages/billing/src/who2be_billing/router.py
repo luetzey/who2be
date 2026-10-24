@@ -61,7 +61,14 @@ from who2be_billing.billing_profile import (
     save_billing_profile,
 )
 from who2be_billing.invoice import HttpSalesInvoiceGateway, InvoiceService, PgInvoiceRepository
-from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
+from who2be_billing.mollie import (
+    BillingProfileMissingError,
+    CheckoutNotConfiguredError,
+    CheckoutPricing,
+    MollieBillingService,
+    MollieError,
+    SdkMollieGateway,
+)
 from who2be_billing.plans import plan_by_code
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
 from who2be_billing.tax import EU_COUNTRIES
@@ -142,6 +149,13 @@ def get_mollie_service() -> MollieBillingService:
         PgProcessedEventRepository(pool),
         grace_days=settings.mollie_grace_days,
         invoices=invoices,
+        # Checkout-Betrag je Steuerfall (R2c): dieselben Schalter wie der Worker.
+        pricing=CheckoutPricing(
+            PgBillingProfileRepository(pool),
+            ViesVatChecker(),
+            tax_mode=settings.invoice_tax_mode,
+            price_basis=settings.invoice_price_basis,
+        ),
     )
 
 
@@ -340,7 +354,12 @@ async def create_checkout(
     ctx: Ctx,
     service: MollieService,
 ) -> CheckoutResponse:
-    """Startet einen Mollie-Checkout fuer den gebuchten Tier (admin-only)."""
+    """Startet einen Mollie-Checkout fuer den gebuchten Tier (admin-only).
+
+    Der Betrag folgt dem Steuerfall der Rechnungsdaten (R2c). Ohne
+    Rechnungsdaten 409, ohne `WHO2BE_INVOICE_TAX_MODE` 503 (fail closed,
+    ADR-0061 §3); in beiden Faellen wird bei Mollie nichts angelegt.
+    """
     require_role(ctx, WorkspaceRole.admin)
     plan = plan_by_code(body.plan)
     if plan is None:
@@ -353,14 +372,26 @@ async def create_checkout(
     customer_name, customer_email = await _fetch_billing_identity(pool, org_id, ctx.user_id)
     settings = get_settings()
     redirect_url = f"{settings.web_base_url.rstrip('/')}/settings/billing"
-    checkout_url = await service.start_checkout(
-        org_id=org_id,
-        plan=plan,
-        customer_name=customer_name,
-        customer_email=customer_email,
-        redirect_url=redirect_url,
-        webhook_url=settings.mollie_webhook_url or None,
-    )
+    try:
+        checkout_url = await service.start_checkout(
+            org_id=org_id,
+            plan=plan,
+            customer_name=customer_name,
+            customer_email=customer_email,
+            redirect_url=redirect_url,
+            webhook_url=settings.mollie_webhook_url or None,
+        )
+    except BillingProfileMissingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rechnungsdaten fehlen. Bitte zuerst die Rechnungsdaten speichern.",
+        ) from exc
+    except CheckoutNotConfiguredError as exc:
+        logger.warning("Checkout abgewiesen: Rechnungsstellung nicht konfiguriert (%s).", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rechnungsstellung nicht konfiguriert.",
+        ) from exc
     return CheckoutResponse(checkout_url=checkout_url)
 
 
