@@ -2158,6 +2158,7 @@
         "sectionFooter": "Offene Einladungen laufen automatisch ab und können widerrufen werden.",
         "emailLabel": "E-Mail",
         "roleLabel": "Rolle",
+        "viewerHint": "Kann Agenten über einen Connector nutzen, aber nichts ändern.",
         "inviteButton": "Einladen",
         "sentToast": "Einladung an {{email}} verschickt.",
         "emailInvalid": "Bitte gültige E-Mail eingeben.",
