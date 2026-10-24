@@ -274,9 +274,12 @@ def test_sync_restores_outdated_builder() -> None:
     # WP-A (Content-Stand 3): die neuen Builder-Befaehigungs-Sektionen sind
     # nach dem Sync in den jeweiligen Playbook-Bodies vorhanden.
     all_playbook_ids = set().union(*res["playbook_body_idsets"].values())
-    # Agent-Playbook: Placeholder-Authoring + ADR-0040-Aufloesung (Templates via MCP).
-    assert "pb-agent-h-placeholder" in all_playbook_ids
-    assert "pb-agent-code-placeholder" in all_playbook_ids
+    # Agent-Playbook: Placeholder-Authoring + ADR-0040-Aufloesung (Templates via
+    # MCP) stehen seit Content-Stand 23 (B6) im Konventions-Abschnitt
+    # res-conv-h-templates; das Playbook verweist darauf.
+    assert "pb-agent-li-create-p1-3" in all_playbook_ids
+    assert "res-conv-h-templates" in res["resource_block_ids"]
+    assert "res-conv-code-templates" in res["resource_block_ids"]
     # Persona-Playbook: Modi-Sektion inkl. Schema-Beispiel.
     assert "pb-persona-h-modi" in all_playbook_ids
     assert "pb-persona-code-modi" in all_playbook_ids
@@ -1370,3 +1373,100 @@ def test_sync_v22_distributes_lean_playbooks() -> None:
         text = json.dumps(body, ensure_ascii=False)
         assert "fetch_resource(resource_id, block_ids=[" in text, name
         assert "pb-feedback-h" not in text, name
+
+
+@pytest.mark.integration
+def test_sync_v23_distributes_lean_agent_playbook_and_templates_section() -> None:
+    """Content-Stand 23 (Builder schlank B6): ein Bestands-Workspace auf
+    Stempel 22 bekommt das entschlackte Agent-Playbook und die Konventionen
+    mit dem neuen Abschnitt `res-conv-h-templates`.
+
+    Der Stempel steht bewusst als Literal auf 22 (Stand vor B6): fehlt der
+    Bump auf 23, findet der Sync nichts zu tun und der Test wird rot.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    pack = get_content_pack("de")
+    agent_pb = next(p for p in pack.playbooks if p.key == "agent")
+    canonical_body = json.loads(agent_pb.load_body("de"))
+    canonical_blocks = json.loads(pack.resource.load_body("de"))
+    old_blocks = [b for b in canonical_blocks if "templates" not in b["id"]]
+    assert len(old_blocks) < len(canonical_blocks)
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE resource_version rv "
+                "SET content = jsonb_set(rv.content, '{blocks}', $2::jsonb) "
+                "FROM resource r WHERE rv.resource_id = r.id AND r.workspace_id = $1 "
+                "AND r.name = 'Agent-Bau-Konventionen' AND rv.status = 'active'",
+                ws,
+                json.dumps(old_blocks),
+            )
+            await conn.execute(
+                "UPDATE playbook_version pv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
+                "AND pb.name = $3 AND pv.status = 'active'",
+                ws,
+                _JUNK,
+                agent_pb.name,
+            )
+            await conn.execute(
+                "UPDATE resource SET managed_content_version = 22 "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = 22 "
+                "WHERE workspace_id = $1 AND name = $2",
+                ws,
+                agent_pb.name,
+            )
+            updated = await sync_managed_builder_content(conn)
+            again = await sync_managed_builder_content(conn)
+            resource = await conn.fetchrow(
+                "SELECT r.managed_content_version AS stamp, rv.content -> 'blocks' AS blocks "
+                "FROM resource r JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.status = 'active' "
+                "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
+            playbook = await conn.fetchrow(
+                "SELECT pb.managed_content_version AS stamp, pv.content ->> 'body' AS body "
+                "FROM playbook_version pv JOIN playbook pb ON pb.id = pv.playbook_id "
+                "WHERE pb.workspace_id = $1 AND pb.name = $2 AND pv.status = 'active'",
+                ws,
+                agent_pb.name,
+            )
+            return {
+                "updated": updated,
+                "again": again,
+                "resource_stamp": resource["stamp"],
+                "blocks": json.loads(resource["blocks"]),
+                "playbook_stamp": playbook["stamp"],
+                "body": json.loads(playbook["body"]),
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert res["updated"] == 2, res["updated"]
+    assert res["again"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    assert res["resource_stamp"] == BUILDER_CONTENT_VERSION
+    assert res["playbook_stamp"] == BUILDER_CONTENT_VERSION
+    assert res["blocks"] == canonical_blocks
+    assert res["body"] == canonical_body
+    assert "res-conv-code-templates" in {b["id"] for b in res["blocks"]}
+    assert "pb-agent-h-placeholder" not in json.dumps(res["body"])

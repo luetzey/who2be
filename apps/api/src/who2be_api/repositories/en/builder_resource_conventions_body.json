@@ -1725,7 +1725,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side.",
+        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. Without one, the default applies: \"read everything, write nothing\". The tool_policy controls tool visibility; actual authorization stays server-side (editor for writing, admin for promote/retire).",
         "styles": {}
       }
     ],
@@ -1749,7 +1749,7 @@
       },
       {
         "type": "text",
-        "text": "domain agents read 'assigned' (only the playbooks/resources assigned to their own persona); 'all' is reserved for meta agents that need to oversee the entire workspace (Builder, maintenance runs). 'none' hides the tool.",
+        "text": "playbook_read and resource_read have three tiers. Domain agents read 'assigned' (only the playbooks/resources assigned to their own persona); 'all' is reserved for meta agents that need to oversee the entire workspace (Builder, maintenance runs). 'none' hides the tool. persona_read and agent_read are on/off switches.",
         "styles": {}
       }
     ],
@@ -1773,7 +1773,7 @@
       },
       {
         "type": "text",
-        "text": "grant individually and minimally — only enable the domains the agent actually needs to write to for its task (persona_write, playbook_write, resource_write, agent_write, each on its own). Never open everything across the board, never grant more than the creating agent itself has.",
+        "text": "grant individually and minimally, each off by default — only enable the domains the agent actually needs to write to for its task (persona_write, playbook_write, resource_write, agent_write, each on its own). Never open everything across the board, never grant more than the creating agent itself has.",
         "styles": {}
       }
     ],
@@ -1797,7 +1797,7 @@
       },
       {
         "type": "text",
-        "text": "only grant it if the agent MUST be able to actively switch versions to active/inactive. For most agents, creating drafts is enough — promoting stays with the curator.",
+        "text": "only grant it if the agent MUST be able to actively switch versions to active/inactive. For draft and review the domain's write capability is enough — promoting stays with the curator.",
         "styles": {}
       }
     ],
@@ -1880,7 +1880,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Agent memory (ADR-0044) is a curated long-term memory per agent and follows the same curator principle as feedback: the agent proposes, the human decides. Controlled via two policy fields: memory_mode (off < read_only < suggest < auto, default off) and memory_directive (required/recommended).",
+        "text": "Agent memory (ADR-0044) is a curated long-term memory per agent and follows the same curator principle as feedback: the agent proposes, the human decides. memory_mode has four tiers (default off): 'off' (memory tools don't exist for the agent), 'read_only' (only search_memory/list_memories over approved facts), 'suggest' (save_memory creates proposals), and 'auto' (immediately active). memory_directive: 'required' (retrieve at the start of the conversation) or 'recommended' (use it when context helps). The system prompt and get_persona carry the instruction automatically once the mode is not 'off'.",
         "styles": {}
       }
     ],
@@ -1904,7 +1904,7 @@
       },
       {
         "type": "text",
-        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
+        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'read_only' for agents that should benefit from curated knowledge but not contribute; 'off' for tool-like agents with no personalization benefit; 'auto' only on explicit user request. Never recommend going beyond 'suggest' on your own initiative.",
         "styles": {}
       }
     ],
@@ -1928,7 +1928,7 @@
       },
       {
         "type": "text",
-        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that). If your own level is too low, enabling it belongs in the hand-off to the user — that's by design, not a bug.",
+        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that; with your own level 'off', any unlock). If your own level is too low, enabling it belongs in the hand-off to the user (agent detail page → Tools → Memory) — that's by design, not a bug.",
         "styles": {}
       }
     ],
@@ -1952,7 +1952,7 @@
       },
       {
         "type": "text",
-        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — no instructions to AI systems, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
+        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — user data, no instructions to AI systems, no small talk, no repo/code facts, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
         "styles": {}
       }
     ],
@@ -1977,6 +1977,277 @@
       {
         "type": "text",
         "text": "search_memory finds entries via paraphrases and across language boundaries (ADR-0046), not only via literal matches. The same similarity applies on write: an entry that merely rewords an existing one is rejected with 409 even when no word matches — that is the dedup guard, not an error. Persona injection is unaffected: it appends the top facts by importance, without a query.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-templates",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Authoring System Prompt Templates",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-templates-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Templates may be authored via MCP (ADR-0040); only a human may activate them in the web UI. A new template defaults to the workspace language; set locale only for a deliberate deviation.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-templates-format",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "The body is Markdown. Placeholders appear in it as tokens ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "{{kind:target_id}}",
+        "styles": {
+          "code": true
+        }
+      },
+      {
+        "type": "text",
+        "text": " (resource section: ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "{{resource:<uuid>#<block_id>}}",
+        "styles": {
+          "code": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "); the server turns them into pills on save and expands them at render time. ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "Call list_placeholders first",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": " — it returns all valid kinds, their target_id contracts, and an example each. Unknown kinds or incorrect target_id values render as unresolved placeholders.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-persona",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Identity: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "persona-ref (instruction to load the persona at runtime via get_persona — lean default) or persona-field (embedded snapshot, e.g. 'profile' or 'name').",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-tools",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Tools: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "by default tools-overview does NOT belong in the template — tools/list already describes the tools. The only exception is a prompt that is explicitly used without an MCP tool list (copied prompt); then use it with a stated reason.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-catalog",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Catalogs: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "playbooks-catalog and resources-catalog render briefing tables with fetch calls (target_id values: list_placeholders).",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-memory",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Memory: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the memory placeholder (target_id '') renders the memory notice matching the memory_mode — with 'off' the spot stays empty. Put it in every template of an agent with memory; the automatic append only applies when the template carries tools-overview.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-inline",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Single embedding: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "playbook / resource with a UUID as target_id embed one element permanently — use sparingly, catalogs + fetch at runtime are the token-saving default.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-bootstrap",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Bootstrap: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the bootstrap loop (load persona, check triggers, follow playbook) lives in the template and is populated from placeholders at render time — don't write it into the prompt by hand.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-code-templates",
+    "type": "codeBlock",
+    "props": {
+      "language": "markdown"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "## Identity\n\nYou are {{persona-field:name}}.\n\n{{memory:}}",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-templates-workflow",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Workflow: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "read list_placeholders, author the body as Markdown, create_system_prompt (draft), transition_system_prompt(to='review') (draft to review only). Changes: update_system_prompt creates a new draft; read the template with get_system_prompt(format=\"source\") and write via edit_content (one section by anchor, or field='body') or update_system_prompt (full state).",
         "styles": {}
       }
     ],

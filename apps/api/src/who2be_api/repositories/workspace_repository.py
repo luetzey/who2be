@@ -534,7 +534,13 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # (K4, Abschnittsregel ADR-0021-Nachtrag). Agent-Playbook: `tools-overview`
 # standardmaessig nicht ins Template; Playbook-Playbook gibt „Zweck“ und
 # „Tools & Operations“ nicht mehr als Gliederung vor — DE + EN.
-BUILDER_CONTENT_VERSION = 22
+# v23: Builder schlank B6 (K6, Owner 2026-10-22: ein Bau 15-25 KB) — Agent-
+# Playbook entschlackt: Nachschlagewissen wandert in die Konventionen
+# (Template-Schreibweg + Platzhalter als neuer Abschnitt `res-conv-h-templates`,
+# nur bei Bedarf geladen; Policy-/Memory-Fakten in `res-conv-h-policy` und
+# `res-conv-h-memory`). Ablaeufe bleiben im Playbook, Standard-Anker nur noch
+# policy + memory — DE + EN.
+BUILDER_CONTENT_VERSION = 23
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

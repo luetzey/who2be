@@ -278,14 +278,15 @@ def test_builder_content_describes_no_json_write_path(pack: ContentPack) -> None
 
 
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
-def test_agent_playbook_markdown_example_converts_to_pills(pack: ContentPack) -> None:
-    """Das Template-Beispiel im Agent-Playbook ist gueltiges Markdown des
-    Schreibwegs (ADR-0058 §3.2): der Konverter, den die API beim Schreiben
+def test_template_markdown_example_converts_to_pills(pack: ContentPack) -> None:
+    """Das Template-Beispiel (seit Content-Stand 23 im Konventions-Abschnitt
+    `res-conv-h-templates`, vorher im Agent-Playbook) ist gueltiges Markdown
+    des Schreibwegs (ADR-0058 §3.2): der Konverter, den die API beim Schreiben
     nutzt, macht aus den Tokens echte Placeholder-Pills."""
     from who2be_models.blocknote_markdown import from_markdown
 
-    blocks = json.loads(load_sidecar("builder_playbook_agent_body.json", pack.locale))
-    example = next(b for b in blocks if b["id"] == "pb-agent-code-placeholder")
+    blocks = json.loads(pack.resource.load_body(pack.locale))
+    example = next(b for b in blocks if b["id"] == "res-conv-code-templates")
     assert example["props"]["language"] == "markdown"
     converted = from_markdown(example["content"][0]["text"])
     pills = [
@@ -426,7 +427,8 @@ def test_builder_template_loads_persona_at_runtime_without_tools_block(pack: Con
 _CONVENTION_ANCHORS = {
     "persona": ["res-conv-h-modi", "res-conv-h-laengen", "res-conv-h-trigger"],
     "playbook": ["res-conv-h-trigger", "res-conv-h-naming", "res-conv-h-laengen-budgets"],
-    "agent": ["res-conv-h-policy", "res-conv-h-memory", "res-conv-h-managed"],
+    # Content-Stand 23 (B6): managed und templates nur bei Bedarf (im Text genannt).
+    "agent": ["res-conv-h-policy", "res-conv-h-memory"],
     "consistency": [
         "res-conv-h-trigger",
         "res-conv-h-modi",
@@ -490,12 +492,16 @@ def test_playbooks_drop_feedback_paragraph_and_full_conventions_load(pack: Conte
 @pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
 def test_agent_playbook_keeps_tools_overview_out_of_templates(pack: ContentPack) -> None:
     """PM 2026-10-22 (1): tools-overview gehoert standardmaessig nicht ins
-    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg."""
-    blocks = _playbook_blocks(pack, "agent")
-    rule = next(b for b in blocks if b["id"] == "pb-agent-li-placeholder-tools")
-    text = " ".join(_collect_block_texts(rule))
-    assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
-    whole = " ".join(_collect_block_texts(blocks))
+    Template; die alte Lehre „gehoert in praktisch jedes Template“ ist weg.
+    Seit Content-Stand 23 steht die Regel im Abschnitt `res-conv-h-templates`
+    und als Kurzform im Agent-Playbook (Phase 1)."""
+    resource = json.loads(pack.resource.load_body(pack.locale))
+    rule = next(b for b in resource if b["id"] == "res-conv-li-templates-tools")
+    step = next(b for b in _playbook_blocks(pack, "agent") if b["id"] == "pb-agent-li-create-p1-3")
+    for block in (rule, step):
+        text = " ".join(_collect_block_texts(block))
+        assert ("NICHT ins Template" in text) or ("does NOT belong in the template" in text)
+    whole = " ".join(_collect_block_texts(_playbook_blocks(pack, "agent") + resource))
     assert "praktisch jedes Template" not in whole
     assert "practically every template" not in whole
 
@@ -511,3 +517,31 @@ def test_playbook_playbook_no_longer_prescribes_purpose_and_tools_sections(
     text = " ".join(_collect_block_texts(atomic))
     assert "Tools & Operations" not in text
     assert ("Fallen" in text) or ("Pitfalls" in text)
+
+
+# Owner 2026-10-22: ein Bau laedt 15–25 KB Prozedur. Gemessen wie im B3-Review:
+# Klartext (`blocks_plain_text`) von Persona- + Agent-Playbook plus der
+# Konventions-Abschnitte, die ihre `fetch_resource`-Aufrufe laden; dazu der
+# Bedarfs-Abschnitt `res-conv-h-templates` (Template verfassen) als schlimmster Fall.
+_AGENT_BUILD_MAX_BYTES = 25_000
+
+
+@pytest.mark.parametrize("pack", [_DE_PACK, _EN_PACK], ids=lambda p: p.locale)
+def test_agent_build_stays_within_owner_budget(pack: ContentPack) -> None:
+    """B6 (K6): der Agenten-Bau bleibt auch mit Template-Abschnitt <= 25 KB, das
+    Agent-Playbook unter dem Playbook-Ziel von 1 000 Woertern (ADR-0063)."""
+    from who2be_models.blocknote_markdown import to_markdown
+    from who2be_models.blocknote_text import blocks_plain_text, section_blocks
+    from who2be_models.content_budgets import count_words
+
+    resource = json.loads(pack.resource.load_body(pack.locale))
+    total = 0
+    for key in ("persona", "agent"):
+        blocks = _playbook_blocks(pack, key)
+        total += len(blocks_plain_text(blocks).encode())
+        calls = _FETCH_CALL_PATTERN.findall(" ".join(_collect_block_texts(blocks)))
+        for anchor in _ANCHOR_PATTERN.findall(calls[0]):
+            total += len(blocks_plain_text(section_blocks(resource, anchor)).encode())
+    total += len(blocks_plain_text(section_blocks(resource, "res-conv-h-templates")).encode())
+    assert total <= _AGENT_BUILD_MAX_BYTES, total
+    assert count_words(to_markdown(_playbook_blocks(pack, "agent"))) <= 1_000
