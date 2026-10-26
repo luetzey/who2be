@@ -125,7 +125,7 @@ services:
 
   uptime-kuma:
     <<: *hardening
-    image: louislam/uptime-kuma:2.5.6@sha256:9912da7d7d9b6ddc0c2d904beb84d24689c1ed9c33b81419eb9008663a92a329
+    image: louislam/uptime-kuma:2.5.7@sha256:4b95dbe7ac5343b768f8e04e3035ccd59997872b1a35ab9b0f082d2cc279070e
     environment:
       # SQLite im Volume; ueberspringt die DB-Auswahl beim ersten Start.
       UPTIME_KUMA_DB_TYPE: sqlite
@@ -136,7 +136,7 @@ services:
 
   beszel:
     <<: *hardening
-    image: henrygd/beszel:0.21.0@sha256:6b39a8b64f9b15d00a25e7683e31a93c46161182a54f62713525107064e10599
+    image: henrygd/beszel:0.21.1@sha256:8514a69d9bbbcb74f371a3205561ee231fc0289739cea64e8131f341d695b770
     environment:
       APP_URL: https://hosts.${MONITOR_DOMAIN:?MONITOR_DOMAIN fehlt}
       # Nur ausgehende WebSocket-Verbindungen der Agenten; der Hub oeffnet
