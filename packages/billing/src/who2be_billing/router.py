@@ -17,6 +17,10 @@ aal2), kein Kunden-Self-Service (LIC-1).
 Und ``GET``/``PUT /v1/workspaces/{ws}/billing/profile`` (admin): Rechnungsdaten
 der Organisation mit VIES-Pruefung der USt-IdNr. (ADR-0061 §10, Paket R1).
 
+Und ``GET /v1/workspaces/{ws}/billing/invoices`` sowie
+``GET .../billing/invoices/{invoice_id}/pdf`` (admin, nur lesend): Rechnungen
+der eigenen Organisation und das PDF aus dem eigenen Archiv (Paket R3).
+
 Guardrails (ADR-0028): kein Webhook ohne Signaturpruefung; Schreiben ausschliesslich
 in `org_entitlement` ueber `EntitlementRepository`; Zugriff am Entitlement, nicht am
 rohen Zahlungsstatus.
@@ -24,18 +28,21 @@ rohen Zahlungsstatus.
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from decimal import Decimal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from who2be_api.blobstore.port import BlobNotFoundError, BlobStorePort
 from who2be_api.blobstore.service import build_blob_store
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
@@ -60,8 +67,21 @@ from who2be_billing.billing_profile import (
     ViesVatChecker,
     save_billing_profile,
 )
-from who2be_billing.invoice import HttpSalesInvoiceGateway, InvoiceService, PgInvoiceRepository
-from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
+from who2be_billing.invoice import (
+    HttpSalesInvoiceGateway,
+    InvoiceRecord,
+    InvoiceService,
+    OrgInvoiceReader,
+    PgInvoiceRepository,
+)
+from who2be_billing.mollie import (
+    BillingProfileMissingError,
+    CheckoutNotConfiguredError,
+    CheckoutPricing,
+    MollieBillingService,
+    MollieError,
+    SdkMollieGateway,
+)
 from who2be_billing.plans import plan_by_code
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
 from who2be_billing.tax import EU_COUNTRIES
@@ -142,6 +162,13 @@ def get_mollie_service() -> MollieBillingService:
         PgProcessedEventRepository(pool),
         grace_days=settings.mollie_grace_days,
         invoices=invoices,
+        # Checkout-Betrag je Steuerfall (R2c): dieselben Schalter wie der Worker.
+        pricing=CheckoutPricing(
+            PgBillingProfileRepository(pool),
+            ViesVatChecker(),
+            tax_mode=settings.invoice_tax_mode,
+            price_basis=settings.invoice_price_basis,
+        ),
     )
 
 
@@ -340,7 +367,12 @@ async def create_checkout(
     ctx: Ctx,
     service: MollieService,
 ) -> CheckoutResponse:
-    """Startet einen Mollie-Checkout fuer den gebuchten Tier (admin-only)."""
+    """Startet einen Mollie-Checkout fuer den gebuchten Tier (admin-only).
+
+    Der Betrag folgt dem Steuerfall der Rechnungsdaten (R2c). Ohne
+    Rechnungsdaten 409, ohne `WHO2BE_INVOICE_TAX_MODE` 503 (fail closed,
+    ADR-0061 §3); in beiden Faellen wird bei Mollie nichts angelegt.
+    """
     require_role(ctx, WorkspaceRole.admin)
     plan = plan_by_code(body.plan)
     if plan is None:
@@ -353,14 +385,26 @@ async def create_checkout(
     customer_name, customer_email = await _fetch_billing_identity(pool, org_id, ctx.user_id)
     settings = get_settings()
     redirect_url = f"{settings.web_base_url.rstrip('/')}/settings/billing"
-    checkout_url = await service.start_checkout(
-        org_id=org_id,
-        plan=plan,
-        customer_name=customer_name,
-        customer_email=customer_email,
-        redirect_url=redirect_url,
-        webhook_url=settings.mollie_webhook_url or None,
-    )
+    try:
+        checkout_url = await service.start_checkout(
+            org_id=org_id,
+            plan=plan,
+            customer_name=customer_name,
+            customer_email=customer_email,
+            redirect_url=redirect_url,
+            webhook_url=settings.mollie_webhook_url or None,
+        )
+    except BillingProfileMissingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rechnungsdaten fehlen. Bitte zuerst die Rechnungsdaten speichern.",
+        ) from exc
+    except CheckoutNotConfiguredError as exc:
+        logger.warning("Checkout abgewiesen: Rechnungsstellung nicht konfiguriert (%s).", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rechnungsstellung nicht konfiguriert.",
+        ) from exc
     return CheckoutResponse(checkout_url=checkout_url)
 
 
@@ -443,6 +487,131 @@ async def put_billing_profile(
     org_id = await deps.resolve_org(ctx.workspace_id)
     profile = await save_billing_profile(deps.repo, deps.checker, org_id, body)
     return _profile_response(profile)
+
+
+# --- Rechnungen der Organisation (ADR-0061 §7, Paket R3) ---------------------------
+
+
+@dataclass(frozen=True)
+class InvoiceReadDeps:
+    """Org-Aufloesung, Lesesicht und Archiv fuer Liste und PDF-Download.
+
+    `blob_store` ist `None`, wenn kein BlobStore konfiguriert ist; dann liefert
+    nur der Download 503, die Liste bleibt lesbar.
+    """
+
+    resolve_org: Callable[[UUID], Awaitable[UUID]]
+    repo: OrgInvoiceReader
+    blob_store: BlobStorePort | None
+
+
+def get_invoice_read_deps() -> InvoiceReadDeps:
+    """Dependency: Cloud-Check zuerst (404 On-Prem), dann lazy Pool (503)."""
+    _require_cloud()
+    try:
+        pool = get_pool()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Datenbank nicht verfuegbar.",
+        ) from exc
+
+    async def _resolve(workspace_id: UUID) -> UUID:
+        return await resolve_org_id(pool, workspace_id)
+
+    return InvoiceReadDeps(_resolve, PgInvoiceRepository(pool), build_blob_store())
+
+
+InvoiceDeps = Annotated[InvoiceReadDeps, Depends(get_invoice_read_deps)]
+
+
+class InvoiceListItem(BaseModel):
+    """Eine ausgestellte Rechnung, so wie die Organisation sie sieht.
+
+    `status` ist die einzige Quelle fuer die Anzeige: `archived` heisst, das
+    PDF liegt im Archiv und ist abrufbar; `issued` heisst, Mollie hat die
+    Rechnung ausgestellt, das PDF ist noch nicht archiviert.
+    """
+
+    id: UUID
+    invoice_number: str
+    issued_at: datetime
+    amount_value: Decimal | None
+    currency: str = "EUR"
+    status: Literal["issued", "archived"]
+
+
+class InvoiceListResponse(BaseModel):
+    invoices: list[InvoiceListItem]
+
+
+def _list_item(record: InvoiceRecord) -> InvoiceListItem:
+    # `billing_invoice_issued_check` garantiert Nummer und Zeitpunkt ab 'issued';
+    # die Lesesicht liefert nur 'issued' und 'archived' (SQL-Filter).
+    assert record.invoice_number is not None and record.issued_at is not None
+    return InvoiceListItem(
+        id=record.id,
+        invoice_number=record.invoice_number,
+        issued_at=record.issued_at,
+        amount_value=record.amount_value,
+        status="archived" if record.status == "archived" else "issued",
+    )
+
+
+@router.get("/invoices")
+async def list_invoices(ctx: Ctx, deps: InvoiceDeps) -> InvoiceListResponse:
+    """Ausgestellte Rechnungen der Organisation dieses Workspace (admin-only)."""
+    require_role(ctx, WorkspaceRole.admin)
+    org_id = await deps.resolve_org(ctx.workspace_id)
+    records = await deps.repo.list_for_org(org_id)
+    return InvoiceListResponse(invoices=[_list_item(r) for r in records])
+
+
+_INVOICE_NOT_FOUND = "Rechnung nicht gefunden."
+_PDF_UNREADABLE = "Rechnungs-PDF nicht lesbar."
+
+
+@router.get("/invoices/{invoice_id}/pdf")
+async def download_invoice_pdf(invoice_id: UUID, ctx: Ctx, deps: InvoiceDeps) -> Response:
+    """Liefert das archivierte PDF einer Rechnung der eigenen Organisation.
+
+    `invoice_id` ist als UUID typisiert (sonst 422). Fremde, unbekannte und
+    noch nicht archivierte Rechnungen sind gleichermassen 404, damit die
+    Antwort nichts ueber andere Organisationen verraet. Ausgeliefert wird nur
+    aus dem eigenen Archiv, und nur wenn der SHA-256 noch zur Archivzeile
+    passt (ADR-0061 §7); sonst 500 ohne Inhalt.
+    """
+    require_role(ctx, WorkspaceRole.admin)
+    org_id = await deps.resolve_org(ctx.workspace_id)
+    record = await deps.repo.get_for_org(org_id, invoice_id)
+    if record is None or record.status != "archived" or record.pdf_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_INVOICE_NOT_FOUND)
+    if deps.blob_store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rechnungsarchiv nicht konfiguriert.",
+        )
+    try:
+        pdf = await deps.blob_store.get(record.pdf_key)
+    except BlobNotFoundError:
+        logger.error("Rechnung %s: PDF fehlt im Archiv", record.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=_PDF_UNREADABLE
+        ) from None
+    if hashlib.sha256(pdf).hexdigest() != record.pdf_sha256:
+        logger.error("Rechnung %s: PDF weicht vom archivierten SHA-256 ab", record.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=_PDF_UNREADABLE
+        )
+    # Die Nummer ist per CHECK auf `[A-Za-z0-9._-]` begrenzt, also headersicher.
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{record.invoice_number}.pdf"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 # --- Manual-Override (kontrollierter Cloud-Ausnahmepfad, ADR-0028) ----------------

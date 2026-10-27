@@ -459,6 +459,26 @@ describe('MembersPage — Invitations', () => {
     expect(postCalls).toHaveLength(0)
   })
 
+  it('erklärt bei der Rolle Viewer, dass nur Nutzen geht (ADR-0023 Nachtrag 2026-10-24)', async () => {
+    stubFetch(settingsHandlers())
+
+    renderMembers('admin')
+
+    await screen.findByRole('button', { name: 'Einladen' })
+    const hint = 'Kann Agenten über einen Connector nutzen, aber nichts ändern.'
+    const roleSelect = screen.getByLabelText('Rolle')
+    expect(screen.queryByText(hint)).toBeNull()
+
+    fireEvent.change(roleSelect, { target: { value: 'viewer' } })
+    const description = await screen.findByText(hint)
+    expect(roleSelect.getAttribute('aria-describedby')).toContain(description.id)
+
+    fireEvent.change(roleSelect, { target: { value: 'admin' } })
+    await waitFor(() => {
+      expect(screen.queryByText(hint)).toBeNull()
+    })
+  })
+
   it('meldet den Fehler per Toast, wenn das Einladen fehlschlaegt', async () => {
     const base = settingsHandlers()
     stubFetch((path, method, init) => {
