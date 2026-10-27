@@ -146,6 +146,13 @@ services:
       # 403 (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
       # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
       WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
+      # Rechnungs-Schalter (ADR-0061 §5). Der Checkout rechnet damit den Betrag.
+      # Steuermodus ohne Default: leer ⇒ Checkout 503, keine Rechnung (fail
+      # closed). Werte `regular`/`small_business`, Festlegung beim Betreiber.
+      # Preisbasis `net` oder `gross`, Default `net`. Dieselben Zeilen stehen
+      # im `worker`; beide brauchen denselben Wert.
+      WHO2BE_INVOICE_TAX_MODE: ${WHO2BE_INVOICE_TAX_MODE:-}
+      WHO2BE_INVOICE_PRICE_BASIS: ${WHO2BE_INVOICE_PRICE_BASIS:-net}
       # Invitation-/Service-Mails via GoTrue-Admin (optional auch ohne nutzbar).
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:5173}
@@ -166,3 +173,11 @@ services:
       # Account-Purge loescht den GoTrue-User per Admin-API (best-effort,
       # `integrations/gotrue_admin.py`). Ohne Key bleibt der Auth-User stehen.
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # Routine `invoice-retry` (ADR-0061 §4) stellt die Rechnungen bei Mollie
+      # aus und braucht dafuer den Key und dieselben Schalter wie `api`. Ohne
+      # Key bricht die Routine ab, ohne Steuermodus haelt sie jede Rechnung
+      # zurueck
+      # (`packages/billing/src/who2be_billing/invoice.py#run_invoice_retry`).
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      WHO2BE_INVOICE_TAX_MODE: ${WHO2BE_INVOICE_TAX_MODE:-}
+      WHO2BE_INVOICE_PRICE_BASIS: ${WHO2BE_INVOICE_PRICE_BASIS:-net}

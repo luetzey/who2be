@@ -1,7 +1,8 @@
 # Cloud-Edition: Erstinbetriebnahme — Vorbereitungsliste fuer den Owner
 
 **Typ:** How-To · **Zielgruppe:** Owner/Betreiber · **Stand:** 2026-09-25,
-gemessen gegen `main` @ `53c4b854`
+gemessen gegen `main` @ `53c4b854`; Rechnung (Schritt 15, Storno und
+Erstattung) 2026-10-24 @ `2660d2c3`
 
 Was hier steht: **alles, was der Owner selbst besorgen, entscheiden oder
 anlegen muss**, um die Cloud-Edition auf einer frischen Box in Betrieb zu
@@ -387,7 +388,25 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
 - [ ] **15 · Kaufen — Mollie-Test-Checkout.** `cloud-prod-smoke.md` §4
       Variante B.
       *Wer: du · Dauer: 30 min · Danach anders: der Webhook hat das Entitlement
-      auf Pro gehoben.*
+      auf Pro gehoben, und zur Zahlung liegt eine archivierte Test-Rechnung.*
+
+      Zwei Voraussetzungen, sonst bricht der Checkout ab, bevor Mollie
+      gefragt wird:
+
+      - **Steuermodus gesetzt.** `WHO2BE_INVOICE_TAX_MODE` (`regular` oder
+        `small_business`) steht in `deploy/hetzner/.env` bzw. in Dokploy →
+        Environment, `api` und `worker` sind danach neu erzeugt. Ohne Wert
+        antwortet der Checkout `503 Rechnungsstellung nicht konfiguriert.`
+        Welcher Wert fuer den Echtbetrieb gilt, legst du vor dem ersten
+        zahlenden Kunden fest; fuer den Testlauf zaehlt nur, dass einer
+        gesetzt ist. `WHO2BE_INVOICE_PRICE_BASIS` bleibt ohne Eintrag auf
+        `net`. Beide Schalter: ADR-0061 §5,
+        [GoBD-Verfahrensdokumentation](compliance/gobd-verfahrensdokumentation.md)
+        §5.2.
+      - **Rechnungsdaten gespeichert.** Im Billing-Bereich der Web-App
+        Kundentyp, Name bzw. Firma und Adresse eintragen (Platzhalterwerte
+        genuegen im Test-Modus). Ohne sie antwortet der Checkout `409`.
+
       Im Mollie-Test-Modus Status „paid" waehlen; es fliesst kein Geld. Mollie
       ruft `https://api.<DOMAIN>/v1/billing/mollie/webhook` — auf der Box ist
       das oeffentlich erreichbar, **kein Tunnel noetig** (lokal braeuchte es
@@ -395,6 +414,20 @@ wiederholt sich hier; das ist die Reihenfolge und die Erwartung je Abschnitt.
       **Das Upgrade wirkt sofort**, es gibt keinen Cache zwischen Gate und
       Tabelle: der naechste Request sieht Pro. Kein Logout, keine
       Neuanmeldung.
+
+      Die Rechnung stellt der Worker aus (Routine `invoice-retry`, alle
+      5 min). Spaetestens nach dem naechsten Lauf:
+
+      ```bash
+      docker exec -i "$DB" psql -U supabase_admin -d postgres -c \
+        "SELECT status, invoice_number, tax_mode, price_basis, last_error
+           FROM billing_invoice ORDER BY created_at DESC LIMIT 5"
+      # → status = archived, invoice_number gesetzt
+      ```
+
+      `$DB` wie unter [Worker pruefen](#worker-pruefen-ohne-dokploy-ui).
+      Steht die Zeile auf `pending` mit `last_error = hold:…`, nennt der Text
+      nach `hold:` den Grund (Tabelle unten).
 
       > **Kommt der Webhook nicht an** (Box down, falsche
       > `MOLLIE_WEBHOOK_URL`), bleibt das Entitlement auf Free — es gibt keinen
@@ -455,6 +488,7 @@ weiter die alten Zeitplaene, obwohl der Worker schon nach den neuen laeuft.
 | `audit-retention` | `0 4 * * *` | loescht den anonymen Audit-Rest geloeschter Workspaces/Orgs 12 Monate nach der Anonymisierung (Owner E1a) |
 | `usage-retention` | `10 4 * * *` | loescht Nutzungs-Rohzeilen (`usage_event`) aelter als 13 Monate (Owner E4b) |
 | `routine-run-retention` | `15 4 * * *` | loescht das eigene Laufprotokoll nach 90 Tagen |
+| `invoice-retry` | alle 5 min | nur Cloud: stellt vorgemerkte Rechnungen bei Mollie aus und archiviert das PDF (ADR-0061 §4); braucht im `worker` `MOLLIE_API_KEY` und `WHO2BE_INVOICE_TAX_MODE` |
 
 Alle Routinen sind idempotent. Beim ersten Start holt der Worker Purge,
 Verfall, Audit- und Nutzungs-Aufbewahrung einmal nach; danach gelten die
@@ -495,7 +529,7 @@ docker inspect -f '{{.State.Health.Status}}' "$W"
 # 2) Wirksame Zeitplaene:
 docker exec "$W" who2be-worker list
 # → audit-retention, purge, memory-expire, routine-run-retention,
-#   usage-retention, alle "on"
+#   usage-retention, invoice-retry, alle "on"
 
 # 3) Erste Laeufe im Protokoll:
 docker exec -i "$DB" psql -U supabase_admin -d postgres -c \
@@ -542,6 +576,45 @@ nicht zurueck.
 
 ---
 
+## Storno und Erstattung
+
+Gehoert zum Betrieb, nicht zum Testlauf. Grundlage: ADR-0061 §8 und
+[GoBD-Verfahrensdokumentation](compliance/gobd-verfahrensdokumentation.md) §5.3.
+
+Who2Be aendert eine ausgestellte Rechnung **nie** und erkennt eine Erstattung
+oder Rueckbuchung heute **nicht** von selbst: ein zweiter Webhook zur selben
+Zahlung ist ein No-op. Mollie Invoicing kennt weder Gutschrift noch
+Stornorechnung. Den Fall bearbeitest du deshalb von Hand:
+
+1. **Rechnung finden.** Rechnungsnummer zur Zahlung (`tr_…`):
+
+   ```bash
+   docker exec -i "$DB" psql -U supabase_admin -d postgres -c \
+     "SELECT invoice_number, status, issued_at, pdf_key
+        FROM billing_invoice WHERE payment_id = '<tr_…>'"
+   ```
+
+2. **Erstattung in Mollie ausloesen** (Dashboard, bei der Zahlung). Eine
+   Rueckbuchung durch die Bank siehst du ebenfalls nur dort.
+3. **Korrekturbeleg erstellen**, mit Bezug auf die Originalnummer. Welcher
+   Beleg noetig ist, legst du einmal fest und haeltst es in der
+   GoBD-Verfahrensdokumentation §6 fest.
+4. **Korrekturbeleg ablegen**, neben dem Original:
+   `<PLATZHALTER: Ablageort fuer Korrekturbelege>`. Who2Be hat dafuer heute
+   keinen Upload; das Original bleibt unveraendert im Archiv.
+5. **Nicht tun:** die Rechnung in Mollie auf `payment-reversed` setzen oder
+   loeschen, die Zeile in `billing_invoice` aendern. Der Trigger lehnt
+   Aenderungen an Nummer, Betrag, Steuerangaben und PDF einer ausgestellten
+   Rechnung ab; geloescht wird erst nach Ablauf der Aufbewahrungsfrist.
+6. **Abo und Tarif** sind davon getrennt: kuendigen ueber Mollie bzw. den
+   Override (Schritt 13), wie im Downgrade-Fall (Schritt 17).
+
+Steht eine Zeile auf `failed` (ERROR-Zeile im Worker-Log
+`Rechnung … endgueltig fehlgeschlagen`): im Mollie-Dashboard pruefen, ob zur
+Zahlung schon eine Rechnung existiert, und sie sonst dort von Hand ausstellen.
+
+---
+
 ## Was garantiert schiefgeht, und wie du es erkennst
 
 Die beiden ersten sind keine Vermutung — sie treffen jeden, der die Liste nicht
@@ -557,6 +630,11 @@ in dieser Reihenfolge abarbeitet.
 | **`provider_email_needs_verification`** | Die E-Mail-Adresse beim Provider ist nicht verifiziert. | Beim Provider verifizieren — oder SMTP einrichten. |
 | **Zertifikat wird nicht ausgestellt** | DNS noch nicht aufgeloest oder Port 80 zu. | `docker compose … logs caddy` nennt den ACME-Fehler im Klartext. Nicht in Schleife neu versuchen — Let's Encrypt hat Ratelimits. |
 | **`503` auf Checkout/Webhook** | `MOLLIE_API_KEY` fehlt oder ist leer. | Test-Key setzen, `api` neu erzeugen. Oder den Override-Weg (Schritt 13) nehmen. |
+| **`503 Rechnungsstellung nicht konfiguriert.` beim Checkout** | `WHO2BE_INVOICE_TAX_MODE` ist im `api`-Container leer (fail closed, ADR-0061 §5). | Wert setzen (Schritt 15), `api` und `worker` neu erzeugen, mit `printenv WHO2BE_INVOICE_TAX_MODE` im Container pruefen. |
+| **`409` beim Checkout** | Fuer die Organisation sind keine Rechnungsdaten gespeichert. | Rechnungsdaten im Billing-Bereich speichern (Schritt 15). |
+| **Container `api` oder `worker` startet nicht, Meldung zu `invoice_tax_mode`/`invoice_price_basis`** | Tippfehler im Schalter. Erlaubt sind nur `regular`/`small_business` bzw. `net`/`gross`. | Wert korrigieren, neu erzeugen. |
+| **Pro aktiv, aber keine Rechnung (`billing_invoice` bleibt `pending`)** | `last_error` nennt den Grund: `hold:tax_mode_missing` (Schalter fehlt im `worker`), `hold:profile_missing`, `hold:email_missing`, `hold:amount_mismatch`. Ohne `hold:`: Worker-Log `invoice-retry: MOLLIE_API_KEY fehlt` heisst, der Key fehlt im `worker`. | Schalter bzw. Key im `worker` setzen, Daten nachtragen; der Worker prueft zurueckgehaltene Rechnungen stuendlich erneut. |
+| **`billing_invoice` auf `failed`** | 8 technische Fehlversuche, ERROR-Zeile im Worker-Log. | Abschnitt [Storno und Erstattung](#storno-und-erstattung), letzter Absatz. |
 | **Compose bricht ab, bevor irgendetwas startet** | `SEAWEEDFS_S3_SECRET_KEY` fehlt (harter Guard). | Wert setzen (Schritt 6). |
 | **Kein `429` im MCP-Check** | Edition ist nicht `cloud`, oder du hast mit einem Web-JWT statt einem `w2b_…`-Token gerufen. | Beide `-f`-Dateien beim Bring-up, und einen API-Token verwenden. |
 
@@ -573,6 +651,8 @@ Damit die Liste nicht laenger wirkt, als sie ist:
   Testlauf reicht Compose von Hand bzw. `deploy/hetzner/scripts/deploy.sh`.
 - **Kein Backup-Setup.** Die `RESTIC_*`/`BACKUP_*`-Variablen liest nur
   `--profile backup`. Vor echten Daten ist das Pflicht, fuer den Testlauf nicht.
-- **Kein Rechnungs-/Umsatzsteuer-Thema.** Der Test-Modus erzeugt keinen Umsatz.
-  Vor dem ersten *zahlenden* Kunden ist es ein harter Blocker mit Wochen
-  Vorlauf — das ist ein eigenes Vorhaben, nicht Teil dieser Liste.
+- **Keine endgueltige Steuer-Festlegung.** Der Test-Modus erzeugt keinen
+  Umsatz; fuer den Testlauf genuegt ein gesetzter Steuermodus (Schritt 15).
+  Welche Schalterwerte im Echtbetrieb gelten, legst du vor dem ersten
+  *zahlenden* Kunden fest — ein harter Blocker mit Vorlauf, aber nicht Teil
+  dieser Liste. Offene Punkte: GoBD-Verfahrensdokumentation §6.
