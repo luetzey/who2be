@@ -2158,6 +2158,7 @@
         "sectionFooter": "Open invitations expire automatically and can be revoked.",
         "emailLabel": "Email",
         "roleLabel": "Role",
+        "viewerHint": "Can use agents through a connector, but cannot change anything.",
         "inviteButton": "Invite",
         "sentToast": "Invitation sent to {{email}}.",
         "emailInvalid": "Please enter a valid email address.",
