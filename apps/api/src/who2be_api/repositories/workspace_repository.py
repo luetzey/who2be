@@ -21,6 +21,10 @@ from who2be_api.repositories.builder_content import (
     PlaybookDef,
     get_content_pack,
 )
+from who2be_api.repositories.tool_profile_repository import (
+    builtin_profile_id,
+    seed_builtin_profiles,
+)
 from who2be_models import (
     DEFAULT_LOCALE,
     AgentToolPolicy,
@@ -29,6 +33,7 @@ from who2be_models import (
     ReadScope,
     WorkspaceRead,
 )
+from who2be_models.tool_profiles import BuiltinProfileKey
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +144,22 @@ async def _scope_to_new_workspace(
         str(workspace_id),
         str(org_id),
     )
+
+
+async def seed_new_workspace_profiles(
+    conn: asyncpg.Connection, workspace_id: UUID, org_id: UUID, content_locale: str
+) -> None:
+    """Mitgelieferte Werkzeug-Profile fuer einen frisch angelegten Workspace.
+
+    Fuer die Anlage-Wege ohne Agenten-Seed: `PgOrganizationRepository.
+    create_company` (Default-Workspace einer Firmen-Org) und
+    `seed_bootstrap_tenant` (On-Prem-Bootstrap). Sie haben denselben
+    RLS-Bedarf wie `_seed_default_agents`, daher erst transaktionslokal auf
+    den neuen Workspace scopen, dann seeden (ADR-0059 §4.3). **Setzt eine
+    umgebende Transaktion voraus**, siehe `_scope_to_new_workspace`.
+    """
+    await _scope_to_new_workspace(conn, workspace_id, org_id)
+    await seed_builtin_profiles(conn, workspace_id, content_locale)
 
 
 async def ensure_personal_workspace(
@@ -674,8 +695,17 @@ async def _seed_default_agents(
     (workspace_id + name/slug) und ON-CONFLICT-DO-NOTHING auf den Links.
     Migration 0047 war der einmalige Backfill des damaligen Stands; neuere
     Inhalte verteilt der Start-Sync.
+
+    Werkzeug-Profile (ADR-0059 §4.3, Migration 0111): Zuerst die vier
+    mitgelieferten Profile, dann bekommen beide Builder-Agenten beim Insert
+    das Profil „Builder“ (W59-3 = A). Der Profil-Seed steht vor dem
+    Frueh-Ausstieg, damit auch ein Re-Lauf fehlende Profile nachlegt.
     """
     pack = get_content_pack(content_locale)
+
+    # 0. Mitgelieferte Werkzeug-Profile (idempotent, Lieferstand aus
+    #    `who2be_models.tool_profiles`).
+    await seed_builtin_profiles(conn, workspace_id, content_locale)
 
     # 1. Persona „Builder" + v1 (active). Der NOT-EXISTS-Guard liefert None,
     #    wenn der Builder-Seed bereits lief — der Lauf ist atomar, also sind
@@ -814,11 +844,12 @@ async def _seed_default_agents(
     )
     if template_id is None:
         return
+    builder_profile_id = await builtin_profile_id(conn, workspace_id, BuiltinProfileKey.builder)
     await conn.execute(
         "INSERT INTO agent (workspace_id, owner_id, name, description, "
         " persona_id, system_prompt_template_id, status, tool_policy, "
-        " is_managed, managed_content_version) "
-        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8 "
+        " is_managed, managed_content_version, tool_profile_id) "
+        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8, $9 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM agent WHERE workspace_id = $1 AND name = $3"
         ")",
@@ -830,6 +861,7 @@ async def _seed_default_agents(
         template_id,
         _builder_tool_policy(),
         BUILDER_CONTENT_VERSION,
+        builder_profile_id,
     )
 
     # 6. Builder-Lite-agent — selbe Persona + Schreib-Policy, aber das schlanke
@@ -845,8 +877,8 @@ async def _seed_default_agents(
     await conn.execute(
         "INSERT INTO agent (workspace_id, owner_id, name, description, "
         " persona_id, system_prompt_template_id, status, tool_policy, "
-        " is_managed, managed_content_version) "
-        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8 "
+        " is_managed, managed_content_version, tool_profile_id) "
+        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8, $9 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM agent WHERE workspace_id = $1 AND name = $3"
         ")",
@@ -858,6 +890,7 @@ async def _seed_default_agents(
         lite_template_id,
         _builder_tool_policy(),
         BUILDER_CONTENT_VERSION,
+        builder_profile_id,
     )
 
 
