@@ -33,4 +33,7 @@ Betreiber-Vorlage `deploy/hetzner/.env.example` nennt beide Schalter.
 
 ## Ergebnis
 
-(wird nachgetragen)
+PR #1098. Neuer Test 31 Faelle gruen, mit Nachbartests 40 passed. Alle 29
+Mutationen der Gegenprobe machen den Test rot. ruff, format, mypy,
+check_effectful_tests und check_code_refs (0 error) sind gruen. Die volle Suite
+mit DB laeuft in der CI, lokal gab es keinen Postgres.
