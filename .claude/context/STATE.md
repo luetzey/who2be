@@ -2,6 +2,36 @@
 
 _Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
 
+## Backlog-Aufbereitungslauf 64 (2026-10-28, `main` @ `14234887`)
+
+**Protokoll:** `.claude/plan/2026-10-28-0030_backlog-aufbereitungslauf-64.md`. Warteschlange: **#442**.
+
+**Fenster:** 4 Commits seit Lauf 63 (#1054, #1084, #1087, #1099) — erstes nicht-leeres seit Lauf 61.
+`main` **gruen** (24 success, 1 skipped, 0 rot). **22 offene PRs**, alle konfliktfrei, elf gruen bei
+hoechstens 4 Commits Rueckstand, drei rot (#674, #1080, #1100).
+
+**Reihenfolge:** 1. **#989** (`http-cache-semantics` → 4.3.0, Frist `osv-scanner.toml:11` am
+**2026-11-02**, 5 Tage) · 2. **#632** (Passkey registrieren, Locale-Sperre mit #1084 gefallen) ·
+3. **#633** (nach #632 + Container-Laufzeit). **Kein Parallel-Paar:** der Python-Baum ist leer.
+
+**Erledigt:** **#1077 geschlossen** — alle fuenf Akzeptanzkriterien auf dem gemergten Baum belegt
+(Traeger #1087, `7ef15b8a`); GoBD-Doku 144 → 231 Zeilen. Bodies von **#1001** und **#633**
+korrigiert, **#442** neu geschrieben (alles per `gh api --input`, Fussszeile je 1x erhalten).
+
+**Neu offen:** **#1001 ist Wartestand, nicht Paket** — **#1101** haelt Zieldatei, Erzeuger
+(`payload_report.py`) **und** Nachweis (`test_tool_payload_budget.py`) und erledigt AK1 ganz, AK2
+ueberwiegend; AK3 (`71.738` → **71.749**) und AK4 (Historien-Zeile) bleiben. Label
+`agent-ready` → `needs-decision`, Weiche 35 mit drei Optionen im Issue (Empfehlung B).
+**#1100 und #1080 sind an `audit` rot aus Rueckstand, nicht aus ihrem Diff** — ihre Baeume tragen
+`authlib 1.7.2` gegen `1.9.1` auf `main`, #1100 fasst `uv.lock` nicht an; ein Branch-Update behebt
+beide. **#674 ist der Gegenfall:** rot bei 0 wie bei 4 Commits Rueckstand.
+
+**Zahlen (Eigenzahlen der Werkzeuge):** Web 282 Dateien / 2849 Tests, Coverage 89,89 / 83,95 /
+86,81 / 91,75 (Branches 9179/10933, engster Abstand 4,95 zum Boden 79); lint 94 problems / 0 errors;
+`tsc -b` 0 Byte; i18n 156 Waisen, Locales je 3.365 Schluessel; mypy 655 Dateien; pytest 4971
+gesammelt (312 Billing); 397 Changelog-Fragmente; `docker info` Exit 1 (40. Mal).
+
+
 ## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
 
 **Stand:** PR offen, Review ausstehend. `save_memory` weist Zugangsdaten und
