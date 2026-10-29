@@ -368,3 +368,76 @@ diesen Lauf unmittelbar betreffen:
   (`human-only`), #540 (entscheidungs- und umgebungsblockiert)
 - Nicht messbar, ausdruecklich offengelassen: der OSV-Stand von GHSA-ch52-4w7c-c8xp (drei Wege zu,
   vierter laeuft ueber den `audit`-Job des Protokoll-PRs)
+
+---
+
+## Nachtrag, 2026-10-29 00:37 — das Gate hat geantwortet und die Reihenfolge gedreht
+
+Der Protokoll-PR dieses Laufs (**#1104**, Head `a9dce956`) ist der Messweg, den Fund 1 als
+einzigen offenen benannt hat. **Er ist innerhalb derselben Stunde gelaufen.**
+
+**CI-Lauf 40795213278, Job `audit` (123189921876), Step 10 „OSV-Scan (Web-Lockfile, unabhaengig
+von der npm-Registry)":**
+
+```
+osv-scanner osv-scanner version: 2.2.4
+Scanned /home/runner/work/who2be/who2be/apps/web/package-lock.json file and found 700 packages
+Loaded filter from: /home/runner/work/who2be/who2be/apps/web/osv-scanner.toml
+/home/runner/work/who2be/who2be/apps/web/osv-scanner.toml has unused ignores:
+ - GHSA-ch52-4w7c-c8xp
+OSV: 0 Eintraege (rc=0)
+```
+
+🔴 **`has unused ignores` ist die Auskunft, auf die es ankommt.** osv-scanner meldet einen
+Ignore-Eintrag als *unused*, wenn er auf **keinen gefundenen Befund** gepasst hat — nicht, wenn
+er einen unterdrueckt. Der Eintrag ist am 2026-10-29 **aktiv** (`ignoreUntil` ist noch nicht
+erreicht) und greift ins Leere. **Also fuehrt auch OSV GHSA-ch52-4w7c-c8xp fuer dieses Lockfile
+nicht mehr** — dieselbe Aussage, die der Bulk-Endpunkt der npm-Registry in die eine Richtung
+macht, macht das **Gate selbst** in der anderen.
+
+### Vier Folgen
+
+1. 🟢 **Die Frist beisst nicht.** Laeuft `ignoreUntil = 2026-11-02T00:00:00Z` ab, passiert
+   nichts: ein wirkungsloser Ignore kann bei seinem Ablauf keinen Befund freigeben, den es nicht
+   gibt. 🔴 **Die Praemisse aller Fassungen seit Lauf 56 — „danach wird `audit` rot, ohne dass
+   jemand eine Zeile anfasst" — war falsch.**
+2. 🟢 **Weiche 32 ist durch Messung beantwortet, nicht durch Entscheidung** — und die Empfehlung
+   dreht sich am selben Tag ein zweites Mal: **nicht B** (sofort ausfuehren, Lockfile-Konflikt in
+   Kauf nehmen), sondern **A** (#1092 zuerst mergen, dann #989 ohne Konflikt). Nicht weil das
+   Warten besser geworden ist, sondern **weil die Eile weg ist**. Zum Schliessen vorgeschlagen.
+3. 🔴 **#989 verliert Kriterium 2 und damit Position 1.** Eine Frist ohne Konsequenz ist keine
+   Owner-Vorgabe; es greift nur noch Kriterium 5. **Neue Reihenfolge: #632 (Kriterium 3) →
+   #989 (Kriterium 5) → #633 (Kriterium 1).** Wellen entsprechend: **A = #632**, **B = #989**,
+   **D = #633** — alle drei im Vitest-Baum, also weiterhin eine Kette.
+4. 🟢 **AK2 von #989 ist jetzt so stark begruendet, wie es geht, und AK3 zweifach gruen.** Fuer
+   AK2 spricht nicht mehr eine Einschaetzung dieses Laufs, sondern die Ausgabe des Werkzeugs, das
+   das Gate stellt: `unused`. Und das Entfernen ist gefahrlos — ohne Filter findet derselbe Scan
+   weiter **0** Eintraege. AK3 ist lokal (`npm audit` Exit 0) **und** am Gate (`OSV: 0 Eintraege`)
+   erfuellt.
+
+### Was das ueber das Verfahren sagt
+
+🟢 **Weiche 37 Option B hat sich innerhalb einer Stunde selbst belegt.** Der Kommentar in #442
+nannte als Messweg „der `audit`-Job des naechsten PR-Laufs" — **genau dieser Job hat Weiche 32
+beantwortet und die Reihenfolge gedreht.** Ein benannter Messweg war hier keine Buchhaltung,
+sondern die Antwort. **Die Empfehlung bleibt B, jetzt mit einem Fall.**
+
+🔴 **Und der Preis des Fehlens ist jetzt bezifferbar:** die Frist hat **neun Laeufe** lang
+Kriterium 2 und Position 1 getragen — eine Reihenfolge, die sie nicht tragen durfte. Gekostet hat
+die Aufklaerung einen CI-Lauf, der ohnehin lief.
+
+### Zustand von PR #1104
+
+🟢 **Voll gruen und mergebar:** **24** Check-Runs, davon **16** am Head gelesen — `all-green`
+**success**, `audit` **success**, `secrets`/`changelog-guard`/`changes`/`CodeQL` **success**, die
+Web-/E2E-/Python-Jobs **skipped** (docs-only, Klassifikation durch den Job `changes`).
+`mergeable_state: clean`, Base `main`, **0** Review-Kommentare, **0** rote Checks.
+**Kein `.claude/skills/steward/` oder `babysit/` im Repo** — es gilt die Standard-Posture.
+
+### Nachgetragen
+
+- **#989** — Abschnitt „Was dieser Lauf NICHT belegen kann" durch den Gate-Beleg ersetzt; Titel,
+  AK2, AK3, Frist-Absatz und Weiche-32-Absatz entsprechend. Byte-exakt zurueckgelesen.
+- **#442** — Satz 1, Startbar-Tabelle (Positionen getauscht), Begruendungs-Absatz, Wellen A/B/D,
+  Weiche 32 (zum Schliessen vorgeschlagen), Weiche 37 (Nachtrag), Fund 1. Byte-exakt
+  zurueckgelesen.
