@@ -441,3 +441,49 @@ Web-/E2E-/Python-Jobs **skipped** (docs-only, Klassifikation durch den Job `chan
 - **#442** — Satz 1, Startbar-Tabelle (Positionen getauscht), Begruendungs-Absatz, Wellen A/B/D,
   Weiche 32 (zum Schliessen vorgeschlagen), Weiche 37 (Nachtrag), Fund 1. Byte-exakt
   zurueckgelesen.
+
+### Gegenprobe: der Gate-Beleg steht zweimal, an zwei Heads
+
+Der Nachtrags-Commit `cc46da9e` hat `audit` ein zweites Mal gefahren. **Zweiter CI-Lauf
+(40795719660), zweiter Head, zweiter Job (123191602667) — wortgleiche Ausgabe:**
+
+```
+osv-scanner osv-scanner version: 2.2.4
+Scanned /home/runner/work/who2be/who2be/apps/web/package-lock.json file and found 700 packages
+Loaded filter from: /home/runner/work/who2be/who2be/apps/web/osv-scanner.toml
+/home/runner/work/who2be/who2be/apps/web/osv-scanner.toml has unused ignores:
+ - GHSA-ch52-4w7c-c8xp
+OSV: 0 Eintraege (rc=0)
+```
+
+🟢 **Damit steht der entscheidende Fund dieses Laufs auf drei Messungen:** dem Bulk-Endpunkt der
+npm-Registry (leer), dem lokalen `npm audit` (Exit 0) und **zweimal dem Gate selbst**
+(`unused ignores`, je `OSV: 0 Eintraege`).
+⚠️ **Ehrlich zur Unabhaengigkeit** (Regel 127): die beiden Gate-Lesungen sind **dasselbe Werkzeug
+auf demselben Lockfile** — eine Wiederholung, kein zweiter Messweg. Sie schliessen einen
+einmaligen Aussetzer aus, nicht einen systematischen Fehler von osv-scanner. **Der zweite Messweg
+bleibt die npm-Registry**, und sie sagt dasselbe.
+
+### Was beim Lesen von Job-Logs in dieser Umgebung gilt (Regel 153)
+
+🔴 **Der Roh-Log eines Actions-Jobs ist hier nicht abrufbar:** `gh api
+repos/.../actions/jobs/<id>/logs` folgt auf eine Azure-Blob-URL, und die Netz-Policy antwortet
+**403 Forbidden** (0 Byte, rc 1). **Lesbar ist der Log nur ueber `get_job_logs` mit
+`return_content`** — und das liefert **nur den Schwanz**. Bei einem gruenen Job besteht der
+Schwanz aus dem `Post job cleanup`-Block (~35 Zeilen), **der die eigentliche Step-Ausgabe
+verdeckt**: `tail_lines=12` und `=30` lieferten nur Cleanup, **erst `=48` reichte bis zur
+OSV-Ausgabe zurueck**.
+
+**Regel: wer die Ausgabe eines Steps aus einem gruenen Job braucht, liest mit `tail_lines` von
+mindestens 48** — und wenn nichts Fachliches auftaucht, ist das **kein Beleg fuer eine leere
+Ausgabe**, sondern fuer einen zu kurzen Schwanz (Regel 10: jeder maschinelle Negativ-Befund wird
+gegengelesen, bevor er ein Fund wird).
+
+### Zustand von PR #1104 am Ende dieses Laufs
+
+🟢 **Voll gruen am Head `cc46da9e`:** **16** Check-Runs, **0** rot, **0** laufend —
+`all-green` **success**, `audit` **success**, `CodeQL` **success** (nicht `neutral` wie in den
+Vorlaeufen), `secrets`/`changelog-guard`/`changes` **success**, die Web-/E2E-/Python-Jobs
+**skipped** (docs-only). `mergeable_state: clean`, **0** Review-Kommentare.
+**Nichts an diesem PR ist offen.** Er ist Protokoll-Nummer **10** des Rueckstands — und faellt
+damit selbst unter Weiche 18.
