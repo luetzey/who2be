@@ -1,10 +1,20 @@
-"""Per-Request-Policy-Filterung der MCP-Tool-Liste (ADR-0042).
+"""Per-Request-Policy-Filterung der MCP-Tool-Liste (ADR-0042, ADR-0059).
 
 FastMCP-Middleware, die `tools/list` pro Request auf die Tools filtert, die
-die `AgentToolPolicy` des aufrufenden Bearer-Tokens gewaehrt, und direkte
-Aufrufe ausgeblendeter Tools mit einer klaren Meldung ablehnt. SSoT fuer die
-Sichtbarkeitsregeln ist `who2be_models.tool_requirements` — dasselbe Mapping,
-das auch der `tools-overview`-Prompt-Resolver der API nutzt (kein Drift).
+die `AgentToolPolicy` des aufrufenden Bearer-Tokens gewaehrt UND das
+Werkzeug-Profil seines Agenten durchlaesst (`whoami.tool_profile`), und
+direkte Aufrufe ausgeblendeter Tools mit einer klaren Meldung ablehnt. SSoT
+fuer die Rechte ist `who2be_models.tool_requirements`, fuer Gruppen, Kern und
+Profil-Formel `who2be_models.tool_profiles` — dieselben Funktionen nutzt der
+`tools-overview`-Prompt-Resolver der API (kein Drift).
+
+Das Profil blendet nur aus, es erweitert nie (ADR-0059 §3.1): Was die Rechte
+verbergen, bleibt verborgen; die Kern-Werkzeuge `ping`, `whoami` und
+`report_problem` blendet kein Profil aus. Ohne `tool_profile` (Menschen,
+ungebundene Tokens, Agenten auf „Alle", aeltere API) filtert die Middleware
+wie vorher nur nach Rechten. Bei `tools/call` unterscheidet sie zwei
+Meldungen: Rechte fehlen, oder nur das Profil verbirgt das Werkzeug — dann
+nennt die Meldung den Meldeweg `report_problem` mit `tool_request` (§8).
 
 Das ist bewusst KEINE Security-Grenze: Die autoritative Durchsetzung bleibt
 serverseitig bei der API (ADR-0039). Daher gilt durchgehend **fail-open**:
@@ -17,8 +27,11 @@ serverseitig bei der API (ADR-0039). Daher gilt durchgehend **fail-open**:
   faengt das im CI.
 
 Die Identitaet (`whoami`) wird pro Token-SHA-256 gecacht (LRU + TTL, Muster
-`_workspace_cache` in `server.py`) — Policy-Aenderungen werden nach TTL bzw.
-Reconnect sichtbar (akzeptiert, siehe Plan).
+`_workspace_cache` in `server.py`). Rechte- und Profil-Aenderungen wirken nach
+hoechstens 60 Sekunden (W59-5, ADR-0059 §6.2); ein Neuverbinden verkuerzt das
+nicht, weil der Cache am Token haengt. Das `ttlMs` von `tools/list` setzt
+FastMCP (heute `0`, `cacheScope: private`); es liegt unter dieser TTL und
+bleibt deshalb unveraendert — `tests/test_policy_filter.py` haelt die Grenze.
 """
 
 from __future__ import annotations
@@ -35,7 +48,12 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import Tool, ToolResult
 
 from who2be_mcp.config import get_settings
-from who2be_models import WhoAmIRead, is_tool_visible_for
+from who2be_models import (
+    WhoAmIRead,
+    is_tool_in_profile,
+    is_tool_visible_for,
+    is_tool_visible_for_with_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +61,10 @@ logger = logging.getLogger(__name__)
 # jeder Request traegt seinen eigenen Bearer, ADR-0034). Key ist der
 # SHA-256-Hash des Tokens (defense-in-depth: kein Klartext-Token als
 # Dict-Key), Wert ist (WhoAmIRead, Ablauf-Monotonic). LRU-Schranke + TTL wie
-# beim `_workspace_cache` in `server.py`.
+# beim `_workspace_cache` in `server.py`. TTL 60 s nach W59-5 (Owner
+# 2026-10-21, ADR-0059 §6.2): eine Freigabe im Web wirkt binnen einer Minute.
 _WHOAMI_CACHE_MAX = 512
-_WHOAMI_CACHE_TTL_SECONDS = 300.0
+_WHOAMI_CACHE_TTL_SECONDS = 60.0
 _whoami_cache: OrderedDict[str, tuple[WhoAmIRead, float]] = OrderedDict()
 
 # Bereits gewarnte unbekannte Tool-Namen — das Warn-Log soll pro Prozess nur
@@ -80,12 +99,28 @@ def _whoami_cache_put(token: str, identity: WhoAmIRead) -> None:
         _whoami_cache.popitem(last=False)
 
 
-class PolicyFilterMiddleware(Middleware):
-    """Filtert `tools/list` und sperrt `tools/call` nach der Token-Policy.
+def _rights_hidden_message(name: str) -> str:
+    return (
+        f"Tool '{name}' ist fuer diesen Agenten nicht freigeschaltet — "
+        "pruefe deine Berechtigungen via whoami."
+    )
 
-    Nutzt `is_tool_visible_for` aus `who2be_models.tool_requirements` gegen
-    die per `whoami` aufgeloeste Identitaet des Request-Tokens. Fail-open in
-    jede Richtung (siehe Modul-Docstring) — die API bleibt autoritativ.
+
+def _profile_hidden_message(name: str, profile_name: str) -> str:
+    # Wortlaut ADR-0059 §8: nennt keine Rechte und verspricht keine Freigabe.
+    return (
+        f"Werkzeug `{name}` liegt nicht in deinem Werkzeug-Profil „{profile_name}“. "
+        'Brauchst du es, melde es mit `report_problem` (`category="tool_request"`, '
+        "in `note` das Werkzeug und wofuer). Ein Mensch passt dein Profil an."
+    )
+
+
+class PolicyFilterMiddleware(Middleware):
+    """Filtert `tools/list` und sperrt `tools/call` nach Token-Policy und Profil.
+
+    Nutzt `is_tool_visible_for_with_profile` aus `who2be_models.tool_profiles`
+    gegen die per `whoami` aufgeloeste Identitaet des Request-Tokens. Fail-open
+    in jede Richtung (siehe Modul-Docstring) — die API bleibt autoritativ.
     """
 
     async def _resolve_identity(self) -> WhoAmIRead | None:
@@ -124,7 +159,27 @@ class PolicyFilterMiddleware(Middleware):
 
     @staticmethod
     def _is_visible(identity: WhoAmIRead, name: str) -> bool | None:
-        return is_tool_visible_for(
+        """Rechte UND Profil (ADR-0059 §3.1); `None` fuer unbekannte Namen."""
+        return is_tool_visible_for_with_profile(
+            name,
+            unrestricted=identity.unrestricted,
+            role=identity.role,
+            capabilities=identity.capabilities,
+            read_scopes=identity.read_scopes,
+            memory_mode=identity.memory_mode,
+            tool_profile=identity.tool_profile,
+        )
+
+    @staticmethod
+    def _hidden_message(identity: WhoAmIRead, name: str) -> str | None:
+        """Sperr-Meldung fuer `tools/call`, `None` wenn der Aufruf durchgeht.
+
+        Die Rechte gehen vor: Verbergen sie das Werkzeug, kommt die
+        Rechte-Meldung, auch wenn das Profil es ebenfalls ausblendet. Nur wenn
+        allein das Profil es verbirgt, kommt die Profil-Meldung (§8).
+        Unbekannte Namen gehen durch (fail-open, die API setzt durch).
+        """
+        by_rights = is_tool_visible_for(
             name,
             unrestricted=identity.unrestricted,
             role=identity.role,
@@ -132,6 +187,14 @@ class PolicyFilterMiddleware(Middleware):
             read_scopes=identity.read_scopes,
             memory_mode=identity.memory_mode,
         )
+        if by_rights is False:
+            return _rights_hidden_message(name)
+        grant = identity.tool_profile
+        if by_rights is None or identity.unrestricted or grant is None:
+            return None
+        if is_tool_in_profile(name, grant):
+            return None
+        return _profile_hidden_message(name, grant.name)
 
     async def on_list_tools(
         self,
@@ -170,10 +233,7 @@ class PolicyFilterMiddleware(Middleware):
         # Tool sperren; Aufloesungsfehler oder unbekannter Name werden
         # durchgelassen — die API setzt autoritativ durch (ADR-0039).
         if identity is not None:
-            name = context.message.name
-            if self._is_visible(identity, name) is False:
-                raise ToolError(
-                    f"Tool '{name}' ist fuer diesen Agenten nicht freigeschaltet — "
-                    "pruefe deine Berechtigungen via whoami."
-                )
+            message = self._hidden_message(identity, context.message.name)
+            if message is not None:
+                raise ToolError(message)
         return await call_next(context)

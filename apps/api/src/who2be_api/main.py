@@ -77,6 +77,7 @@ from who2be_api.routers import (
     system_routines,
     test_cases,
     tokens,
+    tool_profiles,
     usages,
     wa_artifacts,
     wa_ingest,
@@ -302,6 +303,16 @@ _PROBLEM_TITLES: dict[str, str] = {
     "anchor_unknown": "Anker unbekannt",
     "anchor_duplicate": "Anker doppelt",
     "version_conflict": "Stand hat sich geaendert",
+    # Werkzeug-Profile pro Agent (ADR-0059 §7.1, Q2b):
+    "tool_profile_not_found": "Werkzeug-Profil nicht gefunden",
+    "tool_profile_name_conflict": "Name des Werkzeug-Profils vergeben",
+    "tool_profile_in_use": "Werkzeug-Profil noch zugeordnet",
+    "tool_profile_builtin": "Mitgeliefertes Werkzeug-Profil nicht loeschbar",
+    "tool_profile_not_builtin": "Kein mitgeliefertes Werkzeug-Profil",
+    "unknown_tool": "Unbekanntes Werkzeug",
+    "unknown_tool_group": "Unbekannte Werkzeuggruppe",
+    "core_tool_not_removable": "Kern-Werkzeug nicht sperrbar",
+    "human_only": "Nur durch einen Menschen",
     "area_id_required_for_human": "area_id erforderlich",
     "template_version_inactive": "Template ohne aktive Version",
     "agent_incomplete": "Agent unvollstaendig",
@@ -595,6 +606,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Markdown-Schreibweg (ADR-0058 §6): ein Router fuer alle fuenf Elementarten.
     app.include_router(content_markdown.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
+    # Werkzeug-Profile pro Agent (ADR-0059 §7.1): Pflege admin, Zuordnung
+    # editor und nur Menschen — die Gates setzt der Service.
+    app.include_router(tool_profiles.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     # Aufgaben-Zaehler fuer Glocke/Dashboard/Agent (Navigation W1, nur Menschen).
     app.include_router(inbox.router, prefix=_WORKSPACE_PREFIX)

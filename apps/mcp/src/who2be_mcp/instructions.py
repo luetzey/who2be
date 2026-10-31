@@ -33,10 +33,11 @@ ALWAYS_LOAD_META: dict[str, Any] = {ALWAYS_LOAD_KEY: True}
 SERVER_INSTRUCTIONS = """\
 Who2Be verwaltet, wer ein Agent ist: Personae, Playbooks, Resources, \
 Gedaechtnis und Rueckmeldungen. Die Werkzeugliste ist nach deinen Rechten \
-gefiltert; fehlt ein Werkzeug, ist es fuer dich nicht freigegeben.
+und deinem Werkzeug-Profil gefiltert. Fehlt dir ein Werkzeug, das ein \
+Playbook nennt, melde es mit `report_problem` und `category="tool_request"`.
 
 Start, in dieser Reihenfolge:
-1. `whoami`: deine Rechte, `agent_id` und `content_locale`.
+1. `whoami`: deine Rechte, dein Werkzeug-Profil, `agent_id` und `content_locale`.
 2. `get_persona`: deine Persona mit Modi und Playbook-Katalog. Waehle den \
 Modus ueber dessen Trigger.
 3. `search_memory` mit 1-3 Stichworten zum Thema, falls sichtbar.

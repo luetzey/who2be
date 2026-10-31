@@ -324,6 +324,12 @@ PROBES: dict[str, Probe] = {
     f"DELETE {_WS}/agents/{{agent_id}}": Probe(),
     f"POST {_WS}/agents/{{agent_id}}/copy": Probe(body={}),
     f"PUT {_WS}/agents/{{agent_id}}/favorite": Probe(),
+    # Werkzeug-Profil am Agenten (ADR-0059 §7.3, nur Menschen). Die Referenz
+    # zeigt auf ein mitgeliefertes Profil, damit die Gegenprobe das eigene
+    # Profil von B danach noch loeschen kann (ein zugeordnetes waere 409).
+    f"PUT {_WS}/agents/{{agent_id}}/tool-profile": Probe(
+        body={"tool_profile_id": "<<builtin_tool_profile_id>>"}
+    ),
     f"DELETE {_WS}/agents/{{agent_id}}/favorite": Probe(),
     f"GET {_WS}/agents/{{agent_id}}/render": Probe(),
     f"GET {_WS}/agents/{{agent_id}}/rendered": Probe(),
@@ -676,6 +682,20 @@ PROBES: dict[str, Probe] = {
             "hat, darf wissen, dass er gilt (403 bei falscher E-Mail statt 404)."
         ),
     ),
+    # --- Werkzeug-Profile (ADR-0059 §7) -----------------------------------
+    # `tool_profile_id` ist das eigene Profil des Mandanten (Name mit Marker,
+    # `_tool_profile_extras`), `builtin_tool_profile_id` das mitgelieferte
+    # "Lesen": Zuruecksetzen geht nur auf mitgelieferte, Loeschen nur auf eigene.
+    f"GET {_WS}/tool-profiles": Probe(),
+    f"GET {_WS}/tool-profiles/catalog": Probe(),
+    f"POST {_WS}/tool-profiles": Probe(body={"name": "iso-new", "groups": ["core"]}),
+    f"PUT {_WS}/tool-profiles/{{profile_id}}": Probe(
+        body={"name": "iso-upd", "groups": ["core"]}, path={"profile_id": "tool_profile_id"}
+    ),
+    f"POST {_WS}/tool-profiles/{{profile_id}}/reset": Probe(
+        path={"profile_id": "builtin_tool_profile_id"}
+    ),
+    f"DELETE {_WS}/tool-profiles/{{profile_id}}": Probe(path={"profile_id": "tool_profile_id"}),
     # --- Betreiber-Routen (ADR-0057 §7) ------------------------------------
     # Workspace-uebergreifend: Routinen und Laufprotokoll aller Mandanten.
     # Die Grenze ist die Betreiber-Allowlist; A ist kein Betreiber (V4: 403).
@@ -771,7 +791,7 @@ def test_probes_cover_every_path_parameter() -> None:
         "memory_id", "feedback_id", "case_id", "version_id", "area_id", "artifact_id",
         "table_id", "node_id", "token_id", "invitation_id", "user_id", "organization_id",
         "own_invitation_id", "user_memory_id", "proposal_id", "agent_case_id",
-        "session_id", "measure_id",
+        "session_id", "measure_id", "tool_profile_id", "builtin_tool_profile_id",
     }  # fmt: skip
     for key, probe in PROBES.items():
         for param in re.findall(r"{(\w+)}", key):
@@ -1029,6 +1049,29 @@ def _session_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None
         ghost.ids[key] = str(uuid4())
 
 
+def _tool_profile_extras(client: TestClient, ghost: Tenant, *tenants: Tenant) -> None:
+    """Ein eigenes Werkzeug-Profil je Mandant plus die ID des mitgelieferten "Lesen".
+
+    Ueber `POST /tool-profiles` wie im Betrieb; der Name traegt den Marker,
+    damit ein Leck in Listen- und Fehlerantworten auffaellt. Die mitgelieferten
+    Profile legt schon das Anlegen des Workspace an (ADR-0059 Q2a).
+    """
+    for t in tenants:
+        p = f"/v1/workspaces/{t.workspace_id}/tool-profiles"
+        res = client.post(
+            p, json={"name": f"{t.marker} Profil", "groups": ["core"]}, headers=t.human
+        )
+        assert res.status_code == 201, res.text
+        t.ids["tool_profile_id"] = res.json()["id"]
+        listing = client.get(p, headers=t.human)
+        assert listing.status_code == 200, listing.text
+        t.ids["builtin_tool_profile_id"] = next(
+            row["id"] for row in listing.json() if row["builtin_key"] == "read"
+        )
+    for key in ("tool_profile_id", "builtin_tool_profile_id"):
+        ghost.ids[key] = str(uuid4())
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("migrated_db", "isolation_env")
 def test_no_route_crosses_the_tenant_boundary(patched_jwt_secret: str) -> None:
@@ -1129,6 +1172,7 @@ def run_isolation(client: TestClient, a: Tenant, b: Tenant, ghost: Tenant) -> Re
     _memory_extras(ghost, a, b)
     _case_extras(client, ghost, a, b)
     _session_extras(client, ghost, a, b)
+    _tool_profile_extras(client, ghost, a, b)
     before = fingerprint(b)
     plan: list[tuple[Call, Call | None, Call | None]] = []
     for key, probe in PROBES.items():
