@@ -8,9 +8,11 @@ Zahlen sehen:
 
 - `wire_tools()` holt die `tools`-Liste so, wie `tools/list` sie auf den Draht
   legt (In-Memory-Client, echter Handler, utf-8, `ensure_ascii=False`).
-- `REFERENCE_PROFILES` sind die vier Profile aus der Kennzahl M2. Gefiltert
-  wird mit `is_tool_visible_for`, also derselben Funktion, die die Middleware
-  mit den `whoami`-Feldern aufruft.
+- `REFERENCE_PROFILES` sind die vier Profile aus der Kennzahl M2 plus der
+  Builder mit Werkzeug-Profil „Builder“ (ADR-0059 §5.3). Gefiltert wird mit
+  `is_tool_visible_for_with_profile`, also derselben Funktion, die die
+  Middleware mit den `whoami`-Feldern aufruft. Gruppen und Profil kommen aus
+  `who2be_models.tool_profiles`, hier steht keine zweite Kopie.
 - `first_sentence()` und `developer_refs()` sind die Grundlage der Guards fuer
   den Kurzkatalog (Hermes, Claude Code) und fuer Entwickler-Historie im Draht.
 
@@ -27,16 +29,20 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from fastmcp import Client, FastMCP
 
 from who2be_mcp.instructions import ALWAYS_LOAD_KEY
 from who2be_models import (
+    BUILTIN_PROFILES,
     AgentToolPolicy,
+    BuiltinProfileKey,
     MemoryMode,
     ReadScope,
+    ToolProfileGrant,
     WorkspaceRole,
-    is_tool_visible_for,
+    is_tool_visible_for_with_profile,
 )
 
 WireTool = dict[str, Any]
@@ -81,19 +87,36 @@ class ReferenceProfile:
     unrestricted: bool
     role: WorkspaceRole
     policy: AgentToolPolicy | None
+    tool_profile: ToolProfileGrant | None = None
 
     def sees(self, name: str) -> bool:
         """Sieht dieses Profil das Werkzeug? Unbekannte Namen: fail-open wie die Middleware."""
         policy = self.policy
-        visible = is_tool_visible_for(
+        visible = is_tool_visible_for_with_profile(
             name,
             unrestricted=self.unrestricted,
             role=self.role,
             capabilities=None if policy is None else policy.granted_capabilities(),
             read_scopes=None if policy is None else policy.read_scopes(),
             memory_mode=None if policy is None else policy.memory_mode,
+            tool_profile=self.tool_profile,
         )
         return visible is not False
+
+
+def builtin_grant(key: BuiltinProfileKey, locale: str = "de") -> ToolProfileGrant:
+    """Ein mitgeliefertes Profil im Lieferstand, wie `whoami` es liefert.
+
+    Die `id` ist ein fester Platzhalter: fuer die Formel zaehlt nur, dass ein
+    gespeichertes Profil vorliegt (`id is None` hiesse „Alle“).
+    """
+    profile = BUILTIN_PROFILES[key]
+    return ToolProfileGrant(
+        id=UUID(int=list(BuiltinProfileKey).index(key) + 1),
+        name=profile.names[locale],
+        groups=[group.value for group in profile.groups],
+        tools=list(profile.tools),
+    )
 
 
 _BUILDER_POLICY = AgentToolPolicy(
@@ -137,6 +160,16 @@ REFERENCE_PROFILES: tuple[ReferenceProfile, ...] = (
         role=WorkspaceRole.editor,
         policy=_BUILDER_POLICY,
     ),
+    # ADR-0059 §5.3: Builder-Rechte mit dem Profil „Builder“ (inkl.
+    # `workarea_read`, W59-4) — so startet der verwaltete Builder (W59-3).
+    ReferenceProfile(
+        key="builder_profile",
+        label="Agent, Builder mit Profil „Builder“",
+        unrestricted=False,
+        role=WorkspaceRole.editor,
+        policy=_BUILDER_POLICY,
+        tool_profile=builtin_grant(BuiltinProfileKey.builder),
+    ),
     ReferenceProfile(
         key="editor",
         label="Mensch/JWT, Rolle editor",
@@ -150,6 +183,20 @@ REFERENCE_PROFILES: tuple[ReferenceProfile, ...] = (
 def visible_tools(tools: list[WireTool], profile: ReferenceProfile) -> list[WireTool]:
     """Die Teilmenge, die `tools/list` diesem Profil liefert (Reihenfolge bleibt)."""
     return [tool for tool in tools if profile.sees(tool["name"])]
+
+
+def start_bytes(tools: list[WireTool], profile: ReferenceProfile, instructions: str | None) -> int:
+    """Was ein Agent beim Start bezahlt: seine `tools/list` plus Server-`instructions`."""
+    return payload_bytes(visible_tools(tools, profile)) + len((instructions or "").encode())
+
+
+def profile_effect(tools: list[WireTool], instructions: str | None) -> tuple[int, int]:
+    """Start des Builders ohne und mit Profil „Builder“ (ADR-0059 §5.3), in Bytes."""
+    by_key = {profile.key: profile for profile in REFERENCE_PROFILES}
+    return (
+        start_bytes(tools, by_key["builder"], instructions),
+        start_bytes(tools, by_key["builder_profile"], instructions),
+    )
 
 
 def always_loaded(tools: list[WireTool]) -> list[WireTool]:
@@ -255,6 +302,13 @@ def report(tools: list[WireTool], instructions: str | None = None) -> str:
         )
     lines.append("")
     lines.append(f"Server-`instructions`: {_fmt(len((instructions or '').encode()))} Bytes.")
+    without, with_profile = profile_effect(tools, instructions)
+    saved = without - with_profile
+    percent = f"{100 * saved / without:.1f}".replace(".", ",") if without else "0,0"
+    lines.append(
+        f"Wirkung Profil „Builder“ beim Start (mit `instructions`): {_fmt(without)} -> "
+        f"{_fmt(with_profile)} Bytes (−{_fmt(saved)}, −{percent} %)."
+    )
     lines += [
         "",
         "| # | Werkzeug | gesamt | Beschreibung | Schema |",
