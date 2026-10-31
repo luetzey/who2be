@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+
 import asyncpg
 from pydantic import BaseModel
 
+from who2be_api.repositories.tool_profile_repository import fetch_agent_grant
 from who2be_api.services.placeholders._core import RenderContext, ResolveResult
+from who2be_api.services.placeholders._texts import PlaceholderTexts, texts, texts_for
 from who2be_api.services.placeholders.resolvers.memory import memory_prompt_block
 from who2be_models import (
     MCP_TOOL_REQUIREMENTS,
@@ -14,6 +19,45 @@ from who2be_models import (
     ReadScope,
     is_tool_visible,
 )
+from who2be_models.tool_profiles import ToolProfileGrant, is_tool_visible_with_profile
+
+
+async def _load_grant(ctx: RenderContext, db: asyncpg.Connection) -> ToolProfileGrant | None:
+    """Werkzeug-Profil des gerenderten Agenten (ADR-0059 §3.2), sonst None.
+
+    Nur im Agent-Render-Pfad (Policy UND `agent_id` gesetzt). Persona-,
+    Preview- und Export-Render haben keinen Agenten und damit kein Profil.
+    """
+    if ctx.tool_policy is None or ctx.agent_id is None:
+        return None
+    return await fetch_agent_grant(db, ctx.workspace_id, ctx.agent_id)
+
+
+def _hidden_by_profile(
+    policy: AgentToolPolicy | None, grant: ToolProfileGrant | None
+) -> frozenset[str]:
+    """Werkzeuge, die die Rechte zeigen, das Profil aber verbirgt.
+
+    Ohne Profil leer — dann bleibt der Block exakt wie vor ADR-0059. Was die
+    Rechte verbergen, faengt der Eintrags-Schnitt in `_TOOLS` ab (ADR-0042).
+    """
+    if grant is None:
+        return frozenset()
+    return frozenset(
+        name
+        for name in MCP_TOOL_REQUIREMENTS
+        if is_tool_visible(name, policy) is True
+        and is_tool_visible_with_profile(name, policy, grant) is not True
+    )
+
+
+def _mentions_any(text: str, names: Iterable[str]) -> bool:
+    """Nennt `text` eines der Werkzeuge `names` (als ganzes Wort)?
+
+    Wortgrenze statt Teilstring: `search` darf nicht in `search_content`
+    anschlagen.
+    """
+    return any(re.search(rf"(?<![A-Za-z0-9_]){re.escape(n)}(?![A-Za-z0-9_])", text) for n in names)
 
 
 class ToolsOverviewResolver:
@@ -35,43 +79,66 @@ class ToolsOverviewResolver:
     kuratierte Gruppierung + Beschreibung.
 
     `target_id` bleibt ungenutzt. Nie Miss.
+
+    Werkzeug-Profil (ADR-0059 §3.2, Q4): Im Agent-Render-Pfad laedt der
+    Resolver das Profil des Agenten ueber `ctx.agent_id` und wendet die Formel
+    aus `who2be_models.tool_profiles` an — dieselbe, die die
+    `PolicyFilterMiddleware` fuer `tools/list` nutzt. Die Rechte gehen vor; das
+    Profil streicht nur weiter. Ein Eintrag, den das Profil nur teilweise
+    zulaesst (einzeln gewaehlte Werkzeuge), zeigt nur die sichtbaren Werkzeuge.
+    Beschreibungen und Hinweise, die ein vom Profil verborgenes Werkzeug
+    nennen, entfallen — der Prompt nennt nichts, was `tools/list` nicht
+    liefert.
     """
 
     async def resolve(
         self,
         target_id: str,  # noqa: ARG002
         ctx: RenderContext,
-        db: asyncpg.Connection,  # noqa: ARG002
+        db: asyncpg.Connection,
     ) -> ResolveResult:
         policy = ctx.tool_policy
-        lines = ["## Verfuegbare Werkzeuge", ""]
+        grant = await _load_grant(ctx, db)
+        hidden = _hidden_by_profile(policy, grant)
+        t = texts(ctx)
+        lines = [t.tools_heading, ""]
         any_write = False
         for tool in _TOOLS:
-            if not tool.is_visible(policy):
+            visible = tool.visible_names(policy, grant)
+            if not visible:
                 continue
-            if tool.has_visible_write(policy):
+            if tool.has_visible_write(policy, grant):
                 any_write = True
-            suffix = tool.scope_suffix(policy)
-            lines.append(f"- **{tool.signature}** — {tool.description}{suffix}")
+            suffix = tool.scope_suffix(policy, t)
+            signature = tool.signature_for(visible)
+            if _mentions_any(tool.description, hidden):
+                lines.append(f"- **{signature}**{suffix}")
+            else:
+                lines.append(f"- **{signature}** — {tool.description}{suffix}")
         lines.append("")
-        lines.append(_TOOLS_APPLIED_NOTE)
+        if not _mentions_any(t.tools_applied_note, hidden):
+            lines.append(t.tools_applied_note)
         if any_write:
             lines.append("")
-            lines.append(_TOOLS_WRITE_NOTE)
+            lines.append(t.tools_write_note)
         # Rueckmelde-Protokoll: nur wenn der Agent das Flywheel auch bedienen darf.
         # `policy is None` (z. B. Persona-Body) zeigt ohnehin keine Schreib-/
         # Feedback-Tools — dann auch keinen Protokoll-Hinweis.
-        if policy is not None and policy.allows(AgentCapability.feedback_write):
+        if (
+            policy is not None
+            and policy.allows(AgentCapability.feedback_write)
+            and not _mentions_any(t.tools_feedback_note, hidden)
+        ):
             lines.append("")
-            lines.append(_TOOLS_FEEDBACK_NOTE)
+            lines.append(t.tools_feedback_note)
         # Gedaechtnis-Hinweis (ADR-0044): nur bei freigeschaltetem Memory und
         # nur als FALLBACK — enthaelt der Template-Body einen expliziten
         # `memory`-Placeholder (ctx.has_explicit_memory, vom Renderer gesetzt),
         # rendert der an seiner Position und dieser Auto-Append entfaellt
         # (kein Doppel-Hinweis). Texte: eine Quelle (`memory_prompt_block`).
         if policy is not None and not ctx.has_explicit_memory:
-            block = memory_prompt_block(policy)
-            if block:
+            block = memory_prompt_block(policy, ctx.locale)
+            if block and not _mentions_any(block, hidden):
                 lines.append("")
                 lines.append(block)
         return ResolveResult(text="\n".join(lines))
@@ -94,15 +161,46 @@ class _ToolDoc(BaseModel):
     tool_names: tuple[str, ...]
     read_domain: str | None = None
 
-    def is_visible(self, policy: AgentToolPolicy | None) -> bool:
+    def is_visible(
+        self, policy: AgentToolPolicy | None, grant: ToolProfileGrant | None = None
+    ) -> bool:
         """Gruppen-Oder ueber die SSoT (`who2be_models.is_tool_visible`).
 
         `None` (unbekannter Tool-Name) zaehlt hier defensiv als unsichtbar —
         der Paritaetstest stellt sicher, dass jeder Name im Mapping steht.
         """
-        return any(is_tool_visible(name, policy) is True for name in self.tool_names)
+        return bool(self.visible_names(policy, grant))
 
-    def has_visible_write(self, policy: AgentToolPolicy | None) -> bool:
+    def visible_names(
+        self, policy: AgentToolPolicy | None, grant: ToolProfileGrant | None = None
+    ) -> tuple[str, ...]:
+        """Die Werkzeuge des Eintrags, die Rechte UND Profil zeigen (ADR-0059 §3.1)."""
+        return tuple(
+            name
+            for name in self.tool_names
+            if is_tool_visible_with_profile(name, policy, grant) is True
+        )
+
+    def signature_for(self, visible: tuple[str, ...]) -> str:
+        """Signatur nur mit den sichtbaren Werkzeugen.
+
+        Sind alle sichtbar, bleibt die kuratierte Signatur. Sonst werden die
+        `/`-Segmente der sichtbaren Werkzeuge behalten; laesst sich die
+        Signatur nicht eindeutig je Werkzeug zerlegen (etwa
+        `transition_persona/playbook/resource(...)`), steht je sichtbarem
+        Werkzeug `name(…)`.
+        """
+        if set(visible) == set(self.tool_names):
+            return self.signature
+        segments = self.signature.split(" / ")
+        by_name = {seg.split("(", 1)[0].strip(): seg for seg in segments}
+        if set(by_name) == set(self.tool_names) and len(segments) == len(self.tool_names):
+            return " / ".join(by_name[name] for name in self.tool_names if name in visible)
+        return " / ".join(f"{name}(…)" for name in visible)
+
+    def has_visible_write(
+        self, policy: AgentToolPolicy | None, grant: ToolProfileGrant | None = None
+    ) -> bool:
         """True, wenn ein Capability-Tool der Gruppe fuer DIESE Policy sichtbar ist.
 
         Bewusst pro Tool statt pro Gruppe (WP8): gemischte Gruppen wie
@@ -110,23 +208,27 @@ class _ToolDoc(BaseModel):
         `workarea_write`) duerfen den `Schreibzugriff`-Hinweis nur ausloesen,
         wenn der Agent die Write-Capability tatsaechlich haelt. Fuer reine
         Write-Gruppen ist das identisch zum frueheren Gruppen-`is_write`.
+        Ein vom Profil verborgenes Schreib-Werkzeug zaehlt nicht.
         """
         return any(
-            bool(MCP_TOOL_REQUIREMENTS[name].capabilities) and is_tool_visible(name, policy) is True
-            for name in self.tool_names
+            bool(MCP_TOOL_REQUIREMENTS[name].capabilities)
+            for name in self.visible_names(policy, grant)
             if name in MCP_TOOL_REQUIREMENTS
         )
 
-    def scope_suffix(self, policy: AgentToolPolicy | None) -> str:
-        """Hinweis „(nur zugewiesene…)" bei Read-Scope `assigned`."""
+    def scope_suffix(
+        self, policy: AgentToolPolicy | None, t: PlaceholderTexts | None = None
+    ) -> str:
+        """Hinweis „(nur zugewiesene…)" bei Read-Scope `assigned`, in der Sprache `t`."""
         if policy is None:
             return ""
+        t = t or texts_for(None)
         if self.read_domain == "playbook" and policy.playbook_read == ReadScope.assigned:
-            return " — **nur die dir zugewiesenen Playbooks**."
+            return t.tools_scope_playbook
         if self.read_domain == "resource" and policy.resource_read == ReadScope.assigned:
-            return " — **nur die dir zugewiesenen Resources**."
+            return t.tools_scope_resource
         if self.read_domain == "agent" and policy.agent_read == ReadScope.assigned:
-            return " — **nur dein eigener Agent**."
+            return t.tools_scope_agent
         return ""
 
 
@@ -579,6 +681,8 @@ _TOOLS: list[_ToolDoc] = [
     _ToolDoc(
         signature=(
             "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
+            "update_rows(table_id, match, set, expected_count?) / "
+            "delete_rows(table_id, match, expected_count?) / "
             "save_query_result(table_id, sql, title, occurred_at, ...) / "
             "delete_table(table_id) / set_convention(area_id, source_name, convention) / "
             "upsert_category_rule(area_id, pattern, category, confidence?)"
@@ -586,6 +690,8 @@ _TOOLS: list[_ToolDoc] = [
         tool_names=(
             "create_table",
             "insert_rows",
+            "update_rows",
+            "delete_rows",
             "save_query_result",
             "delete_table",
             "set_convention",
@@ -595,6 +701,10 @@ _TOOLS: list[_ToolDoc] = [
             "Strukturierte Zahlen gehoeren in eine Tabelle, nicht in Prosa: "
             "create_table (Spalte `occurred_at` ist Pflicht), insert_rows "
             "(idempotent ueber den Dedupe-Hash, Antwort {inserted, skipped}). "
+            "Falsche Zeilen korrigiert update_rows, ueberzaehlige entfernt "
+            "delete_rows — beide waehlen per `match` (Spalte -> Wert, nur "
+            "Gleichheit), hoechstens 100 Zeilen; vorher mit query_table pruefen "
+            "und `expected_count` mitgeben. "
             "Soll ein Ergebnis belegbar sein, friert save_query_result Abfrage "
             "+ Ergebnis als Artifact ein (dessen ID ist der `source_ref` fuer "
             "einen KB-Node). Einheiten und Notation je Quelle einmalig ueber "
@@ -720,40 +830,5 @@ _TOOLS: list[_ToolDoc] = [
     ),
 ]
 
-# Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks
-# (Pill / applied) gelten immer und sind bereits expandiert — kein MCP-Call noetig.
-# Triggered Playbooks werden via list_triggers() entdeckt und nur bei
-# Trigger-Match via fetch_playbook() geladen.
-_TOOLS_APPLIED_NOTE = (
-    "**Invocation-Wege:** Fest eingebettete Playbooks (applied, bereits im "
-    "System-Prompt) gelten immer. Weitere Playbooks nur bei Trigger-Match laden "
-    "— erst list_triggers(), dann fetch_playbook(id)."
-)
-
-# Erscheint nur, wenn dem Agenten mindestens ein Schreib-Tool freigeschaltet ist.
-_TOOLS_WRITE_NOTE = (
-    "**Schreibzugriff:** Die oben gelisteten Schreib-Tools sind fuer dich "
-    "freigeschaltet. Tools, die hier nicht stehen, sind fuer diesen Agenten "
-    "gesperrt und werden serverseitig abgelehnt — versuche sie nicht."
-)
-
-
-# Rueckmelde-Protokoll (ADR-0038). Erscheint nur, wenn `feedback_write` aktiv ist
-# — macht aus der reinen Tool-Liste eine Handlungsanweisung: WANN melde ich was?
-# Bewusst instruktiv, nicht erzwungen (append-only „Vorschlag, kein Auto-Edit").
-_TOOLS_FEEDBACK_NOTE = (
-    "**Rueckmeldung (mach das routinemaessig):** Damit die AgentDB lernt, welche "
-    "Inhalte wirklich helfen, melde nach JEDEM Einsatz eines Playbooks oder einer "
-    "Resource kurz zurueck:\n"
-    "- `record_usage(entity_type, entity_id, version?, outcome)` mit outcome "
-    "`applied` (angewandt), `skipped` (bewusst verworfen) oder `error` "
-    "(fehlgeschlagen).\n"
-    "- Wirkt ein Inhalt veraltet, falsch oder unklar? `submit_feedback(entity_type, "
-    "entity_id, signal, note?)` mit signal `outdated`/`incorrect`/`unclear` (oder "
-    "`helpful`, wenn es gut gepasst hat) — statt selbst umzuschreiben; ein Kurator "
-    "entscheidet ueber die Pflege.\n"
-    "Beispiel: nach fetch_playbook(P) angewandt → "
-    "record_usage('playbook', P, outcome='applied'); fiel ein veralteter Schritt "
-    "auf → submit_feedback('playbook', P, signal='outdated', note='Schritt 4 …'). "
-    "Diese Rueckmeldungen aendern nie selbst Inhalte und sind fuer den User unsichtbar."
-)
+# Rahmen-Saetze (Ueberschrift, Invocation, Schreibzugriff, Rueckmeldung,
+# Scope-Hinweise) liegen DE/EN in `placeholders/_texts.py`.

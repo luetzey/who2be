@@ -99,6 +99,30 @@ async function stubBillingProfile(page: Page, initial: Record<string, unknown> |
   return puts
 }
 
+/**
+ * `/billing/invoices` (ADR-0061 R3) wird aus demselben Grund abgefangen wie
+ * `/billing/profile`: ohne `who2be-billing`-Paket antwortet der CI-Stack mit
+ * 404, und die Karte "Rechnungen" zeigt dann ihren Fehler-Alarm. Der echte
+ * Endpunkt ist in `packages/billing/tests/test_invoice_endpoint.py` belegt.
+ * Standard ist die leere Liste; ein anderer `status` erzeugt den Fehlerfall.
+ */
+async function stubInvoices(page: Page, status = 200) {
+  await page.route('**/billing/invoices', (route) =>
+    route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        status === 200
+          ? { invoices: [] }
+          : { detail: 'E2E-Stub: Rechnungsliste absichtlich fehlgeschlagen.' },
+      ),
+    }),
+  )
+}
+
+const INVOICES_TITLE = /^(Rechnungen|Invoices)$/
+const INVOICES_EMPTY = /^(Noch keine Rechnungen|No invoices yet)$/
+
 test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitung an', async ({
   page,
   request,
@@ -111,6 +135,7 @@ test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitu
   // Checkout-Aufruf UND das (fiktive) Redirect-Ziel abfangen: der echte
   // Bezahlanbieter wird zu keinem Zeitpunkt kontaktiert.
   const puts = await stubBillingProfile(page, null)
+  await stubInvoices(page)
   await page.route('**/billing/checkout', (route) =>
     route.fulfill({
       status: 201,
@@ -198,6 +223,7 @@ test('Billing: fehlgeschlagener Checkout-Aufruf zeigt eine sichtbare Fehlermeldu
     vat_checked_at: null,
     updated_at: '2026-10-23T00:00:00Z',
   })
+  await stubInvoices(page)
 
   // AC 5: der Checkout-Aufruf schlaegt fehl (Backend 500) -> sichtbarer Fehler.
   await page.route('**/billing/checkout', (route) =>
@@ -213,4 +239,83 @@ test('Billing: fehlgeschlagener Checkout-Aufruf zeigt eine sichtbare Fehlermeldu
   await billingSlot.getByRole('button', { name: UPGRADE_BUTTON_NAME }).click()
 
   await expect(page.getByTestId('error-alert')).toBeVisible()
+})
+
+test('Billing: Checkout ohne Rechnungsdaten (409) verweist auf das Formular', async ({
+  page,
+  request,
+}) => {
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  // Der Client sieht gespeicherte Rechnungsdaten, der Server nicht (z. B. in
+  // einem zweiten Tab geloescht): genau dann antwortet der Checkout mit 409.
+  await stubBillingProfile(page, {
+    ...PLACEHOLDER_BILLING,
+    vat_status: null,
+    vat_checked_at: null,
+    updated_at: '2026-10-23T00:00:00Z',
+  })
+  await stubInvoices(page)
+  await page.route('**/billing/checkout', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        detail: 'Rechnungsdaten fehlen. Bitte zuerst die Rechnungsdaten speichern.',
+      }),
+    }),
+  )
+
+  await page.goto(`/w/${workspaceId}/settings/org`)
+  const billingSlot = page.getByTestId('billing-slot')
+  await billingSlot.getByRole('button', { name: UPGRADE_BUTTON_NAME }).click()
+
+  const notice = billingSlot.getByTestId('checkout-details-missing')
+  await expect(notice).toBeVisible()
+  await expect(notice).toContainText(/Rechnungsdaten fehlen|Billing details missing/)
+  await expect(page.getByTestId('error-alert')).toHaveCount(0)
+
+  await notice.getByRole('button', { name: /Zu den Rechnungsdaten|Go to billing details/ }).click()
+  await expect(billingSlot.locator('#billing-details')).toBeFocused()
+})
+
+test('Billing: Rechnungen-Karte zeigt den Leerzustand ohne Fehler-Alarm', async ({
+  page,
+  request,
+}) => {
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  await stubBillingProfile(page, null)
+  await stubInvoices(page)
+
+  await page.goto(`/w/${workspaceId}/settings/org`)
+  const billingSlot = page.getByTestId('billing-slot')
+  await expect(billingSlot.getByText(INVOICES_TITLE)).toBeVisible()
+  await expect(billingSlot.getByText(INVOICES_EMPTY)).toBeVisible()
+  await expect(page.getByTestId('invoice-list')).toHaveCount(0)
+  await expect(page.getByTestId('error-alert')).toHaveCount(0)
+})
+
+test('Billing: fehlgeschlagene Rechnungsliste bleibt als Fehler in der Karte sichtbar', async ({
+  page,
+  request,
+}) => {
+  const user = await createUser(request)
+  await loginAs(page, user)
+  await decideCookieConsent(page)
+  const { workspaceId } = await seedWorkspace(request, user)
+  await stubBillingProfile(page, null)
+  await stubInvoices(page, 500)
+
+  await page.goto(`/w/${workspaceId}/settings/org`)
+  const billingSlot = page.getByTestId('billing-slot')
+  // Kein Verdecken: die Karte bleibt stehen und meldet den Fehler sichtbar,
+  // statt still zu verschwinden oder einen falschen Leerzustand zu zeigen.
+  await expect(billingSlot.getByText(INVOICES_TITLE)).toBeVisible()
+  await expect(billingSlot.getByTestId('error-alert')).toBeVisible()
+  await expect(billingSlot.getByText(INVOICES_EMPTY)).toHaveCount(0)
 })

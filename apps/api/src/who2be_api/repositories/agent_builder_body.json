@@ -33,7 +33,7 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "placeholder", "props": {"kind": "persona-field", "target_id": "profile", "label": "Persona: Profil"}}
+      {"type": "placeholder", "props": {"kind": "persona-ref", "target_id": "", "label": "Persona laden"}}
     ],
     "children": []
   },
@@ -131,22 +131,6 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "placeholder", "props": {"kind": "resources-catalog", "target_id": "", "label": "Resources"}}
-    ],
-    "children": []
-  },
-  {
-    "id": "ab-h6",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Werkzeuge", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ab-p7",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "placeholder", "props": {"kind": "tools-overview", "target_id": "", "label": "Werkzeuge"}}
     ],
     "children": []
   },

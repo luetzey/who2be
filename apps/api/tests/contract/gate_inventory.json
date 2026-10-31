@@ -381,6 +381,16 @@
       "reason": "Ersetzt ein bestehendes Token; die Zahl nutzbarer Tokens bleibt gleich — den Bestand deckelt das token_quota-Gate an create_token."
     },
     {
+      "path": "/tool-profiles",
+      "name": "create_tool_profile",
+      "reason": "Werkzeug-Profil ist Workspace-Konfiguration (ADR-0059 §7.1, nur admin), keine Inhalts-Entity: tool_profile steht nicht in entity_quota_service._COUNT_QUERY. Gebremst durch write_limit."
+    },
+    {
+      "path": "/tool-profiles/{profile_id}/reset",
+      "name": "reset_tool_profile",
+      "reason": "Setzt ein bestehendes mitgeliefertes Profil auf die Vorgabe zurueck (ADR-0059 §7.1), legt nichts Neues an."
+    },
+    {
       "path": "/usage-events",
       "name": "record_usage",
       "reason": "Append-only-Telemetrie (welches Element wurde genutzt). Ein Quota-Gate deckelte die Messung selbst; gebremst durch write_limit."
@@ -414,6 +424,16 @@
       "path": "/wa-tables/{table_id}/rows",
       "name": "insert_rows",
       "reason": "Zeilen des Tabellen-Stores. Der Store zaehlt bewusst in keinem Speicherkontingent (ADR-0049, derselbe Vorbehalt steht in storage_quota_service)."
+    },
+    {
+      "path": "/wa-tables/{table_id}/rows/delete",
+      "name": "delete_rows",
+      "reason": "Loescht Zeilen des Tabellen-Stores, gibt also hoechstens Platz frei; der Store zaehlt ohnehin in keinem Speicherkontingent (ADR-0049, ADR-0049-Nachtrag)."
+    },
+    {
+      "path": "/wa-tables/{table_id}/rows/update",
+      "name": "update_rows",
+      "reason": "Aendert hoechstens 100 bestehende Zeilen des Tabellen-Stores, legt keine an; der Store zaehlt wie insert_rows in keinem Speicherkontingent (ADR-0049, ADR-0049-Nachtrag)."
     },
     {
       "path": "/work-areas",

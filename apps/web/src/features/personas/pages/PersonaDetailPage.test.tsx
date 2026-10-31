@@ -355,7 +355,7 @@ describe('PersonaDetailPage', () => {
 
   it('vom System verwaltet: Notice + read-only, keine Status-/Lösch-Aktionen', async () => {
     const managed: PersonaShape = { ...persona(1, 's1'), is_managed: true }
-    // Draft-Version => ohne Lock erschiene der „Entwurf abschließen"-Button.
+    // Draft-Version => ohne Lock erschiene der „Zur Freigabe einreichen"-Button.
     const v1 = {
       version: 1,
       status: 'draft',
@@ -401,7 +401,7 @@ describe('PersonaDetailPage', () => {
     expect(screen.getByLabelText('Name')).toBeDisabled()
     // Keine Status-Aktion trotz vorhandener Draft-Version.
     expect(
-      screen.queryByRole('button', { name: 'Entwurf abschließen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).not.toBeInTheDocument()
     // Kein Lösch-Bereich (Danger-Zone liegt im „Versionen"-Tab, fuer managed
     // ohnehin ausgeblendet).
@@ -565,7 +565,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(await screen.findByText('PERSONAS-LISTE')).toBeInTheDocument()
   })
 
-  it('Draft: "Entwurf abschließen" reicht die Version zur Review ein', async () => {
+  it('Draft: "Zur Freigabe einreichen" reicht die Version zur Review ein', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers()
     renderPersonaDetail((path, method, init) => {
@@ -584,7 +584,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     // e2e/journeys.spec.ts bindet.
     expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Entwurf abschließen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Freigabe einreichen' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
@@ -609,9 +609,9 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
       { me: meWithRole('admin') },
     )
 
-    expect(await screen.findByText(/Active: v1 · Zur Freigabe: v2/)).toBeInTheDocument()
+    expect(await screen.findByText(/Aktiv: v1 · v2 wartet auf Freigabe durch einen Admin/)).toBeInTheDocument()
 
-    const publish = screen.getByRole('button', { name: 'Veröffentlichen' })
+    const publish = screen.getByRole('button', { name: 'Aktivieren' })
     expect(publish).toBeEnabled()
     expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
@@ -623,7 +623,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"active"')
   })
 
-  it('Review (kein Admin): Publish ist gesperrt, "Zurück zu Draft" lehnt ab', async () => {
+  it('Review (kein Admin): Publish ist gesperrt, "Zurück in den Entwurf" lehnt ab', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers({ versions: [pVersion(1, 'review')] })
     renderPersonaDetail(
@@ -637,11 +637,11 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
       { me: meWithRole('editor') },
     )
 
-    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Aktivieren' })
     expect(publish).toBeDisabled()
     expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zurück zu Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück in den Entwurf' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
@@ -649,7 +649,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })
 
-  it('Inactive: "Reaktivieren als Draft" reaktiviert die aktuelle Version', async () => {
+  it('Inactive: "Als Entwurf reaktivieren" reaktiviert die aktuelle Version', async () => {
     const transitionBodies: string[] = []
     const base = personaHandlers({
       persona: personaWith({ current_status: 'inactive' }),
@@ -667,7 +667,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
       await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
@@ -685,7 +685,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
+      await screen.findByRole('button', { name: 'Zur Freigabe einreichen' }),
     )
 
     await waitFor(() => {
@@ -709,7 +709,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
+      await screen.findByRole('button', { name: 'Zur Freigabe einreichen' }),
     )
 
     await waitFor(() => {
@@ -728,10 +728,10 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     )
 
     expect(
-      await screen.findByText(/Active: v1 · Du arbeitest auf Draft v2/),
+      await screen.findByText(/Aktiv: v1 · Entwurf v2 in Arbeit/),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Entwurf abschließen' }),
+      screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeInTheDocument()
   })
 
@@ -748,7 +748,7 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     expect(await screen.findByRole('heading', { name: 'Coach' })).toBeInTheDocument()
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Entwurf abschließen' }),
+      screen.queryByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })

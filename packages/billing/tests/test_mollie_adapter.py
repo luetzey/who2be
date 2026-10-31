@@ -481,6 +481,7 @@ class FakeInvoices:
         )
 
     async def issue(self, invoice_id: UUID, *, now: datetime | None = None) -> None:
+        # Seit R2b stellt nur der Worker aus; ein Aufruf hier waere ein Rueckfall.
         self.issued.append(invoice_id)
 
 
@@ -500,7 +501,7 @@ def _paid(payment_id: str, metadata: dict[str, Any], *, sub: str | None) -> Moll
     )
 
 
-def test_recurring_paid_payment_reserves_and_issues_one_invoice() -> None:
+def test_recurring_paid_payment_only_reserves_one_invoice() -> None:
     org_id = uuid4()
     invoices = FakeInvoices()
     gateway = FakeMollieGateway(
@@ -527,7 +528,7 @@ def test_recurring_paid_payment_reserves_and_issues_one_invoice() -> None:
         date(2026, 10, 21),
         date(2026, 11, 20),
     )
-    assert len(invoices.issued) == 1
+    assert invoices.issued == []  # N1: ausgestellt wird im Worker, nie im Webhook
 
 
 def test_first_payment_reserves_before_creating_the_subscription() -> None:
@@ -538,7 +539,7 @@ def test_first_payment_reserves_before_creating_the_subscription() -> None:
     service = MollieBillingService(gateway, repo, invoices=invoices)  # type: ignore[arg-type]
     assert asyncio.run(service.handle_webhook("tr_Erst1", webhook_url="https://api/hook")) is True
     assert [r.payment_id for r in invoices.reserved] == ["tr_Erst1"]
-    assert len(invoices.issued) == 1
+    assert invoices.issued == []
     assert gateway.subscription_create_count == 1
     assert repo.calls[0].entitlement.status == "active"
 

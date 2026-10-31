@@ -1120,6 +1120,38 @@ Oberfläche des Not-Aus kommt mit C5b. Die Warnliste S4a darf den Satz „Du
 kannst alles automatisch Freigegebene auf einmal zurücknehmen“ behalten; er
 wird erst ausgeliefert, wenn der Web-Teil des Not-Aus gemergt ist.
 
+#### 6.4.2 Nachtrag 2026-10-24 — `viewer` über den OAuth-Connector
+
+Owner-Entscheidung vom 2026-10-24 (Option A, Kanban-Karte t_b36bf77f), siehe
+auch den gleichnamigen Nachtrag in ADR-0023. Ein `viewer`, der einen Agenten
+über den OAuth-Connector nutzt, hat folgende Gedächtnis-Rechte:
+
+| MCP-Werkzeug | `viewer` am Connector | Wirkung |
+|---|---|---|
+| `search_memory`, `list_memories` | ja | liefern auch das Agentengedächtnis (`scope='agent'`) |
+| `save_memory` | ja | Eintrag nach Matrix 4.2; unter `memory_mode=suggest` immer `pending` |
+| `propose_memory_change` | ja | Vorschlag `pending`, der Ziel-Eintrag bleibt unverändert |
+| Freigabe (`triage`, `decide_proposal`) | nein für Agentengedächtnis | ab `editor`; eigenes Nutzergedächtnis die Person selbst (3.1.1, 3.1.4) |
+
+Warum: Ein Agent, der beim Kollegen sein Gedächtnis nicht abrufen kann,
+arbeitet schlechter als beim Editor. Vorschläge sind ungefährlich, weil sie
+durch dieselbe Kurations-Schleuse laufen wie jeder Agenten-Vorschlag (4.2,
+ASI06-Mitigationen in 7.1). Ein `viewer` darf vorschlagen, wie er einen Fall
+melden darf (F-W4), aber er darf nicht entscheiden. Unter `memory_mode=auto`
+wirken die Zellen, die ein `admin` eingeschaltet hat, unabhängig von der
+Rolle (`memory_service.decide_memory_status`). Diese Freigabe hat der Admin
+dann vorab erteilt.
+
+**Abweichung zu 6.4.1, bewusst nicht angeglichen:** Über REST sieht ein
+`viewer` das Agentengedächtnis nicht. `GET /memories` lässt `scope='agent'`
+weg, `GET /memories/{memory_id}` antwortet `404 memory_not_found`. Über MCP
+sieht er es. Die Web-Oberfläche dient der Verwaltung des Gedächtnisses, und
+die ist Editor-Arbeit. Der Connector dient der Nutzung des Agenten. Wer eine
+Seite an die andere angleicht, ändert einen Vertrag und braucht eine eigene
+Entscheidung.
+
+Beleg: `apps/api/tests/test_viewer_connector.py::test_viewer_nutzt_agent_per_connector_aendert_aber_nichts`.
+
 ### 6.5 Phase D — Fälle, Nutzung, Muster
 
 REST:

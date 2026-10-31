@@ -44,3 +44,11 @@ Die Tabelle `schema_migrations` legt der Runner selbst an.
   0042/0065 bleibt bewusst erhalten (Legacy-Multi-Track-Bestand kann
   gleiche Versionsnummer in zwei Sprachen tragen). Spiegelt keine
   Anwendungsschicht (Read/Write-Pfade folgen in WP3).
+- `0111_tool_profile.sql` — Werkzeug-Profile (ADR-0059 §4): Tabelle
+  `tool_profile` + drei Agent-Spalten, Backfill der vier mitgelieferten
+  Profile je Bestands-Workspace, verwaltete Builder auf „Builder“ (W59-3 = A).
+  Spiegelt `BUILTIN_PROFILES` (`packages/models/.../tool_profiles.py`, die
+  einzige Quelle) und `seed_builtin_profiles` in
+  `repositories/tool_profile_repository.py`, das alle Anlage-Wege neuer
+  Workspaces aufrufen — beide Schichten synchron halten, der Paritaetstest
+  in `tests/test_tool_profile_repository.py` prueft das.

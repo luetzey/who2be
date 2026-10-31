@@ -10,7 +10,14 @@
     "id": "pb-agent-p-zweck",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "This playbook guides you through creating and maintaining an agent in Who2Be. An agent is the executable configuration: exactly one persona, exactly one system prompt template, and a tool_policy that determines which MCP tools the agent is allowed to use. You work in four phases — Understand, Propose, Write, Hand-Off.", "styles": {}}],
+    "content": [{"type": "text", "text": "Configure and maintain an agent from a persona, a system prompt template, and a tool_policy, in four phases: Understand, Propose, Write, Hand-Off.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before Phase 2 (Propose), in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-policy\", \"res-conv-h-memory\", \"res-conv-h-managed\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -65,7 +72,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Tools: ", "styles": {"bold": true}},
-      {"type": "text", "text": "tools-overview renders the MCP tool list filtered per tool_policy — it belongs in practically every template.", "styles": {}}
+      {"type": "text", "text": "by default tools-overview does NOT belong in the template — tools/list already describes the tools. The only exception is a prompt that is explicitly used without an MCP tool list (copied prompt); then use it with a stated reason.", "styles": {}}
     ],
     "children": []
   },
@@ -85,7 +92,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Memory: ", "styles": {"bold": true}},
-      {"type": "text", "text": "the memory placeholder (target_id '') renders the memory notice matching the agent's memory_mode — with 'off' the spot stays empty (no miss). Convention: place it directly AFTER the tools-overview pill. Without the pill, tools-overview automatically appends the notice to the end of its section (fallback) — the pill is worth it when the position should be chosen deliberately, and it never hurts.", "styles": {}}
+      {"type": "text", "text": "the memory placeholder (target_id '') renders the memory notice matching the agent's memory_mode — with 'off' the spot stays empty (no miss). Put it in every template of an agent with memory; the automatic append only applies when the template carries tools-overview.", "styles": {}}
     ],
     "children": []
   },
@@ -103,7 +110,7 @@
     "id": "pb-agent-code-placeholder",
     "type": "codeBlock",
     "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Identity\n\nYou are {{persona-field:name}}.\n\n{{tools-overview:}}\n\n{{memory:}}", "styles": {}}],
+    "content": [{"type": "text", "text": "## Identity\n\nYou are {{persona-field:name}}.\n\n{{memory:}}", "styles": {}}],
     "children": []
   },
   {
@@ -423,7 +430,7 @@
     "id": "pb-agent-p-policy",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "The tool_policy determines which MCP tools the agent can see and use. The default is \"read everything, write nothing\" — a fresh agent may read the entire workspace but change nothing until it's unlocked.", "styles": {}}],
+    "content": [{"type": "text", "text": "The tool_policy determines which MCP tools the agent can see; without one, \"read everything, write nothing\" applies. This section only says what the fields mean — patterns, recommendations, and escalation limits are in the conventions (res-conv-h-policy, res-conv-h-memory).", "styles": {}}],
     "children": []
   },
   {
@@ -431,8 +438,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Read scopes: ", "styles": {"bold": true}},
-      {"type": "text", "text": "playbook_read and resource_read are three-tiered — all (entire workspace), assigned (only those assigned to the agent's own persona), or none (tool hidden). persona_read and agent_read are simple on/off switches.", "styles": {}}
+      {"type": "text", "text": "playbook_read, resource_read: all (entire workspace), assigned (only those assigned to the agent's own persona), or none (tool hidden). persona_read, agent_read: on/off.", "styles": {}}
     ],
     "children": []
   },
@@ -441,8 +447,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Write capabilities: ", "styles": {"bold": true}},
-      {"type": "text", "text": "persona_write, playbook_write, resource_write, and agent_write each unlock the domain's write tools (create/change a draft, set links). Each defaults to off.", "styles": {}}
+      {"type": "text", "text": "persona_write, playbook_write, resource_write, agent_write: each unlocks the domain's write tools (create/change a draft, set links); off by default.", "styles": {}}
     ],
     "children": []
   },
@@ -451,18 +456,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
-      {"type": "text", "text": "needed to switch a version to active or inactive (publish/retire). For draft/review, the respective write capability is sufficient; promoting/retiring is the extra tier.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-escalation",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "No privilege escalation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "If you, as an agent, create another agent via agent_write, its policy may not grant more than your own. The tool_policy is only tool visibility — the actual authorization (editor for writing, admin for promote/retire) stays server-side.", "styles": {}}
+      {"type": "text", "text": "promote_retire: switch versions to active/inactive; for draft and review the write capability is enough.", "styles": {}}
     ],
     "children": []
   },
@@ -471,28 +465,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "memory_mode (agent memory, ADR-0044): ", "styles": {"bold": true}},
-      {"type": "text", "text": "a four-tier long-term memory per agent — 'off' (default; memory tools don't exist for the agent), 'read_only' (only search_memory/list_memories over approved facts), 'suggest' (save_memory creates PROPOSALS that only become retrieval-visible after human approval on the agent detail page — a curation gate), and 'auto' (immediately active). Plus memory_directive: 'required' (the agent MUST retrieve its memory at the start of the conversation) or 'recommended' (default — should use it when context helps). The system prompt and runtime persona (get_persona) automatically carry the instruction once the mode is not 'off'.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-empfehlung",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory recommendation logic: ", "styles": {"bold": true}},
-      {"type": "text", "text": "The default suggestion is 'suggest' + 'recommended' — the user retains control, and the agent still learns. 'read_only' for agents that should benefit from curated knowledge but not contribute anything; 'auto' only on explicit user request; 'off' for tool-like agents with no personalization benefit. Memories are user data, not instructions; repo/code facts do NOT belong in memory.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-policy-memory-grenze",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Memory escalation boundary: ", "styles": {"bold": true}},
-      {"type": "text", "text": "memory_mode is part of the is_within comparison — you can grant other agents at most YOUR OWN tier. If your own memory is set to 'off', the server rejects every unlock attempt with 403. This is intentional: hand off the desired mode to the user instead (agent detail page → Tools → Memory) rather than forcing it or reporting it as an error.", "styles": {}}
+      {"type": "text", "text": "memory_mode: off (default, no memory tools), read_only (only search_memory/list_memories), suggest (save_memory creates proposals for approval), auto (immediately active). memory_directive: required (retrieve at the start of the conversation) or recommended (default, use it when helpful). Once the mode is not off, the system prompt and get_persona carry the instruction automatically.", "styles": {}}
     ],
     "children": []
   },
@@ -530,7 +503,7 @@
     "id": "pb-agent-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
@@ -538,8 +511,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "get_persona (check persona + active version), list_agents (find existing agents), and get_agent (an agent's config: persona, template, tool_policy, status, missing) — for ANY agent in the workspace. fetch_agent additionally delivers the rendered prompt, but only for your OWN agent. list_playbooks for orientation.", "styles": {}}
+      {"type": "text", "text": "get_agent reads the config of ANY agent in the workspace; fetch_agent (rendered prompt) only works for your OWN agent.", "styles": {}}
     ],
     "children": []
   },
@@ -548,8 +520,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Write: ", "styles": {"bold": true}},
-      {"type": "text", "text": "create_agent (create), update_agent (config in place, incl. status), copy_agent (duplicate) — requires agent_write. Templates: create_system_prompt / update_system_prompt (author/change a draft), restore_system_prompt, transition_system_prompt (draft to review only) — requires system_prompt_write. Server-side, editor applies.", "styles": {}}
+      {"type": "text", "text": "Permissions: ", "styles": {"bold": true}},
+      {"type": "text", "text": "create_agent, update_agent, and copy_agent require agent_write, writing templates requires system_prompt_write; transition_system_prompt only goes from draft to review.", "styles": {}}
     ],
     "children": []
   },
@@ -559,7 +531,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Not available: ", "styles": {"bold": true}},
-      {"type": "text", "text": "template activation via MCP (transition_system_prompt to active/inactive is server-side locked for agent-bound tokens, ADR-0040), deleting agents (no MCP delete, ADR-0030), and transition_* calls on agents (agents have no versions).", "styles": {}}
+      {"type": "text", "text": "activating a template (ADR-0040, a human does that in the web UI), deleting an agent (ADR-0030), and transition_* on agents (agents have no versions).", "styles": {}}
     ],
     "children": []
   },
@@ -631,27 +603,6 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "The bootstrap loop (load persona, check triggers, follow playbook) lives in the template and gets populated from placeholders at render time — you don't need to write it into the prompt by hand.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-agent-li-notes-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: the tool policy pattern (read scopes, minimal write capabilities, promote_retire, transition_grants, write_rate_limit) as well as trigger hygiene, naming, the mode rule, and managed boundaries are binding in the 'Agent-Building Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-h",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-p",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is how the AgentDB becomes self-improving.", "styles": {}}],
     "children": []
   }
 ]

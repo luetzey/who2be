@@ -256,8 +256,9 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # (`report_case`, `submit_case_statement`, `list_cases`,
     # `assign_case_elements`, ebenda), seit E-MCP-1 + 4 Gespraechs-Tools aus
     # `tools/sessions.py`, seit E-MCP-2 + 6 Werkzeugluecken D7 aus
-    # `tools/learning.py`, seit ADR-0058 P3 + `edit_content` (`tools/content.py`).
-    assert len(MCP_TOOL_REQUIREMENTS) == 101
+    # `tools/learning.py`, seit ADR-0058 P3 + `edit_content` (`tools/content.py`),
+    # seit dem ADR-0049-Nachtrag + `update_rows`/`delete_rows` (`tools/tables.py`).
+    assert len(MCP_TOOL_REQUIREMENTS) == 103
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 

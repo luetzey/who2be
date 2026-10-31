@@ -42,6 +42,27 @@ class AgentListMeta:
     is_favorite: bool
 
 
+@dataclass(frozen=True)
+class AgentToolProfileColumns:
+    """Die drei Profil-Spalten am Agenten (ADR-0059 §4.2, Migration 0111).
+
+    Der Default ist „Alle ohne Ausnahmen“. `from_agent` uebernimmt sie aus
+    einem `AgentRead`, so reicht `copy_agent` den Stand der Quelle durch.
+    """
+
+    tool_profile_id: UUID | None = None
+    tools_added: tuple[str, ...] = ()
+    tools_removed: tuple[str, ...] = ()
+
+    @classmethod
+    def from_agent(cls, agent: AgentRead) -> "AgentToolProfileColumns":
+        return cls(
+            tool_profile_id=agent.tool_profile_id,
+            tools_added=tuple(agent.tools_added),
+            tools_removed=tuple(agent.tools_removed),
+        )
+
+
 # `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
 # mitgelesen — so kennt jedes AgentRead die Aktivierbarkeit ohne Extra-Roundtrip.
 # Ein Agent ohne Persona (`persona_id IS NULL`) ergibt korrekt False.
@@ -56,6 +77,7 @@ _SELECT = f"""
     SELECT a.id, a.workspace_id, a.owner_id, a.name, a.description,
            a.persona_id, a.system_prompt_template_id, a.status, a.tool_policy,
            a.is_managed, a.model_provider, a.model_name,
+           a.tool_profile_id, a.tools_added, a.tools_removed,
            a.created_at, a.updated_at,
            {_PERSONA_ACTIVE_EXPR.format(col="a.persona_id")} AS persona_active
     FROM agent a
@@ -68,7 +90,8 @@ _SELECT = f"""
 _RETURNING = f"""
     RETURNING id, workspace_id, owner_id, name, description,
               persona_id, system_prompt_template_id, status, tool_policy,
-              is_managed, model_provider, model_name, created_at, updated_at,
+              is_managed, model_provider, model_name,
+              tool_profile_id, tools_added, tools_removed, created_at, updated_at,
               {_PERSONA_ACTIVE_EXPR.format(col="agent.persona_id")} AS persona_active
 """
 
@@ -86,6 +109,7 @@ class AgentRepository(Protocol):
         template_id: UUID | None,
         status: AgentStatus,
         tool_policy: AgentToolPolicy,
+        tool_profile: AgentToolProfileColumns | None = None,
     ) -> AgentRead | None: ...
 
     async def list_by_workspace(
@@ -116,6 +140,7 @@ class AgentRepository(Protocol):
         description: str,
         status: AgentStatus,
         tool_policy: AgentToolPolicy,
+        tool_profile: AgentToolProfileColumns | None = None,
     ) -> AgentRead | None: ...
 
     async def update(
@@ -153,12 +178,23 @@ class PgAgentRepository:
         template_id: UUID | None,
         status: AgentStatus,
         tool_policy: AgentToolPolicy,
+        tool_profile: AgentToolProfileColumns | None = None,
     ) -> AgentRead | None:
+        """Legt einen Agenten an.
+
+        `tool_profile` setzt nur `copy_agent`: die Kopie uebernimmt Profil und
+        Ausnahmen der Quelle (ADR-0059 §4.2). `create_agent` laesst es weg,
+        dann steht der neue Agent auf „Alle“. Liegt das Profil nicht im
+        Workspace, lehnt der zusammengesetzte FK aus 0111 ab (None, wie bei
+        Persona/Template).
+        """
+        columns = tool_profile or AgentToolProfileColumns()
         try:
             row = await self._pool.fetchrow(
                 "INSERT INTO agent (workspace_id, owner_id, name, description, "
-                "  persona_id, system_prompt_template_id, status, tool_policy) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+                "  persona_id, system_prompt_template_id, status, tool_policy, "
+                "  tool_profile_id, tools_added, tools_removed) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
                 f"{_RETURNING}",
                 workspace_id,
                 owner_id,
@@ -168,6 +204,9 @@ class PgAgentRepository:
                 template_id,
                 status.value,
                 tool_policy.model_dump(mode="json"),
+                columns.tool_profile_id,
+                list(columns.tools_added),
+                list(columns.tools_removed),
             )
         except asyncpg.ForeignKeyViolationError:
             # Composite-FK auf persona/template ausgeloest — Referenz lebt
@@ -186,6 +225,7 @@ class PgAgentRepository:
         description: str,
         status: AgentStatus,
         tool_policy: AgentToolPolicy,
+        tool_profile: AgentToolProfileColumns | None = None,
     ) -> AgentRead | None:
         """Tiefe Kopie eines verwalteten Agenten (Builder-Voll-Klon).
 
@@ -195,7 +235,12 @@ class PgAgentRepository:
         gezeigt. Alles in einer Transaktion. `workspace_id` der Versions-Zeilen
         fuellt der 0035-Trigger. Gibt None zurueck, wenn Persona/Template der
         Quelle nicht (mehr) im Workspace liegen.
+
+        `tool_profile` traegt Profil und Ausnahmen der Quelle (ADR-0059 §4.2).
+        Damit behaelt auch die Kopie des verwalteten Builders das Profil
+        „Builder“.
         """
+        columns = tool_profile or AgentToolProfileColumns()
         async with self._pool.acquire() as conn, conn.transaction():
             # ADR-0045: die Kopie uebernimmt die Entity-Sprache der Quelle.
             new_persona_id = await conn.fetchval(
@@ -277,8 +322,9 @@ class PgAgentRepository:
             )
             row = await conn.fetchrow(
                 "INSERT INTO agent (workspace_id, owner_id, name, description, "
-                "  persona_id, system_prompt_template_id, status, tool_policy) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+                "  persona_id, system_prompt_template_id, status, tool_policy, "
+                "  tool_profile_id, tools_added, tools_removed) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
                 f"{_RETURNING}",
                 workspace_id,
                 owner_id,
@@ -288,6 +334,9 @@ class PgAgentRepository:
                 new_template_id,
                 status.value,
                 tool_policy.model_dump(mode="json"),
+                columns.tool_profile_id,
+                list(columns.tools_added),
+                list(columns.tools_removed),
             )
             return AgentRead.model_validate(dict(row))
 

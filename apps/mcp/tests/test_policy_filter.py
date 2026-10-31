@@ -14,6 +14,7 @@ Aufloesungsfehler, Call-Sperre + Durchlass, whoami-Cache pro Token.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
@@ -27,7 +28,15 @@ from who2be_mcp import policy_filter, server
 from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings
 from who2be_mcp.server import mcp
-from who2be_models import MCP_TOOL_REQUIREMENTS
+from who2be_models import (
+    BUILTIN_PROFILES,
+    CORE_TOOLS,
+    MCP_TOOL_REQUIREMENTS,
+    TOOL_GROUPS,
+    BuiltinProfileKey,
+    ToolGroup,
+    WhoAmIRead,
+)
 
 _WORKSPACE_ID = uuid4()
 
@@ -228,7 +237,7 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     # ADR-0053: `list_test_cases`/`submit_test_results`) + C4b
     # `propose_memory_change` + 4 Fall-Tools (D4) + 4 Gespraechs-Tools (E-MCP-1)
     # + 6 Werkzeugluecken D7 (E-MCP-2) + `edit_content` (ADR-0058 P3).
-    assert len(names) == 101
+    assert len(names) == 103
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -288,8 +297,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    # 101 Tools minus die 4 Memory-Tools (ohne Agent-Bindung kein Namespace).
-    assert len(names) == 97
+    # 103 Tools minus die 4 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 99
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -404,3 +413,227 @@ def test_whoami_resolved_once_per_token(monkeypatch: pytest.MonkeyPatch) -> None
     second = _list_tool_names()
     assert first == second == _DEFAULT_POLICY_TOOLS
     assert calls["whoami"] == 1
+
+
+def test_whoami_cache_ttl_is_sixty_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """W59-5: ein Cache-Eintrag lebt 60 s — knapp davor Treffer, danach neu aufloesen.
+
+    Rein synchron (kein Event-Loop), damit das Vorstellen der Uhr nur den
+    Cache trifft.
+    """
+    assert policy_filter._WHOAMI_CACHE_TTL_SECONDS == 60.0
+    identity = WhoAmIRead.model_validate(_default_policy_payload())
+    now = 1_000.0
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+    policy_filter._whoami_cache_put("w2b_ttl", identity)
+    monkeypatch.setattr(time, "monotonic", lambda: now + 59.9)
+    assert policy_filter._whoami_cache_get("w2b_ttl") is identity
+    monkeypatch.setattr(time, "monotonic", lambda: now + 60.0)
+    assert policy_filter._whoami_cache_get("w2b_ttl") is None
+
+
+def test_tools_list_client_cache_hint_stays_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`ttlMs` von `tools/list` liegt hoechstens bei der Cache-TTL (ADR-0059 §6.2).
+
+    FastMCP setzt den Wert; laege er hoeher, sahe ein Client eine Freigabe
+    erst nach seinem eigenen Cache, nicht binnen einer Minute. `private`, weil
+    die Liste je Token verschieden ist.
+    """
+    _install_identity(monkeypatch, _whoami_handler(_default_policy_payload()))
+
+    async def _run() -> dict[str, Any]:
+        async with Client(mcp) as client:
+            result = await client.list_tools_mcp()
+        dumped: dict[str, Any] = result.model_dump(mode="json", by_alias=True)
+        return dumped
+
+    result = asyncio.run(_run())
+    assert 0 <= result["ttlMs"] <= policy_filter._WHOAMI_CACHE_TTL_SECONDS * 1000
+    assert result["cacheScope"] == "private"
+
+
+# --- Werkzeug-Profil (ADR-0059) -------------------------------------------------
+
+_FULL_SCOPES = {"persona": "all", "playbook": "all", "resource": "all", "agent": "all"}
+
+
+def _profiled_payload(
+    tool_profile: dict[str, object] | None,
+    *,
+    capabilities: list[str] | None = None,
+    unrestricted: bool = False,
+) -> dict[str, object]:
+    payload = _whoami_payload(
+        unrestricted=unrestricted,
+        role="editor",
+        capabilities=_ALL_CAPABILITIES if capabilities is None else capabilities,
+        read_scopes=None if unrestricted else _FULL_SCOPES,
+        memory_mode=None if unrestricted else "auto",
+    )
+    payload["tool_profile"] = tool_profile
+    return payload
+
+
+def _grant(
+    *,
+    name: str = "Builder",
+    groups: list[str] | None = None,
+    tools: list[str] | None = None,
+    tools_added: list[str] | None = None,
+    tools_removed: list[str] | None = None,
+    stored: bool = True,
+) -> dict[str, object]:
+    return {
+        "id": str(uuid4()) if stored else None,
+        "name": name,
+        "groups": [] if groups is None else groups,
+        "tools": [] if tools is None else tools,
+        "tools_added": [] if tools_added is None else tools_added,
+        "tools_removed": [] if tools_removed is None else tools_removed,
+    }
+
+
+def _builder_grant(**overrides: Any) -> dict[str, object]:
+    groups = [group.value for group in BUILTIN_PROFILES[BuiltinProfileKey.builder].groups]
+    return _grant(groups=groups, **overrides)
+
+
+def test_builder_profile_hides_exactly_workarea_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(_builder_grant())))
+    names = _list_tool_names()
+    write = set(TOOL_GROUPS[ToolGroup.workarea_write])
+    assert names == set(MCP_TOOL_REQUIREMENTS) - write
+    # W59-4: das Lesen im Arbeitsbereich bleibt.
+    assert set(TOOL_GROUPS[ToolGroup.workarea_read]) <= names
+
+
+def test_profile_never_hides_core_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ein Profil nur aus `read`, das den Kern ausdruecklich sperrt: der Kern bleibt.
+    grant = _grant(name="Eng", groups=["read"], tools_removed=sorted(CORE_TOOLS))
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(grant)))
+    names = _list_tool_names()
+    assert set(CORE_TOOLS) <= names
+    assert names == set(CORE_TOOLS) | set(TOOL_GROUPS[ToolGroup.read])
+
+
+def test_rights_win_over_profile_additions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`tools_added` macht nichts sichtbar, was die Rechte verbergen (§3.1)."""
+    grant = _grant(name="Lesen", groups=["core", "read"], tools_added=["create_playbook"])
+    payload = _profiled_payload(grant, capabilities=["feedback_write"])
+    _install_identity(monkeypatch, _whoami_handler(payload))
+    names = _list_tool_names()
+    assert "create_playbook" not in names
+    # Ohne `feedback_write` bliebe auch der Kern-Meldeweg unsichtbar — Rechte gehen vor.
+    payload = _profiled_payload(grant, capabilities=[])
+    policy_filter._whoami_cache.clear()
+    _install_identity(monkeypatch, _whoami_handler(payload))
+    assert "report_problem" not in _list_tool_names()
+
+
+def test_profile_additions_and_removals_apply(monkeypatch: pytest.MonkeyPatch) -> None:
+    grant = _grant(
+        name="Lesen",
+        groups=["core", "read"],
+        tools=["record_usage"],
+        tools_added=["create_playbook"],
+        tools_removed=["get_agent"],
+    )
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(grant)))
+    names = _list_tool_names()
+    assert {"record_usage", "create_playbook"} <= names
+    assert "get_agent" not in names
+    assert "update_playbook" not in names
+
+
+def test_all_with_removal_hides_only_the_removed_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """„Alle außer X“: `id=None` mit `tools_removed` (ADR-0059 §3.1)."""
+    grant = _grant(name="Alle", stored=False, tools_removed=["get_agent"])
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(grant)))
+    assert _list_tool_names() == set(MCP_TOOL_REQUIREMENTS) - {"get_agent"}
+
+
+def test_profile_ignored_for_unrestricted_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    grant = _grant(name="Eng", groups=["core"])
+    payload = _whoami_payload(unrestricted=True, role="admin", capabilities=None, read_scopes=None)
+    payload["tool_profile"] = grant
+    _install_identity(monkeypatch, _whoami_handler(payload))
+    memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
+    assert _list_tool_names() == set(MCP_TOOL_REQUIREMENTS) - memory_tools
+
+
+def test_unknown_names_in_profile_are_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Entfallene Gruppen und Werkzeuge im Profil brechen den Filter nicht (§3.3)."""
+    grant = _grant(name="Alt", groups=["core", "gone_group"], tools=["gone_tool"])
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(grant)))
+    assert _list_tool_names() == set(CORE_TOOLS)
+
+
+def test_profile_whoami_failure_still_falls_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Fail-open gilt auch mit Profilen: ohne Identitaet kein Profil, volle Liste.
+    monkeypatch.setattr(policy_filter, "get_settings", lambda: _settings())
+
+    async def _build_raises() -> ApiClient:
+        raise RuntimeError("API nicht erreichbar")
+
+    monkeypatch.setattr(server, "build_client", _build_raises)
+    assert _list_tool_names() == set(MCP_TOOL_REQUIREMENTS)
+    with pytest.raises(ToolError) as excinfo:
+        _call_tool("create_playbook", {"data": {"name": "x", "content": {"body": ""}}})
+    # Durchgelassen (keine Policy-Meldung); der Aufruf scheitert erst am Client.
+    assert "Werkzeug-Profil" not in str(excinfo.value)
+    assert "nicht freigeschaltet" not in str(excinfo.value)
+
+
+def test_call_blocked_by_profile_names_the_reporting_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_identity(monkeypatch, _whoami_handler(_profiled_payload(_builder_grant())))
+    with pytest.raises(ToolError) as excinfo:
+        _call_tool("create_artifact", {"data": {"title": "x"}})
+    message = str(excinfo.value)
+    assert "liegt nicht in deinem Werkzeug-Profil „Builder“" in message
+    assert "`report_problem`" in message
+    assert 'category="tool_request"' in message
+    assert "Berechtigungen" not in message
+
+
+def test_call_blocked_by_rights_keeps_rights_message_under_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Rechte UND Profil verbergen `create_artifact`: die Rechte-Meldung gewinnt.
+    payload = _profiled_payload(_builder_grant(), capabilities=["feedback_write"])
+    _install_identity(monkeypatch, _whoami_handler(payload))
+    with pytest.raises(ToolError, match="nicht freigeschaltet") as excinfo:
+        _call_tool("create_artifact", {"data": {"title": "x"}})
+    assert "Werkzeug-Profil" not in str(excinfo.value)
+
+
+def test_call_allowed_by_profile_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `record_usage` liegt in `feedback_memory` und damit im Profil „Builder“.
+    payload = _profiled_payload(_builder_grant())
+    pid = uuid4()
+    seen: dict[str, int] = {"usage": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/whoami"):
+            return httpx.Response(200, json=payload)
+        if request.url.path.endswith("/usage-events"):
+            seen["usage"] += 1
+            return httpx.Response(
+                201,
+                json={
+                    "id": str(uuid4()),
+                    "entity_type": "playbook",
+                    "entity_id": str(pid),
+                    "version": 1,
+                    "outcome": "applied",
+                    "agent_id": None,
+                    "created_at": "2024-01-01T00:00:00Z",
+                },
+            )
+        return httpx.Response(404, json={"detail": "nicht gemockt"})
+
+    _install_identity(monkeypatch, handler)
+    data = {"entity_type": "playbook", "entity_id": str(pid), "version": 1, "outcome": "applied"}
+    assert _call_tool("record_usage", {"data": data}) is not None
+    assert seen["usage"] == 1

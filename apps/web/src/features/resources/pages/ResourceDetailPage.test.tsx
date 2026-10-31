@@ -480,7 +480,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
@@ -516,7 +516,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
     )
 
     expect(
-      await screen.findByText(/Active: v2 · Du arbeitest auf Draft v3/),
+      await screen.findByText(/Aktiv: v2 · Entwurf v3 in Arbeit/),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
@@ -531,7 +531,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       }),
     )
 
-    expect(await screen.findByText(/Active: v2 · Zur Freigabe: v3/)).toBeInTheDocument()
+    expect(await screen.findByText(/Aktiv: v2 · v3 wartet auf Freigabe durch einen Admin/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
   })
 
@@ -548,7 +548,7 @@ describe('ResourceDetailPage — Status-Action-Bar', () => {
       }),
     )
 
-    expect(await screen.findByText('Active: v2')).toBeInTheDocument()
+    expect(await screen.findByText('Aktiv: v2')).toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
 })

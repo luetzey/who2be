@@ -261,4 +261,50 @@ describe('DashboardWelcome', () => {
     })
     expect(await screen.findByRole('button', { name: 'Ja, weiter' })).toBeInTheDocument()
   })
+
+  it('Chips „Ich nutze“ kommen aus CONNECT_CLIENTS ohne Claude', async () => {
+    acknowledgeCookies()
+    stubApi([[welcomeTutorial()]])
+    renderWelcome()
+    const dialog = await screen.findByRole('dialog')
+    const group = within(dialog).getByRole('group', { name: /./ })
+    expect(within(group).getAllByRole('button').map((el) => el.textContent)).toEqual([
+      'Claude Code',
+      'Cursor oder VS Code',
+      'Hermes Agent',
+      'Etwas anderes',
+    ])
+  })
+
+  it('Hermes: Untertitel, OAuth-Befehl, Text bricht an Wortgrenzen, Erfolg nennt Hermes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    acknowledgeCookies()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    stubApi([[welcomeTutorial()], [welcomeTutorial()], [welcomeTutorial({}, true)]])
+    const { baseElement } = renderWelcome()
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hermes Agent' }))
+    expect(await screen.findByRole('dialog', { name: /Verbinde „Builder“ mit Hermes/ })).toBeInTheDocument()
+
+    expect(screen.getByTestId('connect-lead')).toHaveTextContent('Im Terminal des Rechners')
+    const command = screen.getByLabelText('Befehl')
+    expect(command).toHaveTextContent(/^hermes mcp add who2be-builder --url \S+\/a\/agent-builder --auth oauth$/)
+    expect(command).toHaveClass('break-all')
+    // Gemeinsame Anleitung: der Test-Satz zerreisst nicht mehr mitten im Wort.
+    const sentence = screen.getByLabelText('Test-Satz')
+    expect(sentence).toHaveClass('break-words')
+    expect(sentence).not.toHaveClass('break-all')
+    expect(await axe(baseElement)).toHaveNoViolations()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Befehl kopieren' }))
+    expect(await screen.findByTestId('welcome-waiting')).toBeInTheDocument()
+    expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/--auth oauth$/))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WELCOME_POLL_INTERVAL_MS * 2)
+    })
+    expect(await screen.findByRole('dialog', { name: 'Verbunden!' })).toBeInTheDocument()
+    expect(screen.getByTestId('success-scene')).toHaveTextContent('Hermes')
+  })
 })

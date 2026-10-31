@@ -259,6 +259,22 @@ class InsertResult:
     skipped: int
 
 
+class RowMutationRejected(Exception):
+    """Zeilen-Aenderung/-Loeschung abgelehnt, NICHTS wurde geschrieben (ADR-0049-Nachtrag).
+
+    `kind` sagt, warum: ``too_many`` (mehr Treffer als `max_rows`),
+    ``count_mismatch`` (Trefferzahl weicht von `expected_count` ab) oder
+    ``dedupe_collision`` (der neu berechnete `_dedupe_hash` trifft eine andere
+    Zeile). `matched` ist die gezaehlte Trefferzahl (bei ``too_many`` gedeckelt
+    auf `max_rows` + 1). Der Service mappt alle drei auf 409.
+    """
+
+    def __init__(self, kind: str, matched: int) -> None:
+        super().__init__(kind)
+        self.kind = kind
+        self.matched = matched
+
+
 @dataclass(frozen=True, slots=True)
 class ColumnStats:
     """Spalten-Statistik aus `describe` — Wertebereiche, NIE Rohzeilen.
@@ -389,6 +405,21 @@ def _like_parameter(pattern: str) -> str:
     """
     escaped = pattern.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
+
+
+def _match_clause(match: Mapping[str, object]) -> tuple[str, list[object]]:
+    """WHERE-Teil fuer `update_rows`/`delete_rows`: Gleichheit, UND-verknuepft.
+
+    ``IS ?`` statt ``= ?``, damit ``{"spalte": null}`` die NULL-Zellen trifft
+    (bei ``=`` waere es nie wahr). Ein leeres `match` ist hier ein harter
+    Fehler und nicht „alle Zeilen" — zweite Linie hinter dem Modell
+    (`min_length=1`), damit kein Aufrufer versehentlich die ganze Tabelle
+    aendert oder loescht.
+    """
+    if not match:
+        raise ValueError("match darf nicht leer sein (ADR-0049-Nachtrag).")
+    conditions = [f"{quote_identifier(validate_column_name(column))} IS ?" for column in match]
+    return " AND ".join(conditions), [_to_sql_value(value) for value in match.values()]
 
 
 class TableStore:
@@ -678,6 +709,145 @@ class TableStore:
                 connection.executemany(sql, parameters)
             inserted = connection.total_changes - changes_before
             return InsertResult(inserted=inserted, skipped=total - inserted)
+        finally:
+            connection.close()
+
+    async def update_rows(
+        self,
+        workspace_id: UUID,
+        area_id: UUID,
+        table: str,
+        columns: Sequence[str],
+        match: Mapping[str, object],
+        values: Mapping[str, object],
+        *,
+        max_rows: int,
+        expected_count: int | None = None,
+        dedupe_hash_fn: Callable[[Mapping[str, object]], str] | None = None,
+    ) -> int:
+        """Aendert die Zeilen, deren Spalten `match` gleichen (ADR-0049-Nachtrag).
+
+        Feste, parametrisierte Statements des Servers — nie Aufrufer-SQL.
+        Ablauf in EINER Transaktion unter dem Area-Lock: Treffer lesen
+        (hoechstens `max_rows` + 1), Grenzen pruefen, dann je Treffer ein
+        ``UPDATE ... WHERE rowid = ?``. Ist `dedupe_hash_fn` gesetzt (der
+        Service setzt ihn, wenn `values` eine Dedupe-Spalte beruehrt), wird
+        `_dedupe_hash` aus der NEUEN Zeile neu berechnet; trifft er eine andere
+        Zeile, verletzt das den UNIQUE-Index und die ganze Transaktion rollt
+        zurueck (`RowMutationRejected('dedupe_collision')`, keine Teilaenderung).
+        Rueckgabe: Zahl der geaenderten Zeilen (0 = kein Treffer).
+        """
+        set_columns = [validate_column_name(column) for column in values]
+        if not set_columns:
+            raise ValueError("values darf nicht leer sein.")
+        select_columns = [validate_column_name(column) for column in columns]
+        where_sql, where_params = _match_clause(match)
+        quoted_table = quote_identifier(table)
+        select_sql = (
+            f"SELECT rowid, {', '.join(quote_identifier(c) for c in select_columns)} "
+            f"FROM {quoted_table} WHERE {where_sql} LIMIT ?"
+        )
+        assignments = [f"{quote_identifier(column)} = ?" for column in set_columns]
+        if dedupe_hash_fn is not None:
+            assignments.append('"_dedupe_hash" = ?')
+        update_sql = f"UPDATE {quoted_table} SET {', '.join(assignments)} WHERE rowid = ?"
+        set_params = [_to_sql_value(values[column]) for column in set_columns]
+
+        def _statements(rows: list[tuple[object, ...]]) -> list[list[object]]:
+            parameters: list[list[object]] = []
+            for row in rows:
+                params = list(set_params)
+                if dedupe_hash_fn is not None:
+                    merged = {**dict(zip(select_columns, row[1:], strict=True)), **values}
+                    params.append(dedupe_hash_fn(merged))
+                params.append(row[0])
+                parameters.append(params)
+            return parameters
+
+        path = self.db_path(workspace_id, area_id)
+        lock = await self._lock_for(path)
+        async with lock:
+            return await asyncio.to_thread(
+                self._mutate_rows_sync,
+                path,
+                select_sql,
+                [*where_params, max_rows + 1],
+                update_sql,
+                _statements,
+                max_rows,
+                expected_count,
+            )
+
+    async def delete_rows(
+        self,
+        workspace_id: UUID,
+        area_id: UUID,
+        table: str,
+        match: Mapping[str, object],
+        *,
+        max_rows: int,
+        expected_count: int | None = None,
+    ) -> int:
+        """Loescht die Zeilen, deren Spalten `match` gleichen (ADR-0049-Nachtrag).
+
+        Dieselben Grenzen und dieselbe Transaktion wie `update_rows`; geloescht
+        wird je Treffer per ``rowid``. Rueckgabe: Zahl der geloeschten Zeilen.
+        """
+        where_sql, where_params = _match_clause(match)
+        quoted_table = quote_identifier(table)
+        select_sql = f"SELECT rowid FROM {quoted_table} WHERE {where_sql} LIMIT ?"
+        delete_sql = f"DELETE FROM {quoted_table} WHERE rowid = ?"
+        path = self.db_path(workspace_id, area_id)
+        lock = await self._lock_for(path)
+        async with lock:
+            return await asyncio.to_thread(
+                self._mutate_rows_sync,
+                path,
+                select_sql,
+                [*where_params, max_rows + 1],
+                delete_sql,
+                lambda rows: [[row[0]] for row in rows],
+                max_rows,
+                expected_count,
+            )
+
+    def _mutate_rows_sync(
+        self,
+        path: Path,
+        select_sql: str,
+        select_params: list[object],
+        write_sql: str,
+        build_params: Callable[[list[tuple[object, ...]]], list[list[object]]],
+        max_rows: int,
+        expected_count: int | None,
+    ) -> int:
+        """Lesen, pruefen, schreiben — alles in einer ``BEGIN IMMEDIATE``-Transaktion.
+
+        Jede Ablehnung (Grenze, Zaehler, UNIQUE) rollt zurueck, bevor der
+        Aufrufer antwortet: es gibt keinen Zustand „halb geaendert".
+        """
+        if not path.is_file():
+            raise AreaStoreMissingError(path)
+        connection = self._connect_rw(path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                rows = connection.execute(select_sql, select_params).fetchall()
+                if len(rows) > max_rows:
+                    raise RowMutationRejected("too_many", len(rows))
+                if expected_count is not None and len(rows) != expected_count:
+                    raise RowMutationRejected("count_mismatch", len(rows))
+                try:
+                    connection.executemany(write_sql, build_params(rows))
+                except sqlite3.IntegrityError as exc:
+                    if "_dedupe_hash" not in str(exc):
+                        raise
+                    raise RowMutationRejected("dedupe_collision", len(rows)) from exc
+            except BaseException:
+                connection.rollback()
+                raise
+            connection.commit()
+            return len(rows)
         finally:
             connection.close()
 

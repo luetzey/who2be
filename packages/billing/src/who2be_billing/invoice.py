@@ -1,12 +1,13 @@
-"""Rechnung je bezahlter Zahlung ueber Mollie Invoicing (ADR-0061 §3, §4, §7; Paket R2a).
+"""Rechnung je bezahlter Zahlung ueber Mollie Invoicing (ADR-0061 §3, §4, §7; R2a, R2b).
 
-Ablauf, aufgerufen aus dem Mollie-Webhook (`mollie.py`):
-
-1. **Vormerken** (`InvoiceService.reserve`): eine Zeile `pending` in
-   `billing_invoice`, eine je `payment_id` (`UNIQUE`, Migration
-   `billing_0111`). Ab hier ist die Rechnung geschuldet.
-2. **Ausstellen** (`InvoiceService.issue`): Steuerfall aus den Rechnungsdaten
-   der Org und den Schaltern (`tax.decide_tax`), dann
+1. **Vormerken** (`InvoiceService.reserve`, aus dem Mollie-Webhook in
+   `mollie.py`): eine Zeile `pending` in `billing_invoice`, eine je
+   `payment_id` (`UNIQUE`, Migration `billing_0111`). Ab hier ist die
+   Rechnung geschuldet. Mehr tut der Webhook nicht: jeder Mollie-Aufruf kostet
+   bis zu 5 s, und die Zustellfrist des Webhooks soll nie daran haengen (R2b).
+2. **Ausstellen** (`InvoiceService.issue`, aus der Worker-Routine
+   `invoice-retry` ueber `run_invoice_retry`): Steuerfall aus den
+   Rechnungsdaten der Org und den Schaltern (`tax.decide_tax`), dann
    `POST /v2/sales-invoices` mit `status=paid` und
    `paymentDetails.source=payment`. Vor dem POST wird `post_started_at` atomar
    gesetzt; wer das nicht schafft, POSTet nicht.
@@ -14,16 +15,28 @@ Ablauf, aufgerufen aus dem Mollie-Webhook (`mollie.py`):
    holen, unveraendert unter `invoices/<org_id>/<jahr>/<nummer>.pdf` im
    BlobStore ablegen (Weiche W61-1 A), SHA-256 in die Zeile.
 
-Fehler brechen den Webhook nie ab. Die Zeile bleibt `pending` bzw. `issued`
-und traegt `last_error`; den Retry baut R2b (Worker `invoice-retry`). Ist nach
-einem Timeout offen, ob Mollie die Rechnung angelegt hat, bleibt
-`post_started_at` stehen: dann darf nur die List-API-Suche (R2b) weitermachen,
-nie ein zweiter POST.
+**Unklare Antwort.** Steht `post_started_at` noch (Timeout, 5xx), ist offen, ob
+Mollie die Rechnung angelegt hat. Dann sucht der naechste Lauf sie zuerst ueber
+die List-API (`paymentDetails[].sourceReference == payment_id`). Gefunden ⇒
+ID und Nummer uebernehmen, kein POST. Sicher nicht gefunden ⇒ Marker loesen,
+neu POSTen. Bleibt die Suche selbst unklar ⇒ kein POST (ADR-0061 §4).
 
-Zurueckgehalten (`pending`, `last_error = "hold:<grund>"`) wird die Rechnung,
-wenn kein Steuermodus gesetzt ist, die USt-IdNr. ungeprueft ist, Rechnungsdaten
-oder Empfaenger-E-Mail fehlen oder der bezahlte Betrag nicht zum Rechnungsbetrag
-passt. Eine Rechnung ueber einen anderen Betrag als den bezahlten entsteht nie.
+**Wiederholung.** Technische Fehler zaehlen `attempts` hoch; der naechste
+Versuch kommt nach `retry_backoff` (5 min, verdoppelt, hoechstens 6 h). Nach
+`MAX_ATTEMPTS` Fehlern steht die Zeile auf `failed` und der Worker schreibt eine
+ERROR-Zeile fuer den Betreiber. Keine Rechnung geht still verloren.
+
+Zurueckgehalten (`pending`, `last_error = "hold:<grund>"`, kein Versuch
+gezaehlt, Nachpruefung stuendlich) wird die Rechnung, wenn kein Steuermodus
+gesetzt ist, Rechnungsdaten oder Empfaenger-E-Mail fehlen oder der bezahlte
+Betrag nicht zum Rechnungsbetrag passt. Eine Rechnung ueber einen anderen
+Betrag als den bezahlten entsteht nie.
+
+**Ungepruefte USt-IdNr.** (Weiche W61-3 A): der Worker fragt VIES erneut und
+schreibt das Ergebnis in die Rechnungsdaten; danach entscheidet die
+Steuerfunktion wie sonst. Hat VIES `VIES_GRACE` (72 h) nach dem Vormerken
+noch kein Ergebnis geliefert, wird die Rechnung wie bei ungueltiger Nummer
+mit 19 % ausgestellt (Option B) und der Worker schreibt eine WARN-Zeile.
 
 > **Keine Steuer- oder Rechtsberatung.** Steuerfall und Vermerke kommen aus
 > `tax.py` und sind mit dem Steuerberater zu bestaetigen.
@@ -38,22 +51,34 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Literal, Protocol
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any, Literal, Protocol, TypeAlias, cast
 from uuid import UUID
 
 import asyncpg
 import httpx
 
 from who2be_api.blobstore.port import BlobNotFoundError, BlobStorePort
-from who2be_billing.billing_profile import BillingProfile, BillingProfileRepository
+from who2be_api.blobstore.service import build_blob_store
+from who2be_api.core.config import Settings, get_settings
+from who2be_billing.billing_profile import (
+    BillingProfile,
+    PgBillingProfileRepository,
+    VatChecker,
+    ViesVatChecker,
+)
 from who2be_billing.plans import Plan, plan_by_code
 from who2be_billing.tax import (
+    MEMO_TEXTS,
+    CustomerType,
     InvoiceLocale,
+    MemoKey,
     PriceBasis,
     TaxDecision,
     TaxInput,
     TaxMode,
+    VatMode,
+    VatStatus,
     decide_tax,
     invoice_locale,
     memo_text,
@@ -80,6 +105,28 @@ MAX_LINE_DESCRIPTION = 100
 
 #: Laenge von `last_error` (CHECK in `billing_0111`).
 MAX_ERROR_LENGTH = 500
+
+#: Wiederholung (ADR-0061 §4, R2b). Erster Versuch sofort, danach 5 min,
+#: verdoppelt je Fehler, hoechstens 6 h. Nach `MAX_ATTEMPTS` Fehlern ist die
+#: Zeile `failed` (rund 16 h nach dem ersten Fehler).
+RETRY_BASE = timedelta(minutes=5)
+RETRY_MAX = timedelta(hours=6)
+MAX_ATTEMPTS = 8
+#: Zurueckgehaltene Zeilen (`hold:*`) prueft der Worker so oft erneut.
+HOLD_RECHECK = timedelta(hours=1)
+#: W61-3 A: so lange wartet eine Rechnung mit ungepruefter USt-IdNr. auf VIES,
+#: gerechnet ab dem Vormerken. Danach Option B (19 %, Betreiber-Hinweis).
+VIES_GRACE = timedelta(hours=72)
+#: Zeilen je Worker-Lauf; der Rest kommt im naechsten Lauf (alle 5 min).
+RETRY_BATCH = 25
+
+#: List-API (`GET /v2/sales-invoices`) hat keinen Filter nach Zahlung
+#: (Referenz „List sales invoices“: nur `from`, `limit`). Gelesen wird
+#: seitenweise, hoechstens so viele Seiten; danach gilt die Suche als unklar.
+LIST_PAGE_SIZE = 250
+MAX_LIST_PAGES = 4
+
+_HOLD_PREFIX = "hold:"
 
 PAYMENT_ID_PATTERN = re.compile(r"^tr_[A-Za-z0-9]{1,64}$")
 CUSTOMER_ID_PATTERN = re.compile(r"^cst_[A-Za-z0-9]{1,64}$")
@@ -145,6 +192,10 @@ class InvoiceRecord:
     pdf_key: str | None = None
     pdf_sha256: str | None = None
     last_error: str | None = None
+    #: Technische Fehlversuche (zurueckgehaltene Laeufe zaehlen nicht).
+    attempts: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +220,34 @@ class CreatedInvoice:
     pdf_url: str | None
 
 
+@dataclass(frozen=True)
+class FoundInvoice:
+    """Rechnung, die die List-API zu einer Zahlung gefunden hat (R2b).
+
+    Steuerangaben stammen aus der Mollie-Rechnung selbst: sie ist das, was
+    ausgestellt wurde, auch wenn sich Schalter oder Rechnungsdaten seit dem
+    POST geaendert haben.
+    """
+
+    created: CreatedInvoice
+    vat_rate: Decimal
+    vat_mode: VatMode
+    recipient_type: CustomerType
+    has_vat_number: bool
+    memo_key: MemoKey | None
+
+    def decision(self) -> TaxDecision:
+        return TaxDecision(
+            action="issue",
+            hold_reason=None,
+            vat_rate=self.vat_rate,
+            vat_mode=self.vat_mode,
+            recipient_type=self.recipient_type,
+            include_vat_number=self.has_vat_number,
+            memo_key=self.memo_key,
+        )
+
+
 # --- Ports -------------------------------------------------------------------------
 
 
@@ -178,6 +257,10 @@ class InvoiceRepository(Protocol):
         ...
 
     async def get(self, invoice_id: UUID) -> InvoiceRecord | None: ...
+
+    async def open_invoices(self, limit: int = ...) -> list[InvoiceRecord]:
+        """Zeilen in `pending` oder `issued`, am laengsten unberuehrte zuerst."""
+        ...
 
     async def start_post(self, invoice_id: UUID) -> bool:
         """Setzt `post_started_at` atomar. False ⇒ jemand anderes POSTet bzw. hat."""
@@ -192,7 +275,7 @@ class InvoiceRepository(Protocol):
         invoice_id: UUID,
         created: CreatedInvoice,
         *,
-        tax_mode: TaxMode,
+        tax_mode: TaxMode | None,
         price_basis: PriceBasis,
         decision: TaxDecision,
         issued_at: datetime,
@@ -201,8 +284,42 @@ class InvoiceRepository(Protocol):
     async def mark_archived(self, invoice_id: UUID, *, pdf_key: str, pdf_sha256: str) -> None: ...
 
     async def record_error(self, invoice_id: UUID, error: str) -> None:
-        """Haelt den letzten Fehler fest, ohne den Status zu aendern."""
+        """Haelt den letzten Fehler fest, ohne Status oder Versuche zu aendern."""
         ...
+
+    async def record_failure(self, invoice_id: UUID, error: str) -> InvoiceStatus | None:
+        """Zaehlt einen Fehlversuch. Ab `MAX_ATTEMPTS` wird `pending` zu `failed`.
+
+        Liefert den Status danach. `issued` wird nie `failed`: die Rechnung
+        existiert bei Mollie, nur das Archiv fehlt noch.
+        """
+        ...
+
+
+class OrgInvoiceReader(Protocol):
+    """Lesesicht einer Organisation auf ihre Rechnungen (Paket R3).
+
+    Beide Methoden filtern ausdruecklich nach `org_id`; die Org kommt immer aus
+    dem Workspace-Kontext, nie aus der URL.
+    """
+
+    async def list_for_org(self, org_id: UUID, limit: int = ...) -> list[InvoiceRecord]:
+        """Ausgestellte Rechnungen (`issued`, `archived`), neueste zuerst."""
+        ...
+
+    async def get_for_org(self, org_id: UUID, invoice_id: UUID) -> InvoiceRecord | None:
+        """Die Rechnung, wenn sie dieser Org gehoert und ausgestellt ist, sonst None."""
+        ...
+
+
+class InvoiceProfileRepository(Protocol):
+    """Was der Rechnungsweg an den Rechnungsdaten braucht."""
+
+    async def get(self, org_id: UUID) -> BillingProfile | None: ...
+
+    async def update_vat_status(
+        self, org_id: UUID, vat_id: str, status: VatStatus, checked_at: datetime
+    ) -> None: ...
 
 
 class SalesInvoiceGateway(Protocol):
@@ -211,6 +328,14 @@ class SalesInvoiceGateway(Protocol):
     async def customer_email(self, customer_id: str) -> str | None: ...
 
     async def create_sales_invoice(self, payload: dict[str, Any]) -> CreatedInvoice: ...
+
+    async def find_invoice_for_payment(self, payment_id: str) -> FoundInvoice | None:
+        """Sucht die Rechnung zur Zahlung ueber die List-API.
+
+        `None` heisst: sicher keine. Ist das nicht sicher (Fehler, Seitenlimit),
+        wirft sie `InvoiceUncertainError`.
+        """
+        ...
 
     async def pdf_url(self, invoice_id: str) -> str | None: ...
 
@@ -339,21 +464,56 @@ def _short(error: str) -> str:
     return error[:MAX_ERROR_LENGTH]
 
 
+def retry_backoff(attempts: int) -> timedelta:
+    """Wartezeit nach `attempts` Fehlversuchen: 0, 5 min, 10 min … hoechstens 6 h."""
+    if attempts <= 0:
+        return timedelta(0)
+    backoff: timedelta = RETRY_BASE * 2 ** min(attempts - 1, 16)
+    return min(backoff, RETRY_MAX)
+
+
+def is_held(record: InvoiceRecord) -> bool:
+    """Zurueckgehalten (`hold:*`): wartet auf Daten, nicht auf einen Wiederholversuch."""
+    return record.last_error is not None and record.last_error.startswith(_HOLD_PREFIX)
+
+
+def is_due(record: InvoiceRecord, now: datetime) -> bool:
+    """Ob der Worker die Zeile in diesem Lauf anfasst (Backoff bzw. Nachpruefung)."""
+    if record.status not in ("pending", "issued"):
+        return False
+    if record.updated_at is None:
+        return True
+    waited = now - record.updated_at
+    if record.status == "pending" and is_held(record):
+        return waited >= HOLD_RECHECK
+    if record.attempts <= 0:
+        return True  # noch kein Fehlversuch: sofort (auch bei Uhrenversatz DB/Worker)
+    return waited >= retry_backoff(record.attempts)
+
+
+def _price_basis_of(vat_mode: VatMode) -> PriceBasis:
+    return "net" if vat_mode == "exclusive" else "gross"
+
+
+_COUNTERS = ("open", "due", "issued", "archived", "held", "failed", "vies_fallback")
+
+
 # --- Anwendungsfall ----------------------------------------------------------------
 
 
 class InvoiceService:
-    """Vormerken, Ausstellen, Archivieren. `issue` wirft nie."""
+    """Vormerken (Webhook), Ausstellen und Archivieren (Worker). `issue` wirft nie."""
 
     def __init__(
         self,
         repo: InvoiceRepository,
-        profiles: BillingProfileRepository,
+        profiles: InvoiceProfileRepository,
         gateway: SalesInvoiceGateway,
         blob_store: BlobStorePort | None,
         *,
         tax_mode: TaxMode | None,
         price_basis: PriceBasis,
+        vat_checker: VatChecker | None = None,
     ) -> None:
         self._repo = repo
         self._profiles = profiles
@@ -361,6 +521,8 @@ class InvoiceService:
         self._blob_store = blob_store
         self._tax_mode = tax_mode
         self._price_basis = price_basis
+        self._vat_checker = vat_checker
+        self._vies_fallbacks = 0
 
     async def reserve(self, data: InvoiceReservation) -> InvoiceRecord:
         """Rechnung zur Zahlung vormerken (idempotent je `payment_id`)."""
@@ -370,13 +532,38 @@ class InvoiceService:
         """Stellt aus und archiviert, soweit moeglich. Fehler landen in der Zeile."""
         try:
             return await self._issue(invoice_id, now or datetime.now(UTC))
-        except Exception as exc:  # noqa: BLE001 - der Webhook darf hieran nie scheitern
+        except Exception as exc:  # noqa: BLE001 - ein Fehler gilt nur dieser Zeile
             logger.exception("Rechnung %s: unerwarteter Fehler", invoice_id)
             try:
-                await self._repo.record_error(invoice_id, f"unexpected:{type(exc).__name__}")
+                await self._fail(invoice_id, f"unexpected:{type(exc).__name__}")
             except Exception:  # noqa: BLE001
                 logger.exception("Rechnung %s: Fehler nicht speicherbar", invoice_id)
             return None
+
+    async def retry_open_invoices(
+        self, now: datetime, *, limit: int = RETRY_BATCH
+    ) -> dict[str, int]:
+        """Ein Lauf der Worker-Routine `invoice-retry`: faellige Zeilen abarbeiten.
+
+        Liefert nur Zaehler (ADR-0057 §4). `failed` und `vies_fallback` sind die
+        Faelle fuer den Betreiber; beide stehen zusaetzlich als ERROR- bzw.
+        WARN-Zeile im Worker-Log.
+        """
+        counters = dict.fromkeys(_COUNTERS, 0)
+        rows = await self._repo.open_invoices()
+        counters["open"] = len(rows)
+        self._vies_fallbacks = 0
+        for row in [row for row in rows if is_due(row, now)][:limit]:
+            counters["due"] += 1
+            after = await self.issue(row.id, now=now)
+            if after is None:
+                continue
+            if after.status in ("failed", "archived", "issued"):
+                counters[after.status] += 1
+            elif is_held(after):
+                counters["held"] += 1
+        counters["vies_fallback"] = self._vies_fallbacks
+        return counters
 
     async def _issue(self, invoice_id: UUID, now: datetime) -> InvoiceRecord | None:
         record = await self._repo.get(invoice_id)
@@ -393,6 +580,51 @@ class InvoiceService:
             return await self._repo.get(invoice_id)
         return record
 
+    async def _fail(self, invoice_id: UUID, error: str) -> None:
+        """Zaehlt einen Fehlversuch; beim letzten ein Hinweis an den Betreiber."""
+        status = await self._repo.record_failure(invoice_id, _short(error))
+        if status == "failed":
+            logger.error(
+                "Rechnung %s endgueltig fehlgeschlagen nach %d Versuchen (%s). Betreiber: in "
+                "Mollie pruefen, ob zur Zahlung schon eine Rechnung existiert, sonst von Hand "
+                "ausstellen.",
+                invoice_id,
+                MAX_ATTEMPTS,
+                _short(error),
+            )
+
+    async def _lookup(
+        self, record: InvoiceRecord, now: datetime
+    ) -> tuple[InvoiceRecord, str | None] | bool:
+        """Nach einem unklaren POST: erst nachschlagen, nie blind neu POSTen.
+
+        Gefunden ⇒ ausgestellte Zeile (ohne POST). Sicher keine ⇒ `True`, der
+        Marker ist geloest und der Aufrufer darf POSTen. Unklar ⇒ `False`.
+        """
+        try:
+            found = await self._gateway.find_invoice_for_payment(record.payment_id)
+        except InvoiceUncertainError as exc:
+            logger.warning("Rechnung %s: Suche unklar (%s), kein POST", record.id, exc.reason)
+            await self._fail(record.id, f"lookup:{exc.reason}")
+            return False
+        if found is None:
+            logger.info("Rechnung %s: Mollie hat keine Rechnung zur Zahlung, neuer POST", record.id)
+            await self._repo.release_post(record.id, "lookup:not_found")
+            return True
+        decision = found.decision()
+        issued = await self._repo.mark_issued(
+            record.id,
+            found.created,
+            tax_mode=self._tax_mode,
+            price_basis=_price_basis_of(decision.vat_mode),
+            decision=decision,
+            issued_at=now,
+        )
+        if issued is None:
+            return False
+        logger.info("Rechnung %s: bei Mollie gefunden, ohne neuen POST uebernommen", record.id)
+        return issued, found.created.pdf_url
+
     async def _hold(self, record: InvoiceRecord, reason: str) -> None:
         if reason == "tax_mode_missing":
             logger.warning(
@@ -401,19 +633,39 @@ class InvoiceService:
             )
         else:
             logger.info("Rechnung %s zurueckgehalten: %s", record.id, reason)
-        await self._repo.record_error(record.id, f"hold:{reason}")
+        await self._repo.record_error(record.id, f"{_HOLD_PREFIX}{reason}")
 
-    async def _prepare(self, record: InvoiceRecord) -> tuple[dict[str, Any], TaxDecision] | str:
-        """Baut den POST-Body oder liefert den Grund, warum zurueckgehalten wird."""
-        if self._tax_mode is None:
-            return "tax_mode_missing"
-        plan = plan_by_code(record.plan_code)
-        if plan is None:
-            return "plan_unknown"
-        profile = await self._profiles.get(record.org_id)
-        if profile is None:
-            return "profile_missing"
-        decision = decide_tax(
+    async def _recheck_vat(
+        self, record: InvoiceRecord, profile: BillingProfile, now: datetime
+    ) -> BillingProfile:
+        """W61-3 A: ungepruefte USt-IdNr. bei VIES nachpruefen, nach 72 h Option B.
+
+        Ein Ergebnis (`valid`/`invalid`) geht in die Rechnungsdaten, damit auch
+        der naechste Checkout es kennt. Bleibt VIES bis `VIES_GRACE` nach dem
+        Vormerken stumm, gilt die Nummer fuer DIESE Rechnung als ungueltig (19 %);
+        die Rechnungsdaten bleiben `unchecked`.
+        """
+        vat_id = profile.vat_id
+        if vat_id is None:
+            return profile
+        if self._vat_checker is not None:
+            status: VatStatus = await self._vat_checker.check(vat_id)
+            if status != "unchecked":
+                await self._profiles.update_vat_status(record.org_id, vat_id, status, now)
+                logger.info("Rechnung %s: USt-IdNr. nachgeprueft (%s)", record.id, status)
+                return profile.model_copy(update={"vat_status": status, "vat_checked_at": now})
+        if record.created_at is not None and now - record.created_at >= VIES_GRACE:
+            self._vies_fallbacks += 1
+            logger.warning(
+                "Rechnung %s: USt-IdNr. nach 72 h weiter ungeprueft, Ausstellung mit 19 %% "
+                "(W61-3, Option B). Betreiber: Steuerfall pruefen.",
+                record.id,
+            )
+            return profile.model_copy(update={"vat_status": "invalid"})
+        return profile
+
+    def _decide(self, profile: BillingProfile) -> TaxDecision:
+        return decide_tax(
             TaxInput(
                 tax_mode=self._tax_mode,
                 price_basis=self._price_basis,
@@ -423,6 +675,23 @@ class InvoiceService:
                 vat_status=profile.vat_status,
             )
         )
+
+    async def _prepare(
+        self, record: InvoiceRecord, now: datetime
+    ) -> tuple[dict[str, Any], TaxDecision] | str:
+        """Baut den POST-Body oder liefert den Grund, warum zurueckgehalten wird."""
+        if self._tax_mode is None:
+            return "tax_mode_missing"
+        plan = plan_by_code(record.plan_code)
+        if plan is None:
+            return "plan_unknown"
+        profile = await self._profiles.get(record.org_id)
+        if profile is None:
+            return "profile_missing"
+        decision = self._decide(profile)
+        if decision.hold_reason == "vat_id_unchecked":
+            profile = await self._recheck_vat(record, profile, now)
+            decision = self._decide(profile)
         if decision.action == "hold":
             return decision.hold_reason or "tax"
         if record.amount_value is None or record.amount_value != expected_total(plan, decision):
@@ -441,15 +710,17 @@ class InvoiceService:
         self, record: InvoiceRecord, now: datetime
     ) -> tuple[InvoiceRecord, str | None] | None:
         if record.post_started_at is not None:
-            # Ein frueherer POST endete ohne klare Antwort. Ob Mollie angelegt
-            # hat, klaert nur die List-API (R2b) — hier kein zweiter POST.
-            return None
-        prepared = await self._prepare(record)
+            # Ein frueherer POST endete ohne klare Antwort. Erst die List-API.
+            looked_up = await self._lookup(record, now)
+            if looked_up is False:
+                return None
+            if looked_up is not True:
+                return looked_up
+        prepared = await self._prepare(record, now)
         if isinstance(prepared, str):
             await self._hold(record, prepared)
             return None
         payload, decision = prepared
-        assert self._tax_mode is not None  # von _prepare geprueft
         if not await self._repo.start_post(record.id):
             return None
         try:
@@ -457,10 +728,13 @@ class InvoiceService:
         except InvoiceRejectedError as exc:
             logger.warning("Rechnung %s von Mollie abgelehnt: %s", record.id, exc.reason)
             await self._repo.release_post(record.id, _short(f"rejected:{exc.reason}"))
+            await self._fail(record.id, f"rejected:{exc.reason}")
             return None
         except InvoiceUncertainError as exc:
-            logger.warning("Rechnung %s: Antwort unklar (%s), Worker klaert", record.id, exc.reason)
-            await self._repo.record_error(record.id, _short(f"uncertain:{exc.reason}"))
+            logger.warning(
+                "Rechnung %s: Antwort unklar (%s), naechster Lauf sucht", record.id, exc.reason
+            )
+            await self._fail(record.id, f"uncertain:{exc.reason}")
             return None
         issued = await self._repo.mark_issued(
             record.id,
@@ -477,7 +751,7 @@ class InvoiceService:
 
     async def _archive(self, record: InvoiceRecord, pdf_url: str | None) -> None:
         if self._blob_store is None:
-            await self._repo.record_error(record.id, "archive:blobstore_unconfigured")
+            await self._fail(record.id, "archive:blobstore_unconfigured")
             return
         if record.mollie_invoice_id is None or record.invoice_number is None:
             return  # durch billing_invoice_issued_check ausgeschlossen
@@ -492,7 +766,7 @@ class InvoiceService:
             await self._store_once(key, pdf, digest)
         except (InvoiceArchiveError, InvoiceRejectedError, InvoiceUncertainError) as exc:
             logger.warning("Rechnung %s: Archiv fehlgeschlagen (%s)", record.id, exc)
-            await self._repo.record_error(record.id, _short(f"archive:{exc}"))
+            await self._fail(record.id, f"archive:{exc}")
             return
         await self._repo.mark_archived(record.id, pdf_key=key, pdf_sha256=digest)
 
@@ -508,13 +782,56 @@ class InvoiceService:
             raise InvoiceArchiveError("archive_key_taken")
 
 
+async def run_invoice_retry(
+    conn: asyncpg.Connection, now: datetime, settings: Settings | None = None
+) -> dict[str, int]:
+    """Einstieg der Worker-Routine `invoice-retry` (ADR-0057, ADR-0061 §4).
+
+    Der Kern ruft das ueber einen dynamischen Import (ADR-0029). Ohne Mollie-Key
+    gibt es nichts auszustellen; offene Zeilen bleiben stehen (fail closed).
+    """
+    settings = settings or get_settings()
+    repo = PgInvoiceRepository(conn)
+    if not settings.mollie_api_key:
+        open_rows = await repo.open_invoices()
+        if open_rows:
+            logger.warning(
+                "invoice-retry: MOLLIE_API_KEY fehlt, %d Rechnungen offen.", len(open_rows)
+            )
+        return {"open": len(open_rows), "unconfigured": 1}
+    service = InvoiceService(
+        repo,
+        PgBillingProfileRepository(conn),
+        HttpSalesInvoiceGateway(settings.mollie_api_key),
+        build_blob_store(settings),
+        tax_mode=settings.invoice_tax_mode,
+        price_basis=settings.invoice_price_basis,
+        vat_checker=ViesVatChecker(),
+    )
+    return await service.retry_open_invoices(now)
+
+
 # --- Repository --------------------------------------------------------------------
 
 _COLUMNS = (
     "id, org_id, payment_id, customer_id, plan_code, amount_value, period_start, period_end, "
     "status, post_started_at, mollie_invoice_id, invoice_number, issued_at, pdf_key, "
-    "pdf_sha256, last_error"
+    "pdf_sha256, last_error, attempts, created_at, updated_at"
 )
+
+#: Obergrenze der Rechnungsliste einer Org (R3). Eine Rechnung je Monat, also
+#: reichen 240 Zeilen fuer 20 Jahre; eine Pagination lohnt sich nicht.
+ORG_LIST_LIMIT = 240
+
+#: Nur diese Status tragen eine Rechnungsnummer (`billing_invoice_issued_check`)
+#: und sind fuer die Org sichtbar; `pending`/`failed` sind Betreiber-Zustaende.
+_VISIBLE = "status IN ('issued', 'archived')"
+
+#: Obergrenze, wie viele offene Zeilen ein Worker-Lauf liest (Faelligkeit
+#: entscheidet danach `is_due`). Mehr offene Zeilen sind kein Normalbetrieb.
+OPEN_SCAN_LIMIT = 500
+
+Executor: TypeAlias = asyncpg.Pool | asyncpg.Connection
 
 
 def _record(row: asyncpg.Record) -> InvoiceRecord:
@@ -522,10 +839,34 @@ def _record(row: asyncpg.Record) -> InvoiceRecord:
 
 
 class PgInvoiceRepository:
-    """asyncpg-Implementierung auf dem App-Pool (Webhook ohne Org-Scope)."""
+    """asyncpg-Implementierung ohne Org-Scope (Webhook auf dem Pool, Worker auf der Connection)."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: Executor) -> None:
         self._pool = pool
+
+    async def open_invoices(self, limit: int = OPEN_SCAN_LIMIT) -> list[InvoiceRecord]:
+        rows = await self._pool.fetch(
+            f"SELECT {_COLUMNS} FROM billing_invoice WHERE status IN ('pending', 'issued') "  # noqa: S608
+            "ORDER BY updated_at, id LIMIT $1",
+            limit,
+        )
+        return [_record(row) for row in rows]
+
+    async def record_failure(self, invoice_id: UUID, error: str) -> InvoiceStatus | None:
+        status = await self._pool.fetchval(
+            """
+            UPDATE billing_invoice
+               SET attempts = attempts + 1, last_error = $2,
+                   status = CASE WHEN status = 'pending' AND attempts + 1 >= $3
+                                 THEN 'failed' ELSE status END
+             WHERE id = $1 AND status IN ('pending', 'issued')
+            RETURNING status
+            """,
+            invoice_id,
+            _short(error),
+            MAX_ATTEMPTS,
+        )
+        return cast("InvoiceStatus | None", status)
 
     async def reserve(self, data: InvoiceReservation) -> InvoiceRecord:
         row = await self._pool.fetchrow(
@@ -559,9 +900,27 @@ class PgInvoiceRepository:
         )
         return _record(row) if row is not None else None
 
+    async def list_for_org(self, org_id: UUID, limit: int = ORG_LIST_LIMIT) -> list[InvoiceRecord]:
+        rows = await self._pool.fetch(
+            f"SELECT {_COLUMNS} FROM billing_invoice WHERE org_id = $1 AND {_VISIBLE} "  # noqa: S608
+            "ORDER BY issued_at DESC, id DESC LIMIT $2",
+            org_id,
+            limit,
+        )
+        return [_record(row) for row in rows]
+
+    async def get_for_org(self, org_id: UUID, invoice_id: UUID) -> InvoiceRecord | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {_COLUMNS} FROM billing_invoice "  # noqa: S608
+            f"WHERE id = $1 AND org_id = $2 AND {_VISIBLE}",
+            invoice_id,
+            org_id,
+        )
+        return _record(row) if row is not None else None
+
     async def start_post(self, invoice_id: UUID) -> bool:
         claimed = await self._pool.fetchval(
-            "UPDATE billing_invoice SET post_started_at = now(), attempts = attempts + 1 "
+            "UPDATE billing_invoice SET post_started_at = now() "
             "WHERE id = $1 AND status = 'pending' AND post_started_at IS NULL RETURNING id",
             invoice_id,
         )
@@ -580,7 +939,7 @@ class PgInvoiceRepository:
         invoice_id: UUID,
         created: CreatedInvoice,
         *,
-        tax_mode: TaxMode,
+        tax_mode: TaxMode | None,
         price_basis: PriceBasis,
         decision: TaxDecision,
         issued_at: datetime,
@@ -714,6 +1073,40 @@ class HttpSalesInvoiceGateway:
             raise InvoiceUncertainError("body_unreadable") from exc
         return _created_invoice(body)
 
+    async def find_invoice_for_payment(self, payment_id: str) -> FoundInvoice | None:
+        """List-API seitenweise nach `paymentDetails[].sourceReference` durchsuchen.
+
+        Die API filtert nicht nach Zahlung; neueste zuerst, hoechstens
+        `MAX_LIST_PAGES` Seiten. Ohne Treffer bis zur letzten Seite ⇒ `None`;
+        bricht die Suche vorher ab (Fehler, Seitenlimit) ⇒ unklar.
+        """
+        if not PAYMENT_ID_PATTERN.fullmatch(payment_id):
+            raise InvoiceUncertainError("payment_id_unusable")
+        url: str | None = f"{self._base_url}/sales-invoices?limit={LIST_PAGE_SIZE}"
+        pages = 0
+        async with self._client() as client:
+            while url is not None:
+                if pages >= MAX_LIST_PAGES:
+                    raise InvoiceUncertainError("list_page_limit")
+                pages += 1
+                try:
+                    response = await client.get(url)
+                except httpx.HTTPError as exc:
+                    raise InvoiceUncertainError(f"list:{type(exc).__name__}") from exc
+                if response.status_code != httpx.codes.OK:
+                    raise InvoiceUncertainError(f"list_http_{response.status_code}")
+                try:
+                    body = response.json()
+                except ValueError as exc:
+                    raise InvoiceUncertainError("list_unreadable") from exc
+                invoices, url = _list_page(body)
+                for invoice in invoices:
+                    if _references_payment(invoice, payment_id):
+                        return _found_invoice(invoice)
+                if url is not None and not _is_mollie_api_url(url):
+                    raise InvoiceUncertainError("list_next_foreign")
+        return None
+
     async def pdf_url(self, invoice_id: str) -> str | None:
         if not _INVOICE_ID.fullmatch(invoice_id):
             return None
@@ -764,3 +1157,74 @@ def _created_invoice(body: object) -> CreatedInvoice:
     if not isinstance(number, str) or not _INVOICE_NUMBER.fullmatch(number):
         raise InvoiceUncertainError("invoice_number_unusable")
     return CreatedInvoice(id=invoice_id, invoice_number=number, pdf_url=_pdf_href(body))
+
+
+def _list_page(body: object) -> tuple[list[dict[str, Any]], str | None]:
+    """Eintraege und `_links.next.href` einer List-Antwort; Form falsch ⇒ unklar."""
+    if not isinstance(body, dict):
+        raise InvoiceUncertainError("list_unreadable")
+    embedded = body.get("_embedded")
+    items = embedded.get("sales_invoices") if isinstance(embedded, dict) else None
+    if not isinstance(items, list):
+        raise InvoiceUncertainError("list_unreadable")
+    links = body.get("_links")
+    nxt = links.get("next") if isinstance(links, dict) else None
+    href = nxt.get("href") if isinstance(nxt, dict) else None
+    return [item for item in items if isinstance(item, dict)], (
+        href if isinstance(href, str) and href else None
+    )
+
+
+def _references_payment(invoice: dict[str, Any], payment_id: str) -> bool:
+    details = invoice.get("paymentDetails")
+    entries = details if isinstance(details, list) else [details]
+    return any(
+        isinstance(entry, dict)
+        and entry.get("source") == "payment"
+        and entry.get("sourceReference") == payment_id
+        for entry in entries
+    )
+
+
+def _memo_key(memo: object) -> MemoKey | None:
+    """Vermerk-Schluessel zum Mollie-`memo` (exakt einer unserer Texte, sonst unklar)."""
+    if memo is None or memo == "":
+        return None
+    for key, texts in MEMO_TEXTS.items():
+        if memo in texts.values():
+            return key
+    raise InvoiceUncertainError("found_memo_unknown")
+
+
+def _found_invoice(invoice: dict[str, Any]) -> FoundInvoice:
+    """Gefundene Rechnung samt Steuerangaben; was fehlt oder fremd ist ⇒ unklar.
+
+    Unklar heisst hier: kein zweiter POST, die Zeile laeuft ueber den Backoff
+    nach `failed` und landet beim Betreiber. Lieber von Hand als doppelt.
+    """
+    created = _created_invoice(invoice)
+    vat_mode = invoice.get("vatMode")
+    recipient = invoice.get("recipient")
+    lines = invoice.get("lines")
+    rate_raw = (
+        lines[0].get("vatRate")
+        if isinstance(lines, list) and lines and isinstance(lines[0], dict)
+        else None
+    )
+    if vat_mode not in ("exclusive", "inclusive") or not isinstance(recipient, dict):
+        raise InvoiceUncertainError("found_fields_missing")
+    recipient_type = recipient.get("type")
+    if recipient_type not in ("business", "consumer"):
+        raise InvoiceUncertainError("found_fields_missing")
+    try:
+        vat_rate = Decimal(str(rate_raw)).quantize(_CENT)
+    except (InvalidOperation, ValueError) as exc:
+        raise InvoiceUncertainError("found_fields_missing") from exc
+    return FoundInvoice(
+        created=created,
+        vat_rate=vat_rate,
+        vat_mode=cast("VatMode", vat_mode),
+        recipient_type=cast("CustomerType", recipient_type),
+        has_vat_number=bool(recipient.get("vatNumber")),
+        memo_key=_memo_key(invoice.get("memo")),
+    )

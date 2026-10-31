@@ -3,7 +3,7 @@ title: Claude Free und mehrere Agenten
 description: Was die Grenze von einem eigenen Connector bedeutet und wie du damit arbeitest.
 section: konto-und-team
 order: 20
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -29,6 +29,6 @@ In Who2Be geht dabei nichts verloren. Personas, Playbooks und Gedächtnis bleibe
 Willst du mehrere Agenten parallel nutzen, hast du diese Wege:
 
 - Ein bezahlter Claude-Plan erlaubt mehrere eigene Connectors.
-- Claude Code, Cursor und VS Code haben diese Grenze nicht, siehe [Andere Programme verbinden](/help/connect-other-clients).
+- Claude Code, Cursor, VS Code und Hermes Agent haben diese Grenze nicht, siehe [Andere Programme verbinden](/help/connect-other-clients).
 
 Für Teams und Unternehmen fügt meist der Owner der Claude-Organisation die Connectors hinzu, siehe [Team- und Enterprise-Pläne](/help/connect-claude#team-plan).

@@ -591,7 +591,7 @@ def _block_shaped_inputs(name: str, schema: dict[str, Any]) -> list[str]:
 def test_no_tool_input_schema_accepts_blocknote_json() -> None:
     """Ueber den ganzen Katalog: kein Eingabeschema nimmt ein Editor-Dokument an."""
     tools = asyncio.run(mcp.list_tools(run_middleware=False))
-    assert len(tools) == 101
+    assert len(tools) == 103
     findings: list[str] = []
     for tool in tools:
         findings += _block_shaped_inputs(tool.name, tool.parameters or {})
@@ -685,3 +685,83 @@ def test_write_tool_rejects_blocknote_list(
     with pytest.raises(ToolError):
         asyncio.run(_run())
     assert calls == []
+
+
+# --- Laengen-Hinweise (ADR-0063) ----------------------------------------------
+# Die API liefert `length_hints[]` strukturiert; die Werkzeuge zeigen nur die
+# Zeile `length_note` (Token-Budget) und lassen das strukturierte Feld weg.
+
+_HINT = {
+    "element": "profile",
+    "ref": None,
+    "value": 1450,
+    "unit": "words",
+    "target": 400,
+    "warn": 600,
+    "message": (
+        "Profil 1 450 Wörter, Richtwert 400. Abläufe und Nachschlagewissen "
+        "in Playbook/Resource auslagern?"
+    ),
+}
+_MODE_HINT = {**_HINT, "element": "mode", "ref": "M", "value": 260, "message": "Modus „M“ 260."}
+
+
+def _install_write(monkeypatch: pytest.MonkeyPatch, hints: list[dict[str, Any]]) -> None:
+    content = {"description": "", "tags": [], "profile": "x", "modes": [], "skills": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markdown"):
+            payload = {**_source("personas", content), "dangling_refs": [], "length_hints": hints}
+            return httpx.Response(201, json=payload)
+        return httpx.Response(200, json={"content_locale": "de"})
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+
+def _call_json(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _run() -> dict[str, Any]:
+        async with Client(mcp) as client:
+            result = await client.call_tool(tool, args)
+            return json.loads(result.content[0].text)  # type: ignore[no-any-return]
+
+    return asyncio.run(_run())
+
+
+def test_write_tool_shows_length_hints_as_one_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_write(monkeypatch, [_HINT, _MODE_HINT])
+    out = _call_json("create_persona", {"data": {"name": "P", "locale": "de"}})
+    assert out["length_note"] == f"{_HINT['message']} {_MODE_HINT['message']}"
+    assert "length_hints" not in out
+    assert out["base_rev"] == "rev-7"
+
+
+def test_write_tool_without_hints_has_null_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_write(monkeypatch, [])
+    out = _call_json("create_persona", {"data": {"name": "P", "locale": "de"}})
+    assert out["length_note"] is None
+    assert "length_hints" not in out
+
+
+def test_edit_content_shows_length_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_write(monkeypatch, [_HINT])
+    out = _call_json(
+        "edit_content",
+        {
+            "entity_type": "persona",
+            "entity_id": str(uuid4()),
+            "base_rev": "rev-0",
+            "op": "replace",
+            "field": "profile",
+            "markdown": "neu",
+        },
+    )
+    assert out["length_note"] == _HINT["message"]
+
+
+def test_length_note_costs_less_than_structured_hints() -> None:
+    """Token-Budget: die Zeile kostet weniger als die Haelfte der strukturierten Hinweise."""
+    structured = json.dumps({"length_hints": [_HINT, _MODE_HINT]}, ensure_ascii=False)
+    note = json.dumps(
+        {"length_note": f"{_HINT['message']} {_MODE_HINT['message']}"}, ensure_ascii=False
+    )
+    assert len(note.encode()) < len(structured.encode()) / 2

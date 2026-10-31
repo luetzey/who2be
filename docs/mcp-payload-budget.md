@@ -231,8 +231,9 @@ traegt jedes Tool `title` und `_meta`. Die fruehere Messung nur ueber `name`,
 | 2026-10-14, Gespraechs-Werkzeuge (E-MCP-1) | 94 | **109.963 Bytes** |
 | 2026-10-14, Werkzeugluecken D7 (E-MCP-2) | 100 | **114.203 Bytes** |
 | 2026-10-22, Markdown-Schreibweg (ADR-0058 P3) | 101 | **104.777 Bytes** |
+| 2026-10-23, `update_rows`/`delete_rows` (ADR-0049-Nachtrag) | 103 | **108.262 Bytes** |
 
-Bis zur Grenze bleiben damit 75.223 Bytes. Die Rot-Probe
+Bis zur Grenze bleiben damit 71.738 Bytes. Die Rot-Probe
 `test_tools_list_payload_counts_wire_only_fields` blaeht `title` bzw. `_meta`
 eines einzelnen Tools ueber das Budget auf und verlangt, dass die Messung das
 sieht. Misst der Test wieder nur das Schema, faellt sie.
@@ -250,21 +251,48 @@ neu erzeugen:
 uv run python -m who2be_mcp.payload_report
 ```
 
-Stand 2026-10-22, 101 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4),
-nach Schema-Diaet (T2), Beschreibungs-Diaet (T3) und Markdown-Schreibweg
-(ADR-0058 P3):
+Stand 2026-10-27, 103 Werkzeuge, Draht-Form wie oben, mit `alwaysLoad` (T4),
+nach Schema-Diaet (T2), Beschreibungs-Diaet (T3), Markdown-Schreibweg
+(ADR-0058 P3) und mit dem Werkzeug-Profil-Filter (ADR-0059 Q3):
 
 | Profil | Werkzeuge | Bytes | davon sofort geladen | Start mit Tool Search |
 | --- | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 38 | 29.834 | 4 / 3.870 | 6.190 |
-| Agent, Default + Gedaechtnis `suggest` | 42 | 33.308 | 5 / 4.500 | 6.877 |
-| Agent, Builder (alle Rechte, Lesen `all`) | 101 | 104.777 | 5 / 4.500 | 8.059 |
-| Mensch/JWT, Rolle editor | 97 | 101.303 | 4 / 3.870 | 7.372 |
-| alle Werkzeuge (Guard) | 101 | 104.777 | 5 / 4.500 | 8.059 |
+| Agent, Default-Policy | 38 | 31.131 | 4 / 3.987 | 6.409 |
+| Agent, Default + Gedaechtnis `suggest` | 42 | 34.683 | 5 / 4.656 | 7.135 |
+| Agent, Builder (alle Rechte, Lesen `all`) | 103 | 108.251 | 5 / 4.656 | 8.347 |
+| Agent, Builder mit Profil „Builder“ | 86 | 92.384 | 5 / 4.656 | 8.057 |
+| Mensch/JWT, Rolle editor | 99 | 104.699 | 4 / 3.987 | 7.621 |
+| alle Werkzeuge (Guard) | 103 | 108.251 | 5 / 4.656 | 8.347 |
 
-Zum Vergleich der Stand 2026-10-11 (90 Werkzeuge, nach T3): Default-Policy
+Server-`instructions`: 1.834 Bytes.
+
+**Werkzeug-Profile (ADR-0059).** Seit Q3 filtert die Middleware einen
+agent-gebundenen Token zusaetzlich nach dem Werkzeug-Profil seines Agenten
+(`whoami.tool_profile`). Die Zeile „Builder mit Profil „Builder““ hat die
+Rechte des Builders und das mitgelieferte Profil „Builder“ aus
+`who2be_models/tool_profiles.py`, also die Gruppen `core`, `read`,
+`feedback_memory`, `workarea_read` (W59-4), `content_write`, `transition`,
+`agent_admin`, `system_prompt` und `curation`. Ausgeblendet sind genau die 17
+Werkzeuge der Gruppe `workarea_write`. So startet der verwaltete Builder
+(W59-3). Wirkung beim Start, je mit `instructions`:
+
+| Builder | Werkzeuge | Start |
+| --- | ---: | ---: |
+| ohne Profil („Alle“) | 103 | 110.085 |
+| mit Profil „Builder“ | 86 | 94.218 |
+| Unterschied | −17 | **−15.867 (−14,4 %)** |
+
+Die ADR hatte am 2026-10-22 −14.080 Bytes (−12,2 %) gemessen, auf 100
+Werkzeugen vor dem Markdown-Schreibweg. Seitdem sind `update_rows` und
+`delete_rows` in `workarea_write` dazugekommen, deshalb blendet das Profil heute
+mehr aus. Die Zeile „Wirkung Profil „Builder““ am Ende des Berichts von
+`payload_report` rechnet die Zahl jederzeit neu aus.
+
+Zum Vergleich der Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3): Default-Policy
+38 / 29.834, Builder 101 / 104.777, Rolle editor 97 / 101.303 Bytes. Zum
+Vergleich der Stand 2026-10-11 (90 Werkzeuge, nach T3): Default-Policy
 38 / 29.497, Builder 90 / 104.290, Rolle editor 86 / 100.816 Bytes. Zwischen
-beiden Staenden kamen elf Werkzeuge dazu (E-MCP-1, E-MCP-2, `edit_content`);
+diesen beiden Staenden kamen elf Werkzeuge dazu (E-MCP-1, E-MCP-2, `edit_content`);
 die Ersparnis des Markdown-Schreibwegs gleicht sie beim Builder fast aus.
 
 „Bytes“ ist die Draht-Größe von `tools/list`. „davon sofort geladen“ zählt
@@ -278,17 +306,33 @@ middleware_view` schickt fuer jedes Profil ein passendes `whoami` durch die
 echte Middleware und verlangt dieselbe Byte-Zahl wie der Bericht.
 
 **Zielwerte je Agent-Start (seit T3, harter Test):** Draht-Bytes der
-sichtbaren Werkzeuge plus Server-`instructions` (1.732 Bytes), die jeder
-Client beim Verbinden bekommt.
+sichtbaren Werkzeuge plus Server-`instructions` (1.834 Bytes seit Q3, vorher
+1.732), die jeder Client beim Verbinden bekommt.
 
-| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) | Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3) | Stand 2026-10-22 (101 Werkzeuge, `readOnlyHint`) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 | 32.814 |
-| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 | 108.147 |
+| Profil | Ziel | Stand 2026-10-11 (90 Werkzeuge) | Stand 2026-10-14 (94 Werkzeuge) | Stand 2026-10-14 (100 Werkzeuge, E-MCP-2) | Stand 2026-10-22 (101 Werkzeuge, ADR-0058 P3) | Stand 2026-10-22 (101 Werkzeuge, `readOnlyHint`) | Stand 2026-10-27 (103 Werkzeuge, ADR-0059 Q3) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Agent, Default-Policy | 35.000 | 31.101 | 31.101 | 31.101 | 31.566 | 32.814 | 32.965 |
+| Agent, Builder | 120.000 | 105.894 | 111.567 | 115.807 | 106.509 | 108.147 | 110.085 |
+| Agent, Builder mit Profil „Builder“ | 104.000 | – | – | – | – | – | 94.218 |
+
+Das Ziel 104.000 fuer den Builder mit Profil „Builder“ setzt ADR-0059 §5.3:
+gemessener Wert der ADR (101.727) plus Reserve fuer `edit_content` und knapp
+700 Bytes Luft. Es ist eine Obergrenze gegen Wachstum, nicht die Wirkung. Die
+Wirkung haelt `test_builder_profile_saves_at_least_twelve_percent_at_start`
+fest: mindestens −12 % gegenueber „Alle“ (W59-4). Das Ziel 120.000 bleibt der
+Wert fuer den Builder ohne Profil, bis der Owner es senkt. Die laengeren
+`instructions` (Meldeweg `tool_request`, +102 Bytes) treffen alle Profile.
 
 Die Annotation `readOnlyHint: true` an den 42 Lesewerkzeugen kostet je
 Werkzeug 39 Bytes, zusammen 1.638 Bytes im Gesamtkatalog (104.777 -> 106.415).
 Schreibwerkzeuge bekommen keine Annotation und kosten nichts.
+
+`update_rows` und `delete_rows` (ADR-0049-Nachtrag, 2026-10-23) kosten
+zusammen 1.847 Bytes im Gesamtkatalog (106.415 -> 108.262). Sie gehoeren zu
+`workarea_write` und erscheinen darum nicht im Default-Profil. Neuer Stand
+der Start-Ziele: Default-Policy 32.874 (Ziel 35.000), Builder 109.994 Bytes
+(Ziel 120.000), je mit `instructions`. Zum Gesamtkatalog-Guard (180.000
+Bytes) bleiben 71.738 Bytes.
 
 ADR-0058 P3 (Markdown-Schreibweg) senkt den Builder-Start um 9.298 Bytes:
 die zehn Schreibwerkzeuge verlieren die BlockNote-Schemata, `edit_content`
@@ -302,7 +346,7 @@ Das Builder-Ziel lag bis 2026-10-14 bei 110.000 Bytes. Der Owner hat es am
 Phase E (E-MCP-1) den Builder-Start auf 111.567 Bytes bringen. Das Default-Ziel
 bleibt 35.000.
 
-`test_agent_start_meets_target_per_profile` haelt beide Ziele; das
+`test_agent_start_meets_target_per_profile` haelt alle drei Ziele; das
 Katalog-Budget oben bleibt die Obergrenze daneben. Reisst ein Ziel:
 Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an.
 
