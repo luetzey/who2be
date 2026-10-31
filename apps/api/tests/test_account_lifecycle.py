@@ -324,3 +324,79 @@ def test_purge_removes_expired(monkeypatch: pytest.MonkeyPatch) -> None:
         _drop_company_org(slug)
         cleanup_workspaces([owner])
         asyncio.run(_execute("DELETE FROM account_deletion WHERE user_id = $1", owner))
+
+
+@pytest.mark.integration
+def test_purge_redacts_multiple_expired_open_invitations_per_workspace() -> None:
+    """Regression: zwei abgelaufene, offene Einladungen im selben Workspace.
+
+    Abgelaufene Einladungen haben weder `accepted_at` noch `revoked_at` und
+    bleiben deshalb im Partial-Unique-Index `workspace_invitation_open_uniq`
+    (Migration 0017). Mit dem frueheren gemeinsamen Marker `<redacted>`
+    kollidierten sie, `purge_expired` brach mit UniqueViolationError ab.
+    Der Seed enthaelt zusaetzlich eine Altbestand-Zeile mit dem alten Marker,
+    wie sie auf bestehenden Datenbanken liegt. Laeuft in einem isolierten Schema.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+
+    schema = f"invpurge_{secrets.token_hex(6)}"
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(f'CREATE SCHEMA "{schema}"')
+            await conn.execute(f'SET search_path TO "{schema}"')
+            await apply_migrations(conn, MIGRATIONS_DIR)
+
+            org_id = await conn.fetchval(
+                "INSERT INTO organization (name, slug, kind) "
+                "VALUES ('o', $1, 'company') RETURNING id",
+                f"o-{secrets.token_hex(4)}",
+            )
+            ws_id = await conn.fetchval(
+                "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', 'w') RETURNING id",
+                org_id,
+            )
+            now = datetime.now(UTC)
+            past = now - timedelta(days=8)
+            originals = ["eins@example.com", "zwei@example.com"]
+            # Zwei abgelaufene, offene Einladungen + eine Altbestand-Zeile.
+            for email in [*originals, "<redacted>"]:
+                await conn.execute(
+                    "INSERT INTO workspace_invitation "
+                    "(workspace_id, email, role, token_hash, expires_at, created_by) "
+                    "VALUES ($1, $2, 'editor', $3, $4, $5)",
+                    ws_id,
+                    email,
+                    f"h-{secrets.token_hex(8)}",
+                    past,
+                    uuid4(),
+                )
+
+            repo = PgAccountPurgeRepository(conn)
+            assert await repo.cleanup_expired_invitations(now) == 2
+
+            rows = await conn.fetch(
+                "SELECT id, email, accepted_at, revoked_at FROM workspace_invitation "
+                "WHERE workspace_id = $1",
+                ws_id,
+            )
+            emails = {row["email"] for row in rows}
+            assert not emails & set(originals)
+            assert not any("@" in email for email in emails)
+            # Eindeutiger Marker je Zeile; die Altbestand-Zeile bleibt unveraendert.
+            assert len(emails & {f"<redacted>:{row['id']}" for row in rows}) == 2
+            assert "<redacted>" in emails
+            # Variante (b): accepted_at/revoked_at bleiben unberuehrt.
+            assert all(row["revoked_at"] is None for row in rows)
+            assert all(row["accepted_at"] is None for row in rows)
+
+            # Der volle Purge-Lauf bricht nicht ab; ohne neue Faelle ein No-op.
+            result = await purge_expired(repo, now)
+            assert result.cleaned_invitations == 0
+        finally:
+            await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            await conn.close()
+
+    asyncio.run(_run())
