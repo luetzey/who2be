@@ -2,7 +2,7 @@
 
 **Typ:** How-To · **Zielgruppe:** Owner/Betreiber · **Stand:** 2026-09-25,
 gemessen gegen `main` @ `53c4b854`; Rechnung (Schritt 15, Storno und
-Erstattung) 2026-10-24 @ `2660d2c3`
+Erstattung) 2026-10-24 @ `2660d2c3`; Domain umziehen 2026-10-31 @ `14234887`
 
 Was hier steht: **alles, was der Owner selbst besorgen, entscheiden oder
 anlegen muss**, um die Cloud-Edition auf einer frischen Box in Betrieb zu
@@ -617,6 +617,364 @@ Stornorechnung. Den Fall bearbeitest du deshalb von Hand:
 Steht eine Zeile auf `failed` (ERROR-Zeile im Worker-Log
 `Rechnung … endgueltig fehlgeschlagen`): im Mollie-Dashboard pruefen, ob zur
 Zahlung schon eine Rechnung existiert, und sie sonst dort von Hand ausstellen.
+
+---
+
+## Domain umziehen
+
+Gehoert zum Betrieb, nicht zum Testlauf. Anlass ist die Owner-Entscheidung vom
+2026-10-27: Zum Cloud-Release laeuft die Cloud unter der Produktdomain, also
+`DOMAIN=who2be.de` und damit `app.`, `api.`, `supabase.` und `mcp.who2be.de`.
+Der Apex `who2be.de` bleibt die Website, an seinen Records aenderst du nichts.
+
+Unten steht `<DOMAIN>` fuer die neue Domain und `<ALT_DOMAIN>` fuer die
+bisherige. `<BOX_IP>` ist die oeffentliche Adresse der Box.
+
+**Was der Stack selbst nachzieht.** Im Dokploy-Stack leiten sich alle
+Hostnamen aus `DOMAIN` ab: die Traefik-Router, Supabase-Auth (`SITE_URL`,
+Allow-List, JWT-Issuer, Provider-Redirect), CORS, der OAuth-Issuer, die
+Consent-URL und die MCP-Resource, dazu die API-, Supabase- und MCP-URLs der
+Web-App. Das Inventar mit Datei und Zeile steht in
+[`.claude/plan/2026-10-31-0056_domain-umzug.md`](../.claude/plan/2026-10-31-0056_domain-umzug.md).
+
+**Was du von Hand umstellst, weil es nicht im Repo liegt:** die DNS-Records,
+`MOLLIE_WEBHOOK_URL`, eventuell uebersteuerte Env-Werte, die
+Traefik-Datei `who2be-headers.yml`, die Provider-Konsolen bei Google, GitHub
+und Apple, die laufenden Mollie-Subscriptions, die Connectoren deiner Nutzer
+sowie die Links auf der Website und die Uptime-Checks.
+
+**Folgen, die du einplanen musst:**
+
+- **Alle Nutzer melden sich neu an.** Die neue Web-Adresse ist ein neuer
+  Origin, die Browser-Sitzung der alten liegt dort nicht. Ausserdem traegt
+  jedes Supabase-JWT den alten Issuer, und den lehnt die API ab
+  (`apps/api/src/who2be_api/core/security.py#_jwt_issuer`).
+- **Jeder Connector muss neu verbunden werden**, das betrifft Claude, ChatGPT,
+  Claude Code und Hermes. Die Tokens selbst bleiben gueltig, nur erreicht der
+  Client sie nicht mehr. Die Begruendung steht in Schritt U5.
+- **Mail-Links von vor dem Umzug sind tot.** Das betrifft offene Einladungen,
+  Bestaetigungs- und Adresswechsel-Mails, denn sie zeigen auf
+  `supabase.<ALT_DOMAIN>`.
+
+Waehle ein ruhiges Fenster ohne laufende Checkouts. Der Rueckweg
+(Schritt U8) ist nur in den ersten Stunden billig.
+
+### U1 · DNS-Records anlegen, TTL vorher senken (Vorlauf: mindestens 24 h)
+
+- [ ] Bei den **bisherigen** Records `api.`, `app.`, `supabase.` und
+      `mcp.<ALT_DOMAIN>` die TTL auf `300` senken, und zwar mindestens eine
+      alte TTL vor dem Umzug. Die Records selbst bleiben stehen, bis das
+      Rueckweg-Fenster zu ist (Schritt U8).
+- [ ] Fuer die **neuen** Hosts je einen Record auf die Box anlegen, mit
+      TTL `300`. Das darf Tage vor dem Umzug passieren: Bis Schritt U3 hat
+      Traefik keinen Router fuer die neuen Namen und antwortet nur mit `404`.
+
+      | Record | Typ | Ziel |
+      |---|---|---|
+      | `api.<DOMAIN>` | A (+ AAAA) | `<BOX_IP>` |
+      | `app.<DOMAIN>` | A (+ AAAA) | `<BOX_IP>` |
+      | `supabase.<DOMAIN>` | A (+ AAAA) | `<BOX_IP>` |
+      | `mcp.<DOMAIN>` | A (+ AAAA) | `<BOX_IP>` |
+
+      Ein AAAA-Record nur dann, wenn die Box per IPv6 auf Port 80 und 443
+      antwortet. Let's Encrypt prueft bevorzugt ueber IPv6, ein AAAA ins Leere
+      laesst die Zertifikatsausstellung scheitern.
+- [ ] Am Apex nach CAA-Records sehen. Gibt es welche, muss
+      `letsencrypt.org` darunter sein.
+
+**Pruefen** (Workstation):
+
+```bash
+D=<DOMAIN>
+for s in api app supabase mcp; do
+  printf '%-9s A=%s AAAA=%s\n' "$s" "$(dig +short A $s.$D)" "$(dig +short AAAA $s.$D)"
+done                                   # → jeweils <BOX_IP>, AAAA leer oder die v6 der Box
+dig +short CAA "$D"                    # → leer oder enthaelt letsencrypt.org
+dig +noall +answer api.<ALT_DOMAIN>    # → zweite Spalte (TTL) ≤ 300
+# Die Box antwortet unter dem neuen Namen. Vor Schritt U3 ist 404 oder ein
+# 30x richtig, ein Timeout oder "Could not resolve host" ist falsch:
+curl -4 -s -o /dev/null -w '%{http_code}\n' "http://app.$D/"
+curl -6 -s -o /dev/null -w '%{http_code}\n' "http://app.$D/"   # nur mit AAAA
+```
+
+### U2 · Env-Werte in Dokploy und Provider-Konsolen
+
+Erst die Konsolen, dann Dokploy, denn Google und Apple vertragen mehrere
+Redirect-URIs parallel.
+
+- [ ] **Google** (Cloud Console → *APIs & Services*): Unter *Credentials* beim
+      OAuth-Client `https://supabase.<DOMAIN>/auth/v1/callback` **zusaetzlich**
+      eintragen, die alte URI bleibt. Unter *OAuth consent screen* →
+      *Authorized domains* die neue Domain ergaenzen; Homepage, Datenschutz-
+      und AGB-Link auf `https://app.<DOMAIN>/…` umstellen (Pfade wie in
+      Phase 0 Punkt 4). Google verlangt fuer eine neue Authorized Domain einen
+      Besitznachweis in der Search Console. Das hat Vorlauf, also mit Schritt U1
+      anfangen.
+- [ ] **Apple** (nur wenn aktiv; Services ID → *Sign in with Apple*): unter
+      *Domains and Subdomains* `supabase.<DOMAIN>` und unter *Return URLs*
+      `https://supabase.<DOMAIN>/auth/v1/callback` **ergaenzen**. Das
+      Client-Secret-JWT haengt nicht an der Domain und bleibt.
+- [ ] **GitHub**: Eine OAuth-App kennt genau **eine** Callback-URL. Sie wird
+      deshalb erst im Umschaltmoment geaendert, direkt nach dem Deploy in
+      Schritt U3, auf `https://supabase.<DOMAIN>/auth/v1/callback`; die
+      Homepage-URL auf `https://app.<DOMAIN>`. Zwischen Deploy und Aenderung
+      scheitert der GitHub-Login mit `redirect_uri_mismatch`.
+- [ ] **Dokploy → Projekt → Environment:**
+      - `DOMAIN=<DOMAIN>`
+      - `MOLLIE_WEBHOOK_URL=https://api.<DOMAIN>/v1/billing/mollie/webhook`
+        (ist `MOLLIE_WEBHOOK_SECRET` gesetzt, mit `?token=<secret>` dahinter,
+        wie bisher). Das ist der **einzige** Hostname, den der Stack nicht aus
+        `DOMAIN` ableitet.
+      - Stehen `WEB_BASE_URL` oder `GOTRUE_EXTERNAL_{GOOGLE,GITHUB,APPLE}_REDIRECT_URI`
+        ausdruecklich im Environment, diese Zeilen loeschen. Dann greift der
+        aus `DOMAIN` abgeleitete Default.
+      - Banner fuer die Nutzer, die sich neu anmelden, z. B.
+        `WHO2BE_NOTICE_DE="Neue Adresse: Bitte verbinde deine Connectoren neu (Agent → Verbindung)."`
+        und `WHO2BE_NOTICE_EN` (Werte: [`signup-and-invites.md`](signup-and-invites.md)).
+        Nach zwei Wochen wieder leeren.
+      - Im Environment-Editor nach `<ALT_DOMAIN>` suchen. Am Ende darf nur
+        noch eine Absenderadresse `GOTRUE_SMTP_ADMIN_EMAIL` uebrig sein, falls
+        sie bewusst bei der alten Mail-Domain bleibt.
+- [ ] **Dokploy → Compose → Domains:** Steht dort ein Eintrag mit
+      `<ALT_DOMAIN>`, auf `<DOMAIN>` umstellen. Das Routing tragen die
+      Traefik-Labels aus dem Repo, ein vergessener UI-Eintrag hielte den alten
+      Host halb am Leben.
+- [ ] **Traefik → File System → `dynamic/who2be-headers.yml`** (falls nach
+      RUNBOOK §Dokploy-Stack Schritt 1 angelegt): In `who2be-csp-web` →
+      `connect-src` beide Hosts auf `<DOMAIN>` umstellen. Sonst blockiert die
+      CSP der neuen Web-App ihre eigene API.
+
+**Pruefen:** Die Suche nach `<ALT_DOMAIN>` im Dokploy-Environment und in
+`who2be-headers.yml` findet nichts mehr, ausser einer bewusst behaltenen
+Absenderadresse. In der Google-Konsole stehen beide Redirect-URIs, und die
+Authorized Domain gilt als verifiziert. Die Werte im Container prueft
+Schritt U3.
+
+### U3 · Neu ausrollen (Deploy, nicht Restart)
+
+- [ ] In Dokploy **Deploy** ausloesen. Ein *Restart* reicht nicht: Er startet
+      die alten Container mit alten Labels und altem Environment. Die
+      Traefik-Router und das Web-Bundle entstehen erst beim Neuerzeugen.
+- [ ] Direkt danach die GitHub-Callback-URL umstellen (Schritt U2).
+- [ ] Beim ersten Aufruf je Host holt Traefik das Zertifikat. Das dauert ein
+      paar Sekunden, also nicht in Schleife neu laden (Let's-Encrypt-Ratelimits).
+
+**Pruefen** (Workstation und Box):
+
+```bash
+D=<DOMAIN>
+curl -fsS "https://api.$D/v1/health"                                   # → "db":"ok"
+curl -fsS -o /dev/null -w 'app %{http_code}\n' "https://app.$D/"         # → 200
+curl -fsS "https://supabase.$D/auth/v1/health"                         # → JSON mit "version"
+curl -fsS -o /dev/null -w 'mcp %{http_code}\n' \
+  "https://mcp.$D/.well-known/oauth-protected-resource/mcp"            # → 200
+for s in api app supabase mcp; do
+  echo | openssl s_client -connect "$s.$D:443" -servername "$s.$D" 2>/dev/null \
+    | openssl x509 -noout -issuer -subject
+done                                   # → issuer Let's Encrypt, subject CN = <s>.<DOMAIN>
+curl -fsS "https://app.$D/config.js" | grep -E 'apiBaseUrl|mcpUrl|supabaseUrl'
+                                       # → alle drei auf <DOMAIN>
+# Auf der Box: der Webhook-Wert ist im Container angekommen.
+docker exec "$(docker ps -q --filter label=com.docker.compose.service=api)" \
+  printenv MOLLIE_WEBHOOK_URL WEB_BASE_URL   # → beide mit <DOMAIN>
+```
+
+### U4 · Supabase-Auth-URLs
+
+Im Dokploy-Stack gibt es hier nichts mehr zu setzen: `GOTRUE_SITE_URL`,
+`GOTRUE_URI_ALLOW_LIST`, `GOTRUE_JWT_ISSUER`, `API_EXTERNAL_URL` und die
+Provider-Redirects kommen aus `DOMAIN`
+(`deploy/dokploy/docker-compose.yml#auth`). Du pruefst nur, dass sie
+angekommen sind.
+
+- [ ] Offene Einladungen zurueckziehen und neu senden (Einstellungen →
+      Mitglieder), denn ihr Mail-Link zeigt auf den alten Host.
+
+**Pruefen:**
+
+```bash
+D=<DOMAIN>
+# Der Provider-Start zeigt mit der NEUEN Callback-URL zum Provider
+# (provider=google bzw. github, je nachdem, was aktiv ist):
+curl -s -o /dev/null -w '%{redirect_url}\n' "https://supabase.$D/auth/v1/authorize?provider=google" \
+  | grep -o 'redirect_uri=[^&]*'       # → redirect_uri=https%3A%2F%2Fsupabase.<DOMAIN>%2Fauth%2Fv1%2Fcallback
+# CORS: die API erlaubt den neuen Web-Origin.
+curl -s -o /dev/null -D - -X OPTIONS "https://api.$D/v1/health" \
+  -H "Origin: https://app.$D" -H 'Access-Control-Request-Method: GET' \
+  | grep -i '^access-control-allow-origin'   # → https://app.<DOMAIN>
+```
+
+Im Browser `https://app.<DOMAIN>` aufrufen und je aktivem Provider
+anmelden. Richtig ist: Du landest nach dem Provider wieder auf
+`app.<DOMAIN>`, ohne `redirect_uri_mismatch` und ohne Umweg ueber den alten
+Host. Danach eine Testeinladung an eine eigene Zweitadresse schicken: Der Link
+in der Mail zeigt auf `<DOMAIN>`, nicht auf `<ALT_DOMAIN>`.
+
+### U5 · OAuth-Connectoren: neue URL, Hinweis an die Nutzer
+
+**Was mit bestehenden Connector-Tokens passiert.** Serverseitig bleiben sie
+gueltig. Der Access-Token ist ein gewoehnlicher `w2b_…`-Token, 8 h gueltig,
+der Refresh-Token 30 Tage
+(`apps/api/src/who2be_api/services/oauth_service.py#_ACCESS_TTL`). Beide haengen
+weder am Issuer noch an der Audience: Die Resource wird nur im 60-s-Code
+geprueft (`OAuthService.consent`), der Refresh prueft Client und Mitgliedschaft
+(`OAuthService.exchange_refresh`), und der MCP-Server prueft den Bearer per
+`GET /v1/me` (`apps/mcp/src/who2be_mcp/auth.py#Who2BeTokenVerifier`).
+
+Trotzdem funktioniert danach **kein** bestehender Connector mehr, denn
+der Client spricht weiter `mcp.<ALT_DOMAIN>` an und erneuert seinen Token bei
+`api.<ALT_DOMAIN>/oauth/token`. Fuer diese Namen hat Traefik nach Schritt U3
+keinen Router mehr. Der Nutzer sieht also keine Anmeldeaufforderung, sondern
+einen Verbindungsfehler: eine Zertifikatswarnung oder Traefiks
+`404 page not found`. Wie das aussieht, haengt vom Client ab. Claude und
+ChatGPT zeigen den Connector als nicht erreichbar, Werkzeugaufrufe schlagen
+fehl.
+
+Was der Nutzer tun muss:
+
+| Client | Schritt |
+|---|---|
+| Claude, ChatGPT (OAuth) | Alten Connector entfernen, neuen mit der Adresse von *Agent → Verbindung* anlegen, Consent bestaetigen. |
+| Claude Code, Hermes mit `--auth oauth` | Server entfernen und mit der neuen Adresse neu hinzufuegen. |
+| Claude Code, Hermes mit festem `w2b_…`-Token im Header | Nur die URL tauschen, der Token bleibt gueltig. |
+
+Die alten OAuth-Tokens verfallen von selbst. Wer aufraeumen will, widerruft sie
+unter *API-Tokens*.
+
+- [ ] **Vorab-Hinweis** an alle aktiven Nutzer, mit Datum und Uhrzeit. Ein
+      Muster:
+
+      > Am <Datum> um <Uhrzeit> zieht Who2Be auf `app.<DOMAIN>` um. Danach
+      > meldest du dich dort einmal neu an. Deine Connectoren in Claude,
+      > ChatGPT oder Claude Code verbindest du bitte neu: Die neue Adresse
+      > steht beim Agenten unter *Verbindung*. Deine Daten bleiben, wie sie
+      > sind.
+- [ ] Nach erfolgreicher Pruefung (Schritt U7) den Hinweis als „ist erledigt"
+      noch einmal schicken. Das Banner aus Schritt U2 sehen nur Nutzer, die die
+      neue Adresse schon kennen.
+
+**Pruefen:**
+
+```bash
+D=<DOMAIN>
+curl -fsS "https://api.$D/.well-known/oauth-authorization-server" | jq -r .issuer
+                                       # → https://api.<DOMAIN>
+curl -fsS "https://mcp.$D/.well-known/oauth-protected-resource/mcp" | jq -c '{resource, authorization_servers}'
+                                       # → {"resource":"https://mcp.<DOMAIN>/mcp","authorization_servers":["https://api.<DOMAIN>"]}
+curl -s -i -X POST "https://mcp.$D/mcp" -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  | grep -iE '^HTTP/|^www-authenticate'  # → 401, resource_metadata="https://mcp.<DOMAIN>/…"
+```
+
+Danach in Claude einen Connector mit der Adresse aus *Agent → Verbindung*
+anlegen. Er muss bis zum Consent auf `app.<DOMAIN>` laufen, zurueckkehren und
+die Werkzeuge listen. Zum Abschluss einen Werkzeugaufruf machen, etwa
+`whoami`.
+
+### U6 · Mollie-Webhook
+
+Die Webhook-URL setzt Schritt U2. Neue Zahlungen und Subscriptions nehmen den
+neuen Wert mit, denn er wird bei jedem Payment und bei jeder Subscription an
+Mollie uebergeben (`packages/billing/src/who2be_billing/router.py#create_checkout`).
+Laufende Objekte tragen dagegen ihren alten Wert selbst.
+
+- [ ] **Laufende Subscriptions umschreiben.** Den Key nicht in die
+      Shell-History tippen:
+
+      ```bash
+      read -rs MOLLIE_API_KEY; export MOLLIE_API_KEY
+      NEW='https://api.<DOMAIN>/v1/billing/mollie/webhook'   # ggf. mit ?token=…
+      curl -s "https://api.mollie.com/v2/subscriptions?limit=250" \
+        -H "Authorization: Bearer $MOLLIE_API_KEY" \
+        | jq -r '._embedded.subscriptions[] | select(.status=="active" or .status=="pending")
+                 | [.customerId, .id, .webhookUrl] | @tsv' > subs.tsv
+      while IFS=$'\t' read -r cst sub _; do
+        curl -s -X PATCH "https://api.mollie.com/v2/customers/$cst/subscriptions/$sub" \
+          -H "Authorization: Bearer $MOLLIE_API_KEY" -H 'Content-Type: application/json' \
+          -d "{\"webhookUrl\":\"$NEW\"}" | jq -r '[.id, .webhookUrl] | @tsv'
+      done < subs.tsv
+      ```
+- [ ] **Zahlungen, die vor dem Umzug offen waren**, schicken ihren Webhook an
+      den alten Host. Ist eine davon nach dem Umzug bezahlt worden, loest du
+      den Webhook selbst aus. Das ist gefahrlos, weil die API den Status bei
+      Mollie nachliest und dem Aufruf nicht glaubt:
+
+      ```bash
+      curl -s -X POST "https://api.<DOMAIN>/v1/billing/mollie/webhook" -d id=<tr_…>   # ggf. ?token=…
+      ```
+- [ ] Im Mollie-Dashboard unter *Website-Profil* steht die Website, also der
+      Apex. Sie bleibt.
+
+**Pruefen:**
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "https://api.<DOMAIN>/v1/billing/mollie/webhook"
+                                       # → 422 (Route erreicht, `id` fehlt); 404 = Overlay fehlt
+curl -s "https://api.mollie.com/v2/subscriptions?limit=250" -H "Authorization: Bearer $MOLLIE_API_KEY" \
+  | jq -r '._embedded.subscriptions[] | select(.status=="active") | .webhookUrl' | sort -u
+                                       # → nur noch die neue URL
+```
+
+Danach einen Test-Checkout ueber die Web-App wie in Phase 3 Schritt 15 machen. Mollie
+leitet zurueck auf `https://app.<DOMAIN>/settings/billing`, der Tarif steht
+auf Pro, und im Mollie-Dashboard zeigt die Zahlung unter *Webhook* den neuen
+Host mit Status `200`.
+
+### U7 · Abnahme
+
+Erst wenn jede Zeile stimmt, ist der Umzug durch. Jede Pruefung steht oben im
+jeweiligen Schritt.
+
+| # | Pruefung | Erwartet | Schritt |
+|---|---|---|---|
+| 1 | `curl` je Subdomain (`api` Health, `app`, `supabase` Health, `mcp` PRM) | `200`, gueltiges Zertifikat je Host | U3 |
+| 2 | `config.js` der Web-App | alle URLs auf `<DOMAIN>` | U3 |
+| 3 | Login je aktivem Provider | landet auf `app.<DOMAIN>` | U4 |
+| 4 | Testeinladung | Mail-Link auf `<DOMAIN>` | U4 |
+| 5 | OAuth-Metadaten und PRM | Issuer und Resource auf `<DOMAIN>` | U5 |
+| 6 | Neuer Connector in Claude | Consent, Werkzeugliste, ein Aufruf | U5 |
+| 7 | Test-Checkout | Pro aktiv, Webhook `200` auf dem neuen Host | U6 |
+| 8 | Uptime-Checks (RUNBOOK §Waechter-Server) auf die neuen Hosts umgestellt | gruen | — |
+| 9 | Links der Website zur App | zeigen auf `app.<DOMAIN>` | — |
+
+### U8 · Rueckweg
+
+Der Rueckweg setzt voraus, dass die alten DNS-Records stehen (Schritt U1) und
+die alten Redirect-URIs bei Google und Apple nicht geloescht sind. Er ist
+symmetrisch: Connectoren, die im neuen Fenster angelegt wurden, muessen danach
+wieder neu verbunden werden. Darum faellt die Entscheidung in den ersten
+Stunden, vor dem „ist erledigt"-Hinweis.
+
+- [ ] Dokploy-Environment: `DOMAIN=<ALT_DOMAIN>`,
+      `MOLLIE_WEBHOOK_URL=https://api.<ALT_DOMAIN>/v1/billing/mollie/webhook`
+      (ggf. mit `?token=…`), Banner leeren.
+- [ ] `who2be-headers.yml` und gegebenenfalls Dokploy → Domains zurueck auf
+      `<ALT_DOMAIN>`.
+- [ ] Dokploy **Deploy**, danach die GitHub-Callback-URL zurueck auf
+      `https://supabase.<ALT_DOMAIN>/auth/v1/callback`.
+- [ ] Subscriptions, die Schritt U6 umgeschrieben hat oder die im Fenster
+      entstanden sind, mit derselben Schleife auf die alte URL setzen. Bezahlte
+      Zahlungen aus dem Fenster per Webhook-Aufruf gegen `api.<ALT_DOMAIN>`
+      nachziehen.
+- [ ] Nutzer informieren: Die alte Adresse gilt wieder.
+
+**Pruefen:** Die Schleifen aus Schritt U3 und U5, mit
+`D=<ALT_DOMAIN>`. Danach ein Login und ein bestehender, nicht neu verbundener
+Connector: Er laeuft wieder, ohne neuen Consent, sofern sein Refresh-Token
+juenger als 30 Tage ist.
+
+**Aufraeumen, wenn kein Rueckweg mehr noetig ist** (fruehestens nach
+14 Tagen): die alten DNS-Records und Redirect-URIs entfernen, das Banner
+leeren und die TTL der neuen Records wieder anheben.
+
+> **Hetzner/Caddy-Stack statt Dokploy:** Dort leitet sich weniger aus
+> `DOMAIN` ab. In `deploy/hetzner/.env` gehoeren zusaetzlich `CORS_ORIGINS`,
+> `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_MCP_URL` und
+> `MOLLIE_WEBHOOK_URL` umgestellt, in `deploy/hetzner/supabase/.env` `DOMAIN`
+> und `SITE_URL`. Danach beide Stacks mit `up -d`, Caddy eingeschlossen.
+> Zusaetzlich gilt: Passkeys haengen dort an `GOTRUE_WEBAUTHN_RP_ID=app.${DOMAIN}`.
+> Wer einen Passkey als zweiten Faktor hat, muss ihn nach dem Umzug neu
+> registrieren. Die Werte mit Datei und Zeile stehen im Inventar (Abschnitt C).
 
 ---
 
