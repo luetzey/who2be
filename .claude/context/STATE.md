@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
+_Stand: 2026-10-26 (Backlog-Aufbereitungslauf 62: 0-Commit-Fenster, Weiche 19 gelöst, osv-Frist 7 Tage)_
 
 ## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
 
@@ -3128,6 +3128,50 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
 - **Konsolidierungs-DoD (beide Wellen):** eslint 0 Errors, tsc grün, volle
   Suite **985 Vitest passed** (Coverage 86,61/80,99/82,6/87,63, Floors
   80/79/75/80), Build grün; mcp: 241 pytest grün.
+
+### Backlog-Aufbereitungslauf 62 (2026-10-26, `main` @ `3d55f09c`)
+
+**Fenster: 0 Commits** — der Baum war bitgleich mit dem von Lauf 61; nichts gemergt, nichts
+gestartet, 24 Stunden. Beide Bäume grün (`ruff`/`mypy` 652 Dateien/`pytest --collect-only`
+4957 Tests/`lint` 0 errors/`tsc` 0 Byte/`test:coverage` Exit 0 bei 282 Dateien / 2848 Tests,
+Coverage 89,89 / 83,95 / 86,81 / 91,75), `main`-CI Lauf 2324 `conclusion: success`.
+`docker info` → Exit 1 (38. Messung). **Der Who2Be-MCP war den 17. Lauf in Folge nicht
+erreichbar** — keine Kurations-Rückmeldung, kein Gedächtnis-Vorschlag möglich.
+
+**Reihenfolge unverändert** (#989 → #1001 → #632 → #633; Wellen A `#989 ‖ #1001`, B `#632`,
+C Merges, D `#633`), weil bei 0 Commits kein Sortierkriterium sich bewegt hat. Alle fünf
+`agent-ready`-Issues tragen die Pflichtfelder vollständig.
+
+**Funde:**
+
+- 🔴 **Die `osv-scanner`-Frist steht auf 7 Tagen** (`apps/web/osv-scanner.toml:11`,
+  `ignoreUntil = 2026-11-02`). #989 ist seit dem 2026-10-20 startbar und nicht gestartet; seine
+  §Startbedingung verlangt obendrein das Warten auf #1017/#674 (54/55 Commits hinter, einer an
+  8 Checks rot) und ist damit nicht erfüllbar. → **Weiche 32**, Empfehlung A (der nächste Lauf
+  führt #989 selbst aus), B als Rückfallebene.
+- 🟢 **Weiche 19 gelöst, Ursache ist der Schreibweg** (→ **Regel 144**). Kontrolliert gemessen,
+  jeweils byte-exakt zurückgelesen: **MCP `issue_write` strippt die Attributions-Fußzeile aus
+  einem Issue-Body (0×, Body nicht abgeschnitten); `gh api PATCH --input` behält sie (1×);
+  MCP-Kommentare behalten sie (1×).** Issue-Bodies künftig per `gh api --input`; in #1001 und
+  #1077 nachgetragen. **Der erste Schluss dieses Laufs war der umgekehrte und stand schon in
+  #442, als die Gegenprobe ihn umwarf** — eine Hypothese, die alle bekannten Fälle erklärt, ist
+  kein Beleg (Regel 130, diesmal an der eigenen Schlussfolgerung).
+- ⚠️ **Lauf 61s Fragmentzahl war ein Zählfehler** (→ **Regel 143**): 393 (Eigenzahl des
+  Werkzeugs) gegen 394 (`ls | wc -l`), Differenz genau `changelog.d/README.md`, ausdrücklich in
+  `IGNORED_NAMES` (`scripts/changelog_fragments.py:84`). Kein Defekt im Repo.
+- ⚠️ **Zwei Zahlen in Bodies gewandert** (Regel 98): #633 nennt `LoginPage.tsx` mit 394 Zeilen
+  (ist 399); #989s AK5-Bezug 267/2517 (ist 282/2848). In Kommentaren richtiggestellt.
+- ⚠️ **Zwei Fehlalarme der maschinellen Norm-Prüfung:** #632/#633 schreiben `**Out:**` statt
+  `**Out of Scope**` und sind norm-vollständig. → Pflege-Regel 10 in #442.
+- 🔴 **Protokoll-Rückstand 7 plus diesem = 8** (Höchststand); **die Hälfte aller 14 offenen PRs
+  sind Protokolle dieses Laufs.** Von 7 offenen Code-PRs trägt keiner ein Issue (Weiche 23).
+  **Der Engpass ist der Merge-Durchsatz, nicht die Arbeitsversorgung** (Weiche 18/22).
+- **#1077 bleibt aus der Warteschlange genommen** (Regel 142): **#1087 erfüllt alle vier
+  schreibbaren AK** — eigenständig nachgeprüft (GoBD-Doku 144 → 231 Zeilen; „stellt keine
+  eigenen Rechnungen" 1 → 0; `billing_invoice` 0 → 4; `payment_id` 0 → 2; `invoice-retry`
+  0 → 2; `invoices/` 0 → 2). Wartet auf Owner-Go.
+
+**Plan:** `.claude/plan/2026-10-26-0030_backlog-aufbereitungslauf-62.md`.
 
 ## Bekannte Probleme
 
