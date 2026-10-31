@@ -236,6 +236,11 @@ auf sie.
       `.env.example` kommentiert — **jedes `CHANGE_ME` ersetzen**, keines
       stehen lassen.
 
+      Den Steuermodus `WHO2BE_INVOICE_TAX_MODE` am besten gleich hier in
+      `deploy/hetzner/.env` eintragen (Erklaerung in Schritt 15). Fehlt er
+      beim Hochfahren in Schritt 9, musst du `api` und `worker` spaeter neu
+      erzeugen, sonst antwortet der Checkout mit 503.
+
 - [ ] **7 · OAuth-Zugangsdaten eintragen — in dieser Reihenfolge.**
       *Wer: du · Dauer: 10 min · Danach anders: die Anmeldung funktioniert.*
       In `deploy/hetzner/supabase/.env`:
