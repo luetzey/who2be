@@ -381,6 +381,16 @@
       "reason": "Ersetzt ein bestehendes Token; die Zahl nutzbarer Tokens bleibt gleich — den Bestand deckelt das token_quota-Gate an create_token."
     },
     {
+      "path": "/tool-profiles",
+      "name": "create_tool_profile",
+      "reason": "Werkzeug-Profil ist Workspace-Konfiguration (ADR-0059 §7.1, nur admin), keine Inhalts-Entity: tool_profile steht nicht in entity_quota_service._COUNT_QUERY. Gebremst durch write_limit."
+    },
+    {
+      "path": "/tool-profiles/{profile_id}/reset",
+      "name": "reset_tool_profile",
+      "reason": "Setzt ein bestehendes mitgeliefertes Profil auf die Vorgabe zurueck (ADR-0059 §7.1), legt nichts Neues an."
+    },
+    {
       "path": "/usage-events",
       "name": "record_usage",
       "reason": "Append-only-Telemetrie (welches Element wurde genutzt). Ein Quota-Gate deckelte die Messung selbst; gebremst durch write_limit."
