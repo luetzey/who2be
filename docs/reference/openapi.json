@@ -15522,6 +15522,488 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/tool-profiles": {
+      "get": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "List Tool Profiles",
+        "operationId": "list_tool_profiles_v1_workspaces__workspace_id__tool_profiles_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ToolProfileRead"
+                  },
+                  "title": "Response List Tool Profiles V1 Workspaces  Workspace Id  Tool Profiles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Create Tool Profile",
+        "operationId": "create_tool_profile_v1_workspaces__workspace_id__tool_profiles_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolProfileCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolProfileRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "reason: tool_profile_name_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "reason: unknown_tool | unknown_tool_group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/tool-profiles/catalog": {
+      "get": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Get Tool Catalog",
+        "operationId": "get_tool_catalog_v1_workspaces__workspace_id__tool_profiles_catalog_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCatalogRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/tool-profiles/{profile_id}": {
+      "put": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Update Tool Profile",
+        "operationId": "update_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolProfileRead"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: tool_profile_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "reason: tool_profile_name_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "reason: unknown_tool | unknown_tool_group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Delete Tool Profile",
+        "operationId": "delete_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "reason: tool_profile_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "reason: tool_profile_builtin | tool_profile_in_use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/tool-profiles/{profile_id}/reset": {
+      "post": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Reset Tool Profile",
+        "operationId": "reset_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__reset_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolProfileRead"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: tool_profile_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "reason: tool_profile_not_builtin | tool_profile_name_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/tool-profile": {
+      "put": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Set Agent Tool Profile",
+        "operationId": "set_agent_tool_profile_v1_workspaces__workspace_id__agents__agent_id__tool_profile_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentToolProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRead"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "reason: human_only (application/problem+json)"
+          },
+          "404": {
+            "description": "reason: agent_not_found | tool_profile_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "reason: unknown_tool | core_tool_not_removable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/dashboard": {
       "get": {
         "tags": [
@@ -18104,6 +18586,40 @@
         "title": "AgentToolPolicy",
         "description": "Welche MCP-Tools ein Agent nutzen darf.\n\nWird als JSONB auf `agent.tool_policy` persistiert. Ein leeres JSON-Objekt\n(`{}`) deserialisiert zur Default-Policy unten — so erben Bestands-Agenten\nohne expliziten Eintrag das „nur Zugewiesenes lesen, keine Writes\"-Verhalten\n(least privilege/„secure by default\")."
       },
+      "AgentToolProfileUpdate": {
+        "properties": {
+          "tool_profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Profile Id"
+          },
+          "tools_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Added"
+          },
+          "tools_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Removed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgentToolProfileUpdate",
+        "description": "Eingabe `PUT /agents/{id}/tool-profile` (editor, nur Menschen, §7.3).\n\n`tool_profile_id=None` stellt auf „Alle\". `tools_removed` darf keine\nKern-Werkzeuge enthalten (422 `core_tool_not_removable`)."
+      },
       "AgentUpdate": {
         "properties": {
           "name": {
@@ -18552,7 +19068,16 @@
               "block_not_representable",
               "anchor_unknown",
               "anchor_duplicate",
-              "version_conflict"
+              "version_conflict",
+              "tool_profile_not_found",
+              "tool_profile_name_conflict",
+              "tool_profile_in_use",
+              "tool_profile_builtin",
+              "tool_profile_not_builtin",
+              "unknown_tool",
+              "unknown_tool_group",
+              "core_tool_not_removable",
+              "human_only"
             ],
             "title": "Reason"
           },
@@ -18964,6 +19489,17 @@
           "client_id"
         ],
         "title": "Body_token_oauth_token_post"
+      },
+      "BuiltinProfileKey": {
+        "type": "string",
+        "enum": [
+          "read",
+          "author",
+          "curator",
+          "builder"
+        ],
+        "title": "BuiltinProfileKey",
+        "description": "Schluessel der mitgelieferten Profile (`tool_profile.builtin_key`).\n\n„Alle\" hat keinen Schluessel — es ist das Fehlen eines Profils."
       },
       "CaseActorKind": {
         "type": "string",
@@ -30775,6 +31311,106 @@
         "title": "TokenRename",
         "description": "Eingabe fuer `PATCH /v1/tokens/{id}` — nur der Name ist editierbar.\n\nSecret, Rolle und Agent-Bindung bleiben bewusst unveraenderlich (ADR-0023-\nSnapshot). Fuer ein neues Secret gibt es `POST /v1/tokens/{id}/rotate`."
       },
+      "ToolCatalogRead": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ToolGroupRead"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "core_tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Core Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "groups",
+          "core_tools"
+        ],
+        "title": "ToolCatalogRead",
+        "description": "Antwort `GET /tool-profiles/catalog`: Gruppen aus dem Code, Kern."
+      },
+      "ToolGroup": {
+        "type": "string",
+        "enum": [
+          "core",
+          "read",
+          "feedback_memory",
+          "workarea_read",
+          "workarea_write",
+          "content_write",
+          "transition",
+          "agent_admin",
+          "system_prompt",
+          "curation"
+        ],
+        "title": "ToolGroup",
+        "description": "Fachlich geschnittene Werkzeuggruppe (ADR-0059 §5.1).\n\nJedes MCP-Werkzeug gehoert zu genau einer Gruppe — der Paritaetstest gegen\n`MCP_TOOL_REQUIREMENTS` erzwingt das. Ein neues Werkzeug braucht deshalb\neinen Eintrag im Mapping UND eine Gruppe. Die Gruppen sind nach Arbeit\ngeschnitten, nicht nach Rechten (`promote_artifact` verlangt\n`resource_write`, gehoert aber zur Arbeit im Arbeitsbereich)."
+      },
+      "ToolGroupRead": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/ToolGroup"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "tools"
+        ],
+        "title": "ToolGroupRead",
+        "description": "Eine Gruppe im Katalog: Schluessel und ihre Werkzeuge."
+      },
+      "ToolProfileCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ToolProfileCreate",
+        "description": "Eingabe `POST /tool-profiles` — eigenes Profil anlegen (admin)."
+      },
       "ToolProfileGrant": {
         "properties": {
           "id": {
@@ -30829,6 +31465,117 @@
         ],
         "title": "ToolProfileGrant",
         "description": "Das Werkzeug-Profil eines agent-gebundenen Tokens (`whoami`, §6.1).\n\n`id is None` heisst „Alle\" (mit Ausnahmen in `tools_added`/\n`tools_removed`). Kein Profil und keine Ausnahmen liefert `whoami` als\n`tool_profile=None`. Die ausgerechnete Werkzeugliste steht bewusst NICHT\nhier — der Aufrufer rechnet sie mit `effective_tool_set` aus (§6.1).\n\nGruppen und Werkzeuge sind `str`, nicht `ToolGroup`: Ein Name, den der\nCode nicht mehr kennt, darf das Lesen nicht brechen, er wird bei der\nAuswertung uebergangen (§3.3)."
+      },
+      "ToolProfileRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "builtin_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuiltinProfileKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "agent_count": {
+            "type": "integer",
+            "title": "Agent Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "groups",
+          "tools",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ToolProfileRead",
+        "description": "Ein Werkzeug-Profil des Workspace, mit Zahl der zugeordneten Agenten."
+      },
+      "ToolProfileUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ToolProfileUpdate",
+        "description": "Eingabe `PUT /tool-profiles/{id}` — Profil vollstaendig ersetzen (admin)."
       },
       "TransitionGrant": {
         "properties": {
