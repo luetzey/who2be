@@ -241,3 +241,79 @@ Abschnitts-Ueberschriften. **Bewusst nicht umgebaut** (Regel 7, Weiche 4): `huma
 - **158** — Gate-alt wird an der CI-Definition gemessen, nicht am Commit-Abstand.
 - **Regel-20-Umkehrung** — Ist der Determinismus belegt und der Baum bitgleich, wird die teure
   Suite nicht erneut gefahren; das wird mit Grund hingeschrieben.
+
+---
+
+## Nachtrag: `main` ist latent rot (nach dem CI-Lauf dieses PR)
+
+**Der wichtigste Fund dieses Laufs ist nach dem Bericht eingetroffen — aus der CI dieses
+Protokoll-PR selbst (#1107).** Der PR traegt **eine** Markdown-Datei und **keine**
+Abhaengigkeitsdatei; `audit` und `all-green` sind trotzdem rot.
+
+### Befund
+
+`audit` fährt `uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt`
+(Job 124385169742):
+
+```
+Found 9 known vulnerabilities in 2 packages
+joserfc 1.7.2   CVE-2026-119283 / CVE-2026-119284      Fix: 1.7.5 / 1.7.6
+pypdf   6.21.2  CVE-2026-119203 … CVE-2026-119209 (7)  Fix: 6.21.3 / 6.21.4
+```
+
+**Es ist der Abhaengigkeitsstand von `main` selbst.** `main` @ `14234887` traegt
+`joserfc 1.7.2` und `pypdf 6.21.2` (`git show origin/main:uv.lock`). **Am unveraenderten
+`main`-Baum lokal reproduziert:** `uv export --format requirements-txt --no-emit-workspace
+--no-hashes --group billing` → `uv tool run pip-audit --disable-pip --no-deps` → **Exit 1**,
+dieselben neun Funde.
+
+### Warum vier Laeufe das nicht gesehen haben
+
+Die **24** `success`-Check-Runs an `14234887` sind echt — aber `audit` lief am
+**2026-10-27T22:36:17Z** und `all-green` um **22:46:19Z**. **Die beiden Advisory-Wellen sind
+danach erschienen.** Der Baum war vier Laeufe **bitgleich**; die Advisory-Datenbank war es nicht.
+
+**Und das Gate-Set dieses Verfahrens hatte ein Loch genau dort.** `pip-audit` steht **nicht** in
+der Befehlsliste von `CLAUDE.md` und ist in 66 Laeufen nie lokal gefahren worden: geprueft wurde
+die Python-Seite mit `ruff`/`mypy`/`pytest`, die Web-Seite mit `npm audit`. **Der
+Python-Security-Gate wurde ausschliesslich ueber Check-Runs „gemessen"** — also ueber einen
+datierten Datensatz. → **Regel 159**: ein Check-Run-Ergebnis ist keine aktuelle Messung; bei
+einem advisory-gefuetterten Gate verfaellt es, ohne dass sich eine Zeile im Repo aendert.
+`pip-audit` gehoert ab jetzt in jeden Lauf.
+
+### Abgrenzung (Regel 10, am Log nachgemessen)
+
+Das Rot von **#1100** (2026-10-27T20:15) war eine **andere** Welle: `authlib 1.7.2` (7 CVEs) +
+`dnspython 2.8.0` (1) = 8 Advisories — genau das, was `14234887` („authlib 1.9.1 + dnspython
+2.9.0, 8 advisories") geschlossen hat. **Die alten roten PRs und #1107 sind nicht aus demselben
+Grund rot.**
+
+**Damit korrigiert sich eine Aussage dieses Laufs:** zu Weiche 36 stand hier „bei #1080/#1078
+genuegt ein Branch-Update". Das **galt fuer die alte Welle** und gilt nicht mehr — ein Update auf
+`main` landet jetzt auf der neuen `joserfc`/`pypdf`-Welle, die `main` selbst nicht besteht.
+**Diese PRs werden erst durch den Sprung aus #1106 gruen.**
+
+### Folge fuer die Reihenfolge
+
+**Regel 80 greift doch:** ein rotes `main` schlaegt jede Position, erster Posten ist die Ursache
+des roten Gates. Der Fix existiert und liegt in **#1106** (`joserfc` → **1.7.7**, `pypdf` →
+**6.21.4**, Fragment `changelog.d/audit-pypdf-joserfc.security.md`: „*Der CI-Job `audit` ist
+wieder gruen*").
+
+⚠️ **Und damit haengt das Schliessen eines Security-Gates an genau dem PR, der so wie er ist
+nicht mergen sollte (Weiche 39).** Empfehlung **A** ist deshalb nicht mehr nur Hygiene, sondern
+**der entsperrende Weg**: die zwei Host-Zeilen auf `<DOMAIN>` ziehen, dann mergen — Fix landet,
+Hosts nicht. **B waere, die Hosts festzuschreiben, um CI zu entsperren; dieser Tausch ist nicht
+noetig.** In #442 als Welle-C-Schritt **0** eingetragen, vor allen anderen Merges.
+
+**In #1107 nicht portiert, bewusst:** ein `uv.lock`-Sprung wuerde einen Protokoll-Draft zu einem
+Abhaengigkeits-PR machen, die Arbeit von #1106 doppeln und `uv.lock` von dreifach auf vierfach
+gehalten bringen. **Kein Re-Run:** die Eingaben sind unveraendert, das Ergebnis determiniert und
+lokal reproduziert.
+
+### Neue Regel
+
+- **159** — Ein Check-Run-Ergebnis ist ein datierter Datensatz, keine aktuelle Messung. Bei einem
+  Gate, das aus einer externen Datenbank gefuettert wird (`pip-audit`, `npm audit`,
+  `osv-scanner`), verfaellt ein gruenes Ergebnis ohne jede Repo-Aenderung. Die
+  advisory-gefuetterten Gates werden selbst gefahren.
