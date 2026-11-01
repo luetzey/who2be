@@ -858,13 +858,18 @@ unter *API-Tokens*.
 ```bash
 D=<DOMAIN>
 curl -fsS "https://api.$D/.well-known/oauth-authorization-server" | jq -r .issuer
-                                       # → https://api.<DOMAIN>
+                                       # → https://api.<DOMAIN>/
 curl -fsS "https://mcp.$D/.well-known/oauth-protected-resource/mcp" | jq -c '{resource, authorization_servers}'
-                                       # → {"resource":"https://mcp.<DOMAIN>/mcp","authorization_servers":["https://api.<DOMAIN>"]}
+                                       # → {"resource":"https://mcp.<DOMAIN>/mcp","authorization_servers":["https://api.<DOMAIN>/"]}
 curl -s -i -X POST "https://mcp.$D/mcp" -H 'Accept: application/json, text/event-stream' \
   -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
   | grep -iE '^HTTP/|^www-authenticate'  # → 401, resource_metadata="https://mcp.<DOMAIN>/…"
 ```
+
+Der abschliessende Slash an Issuer und `authorization_servers` ist richtig: Das
+ist die URL-Normalform, die der Client beim Parsen selbst bildet und byte-genau
+vergleicht (`packages/models/src/who2be_models/oauth_issuer.py#issuer_identifier`,
+ADR-0036, #523). Fehlt er, ist der Stack falsch, nicht diese Liste.
 
 Danach in Claude einen Connector mit der Adresse aus *Agent → Verbindung*
 anlegen. Er muss bis zum Consent auf `app.<DOMAIN>` laufen, zurueckkehren und
@@ -931,7 +936,7 @@ jeweiligen Schritt.
 | 2 | `config.js` der Web-App | alle URLs auf `<DOMAIN>` | U3 |
 | 3 | Login je aktivem Provider | landet auf `app.<DOMAIN>` | U4 |
 | 4 | Testeinladung | Mail-Link auf `<DOMAIN>` | U4 |
-| 5 | OAuth-Metadaten und PRM | Issuer und Resource auf `<DOMAIN>` | U5 |
+| 5 | OAuth-Metadaten und PRM | Issuer `https://api.<DOMAIN>/` (mit Slash), Resource auf `<DOMAIN>` | U5 |
 | 6 | Neuer Connector in Claude | Consent, Werkzeugliste, ein Aufruf | U5 |
 | 7 | Test-Checkout | Pro aktiv, Webhook `200` auf dem neuen Host | U6 |
 | 8 | Uptime-Checks (RUNBOOK §Waechter-Server) auf die neuen Hosts umgestellt | gruen | — |
@@ -959,7 +964,8 @@ Stunden, vor dem „ist erledigt"-Hinweis.
 - [ ] Nutzer informieren: Die alte Adresse gilt wieder.
 
 **Pruefen:** Die Schleifen aus Schritt U3 und U5, mit
-`D=<ALT_DOMAIN>`. Danach ein Login und ein bestehender, nicht neu verbundener
+`D=<ALT_DOMAIN>`; der Issuer lautet dann `https://api.<ALT_DOMAIN>/`,
+ebenfalls mit Slash. Danach ein Login und ein bestehender, nicht neu verbundener
 Connector: Er laeuft wieder, ohne neuen Consent, sofern sein Refresh-Token
 juenger als 30 Tage ist.
 
