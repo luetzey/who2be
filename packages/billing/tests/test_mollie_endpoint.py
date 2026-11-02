@@ -9,6 +9,9 @@ Der Webhook-Service wird ueber `app.dependency_overrides` durch einen Fake erset
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -25,13 +28,16 @@ import who2be_billing.router as billing_router
 from who2be_api.core.config import get_settings
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.main import create_app
+from who2be_billing.billing_profile import BillingProfile
 from who2be_billing.mollie import (
+    CheckoutPricing,
     MollieBillingService,
     MolliePayment,
     MollieSubscription,
 )
 from who2be_billing.plans import PRO_PLAN
 from who2be_billing.router import get_mollie_service
+from who2be_billing.tax import PriceBasis, TaxMode, VatStatus
 from who2be_models import WorkspaceRole
 
 
@@ -253,3 +259,325 @@ def test_checkout_404_on_onprem(monkeypatch: pytest.MonkeyPatch) -> None:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
     assert resp.status_code == 404
+
+
+# --- Checkout-Betrag je Steuerfall + 409/503 (ADR-0061 §5, §6; R2c) ---------------
+#
+# Nur Platzhalter: keine echten Adressen, keine echten USt-IdNr. (oeffentliches Repo).
+
+
+@dataclass
+class _AmountGateway:
+    """Fake-Gateway, das Betraege und Customer-Anlagen mitschreibt.
+
+    Eigenstaendig statt von `FakeMollieGateway` abgeleitet: dessen Import ist
+    fuer mypy `Any`, eine Unterklasse verloere damit jede Typpruefung.
+    """
+
+    payment: MolliePayment | None = None
+    checkout_url: str = "https://www.mollie.com/checkout/fake"
+    customer_count: int = 0
+    first_payment_amounts: list[str] = field(default_factory=list)
+    subscription_amounts: list[str] = field(default_factory=list)
+
+    async def create_customer(
+        self, *, name: str, email: str | None, metadata: dict[str, str]
+    ) -> str:
+        self.customer_count += 1
+        return "cst_fake"
+
+    async def create_first_payment(self, *, amount_eur: str, **_: Any) -> str:
+        self.first_payment_amounts.append(amount_eur)
+        return self.checkout_url
+
+    async def get_payment(self, payment_id: str) -> MolliePayment | None:
+        return self.payment
+
+    async def create_subscription(self, *, amount_eur: str, **_: Any) -> str:
+        self.subscription_amounts.append(amount_eur)
+        return "sub_new"
+
+    async def get_subscription(
+        self, customer_id: str, subscription_id: str
+    ) -> MollieSubscription | None:
+        return None
+
+
+@dataclass
+class _FakeProfiles:
+    """Rechnungsdaten einer Org im Speicher, mit Protokoll der VIES-Rueckschreibungen."""
+
+    profile: BillingProfile | None
+    vat_updates: list[tuple[UUID, str, VatStatus]] = field(default_factory=list)
+
+    async def get(self, org_id: UUID) -> BillingProfile | None:
+        return self.profile
+
+    async def update_vat_status(
+        self, org_id: UUID, vat_id: str, status: VatStatus, checked_at: datetime
+    ) -> None:
+        self.vat_updates.append((org_id, vat_id, status))
+
+
+@dataclass
+class _FakeVies:
+    status: VatStatus = "unchecked"
+    calls: int = 0
+
+    async def check(self, vat_id: str) -> VatStatus:
+        self.calls += 1
+        return self.status
+
+
+def _profile(
+    country: str,
+    customer_type: str,
+    *,
+    vat_id: str | None = None,
+    vat_status: VatStatus | None = None,
+) -> BillingProfile:
+    names: dict[str, Any] = (
+        {"given_name": "Erika", "family_name": "Beispiel"}
+        if customer_type == "consumer"
+        else {"company_name": "Beispiel GmbH"}
+    )
+    return BillingProfile(
+        customer_type=customer_type,  # type: ignore[arg-type]
+        street="Musterstrasse 1",
+        postal_code="12345",
+        city="Musterstadt",
+        country=country,
+        vat_id=vat_id,
+        vat_status=vat_status,
+        **names,
+    )
+
+
+def _post_checkout(
+    monkeypatch: pytest.MonkeyPatch,
+    service: MollieBillingService | None,
+) -> Any:
+    """Checkout ueber HTTP; `service=None` nutzt die echte `get_mollie_service`."""
+    workspace_id = uuid4()
+    app = create_app()
+    if service is not None:
+        app.dependency_overrides[get_mollie_service] = lambda: service
+    app.dependency_overrides[get_current_workspace] = lambda: WorkspaceContext(
+        workspace_id=workspace_id,
+        user_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        aal="aal2",
+    )
+    monkeypatch.setattr(
+        billing_router,
+        "get_pool",
+        lambda: _CheckoutPool(workspace_id=workspace_id, org_id=uuid4(), org_name="Beispiel"),
+    )
+    try:
+        with TestClient(app) as client:
+            return client.post(
+                f"/v1/workspaces/{workspace_id}/billing/checkout",
+                json={"plan": "pro"},
+                headers={"Authorization": "Bearer w2b_dummy"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _priced_service(
+    profiles: _FakeProfiles,
+    *,
+    tax_mode: TaxMode | None = "regular",
+    price_basis: PriceBasis = "net",
+    vies: _FakeVies | None = None,
+) -> tuple[MollieBillingService, _AmountGateway]:
+    gateway = _AmountGateway()
+    pricing = CheckoutPricing(
+        profiles, vies or _FakeVies(), tax_mode=tax_mode, price_basis=price_basis
+    )
+    service = MollieBillingService(gateway, FakeEntitlementRepository(), pricing=pricing)
+    return service, gateway
+
+
+@pytest.fixture
+def cloud_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("WHO2BE_EDITION", "cloud")
+    monkeypatch.setenv("MOLLIE_API_KEY", "test_dummy")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.mark.usefixtures("cloud_env")
+@pytest.mark.parametrize(
+    ("case", "profile", "vies_status", "expected"),
+    [
+        ("DE B2C", _profile("DE", "consumer"), "unchecked", "11.89"),
+        ("DE B2B", _profile("DE", "business", vat_id="DE000000000"), "unchecked", "11.89"),
+        (
+            "EU B2B geprueft",
+            _profile("AT", "business", vat_id="ATU00000000", vat_status="valid"),
+            "unchecked",
+            "9.99",
+        ),
+        (
+            "EU B2B ungeprueft, VIES stumm (W-R2c-1 A: 19 %)",
+            _profile("AT", "business", vat_id="ATU00000000", vat_status="unchecked"),
+            "unchecked",
+            "11.89",
+        ),
+        (
+            "EU B2B ungeprueft, VIES jetzt gueltig",
+            _profile("AT", "business", vat_id="ATU00000000", vat_status="unchecked"),
+            "valid",
+            "9.99",
+        ),
+        (
+            "EU B2B ungeprueft, VIES jetzt ungueltig",
+            _profile("AT", "business", vat_id="ATU00000000", vat_status="unchecked"),
+            "invalid",
+            "11.89",
+        ),
+        ("EU B2C", _profile("AT", "consumer"), "unchecked", "11.89"),
+        ("Drittland B2B", _profile("US", "business"), "unchecked", "9.99"),
+        ("Drittland B2C", _profile("US", "consumer"), "unchecked", "9.99"),
+    ],
+    ids=lambda value: value if isinstance(value, str) else "",
+)
+def test_checkout_amount_per_tax_case(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    profile: BillingProfile,
+    vies_status: VatStatus,
+    expected: str,
+) -> None:
+    """Regelbesteuerung, Preisbasis netto (Default): Betrag = `expected_total`."""
+    service, gateway = _priced_service(_FakeProfiles(profile), vies=_FakeVies(vies_status))
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 201, case
+    assert gateway.first_payment_amounts == [expected], case
+
+
+@pytest.mark.usefixtures("cloud_env")
+@pytest.mark.parametrize(
+    ("tax_mode", "price_basis", "profile", "expected"),
+    [
+        ("regular", "gross", _profile("DE", "consumer"), "9.99"),
+        ("regular", "gross", _profile("US", "business"), "9.99"),
+        ("small_business", "net", _profile("DE", "consumer"), "9.99"),
+    ],
+)
+def test_checkout_amount_follows_switches(
+    monkeypatch: pytest.MonkeyPatch,
+    tax_mode: TaxMode,
+    price_basis: PriceBasis,
+    profile: BillingProfile,
+    expected: str,
+) -> None:
+    """Brutto-Basis (W61-2 A): Planpreis enthaelt die Steuer. Kleinunternehmer: 0 %."""
+    service, gateway = _priced_service(
+        _FakeProfiles(profile), tax_mode=tax_mode, price_basis=price_basis
+    )
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 201
+    assert gateway.first_payment_amounts == [expected]
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_checkout_unchecked_vat_rechecks_vies_and_stores_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W-R2c-1 A: VIES einmal neu fragen, ein Ergebnis landet in den Rechnungsdaten."""
+    profiles = _FakeProfiles(
+        _profile("AT", "business", vat_id="ATU00000000", vat_status="unchecked")
+    )
+    vies = _FakeVies("valid")
+    service, _ = _priced_service(profiles, vies=vies)
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 201
+    assert vies.calls == 1
+    assert [(vat_id, status) for _, vat_id, status in profiles.vat_updates] == [
+        ("ATU00000000", "valid")
+    ]
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_checkout_silent_vies_keeps_profile_unchecked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bleibt VIES stumm, wird nichts zurueckgeschrieben: die 19 % gelten nur fuer den Betrag."""
+    profiles = _FakeProfiles(
+        _profile("AT", "business", vat_id="ATU00000000", vat_status="unchecked")
+    )
+    vies = _FakeVies("unchecked")
+    service, _ = _priced_service(profiles, vies=vies)
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 201
+    assert vies.calls == 1
+    assert profiles.vat_updates == []
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_checkout_without_billing_profile_is_409(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Rechnungsdaten 409, und bei Mollie entsteht nichts (kein Customer, keine Zahlung)."""
+    service, gateway = _priced_service(_FakeProfiles(None))
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 409
+    assert "Rechnungsdaten" in resp.json()["detail"]
+    assert gateway.customer_count == 0
+    assert gateway.first_payment_amounts == []
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_checkout_without_tax_mode_is_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    """W-R2c-2 A: ohne Steuermodus fail closed, auch wenn Rechnungsdaten vorliegen."""
+    service, gateway = _priced_service(_FakeProfiles(_profile("DE", "consumer")), tax_mode=None)
+    resp = _post_checkout(monkeypatch, service)
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Rechnungsstellung nicht konfiguriert."
+    assert gateway.customer_count == 0
+    assert gateway.first_payment_amounts == []
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_router_wires_pricing_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Echte `get_mollie_service` ohne `WHO2BE_INVOICE_TAX_MODE` ⇒ 503 vor jedem Mollie-Aufruf.
+
+    Faellt die Verdrahtung von `CheckoutPricing` im Router weg, ginge der Checkout
+    mit dem Plan-Preis an das (echte) SDK-Gateway und der Test waere rot.
+    """
+    monkeypatch.delenv("WHO2BE_INVOICE_TAX_MODE", raising=False)
+    get_settings.cache_clear()
+    resp = _post_checkout(monkeypatch, None)
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Rechnungsstellung nicht konfiguriert."
+
+
+@pytest.mark.usefixtures("cloud_env")
+def test_subscription_uses_paid_first_amount() -> None:
+    """Die Subscription traegt den bezahlten Erstbetrag, nicht den Planpreis (R2c).
+
+    Sonst laeuft ab der zweiten Zahlung jede Rechnung in `amount_mismatch`.
+    """
+    app = create_app()
+    org_id = uuid4()
+    gateway = _AmountGateway(
+        payment=MolliePayment(
+            "tr_first",
+            True,
+            "cst_1",
+            None,
+            "mdt_1",
+            dict(PRO_PLAN.metadata(org_id)),
+            amount_value=Decimal("11.89"),
+        ),
+    )
+    app.dependency_overrides[get_mollie_service] = lambda: MollieBillingService(
+        gateway, FakeEntitlementRepository()
+    )
+    try:
+        with TestClient(app) as client:
+            resp = client.post("/v1/billing/mollie/webhook", data={"id": "tr_first"})
+    finally:
+        app.dependency_overrides.clear()
+    assert resp.json() == {"received": True}
+    assert gateway.subscription_amounts == ["11.89"]

@@ -11,10 +11,15 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Feedback-driven maintenance run across the agent library. This run collects the accumulated feedback and usage signals (", "styles": {}},
-      {"type": "text", "text": "get_feedback", "styles": {"code": true}},
-      {"type": "text", "text": " returns usage_count, by_outcome, by_signal, and recent_notes), checks the library's relationships and structural gaps, and turns findings into drafts after user approval. It is the builder's recurring cleanup routine: not building, but maintaining — updating what's outdated, connecting or retiring what's orphaned, surfacing gaps. Curation authority stays with the user throughout: no finding is written without approval, no activation without their decision.", "styles": {}}
+      {"type": "text", "text": "Recurring, feedback-driven maintenance run across the agent library: collect signals, check relationships, and turn findings into drafts only after the user's approval.", "styles": {}}
     ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — in Phase 1, in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-status\", \"res-conv-h-managed\", \"res-conv-h-graph\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -321,27 +326,7 @@
     "id": "pb-maint-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-tools-read",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (inventory); get_feedback(entity_type, entity_id) (signals and notes); find_usages (inbound references, orphan check); list_versions, diff_versions (check a note against the current version); fetch_playbook, fetch_resource, get_persona (current state before every set_*); search (find elements for suspected cases); search_content (passage cross-check for suspected gaps and knowledge drift).", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-tools-write",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Write (only after approval): ", "styles": {"bold": true}},
-      {"type": "text", "text": "update_persona / update_playbook / update_resource (new draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (replace semantics — set the complete target state); transition_persona / transition_playbook / transition_resource (only approved transitions); record_usage and submit_feedback (tracking); resolve_feedback (close signals — addressed/in_progress/dismissed, dismissed only with a note; only after approval).", "styles": {}}
-    ],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
@@ -349,8 +334,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Forbidden: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Delete doesn't exist via MCP — don't attempt it, don't simulate it. create_* without an explicit build request from the user (semantic gaps are observations, not requests). Any write attempt on managed content (is_managed=true returns 409) — these findings belong in the repo hand-off.", "styles": {}}
+      {"type": "text", "text": "set_persona_playbooks, set_playbook_resource_links, set_playbook_composes, and set_resource_sub_resources have replace semantics — set the complete target state. Delete doesn't exist via MCP (don't simulate it); create_* only with an explicit build request; write attempts on managed content return 409 and belong in the repo hand-off; resolve_feedback only after approval, dismissed only with a note.", "styles": {}}
     ],
     "children": []
   },
@@ -428,30 +412,6 @@
       {"type": "text", "text": "Feedback closure via MCP and web UI: ", "styles": {"bold": true}},
       {"type": "text", "text": "Signals are now also closed via MCP (resolve_feedback, capability feedback_resolve — an extension of ADR-0038); the web UI triage (inbox) remains equally valid. The closing report must include the closed signals with their resolution — it remains the handoff point between agent run and curation.", "styles": {}}
     ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-li-notes-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, findability/retrieval, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "pb-maint-h-feedback",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-maint-p-feedback",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If while executing this playbook you notice something outdated or incorrect about it, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it — this playbook is managed, so the correction runs through the repo hand-off. Report used playbooks/resources via record_usage (applied/skipped/error). This is how the AgentDB becomes self-improving.", "styles": {}}],
     "children": []
   }
 ]

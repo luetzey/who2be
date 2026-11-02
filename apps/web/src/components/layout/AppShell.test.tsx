@@ -147,7 +147,7 @@ beforeEach(() => {
 
 const NAV_LABELS = [
   'Dashboard',
-  'Agents',
+  'Agenten',
   'System-Prompts',
   'Personas',
   'Playbooks',
@@ -162,7 +162,7 @@ const NAV_LABELS = [
 // Audit E2-B: Gruppen in fester Reihenfolge. `heading: null` = Gruppe ohne
 // Ueberschrift (Einstieg oben, Settings unten).
 const NAV_GROUPS_DE: { heading: string | null; links: string[] }[] = [
-  { heading: null, links: ['Dashboard', 'Agents'] },
+  { heading: null, links: ['Dashboard', 'Agenten'] },
   {
     heading: 'Bausteine',
     links: ['System-Prompts', 'Personas', 'Playbooks', 'Resources', 'Externe Tools'],

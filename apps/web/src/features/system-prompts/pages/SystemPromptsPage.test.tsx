@@ -81,14 +81,14 @@ describe('SystemPromptsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('Noch keine Templates')).toBeInTheDocument()
+    expect(await screen.findByText('Noch keine System-Prompts')).toBeInTheDocument()
     expect(
-      screen.getByText('Lege dein erstes System-Prompt-Template an.'),
+      screen.getByText('Lege deinen ersten System-Prompt an.'),
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('Suche')).not.toBeInTheDocument()
     // CTA sowohl im Header als auch im Empty-State.
     expect(
-      screen.getAllByRole('link', { name: /Neues Template/ }).length,
+      screen.getAllByRole('link', { name: /Neuer System-Prompt/ }).length,
     ).toBeGreaterThanOrEqual(2)
   })
 

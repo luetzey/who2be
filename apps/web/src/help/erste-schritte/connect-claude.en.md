@@ -3,7 +3,7 @@ title: Connect to Claude
 description: One click, one confirmation, one test sentence.
 section: erste-schritte
 order: 20
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -14,7 +14,7 @@ The connector belongs to your Claude account. You add it once, and then it works
 ## Step by step [#schritte]
 
 1. Under **Agents**, open your agent, for example the Builder. The **Overview** tab shows the **Connection** card.
-2. Under "Where do you use your agents?" choose **Claude** and click **Connect to Claude**. Claude opens in a new tab with the name and address already filled in.
+2. Under "Where do you use your agents?" choose **Claude (web, app, mobile)** and click **Connect to Claude**. Claude opens in a new tab with the name and address already filled in.
 3. In Claude, click **Add** and then **Connect**.
 4. Who2Be asks whether Claude may use this agent. Confirm.
 5. In Claude, start a new chat, send the test sentence and allow the tool call when Claude asks.
@@ -44,4 +44,4 @@ On Claude plans for teams and companies, the owner of the Claude organization ad
 - **The agent isn't ready:** Instead of the button you see what is missing, for example an active persona. Fix that first.
 - **Claude Free:** Only one custom connector is allowed there. If one is already added, remove it first.
 
-Claude Code, Cursor and VS Code work in a similar way, see [Connect other programs](/help/connect-other-clients).
+Claude Code, Cursor, VS Code and Hermes Agent work in a similar way, see [Connect other programs](/help/connect-other-clients).

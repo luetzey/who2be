@@ -105,6 +105,14 @@ Tage) an und ruft danach **best-effort** GoTrue `POST /auth/v1/invite`
 Der 201-Body trägt den Klartext-Token genau einmal
 (`packages/models/src/who2be_models/invitation.py#InvitationCreated`).
 
+Pro Workspace und Adresse (Groß-/Kleinschreibung egal) gibt es höchstens eine
+offene, gültige Einladung. Eine zweite antwortet mit
+`409 invitation_already_pending`; wer neu einladen will, widerruft die alte
+zuerst. Eine bereits abgelaufene Einladung sperrt die Adresse nicht: die
+Neueinladung schwärzt deren E-Mail vorab mit dem Purge-Marker, `revoked_at`
+bleibt dabei leer
+(`apps/api/src/who2be_api/repositories/invitation_repository.py#PgInvitationRepository.create`).
+
 Es gibt zwei Wege zur Annahme. Beide verlangen ein eingeloggtes Konto, dessen
 E-Mail-Adresse zur Einladung passt.
 

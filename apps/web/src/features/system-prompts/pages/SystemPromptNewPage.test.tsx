@@ -123,7 +123,7 @@ describe('SystemPromptNewPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Detail von sp42')).toBeInTheDocument()
     })
-    expect(notify.success).toHaveBeenCalledWith('Template angelegt.')
+    expect(notify.success).toHaveBeenCalledWith('System-Prompt angelegt.')
     // submitForm feuert click + submit (jsdom-Fallback) — je nach Umgebung
     // kommen 1–2 POSTs an; entscheidend ist der Payload.
     expect(postCalls.length).toBeGreaterThanOrEqual(1)

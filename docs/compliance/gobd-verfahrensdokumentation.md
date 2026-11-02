@@ -5,7 +5,7 @@
 > Rechtsberatung.** Ob, in welcher Form und durch wen umsatzsteuerliche Belege
 > auszustellen und aufzubewahren sind, ist mit einem Steuerberater zu klaeren.
 > Alle `<PLATZHALTER: …>` sind vom Betreiber zu fuellen. Stand der abgeleiteten
-> Fakten: 2026-06-05.
+> Fakten: 2026-06-05, §1, §4 und §5: 2026-10-24.
 
 Die **GoBD** (Grundsaetze zur ordnungsmaessigen Fuehrung und Aufbewahrung von
 Buechern, Aufzeichnungen und Unterlagen in elektronischer Form) verlangen eine
@@ -24,8 +24,11 @@ Dokument beschreibt das fuer die **Cloud-Edition** (bezahlte Tarife via Mollie).
 
 | System | Rolle im Beleg-/Zahlungsfluss |
 |---|---|
-| **Mollie B.V.** | Zahlungsdienstleister (PSP). Fuehrt Checkout, Abo-Lebenszyklus, Zahlungseinzug und die zahlungsbezogene Belegerstellung. |
-| **Who2Be-API** (`packages/billing/`) | Empfaengt Mollie-Webhooks (Pull-after-Ping), leitet daraus den Entitlement-Stand ab. Stellt **keine** eigenen Rechnungen aus. |
+| **Mollie B.V.** | Zahlungsdienstleister (PSP). Fuehrt Checkout, Abo-Lebenszyklus und Zahlungseinzug. Erzeugt ueber Mollie Invoicing (Sales Invoices API) die Rechnung samt Nummernkreis und PDF. |
+| **Who2Be-API** (`packages/billing/`) | Empfaengt Mollie-Webhooks (Pull-after-Ping), leitet daraus den Entitlement-Stand ab und merkt je bezahlter Zahlung eine Rechnung vor (ADR-0061 §3). |
+| **Worker-Routine `invoice-retry`** | Stellt vorgemerkte Rechnungen bei Mollie aus, holt das PDF und archiviert es (alle 5 min, ADR-0057). |
+| **`billing_invoice`** (Tabelle, Migration `billing_0111`) | Eine Zeile je bezahlter Zahlung (`UNIQUE (payment_id)`): Status, Rechnungsnummer, Schalterwerte, Ablageort und SHA-256 des PDF. |
+| **BlobStore, Praefix `invoices/`** | Rechnungsarchiv: das PDF unveraendert, wie Mollie es liefert. |
 | **`org_entitlement`** (Tabelle) | Aktueller Tarif-/Berechtigungsstand pro Organisation (UPSERT, „letzter Stand"). |
 | **`entitlement_history`** (Tabelle, WP-A/C) | **Unveraenderbares, lueckenloses Journal** jeder Entitlement-Aenderung (append-only). |
 | **`processed_webhook_event`** | Dedupe-Ledger fuer Mollie-Webhooks (Idempotenz). |
@@ -89,31 +92,111 @@ geschrieben).
   die gesetzliche Aufbewahrungspflicht zurueck (Art. 17 Abs. 3 lit. b/e DSGVO).
   Begruendung dokumentiert in ADR-0031 und
   [`data-retention-and-erasure.md`](./data-retention-and-erasure.md).
-- **Beleg-Aufbewahrung Mollie-seitig:** Da Mollie die zahlungsbezogenen Belege
-  fuehrt, ist zu klaeren, wie der Betreiber an diese Belege fuer die eigene
-  Aufbewahrung kommt (Export/Archiv): `<PLATZHALTER: Mollie-Beleg-Export &
-  Archivierungsverfahren>`.
+
+### 4.1 Rechnungsarchiv (ADR-0061 §7)
+
+Mollie haelt Rechnungen nur 5 Jahre vor. Massgeblich ist deshalb das eigene
+Archiv von Who2Be:
+
+| Was | Wo | Unveraenderbarkeit |
+|---|---|---|
+| Rechnungs-PDF, Byte fuer Byte wie von Mollie geliefert | BlobStore (SeaweedFS/S3, ADR-0048), Schluessel `invoices/<org_id>/<jahr>/<rechnungsnummer>.pdf` | Ablageort und SHA-256 stehen in der Archivzeile und sind nach dem ersten Setzen fest |
+| Archivzeile je Zahlung | `billing_invoice` (Migration `billing_0111`) | Trigger `billing_invoice_guard`: Status nur nach vorn, Rechnungsnummer, Mollie-ID, Ablageort und Hash nach dem Setzen fest, Steuerangaben, Betrag und Zeitraum ab `issued` fest. Die Laufzeitrolle hat kein `DELETE` |
+
+- **Frist:** mindestens **10 Jahre ab Ende des Ausstellungsjahres** (das Jahr
+  steht im Schluessel). Damit ist die laengere der beiden Fristen abgedeckt.
+- **Pruefbarkeit:** Der SHA-256 in der Archivzeile belegt, dass das abgelegte
+  PDF unveraendert ist. Pruefen durch erneutes Hashen des Objekts und Vergleich
+  mit `billing_invoice.pdf_sha256`.
+- **Loeschung:** nur durch die Owner-Rolle und erst nach Ablauf der Frist. Eine
+  Routine dafuer kommt, wenn die erste Rechnung faellig wird; bis dahin steht
+  die Frist im Loeschkonzept.
+- **Abgrenzung zum Purge:** Archivzeile und PDF haengen nicht an der
+  Organisation (`org_id` ohne Fremdschluessel) und liegen ausserhalb des
+  Praefixes `blobs/<workspace_id>/`, den der Workspace-Purge raeumt. Sie
+  ueberstehen Konto- und Org-Loeschung.
+- **Sicherung:** Der Bucket ist Teil des naechtlichen Backups (`s3 sync` plus
+  restic, `deploy/hetzner/scripts/backup.sh`). Das Offsite-Backup haelt nur
+  6 Monate Historie: ein versehentlich im Bucket geloeschtes PDF ist danach
+  nicht mehr wiederherstellbar. Eine zusaetzliche schreibgeschuetzte Ablage
+  ausserhalb von Who2Be (Weiche W61-1, Option C) bleibt Betreiber-Aufgabe:
+  `<PLATZHALTER: zweite Ablage (Buchhaltung / WORM-Speicher), ab wann>`.
 
 ---
 
-## 5 · Rechnungsausstellung & E-Rechnung (EN 16931)
+## 5 · Rechnungsausstellung (ADR-0061)
 
-- **Who2Be stellt keine eigenen Rechnungen aus.** Die zahlungsbezogene
-  Belegerstellung liegt bei Mollie bzw. beim Betreiber ausserhalb dieser
-  Codebase.
-- Daraus folgt: Die Pflicht zur **strukturierten E-Rechnung (EN 16931 /
-  XRechnung / ZUGFeRD)** ist fuer die Who2Be-Codebase **nicht einschlaegig** —
-  es gibt keine eigene Rechnungsfunktion, die ein E-Rechnungsformat erzeugen
-  muesste.
-- **Wird das geaendert** (z. B. eigene Rechnungsstellung / Enterprise-SKU mit
-  eigenem Invoicing), ist EN 16931 neu zu bewerten und eine eigene
-  Verfahrensdokumentation dafuer zu erstellen.
+Who2Be stellt je **bezahlter** Mollie-Zahlung genau eine Rechnung ueber Mollie
+Invoicing aus. Nummernkreis, Pflichtangaben des Absenders und PDF-Layout
+kommen aus dem Mollie-Profil des Betreibers.
 
-> **Angekuendigte Aenderung (ADR-0061, Accepted 2026-10-20):** Who2Be wird
-> Rechnungen ueber Mollie Invoicing (Sales Invoices API) ausstellen, eine je
-> bezahlter Zahlung, und die PDFs selbst archivieren (mindestens 10 Jahre).
-> Bis zur Umsetzung in Paket R2 gilt der Ist-Stand oben. Mit R2 werden dieser
-> Abschnitt sowie §4 und §6 nach ADR-0061 neu gefasst.
+### 5.1 Ablauf
+
+1. **Vormerken (Webhook).** Meldet der Mollie-Webhook eine bezahlte Zahlung,
+   legt Who2Be eine Zeile `pending` in `billing_invoice` an. `UNIQUE
+   (payment_id)` verhindert eine zweite Rechnung zur selben Zahlung, auch bei
+   doppeltem Webhook.
+2. **Ausstellen (Worker `invoice-retry`).** Der Worker bestimmt den Steuerfall
+   aus den Rechnungsdaten der Organisation und den Schaltern (Abschnitt 5.2),
+   setzt atomar eine Sperre und legt die Rechnung bei Mollie als bezahlt an,
+   mit Bezug auf die Zahlung. Status `issued`, Rechnungsnummer und Mollie-ID
+   werden festgeschrieben.
+3. **Archivieren.** Der Worker holt das PDF, legt es unveraendert ab
+   (Abschnitt 4.1) und schreibt Ablageort und SHA-256. Status `archived`.
+
+Bleibt eine Antwort von Mollie unklar (Timeout, Serverfehler), sucht der
+naechste Lauf die Rechnung zuerst ueber die Liste bei Mollie, statt neu
+anzulegen. So entsteht auch dann keine zweite Nummer.
+
+**Zurueckgehalten** (Status bleibt `pending`, `last_error` beginnt mit
+`hold:`) wird eine Rechnung, wenn der Steuermodus nicht gesetzt ist,
+Rechnungsdaten oder Empfaenger-E-Mail fehlen oder der bezahlte Betrag nicht
+zum Rechnungsbetrag passt. Der Worker prueft stuendlich erneut. Eine Rechnung
+ueber einen anderen als den bezahlten Betrag entsteht nie.
+
+**Ungepruefte USt-IdNr.** (Weiche W61-3 A): Der Worker fragt VIES erneut.
+Liefert VIES 72 Stunden nach dem Vormerken noch kein Ergebnis, wird die
+Rechnung wie bei ungueltiger Nummer ausgestellt und der Worker schreibt eine
+Warnung ins Log.
+
+**Technische Fehler** zaehlen einen Versuch; der naechste kommt mit
+wachsendem Abstand (5 min bis 6 h). Nach 8 Fehlversuchen steht die Zeile auf
+`failed`, und der Worker schreibt eine ERROR-Zeile. Dann prueft der Betreiber
+im Mollie-Dashboard, ob zur Zahlung schon eine Rechnung existiert, und stellt
+sie sonst von Hand aus. Keine Rechnung geht still verloren.
+
+### 5.2 Schalter
+
+Steuermodus und Preisbasis sind Betriebseinstellungen (ADR-0061 §5), gesetzt
+im Deploy fuer die Dienste `api` und `worker`:
+
+| Variable | Werte | Ohne Wert |
+|---|---|---|
+| `WHO2BE_INVOICE_TAX_MODE` | `regular` · `small_business` | Checkout antwortet 503, vorgemerkte Rechnungen bleiben zurueckgehalten |
+| `WHO2BE_INVOICE_PRICE_BASIS` | `net` · `gross` | `net` |
+
+Welche Werte gelten, legt der Betreiber fest:
+`<PLATZHALTER: Steuermodus und Preisbasis, festgelegt am>`. Ein Wechsel wirkt
+nur fuer neue Rechnungen; jede Archivzeile haelt fest, mit welchen Werten sie
+entstand (`tax_mode`, `price_basis`, `vat_rate`, `memo_key`). Die Steuerlogik
+steht als Tabelle in `packages/billing/src/who2be_billing/tax.py`.
+
+### 5.3 Storno und Erstattung (ADR-0061 §8)
+
+Die Sales Invoices API kennt weder Gutschrift noch Stornorechnung. Who2Be
+aendert ausgestellte Rechnungen deshalb **nie automatisch** und erkennt
+Erstattungen heute nicht von selbst. Erstattung und Rueckbuchung bearbeitet
+der Betreiber von Hand: Erstattung in Mollie, Korrekturbeleg mit Bezug auf die
+Originalnummer, Ablage neben dem Original (ADR-0061 §8). Ablauf:
+[`../cloud-erstinbetriebnahme.md`](../cloud-erstinbetriebnahme.md#storno-und-erstattung).
+
+### 5.4 E-Rechnung (EN 16931)
+
+Die Rechnungen sind PDF, keine strukturierte E-Rechnung. Ob fuer die
+ausgestellten Betraege eine Pflicht zur E-Rechnung (EN 16931 / XRechnung /
+ZUGFeRD) besteht, ist vom Betreiber zu bestaetigen (ADR-0061 §13):
+`<PLATZHALTER: Bewertung E-Rechnungspflicht>`. Mollie bietet den Versand
+ueber Peppol an, falls Geschaeftskunden danach fragen.
 
 ---
 
@@ -122,16 +205,19 @@ geschrieben).
 Diese Punkte sind **nicht** durch Code entscheidbar und vom Betreiber mit
 Steuerberater zu klaeren:
 
-1. **Vertriebsmodell / USt-Schuldner:** Wer stellt die umsatzsteuerlich
-   massgebliche Rechnung an B2B-Kunden aus — Mollie-Receipt vs. ordnungsgemaesse
-   Rechnung des Betreibers? `<PLATZHALTER: Entscheidung>`.
-2. **USt-IdNr / Reverse-Charge:** Erfassung der USt-IdNr und Reverse-Charge-
-   Behandlung sind heute **nicht** in der App abgebildet. Solange Mollie die
-   Steuerbehandlung uebernimmt, kein Code-Bedarf; bei EU-B2B-Direktverkauf durch
-   den Betreiber neu zu bewerten. `<PLATZHALTER: Klaerung USt-IdNr/Reverse-Charge>`.
-3. **Aufbewahrungsfristen & Archiv-Form:** Welche Artefakte, wie lange, in
-   welchem Format/Speicherort (GoBD-konformes Archiv)? `<PLATZHALTER>`.
-4. **Datenzugriff der Finanzverwaltung (Z1/Z2/Z3):** Wie wird ein etwaiger
+1. **Steuermodus und Preisbasis:** Werte der beiden Schalter (Abschnitt 5.2)
+   und Texte der Rechnungsvermerke (`MEMO_TEXTS` in `tax.py`) bestaetigen.
+   `<PLATZHALTER: Entscheidung>`.
+2. **USt-IdNr / Reverse-Charge:** Die App erfasst die USt-IdNr. je
+   Organisation und prueft sie bei VIES (ADR-0061 R1); Reverse Charge und
+   Drittland sind Zeilen der Steuertabelle. Der Steuerfall je Kundengruppe ist
+   zu bestaetigen. `<PLATZHALTER: Klaerung USt-IdNr/Reverse-Charge>`.
+3. **Aufbewahrungsfristen & Archiv-Form:** Frist je Artefakt und zweite,
+   schreibgeschuetzte Ablage neben dem Archiv aus Abschnitt 4.1.
+   `<PLATZHALTER>`.
+4. **Korrekturbelege:** Welcher Beleg bei Erstattung oder Rueckbuchung noetig
+   ist (Abschnitt 5.3). `<PLATZHALTER>`.
+5. **Datenzugriff der Finanzverwaltung (Z1/Z2/Z3):** Wie wird ein etwaiger
    Datenzugriffsanspruch bedient? `<PLATZHALTER>`.
 
 ---
@@ -142,3 +228,4 @@ Steuerberater zu klaeren:
 |---|---|---|
 | 2026-06-05 | Erstanlage (WP-H) — aus Billing-/Entitlement-Code abgeleitet | Plan §WP-H, ADR-0031 |
 | 2026-10-21 | Hinweis in §5: Rechnungsstellung ueber Mollie Invoicing angekuendigt, Neufassung mit R2 | ADR-0061 |
+| 2026-10-24 | §1, §4 und §5 neu gefasst (Rechnung je Zahlung, Archiv, Schalter, Storno), §6 nachgezogen | ADR-0061 §5, §7, §8; Pakete R2a–R2d |

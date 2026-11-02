@@ -114,7 +114,7 @@ describe('StatusActionBar', () => {
   it('zeigt im Status inactive den Reactivate-Button', () => {
     renderBar('inactive')
     expect(
-      screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
+      screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
     expect(
@@ -127,7 +127,7 @@ describe('StatusActionBar', () => {
     const onTransitioned = vi.fn()
 
     renderBar('inactive', onTransition, onTransitioned)
-    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
@@ -201,7 +201,7 @@ describe('StatusActionBar', () => {
     it('traegt branch-action-reactivate im Status inactive', () => {
       renderBar('inactive')
       expect(screen.getByTestId('branch-action-reactivate')).toBe(
-        screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
+        screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }),
       )
     })
   })
@@ -213,7 +213,7 @@ describe('StatusActionBar', () => {
 
       expect(screen.queryByTestId('branch-action-publish')).toBeNull()
       const toolbar = screen.getByRole('toolbar', { name: 'Status-Aktionen' })
-      expect(toolbar).toHaveTextContent('Veröffentlichen erfordert Zwei-Faktor-Anmeldung.')
+      expect(toolbar).toHaveTextContent('Aktivieren erfordert Zwei-Faktor-Anmeldung.')
       const setup = screen.getByRole('link', { name: 'Zwei-Faktor einrichten' })
       // Ruecksprung nach der Einrichtung: Pfad + Query der Ausgangsseite.
       expect(setup).toHaveAttribute(

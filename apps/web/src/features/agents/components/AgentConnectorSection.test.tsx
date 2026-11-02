@@ -12,6 +12,7 @@ import {
   claudeCodeCommand,
   claudeInstallLink,
   cursorInstallLink,
+  hermesCommand,
   serverSlug,
   vscodeInstallLink,
 } from '@/lib/installLinks'
@@ -146,7 +147,10 @@ describe('AgentConnectorSection — Claude', () => {
     expect(href.hash).toBe('')
     expect(href.searchParams.get('connectorName')).toBe('Who2Be – Coder')
     expect(href.searchParams.get('connectorUrl')).toBe(URL_)
-    expect(screen.getByRole('button', { name: 'Claude' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Claude (Web, App, Handy)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('haelt Name und URL im Aufklapper als Rueckfall bereit und kopiert sie', async () => {
@@ -352,11 +356,108 @@ describe('AgentConnectorSection — andere Programme', () => {
 
     expect(screen.getByLabelText('Server-URL')).toHaveTextContent(URL_)
     expect(screen.queryByRole('link', { name: /Mit Claude verbinden/ })).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'So geht es in Gemini, Le Chat, Windsurf, Zed und Copilot' }),
+    ).toHaveAttribute('href', '/w/ws-1/help/connect-other-clients#steckbriefe')
     fireEvent.click(screen.getByRole('button', { name: 'Ich habe die Adresse eingetragen' }))
     expect(screen.getByTestId('connect-waiting')).toHaveTextContent('in deinem Programm')
     expect(
       screen.queryByRole('button', { name: 'Ich habe die Adresse eingetragen' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('Hermes Agent: OAuth-Befehl als einzige Brand-Aktion, Kopieren startet das Warten', async () => {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: 'Hermes Agent' }))
+
+    expect(screen.getByRole('button', { name: 'Hermes Agent' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('connect-lead')).toHaveTextContent(
+      'Im Terminal des Rechners, auf dem Hermes läuft.',
+    )
+    const command = screen.getByLabelText('Befehl')
+    expect(command).toHaveTextContent(`hermes mcp add who2be-coder --url ${URL_} --auth oauth`)
+    expect(command).toHaveClass('break-all')
+    // Schritt 3 nennt /reload-mcp als Code, ohne Kopierknopf.
+    expect(screen.getByText('/reload-mcp').tagName).toBe('CODE')
+    expect(screen.getByTestId('connect-hints')).toHaveTextContent('hermes -p <profil> mcp add …')
+    expect(screen.getByTestId('connect-hints')).toHaveTextContent('Server ohne Browser')
+
+    const guide = screen.getByTestId('connect-guide')
+    const brand = within(guide)
+      .getAllByRole('button')
+      .filter((el) => el.className.includes('bg-brand'))
+    expect(brand.map((el) => el.textContent)).toEqual(['Befehl kopieren'])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Befehl kopieren' }))
+    await waitFor(() => expect(screen.getByTestId('connect-waiting')).toBeInTheDocument())
+    expect(writeText).toHaveBeenCalledWith(`hermes mcp add who2be-coder --url ${URL_} --auth oauth`)
+    expect(screen.getByTestId('connect-waiting')).toHaveTextContent('in Hermes')
+    // Waehrend des Wartens ist der Befehl keine Brand-Aktion mehr.
+    expect(screen.getByRole('button', { name: 'Befehl kopieren' }).className).not.toContain('bg-brand')
+    expect(screen.getByRole('link', { name: 'Klappt es nicht? Häufige Ursachen' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/connect-other-clients#hermes',
+    )
+  })
+})
+
+describe('AgentConnectorSection — Auswahl (Client-Auswahl P-A)', () => {
+  it('zeigt fuenf Kacheln in fester Reihenfolge im Raster 2 × 3 / 3 × 2', async () => {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+
+    const group = screen.getByRole('group', { name: 'Wo nutzt du deine Agenten?' })
+    expect(within(group).getAllByRole('button').map((el) => el.textContent)).toEqual([
+      'Claude (Web, App, Handy)',
+      'Claude Code',
+      'Cursor oder VS Code',
+      'Hermes Agent',
+      'Etwas anderes',
+    ])
+    expect(group).toHaveClass('grid', 'grid-cols-2', 'md:grid-cols-3')
+    expect(group).not.toHaveClass('sm:flex')
+  })
+
+  it('Untertitel wechselt mit der Auswahl und beschreibt die Schritte', async () => {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+
+    const lead = screen.getByTestId('connect-lead')
+    expect(lead).toHaveTextContent('Web, App am Computer und am Handy.')
+    const steps = screen.getByRole('list')
+    expect(steps).toHaveAttribute('aria-describedby', lead.id)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude Code' }))
+    expect(screen.getByTestId('connect-lead')).toHaveTextContent('Im Terminal, mit einem Befehl.')
+  })
+
+  it.each([
+    ['Claude (Web, App, Handy)', /Mit Claude verbinden/, '/w/ws-1/help/connect-claude#troubleshooting'],
+    ['Claude Code', 'Befehl kopieren', '/w/ws-1/help/connect-other-clients#claude-code'],
+    ['Cursor oder VS Code', /Zu Cursor hinzufügen/, '/w/ws-1/help/connect-other-clients#cursor-vscode'],
+    ['Etwas anderes', 'Ich habe die Adresse eingetragen', '/w/ws-1/help/connect-other-clients#andere'],
+  ] as const)('Hilfe-Link beim Warten fuer %s', async (tile, action, href) => {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: tile }))
+    const target =
+      screen.queryByRole('link', { name: action }) ?? screen.getByRole('button', { name: action })
+    fireEvent.click(target)
+    const link = await screen.findByRole('link', { name: 'Klappt es nicht? Häufige Ursachen' })
+    expect(link).toHaveAttribute('href', href)
+  })
+
+  it('a11y: keine axe-Befunde bei Hermes', async () => {
+    stubUsage(null)
+    const { container } = renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: 'Hermes Agent' }))
+    expect(await axe(container)).toHaveNoViolations()
   })
 })
 
@@ -482,6 +583,13 @@ describe('installLinks', () => {
   it('Claude-Code-Befehl nutzt den HTTP-Transport ohne Token', () => {
     expect(claudeCodeCommand('who2be-carla', URL_)).toBe(
       `claude mcp add --transport http who2be-carla ${URL_}`,
+    )
+  })
+
+  it('Hermes-Befehl traegt Name, URL und die OAuth-Anmeldung, kein Token', () => {
+    // Ganzer Befehl verglichen: ohne `--auth oauth` meldet sich Hermes nicht an.
+    expect(hermesCommand('who2be-carla', URL_)).toBe(
+      `hermes mcp add who2be-carla --url ${URL_} --auth oauth`,
     )
   })
 

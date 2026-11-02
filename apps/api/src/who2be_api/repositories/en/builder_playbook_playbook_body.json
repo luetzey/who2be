@@ -11,12 +11,15 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "CRUD workflow for playbooks via the Who2Be MCP write tools. Covers atomic and composite playbooks. A playbook is created as a draft and only activated after review — the draft-to-active workflow stays server-side. A composite's sub-playbook sequence is set via ", "styles": {}},
-      {"type": "text", "text": "set_playbook_composes", "styles": {"code": true}},
-      {"type": "text", "text": "; references to knowledge resources via ", "styles": {}},
-      {"type": "text", "text": "set_playbook_resource_links", "styles": {"code": true}},
-      {"type": "text", "text": ".", "styles": {}}
+      {"type": "text", "text": "Create and maintain atomic and composite playbooks as drafts, including the sub-playbook sequence and resource references.", "styles": {}}
     ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before Phase 2 (Proposal), in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-trigger\", \"res-conv-h-naming\", \"res-conv-h-laengen-budgets\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -165,7 +168,7 @@
     "id": "pb-playbook-create-p2-atomic",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Atomic: Draft the body as Markdown (headings ##/###, lists, code fences; placeholders as {{kind:target_id}}) — clear phases or numbered steps, plus the Tools & Operations, Anti-Patterns, and Notes sections. Those sub-headings are also the cut lines of passage search (search_content): one section = one thought, and the heading names the subject.", "styles": {}}],
+    "content": [{"type": "text", "text": "Atomic: Draft the body as Markdown (headings ##/###, lists, code fences; placeholders as {{kind:target_id}}) — clear phases or numbered steps, plus anti-patterns from documented mistakes and, only if there are any, a Pitfalls section (non-obvious tool pitfalls such as replace semantics, 409, permission boundaries). No purpose paragraph that repeats the catalog line, no tool list — tools/list describes the tools. Those sub-headings are also the cut lines of passage search (search_content): one section = one thought, and the heading names the subject.", "styles": {}}],
     "children": []
   },
   {
@@ -279,9 +282,7 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Understand: Load the playbook with ", "styles": {}},
-      {"type": "text", "text": "fetch_playbook", "styles": {"code": true}},
-      {"type": "text", "text": ", clarify the scope of the change — a body section (Procedure / Tools & Operations / Anti-Patterns / Notes) or a field (triggers, tags, description, type).", "styles": {}}
+      {"type": "text", "text": "Understand: Load the playbook with fetch_playbook, clarify the scope of the change — a body section (Procedure / Pitfalls / Anti-Patterns / Notes) or a field (triggers, tags, description, type).", "styles": {}}
     ],
     "children": []
   },
@@ -366,35 +367,21 @@
     "id": "pb-playbook-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-playbook-tools-read",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Read: fetch_playbook (body + fields), list_playbooks (catalog, tags), list_triggers (check trigger collisions), search (find elements before creating new), search_content (the matching passage instead of the full text), find_usages (where a playbook is already deployed).", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-playbook-tools-write",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Write: create_playbook (draft v1), update_playbook (new draft), transition_playbook (switch status), restore_playbook (old version as draft).", "styles": {}}],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-playbook-tools-link",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Linking: set_playbook_composes (a composite's sub-playbook sequence, replace semantics), set_playbook_resource_links (resource references, replace semantics).", "styles": {}}],
+    "content": [{"type": "text", "text": "set_playbook_composes and set_playbook_resource_links have replace semantics: read the current state first, then set the complete list.", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-playbook-tools-forbidden",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Forbidden: no hard delete via MCP; never set composes on draft or inactive playbooks; no composite with only one sub-playbook (premature composite); don't edit personas or resources within this playbook — dedicated playbooks exist for that.", "styles": {}}],
+    "content": [{"type": "text", "text": "Never set composes on draft or inactive playbooks; no composite with only one sub-playbook (premature composite); no hard delete via MCP. Don't edit personas or resources through this playbook.", "styles": {}}],
     "children": []
   },
   {
@@ -458,34 +445,6 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Composite convention: The order in set_playbook_composes is the execution-relevant source of truth. When a composite is rendered, the numbered sub-playbook sequence is automatically appended to the body; inactive or missing children are skipped.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-playbook-notes-draft",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "The draft-to-active workflow stays server-side: MCP write tools only create drafts; publishing always runs through transition_playbook. There is deliberately no hard delete via MCP.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-playbook-notes-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the modes rule, policy patterns, findability/retrieval, and managed boundaries are binding in the 'Agent-Building Conventions' resource — look them up there instead of duplicating rules here. It is linked as a lazy pointer and does NOT come along automatically: load it via fetch_resource before Phase 2 (Proposal); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-h",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-p",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "If you notice something outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report used playbooks/resources via record_usage (applied/skipped/error). This is how the AgentDB becomes self-improving.", "styles": {}}],
     "children": []
   }
 ]

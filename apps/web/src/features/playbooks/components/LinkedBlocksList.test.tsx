@@ -43,7 +43,7 @@ describe('LinkedBlocksList', () => {
     )
 
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
-    expect(screen.getByText('Nur in Draft')).toBeInTheDocument()
+    expect(screen.getByText('Nur im Entwurf')).toBeInTheDocument()
     expect(screen.getByText('Block gelöscht')).toBeInTheDocument()
     expect(screen.getByText('Aktive Section.')).toBeInTheDocument()
     expect(screen.getByText('Draft-Section.')).toBeInTheDocument()

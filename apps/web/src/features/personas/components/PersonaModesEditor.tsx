@@ -15,6 +15,8 @@ import type { Playbook, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import type { PersonaEditorValues } from '@/features/personas/hooks/usePersonaForm'
 import { ResourceEditor } from '@/components/editor/ResourceEditor'
+import { BudgetNote } from '@/components/editor/EditorFooter'
+import { countWords } from '@/components/editor/estimate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -228,7 +230,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
         />
       ))}
 
-      <div className="flex justify-start">
+      <div className="flex flex-wrap items-center justify-start gap-x-3 gap-y-2">
         <Button
           type="button"
           variant="outline"
@@ -242,6 +244,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
           <Plus className="size-4" />
           {t('modes.add')}
         </Button>
+        <BudgetNote element="mode_count" value={fields.length} className="text-xs text-muted-foreground" />
       </div>
     </div>
   )
@@ -388,6 +391,22 @@ function PersonaModeCard({
         instanceKey={instanceKey}
         disabled={disabled}
       />
+      <ModeWordsNote control={control} index={index} />
     </div>
   )
+}
+
+// Richtwert je Modus (ADR-0063, Builder schlank B5): die drei Textfelder
+// zählen zusammen, wie in der Schreibantwort der API.
+function ModeWordsNote({ control, index }: { control: Control<PersonaEditorValues>; index: number }) {
+  const [identity, style, anti] = useWatch({
+    control,
+    name: [
+      `modes.${index}.identity_add`,
+      `modes.${index}.output_style_override`,
+      `modes.${index}.anti_patterns`,
+    ],
+  })
+  const words = countWords(identity) + countWords(style) + countWords(anti)
+  return <BudgetNote element="mode" value={words} className="text-xs text-muted-foreground" />
 }

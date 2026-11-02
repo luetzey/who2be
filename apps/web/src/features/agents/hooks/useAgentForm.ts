@@ -160,7 +160,9 @@ export interface UseAgentFormResult {
 
 export function useAgentForm(
   agent: Agent | null,
-  onSaved: () => void,
+  // Bekommt den gespeicherten Stand aus der PUT-Antwort (u. a. `activatable`),
+  // damit der Aufrufer ohne zweiten Request entscheiden kann, was folgt.
+  onSaved: (saved: Agent) => void,
 ): UseAgentFormResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -223,7 +225,7 @@ export function useAgentForm(
     setSaveError(null)
     try {
       // Leere Auswahl ⇒ Feld weglassen (Backend nutzt COALESCE: unveraendert).
-      await api.updateAgent(agent.id, {
+      const saved = await api.updateAgent(agent.id, {
         name: values.name,
         description: values.description,
         persona_id: values.persona_id || undefined,
@@ -239,7 +241,7 @@ export function useAgentForm(
         model_name: values.model_name.trim(),
       })
       notify.success(i18n.t('agents:toast.saved'))
-      onSaved()
+      onSaved(saved)
     } catch (cause) {
       setSaveError(describeError(cause))
     }

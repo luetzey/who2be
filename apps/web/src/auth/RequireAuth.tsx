@@ -21,8 +21,9 @@ export function RequireAuth() {
 
   if (session === null) {
     // Ziel-URL als `next` mitgeben, damit der Login danach hierher
-    // zurueckfuehrt statt auf das Default-Dashboard.
-    const next = `${location.pathname}${location.search}`
+    // zurueckfuehrt statt auf das Default-Dashboard. Der Anker gehoert dazu
+    // (`/help/connect-claude#schritte`), sonst landet der Sprung oben.
+    const next = `${location.pathname}${location.search}${location.hash}`
     const to = next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`
     return <Navigate to={to} replace />
   }

@@ -202,7 +202,7 @@ describe('TutorialChecklist', () => {
     const next = within(card).getByRole('button', { name: 'Verbinden (als Nächstes)' })
     expect(next).toHaveAttribute('aria-expanded', 'true')
     expect(within(card).getByText('Verbinde den Agenten.')).toBeVisible()
-    expect(within(card).getByRole('link', { name: 'Zu den Agents' })).toHaveAttribute(
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
       'href',
       '/w/ws-1/agents',
     )
@@ -229,10 +229,10 @@ describe('TutorialChecklist', () => {
       'href',
       '/w/ws-1/agents/builder%201#connect',
     )
-    expect(within(card).queryByRole('link', { name: 'Zu den Agents' })).not.toBeInTheDocument()
+    expect(within(card).queryByRole('link', { name: 'Zu den Agenten' })).not.toBeInTheDocument()
     // Andere automatische Schritte bleiben bei der Agentenliste.
     fireEvent.click(within(card).getByRole('button', { name: 'Agent anlegen' }))
-    expect(within(card).getByRole('link', { name: 'Zu den Agents' })).toHaveAttribute(
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
       'href',
       '/w/ws-1/agents',
     )
@@ -243,7 +243,7 @@ describe('TutorialChecklist', () => {
     renderChecklist()
     const card = await screen.findByRole('region', { name: 'Probe-Liste de' })
     await waitFor(() => expect(calls.some((c) => /\/agents$/.test(c.url))).toBe(true))
-    expect(within(card).getByRole('link', { name: 'Zu den Agents' })).toHaveAttribute(
+    expect(within(card).getByRole('link', { name: 'Zu den Agenten' })).toHaveAttribute(
       'href',
       '/w/ws-1/agents',
     )

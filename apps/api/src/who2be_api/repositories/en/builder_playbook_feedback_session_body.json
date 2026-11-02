@@ -10,7 +10,7 @@
     "id": "fg-p01",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "The Builder moderates a feedback conversation about an agent (ADR-0053, 3.5, 3.6, 6.6). The conversation takes place in the client. Who2Be supplies the preparation (dossier) and stores the result (record, measures). The human decides, the affected agent gives its account, the Builder moderates, assigns, creates test cases and drafts, and submits the record (switch E4 a). It never decides and never closes cases.", "styles": {}}],
+    "content": [{"type": "text", "text": "The Builder moderates a feedback conversation about an agent (ADR-0053, 3.5, 3.6, 6.6): Who2Be supplies the dossier and stores the record and measures, the human decides, the Builder never decides and never closes cases.", "styles": {}}],
     "children": []
   },
   {
@@ -18,6 +18,13 @@
     "type": "paragraph",
     "props": {},
     "content": [{"type": "text", "text": "Terms: the web UI says “review” for the conversation, “review record” for the record, “case” for a case, “change” for a measure and “follow-up check” for the follow-up. In the tools they are called session, case, measure and follow_up.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "fg-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Load only the sections of the 'Agent-Building Conventions' resource this playbook needs — before the first write step, in one call: fetch_resource(resource_id, block_ids=[\"res-conv-h-status\", \"res-conv-h-managed\"]). A heading anchor returns its whole section; the resource_id is in this playbook's links (linked_blocks). Load other sections only when needed (anchors via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -402,21 +409,14 @@
     "id": "fg-h-werkzeuge",
     "type": "heading",
     "props": {"level": 2},
-    "content": [{"type": "text", "text": "Tools", "styles": {}}],
+    "content": [{"type": "text", "text": "Pitfalls", "styles": {}}],
     "children": []
   },
   {
     "id": "fg-p43",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Read: get_dossier, get_case, list_cases (status as a list, cursor/next_cursor), list_patterns, list_test_cases, list_agents, get_agent, get_persona, fetch_playbook, fetch_resource, get_system_prompt, list_versions, find_usages, get_follow_up, whoami. All case and conversation tools require case_triage.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "fg-p44",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Write (subject to approval): assign_case_elements, triage_case, create_test_case, submit_session_protocol, update_* and transition_* up to review, link_measure_draft, submit_feedback, record_usage.", "styles": {}}],
+    "content": [{"type": "text", "text": "All case and conversation tools require case_triage. list_cases takes status as a list and pages via cursor/next_cursor. update_* and transition_* only up to review, writing subject to approval.", "styles": {}}],
     "children": []
   },
   {
@@ -493,14 +493,7 @@
     "id": "fg-p53",
     "type": "paragraph",
     "props": {},
-    "content": [{"type": "text", "text": "Basis: ADR-0053 3.3 (case, status, permissions), 3.5 (conversation record), 3.6 (measure, test case mandatory), 6.6 (tools, no MCP tool for rating), switches E1 a, E2 a, E4 a, F3 a; owner switch W-E2 a (in_progress automatically with the record). Conventions for triggers, managed boundaries and the status workflow are in the resource Agent-Building Conventions.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "fg-p54",
-    "type": "paragraph",
-    "props": {},
-    "content": [{"type": "text", "text": "Follow-through: report the playbooks and resources used with record_usage; if something on this playbook looks outdated, submit_feedback with signal outdated.", "styles": {}}],
+    "content": [{"type": "text", "text": "Basis: ADR-0053 3.3 (case, status, permissions), 3.5 (conversation record), 3.6 (measure, test case mandatory), 6.6 (tools, no MCP tool for rating), switches E1 a, E2 a, E4 a, F3 a; owner switch W-E2 a (in_progress automatically with the record).", "styles": {}}],
     "children": []
   }
 ]

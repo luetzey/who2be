@@ -3,7 +3,7 @@ title: Persona
 description: Who your agent is, how it sounds and where its limits are.
 section: bausteine
 order: 10
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
@@ -27,6 +27,23 @@ A mode is a situational variant of the persona, such as "coaching" and "analysis
 - **Playbook (optional):** a procedure that belongs to this mode.
 
 If no trigger matches, the agent works in the default mode.
+
+## How long can a persona be? [#laenge]
+
+The agent loads the whole persona in every chat. The longer it is, the more room it takes and the less reliably the agent follows any single rule. That is why there are guide values:
+
+- **Profile:** guide value 400 words, note from 600.
+- **One mode** (all three fields together): guide value 150 words, note from 250.
+- **Number of modes:** guide value 3, note from 5.
+- **Playbook content:** guide value 1,000 words, note from 1,500.
+
+Below the editor you see where you stand, for example "412 words · guide value 400". From the note threshold on it says "over the guide value" with a suggestion. This is not a limit: Who2Be saves anyway. Code blocks don't count, an inserted reference counts as one word.
+
+If it gets too long, one of these usually helps:
+
+- **Procedures** ("first …, then …") belong in a [playbook](/help/playbooks). The profile keeps a reference to it.
+- **Reference knowledge** such as tables, lists and templates belongs in a [resource](/help/resources).
+- **Modes** that barely differ can be merged.
 
 ## Versions and activation [#versionen]
 

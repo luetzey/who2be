@@ -1049,6 +1049,29 @@ export interface Api {
   // ADR-0061 R1: Rechnungsdaten der Organisation (admin, cloud-only).
   getBillingProfile: () => Promise<BillingProfileResponse>
   saveBillingProfile: (input: BillingProfileInput) => Promise<BillingProfileResponse>
+  // ADR-0061 R3: ausgestellte Rechnungen der Organisation + PDF aus dem Archiv.
+  listInvoices: () => Promise<InvoiceListResponse>
+  downloadInvoicePdf: (invoiceId: string) => Promise<Blob>
+}
+
+// --- Rechnungen (ADR-0061 §7, Paket R3) -------------------------------------
+// Spiegel von `who2be_billing.router.InvoiceListItem`. `status` ist die eine
+// Quelle fuer die Anzeige: `archived` = PDF abrufbar, `issued` = PDF folgt.
+
+export type InvoiceStatus = 'issued' | 'archived'
+
+export interface InvoiceListItem {
+  id: string
+  invoice_number: string
+  issued_at: string
+  /** Dezimal als String (z. B. `"11.89"`), `null` wenn unbekannt. */
+  amount_value: string | null
+  currency: string
+  status: InvoiceStatus
+}
+
+export interface InvoiceListResponse {
+  invoices: InvoiceListItem[]
 }
 
 // --- Rechnungsdaten (ADR-0061 §10, Paket R1) -------------------------------
@@ -1819,5 +1842,8 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
+    listInvoices: () => request<InvoiceListResponse>(token, apiPath`${ws}/billing/invoices`),
+    downloadInvoicePdf: (invoiceId) =>
+      requestBlob(token, apiPath`${ws}/billing/invoices/${invoiceId}/pdf`),
   }
 }

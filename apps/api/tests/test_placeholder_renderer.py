@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -20,6 +21,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from who2be_api.repositories.tool_profile_repository import grant_from_row
 from who2be_api.services.placeholders.registry import (
     REGISTRY,
     DateResolver,
@@ -80,6 +82,11 @@ def _make_db(fetchrow_return: Any = None, fetch_return: Any = None) -> MagicMock
 
 def _async_run(coro: Any) -> Any:
     return asyncio.run(coro)
+
+
+def _mentions(text: str, tool_name: str) -> bool:
+    """Steht `tool_name` als ganzes Wort in `text` (nicht als Teil von `search_kb`)?"""
+    return re.search(rf"(?<![\w]){re.escape(tool_name)}(?![\w])", text) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -1437,6 +1444,179 @@ class TestToolsOverviewResolver:
                 assert name not in text, (
                     f"{label}: '{name}' steht im Prompt, wird aber aus tools/list gefiltert"
                 )
+
+        # Werkzeug-Profil (ADR-0059 §3.2, Q4): dieselbe Pruefung mit Profil.
+        # Massstab ist die Formel aus `who2be_models.tool_profiles`, die auch die
+        # `PolicyFilterMiddleware` anwendet. Wortgrenze statt Teilstring, weil
+        # ein Profil `search` verbergen und `search_content` zeigen kann.
+        from who2be_api.services.placeholders.resolvers.tools import _TOOLS
+        from who2be_models.tool_profiles import is_tool_visible_with_profile
+
+        curated = {
+            name for tool in _TOOLS for name in tool.tool_names if _mentions(tool.signature, name)
+        }
+        for label, policy, row in self._profile_cases():
+            ctx = self._agent_ctx(policy)
+            db = _make_db(fetchrow_return=row)
+            text = _async_run(ToolsOverviewResolver().resolve("", ctx, db)).text
+            sql, ws, agent = db.fetchrow.await_args.args
+            assert "tool_profile" in sql
+            assert (ws, agent) == (ctx.workspace_id, ctx.agent_id)
+            grant = grant_from_row(row)
+            for name in MCP_TOOL_REQUIREMENTS:
+                shown = is_tool_visible_with_profile(name, policy, grant) is True
+                if shown and name not in curated:
+                    continue
+                assert _mentions(text, name) is shown, (
+                    f"{label}: '{name}' ist {'sichtbar' if shown else 'verborgen'}, "
+                    f"der Prompt {'nennt es nicht' if shown else 'nennt es'}"
+                )
+
+    @staticmethod
+    def _full_rights() -> Any:
+        from who2be_models import AgentCapability, AgentToolPolicy, MemoryMode, ReadScope
+
+        return AgentToolPolicy.model_validate(
+            {
+                **{cap.value: True for cap in AgentCapability},
+                "playbook_read": ReadScope.all,
+                "resource_read": ReadScope.all,
+                "agent_read": ReadScope.all,
+                "memory_mode": MemoryMode.suggest,
+            }
+        )
+
+    @staticmethod
+    def _agent_ctx(policy: Any) -> RenderContext:
+        return RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=policy,
+            agent_id=UUID("00000000-0000-0000-0000-0000000000a1"),
+        )
+
+    @staticmethod
+    def _grant_row(
+        *,
+        profile: bool = True,
+        groups: tuple[str, ...] = (),
+        tools: tuple[str, ...] = (),
+        added: tuple[str, ...] = (),
+        removed: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        """Zeile in der Form von `fetch_agent_grant` (Agent-Spalten + Profil)."""
+        return {
+            "tool_profile_id": uuid4() if profile else None,
+            "tools_added": list(added),
+            "tools_removed": list(removed),
+            "name": "Test" if profile else None,
+            "groups": list(groups),
+            "tools": list(tools),
+        }
+
+    def _profile_cases(self) -> list[tuple[str, Any, dict[str, Any]]]:
+        from who2be_models import AgentToolPolicy
+        from who2be_models.tool_profiles import BUILTIN_PROFILES, BuiltinProfileKey
+
+        full = self._full_rights()
+        cases: list[tuple[str, Any, dict[str, Any]]] = [
+            (
+                f"Profil {key.value}, alle Rechte",
+                full,
+                self._grant_row(groups=tuple(g.value for g in profile.groups)),
+            )
+            for key, profile in BUILTIN_PROFILES.items()
+        ]
+        builder_groups = tuple(g.value for g in BUILTIN_PROFILES[BuiltinProfileKey.builder].groups)
+        cases += [
+            (
+                "Profil builder, Default-Rechte (Rechte gehen vor)",
+                AgentToolPolicy(),
+                self._grant_row(groups=builder_groups),
+            ),
+            (
+                "Alle ausser Einzelnen (Kreuzverweise in Beschreibungen und Hinweisen)",
+                full,
+                self._grant_row(
+                    profile=False,
+                    removed=("search", "fetch_playbook", "timeline", "save_memory", "ingest"),
+                ),
+            ),
+            (
+                "Einzelne Werkzeuge teilen Eintraege",
+                full,
+                self._grant_row(
+                    groups=("read",),
+                    tools=("update_persona", "list_tables", "transition_playbook"),
+                    added=("search_memory", "get_case"),
+                    removed=("get_agent",),
+                ),
+            ),
+        ]
+        return cases
+
+    def test_profil_lesen_zeigt_keine_schreibwerkzeuge_trotz_rechten(self) -> None:
+        """Profil „Lesen“ bei vollen Rechten: keine Inhalts-, Agent- oder WorkArea-Schreiber."""
+        from who2be_models.tool_profiles import BUILTIN_PROFILES, BuiltinProfileKey
+
+        groups = tuple(g.value for g in BUILTIN_PROFILES[BuiltinProfileKey.read].groups)
+        db = _make_db(fetchrow_return=self._grant_row(groups=groups))
+        text = _async_run(
+            ToolsOverviewResolver().resolve("", self._agent_ctx(self._full_rights()), db)
+        ).text
+        assert "create_playbook" not in text
+        assert "create_agent" not in text
+        assert "create_artifact" not in text
+        assert "search_workarea(query, area_id?)" in text
+        assert "record_usage(...)" in text
+
+    def test_teilweise_sichtbarer_eintrag_zeigt_nur_sichtbare_signaturen(self) -> None:
+        """Ein einzeln gewaehltes Werkzeug kuerzt die Signatur seines Eintrags."""
+        db = _make_db(
+            fetchrow_return=self._grant_row(tools=("update_persona", "transition_playbook"))
+        )
+        text = _async_run(
+            ToolsOverviewResolver().resolve("", self._agent_ctx(self._full_rights()), db)
+        ).text
+        assert "- **update_persona(...)** — Personas anlegen" in text
+        assert "- **transition_playbook(…)**" in text
+        assert "transition_persona" not in text
+        assert "create_persona" not in text
+
+    def test_profil_ohne_schreibwerkzeuge_ohne_schreibhinweis(self) -> None:
+        """Rechte fuer alles, Profil nur `read`: der Schreib-Hinweis entfaellt."""
+        db = _make_db(fetchrow_return=self._grant_row(groups=("read",)))
+        text = _async_run(
+            ToolsOverviewResolver().resolve("", self._agent_ctx(self._full_rights()), db)
+        ).text
+        assert "list_playbooks(tag?, trigger?)" in text
+        assert "Schreibzugriff" not in text
+
+    def test_verborgenes_werkzeug_streicht_nur_texte_die_es_als_wort_nennen(self) -> None:
+        """`search` verborgen: Texte mit `search_workarea`/`search_memory` bleiben."""
+        db = _make_db(fetchrow_return=self._grant_row(profile=False, removed=("search",)))
+        text = _async_run(
+            ToolsOverviewResolver().resolve("", self._agent_ctx(self._full_rights()), db)
+        ).text
+        assert "search(query, types?, limit?)" not in text
+        assert "Einstieg IMMER search_workarea" in text
+        assert "Langzeit-Gedaechtnis" in text
+        assert "**Invocation-Wege:**" in text
+        # Die Beschreibung von search_content nennt `search` nicht, bleibt also.
+        assert "Liefert die passende STELLE" in text
+
+    def test_ohne_profil_bleibt_der_block_unveraendert(self) -> None:
+        """Agent auf „Alle“ (keine Zeile mit Profil): Text wie ohne Profil-Abfrage."""
+        policy = self._full_rights()
+        with_agent = _async_run(
+            ToolsOverviewResolver().resolve("", self._agent_ctx(policy), _make_db())
+        ).text
+        no_agent = self._agent_ctx(policy).model_copy(update={"agent_id": None})
+        db = _make_db()
+        without = _async_run(ToolsOverviewResolver().resolve("", no_agent, db)).text
+        assert with_agent == without
+        db.fetchrow.assert_not_awaited()
 
     def test_agent_read_tools_listed_in_overview(self) -> None:
         """list_agents/get_agent stehen in der Werkzeug-Uebersicht (nicht nur fetch_agent)."""

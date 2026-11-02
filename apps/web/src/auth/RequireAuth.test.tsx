@@ -55,6 +55,14 @@ describe('RequireAuth', () => {
     )
   })
 
+  it('behaelt den Anker der Ziel-URL in next (UX-Audit K5)', () => {
+    renderAt('/help/tutorials/getting-started?x=1#verbinden', { session: null })
+
+    expect(screen.getByTestId('login').textContent).toBe(
+      `/login?next=${encodeURIComponent('/help/tutorials/getting-started?x=1#verbinden')}`,
+    )
+  })
+
   it('redirected von der Root ohne next-Parameter', () => {
     renderAt('/', { session: null })
 

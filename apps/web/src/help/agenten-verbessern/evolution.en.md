@@ -3,11 +3,17 @@ title: Evolve your agents
 description: Four steps from a case to a better version.
 section: agenten-verbessern
 order: 30
-updated: 2026-10-22
+updated: 2026-10-23
 audience: all
 ---
 
 Your agent gets better when you say what is off and check whether the change works. On your agent's page the **Evolution** tab shows the four steps and what is waiting for you.
+
+## Who does what [#rollen]
+
+- **You decide.** You settle which change happens, whether a draft goes active and whether it worked.
+- **The agent gives its account.** The agent concerned describes from its point of view what happened. It does not grade itself.
+- **The Builder moderates.** It guides you through the review, assigns cases and creates drafts. It decides nothing and does not close cases.
 
 ## ① Collect [#sammeln]
 
@@ -22,8 +28,21 @@ Click **Prepare a review**:
 1. Choose the cases. One to three are ideal, more make the review long.
 2. Who2Be puts together the situation: open cases, uses and signals per version.
 3. Click **Start in your client** and hold the review in Claude with the Builder.
+4. Get the agent's account if it is still missing. How that works is explained right below.
 
 The Builder suggests changes. You decide. Agreed changes then show up in the next step.
+
+### The agent's account [#sicht-des-agenten]
+
+For each case the agent concerned gives its account: which instruction it followed, what it was missing and where instructions contradicted each other. The account describes, it does not judge. Only the agent itself can give it. The Builder must not do this on its behalf.
+
+If the account is missing, the Builder tells you during the review. If the agent runs in another program, for example Claude Desktop or Hermes, do this:
+
+1. Open the case and copy its ID from the **⋯** menu with **Copy ID**.
+2. Ask the agent in its own chat to give its account of the case with this ID.
+3. If that does not work, have it describe its view in the chat and paste the wording into the review with the Builder.
+
+The account then shows on the case under **The agent's account**.
 
 ## ③ Implement [#umsetzen]
 

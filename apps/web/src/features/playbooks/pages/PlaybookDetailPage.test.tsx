@@ -532,7 +532,7 @@ describe('PlaybookDetailPage — Lade-/Fehler-Zustaende', () => {
 })
 
 describe('PlaybookDetailPage — Status-Transitions', () => {
-  it('Draft: "Entwurf abschließen" reicht die Version zur Review ein', async () => {
+  it('Draft: "Zur Freigabe einreichen" reicht die Version zur Review ein', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers()
     renderPlaybookDetail((path, method, init) => {
@@ -545,13 +545,13 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
 
     // Review-Banner zeigt den offenen Entwurf als Branch-Knoten.
     expect(await screen.findByTestId('review-banner')).toBeInTheDocument()
-    expect(screen.getByText('Entwurf: v1')).toBeInTheDocument()
+    expect(screen.getByText('Entwurf v1 in Arbeit')).toBeInTheDocument()
     // E2E-Selektor-Fix (Issue #391): die zentrale StatusActionBar traegt das
     // Testid-Schema aus components/data/BranchStatus.tsx, an das
     // e2e/journeys.spec.ts bindet.
     expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Entwurf abschließen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Freigabe einreichen' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Zur Freigabe eingereicht.')
@@ -573,7 +573,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       { me: meWithRole('admin') },
     )
 
-    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Aktivieren' })
     expect(publish).toBeEnabled()
     expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
@@ -585,7 +585,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"active"')
   })
 
-  it('Review (kein Admin): Publish ist gesperrt, "Zurück zu Draft" lehnt ab', async () => {
+  it('Review (kein Admin): Publish ist gesperrt, "Zurück in den Entwurf" lehnt ab', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers({ versions: [pbVersion(1, 'review')] })
     renderPlaybookDetail((path, method, init) => {
@@ -596,11 +596,11 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       return base(path, method, init)
     })
 
-    const publish = await screen.findByRole('button', { name: 'Veröffentlichen' })
+    const publish = await screen.findByRole('button', { name: 'Aktivieren' })
     expect(publish).toBeDisabled()
     expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zurück zu Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück in den Entwurf' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Freigabe abgelehnt.')
@@ -608,7 +608,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(transitionBodies[0]).toContain('"to":"draft"')
   })
 
-  it('Inactive: "Reaktivieren als Draft" reaktiviert die aktuelle Version', async () => {
+  it('Inactive: "Als Entwurf reaktivieren" reaktiviert die aktuelle Version', async () => {
     const transitionBodies: string[] = []
     const base = playbookHandlers({
       playbook: playbookWith({ current_status: 'inactive' }),
@@ -624,7 +624,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
 
     expect(await screen.findByText('Inaktiv: v1')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
@@ -642,7 +642,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     })
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Entwurf abschließen' }),
+      await screen.findByRole('button', { name: 'Zur Freigabe einreichen' }),
     )
 
     await waitFor(() => {
@@ -660,9 +660,9 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     )
 
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
-    expect(screen.getByText('Entwurf: v2')).toBeInTheDocument()
+    expect(screen.getByText('Entwurf v2 in Arbeit')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Entwurf abschließen' }),
+      screen.getByRole('button', { name: 'Zur Freigabe einreichen' }),
     ).toBeInTheDocument()
   })
 
@@ -675,9 +675,9 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     )
 
     expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
-    expect(screen.getByText('v2 wartet auf Freigabe')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Veröffentlichen' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeInTheDocument()
+    expect(screen.getByText('v2 wartet auf Freigabe durch einen Admin')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zurück in den Entwurf' })).toBeInTheDocument()
   })
 
   it('nur Active (ohne Draft/Review): Hero-Chip statt Banner, keine Branch-Aktionen', async () => {

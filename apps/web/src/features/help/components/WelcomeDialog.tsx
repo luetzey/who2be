@@ -1,5 +1,5 @@
-import { Copy, ExternalLink } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { ExternalLink } from 'lucide-react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
@@ -10,6 +10,7 @@ import { useSession } from '@/auth/session-context'
 import { useAuthToken } from '@/auth/useAuthToken'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CONNECT_ACTION, ConnectGuide, WaitingBlock } from '@/components/connect/ConnectGuide'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,19 +18,16 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { config } from '@/config'
 import { useCookieConsent } from '@/features/legal/layout'
 import { findTutorial, helpIndex, toHelpLocale } from '@/help/helpIndex'
 import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import {
+  CONNECT_CLIENTS,
   agentConnectorUrl,
-  claudeCodeCommand,
   claudeInstallLink,
-  cursorInstallLink,
   serverSlug,
-  vscodeInstallLink,
   type ConnectClient,
 } from '@/lib/installLinks'
 import { cn } from '@/lib/utils'
@@ -68,8 +66,13 @@ interface Waiting {
   expired: boolean
 }
 
-const ACTION = 'min-h-11 w-full sm:w-auto md:min-h-10'
 const LINK = 'underline underline-offset-4 hover:text-foreground'
+const ACTION = CONNECT_ACTION
+// Chips „Ich nutze“: alle Programme ausser Claude, das der Hauptknopf traegt
+// (Client-Auswahl-Spec §3). Reihenfolge aus `CONNECT_CLIENTS`.
+const ALT_CLIENTS = CONNECT_CLIENTS.filter((entry) => entry !== 'claude')
+// Programme mit eigenem Namen in der Erfolgs-Szene; sonst „Claude & Co.“.
+const NAMED_CLIENTS: ReadonlySet<ConnectClient> = new Set(['claude', 'code', 'hermes'])
 
 function useBuilder(enabled: boolean): Builder {
   const api = useApi()
@@ -271,7 +274,7 @@ export function WelcomeDialog({ open, tutorialId, onClose }: WelcomeDialogProps)
         </div>
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('welcome.altGroup')}>
           <span className="mr-1 text-sm text-muted-foreground">{t('welcome.altLabel')}</span>
-          {(['code', 'editor', 'other'] as const).map((entry) => (
+          {ALT_CLIENTS.map((entry) => (
             <Button
               key={entry}
               type="button"
@@ -326,7 +329,9 @@ export function WelcomeDialog({ open, tutorialId, onClose }: WelcomeDialogProps)
           <ConnectGuide
             client={client}
             agentName={agentName}
-            connector={connector}
+            connectorName={connector.name}
+            connectorUrl={connector.url}
+            slug={connector.slug}
             waiting={waiting !== null}
             onStart={startWaiting}
             onCopy={copy}
@@ -338,6 +343,7 @@ export function WelcomeDialog({ open, tutorialId, onClose }: WelcomeDialogProps)
             clientName={clientName}
             confirmVisible={waiting.confirmVisible || waiting.expired}
             expired={waiting.expired}
+            testId="welcome-waiting"
             onConfirm={onClose}
             onCheckAgain={() => {
               startWaiting()
@@ -354,7 +360,7 @@ export function WelcomeDialog({ open, tutorialId, onClose }: WelcomeDialogProps)
         <SuccessScene
           agentName={agentName}
           clientName={
-            client === 'claude' || client === 'code'
+            NAMED_CLIENTS.has(client)
               ? ta(`connect.clientName.${client}`)
               : t('welcome.scene.client')
           }
@@ -448,263 +454,6 @@ function BuilderMissing() {
         {t('checklist.openAgents')}
       </Link>
     </p>
-  )
-}
-
-// -------------------------------------------------------------- Anleitung
-
-interface ConnectGuideProps {
-  client: ConnectClient
-  agentName: string
-  connector: { url: string; name: string; slug: string }
-  waiting: boolean
-  onStart: () => void
-  onCopy: (value: string, after?: () => void) => void
-}
-
-/**
- * Kurzfassung des Verbinden-Bausteins (Spec §5.1) fuer den Dialog: dieselben
- * Links und Texte, ohne Status-Kapsel. Der Rueckfall „Von Hand eintragen“
- * bleibt, weil der Knopf auf dem iPhone manchmal nicht greift.
- */
-function ConnectGuide({ client, agentName, connector, waiting, onStart, onCopy }: ConnectGuideProps) {
-  const { t } = useTranslation('agents')
-  const sentence = (
-    <CopyField
-      label={t('connect.testLabel')}
-      value={t('connect.testSentence')}
-      copyLabel={t('connect.copySentence')}
-      onCopy={onCopy}
-      dashed
-    />
-  )
-  const manual = (path: string, name: string) => (
-    <details className="min-w-0 rounded-md border px-3 py-2">
-      <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground md:min-h-9">
-        {t('connect.manual.summary')}
-      </summary>
-      <div className="flex flex-col gap-3 pt-2">
-        <CopyField label={t('connect.nameLabel')} value={name} copyLabel={t('connect.copyName')} onCopy={onCopy} />
-        <CopyField
-          label={t('connect.urlLabel')}
-          value={connector.url}
-          copyLabel={t('connect.copyUrl')}
-          onCopy={onCopy}
-          mono
-        />
-        <p className="text-xs break-words text-muted-foreground">{path}</p>
-      </div>
-    </details>
-  )
-
-  if (client === 'claude') {
-    return (
-      <div className="flex flex-col gap-4">
-        <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm break-words">
-          <li>{t('connect.steps.claude')}</li>
-          <li>{t('connect.steps.confirm', { client: 'Claude', agent: agentName })}</li>
-          <li className="space-y-2">
-            {t('connect.steps.test')}
-            {sentence}
-          </li>
-        </ol>
-        <div>
-          <Button asChild variant={waiting ? 'outline' : 'brand'} className={ACTION}>
-            <Link
-              to={claudeInstallLink(connector.name, connector.url)}
-              reloadDocument
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onStart}
-            >
-              <ExternalLink aria-hidden="true" />
-              {waiting ? t('connect.reopenClaude') : t('connect.cta.claude')}
-              <span className="sr-only"> {t('connect.newTab')}</span>
-            </Link>
-          </Button>
-        </div>
-        {manual(t('connect.manual.claudePath'), connector.name)}
-        <p className="text-xs break-words text-muted-foreground">{t('connect.teamPlan')}</p>
-      </div>
-    )
-  }
-
-  if (client === 'code') {
-    return (
-      <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm break-words">
-        <li className="space-y-2">
-          {t('connect.steps.code')}
-          <CopyField
-            label={t('connect.commandLabel')}
-            value={claudeCodeCommand(connector.slug, connector.url)}
-            copyLabel={t('connect.cta.code')}
-            onCopy={(value) => onCopy(value, onStart)}
-            primary={!waiting}
-          />
-        </li>
-        <li>{t('connect.steps.login', { agent: agentName })}</li>
-        <li className="space-y-2">
-          {t('connect.steps.test')}
-          {sentence}
-        </li>
-      </ol>
-    )
-  }
-
-  if (client === 'editor') {
-    return (
-      <div className="flex flex-col gap-4">
-        <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm break-words">
-          <li>{t('connect.steps.editor')}</li>
-          <li>{t('connect.steps.login', { agent: agentName })}</li>
-          <li className="space-y-2">
-            {t('connect.steps.test')}
-            {sentence}
-          </li>
-        </ol>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Button asChild variant={waiting ? 'outline' : 'brand'} className={ACTION}>
-            <Link to={cursorInstallLink(connector.slug, connector.url)} reloadDocument onClick={onStart}>
-              <ExternalLink aria-hidden="true" />
-              {t('connect.cta.cursor')}
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className={ACTION}>
-            <Link to={vscodeInstallLink(connector.slug, connector.url)} reloadDocument onClick={onStart}>
-              <ExternalLink aria-hidden="true" />
-              {t('connect.cta.vscode')}
-            </Link>
-          </Button>
-        </div>
-        {manual(t('connect.manual.editorPath'), connector.slug)}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3 text-sm break-words">
-      <p>{t('connect.steps.otherIntro')}</p>
-      <CopyField
-        label={t('connect.urlLabel')}
-        value={connector.url}
-        copyLabel={t('connect.copyUrl')}
-        onCopy={onCopy}
-        mono
-      />
-      <p>{t('connect.steps.otherTest')}</p>
-      {sentence}
-      {waiting ? null : (
-        <div>
-          <Button type="button" variant="outline" className={ACTION} onClick={onStart}>
-            {t('connect.cta.other')}
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CopyField({
-  label,
-  value,
-  copyLabel,
-  onCopy,
-  mono = false,
-  dashed = false,
-  primary = false,
-}: {
-  label: string
-  value: string
-  copyLabel: string
-  onCopy: (value: string) => void
-  mono?: boolean
-  dashed?: boolean
-  primary?: boolean
-}) {
-  const id = useId()
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      <div className="flex flex-col gap-2 md:flex-row md:items-center">
-        <output
-          id={id}
-          aria-live="off"
-          className={cn(
-            'flex min-h-10 min-w-0 flex-1 items-center rounded-md px-3 py-2 text-sm break-all',
-            dashed ? 'border border-dashed border-input' : 'border border-input bg-muted/50',
-            (mono || dashed) && 'font-mono',
-          )}
-        >
-          {value}
-        </output>
-        <Button
-          type="button"
-          size="sm"
-          variant={primary ? 'brand' : 'outline'}
-          className="min-h-11 w-full md:min-h-9 md:w-auto"
-          onClick={() => onCopy(value)}
-        >
-          <Copy aria-hidden="true" />
-          {copyLabel}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function WaitingBlock({
-  agentName,
-  clientName,
-  confirmVisible,
-  expired,
-  onConfirm,
-  onCheckAgain,
-}: {
-  agentName: string
-  clientName: string
-  confirmVisible: boolean
-  expired: boolean
-  onConfirm: () => void
-  onCheckAgain: () => void
-}) {
-  const { t } = useTranslation('agents')
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-md border border-dashed bg-muted/40 p-3"
-      data-testid="welcome-waiting"
-    >
-      <div className="flex items-start gap-3" role="status">
-        {/* Vier Pulse, dann ruhig: unter 5 s (WCAG 2.2.2); bei reduzierter
-            Bewegung greift das globale Netz und der Punkt steht still. */}
-        <span
-          className="mt-1.5 inline-block size-2.5 shrink-0 animate-[pulse_1s_ease-in-out_4] rounded-full bg-brand"
-          aria-hidden="true"
-        />
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-sm font-medium break-words">
-            {t('connect.waiting', { agent: agentName })}
-          </span>
-          <span className="text-xs break-words text-muted-foreground">
-            {expired ? t('connect.expired') : t('connect.waitingHint', { client: clientName })}
-          </span>
-        </div>
-      </div>
-      {confirmVisible ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <span className="text-sm">{t('connect.confirmQuestion')}</span>
-          <Button type="button" variant="outline" size="sm" className="min-h-11 md:min-h-9" onClick={onConfirm}>
-            {t('connect.confirmYes')}
-          </Button>
-          {expired ? (
-            <Button type="button" variant="ghost" size="sm" className="min-h-11 md:min-h-9" onClick={onCheckAgain}>
-              {t('connect.checkAgain')}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
   )
 }
 

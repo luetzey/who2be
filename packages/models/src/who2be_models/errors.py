@@ -85,6 +85,7 @@ ProblemReason = Literal[
     "invitation_email_mismatch",  # 403 — Einladung gehoert zu einer anderen Email-Adresse
     "invitation_email_required",  # 403 — Annahme nur mit Email im Login (Abgleich fail-closed)
     "invitation_email_unconfirmed",  # 403 — offene Einladungen erst mit bestaetigter Konto-Email
+    "invitation_already_pending",  # 409 — fuer die Adresse liegt schon eine offene Einladung vor
     "personal_organization_undeletable",  # 400 — Personal-Org nur ueber Konto-Loeschung
     "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
@@ -228,6 +229,17 @@ ProblemReason = Literal[
     "anchor_duplicate",  # 422 — dieselbe Block-ID zweimal (params: block_id[, field])
     # 409 — base_rev passt nicht zum Stand (params: current_version, current_base_rev)
     "version_conflict",
+    # Werkzeug-Profile pro Agent (ADR-0059 §7.1, Paket Q2b):
+    "tool_profile_not_found",  # 404 — Werkzeug-Profil unbekannt in diesem Workspace
+    "tool_profile_name_conflict",  # 409 — Profilname im Workspace vergeben (params: name)
+    "tool_profile_in_use",  # 409 — Profil noch Agenten zugeordnet (params: agent_count)
+    "tool_profile_builtin",  # 409 — mitgeliefertes Profil nicht loeschbar
+    "tool_profile_not_builtin",  # 409 — Lieferstand nur fuer mitgelieferte Profile
+    "unknown_tool",  # 422 — Werkzeugname ausserhalb des Katalogs (params: tools)
+    "unknown_tool_group",  # 422 — Gruppenname ausserhalb des Katalogs (params: groups)
+    "core_tool_not_removable",  # 422 — ping/whoami/report_problem gesperrt (params: tools)
+    # 403 — agent-gebundener Token an der Profil-Zuordnung; Gate-Grund (RFC 7807)
+    "human_only",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -11,7 +11,8 @@ Zeile fuer den Schreibenden. Missbrauchsschutz ist die bestehende
 Feldgrenze des Markdown-Wegs (200 000 Zeichen je Feld, `content_markdown`).
 
 Gezaehlt werden Woerter im Markdown-Text (Normalform nach ADR-0058) ohne
-Codebloecke und ohne Ueberschriften-Anker ` [#id]`. Ein Wort ist eine durch
+Codebloecke, ohne Ueberschriften-Anker ` [#id]` und ohne Schutz-Marker
+`<!-- w2b:... -->` (der zitierte Klartext darunter zaehlt). Ein Wort ist eine durch
 Leerraum getrennte Folge mit mindestens einem Buchstaben oder einer Ziffer;
 reine Markdown-Zeichen (`-`, `#`, `|`, `---`) zaehlen nicht.
 """
@@ -93,6 +94,10 @@ _FENCE_RE = re.compile(r"^[ ]{0,3}(`{3,}|~{3,})")
 _ANCHOR_ID = r"[A-Za-z0-9_.:-]+"
 _ANCHOR_RE = re.compile(r"[ \t]\[#" + _ANCHOR_ID + r"\][ \t]*$")
 _HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+(.*)$")
+#: Schutz-Marker eines gesperrten bzw. nicht abbildbaren Blocks (ADR-0058 3.3),
+#: allein auf einer Zeile. Er ist kein Inhalt und zaehlt nicht; der zitierte
+#: Klartext darunter (`> ...`) zaehlt weiter, wie im Web-Laengenzaehler.
+_MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*w2b:[^>]*-->[ \t]*$")
 _WORD_RE = re.compile(r"\S+")
 _ALNUM_RE = re.compile(r"[^\W_]")
 
@@ -108,6 +113,8 @@ def _prose_lines(markdown: str) -> Iterable[str]:
             continue
         if match:
             fence = match.group(1)
+            continue
+        if _MARKER_RE.match(line):
             continue
         yield _ANCHOR_RE.sub("", line)
 
@@ -295,8 +302,64 @@ def resource_hints(body: str, locale: str) -> list[LengthHint]:
     ]
 
 
+# --- Web-Konstante (B5) --------------------------------------------------------
+
+#: Ablageort der erzeugten Konstante fuer den Web-Laengenzaehler (ADR-0063 Abschnitt 4).
+WEB_CONSTANT_PATH = "apps/web/src/components/editor/contentBudgets.generated.ts"
+
+
+def typescript_constant() -> str:
+    """Die Richtwerte als TypeScript-Modul fuer den Web-Laengenzaehler.
+
+    Das Web fuehrt keine zweite Liste von Hand: die Datei unter
+    `WEB_CONSTANT_PATH` ist die Ausgabe dieser Funktion, ein Test haelt beide
+    gleich. Neu erzeugen mit `uv run python -m who2be_models.content_budgets`.
+    """
+    lines = [
+        "// ERZEUGT aus packages/models/src/who2be_models/content_budgets.py (ADR-0063).",
+        "// Nicht von Hand aendern. Neu erzeugen im Repo-Root mit:",
+        "//   uv run python -m who2be_models.content_budgets",
+        "// test_content_budgets.py haelt diese Datei gleich mit den Python-Werten.",
+        "",
+        "export interface ContentBudget {",
+        "  /** Richtwert (Ziel); `null`: nur Warnschwelle. */",
+        "  target: number | null",
+        "  /** Warnschwelle. */",
+        "  warn: number",
+        "  unit: 'words' | 'chars' | 'count'",
+        "  /** `true`: gewarnt wird erst ueber `warn`, sonst ab `warn`. */",
+        "  strict: boolean",
+        "}",
+        "",
+        "export const CONTENT_BUDGETS = {",
+    ]
+    for element, budget in BUDGETS.items():
+        target = "null" if budget.target is None else str(budget.target)
+        strict = "true" if budget.strict else "false"
+        lines.append(
+            f"  {element}: {{ target: {target}, warn: {budget.warn}, "
+            f"unit: '{budget.unit}', strict: {strict} }},"
+        )
+    lines += [
+        "} as const satisfies Record<string, ContentBudget>",
+        "",
+        "export type ContentBudgetElement = keyof typeof CONTENT_BUDGETS",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _write_web_constant() -> None:  # pragma: no cover - Entwickler-Kommando
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    (root / WEB_CONSTANT_PATH).write_text(typescript_constant(), encoding="utf-8")
+    print(f"geschrieben: {WEB_CONSTANT_PATH}")
+
+
 __all__ = [
     "BUDGETS",
+    "WEB_CONSTANT_PATH",
     "PERSONA_MODE",
     "PERSONA_MODE_COUNT",
     "PERSONA_PROFILE",
@@ -315,4 +378,9 @@ __all__ = [
     "playbook_hints",
     "resource_hints",
     "sections",
+    "typescript_constant",
 ]
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _write_web_constant()

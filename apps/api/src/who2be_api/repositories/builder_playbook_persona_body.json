@@ -10,7 +10,14 @@
     "id": "pb-persona-p-zweck",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "CRUD-Workflow fuer Personas in Who2Be: eine Persona anlegen, pflegen oder zurueckziehen — mit Schema-Disziplin und Phasen-Trennung (Verstehen → Vorschlag → Schreiben → Hand-Off). Drei Modi: Create (neue Persona), Update (bestehende aendern), Retire (deaktivieren). Geschrieben wird ausschliesslich ueber die Who2Be-MCP-Write-Tools; der Draft→active-Workflow bleibt serverseitig.", "styles": {}}],
+    "content": [{"type": "text", "text": "Personas anlegen, aendern und zurueckziehen (Create / Update / Retire) — geschrieben wird nur als Draft, ueber das Aktivieren entscheidet der Nutzer.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Lade aus der Resource 'Agent-Bau-Konventionen' nur die Abschnitte, die dieses Playbook braucht — vor Phase 2 (Vorschlag), mit einem Aufruf: fetch_resource(resource_id, block_ids=[\"res-conv-h-modi\", \"res-conv-h-laengen\", \"res-conv-h-trigger\", \"res-conv-h-sprache\"]). Ein Ueberschriften-Anker liefert den ganzen Abschnitt; die resource_id steht in den Verweisen dieses Playbooks (linked_blocks). Weitere Abschnitte nur bei Bedarf (Anker via list_resource_blocks).", "styles": {}}],
     "children": []
   },
   {
@@ -199,56 +206,21 @@
     "id": "pb-persona-h-tools",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t1",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "create_persona — neue Persona als Draft-Version 1 anlegen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t2",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "update_persona — Inhalt einer Persona als neuen Draft aendern.", "styles": {}}],
+    "content": [{"type": "text", "text": "Fallen", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-persona-li-t3",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "transition_persona — eine Version schalten (draft/review benoetigt persona_write; active/inactive benoetigt promote_retire).", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t4",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "restore_persona — eine fruehere Version als neuen Draft wiederherstellen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t5",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "set_persona_playbooks — die einer Persona zugeordneten Playbooks setzen (Replace-Semantik).", "styles": {}}],
+    "content": [{"type": "text", "text": "transition_persona: draft/review braucht persona_write, active/inactive braucht promote_retire — fehlt das Recht, bleibt das Aktivieren beim Nutzer.", "styles": {}}],
     "children": []
   },
   {
     "id": "pb-persona-li-t6",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Reads: get_persona, list_playbooks zur Vorbereitung. Verboten: Status beim Anlegen direkt auf active setzen, sowie Schreiben in fremde Aggregate ueber dieses Playbook hinaus.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-persona-li-t7-konventionen",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Laengen & Wohin, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen'. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
+    "content": [{"type": "text", "text": "Nicht beim Anlegen aktivieren und ueber dieses Playbook nicht in fremde Aggregate schreiben (Playbooks, Resources, Agenten haben eigene Playbooks).", "styles": {}}],
     "children": []
   },
   {
@@ -284,20 +256,6 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Bei verhaltensrelevanten Updates: laufende Sitzungen halten den alten Stand gecached — fuer die neue Stimme einen neuen Chat starten. Bei Themen ausserhalb der Persona-Pflege hoeflich an die zustaendige Stelle rueckverweisen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-h",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "pb-feedback-p",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Faellt dir beim Lesen bestehender Elemente Veraltetes oder Falsches auf, melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen; genutzte Playbooks/Resources via record_usage (applied/skipped/error). So wird die AgentDB selbst-verbessernd.", "styles": {}}],
     "children": []
   }
 ]

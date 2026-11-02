@@ -335,7 +335,7 @@ describe('ToolDetailPage — Status-Action-Bar', () => {
       await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Als Entwurf reaktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')

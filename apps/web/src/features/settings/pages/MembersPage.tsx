@@ -33,6 +33,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -477,6 +478,9 @@ export function MembersPage() {
                             ))}
                           </Select>
                         </FormControl>
+                        {field.value === 'viewer' && (
+                          <FormDescription>{t('members.invite.viewerHint')}</FormDescription>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}

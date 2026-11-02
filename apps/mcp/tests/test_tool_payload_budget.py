@@ -38,6 +38,7 @@ rot.
 
 import ast
 import asyncio
+import dataclasses
 import importlib
 import inspect
 import json
@@ -79,7 +80,14 @@ from who2be_mcp.server import (
     list_versions,
     mcp,
 )
-from who2be_models import AgentToolPolicy, AgentWithRenderedPrompt, MemoryMode, WorkspaceRole
+from who2be_models import (
+    TOOL_GROUPS,
+    AgentToolPolicy,
+    AgentWithRenderedPrompt,
+    MemoryMode,
+    ToolGroup,
+    WorkspaceRole,
+)
 from who2be_models.blocknote_markdown import to_markdown
 from who2be_models.external_tool import ExternalToolContent
 from who2be_models.system_prompt_template import SystemPromptTemplateContent
@@ -297,19 +305,7 @@ def test_reference_profiles_measure_the_middleware_view(monkeypatch: pytest.Monk
 
     tools = _wire_tools()
     for profile in payload_report.REFERENCE_PROFILES:
-        policy = profile.policy
-        payload: dict[str, object] = {
-            "user_id": str(uuid4()),
-            "workspace_id": str(_WORKSPACE_ID),
-            "role": profile.role.value,
-            "is_api_token": not profile.unrestricted,
-            "agent_id": None if profile.unrestricted else str(uuid4()),
-            "unrestricted": profile.unrestricted,
-            "capabilities": None if policy is None else policy.granted_capabilities(),
-            "read_scopes": None if policy is None else policy.read_scopes(),
-            "memory_mode": None if policy is None else policy.memory_mode,
-            "features": ["core"],
-        }
+        payload = _whoami_for(profile)
         policy_filter._whoami_cache.clear()
         monkeypatch.setattr(
             policy_filter,
@@ -335,8 +331,18 @@ def test_reference_profiles_order_and_figures() -> None:
         for profile in payload_report.REFERENCE_PROFILES
     }
     total = payload_report.payload_bytes(tools)
-    assert set(sizes) == {"default", "default_memory", "builder", "editor"}
+    assert set(sizes) == {"default", "default_memory", "builder", "builder_profile", "editor"}
     assert 0 < sizes["default"] < sizes["default_memory"] < sizes["editor"] < sizes["builder"]
+    # Das Profil „Builder“ blendet beim Builder genau `workarea_write` aus und
+    # behaelt `workarea_read` (W59-4) — nicht mehr, nicht weniger.
+    assert sizes["default_memory"] < sizes["builder_profile"] < sizes["builder"]
+    by_key = {profile.key: profile for profile in payload_report.REFERENCE_PROFILES}
+    full = {tool["name"] for tool in payload_report.visible_tools(tools, by_key["builder"])}
+    profiled = {
+        tool["name"] for tool in payload_report.visible_tools(tools, by_key["builder_profile"])
+    }
+    assert full - profiled == set(TOOL_GROUPS[ToolGroup.workarea_write])
+    assert set(TOOL_GROUPS[ToolGroup.workarea_read]) <= profiled
     # Der Builder hat alle Rechte und sieht damit den ganzen Katalog: seine
     # Kennzahl ist der Gesamt-Guard. Faellt ein Werkzeug fuer ihn heraus, ist
     # die Builder-Policy unvollstaendig, nicht der Katalog kleiner geworden.
@@ -422,6 +428,9 @@ def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixtur
     out = capsys.readouterr().out
     for profile in payload_report.REFERENCE_PROFILES:
         assert f"| {profile.label} |" in out
+    without, with_profile = payload_report.profile_effect(_wire_tools(), mcp.instructions)
+    effect = f"beim Start (mit `instructions`): {without:,} -> {with_profile:,} Bytes"
+    assert effect.replace(",", ".") in out
     costs = payload_report.tool_costs(_wire_tools())
     assert f"| 1 | `{costs[0].name}` |" in out
     assert f"| 10 | `{costs[9].name}` |" in out
@@ -439,12 +448,17 @@ def test_payload_report_prints_profiles_and_top_ten(capsys: pytest.CaptureFixtur
 # Reisst ein Ziel: Beschreibungen kuerzen. Ein Ziel hebt nur der Owner an;
 # Builder 110_000 -> 120_000 nach Owner-Entscheidung 2026-10-14 ("1a",
 # Gespraechs-Werkzeuge Phase E, siehe docs/mcp-payload-budget.md).
-_START_TARGET_BYTES = {"default": 35_000, "builder": 120_000}
+# `builder_profile` (ADR-0059 §5.3): Builder mit Profil „Builder“, Ziel
+# 104_000 = Messwert der ADR (101.727) plus Reserve fuer `edit_content`.
+_START_TARGET_BYTES = {"default": 35_000, "builder": 120_000, "builder_profile": 104_000}
+
+# W59-4 (Owner 2026-10-21): das Profil „Builder“ senkt den Builder-Start um
+# mindestens 12 % gegenueber „Alle“ (ADR-0059 §5.2: −12,2 % gemessen).
+_BUILDER_PROFILE_MIN_SAVING = 0.12
 
 
 def _start_bytes(tools: list[dict[str, Any]], profile: payload_report.ReferenceProfile) -> int:
-    visible = payload_report.visible_tools(tools, profile)
-    return payload_report.payload_bytes(visible) + len((mcp.instructions or "").encode())
+    return payload_report.start_bytes(tools, profile, mcp.instructions)
 
 
 def _profile(key: str) -> payload_report.ReferenceProfile:
@@ -452,9 +466,9 @@ def _profile(key: str) -> payload_report.ReferenceProfile:
 
 
 def test_agent_start_meets_target_per_profile() -> None:
-    """Default-Agent <= 35.000 Bytes, Builder <= 120.000 Bytes beim Start.
+    """Default <= 35.000, Builder <= 120.000, Builder mit Profil <= 104.000 Bytes.
 
-    Rot-Probe: eine aufgeblaehte Beschreibung an einem Werkzeug, das beide
+    Rot-Probe: eine aufgeblaehte Beschreibung an einem Werkzeug, das alle
     Profile sehen, traegt jedes Profil ueber sein Ziel.
     """
     tools = _wire_tools()
@@ -476,6 +490,25 @@ def test_agent_start_meets_target_per_profile() -> None:
         f"Agent-Start ueber dem Ziel (ist, Ziel): {over}. Beschreibungen kuerzen "
         "(docs/mcp-payload-budget.md, Beschreibungs-Diaet). Das Ziel hebt nur der "
         "Owner an (zuletzt Builder 120.000, Owner-Entscheidung 2026-10-14)."
+    )
+
+
+def test_builder_profile_saves_at_least_twelve_percent_at_start() -> None:
+    """Das Profil „Builder“ senkt den Builder-Start um mindestens 12 % (W59-4).
+
+    Gemessen wie das Startziel (Draht plus `instructions`), ohne und mit
+    Profil bei gleichen Rechten. Rot-Probe: ohne Profil (`tool_profile=None`)
+    gibt es keine Wirkung, die Kennzahl wuerde dann einen Builder messen, der
+    gar nicht gefiltert wird.
+    """
+    tools = _wire_tools()
+    without, with_profile = payload_report.profile_effect(tools, mcp.instructions)
+    unfiltered = dataclasses.replace(_profile("builder_profile"), tool_profile=None)
+    assert _start_bytes(tools, unfiltered) == without
+    saving = (without - with_profile) / without
+    assert saving >= _BUILDER_PROFILE_MIN_SAVING, (
+        f"Profil „Builder“ spart beim Start nur {saving:.1%} ({without} -> {with_profile}); "
+        "Ziel aus W59-4 sind mindestens 12 %."
     )
 
 
@@ -509,6 +542,9 @@ def _whoami_for(profile: payload_report.ReferenceProfile) -> dict[str, object]:
         "read_scopes": None if policy is None else policy.read_scopes(),
         "memory_mode": None if policy is None else policy.memory_mode,
         "features": ["core"],
+        "tool_profile": (
+            None if profile.tool_profile is None else profile.tool_profile.model_dump(mode="json")
+        ),
     }
 
 

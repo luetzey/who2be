@@ -461,11 +461,15 @@ function profileResponse(profile: BillingProfile | null): BillingProfileResponse
 function billingFetch(options: {
   profile: BillingProfile | null
   onPut?: (body: BillingProfileInput) => Response | Promise<Response>
+  onCheckout?: () => Response
 }) {
   return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     const u = String(url)
     if (u.includes('/inbox/counts')) {
       return Promise.resolve(new Response('{"detail":"nope"}', { status: 500 }))
+    }
+    if (u.includes('/billing/checkout') && options.onCheckout) {
+      return Promise.resolve(options.onCheckout())
     }
     if (u.includes('/billing/profile')) {
       if (init?.method === 'PUT' && options.onPut) {
@@ -686,6 +690,66 @@ describe('BillingPanel – Rechnungsdaten', () => {
     vi.stubGlobal('fetch', billingFetch({ profile: savedProfile }))
     renderAdminPanel()
     await screen.findByTestId('billing-details-summary')
+    expect(await axe(document.body)).toHaveNoViolations()
+  })
+
+  // --- 409 vom Checkout: Rechnungsdaten fehlen serverseitig (R2c) ----------
+
+  function conflictResponse() {
+    return new Response(
+      JSON.stringify({ detail: 'Rechnungsdaten fehlen. Bitte zuerst die Rechnungsdaten speichern.' }),
+      { status: 409, headers: { 'content-type': 'application/json' } },
+    )
+  }
+
+  it('zeigt bei 409 eine eigene Meldung mit Sprung zu den Rechnungsdaten', async () => {
+    // Der Client haelt einen veralteten Stand (Profil vorhanden), der Server nicht.
+    vi.stubGlobal('fetch', billingFetch({ profile: savedProfile, onCheckout: conflictResponse }))
+    renderAdminPanel()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Jetzt upgraden' }))
+
+    const alert = await screen.findByTestId('checkout-details-missing')
+    expect(alert).toHaveTextContent('Rechnungsdaten fehlen')
+    expect(alert).toHaveTextContent('Für das Upgrade brauchen wir deine Rechnungsdaten')
+    // Die generische Fehlermeldung erscheint nicht zusaetzlich.
+    expect(screen.queryByTestId('error-alert')).not.toBeInTheDocument()
+
+    fireEvent.click(within(alert).getByRole('button', { name: 'Zu den Rechnungsdaten' }))
+    const card = screen.getByTestId('billing-details-summary').closest('#billing-details')
+    expect(card).not.toBeNull()
+    expect(card).toHaveFocus()
+    // Nach dem Fehler ist der Knopf wieder bedienbar.
+    expect(screen.getByRole('button', { name: 'Jetzt upgraden' })).not.toBeDisabled()
+  })
+
+  it('zeigt andere Checkout-Fehler weiter als allgemeine Fehlermeldung', async () => {
+    vi.stubGlobal(
+      'fetch',
+      billingFetch({
+        profile: savedProfile,
+        onCheckout: () =>
+          new Response(JSON.stringify({ detail: 'Rechnungsstellung nicht konfiguriert.' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          }),
+      }),
+    )
+    renderAdminPanel()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Jetzt upgraden' }))
+
+    expect(await screen.findByTestId('error-alert')).toHaveTextContent(
+      'Rechnungsstellung nicht konfiguriert.',
+    )
+    expect(screen.queryByTestId('checkout-details-missing')).not.toBeInTheDocument()
+  })
+
+  it('hat mit der 409-Meldung keine axe-Verstoesse', async () => {
+    vi.stubGlobal('fetch', billingFetch({ profile: savedProfile, onCheckout: conflictResponse }))
+    renderAdminPanel()
+    fireEvent.click(await screen.findByRole('button', { name: 'Jetzt upgraden' }))
+    await screen.findByTestId('checkout-details-missing')
     expect(await axe(document.body)).toHaveNoViolations()
   })
 })

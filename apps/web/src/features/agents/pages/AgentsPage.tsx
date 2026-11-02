@@ -197,13 +197,18 @@ export function AgentsPage() {
     : t('page.empty.description')
 
   // Genau ein Erstell-Pfad: ein leerer, sofort speicherbarer Agent. Persona,
-  // Systemprompt und Status werden anschliessend in der Detail-Page ergaenzt.
+  // Systemprompt und Status werden anschliessend in der Detail-Page ergaenzt —
+  // deshalb direkt in Einstellungen › Konfiguration, Fokus auf „Persona“
+  // (UX-Audit B4). Der Fokus-Wunsch reist im Router-State, nicht in der URL:
+  // ein Reload oder ein geteilter Link soll nicht erneut fokussieren.
   const createAgent = async () => {
     setCreating(true)
     try {
       const created = await api.createAgent({ name: 'Neuer Agent' })
       notify.success(t('toast.created'))
-      navigate(wsPath(`/agents/${created.id}`))
+      navigate(wsPath(`/agents/${created.id}?tab=settings`), {
+        state: { focusPersona: true },
+      })
     } catch (cause: unknown) {
       notify.error(cause instanceof Error ? cause.message : t('toast.createError'))
       setCreating(false)

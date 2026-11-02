@@ -10,6 +10,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.workspace_repository import seed_new_workspace_profiles
 from who2be_models import OrganizationRead
 
 
@@ -76,16 +77,19 @@ class PgOrganizationRepository:
                 org_id,
                 user_id,
             )
-            ws_id = await conn.fetchval(
+            ws_row = await conn.fetchrow(
                 "INSERT INTO workspace (org_id, name, slug) "
-                "VALUES ($1, $2, 'default') RETURNING id",
+                "VALUES ($1, $2, 'default') RETURNING id, content_locale",
                 org_id,
                 default_workspace_name,
             )
+            ws_id = ws_row["id"]
             await conn.execute(
                 "INSERT INTO workspace_member (workspace_id, user_id, role) "
                 "VALUES ($1, $2, 'admin')",
                 ws_id,
                 user_id,
             )
+            # Die vier mitgelieferten Werkzeug-Profile (ADR-0059 §4.3).
+            await seed_new_workspace_profiles(conn, ws_id, org_id, ws_row["content_locale"])
         return OrganizationRead.model_validate(dict(org_row)), ws_id

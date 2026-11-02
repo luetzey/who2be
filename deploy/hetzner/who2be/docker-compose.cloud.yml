@@ -33,9 +33,12 @@
 #                "Notfallpfad: Registry nicht erreichbar" fuer den
 #                Host-Build-Fallback).
 #   ~ api      — WHO2BE_EDITION=cloud, APP_DATABASE_URL (who2be_app, RLS aktiv),
-#                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Env, SUPABASE_SERVICE_KEY,
+#                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Env, Rechnungs-
+#                Schalter WHO2BE_INVOICE_*, SUPABASE_SERVICE_KEY,
 #                WEB_BASE_URL; zieht denselben who2be-api-cloud-Registry-Build
 #                wie `migrate` (analog).
+#   ~ worker   — WHO2BE_EDITION=cloud, MOLLIE_API_KEY und WHO2BE_INVOICE_*
+#                fuer die Routine `invoice-retry` (ADR-0061 §4).
 #   ~ web      — Build-Arg VITE_WHO2BE_EDITION=cloud: die Billing-UI ist
 #                Compile-Time tree-geshaked (ADR-0029), das GHCR-On-Prem-Image
 #                enthaelt sie nicht — es gibt kein `web-cloud`-Image in der
@@ -90,6 +93,13 @@ services:
       # (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
       # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
       WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
+      # Rechnungs-Schalter (ADR-0061 §5). Der Checkout rechnet damit den Betrag.
+      # Steuermodus ohne Default: leer ⇒ Checkout 503, keine Rechnung (fail
+      # closed). Werte `regular`/`small_business`, Festlegung beim Betreiber.
+      # Preisbasis `net` oder `gross`, Default `net`. Dieselben Zeilen stehen
+      # im `worker`; beide brauchen denselben Wert.
+      WHO2BE_INVOICE_TAX_MODE: ${WHO2BE_INVOICE_TAX_MODE:-}
+      WHO2BE_INVOICE_PRICE_BASIS: ${WHO2BE_INVOICE_PRICE_BASIS:-net}
       # Invitation-/Account-Delete-Mails via GoTrue-Admin (service_role-JWT).
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       # Basis-URL der Web-App fuer Mail-/Redirect-Links.
@@ -113,6 +123,14 @@ services:
       # Account-Purge loescht den GoTrue-User per Admin-API (best-effort,
       # `integrations/gotrue_admin.py`). Ohne Key bleibt der Auth-User stehen.
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # Routine `invoice-retry` (ADR-0061 §4) stellt die Rechnungen bei Mollie
+      # aus und braucht dafuer den Key und dieselben Schalter wie `api`. Ohne
+      # Key bricht die Routine ab, ohne Steuermodus haelt sie jede Rechnung
+      # zurueck
+      # (`packages/billing/src/who2be_billing/invoice.py#run_invoice_retry`).
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      WHO2BE_INVOICE_TAX_MODE: ${WHO2BE_INVOICE_TAX_MODE:-}
+      WHO2BE_INVOICE_PRICE_BASIS: ${WHO2BE_INVOICE_PRICE_BASIS:-net}
 
   # Cloud-Web-Bundle: VITE_* wirkt zur Compile-Zeit (Vite) — das On-Prem-Image
   # aus GHCR hat die Billing-UI tree-geshaked (ADR-0029) und es gibt kein

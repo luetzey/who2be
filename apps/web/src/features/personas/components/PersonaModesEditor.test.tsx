@@ -70,6 +70,45 @@ const emptyMode = (overrides: Partial<PersonaEditorValues['modes'][number]> = {}
 })
 
 describe('PersonaModesEditor', () => {
+  // Richtwerte (ADR-0063, Builder schlank B5): je Modus die drei Felder
+  // zusammen, unter der Liste die Zahl der Modi.
+  it('zählt die drei Felder eines Modus zusammen und warnt ab 250 Wörtern', () => {
+    const para = (n: number) =>
+      [
+        {
+          id: `p${n}`,
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text: Array(n).fill('wort').join(' '), styles: {} }],
+          children: [],
+        },
+      ] as unknown as ResourceBlock[]
+    render(
+      <Harness
+        initialModes={[
+          emptyMode({ name: 'Kurz', is_default: true, identity_add: para(100), anti_patterns: para(20) }),
+          emptyMode({ name: 'Lang', identity_add: para(200), output_style_override: para(30), anti_patterns: para(20) }),
+        ]}
+      />,
+    )
+    const notes = screen.getAllByTestId('budget-note-mode')
+    expect(notes[0]).toHaveTextContent('Modus: 120 Wörter · Richtwert 150')
+    expect(notes[0]).toHaveAttribute('data-over', 'false')
+    expect(notes[1]).toHaveTextContent('Modus: 250 Wörter · über dem Richtwert 150')
+    expect(notes[1]).toHaveAttribute('data-over', 'true')
+    expect(screen.getByTestId('budget-note-mode_count')).toHaveTextContent('2 Modi · Richtwert 3')
+  })
+
+  it('zeigt ab fünf Modi den Hinweis zur Zahl der Modi', () => {
+    render(
+      <Harness
+        initialModes={Array.from({ length: 5 }, (_, i) => emptyMode({ name: `m${i}`, is_default: i === 0 }))}
+      />,
+    )
+    const note = screen.getByTestId('budget-note-mode_count')
+    expect(note).toHaveAttribute('data-over', 'true')
+    expect(note).toHaveTextContent('5 Modi · über dem Richtwert 3, Modi zusammenlegen oder als Playbook führen')
+  })
   it('zeigt den Leer-Zustand, wenn keine Modi vorhanden sind', () => {
     render(<Harness />)
     expect(screen.getByText(/Noch keine Modi definiert/)).toBeInTheDocument()

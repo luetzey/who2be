@@ -249,6 +249,9 @@ function CurationPanel({ reloadNonce }: { reloadNonce: number }) {
   )
 }
 
+// Hilfe-Seite „Rückmeldungen und Fälle“ (Kontext-Link, Muster MemoryPage).
+const FEEDBACK_HELP_PATH = '/help/feedback-and-cases'
+
 /**
  * Feedback-Hub (ADR-0053 D6b). `?tab=` ist die Quelle des aktiven Tabs und
  * wechselt per `replace`. Default ist „Fälle“; unbekannte oder fuer die Rolle
@@ -258,6 +261,7 @@ function CurationPanel({ reloadNonce }: { reloadNonce: number }) {
  */
 export function FeedbackOverviewPage() {
   const { t } = useTranslation('feedback')
+  const wsPath = useWorkspacePath()
   const role = useCurrentWorkspaceRole()
   const canTriage = role !== null && role !== 'viewer'
   const [params, setParams] = useSearchParams()
@@ -376,6 +380,13 @@ export function FeedbackOverviewPage() {
           description={t('overview.description')}
           actions={
             <>
+              <Link
+                to={wsPath(FEEDBACK_HELP_PATH)}
+                className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground md:min-h-0"
+                data-testid="feedback-help-link"
+              >
+                {t('overview.helpLink')}
+              </Link>
               <ReportProblemDialog onReported={onReported} />
               {/* Unter `sm` volle Breite (Delta-Spec S7, 390 px); unter `md`
                   ist der Ausloeser ein Link auf die Melden-Seite. */}

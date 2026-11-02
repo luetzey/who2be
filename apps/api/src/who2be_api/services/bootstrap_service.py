@@ -30,6 +30,7 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.tenancy import scope_to_self
 from who2be_api.licensing.edition import is_onprem
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
+from who2be_api.repositories.workspace_repository import seed_new_workspace_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +66,19 @@ async def seed_bootstrap_tenant(conn: asyncpg.Connection, email: str) -> UUID | 
         org_id,
         user_id,
     )
-    ws_id = await conn.fetchval(
-        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'Default', 'default') RETURNING id",
+    ws_row = await conn.fetchrow(
+        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'Default', 'default') "
+        "RETURNING id, content_locale",
         org_id,
     )
+    ws_id = ws_row["id"]
     await conn.execute(
         "INSERT INTO workspace_member (workspace_id, user_id, role) VALUES ($1, $2, 'admin')",
         ws_id,
         user_id,
     )
+    # Die vier mitgelieferten Werkzeug-Profile (ADR-0059 §4.3).
+    await seed_new_workspace_profiles(conn, ws_id, org_id, ws_row["content_locale"])
     return org_id
 
 

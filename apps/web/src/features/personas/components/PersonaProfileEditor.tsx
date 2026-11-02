@@ -165,7 +165,7 @@ export function PersonaProfileEditor({
           <ProfileSideMenu />
         </BlockNoteView>
       </div>
-      <EditorFooter blocks={doc} />
+      <EditorFooter blocks={doc} budget="profile" />
 
       {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
       <PlaceholderPreviewPopover

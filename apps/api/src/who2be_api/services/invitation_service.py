@@ -50,14 +50,23 @@ class InvitationService:
     async def create(self, ctx: WorkspaceContext, data: InvitationCreate) -> InvitationCreated:
         plaintext = _new_invitation_token()
         expires_at = datetime.now(UTC) + _EXPIRY
-        invitation = await self._repo.create(
-            ctx.workspace_id,
-            data.email,
-            data.role,
-            hash_token(plaintext),
-            expires_at,
-            ctx.user_id,
-        )
+        try:
+            invitation = await self._repo.create(
+                ctx.workspace_id,
+                data.email,
+                data.role,
+                hash_token(plaintext),
+                expires_at,
+                ctx.user_id,
+            )
+        except asyncpg.UniqueViolationError as exc:
+            # Fuer die Adresse liegt schon eine offene, gueltige Einladung vor
+            # (abgelaufene raeumt das Repository vorab aus dem Weg).
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Fuer diese Adresse gibt es bereits eine offene Einladung.",
+                reason="invitation_already_pending",
+            ) from exc
         if self._audit is not None and self._pool is not None:
             await self._audit.record(
                 self._pool,

@@ -180,6 +180,14 @@ describe('FeedbackOverviewPage — Hub-Tabs', () => {
     expect(screen.getByRole('button', { name: /Problem melden/ })).toBeInTheDocument()
   })
 
+  it('verlinkt im Seitenkopf die Hilfe „Rückmeldungen und Fälle“', () => {
+    renderPage()
+    expect(screen.getByRole('link', { name: 'Rückmeldungen erklärt' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/help/feedback-and-cases',
+    )
+  })
+
   // D6b-Review Nit d (Seitenkopf): solange die Rolle laedt, weder „Meine
   // Fälle“ noch die viewer-Beschreibung zeigen und keine Faelle abrufen.
   it('zeigt waehrend die Rolle laedt nur Kopf und Platzhalter, ohne viewer-Variante', () => {

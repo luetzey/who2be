@@ -3,7 +3,7 @@ title: Workspaces, Mitglieder und Rollen
 description: Wie Who2Be Inhalte trennt, wen du einlädst und wer was darf.
 section: konto-und-team
 order: 10
-updated: 2026-10-22
+updated: 2026-10-24
 audience: all
 ---
 
@@ -33,6 +33,26 @@ Das ist ein Vier-Augen-Prinzip: Ein Editor schreibt, ein Admin aktiviert. Eigene
 3. Klick auf **Einladen**. Die Person erhält einen einmaligen Link, um beizutreten.
 
 Offene Einladungen laufen automatisch ab und lassen sich widerrufen. Im Team-Workspace sehen Eingeladene die Startliste [Erste Schritte](/help/tutorials/getting-started). Die Begrüßung erscheint nur im eigenen persönlichen Workspace.
+
+## Kollegen nur nutzen lassen [#nur-nutzen]
+
+Soll ein Kollege deine Agenten nutzen, aber nichts daran ändern, lädst du ihn mit der Rolle **Viewer** ein (siehe [Mitglieder einladen](#einladen)).
+
+Das kann der Kollege:
+
+- Einen Agenten über einen Connector mit Claude oder einem anderen Client verbinden (siehe [Mit Claude verbinden](/help/connect-claude)) und ihn dort nutzen. Der Agent lädt seine Persona, seine Playbooks und seine Resources und durchsucht sie.
+- Alles im Workspace lesen, auch Entwürfe.
+- Rückmeldungen geben und ihren Stand verfolgen.
+
+Das kann er nicht:
+
+- Agenten, Personas, Playbooks oder Resources anlegen, ändern oder löschen.
+- Versionen aktivieren.
+- API-Tokens erstellen oder Mitglieder verwalten.
+
+Im Gespräch mit dem Kollegen darf der Agent sein [Gedächtnis](/help/memory) nutzen und neue Einträge oder Änderungen vorschlagen. Vorschläge für das Agentengedächtnis gehen in die [Freigabe](/help/memory#freigabe) und wirken erst, wenn ein Editor oder Admin sie freigibt. Nur beim Speicher-Modus **Automatisch nach Workspace-Regeln** gilt sofort, was ein Admin dort eingeschaltet hat. In der Web-Oberfläche sieht der Kollege nur sein eigenes Nutzergedächtnis, nicht das Agentengedächtnis.
+
+Der Kollege muss Mitglied desselben Workspace sein. Agenten über Organisationsgrenzen hinweg zu teilen geht noch nicht. Arbeitet der Kollege in einer anderen Organisation, lade ihn deshalb wie oben in einen Workspace deiner Organisation ein. Dann arbeitet ihr in der gemeinsamen Organisation.
 
 ## Rolle ändern oder entfernen [#aendern]
 

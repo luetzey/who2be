@@ -1,4 +1,4 @@
-import { lazy, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 
@@ -22,6 +22,7 @@ import { PendingInvitationsPage } from '@/features/auth/pages/PendingInvitations
 
 import { AppLayout } from './AppLayout'
 import { PublicLayout } from './PublicLayout'
+import { RouteFallback } from './RouteFallback'
 
 // Eager: `LoginPage` ist die einzige Route ausserhalb `<AppLayout>`/`<Suspense>`
 // und muss synchron verfuegbar sein. Die Authenticated-Routes liegen unter
@@ -217,6 +218,10 @@ const HelpTutorialPage = lazy(() =>
 const HelpNewsPage = lazy(() =>
   import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.HelpNewsPage })),
 )
+// Oeffentliche Hilfe ohne Sitzung (UX-Audit K5): gleicher Chunk.
+const PublicHelpPage = lazy(() =>
+  import('@/features/help/pages/HelpPages').then((mod) => ({ default: mod.PublicHelpPage })),
+)
 
 // Agenten-Arbeitsbereich + Knowledge Base (ADR-0047). Eigenes Sub-Layout mit
 // Sub-Navigation (Muster `SettingsLayout`) — die Lese-Ansicht besteht aus
@@ -353,6 +358,40 @@ function HelpShortLinkRedirect() {
   )
 }
 
+// Segmente unter `/help/`, die keine Hilfe-Seite sind (Tutorials, Altseite,
+// Was ist neu): sie brauchen ein Konto und bleiben hinter dem Login.
+const HELP_ACCOUNT_SEGMENTS: readonly string[] = ['tutorials', 'placeholders', 'neu']
+
+/**
+ * Einstieg `/help/*` (Owner W-B, UX-Audit K5). Mit Sitzung wie bisher in den
+ * Default-Workspace. Ohne Sitzung zeigen `/help` und `/help/<slug>` die
+ * oeffentliche Hilfe (nur `audience: all`); alles andere fuehrt zum Login,
+ * mit Anker in `next`.
+ */
+export function HelpEntry() {
+  const { t } = useTranslation('common')
+  const params = useParams()
+  const { pathname, search, hash } = useLocation()
+  const { session, sessionLoaded } = useSession()
+  if (!sessionLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        {t('loadingLong')}
+      </div>
+    )
+  }
+  if (session !== null) return <HelpShortLinkRedirect />
+  const segments = (params['*'] ?? '').split('/').filter(Boolean)
+  if (segments.length > 1 || (segments.length === 1 && HELP_ACCOUNT_SEGMENTS.includes(segments[0]))) {
+    return <Navigate to={`/login?next=${encodeURIComponent(`${pathname}${search}${hash}`)}`} replace />
+  }
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <PublicHelpPage slug={segments[0] ?? ''} />
+    </Suspense>
+  )
+}
+
 // Die fruehere Platzhalter-Seite ist in die Hilfe-Seite „System-Prompts und
 // Platzhalter“ aufgegangen (Onboarding P7c). Alte Lesezeichen und Links landen
 // per replace direkt am Abschnitt mit allen Platzhaltern.
@@ -389,6 +428,9 @@ export function RouterRoot() {
                   eingeloggte User autorisiert hier einen LLM-Client fuer genau
                   einen Agenten. Ohne Session springt die Page auf den Login. */}
               <Route path="/oauth/consent" element={<OAuthConsentPage />} />
+              {/* Hilfe: ohne Sitzung oeffentlich (nur `audience: all`), mit
+                  Sitzung Kurzlink in den Default-Workspace (`HelpEntry`). */}
+              <Route path="/help/*" element={<HelpEntry />} />
               {/* Oeffentliche Pflichtseiten: auch ausgeloggt erreichbar. */}
               <Route path="/legal" element={<LegalLayout />}>
                 <Route index element={<Navigate to="/legal/impressum" replace />} />
@@ -406,8 +448,6 @@ export function RouterRoot() {
                   Konto-Adresse, Annahme per Klick. Ohne Session faengt
                   RequireAuth ab und fuehrt per `next` hierher zurueck. */}
               <Route path="/invitations" element={<PendingInvitationsPage />} />
-              {/* Kurzlink ohne Workspace (E-Mails, „Was ist neu“). */}
-              <Route path="/help/*" element={<HelpShortLinkRedirect />} />
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />

@@ -43,7 +43,7 @@ from who2be_api.core.security import (
     require_role,
     require_unmanaged,
 )
-from who2be_api.repositories.agent_repository import AgentRepository
+from who2be_api.repositories.agent_repository import AgentRepository, AgentToolProfileColumns
 from who2be_api.services.audit_service import AuditService
 from who2be_models import (
     AgentCapability,
@@ -455,6 +455,9 @@ class AgentService:
         # `activatable` garantiert Persona + Template (mit aktiver Persona-Version).
         if source.persona_id is None or source.system_prompt_template_id is None:
             raise _not_activatable(source.missing)
+        # Werkzeug-Profil und Ausnahmen gehen mit (ADR-0059 §4.2). Ein Profil
+        # ist kein Recht (§3.3), deshalb kein Eskalations-Check dafuer.
+        tool_profile = AgentToolProfileColumns.from_agent(source)
         if source.is_managed:
             # Voll-Klon: ein verwalteter Agent (Builder) wird mit unverwalteten,
             # editierbaren Kopien von Persona + Playbooks + Template dupliziert —
@@ -469,6 +472,7 @@ class AgentService:
                 source.description,
                 source.status,
                 source.tool_policy,
+                tool_profile,
             )
         else:
             agent = await self._repo.insert(
@@ -480,6 +484,7 @@ class AgentService:
                 source.system_prompt_template_id,
                 source.status,
                 source.tool_policy,
+                tool_profile,
             )
         if agent is None:
             # Persona/Template wurde zwischen fetch und insert geloescht.

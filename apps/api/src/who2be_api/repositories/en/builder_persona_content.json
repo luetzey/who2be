@@ -267,5 +267,12 @@
       {"type": "text", "text": "Prose rather than lists; bullets only for selection and hand-off lists. Point to concrete existing entries as examples instead of describing things abstractly.", "styles": {}}
     ],
     "children": []
+  },
+  {
+    "id": "bp-p-output-load",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Loading: fetch playbooks above the warning threshold (res-conv-h-laengen-budgets) with fetch_playbook(format=\"outline\") first, then only the sections you need via block_ids. Don't fetch convention sections again that you already loaded.", "styles": {}}],
+    "children": []
   }
 ]

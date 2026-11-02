@@ -94,11 +94,11 @@ describe('SystemPromptStatusActionBar — MFA-Vorankuendigung (Audit A1)', () =>
 
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
     expect(screen.getByTestId('publish-mfa-notice')).toHaveTextContent(
-      'Veröffentlichen erfordert Zwei-Faktor-Anmeldung.',
+      'Aktivieren erfordert Zwei-Faktor-Anmeldung.',
     )
     expect(screen.getByRole('link', { name: 'Zwei-Faktor einrichten' })).toBeInTheDocument()
     // Zurueck zu Draft braucht kein aal2 und bleibt nutzbar.
-    expect(screen.getByRole('button', { name: 'Zurück zu Draft' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Zurück in den Entwurf' })).toBeEnabled()
   })
 
   it('zeigt einem Admin bei aal2 den aktiven Aktivieren-Knopf und keinen Hinweis', () => {
@@ -120,20 +120,20 @@ describe('SystemPromptStatusActionBar — MFA-Vorankuendigung (Audit A1)', () =>
 
 describe('SystemPromptStatusActionBar — Review-Leiste', () => {
   // Audit A2: umkehrbar, also keine rote Aktion (design-language §9.1).
-  it('rendert „Zurück zu Draft" als outline, nicht destruktiv', () => {
+  it('rendert „Zurück in den Entwurf" als outline, nicht destruktiv', () => {
     renderBar('review', { aal: 'aal2' })
 
-    const back = screen.getByRole('button', { name: 'Zurück zu Draft' })
+    const back = screen.getByRole('button', { name: 'Zurück in den Entwurf' })
     expect(back.className).toMatch(/\bborder-input\b/)
     expect(back.className).not.toMatch(/bg-destructive/)
   })
 
-  it('fuehrt „Zurück zu Draft" als review→draft-Transition aus', async () => {
+  it('fuehrt „Zurück in den Entwurf" als review→draft-Transition aus', async () => {
     transition.mockResolvedValue(undefined)
     const onTransitioned = vi.fn()
     renderBar('review', { aal: 'aal2', onTransitioned })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Zurück zu Draft' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück in den Entwurf' }))
 
     await waitFor(() => expect(onTransitioned).toHaveBeenCalledTimes(1))
     expect(transition).toHaveBeenCalledWith('sp1', 3, 'draft')

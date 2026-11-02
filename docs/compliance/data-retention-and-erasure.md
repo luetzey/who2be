@@ -149,8 +149,40 @@ Ausnahme. Sie sind Vertragsdaten der lebenden Organisation:
 - Einen eigenen Loeschpfad gibt es nicht; ein Admin kann die Angaben jederzeit
   ueberschreiben. Es wird kein Verlauf gefuehrt.
 - Gesetzlich aufzubewahren sind erst die **ausgestellten Rechnungen**
-  (Archivzeile und PDF, ADR-0061 §7 und §9, Paket R2). Sie kopieren die
-  Angaben zum Ausstellungszeitpunkt und haengen nicht an `billing_profile`.
+  (Archivzeile und PDF, ADR-0061 §7 und §9). Sie kopieren die Angaben zum
+  Ausstellungszeitpunkt und haengen nicht an `billing_profile`. Regelung im
+  folgenden Abschnitt.
+
+### Gesetzliche Ausnahme: ausgestellte Rechnungen (`billing_invoice`, Rechnungs-PDF)
+
+Je bezahlter Mollie-Zahlung entsteht eine Rechnung ueber Mollie Invoicing
+(ADR-0061). Who2Be archiviert sie selbst, weil Mollie nur 5 Jahre vorhaelt:
+
+| Teil | Ort | Personenbezug |
+|---|---|---|
+| Archivzeile | `billing_invoice` (Migration `billing_0111`), eine Zeile je Zahlung | `org_id`, Mollie-Kunden- und Zahlungs-ID, Rechnungsnummer, Betrag, Zeitraum, Steuerangaben |
+| PDF | BlobStore, Schluessel `invoices/<org_id>/<jahr>/<rechnungsnummer>.pdf` | Name bzw. Firma, Rechnungsadresse, ggf. USt-IdNr. zum Ausstellungszeitpunkt |
+
+- **Frist:** mindestens **10 Jahre ab Ende des Ausstellungsjahres** (§14b
+  UStG, §147 AO). Art. 17 Abs. 3 lit. b DSGVO erlaubt die Aufbewahrung trotz
+  Loeschanspruch.
+- **Ueberlebt den Purge, bewusst.** `billing_invoice.org_id` hat **keinen**
+  Fremdschluessel auf `organization` (wie `entitlement_history`): ein FK mit
+  CASCADE braeche die Aufbewahrung, einer ohne blockierte den Purge. Das PDF
+  liegt ausserhalb von `blobs/<workspace_id>/`, den der Workspace-Purge und der
+  Blob-Sweep (§4a) raeumen.
+- **Unveraenderbar.** Trigger `billing_invoice_guard` (Status nur nach vorn,
+  Nummer, PDF-Ablageort und SHA-256 nach dem Setzen fest); die Laufzeitrolle
+  `who2be_app` hat `SELECT, INSERT, UPDATE`, **kein** `DELETE`.
+- **Loeschung nach Fristablauf:** durch die Owner-Rolle, Zeile und PDF. Eine
+  Worker-Routine dafuer kommt, bevor die erste Rechnung faellig wird
+  (ADR-0061 §7). `<PLATZHALTER: Bestaetigung der Frist und des Verfahrens>`.
+- **Backups:** das PDF ist im Objekt-Spiegel und im Offsite-Snapshot
+  enthalten (§4). Deren Retention ist kuerzer als die Aufbewahrungsfrist; das
+  Archiv selbst ist der Bucket.
+- **Auskunft (Art. 15/20):** Rechnungen einer Organisation findet der
+  Betreiber ueber `billing_invoice.org_id`. Der Self-Service-Export enthaelt
+  sie heute nicht.
 
 ---
 
@@ -579,6 +611,7 @@ gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien).
 | Gespraechsprotokolle + Massnahmen (`feedback_session`, `measure` + Faelle und Verlauf, 0103) | ohne eigene Frist wie Faelle (PM-6); kein Einzel-Loeschen (unveraenderlich) | Fall-Loeschung: nur die Verknuepfungen per **CASCADE**; Agent-/Org-/Workspace-Purge: **CASCADE**; Account-Purge: `submitted_by` (nur `human`), menschliche IDs in `participants`/`dissent` und menschliche `actor_id` **anonymisiert** (Sentinel), s. §4e |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Rechnungsdaten der Organisation (`billing_profile`, `billing_0109`) | bis Org-Purge (Konto-Purge: persoenliche Org) | Org-/Konto-Purge: **CASCADE** auf `organization`, s. §3 Abgrenzung |
+| Ausgestellte Rechnungen (`billing_invoice`, `billing_0111`, PDF unter `invoices/` im BlobStore) | mindestens 10 Jahre ab Ende des Ausstellungsjahres (§14b UStG/§147 AO) | **keine** Loeschung im Purge (kein FK, ausserhalb des Workspace-Praefixes); Loeschung erst nach Frist durch die Owner-Rolle, s. §3 |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | Caddy-Access-Log 14 Tage; Container-Logs 3 x 10 MB je Dienst | Host-Cron startet taeglich `deploy/hetzner/scripts/rotate-access-log.sh` (rotiert + loescht beide Generationen-Namensklassen, RUNBOOK §Access-Logs) — der einzige Loeschpfad fuer die Frist; `roll_keep_for 336h` begrenzt nur Caddys eigene Generationen, `logging:`-Limits die Container-Logs |
 
