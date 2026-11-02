@@ -270,6 +270,11 @@
     "operationId": "fetch_agent_rendered_v1_workspaces__workspace_id__agents__agent_id__rendered_get"
   },
   {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/tool-profile",
+    "operationId": "set_agent_tool_profile_v1_workspaces__workspace_id__agents__agent_id__tool_profile_put"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/usage",
     "operationId": "get_agent_usage_v1_workspaces__workspace_id__agents__agent_id__usage_get"
@@ -1093,6 +1098,36 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}/rotate",
     "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles",
+    "operationId": "list_tool_profiles_v1_workspaces__workspace_id__tool_profiles_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles",
+    "operationId": "create_tool_profile_v1_workspaces__workspace_id__tool_profiles_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles/catalog",
+    "operationId": "get_tool_catalog_v1_workspaces__workspace_id__tool_profiles_catalog_get"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles/{profile_id}",
+    "operationId": "delete_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__delete"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles/{profile_id}",
+    "operationId": "update_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__put"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/tool-profiles/{profile_id}/reset",
+    "operationId": "reset_tool_profile_v1_workspaces__workspace_id__tool_profiles__profile_id__reset_post"
   },
   {
     "method": "GET",

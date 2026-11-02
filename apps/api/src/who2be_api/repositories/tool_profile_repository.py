@@ -369,19 +369,32 @@ class PgToolProfileRepository:
         None bei „Alle ohne Ausnahmen“ oder wenn der Agent fehlt. „Alle“ mit
         Ausnahmen liefert `id=None`, `name=""` und nur die Ausnahmen.
         """
-        row = await self._pool.fetchrow(
-            "SELECT a.tool_profile_id, a.tools_added, a.tools_removed, "
-            "       p.name, p.groups, p.tools "
-            "FROM agent a "
-            "LEFT JOIN tool_profile p "
-            "  ON p.workspace_id = a.workspace_id AND p.id = a.tool_profile_id "
-            "WHERE a.workspace_id = $1 AND a.id = $2",
-            workspace_id,
-            agent_id,
-        )
-        if row is None:
-            return None
-        return grant_from_row(row)
+        return await fetch_agent_grant(self._pool, workspace_id, agent_id)
+
+
+_AGENT_GRANT_SQL = (
+    "SELECT a.tool_profile_id, a.tools_added, a.tools_removed, "
+    "       p.name, p.groups, p.tools "
+    "FROM agent a "
+    "LEFT JOIN tool_profile p "
+    "  ON p.workspace_id = a.workspace_id AND p.id = a.tool_profile_id "
+    "WHERE a.workspace_id = $1 AND a.id = $2"
+)
+
+
+async def fetch_agent_grant(
+    db: asyncpg.Pool | asyncpg.Connection, workspace_id: UUID, agent_id: UUID
+) -> ToolProfileGrant | None:
+    """`fetch_grant` auf einer beliebigen Verbindung (Pool oder Connection).
+
+    Der eine Ladeweg fuer das Profil eines Agenten: das Repository nutzt ihn
+    mit dem Pool, der `tools-overview`-Resolver (ADR-0059 §3.2, Q4) mit der
+    Render-Connection. So existiert die Abfrage nur einmal.
+    """
+    row = await db.fetchrow(_AGENT_GRANT_SQL, workspace_id, agent_id)
+    if row is None:
+        return None
+    return grant_from_row(row)
 
 
 def grant_from_row(row: asyncpg.Record | dict[str, Any]) -> ToolProfileGrant | None:
@@ -417,6 +430,7 @@ __all__ = [
     "ToolProfileRepository",
     "builtin_profile_id",
     "builtin_profile_name",
+    "fetch_agent_grant",
     "grant_from_row",
     "seed_builtin_profiles",
 ]

@@ -7,7 +7,8 @@ abfragen. Die Membership-/Token-Autorisierung uebernimmt `get_current_workspace`
 
 Liefert genug, damit ein Agent (oder die Web-UI) ohne Raten weiss, wer er ist
 und was er darf: Rolle, Agent-Bindung, gewaehrte Write-Capabilities, Read-Scopes
-und die org-weiten Entitlement-Features.
+und die org-weiten Entitlement-Features. Dazu das Werkzeug-Profil des
+gebundenen Agenten (ADR-0059 §6.1), das kein Recht ist und nur ausblendet.
 """
 
 from typing import Annotated
@@ -19,9 +20,11 @@ from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.licensing.service import build_entitlement_port
+from who2be_api.repositories.tool_profile_repository import PgToolProfileRepository
 from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository, resolve_org_id
 from who2be_models import DEFAULT_LOCALE, WhoAmIRead, WorkAreaAssignment
+from who2be_models.tool_profiles import ToolProfileGrant
 
 router = APIRouter(prefix="/whoami", tags=["whoami"])
 
@@ -66,10 +69,19 @@ async def whoami(ctx: Ctx, pool: Pool) -> WhoAmIRead:
     # Auto-Anlage aus (inkl. materialisiertem Owner-Grant). Menschen haben
     # keine Grant-Menge (`None`), fuer sie gilt das Rollen-Scoping.
     work_areas: list[WorkAreaAssignment] | None = None
+    tool_profile: ToolProfileGrant | None = None
     if policy is not None and ctx.agent_id is not None:
         area_repo = PgWorkAreaRepository(pool)
         await area_repo.get_or_create_private_area(ctx.workspace_id, ctx.agent_id)
         work_areas = await area_repo.list_assignments_for_agent(ctx.workspace_id, ctx.agent_id)
+        # Werkzeug-Profil (ADR-0059 §6.1): Gruppen, Einzelwerkzeuge und
+        # Ausnahmen, nicht die ausgerechnete Liste. `None` = „Alle“ ohne
+        # Ausnahmen. Eigene Abfrage ueber das Repository statt Join in
+        # `_load_agent_tool_policy`: Ein Profil ist kein Recht (§3.3) und
+        # gehoert nicht in den Rechte-Ladeweg jedes Requests.
+        tool_profile = await PgToolProfileRepository(pool).fetch_grant(
+            ctx.workspace_id, ctx.agent_id
+        )
 
     return WhoAmIRead(
         user_id=ctx.user_id,
@@ -88,4 +100,5 @@ async def whoami(ctx: Ctx, pool: Pool) -> WhoAmIRead:
         features=sorted(entitlement.features),
         content_locale=content_locale,
         work_areas=work_areas,
+        tool_profile=tool_profile,
     )
