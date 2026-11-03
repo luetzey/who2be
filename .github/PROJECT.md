@@ -59,26 +59,29 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
 Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
-**Stand 2026-09-25 nach Aufbereitungslauf 31, gegen `main` @ `cee6478`
-gemessen.**
+**Stand 2026-10-30 nach Aufbereitungslauf 66, gegen `main` @ `14234887`
+gemessen.** Die Zahlen selbst stehen im Queue-Issue; hier steht nur, warum die
+Reihenfolge so aussieht.
 
 Der Cloud-Launch-Block und der Responsive-Block sind **durch**: alle Pakete aus
 #428 außer dem `human-only`-Rest (#454) liegen auf `main`, und #431 ist am
 2026-09-25 mit 6 von 6 Akzeptanzkriterien geschlossen worden. Was bleibt, ist
 schmal — die Reihenfolge folgt deshalb fast nur noch Kriterium 1 (harte
-Abhängigkeit).
+Abhängigkeit) und Kriterium 5 (bei Gleichstand das kleinere).
 
 | Issue | Rolle in der Reihenfolge |
 |---|---|
-| **#632** Passkey registrieren (#435 W2a) | **Fundament vor Fläche:** öffnet #633. Einziges Paket, das heute ohne Owner-Antwort und ohne Docker startbar ist. Fasst `e2e/helpers/auth.ts` bewusst **nicht** an. |
-| **#633** Step-up mit Passkey (#435 W2b) | **Harte Abhängigkeit: nach #632** — ohne registrierbaren Faktor ist der Step-up nicht testbar. Zusätzlich nach PR #631 (beide ändern `LoginPage.tsx`). |
-| **#624** Statusaktionen auf dem Phone | **`needs-decision` — nicht starten.** Alle Felder stehen, die Design-Weiche (Bottom-Bar / Sticky / `DetailHeader`) ist Produktverhalten und nicht aus dem Repo belegbar. Drei Optionen mit Empfehlung stehen als Kommentar; nach der Antwort ohne weiteres Refinement startbar. |
-| **#540** Rate-Limit an der Kante | **`needs-decision` und umgebungsblockiert.** Letztes offenes Kind von #535. Braucht die Mechanismus-Entscheidung (A/B/C im Issue) **und** einen Docker-Daemon — in Cloud-Sessions seit neunzehn Läufen nicht vorhanden. Steht hinten wegen der Umgebung, nicht wegen geringer Bedeutung. |
+| **#632** Passkey registrieren (#435 W2a) | **Fundament vor Fläche (Kriterium 3):** öffnet #633. Einziges Paket, das ohne Owner-Antwort und ohne Container-Laufzeit startbar ist. Fasst `e2e/helpers/auth.ts` bewusst **nicht** an. |
+| **#989** `http-cache-semantics` → 4.3.0 | **Bei Gleichstand das kleinere (Kriterium 5).** Transitiver Lockfile-Sprung plus Entfernen des befristeten `osv-scanner`-Ignores. **Kein Termindruck:** die Frist `ignoreUntil = 2026-11-02` ist am 2026-10-29 und erneut am 2026-10-30 als Nicht-Ereignis gemessen worden — das Advisory wird nicht mehr geführt, ein Ablauf macht den Scan nicht rot. Nicht parallel zu #632 (gleicher Vitest-Baum). |
+| **#633** Step-up mit Passkey (#435 W2b) | **Harte Abhängigkeit: nach #632** — ohne registrierbaren Faktor ist der Step-up nicht testbar. Zusätzlich blockiert an der fehlenden Container-Laufzeit. |
+| **#1001** Payload-Budget (Rest von ADR-0058 P4b) | **Wartestand, nicht Paket.** Fläche, Erzeuger und Nachweis liegen im offenen PR #1101; erst nach seinem Merge zuschneiden. Trägt `needs-decision` (Weiche 35). |
+| **#540** Rate-Limit an der Kante | **`needs-decision` und umgebungsblockiert.** Letztes offenes Kind von #535. Braucht die Mechanismus-Entscheidung (A/B/C im Issue) **und** einen Docker-Daemon — in Cloud-Sessions bis zur 42. Messung nicht vorhanden. Steht hinten wegen der Umgebung, nicht wegen geringer Bedeutung. |
 
 Erledigt und deshalb aus der Tabelle genommen: der gesamte Cloud-Launch-Block
 (#429, #449–#453), der Responsive-Block (#438, #500, #513, #561–#573 sowie die
-Welle-7-Pakete #615–#623) und die fünf Härtungs-Kinder von #535
-(#536–#539, #576).
+Welle-7-Pakete #615–#623), die fünf Härtungs-Kinder von #535 (#536–#539, #576)
+und **#624** (Statusaktionen auf dem Phone, am 2026-09-29 geschlossen — diese
+Datei hat es bis Aufbereitungslauf 65 weiter als „nicht starten" geführt).
 
 Danach oder parallel, außerhalb der Warteschlange:
 
@@ -87,10 +90,12 @@ Danach oder parallel, außerhalb der Warteschlange:
   #535: fünf von sechs, offen nur #540. Beide warten auf je eine Owner-Antwort,
   die nichts blockiert.
 - **#435 Passkeys** (`size/M`) — Tracking. W1 (#499) ist gemergt: alle drei
-  Stacks pinnen `supabase/gotrue:v2.196.0` (`docker-compose.yml:63`,
-  `deploy/hetzner/supabase/docker-compose.yml:63`,
-  `deploy/dokploy/docker-compose.yml:81`), der WebAuthn-Faktor ist serverseitig
-  verfügbar. W2 ist am 2026-09-25 in **#632** und **#633** geschnitten.
+  Stacks pinnen GoTrue, am 2026-10-30 auf **`v2.197.0`** nachgemessen
+  (`docker-compose.yml:63`, `deploy/hetzner/supabase/docker-compose.yml:92`,
+  `deploy/dokploy/docker-compose.yml:115`), der WebAuthn-Faktor ist
+  serverseitig verfügbar. W2 ist am 2026-09-25 in **#632** und **#633**
+  geschnitten. ⚠️ Zeilen- und Versionszeiger sind seit dem Schnitt mehrfach
+  gewandert — vor dem Zitieren neu messen.
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
   **Alle Code-Voraussetzungen sind erfüllt.**
@@ -153,7 +158,14 @@ Quelle, nicht `project.json`.
 - Ein `size/M`-Issue wird **nie** durch Nachtragen von Feldern startbar. Fehlt
   ihm nichts als die Größe, ist der nächste Schritt ein Zuschnitt, kein
   Refinement — sonst entsteht ein Paket, das vollständig aussieht und trotzdem
-  nicht in einem Zug reviewbar ist. Betrifft aktuell #428, #402, #431 und #435.
+  nicht in einem Zug reviewbar ist. Betrifft am 2026-10-30 noch **#428**,
+  **#435** und **#535**; #402 (2026-09-10) und #431 (2026-09-25) sind
+  geschlossen und standen hier bis Aufbereitungslauf 65 weiter als offen.
+- **Anwesenheit ist nicht Gültigkeit.** „Alle vier Pflichtabschnitte stehen"
+  heißt nicht, dass ihr Inhalt heute noch gilt: ein `agent-ready`-Body wird
+  zusätzlich auf jeden Zeiger und jede Fremd-Referenz geprüft, vor allem auf
+  Referenzen auf inzwischen geschlossene Issues. Begründung und Belege:
+  Regel 151–155 im `backlog-queue`-Issue.
 - Genau **ein** offenes Issue trägt `backlog-queue`. Wer ein zweites anlegt,
   spaltet die Reihenfolge.
 
