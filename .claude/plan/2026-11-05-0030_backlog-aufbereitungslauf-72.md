@@ -120,10 +120,14 @@ nur in einem Major liegt, den kein Elternpaket annimmt; `minimatch@3` ueber
 **Folge:** Ablauf -> kein Filter -> Fund -> `audit` rot -> `all-green` rot, **auf jedem**
 offenen PR.
 
-⚠️ **Grenze der Messung (Weiche 37 B):** `npm audit` liest npm, das Gate ist `osv-scanner` und
-liest OSV. `api.osv.dev` ist gesperrt, keine Container-Laufzeit. **Messweg fuer die OSV-Haelfte
-ist der `audit`-Job des naechsten PR-Laufs** — das Protokoll dieses Laufs faehrt ihn. Bis dahin
-npm-Haelfte gemessen, OSV-Haelfte gekennzeichnet.
+⚠️ **Grenze der Messung beim Schreiben der Weiche (Weiche 37 B):** `npm audit` liest npm, das
+Gate ist `osv-scanner` und liest OSV. `api.osv.dev` ist gesperrt, keine Container-Laufzeit.
+**Benannter Messweg fuer die OSV-Haelfte: der `audit`-Job des naechsten PR-Laufs.**
+
+🟢 **Der Messweg ist noch im selben Lauf gelaufen und bestaetigt die Praemisse — s. §F9.**
+CI-Lauf **41942967748**, Job **126968093211** an **#1119** (Head `09872a72`), osv-scanner 2.2.4:
+`Filtered 3 vulnerabilities from output` (einer fuer `glob`, zwei fuer `minimatch`).
+**Die Ignores wirken; ihr Ablauf beisst, am Gate selbst belegt, nicht aus npm abgeleitet.**
 
 **Kein Issue:** #989 erklaert die Migration out of scope, in der Warteschlange steht sie nicht,
 die `reason`-Strings verweisen auf eine Kanban-Karte ausserhalb des Repos (Muster Weiche 23).
@@ -171,6 +175,43 @@ gegengelesen. `grep -c GHSA-ch52-4w7c-c8xp osv-scanner.toml` -> **0**. 🔴 **Un
 Frist ist seit dem 2026-11-03 verstrichen:** ein Schnitt von heute veroeffentlicht einen Satz,
 der eine abgelaufene Gueltigkeit fuer einen Eintrag behauptet, den es nicht gibt. Verstaerkt
 Weiche 40 Empfehlung B.
+
+### F9 🔴 Die `unused ignores`-Liste von osv-scanner taugt nicht als Beleg (Regel 177, neu)
+
+Der `audit`-Job von **#1119** (CI-Lauf 41942967748, Job 126968093211, Head `09872a72`,
+osv-scanner **2.2.4**) sagt **zwei Dinge gleichzeitig ueber dieselben zwei IDs**:
+
+```
+GHSA-3g3m-2fjr-6pw4 and 1 alias have been filtered out because: glob@13.0.6: ...
+GHSA-g3hv-75wg-m249 and 1 alias have been filtered out because: minimatch@... (zweimal)
+Filtered 3 vulnerabilities from output
+/home/runner/.../apps/web/osv-scanner.toml has unused ignores:
+ - GHSA-3g3m-2fjr-6pw4
+ - GHSA-g3hv-75wg-m249
+OSV: 0 Eintraege (rc=0)
+```
+
+**Die Ignores haben drei Befunde unterdrueckt UND stehen in derselben Ausgabe als `unused`.**
+
+🔴 **Damit ist die Lesart aus Lauf 65 widerlegt**, die lautete: „*osv-scanner meldet einen
+Ignore-Eintrag als `unused`, wenn er auf keinen gefundenen Befund gepasst hat — nicht, wenn er
+einen unterdrueckt.*" Diese Regel hat seit dem 2026-10-29 Weiche 32 getragen.
+
+⚠️ **Nicht ueberkorrigieren** (Regel 157): der **Schluss** von Lauf 65 ueber
+`GHSA-ch52-4w7c-c8xp` bleibt richtig. In dem damals zitierten Log fehlen **beide**
+Wirksamkeits-Zeilen — keine `filtered out because`-Zeile, kein `Filtered N vulnerabilities`.
+Dort griff der Ignore tatsaechlich ins Leere. **Falsch war nur die Begruendung:** belastbar war
+die *Abwesenheit* der Filter-Zeilen, nicht die *Anwesenheit* der `unused`-Zeile. **Lauf 65 hatte
+recht aus dem falschen Grund** — und genau deshalb haette die Regel beim naechsten Fall in die
+Irre gefuehrt, was sie hier beinahe getan hat.
+
+**Regel 177:** Ob ein `osv-scanner`-Ignore wirkt, liest man an
+`<ID> ... have been filtered out because: ...` plus `Filtered N vulnerabilities from output`,
+**nicht** an der `unused ignores`-Liste. Wirkt ein Ignore, beisst sein Ablauf; wirkt er nicht,
+ist der Ablauf harmlos — und diese Unterscheidung traegt eine Sortier-Entscheidung.
+
+🟢 **Weiche 37 Option B hat sich zum dritten Mal selbst belegt:** der benannte Messweg war die
+Antwort, und er kostete einen CI-Lauf, der ohnehin lief.
 
 ## 5. PR-Bestand (alle 29 selbst gemessen)
 
@@ -278,6 +319,10 @@ entfernt sie (Regel 169, in Lauf 71 im kontrollierten Versuch belegt).
 ## 10. Offen
 
 - **Weiche 46** (neu): Frist 2026-11-30 fuer `glob`/`minimatch` — 25 Tage, kein Issue.
+  🟢 **Praemisse am Gate bestaetigt** (§F9): die Ignores filtern drei echte OSV-Befunde, der
+  Ablauf beisst. Empfehlung **B** unveraendert, jetzt gemessen statt geschaetzt.
+- **Weiche 32** (am 2026-10-29 zum Schliessen vorgeschlagen): der Schluss haelt, die
+  Begruendung nicht — s. §F9 und Regel 177.
 - **Weiche 45/44**: Schreibweg fuer Issue-Bodies, Festschreibung in Pflege-Regel 9 fehlt.
 - **Weiche 40**: Zuschnitt von #989 (Empfehlung B, durch F8 weiter verstaerkt).
 - **Weiche 11/18/36**: neun merge-fertige PRs, 16 fehlende Protokolle, drei rote
