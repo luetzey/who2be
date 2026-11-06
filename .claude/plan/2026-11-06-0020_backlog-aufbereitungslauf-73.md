@@ -296,3 +296,82 @@ zehn merge-fertige PRs und achtzehn Protokolle warten, und `main` steht seit sec
 Keiner nötig: dieser Lauf ändert kein öffentliches Verhalten (keine API-Signatur, kein
 CLI-Flag, keine Konfig, kein Setup). Die Änderungen liegen in Issue-Bodies auf GitHub und in
 diesem Protokoll. **Kein CHANGELOG-Fragment** — der Fragment-Bestand bleibt bei **403**.
+
+---
+
+## Nachtrag (00:40 UTC): das CI-Rot des eigenen Protokoll-PRs
+
+**Der PR dieses Laufs (#1121) ist rot an `audit` + `all-green` geworden — und das hat zwei
+Aussagen dieses Protokolls widerlegt.**
+
+### Der Befund
+
+`audit` scheitert an seinem `pip-audit`-Schritt (Job 127630976394, Exit 1):
+
+```
+Found 1 known vulnerability in 1 package
+oauthlib 4.0.0   CVE-2026-49272   Fix Versions: 4.0.1
+```
+
+**Selbst nachgemessen am `main`-Stand** (der Branch unterscheidet sich von `main` @ `af78ad7d`
+nur um diese Markdown-Datei, `uv.lock` ist bitgleich):
+
+```
+$ uv tool run pip-audit --disable-pip --no-deps -r /tmp/req.txt ; echo "EXIT=$?"
+oauthlib 4.0.0   CVE-2026-49272   4.0.1
+EXIT=1                                     # 398 Requirements
+$ grep -A2 '^name = "oauthlib"' uv.lock    # version = "4.0.0"
+```
+
+🔴 **`main` trägt die betroffene Version.** Der Fund ist die Basis, nicht der Diff — und er
+trifft ab jetzt **jeden** PR, dessen `audit`-Job läuft und der den Fix nicht selbst mitbringt.
+
+⚠️ **`main`s letzter CI-Lauf ist kein Gegenbeweis:** Lauf `41188042026` ist `success`, lief aber
+am **2026-10-31**, und `oauthlib 4.0.1` erschien am **2026-10-31T09:52Z**. **Der Lauf ist älter
+als das Advisory.** Ein frischer Lauf auf `main` wäre heute rot.
+
+🟢 **Der Fix liegt merge-fertig als #1120** — der einzige der 31 offenen PRs mit grünem `audit`,
+**weil er den Fix trägt**, nicht weil er aktuell ist.
+
+### Zwei widerlegte Aussagen dieses Laufs
+
+🔴 **1. „#1120 belegt sie erneut: bei 0 Rückstand ist `audit` grün" (Welle P, Weiche 36) war ein
+Fehlschluss.** #1121 steht ebenfalls bei 0 Rückstand und ist **rot**. Der Grund für #1120s Grün
+ist sein Inhalt, nicht sein Stand. **Der eigene PR ist der Gegenbeweis zur eigenen Aussage** —
+und er kam vier Minuten nach dem Schreiben an.
+
+🔴 **2. Weiche 41 (`pip-audit`) wurde als „übernommen" gekennzeichnet, statt gemessen zu
+werden.** Das verletzt **Regel 178**, die dieser Lauf selbst eingeführt hat: ein
+advisory-gefüttertes Gate ist ein eigener Messgegenstand und ist nicht übernehmbar, weil die
+Datenbank sich unabhängig vom Baum bewegt. **Hätte der Lauf `pip-audit` gefahren, wäre der CVE
+vor dem Push aufgefallen.** Die Regel war richtig und der Lauf hat sie am selben Tag gebrochen.
+
+### Was richtig bleibt
+
+🟢 **Die Rückstands-Theorie gilt weiter für die drei alten roten PRs.** #1107s `audit`-Log
+(2026-10-31T00:34) nennt **9 Funde in 2 Paketen** — `joserfc 1.7.2` (CVE-2026-119283/119284)
+und `pypdf 6.21.2` (sieben CVEs) — und genau die hat `main`s Kopf-Commit `af78ad7` (#1111)
+behoben. **Dort heilt ein Branch-Update tatsächlich.** Es sind **zwei verschiedene Ursachen mit
+demselben Symptom**; #1121 hat die zweite. Weiche 36 bleibt also gültig, ihr Beleg war nur der
+falsche.
+
+### Folgen für die Reihenfolge
+
+🔴 **Welle M wird umsortiert: #1120 gehört vor #1114.** Es ist nicht mehr ein Dependabot-Bump
+unter zehn, sondern der **CVE-Fix, der das `audit`-Gate repo-weit entsperrt** — und damit der
+oberste Posten des ganzen Backlogs. #1114 bleibt zweiter (es entsperrt #989).
+
+**Nicht portiert, begründet:** #1120 ist ein offener, merge-fertiger PR auf **derselben Datei**
+(`uv.lock`, aktuell von vier PRs gehalten). Eine Kopie seines Diffs in diesen Protokoll-PR würde
+ihn duplizieren, mit ihm kollidieren und aus einem Ein-Datei-PR eine Dependency-Änderung machen.
+**Mergen ist nach Persona-Grenze ohne Owner-Freigabe nicht zulässig.** Kein Re-Run: die Ursache
+ist deterministisch.
+
+### Neue Pflege-Regel
+
+- **181. Ein Gate, das eine fremde Datenbank liest, wird in JEDEM Lauf selbst gefahren — ohne
+  Ausnahme für ein bitgleiches Fenster.** Regel 160 („teure Suite nur bei berührtem Teilbaum")
+  gilt für Gates, die den Baum lesen, **nicht** für `pip-audit`, `npm audit` und `osv-scanner`.
+  Sie können an einem unveränderten Baum von grün auf rot kippen, und genau das ist hier
+  passiert. **Die Kosten sind Sekunden; der Preis des Auslassens war ein roter eigener PR und
+  eine unentdeckte CVE in `main`.**
