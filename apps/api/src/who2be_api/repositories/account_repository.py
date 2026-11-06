@@ -481,10 +481,19 @@ class PgAccountPurgeRepository:
         Audit-Trail (`workspace_invitation`-Verlauf) bleibt formal erhalten,
         die PII (E-Mail) wird entfernt. Idempotent: schon bereinigte Zeilen
         traegt der WHERE-Filter beim naechsten Lauf nicht mehr.
+
+        Der Marker ist je Zeile eindeutig (`<redacted>:<id>`): Abgelaufene
+        Einladungen haben weder `accepted_at` noch `revoked_at` und bleiben im
+        Partial-Unique-Index `workspace_invitation_open_uniq` (Migration 0017).
+        Ein gemeinsamer Marker liesse zwei solche Zeilen im selben Workspace
+        kollidieren und braeche den ganzen Purge-Lauf ab. Der Praefix-Filter
+        fasst auch den Altbestand mit dem frueheren Marker `<redacted>` nicht
+        mehr an. `revoked_at` bleibt bewusst unberuehrt — es bedeutet
+        Admin-Widerruf mit Audit-Eintrag.
         """
         result = await self._conn.execute(
-            "UPDATE workspace_invitation SET email = '<redacted>' "
-            "WHERE email <> '<redacted>' "
+            "UPDATE workspace_invitation SET email = '<redacted>:' || id::text "
+            "WHERE email NOT LIKE '<redacted>%' "
             "  AND (accepted_at IS NOT NULL OR expires_at < $1)",
             now,
         )

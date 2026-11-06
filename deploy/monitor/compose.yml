@@ -45,7 +45,7 @@ x-hardening: &hardening
 services:
   caddy:
     <<: *hardening
-    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
     ports:
       - "80:80"
       - "443:443"
@@ -125,7 +125,7 @@ services:
 
   uptime-kuma:
     <<: *hardening
-    image: louislam/uptime-kuma:2.5.6@sha256:9912da7d7d9b6ddc0c2d904beb84d24689c1ed9c33b81419eb9008663a92a329
+    image: louislam/uptime-kuma:2.5.8@sha256:20abea8c48a163cf0a7a5d5936ab418e4b742d908704e1f58f6c06e56a9c6b67
     environment:
       # SQLite im Volume; ueberspringt die DB-Auswahl beim ersten Start.
       UPTIME_KUMA_DB_TYPE: sqlite
@@ -136,7 +136,7 @@ services:
 
   beszel:
     <<: *hardening
-    image: henrygd/beszel:0.21.0@sha256:6b39a8b64f9b15d00a25e7683e31a93c46161182a54f62713525107064e10599
+    image: henrygd/beszel:0.21.1@sha256:8514a69d9bbbcb74f371a3205561ee231fc0289739cea64e8131f341d695b770
     environment:
       APP_URL: https://hosts.${MONITOR_DOMAIN:?MONITOR_DOMAIN fehlt}
       # Nur ausgehende WebSocket-Verbindungen der Agenten; der Hub oeffnet

@@ -75,8 +75,8 @@ nimmt das eigene (private, `UNLICENSED`) `who2be-web` heraus.
 
 - **Erlaubt:** MIT, BSD-2/3-Clause, Apache-2.0, ISC, 0BSD, Unlicense, PSF-2.0,
   CC0-1.0 sowie **MPL-2.0** (file-level, konsumiert/unveraendert).
-- **Verboten (fail-closed):** GPL, AGPL, LGPL, SSPL, CDDL, EPL, EUPL, OSL und
-  unbekannte/fehlende Lizenzen.
+- **Verboten (fail-closed):** GPL, AGPL, LGPL, SSPL, CDDL, EPL, EUPL, OSL, CPL,
+  CPAL, NPL, Sleepycat und unbekannte/fehlende Lizenzen.
 - **Ausnahme:** eine bewusst akzeptierte Copyleft-Dependency braucht einen
   ADR-Nachtrag mit Begruendung + ggf. `--excludePackages`-Eintrag.
 
