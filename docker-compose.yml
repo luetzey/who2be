@@ -418,7 +418,7 @@ services:
   seaweedfs:
     # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
     # impliziten Image-Sprung haengen.
-    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    image: chrislusf/seaweedfs:4.50@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860
     # All-in-One (`server`) statt des Vier-Service-Stacks master/volume/filer/s3
     # aus SeaweedFS' eigener Compose-Vorlage: fuer EINEN Bucket waeren vier
     # Container ein schlechter Tausch gegen den einen MinIO-Container.
