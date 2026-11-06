@@ -5,7 +5,7 @@ Beweist auf der echten DB (Owner-Verbindung — wie der Purge-Job):
   werden auf den Sentinel `00000000-0000-0000-0000-000000000000` gesetzt
   (anonymisiert, nicht geloescht — Audit-Integritaet bleibt).
 - `workspace_invitation.email` akzeptierter/abgelaufener Einladungen wird
-  ueber `cleanup_expired_invitations` auf `<redacted>` gesetzt; offene,
+  ueber `cleanup_expired_invitations` auf `<redacted>:<id>` gesetzt; offene,
   zukuenftige Einladungen bleiben unangetastet.
 - `entitlement_history` bleibt unveraendert (gesetzliche Aufbewahrung).
 
@@ -178,7 +178,8 @@ def test_purge_anonymises_audit_and_keeps_entitlement_history() -> None:
                 ws_id,
             )
             email_map = {row["email"] for row in emails}
-            assert "<redacted>" in email_map
+            redacted = {e for e in email_map if e.startswith("<redacted>:")}
+            assert len(redacted) == 2
             assert "c@example.com" in email_map
             assert "a@example.com" not in email_map
             assert "b@example.com" not in email_map
