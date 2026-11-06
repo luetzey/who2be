@@ -8,7 +8,7 @@ Werkzeuge gegen dieselbe Schwelle und haelt das Budget als Regel fest.
 
 Gemessen wurde die **serialisierte Antwort, wie sie beim Agenten ankommt** —
 nicht die REST-Antwort und nicht geschaetzt. Jeder Aufruf lief live gegen den
-Produktions-MCP (`mcp.luetzenburg-cloud.de`) mit dem groessten vorhandenen
+Produktions-MCP (`mcp.<DOMAIN>`) mit dem groessten vorhandenen
 Objekt je Typ (Persona `Coder`, Playbook `Code-Task-Flow`, Resource
 `Dokumentations-Standards` mit 92 Bloecken, Agent `Coder`). Die Zahl ist die
 Zeichenlaenge der Tool-Antwort; ueber 50 000 Zeichen legt die Laufzeit die
