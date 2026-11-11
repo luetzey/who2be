@@ -1,6 +1,37 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
+_Stand: 2026-10-24 (Aufbereitungslauf 60: `main` rot an zwei Supply-Chain-Funden, der zweite vom Gate selbst verdeckt)_
+
+## Ein Gate, das beim ersten Fund abbricht, verdeckt den zweiten (2026-10-24, Aufbereitungslauf 60)
+
+**Stand:** Befund, kein PR. `main` @ `12093b46` ist rot (CI-Lauf 2284, `conclusion: failure`).
+Der Job `audit` fuehrt vier Supply-Chain-Pruefungen als **Schritte eines Jobs**: `pip-audit`,
+`npm audit`, License-Gate, OSV-Scan. Schritt 5 (`pip-audit`) scheitert an **fuenf Advisories**
+(`fastmcp 4.1.1`, `pypdf 6.21.1`) — und damit sind die Schritte 6 bis 10 **alle `skipped`**.
+
+**Der zweite Fund war deshalb nicht neu, sondern unsichtbar:** `undici@6.29.0` im
+Web-Lockfile, zwei Advisories (einer `high`), behoben in **6.29.1**. Gemeldet wird er nur dort,
+wo `pip-audit` durchkommt — in PR #1074, der die fuenf Python-Advisories behebt und genau
+deshalb bis zum OSV-Schritt laeuft und dort stirbt. **Folge: der Sicherheits-PR ist selbst rot
+und `blocked`, und `main` wird durch seinen Merge allein nicht gruen.**
+
+**Beleg:** `pip-audit` lokal mit dem Kommando aus `ci.yml:973-975` reproduziert, **rc 1**,
+5 Funde in 2 Paketen. `npm audit --json` in `apps/web/`, **rc 1**, `{high: 2}` — `undici` und
+`http-cache-semantics`. Beide Web-Funde sind `"dev": true`, weshalb
+`npm audit --omit=dev --audit-level=high` daneben **gruen mit 0 Funden** ist; rot ist allein
+der OSV-Scan, der das ganze Lockfile liest. ⚠️ **`pypdf` dagegen liegt auf einem erreichbaren
+Produktivpfad:** `extract_pdf_text` in `services/wa_ingest.py` parst hochgeladene PDFs, und
+pypdf liegt im API-Produktionsimage.
+
+**Die Lehre, verallgemeinert:** ein gruenes Nachbar-Gate ist kein Beleg fuer die Flaeche, die
+es ausblendet, und ein rotes Gate meldet die **erste** Ursache, nicht alle. Wer aus „`audit`
+ist rot" auf eine Ursache schliesst, hat geraten. Die Pruefungen eines Jobs gehoeren so
+verdrahtet, dass jede ihr Ergebnis meldet, auch wenn eine fruehere schon rot ist.
+
+**Offen:** Paket **#1076** (undici) ist der Weg zu gruenem `main`; **#989**
+(`http-cache-semantics`, Frist `ignoreUntil` 2026-11-02) liegt in derselben Datei. Dass der
+`audit`-Job alle vier Funde melden sollte statt nur des ersten, ist ein eigener Posten —
+verwandt mit Weiche 5 Option C, in #442 als Fund ohne Issue gefuehrt.
 
 ## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
 
