@@ -6,7 +6,7 @@ Modularer Monolith (ADR-0001), uv-Workspace im Repo-Root. Details:
 ## Stack
 
 - **Backend:** Python, FastAPI (REST) + FastMCP (MCP-Server), asyncpg (ADR-0003).
-- **Frontend:** React 18 + Vite 7, TypeScript strict, Tailwind v4
+- **Frontend:** React 18 + Vite 8, TypeScript strict, Tailwind v4
   (`@theme inline`, kein config-File), shadcn-Primitives, BlockNote-Insel (ADR-0022).
 - **DB:** Supabase/Postgres; Migrationen bei der API; RLS als 2. Verteidigungslinie.
 - **Auth:** Supabase Auth (JWT) für Web; eigene API-Token-Tabelle für Agenten.
