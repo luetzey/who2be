@@ -114,6 +114,16 @@ plus RUNBOOK-Abschnitt plus CI-Schritt** (`grep -ril fail2ban` → 10 Treffer au
 `.git/`). **Lauf 55 hat diesen Selbstwiderspruch schon benannt** — er steht seit **32 Läufen**
 unkorrigiert im Body, weil #540 nicht aufgreifbar ist (Regel 62).
 
+🔴 **Derselbe falsche Grund steht an einer dritten Stelle — in einer eingecheckten Datei.**
+`.github/PROJECT.md:76` sagt über #540: „**`needs-decision` und umgebungsblockiert.** … **Braucht
+die Mechanismus-Entscheidung (A/B/C im Issue)** **und** einen Docker-Daemon — in Cloud-Sessions
+seit neunzehn Läufen nicht vorhanden." Der Docker-Teil hält (heute die **63.** Messung), der
+Mechanismus-Teil nicht. ⚠️ **Nicht korrigiert, mit Grund:** die Datei ist von **#1105** gehalten
+(Protokoll Lauf 66, 15 Commits hinter `main`), und ein zweiter Schreiber auf derselben Datei ist
+genau das, was diese Liste jedem Paket verbietet (Regel 31/76 der Pflege-Regeln). **Der Owner zieht
+die Zeile am besten mit, wenn #1105 mergt** — die Begründungs-Tabelle dort ist ohnehin noch vom
+2026-09-25 (Lauf 31) datiert.
+
 **Warum das mehr ist als ein verrotteter Zeiger:** #540 trägt `needs-decision` und liegt damit
 auf dem Antwort-Stapel des Owners. Wer den Body liest, um Weiche 17 zu beantworten, liest zuerst
 eine Mechanismus-Frage, die vor einem Monat entschieden **und gebaut** wurde. **Die Warteschlange
@@ -281,9 +291,18 @@ Bestandszahlen auf die heutige Messung **49/54** und die Tagesabstände) und **#
 (Bestandszahlen **26/31 → 49/54**, „38 Tage" → **49**, „drei Tage" → **14**, „dreizehnte
 identische Messung" → **22.**).
 
-**In die Warteschlange** (#442, Pflege-Regel 63c): der falsche Blocker-Grund bei #540 (Fund 1),
-die Wellen-Lücke #1127 (Welle S), die Pro-Knoten-Messung von #1124 (Fund 3), der PR-Bestand
-49/54, die neuen Regeln **76** und **77**.
+**In die Warteschlange** (#442, Pflege-Regel 63c): der falsche Blocker-Grund bei #540 (Fund 1,
+an beiden Stellen — §Nicht in der Warteschlange **und** Weiche 17), die Wellen-Lücke #1127
+(Welle S), die Pro-Knoten-Messung von #1124 (Fund 3), der PR-Bestand **49/54**, die ehrliche
+Zählweise im Weichen-Kopf und die neuen Regeln **76**, **77**, **78**.
+🟢 **Der neue Body ist abschnittsweise gebaut** (Anker statt Zeilennummern, jede Ersetzung mit
+`assert count == 1`), **64.798 Zeichen**, und **von mir selbst zurückgelesen und maschinell
+verglichen: zeichengleich**, Labels `needs-decision` + `backlog-queue` unverändert, **alle 78
+Pflege-Regeln und alle 34 Weichen-Nummern erhalten** (geprüft, nicht behauptet — Regel 45/51).
+🟢 **Die neun Zeilenzahlen der Sperr-Tabelle sind heute selbst nachgemessen und halten alle:**
+`uv.lock` **3485**, `.github/PROJECT.md` **179**, `apps/web/package.json` **82**,
+`osv-scanner.toml` **26**, `docs/mcp-payload-budget.md` **609**, `ci.yml` **1259**,
+`vite.config.ts` **107**, `Caddyfile` **208**, `docs/licensing/plans.md` **271**.
 
 **Als Kommentar, mit benanntem Grund** (Regel 62 — nicht aufgreifbar, eine Body-Korrektur
 erreicht keinen Agenten): **#540** (Fund 1 vollständig, mit den acht nachgemessenen Zeigern) und
