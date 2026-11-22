@@ -10,6 +10,8 @@ import type {
   AgentInput,
   AgentRenderFormat,
   AgentRenderResult,
+  AgentToolProfileInput,
+  AgentToolProfilePreview,
   AgentUpdateInput,
   AgentUsageStats,
   AgentWorkArea,
@@ -129,6 +131,9 @@ import type {
   TokenCreated,
   TokenInput,
   TokenRenameInput,
+  ToolCatalog,
+  ToolProfile,
+  ToolProfileInput,
   UsageEntityType,
   UsageStats,
   VersionDiff,
@@ -834,6 +839,17 @@ export interface Api {
   favoriteAgent: (id: string) => Promise<void>
   unfavoriteAgent: (id: string) => Promise<void>
   copyAgent: (id: string, input?: AgentCopyInput) => Promise<Agent>
+  // ADR-0059 §7 — Werkzeug-Profile. Lesen darf jedes Mitglied, pflegen nur
+  // admin; die Zuordnung am Agenten editor und nur ein Mensch (403
+  // `human_only` fuer Agent-Tokens), auch bei verwalteten Agenten.
+  listToolProfiles: () => Promise<ToolProfile[]>
+  getToolCatalog: () => Promise<ToolCatalog>
+  createToolProfile: (input: ToolProfileInput) => Promise<ToolProfile>
+  updateToolProfile: (id: string, input: ToolProfileInput) => Promise<ToolProfile>
+  resetToolProfile: (id: string) => Promise<ToolProfile>
+  deleteToolProfile: (id: string) => Promise<void>
+  setAgentToolProfile: (agentId: string, input: AgentToolProfileInput) => Promise<Agent>
+  getAgentToolProfilePreview: (agentId: string) => Promise<AgentToolProfilePreview>
   // ADR-0044 — Agent-Memory (Mensch-Pfad, editor+ gated). `status` filtert
   // serverseitig; ohne Filter kommen alle Status (Triage-UI braucht pending +
   // active + rejected gleichzeitig).
@@ -1514,6 +1530,32 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input ?? {}),
       }),
+    listToolProfiles: () => request<ToolProfile[]>(token, apiPath`${ws}/tool-profiles`),
+    getToolCatalog: () => request<ToolCatalog>(token, apiPath`${ws}/tool-profiles/catalog`),
+    createToolProfile: (input) =>
+      request<ToolProfile>(token, apiPath`${ws}/tool-profiles`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateToolProfile: (id, input) =>
+      request<ToolProfile>(token, apiPath`${ws}/tool-profiles/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    resetToolProfile: (id) =>
+      request<ToolProfile>(token, apiPath`${ws}/tool-profiles/${id}/reset`, { method: 'POST' }),
+    deleteToolProfile: (id) =>
+      request<void>(token, apiPath`${ws}/tool-profiles/${id}`, { method: 'DELETE' }),
+    setAgentToolProfile: (agentId, input) =>
+      request<Agent>(token, apiPath`${ws}/agents/${agentId}/tool-profile`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    getAgentToolProfilePreview: (agentId) =>
+      request<AgentToolProfilePreview>(
+        token,
+        apiPath`${ws}/agents/${agentId}/tool-profile/preview`,
+      ),
     listAgentMemories: (agentId, status) =>
       request<MemoryRead[]>(
         token,
