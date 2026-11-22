@@ -45,6 +45,7 @@ from who2be_api.repositories.tool_profile_repository import (
 from who2be_api.services.audit_service import AuditService
 from who2be_models import DEFAULT_LOCALE, AgentRead, WorkspaceRead, WorkspaceRole
 from who2be_models.tool_profiles import (
+    AgentToolProfilePreview,
     AgentToolProfileUpdate,
     ToolCatalogRead,
     ToolProfileCreate,
@@ -52,6 +53,7 @@ from who2be_models.tool_profiles import (
     ToolProfileUpdate,
     core_tools_in,
     tool_catalog,
+    tool_profile_preview,
     unknown_groups,
     unknown_tools,
 )
@@ -224,6 +226,29 @@ class ToolProfileService:
         """Gruppen und Kern-Werkzeuge aus dem Code (jedes Mitglied)."""
         require_role(ctx, WorkspaceRole.viewer)
         return tool_catalog()
+
+    async def preview(self, ctx: WorkspaceContext, agent_id: UUID) -> AgentToolProfilePreview:
+        """Effektive Werkzeugliste eines Agenten: Rechte UND Profil (jedes Mitglied).
+
+        Die Formel kommt aus ``tool_profile_preview`` (ADR-0059 §3.1), das
+        Profil ueber denselben Ladeweg wie ``whoami`` und ``tools-overview``
+        (``fetch_grant``). Hier wird nichts nachgerechnet.
+        """
+        require_role(ctx, WorkspaceRole.viewer)
+        agent = await self._agents.fetch(ctx.workspace_id, agent_id)
+        if agent is None:
+            raise _agent_not_found()
+        grant = await self._repo.fetch_grant(ctx.workspace_id, agent_id)
+        tools = tool_profile_preview(agent.tool_policy, grant)
+        return AgentToolProfilePreview(
+            agent_id=agent.id,
+            tool_profile_id=agent.tool_profile_id,
+            tools_added=list(agent.tools_added),
+            tools_removed=list(agent.tools_removed),
+            total=len(tools),
+            visible_count=sum(1 for tool in tools if tool.visible),
+            tools=tools,
+        )
 
     # ------------------------------------------------------------ Pflegen (admin)
 

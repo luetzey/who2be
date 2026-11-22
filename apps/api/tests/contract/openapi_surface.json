@@ -276,6 +276,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/tool-profile/preview",
+    "operationId": "preview_agent_tool_profile_v1_workspaces__workspace_id__agents__agent_id__tool_profile_preview_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/usage",
     "operationId": "get_agent_usage_v1_workspaces__workspace_id__agents__agent_id__usage_get"
   },

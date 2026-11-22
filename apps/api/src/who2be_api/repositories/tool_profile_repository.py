@@ -102,28 +102,36 @@ async def builtin_profile_id(
     return value if isinstance(value, UUID) else None
 
 
-# `agent_count` per korrelierter Unterabfrage: ein Roundtrip fuer die Liste,
+# `agent_ids` per korrelierter Unterabfrage: ein Roundtrip fuer die Liste,
 # kein N+1. Der Index `agent_tool_profile_idx` (0111) traegt sie.
-_SELECT = """
+# `agent_count` ist die Laenge derselben Liste, damit beide nie auseinanderlaufen.
+_AGENT_IDS = """
+    (SELECT coalesce(array_agg(a.id ORDER BY a.created_at, a.id), '{{}}'::uuid[])
+       FROM agent a
+      WHERE a.workspace_id = {table}.workspace_id
+        AND a.tool_profile_id = {table}.id)
+"""
+
+_SELECT = f"""
     SELECT p.id, p.workspace_id, p.builtin_key, p.name, p.description,
            p.groups, p.tools, p.created_at, p.updated_at,
-           (SELECT count(*) FROM agent a
-             WHERE a.workspace_id = p.workspace_id
-               AND a.tool_profile_id = p.id)::int AS agent_count
+           {_AGENT_IDS.format(table="p")} AS agent_ids
     FROM tool_profile p
 """
 
-_RETURNING = """
+_RETURNING = f"""
     RETURNING id, workspace_id, builtin_key, name, description, groups, tools,
               created_at, updated_at,
-              (SELECT count(*) FROM agent a
-                WHERE a.workspace_id = tool_profile.workspace_id
-                  AND a.tool_profile_id = tool_profile.id)::int AS agent_count
+              {_AGENT_IDS.format(table="tool_profile")} AS agent_ids
 """
 
 
 def _read(row: asyncpg.Record) -> ToolProfileRead:
-    return ToolProfileRead.model_validate(dict(row))
+    data = dict(row)
+    agent_ids = list(data.get("agent_ids") or [])
+    return ToolProfileRead.model_validate(
+        {**data, "agent_ids": agent_ids, "agent_count": len(agent_ids)}
+    )
 
 
 def _is_name_conflict(exc: asyncpg.UniqueViolationError) -> bool:

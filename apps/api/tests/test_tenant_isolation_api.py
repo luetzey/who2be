@@ -330,6 +330,9 @@ PROBES: dict[str, Probe] = {
     f"PUT {_WS}/agents/{{agent_id}}/tool-profile": Probe(
         body={"tool_profile_id": "<<builtin_tool_profile_id>>"}
     ),
+    # Vorschau (Q5-0): rechnet Rechte und Profil des fremden Agenten nur,
+    # wenn er im eigenen Workspace liegt, sonst 404 wie jeder Agent-Pfad.
+    f"GET {_WS}/agents/{{agent_id}}/tool-profile/preview": Probe(),
     f"DELETE {_WS}/agents/{{agent_id}}/favorite": Probe(),
     f"GET {_WS}/agents/{{agent_id}}/render": Probe(),
     f"GET {_WS}/agents/{{agent_id}}/rendered": Probe(),
