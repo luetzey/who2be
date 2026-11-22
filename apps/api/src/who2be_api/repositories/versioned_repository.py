@@ -379,7 +379,8 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
     ) -> tuple[TRead | None, WriteConflict | None]:
         """PUT-Pfad: neue Version. Active bleibt unangetastet (→ neuer Draft).
 
-        Blockiert mit `draft_exists`, solange irgendein Draft offen ist.
+        Blockiert mit `draft_exists`, solange irgendein Draft offen ist, und
+        mit `review_pending`, wenn die hoechste Version in Review steht.
         `new_locale` (gesetzt) wechselt die Entity-Sprache (Metadaten-Update);
         die neue Versions-Row uebernimmt die (ggf. neue) Entity-Sprache.
         Ist ein `base_rev` erwartet, wird er unter der Sperre geprueft
@@ -402,6 +403,10 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             )
             if existing_draft is not None:
                 return None, "draft_exists"
+            if current["status"] == VersionStatus.review.value:
+                # Wie der Auto-Save-Pfad: bei offenem Review keine Version
+                # anlegen, sonst entstuende still eine unsichtbare `inactive`.
+                return None, "review_pending"
             next_version = current["current_version"] + 1
             new_status: VersionStatus
             if current["status"] == VersionStatus.active.value:
