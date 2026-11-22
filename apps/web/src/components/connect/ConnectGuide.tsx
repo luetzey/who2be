@@ -1,5 +1,5 @@
 import { Copy, ExternalLink } from 'lucide-react'
-import { useId, type ReactNode } from 'react'
+import { Fragment, useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -7,6 +7,9 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
+  CHATGPT_CREATE,
+  CHATGPT_MENU,
+  CHATGPT_URL,
   OTHER_CLIENTS_HELP_PATH,
   claudeCodeCommand,
   claudeInstallLink,
@@ -73,6 +76,33 @@ function WithCode({ text, code }: { text: string; code: string }) {
   )
 }
 
+/**
+ * Satz mit hervorgehobenen Teilen an den Platzhaltern `[[0]]`, `[[1]]` …
+ * (Menuenamen, Feldwerte). Die Teile sind React-Knoten aus dem Code, im JSON
+ * steht nur Text — kein HTML.
+ */
+function WithParts({ text, parts }: { text: string; parts: readonly ReactNode[] }) {
+  const pieces = text.split(/\[\[(\d+)\]\]/)
+  return (
+    <>
+      {pieces.map((piece, index) => (
+        <Fragment key={index}>{index % 2 === 0 ? piece : parts[Number(piece)]}</Fragment>
+      ))}
+    </>
+  )
+}
+
+const mark = (index: number) => `[[${index}]]`
+
+/** Englischer Menuename in der DE-Fassung: fett und fuer Screenreader englisch. */
+function MenuName({ children }: { children: string }) {
+  return (
+    <b lang="en" className="font-semibold">
+      {children}
+    </b>
+  )
+}
+
 export function ConnectGuide({
   client,
   agentName,
@@ -136,6 +166,80 @@ export function ConnectGuide({
         />
         <p className={HINT}>{t('connect.teamPlan')}</p>
         {showFreeHint ? <p className={HINT}>{t('connect.free')}</p> : null}
+      </>
+    )
+  } else if (client === 'chatgpt') {
+    // Kein Install-Link: Name und URL werden in ChatGPT eingetragen. Die URL
+    // ist die Hauptaktion, Kopieren startet das Warten (wie beim Befehl).
+    guide = (
+      <>
+        <ol aria-describedby={leadId} className="flex list-decimal flex-col gap-3 pl-5 text-sm break-words">
+          <li className="space-y-2">
+            <span className="block">
+              <WithParts
+                text={t('connect.steps.chatgptOpen', { m0: mark(0), m1: mark(1), m2: mark(2) })}
+                parts={CHATGPT_MENU.map((name) => (
+                  <MenuName key={name}>{name}</MenuName>
+                ))}
+              />
+            </span>
+            <div>
+              <Button asChild variant="outline" className={CONNECT_ACTION}>
+                <Link to={CHATGPT_URL} reloadDocument target="_blank" rel="noopener noreferrer" onClick={onStart}>
+                  <ExternalLink aria-hidden="true" />
+                  {t('connect.cta.chatgptOpen')}
+                  {newTab}
+                </Link>
+              </Button>
+            </div>
+          </li>
+          <li className="space-y-2">
+            <span className="block">
+              <WithParts
+                text={t('connect.steps.chatgptAdd', { oauth: mark(0), create: mark(1), agent: agentName })}
+                parts={[
+                  <b key="oauth" className="font-semibold">
+                    OAuth
+                  </b>,
+                  <MenuName key="create">{CHATGPT_CREATE}</MenuName>,
+                ]}
+              />
+            </span>
+            <CopyField
+              label={t('connect.nameLabel')}
+              value={connectorName}
+              copyLabel={t('connect.copyName')}
+              onCopy={onCopy}
+            />
+            <CopyField
+              label={t('connect.urlLabel')}
+              value={connectorUrl}
+              copyLabel={t('connect.copyUrl')}
+              onCopy={(value) => onCopy(value, onStart)}
+              primary={!waiting}
+              mono
+              breakAll
+            />
+          </li>
+          <li className="space-y-2">
+            <span className="block">
+              <WithParts
+                text={t('connect.steps.chatgptTest', { at: mark(0), name: connectorName })}
+                parts={[
+                  <b key="at" className="font-mono font-semibold">
+                    @
+                  </b>,
+                ]}
+              />
+            </span>
+            {sentence}
+          </li>
+        </ol>
+        <div className="flex flex-col gap-1" data-testid="connect-hints">
+          <p className={HINT}>{t('connect.chatgptPlan')}</p>
+          <p className={HINT}>{t('connect.chatgptBusiness')}</p>
+          <p className={HINT}>{t('connect.chatgptConfirm')}</p>
+        </div>
       </>
     )
   } else if (client === 'code' || client === 'hermes') {

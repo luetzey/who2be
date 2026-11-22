@@ -3,7 +3,7 @@ title: Connect other programs
 description: Connect Claude Code, Cursor, VS Code, Hermes Agent and other programs to your agent.
 section: erste-schritte
 order: 30
-updated: 2026-10-23
+updated: 2026-11-22
 audience: all
 ---
 
@@ -53,6 +53,8 @@ Your program needs to support two things:
 
 - Remote MCP over HTTP, not only local servers.
 - Sign-in via OAuth, so you can confirm access in Who2Be.
+
+ChatGPT has its own guide: [Connect to ChatGPT](/help/connect-chatgpt).
 
 ## Profiles [#steckbriefe]
 

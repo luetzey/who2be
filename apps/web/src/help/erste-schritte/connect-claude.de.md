@@ -3,7 +3,7 @@ title: Mit Claude verbinden
 description: Ein Klick, eine Bestätigung, ein Test-Satz.
 section: erste-schritte
 order: 20
-updated: 2026-10-23
+updated: 2026-11-22
 audience: all
 ---
 
@@ -44,4 +44,4 @@ In Claude-Plänen für Teams und Unternehmen fügt der Owner der Claude-Organisa
 - **Der Agent ist nicht bereit:** Statt des Knopfs steht dann, was fehlt, zum Beispiel eine aktive Persona. Behebe das zuerst.
 - **Claude Free:** Dort ist nur ein eigener Connector erlaubt. Ist schon einer eingetragen, entferne ihn vorher.
 
-Mit Claude Code, Cursor, VS Code oder Hermes Agent geht es ähnlich, siehe [Andere Programme verbinden](/help/connect-other-clients).
+Mit Claude Code, Cursor, VS Code oder Hermes Agent geht es ähnlich, siehe [Andere Programme verbinden](/help/connect-other-clients), ChatGPT siehe [Mit ChatGPT verbinden](/help/connect-chatgpt).

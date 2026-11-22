@@ -683,6 +683,7 @@
       "clientQuestion": "Wo nutzt du deine Agenten?",
       "client": {
         "claude": "Claude",
+        "chatgpt": "ChatGPT",
         "code": "Claude Code",
         "editor": "Cursor oder VS Code",
         "hermes": "Hermes Agent",
@@ -693,6 +694,7 @@
       },
       "clientName": {
         "claude": "Claude",
+        "chatgpt": "ChatGPT",
         "code": "Claude Code",
         "editor": "deinem Editor",
         "hermes": "Hermes",
@@ -700,6 +702,7 @@
       },
       "lead": {
         "claude": "Web, App am Computer und am Handy.",
+        "chatgpt": "Nur auf chatgpt.com im Browser, nicht in der ChatGPT-App.",
         "code": "Im Terminal, mit einem Befehl.",
         "editor": "Ein Klick trägt den Agenten im Editor ein.",
         "hermes": "Im Terminal des Rechners, auf dem Hermes läuft.",
@@ -719,10 +722,14 @@
         "otherIntro": "Dein Programm muss Remote-MCP mit Anmeldung (OAuth) können. Trag dort diese Adresse ein:",
         "otherTest": "Danach schreibst du deinem Agenten:",
         "hermesLogin": "Hermes öffnet die Anmeldung im Browser oder zeigt einen Link dafür. Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
-        "hermesTest": "Starte eine neue Sitzung oder tippe {{cmd}}. Dann schreib:"
+        "hermesTest": "Starte eine neue Sitzung oder tippe {{cmd}}. Dann schreib:",
+        "chatgptOpen": "Öffne ChatGPT im Browser und geh auf {{m0}} › {{m1}} › {{m2}}.",
+        "chatgptAdd": "Trag Name und Server-URL ein. Lass die Anmeldung auf {{oauth}}, bestätige den Hinweis und klick auf {{create}}. Melde dich bei Who2Be an und bestätige den Agenten „{{agent}}“.",
+        "chatgptTest": "Tipp im neuen Chat {{at}}, wähl „{{name}}“ und schreib:"
       },
       "cta": {
         "claude": "Mit Claude verbinden",
+        "chatgptOpen": "ChatGPT öffnen",
         "code": "Befehl kopieren",
         "cursor": "Zu Cursor hinzufügen",
         "vscode": "In VS Code installieren",
@@ -747,6 +754,9 @@
       },
       "teamPlan": "Team- oder Enterprise-Plan? Dort fügt der Owner deiner Claude-Organisation Connectors hinzu.",
       "free": "Claude Free erlaubt nur einen eigenen Connector. Entferne dort vorher den Builder.",
+      "chatgptPlan": "Ob dein Plan Schreibwerkzeuge erlaubt, legt OpenAI fest. Im Zweifel kann ChatGPT nur lesen.",
+      "chatgptBusiness": "ChatGPT Business: Nur Admins fügen eigene Server hinzu.",
+      "chatgptConfirm": "ChatGPT fragt nach, bevor ein Werkzeug etwas ändert. Erlaube den Aufruf, sonst passiert nichts.",
       "hermesProfile": "Mehrere Profile? Mit {{cmd}} landet der Agent im richtigen Profil.",
       "hermesProfileCommand": "hermes -p <profil> mcp add …",
       "hermesHeadless": "Hermes läuft auf einem Server ohne Browser? Öffne den Link auf deinem Rechner und füg die Adresse, auf der der Browser landet, im Terminal ein.",

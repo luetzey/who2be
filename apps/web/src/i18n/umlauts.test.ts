@@ -66,6 +66,7 @@ const ALLOWED_PARTS = [
   'wiss',
   // Englische Fachbegriffe im deutschen Text
   'address',
+  'business', // ChatGPT Business (Produktname)
   'dismiss',
   'headless',
   'message',

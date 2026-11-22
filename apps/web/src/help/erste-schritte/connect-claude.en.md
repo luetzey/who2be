@@ -3,7 +3,7 @@ title: Connect to Claude
 description: One click, one confirmation, one test sentence.
 section: erste-schritte
 order: 20
-updated: 2026-10-23
+updated: 2026-11-22
 audience: all
 ---
 
@@ -44,4 +44,4 @@ On Claude plans for teams and companies, the owner of the Claude organization ad
 - **The agent isn't ready:** Instead of the button you see what is missing, for example an active persona. Fix that first.
 - **Claude Free:** Only one custom connector is allowed there. If one is already added, remove it first.
 
-Claude Code, Cursor, VS Code and Hermes Agent work in a similar way, see [Connect other programs](/help/connect-other-clients).
+Claude Code, Cursor, VS Code and Hermes Agent work in a similar way, see [Connect other programs](/help/connect-other-clients). For ChatGPT, see [Connect to ChatGPT](/help/connect-chatgpt).

@@ -683,6 +683,7 @@
       "clientQuestion": "Where do you use your agents?",
       "client": {
         "claude": "Claude",
+        "chatgpt": "ChatGPT",
         "code": "Claude Code",
         "editor": "Cursor or VS Code",
         "hermes": "Hermes Agent",
@@ -693,6 +694,7 @@
       },
       "clientName": {
         "claude": "Claude",
+        "chatgpt": "ChatGPT",
         "code": "Claude Code",
         "editor": "your editor",
         "hermes": "Hermes",
@@ -700,6 +702,7 @@
       },
       "lead": {
         "claude": "Web, desktop app and mobile.",
+        "chatgpt": "Only on chatgpt.com in the browser, not in the ChatGPT app.",
         "code": "In the terminal, with one command.",
         "editor": "One click adds the agent to your editor.",
         "hermes": "In the terminal of the machine Hermes runs on.",
@@ -719,10 +722,14 @@
         "otherIntro": "Your app needs to support remote MCP with sign-in (OAuth). Enter this address there:",
         "otherTest": "Then write to your agent:",
         "hermesLogin": "Hermes opens sign-in in the browser or prints a link for it. Sign in to Who2Be and approve the agent “{{agent}}”.",
-        "hermesTest": "Start a new session or type {{cmd}}. Then write:"
+        "hermesTest": "Start a new session or type {{cmd}}. Then write:",
+        "chatgptOpen": "Open ChatGPT in the browser and go to {{m0}} › {{m1}} › {{m2}}.",
+        "chatgptAdd": "Enter the name and server URL. Leave sign-in on {{oauth}}, accept the notice and click {{create}}. Sign in to Who2Be and approve the agent “{{agent}}”.",
+        "chatgptTest": "In a new chat, type {{at}}, pick “{{name}}” and write:"
       },
       "cta": {
         "claude": "Connect to Claude",
+        "chatgptOpen": "Open ChatGPT",
         "code": "Copy command",
         "cursor": "Add to Cursor",
         "vscode": "Install in VS Code",
@@ -747,6 +754,9 @@
       },
       "teamPlan": "On a Team or Enterprise plan? There, your Claude organization owner adds connectors.",
       "free": "Claude Free allows only one custom connector. Remove the Builder there first.",
+      "chatgptPlan": "OpenAI decides whether your plan allows write tools. If in doubt, ChatGPT can only read.",
+      "chatgptBusiness": "ChatGPT Business: only admins can add custom servers.",
+      "chatgptConfirm": "ChatGPT asks before a tool changes anything. Allow the call, otherwise nothing happens.",
       "hermesProfile": "Several profiles? {{cmd}} puts the agent in the right one.",
       "hermesProfileCommand": "hermes -p <profile> mcp add …",
       "hermesHeadless": "Hermes runs on a server without a browser? Open the link on your computer and paste the address the browser ends up on into the terminal.",

@@ -13,15 +13,25 @@
 // - Hermes Agent: `hermes mcp add <name> --url <url> --auth oauth`
 //   (`hermes mcp add --help`; Hermes-Doku user-guide/features/mcp,
 //   „OAuth-authenticated HTTP servers“).
+// - ChatGPT: kein Install-Link; Name und URL werden im Browser unter
+//   Plugins › + › Add custom MCP server eingetragen (OAuth, DCR/CIMD).
+//   Owner-Test gegen Who2Be am 2026-11-22: ok.
 
-export type ConnectClient = 'claude' | 'code' | 'editor' | 'hermes' | 'other'
+export type ConnectClient = 'claude' | 'chatgpt' | 'code' | 'editor' | 'hermes' | 'other'
 
 /**
- * Reihenfolge der Auswahl (Client-Auswahl-Spec §1): erst das Chat-Programm,
+ * Reihenfolge der Auswahl (Client-Auswahl-Spec §1): erst die Chat-Programme,
  * dann die Entwickler-Werkzeuge, dann der Agent-Rahmen, der Rueckfall zuletzt.
  * Einzige Quelle — Baustein und Begruessung lesen beide von hier.
  */
-export const CONNECT_CLIENTS: readonly ConnectClient[] = ['claude', 'code', 'editor', 'hermes', 'other']
+export const CONNECT_CLIENTS: readonly ConnectClient[] = [
+  'claude',
+  'chatgpt',
+  'code',
+  'editor',
+  'hermes',
+  'other',
+]
 
 /**
  * Ziel von „Klappt es nicht? Häufige Ursachen“ je Programm (Spec §2.5),
@@ -29,11 +39,23 @@ export const CONNECT_CLIENTS: readonly ConnectClient[] = ['claude', 'code', 'edi
  */
 export const CONNECT_HELP_PATHS: Readonly<Record<ConnectClient, string>> = {
   claude: '/help/connect-claude#troubleshooting',
+  chatgpt: '/help/connect-chatgpt#troubleshooting',
   code: '/help/connect-other-clients#claude-code',
   editor: '/help/connect-other-clients#cursor-vscode',
   hermes: '/help/connect-other-clients#hermes',
   other: '/help/connect-other-clients#andere',
 }
+
+/**
+ * Ziel von „ChatGPT öffnen“. Eigene Server gibt es nur im Browser, nicht in
+ * der App. `chatgpt.com/plugins` ist nicht als stabiler Pfad belegt (Spec §7.3).
+ */
+export const CHATGPT_URL = 'https://chatgpt.com/'
+
+/** Menuepfad in ChatGPT; ChatGPT zeigt ihn auch in der DE-Oberflaeche englisch. */
+export const CHATGPT_MENU = ['Plugins', '+', 'Add custom MCP server'] as const
+/** Knopf am Ende des ChatGPT-Dialogs. */
+export const CHATGPT_CREATE = 'Create as a plugin'
 
 /** Steckbriefe weiterer Programme (Gemini, Le Chat, …) in der Hilfe. */
 export const OTHER_CLIENTS_HELP_PATH = '/help/connect-other-clients#steckbriefe'
