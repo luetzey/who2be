@@ -297,7 +297,7 @@ WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85 \
 python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
 # OSS license gate (ADR-0033) — fail-closed against copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
-  --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
+  --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;CPAL;NPL;Sleepycat;UNKNOWN"
 # New tests must exercise behaviour (reports, does not block):
 uv run python scripts/check_effectful_tests.py --base origin/main
 ```
