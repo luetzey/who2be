@@ -182,7 +182,7 @@ AI-Agenten-Vertrag. **Bei jeder UI-Aenderung zuerst diese Datei lesen.**
 
 ### Stack
 
-- Framework: Vite 7 + React 18, TypeScript `strict` (`apps/web/tsconfig.app.json`).
+- Framework: Vite 8 + React 18, TypeScript `strict` (`apps/web/tsconfig.app.json`).
 - Routing: `react-router-dom@7` (kein Next-App- oder Pages-Router).
 - Tailwind v4 via `@tailwindcss/vite`: Tokens in `src/styles/globals.css`
   (`@import "tailwindcss"` + `@theme inline`). **Kein** `tailwind.config.*`.
