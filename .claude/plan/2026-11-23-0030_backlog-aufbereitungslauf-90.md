@@ -262,13 +262,49 @@ gemergt.**
   nicht von allein.* Der erlaubte Weg steht VOR jeder Optimierung, mit dem
   Satz, dass bei Kollision die Optimierung weicht. (Gefangen am eigenen Fehler.)
 
-## Nachlese für den nächsten Lauf
+## Offen geblieben — ausdrücklich, mit Grund
 
-- 🔴 Die vier Body-Schreiber haben je **einige** nicht gelistete Stellen stehen
-  gelassen, die nun im Widerspruch zu den neuen Aussagen stehen (u. a. in #632
-  der Verweis auf die gestrichene Vier-Pakete-Liste, in #1001 §Scope „Welle 0:
-  #1120 + #1141 + #1142 + #1150"). **Eine Ersetzungsliste, die einen Absatz
-  ersetzt, muss die Absätze mitnennen, die auf ihn verweisen** (Regel 153).
+🔴 **In #632 und #633 steht je ein Restsatz, der weiter eine falsche Anweisung
+trägt.** In §Verifikation folgt hinter der neu gesetzten grünen `all-green`-Zeile
+noch: „Statt einer Farbe zählt: jeder Job außer `audit` und `all-green` ist grün,
+und der `audit`-Job-LOG nennt ausschließlich Pakete aus der Vier-Pakete-Liste
+unten … dann ist es deins." **Die Vier-Pakete-Liste ist in derselben Korrektur
+gestrichen worden** — der Satz verweist ins Leere und lädt dazu ein, ein echtes
+`audit`-Rot abzutun.
+
+**Ein Nachzieh-Versuch ist gefahren und hat nichts geschrieben:** die Antwort des
+Schreibers wurde von einer Sicherheitsprüfung gestoppt, während er den Body von
+#632 für das Ersetzungsskript übertrug. **Beide Bodies sind unverändert** (kein
+Schreibzugriff, auch kein `gh`), die abgelegte Datei ist unvollständig (6.347 von
+38.741 Zeichen) und **nicht** als Vorlage brauchbar. Der Versuch ist nicht
+wiederholt worden.
+
+**Warum das hier stehen bleibt statt erzwungen zu werden:** der tragende Fehler —
+die Überschriften und die Aussetzung von `all-green` — ist in beiden Bodies
+behoben, **#442 als vorgeschriebener Einstiegspunkt sagt unmissverständlich, dass
+die Aussetzung aufgehoben ist**, und beide Pakete sind ohnehin blockiert (#632
+über Weiche 59, #633 über #632). Der Restsatz erreicht also vor der Owner-Antwort
+keinen Agenten. **Er gehört in den nächsten Lauf**, zusammen mit:
+
+- #632 Punkt 2: der Absatz „Der Mechanismus ist unberührt belegt" beschreibt
+  `pip-audit` weiter als `failure` und die Folgeschritte als `skipped`.
+- #632 Punkt 3: die zweizeilige Tabelle unter der neuen grünen Überschrift führt
+  beide Zeilen rot (`f89acf87`, „2 von 14"; „Exit 1, 7 CVEs"). **Eine
+  Ersetzung nur der ersten Zeile bricht die Tabelle** — beide Zeilen gehören als
+  Historie gekennzeichnet.
+- #632 Punkt 4/5: nach den Ersetzungen müssen der Anschluss „, je PR über
+  `git merge-base` …" und der Einleiter „⚠️ **Die Ausnahme ist die DoD:**"
+  mitangepasst werden.
+- #632 Punkt 7 und #633: `shallow (50) → **1676** Commits` → **1678**.
+- #1001 §Scope: „Out of Scope: `uv.lock` … (Welle 0: #1120 + #1141 + #1142 +
+  #1150)".
+- #989: der Baum-Gates-Absatz vom 2026-11-15 nennt `changelog_fragments.py check`
+  weiter mit **405**, und §Scope „die vier CVE-Pakete in `uv.lock`".
+
+→ **Lehre: eine Ersetzungsliste, die einen Absatz streicht, muss die Absätze
+mitnennen, die auf ihn verweisen** (Regel 153 gilt auch rückwärts).
+
+## Nachlese für den nächsten Lauf
 - 🔴 Mehrere Schreiber haben im gemeinsamen Scratchpad **dieselben Dateinamen**
   benutzt und sich gegenseitig überschrieben. Je Schreiber ein eigenes Präfix.
 - ⚪ Die Check-Runs von #1157, #1158, #1160, #1122, #1127, #1148 sind nicht
