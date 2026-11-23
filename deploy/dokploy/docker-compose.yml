@@ -51,7 +51,7 @@ x-hardening: &hardening
 
 services:
   db:
-    image: supabase/postgres:15.19.0.007
+    image: supabase/postgres:15.20.0.002
     environment:
       POSTGRES_HOST: /var/run/postgresql
       POSTGRES_DB: postgres
@@ -112,7 +112,7 @@ services:
     mem_limit: 128m
 
   auth:
-    image: supabase/gotrue:v2.197.0
+    image: supabase/gotrue:v2.198.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -265,7 +265,7 @@ services:
   seaweedfs:
     # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
     # impliziten Image-Sprung haengen (identisch zum lokalen Stack, WP1).
-    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    image: chrislusf/seaweedfs:4.54@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
     # Credential-Datei s3.json: SeaweedFS erlaubt OHNE `-s3.config` anonymen
     # Zugriff auf alle S3-Operationen (Doku woertlich) — die Datei ist ein
     # Sicherheits-Gate, keine Kuer. Der lokale Stack mountet dafuer eine
