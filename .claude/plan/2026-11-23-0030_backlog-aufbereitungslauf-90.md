@@ -234,9 +234,27 @@ Paket; je Body ein eigener Schreiber mit dem Originaltext vor sich):
 | **#632** | 🔴 `gh api` | 41.868 → **38.741** | zeichengleich bis 38.683, danach +58 (Fußzeile angehängt) |
 | **#633** | 🔴 `gh api` | 47.187 → **42.313** | zeichengleich bis 42.255, danach +58 (dito) |
 
-**#442** neu gesetzt (Nebenbedingung, Kopf, Gates, fünf Funde, PR-Bestand,
-Sperren, Startbar, Norm-Tabelle, Wellen, zwei neue Weichen, drei neue Regeln,
-Fußzeile). **#1150**: Titel nachgezogen (Regel 59) + Kommentar.
+**#442** neu gesetzt, in zwei Durchgängen, **beide über MCP und beide
+gegengelesen**:
+
+| Durchgang | Inhalt | Zeichen | Gegenlese |
+|---|---|---|---|
+| 1 | Nebenbedingung, Kopf, Gates, fünf Funde, PR-Bestand, Sperren, Startbar, Norm-Tabelle, Wellen, Weichen 67/68, Regeln 84–86, Fußzeile | 76.588 → **82.157** | ⚠️ **eine Ein-Zeichen-Drift** in Regel 83 („Läufen" → „Läufe"), maschinell gefunden; **nicht nachgeschrieben** (Regel 78: ein Korrektur-Schrieb ist ein zweites Abtippen mit derselben Wahrscheinlichkeit) |
+| 2 | Weichen-Kopfzahl mit Zählweise, Abschnitt „Was in den Bodies korrigiert wurde", `STATE.md`-Alter in Weiche 43, `Welle S` → `Welle M3` | 82.156 → **83.603** | 🟢 **zeichengleich** |
+
+🟢 **Erhaltungspflicht eingelöst, maschinell gezählt:** Weichen-Nummern vorher 44,
+nachher 44 (dieselben, plus 67/68 — die Zeile „11 / 34" zählt `grep` nicht als
+`**N. `); Pflege-Regeln **1 bis 86 lückenlos** (`== list(range(1,87))` → True).
+
+⚠️ **Eine Zahl bleibt unstimmig, mit Grund:** **Weiche 66** nennt das
+`STATE.md`-Alter mit **51 Tagen**, der Kopf und Weiche 43 nennen **52**. Die 51
+war am **2026-11-22** richtig; nach Regel 19 ist eine datierte Messung als
+Historie gültig. Sie ist **nicht** nachgezogen worden, weil ein Vollschrieb von
+83.603 Zeichen für eine Ziffer das falsche Verhältnis hat (Regel 78) — **der
+nächste Lauf nimmt sie mit**, am besten zusammen mit den Reststellen aus #632,
+#633, #989 und #1001.
+
+**#1150**: Titel nachgezogen (Regel 59) + Kommentar.
 
 **Als Kommentar, mit benanntem Grund** (Regel 62 — `needs-decision` /
 `human-only` / `epic`, nicht aufgreifbar): **#1150** (Weiche 67), **#540**
