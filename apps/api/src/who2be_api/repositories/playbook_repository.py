@@ -403,6 +403,9 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             )
             if existing_draft is not None:
                 return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
+            if current["status"] == VersionStatus.review.value:
+                # Wie im Kern: bei offenem Review keine unsichtbare Version.
+                return PlaybookUpdateOutcome(playbook=None, conflict="review_pending")
             next_version = current["current_version"] + 1
             new_status: VersionStatus
             if current["status"] == VersionStatus.active.value:

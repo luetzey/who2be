@@ -1026,7 +1026,10 @@ async def create_persona(data: PersonaMarkdownCreate) -> ToolWriteResult:
 async def update_persona(persona_id: str, data: PersonaMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt einer Persona (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    Ohne offenen Draft entsteht ein neuer auf Basis der aktiven Version; bei offenem Draft
+    409 (dann `edit_content`), bei offenem Review 409 `review_conflict`.
+    Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server (sonst
+    `anchor_unknown`). Vorlage mit `format="source"`
     lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     Felder wie bei `create_persona`.
     """
@@ -1100,7 +1103,10 @@ async def create_playbook(data: PlaybookMarkdownCreate) -> ToolWriteResult:
 async def update_playbook(playbook_id: str, data: PlaybookMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt eines Playbooks (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    Ohne offenen Draft entsteht ein neuer auf Basis der aktiven Version; bei offenem Draft
+    409 (dann `edit_content`), bei offenem Review 409 `review_conflict`.
+    Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server (sonst
+    `anchor_unknown`). Vorlage mit `format="source"`
     lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     Anker bestehender Ueberschriften stehen lassen. Body wie bei `create_playbook`.
     """
@@ -1189,7 +1195,10 @@ async def create_resource(data: ResourceMarkdownCreate) -> ToolWriteResult:
 async def update_resource(resource_id: str, data: ResourceMarkdownUpdate) -> ToolWriteResult:
     """Ersetzt den Inhalt einer Resource (PUT); auf einer aktiven Version entsteht ein Draft.
 
-    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    Ohne offenen Draft entsteht ein neuer auf Basis der aktiven Version; bei offenem Draft
+    409 (dann `edit_content`), bei offenem Review 409 `review_conflict`.
+    Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server (sonst
+    `anchor_unknown`). Vorlage mit `format="source"`
     lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     Anker bestehender Ueberschriften stehen lassen, sonst verlieren Verweise ihr Ziel.
     """
@@ -1264,7 +1273,10 @@ async def update_external_tool(tool_id: str, data: ExternalToolMarkdownUpdate) -
     """Ersetzt den Inhalt einer externen Tool-Bindung (PUT); der Alias bleibt.
 
     Auf einer aktiven Version entsteht ein Draft.
-    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    Ohne offenen Draft entsteht ein neuer auf Basis der aktiven Version; bei offenem Draft
+    409 (dann `edit_content`), bei offenem Review 409 `review_conflict`.
+    Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server (sonst
+    `anchor_unknown`). Vorlage mit `format="source"`
     lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     """
     return await content_tools.put_markdown("external_tool", tool_id, "ExternalTool", data)
@@ -1370,7 +1382,10 @@ async def update_system_prompt(
     """Ersetzt den Inhalt eines System-Prompt-Templates (PUT) als neuen Draft.
 
     Die aktive Version bleibt, bis ein Mensch freigibt.
-    409, wenn schon ein Draft offen ist: dann `edit_content`. Vorlage mit `format="source"`
+    Ohne offenen Draft entsteht ein neuer auf Basis der aktiven Version; bei offenem Draft
+    409 (dann `edit_content`), bei offenem Review 409 `review_conflict`.
+    Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server (sonst
+    `anchor_unknown`). Vorlage mit `format="source"`
     lesen, nie die Lesefassung; `data.base_rev` ist optional und prueft auf Konflikte.
     Body wie bei `create_system_prompt`.
     """
