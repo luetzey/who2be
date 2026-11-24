@@ -9,6 +9,8 @@ Pfade unter ``/v1/workspaces/{workspace_id}`` (Prefix aus ``main.py``):
 * ``POST   /tool-profiles/{id}/reset``    mitgeliefertes Profil zuruecksetzen (admin)
 * ``DELETE /tool-profiles/{id}``          eigenes Profil loeschen (admin)
 * ``PUT    /agents/{agent_id}/tool-profile``  Zuordnung (editor, nur Menschen)
+* ``GET    /agents/{agent_id}/tool-profile/preview``  effektive Werkzeugliste
+  mit Zustand je Werkzeug (viewer, Q5-0)
 
 Rollen, Fehlercodes und Audit setzt ``ToolProfileService``; der Router
 deklariert die Fehler nur im Schema (ADR-0051). Keine neuen MCP-Werkzeuge
@@ -32,6 +34,7 @@ from who2be_api.services.audit_service import AuditService
 from who2be_api.services.tool_profile_service import ToolProfileService
 from who2be_models import AgentRead, ApiErrorBody
 from who2be_models.tool_profiles import (
+    AgentToolProfilePreview,
     AgentToolProfileUpdate,
     ToolCatalogRead,
     ToolProfileCreate,
@@ -128,6 +131,16 @@ async def delete_tool_profile(
 ) -> Response:
     await service.delete(ctx, profile_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/agents/{agent_id}/tool-profile/preview",
+    responses={404: _err("reason: agent_not_found")},
+)
+async def preview_agent_tool_profile(
+    agent_id: UUID, ctx: Ctx, service: Service
+) -> AgentToolProfilePreview:
+    return await service.preview(ctx, agent_id)
 
 
 @router.put(

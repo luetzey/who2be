@@ -189,6 +189,15 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.deleteAgent(ID),
     api.copyAgent(ID),
     api.renderAgentPrompt(ID),
+    // ADR-0059 §7 (Q5-0): Werkzeug-Profile und Vorschau je Agent.
+    api.listToolProfiles(),
+    api.getToolCatalog(),
+    api.createToolProfile({ name: 'x' }),
+    api.updateToolProfile(ID, { name: 'x' }),
+    api.resetToolProfile(ID),
+    api.deleteToolProfile(ID),
+    api.setAgentToolProfile(ID, { tool_profile_id: null }),
+    api.getAgentToolProfilePreview(ID),
     api.previewPlaceholder({ kind: 'playbook', target_id: ID } as never),
     // ADR-0047 — Arbeitsbereich + Knowledge Base.
     api.listWorkAreas(),

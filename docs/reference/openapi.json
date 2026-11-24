@@ -15923,6 +15923,74 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/tool-profile/preview": {
+      "get": {
+        "tags": [
+          "tool-profiles"
+        ],
+        "summary": "Preview Agent Tool Profile",
+        "operationId": "preview_agent_tool_profile_v1_workspaces__workspace_id__agents__agent_id__tool_profile_preview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolProfilePreview"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agents/{agent_id}/tool-profile": {
       "put": {
         "tags": [
@@ -18585,6 +18653,65 @@
         "type": "object",
         "title": "AgentToolPolicy",
         "description": "Welche MCP-Tools ein Agent nutzen darf.\n\nWird als JSONB auf `agent.tool_policy` persistiert. Ein leeres JSON-Objekt\n(`{}`) deserialisiert zur Default-Policy unten — so erben Bestands-Agenten\nohne expliziten Eintrag das „nur Zugewiesenes lesen, keine Writes\"-Verhalten\n(least privilege/„secure by default\")."
+      },
+      "AgentToolProfilePreview": {
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "tool_profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Profile Id"
+          },
+          "tools_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Added"
+          },
+          "tools_removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools Removed"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "visible_count": {
+            "type": "integer",
+            "title": "Visible Count"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolPreviewEntry"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_id",
+          "total",
+          "visible_count",
+          "tools"
+        ],
+        "title": "AgentToolProfilePreview",
+        "description": "Antwort `GET /agents/{id}/tool-profile/preview`: die effektive Werkzeugliste.\n\nGerechnet mit `tool_profile_preview`, also mit denselben Bausteinen wie\nMCP-Filter und `tools-overview`. Die Oberflaeche baut nichts nach."
       },
       "AgentToolProfileUpdate": {
         "properties": {
@@ -31374,6 +31501,54 @@
         "title": "ToolGroupRead",
         "description": "Eine Gruppe im Katalog: Schluessel und ihre Werkzeuge."
       },
+      "ToolPreviewEntry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "group": {
+            "$ref": "#/components/schemas/ToolGroup"
+          },
+          "core": {
+            "type": "boolean",
+            "title": "Core"
+          },
+          "in_profile": {
+            "type": "boolean",
+            "title": "In Profile"
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed"
+          },
+          "allowed_by_rights": {
+            "type": "boolean",
+            "title": "Allowed By Rights"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "group",
+          "core",
+          "in_profile",
+          "added",
+          "removed",
+          "allowed_by_rights",
+          "visible"
+        ],
+        "title": "ToolPreviewEntry",
+        "description": "Ein Werkzeug in der Vorschau eines Agenten (ADR-0059 §3.1, §3.2).\n\n`in_profile` ist das Profil inklusive Ausnahmen (`is_tool_in_profile`),\n`allowed_by_rights` sind die Rechte (`is_tool_visible`). Sichtbar ist ein\nWerkzeug nur, wenn beides gilt (Rechte gehen vor). `added`/`removed`\nzeigen die Ausnahmen am Agenten: Ein Werkzeug kann in `tools_added`\nstehen und trotzdem durch die Rechte verborgen sein."
+      },
       "ToolProfileCreate": {
         "properties": {
           "name": {
@@ -31516,6 +31691,14 @@
             "title": "Agent Count",
             "default": 0
           },
+          "agent_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Agent Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -31525,6 +31708,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "is_modified": {
+            "type": "boolean",
+            "title": "Is Modified",
+            "description": "True, wenn ein mitgeliefertes Profil vom Lieferstand abweicht.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -31535,10 +31724,11 @@
           "groups",
           "tools",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "is_modified"
         ],
         "title": "ToolProfileRead",
-        "description": "Ein Werkzeug-Profil des Workspace, mit Zahl der zugeordneten Agenten."
+        "description": "Ein Werkzeug-Profil des Workspace, mit den zugeordneten Agenten.\n\n`agent_ids` listet die Agenten mit diesem Profil (fuer „Genutzt von …“),\n`agent_count` ist ihre Zahl. `is_modified` rechnet der Server gegen\n`BUILTIN_PROFILES`, damit der Client keine zweite Kopie des Lieferstands\nbraucht."
       },
       "ToolProfileUpdate": {
         "properties": {

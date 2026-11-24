@@ -1121,6 +1121,107 @@ export interface Agent {
   // Attribution faelschen. null = nicht hinterlegt.
   model_provider?: string | null
   model_name?: string | null
+  // ADR-0059 §4.2 — Werkzeug-Profil. `tool_profile_id = null` heisst „Alle“.
+  // Nur Ausgabe: gesetzt wird ueber `setAgentToolProfile` (eigener Weg, nur
+  // Menschen, auch bei verwalteten Agenten), nie ueber `updateAgent`.
+  tool_profile_id?: string | null
+  tools_added?: string[]
+  tools_removed?: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Werkzeug-Profile (ADR-0059 §7). Ein Profil ist kein Recht: es blendet nur
+// MCP-Werkzeuge aus (Rechte gehen vor). Gruppen, Kern und Lieferstand kennt
+// nur der Server (`who2be_models/tool_profiles.py`) — der Client rechnet
+// nichts nach, sondern liest Katalog, `is_modified` und die Vorschau.
+
+// Schluessel der Werkzeuggruppen (`ToolGroup`, Reihenfolge laut Katalog).
+export type ToolGroupKey =
+  | 'core'
+  | 'read'
+  | 'feedback_memory'
+  | 'workarea_read'
+  | 'workarea_write'
+  | 'content_write'
+  | 'transition'
+  | 'agent_admin'
+  | 'system_prompt'
+  | 'curation'
+
+// Schluessel der mitgelieferten Profile; „Alle“ hat keinen (kein Profil).
+export type BuiltinToolProfileKey = 'read' | 'author' | 'curator' | 'builder'
+
+// `GET /tool-profiles` — ein Profil des Workspace.
+export interface ToolProfile {
+  id: string
+  workspace_id: string
+  builtin_key: BuiltinToolProfileKey | null
+  name: string
+  description: string
+  // `string` statt `ToolGroupKey`: ein entfallener Name darf das Lesen nicht
+  // brechen (ADR-0059 §3.3), er wirkt nur nicht.
+  groups: string[]
+  tools: string[]
+  agent_count: number
+  // Agenten mit diesem Profil (fuer „Genutzt von …“), Laenge = agent_count.
+  agent_ids: string[]
+  // Mitgeliefertes Profil weicht vom Lieferstand ab (Abzeichen „angepasst“);
+  // eigene Profile immer false.
+  is_modified: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Eingabe `POST /tool-profiles` und `PUT /tool-profiles/{id}` (admin).
+export interface ToolProfileInput {
+  name: string
+  description?: string
+  groups?: string[]
+  tools?: string[]
+}
+
+// `GET /tool-profiles/catalog` — Gruppen und Kern aus dem Code.
+export interface ToolGroup {
+  key: ToolGroupKey
+  tools: string[]
+}
+
+export interface ToolCatalog {
+  groups: ToolGroup[]
+  core_tools: string[]
+}
+
+// Eingabe `PUT /agents/{id}/tool-profile` (editor, nur Menschen). Kern-
+// Werkzeuge in `tools_removed` ergeben 422 `core_tool_not_removable`.
+export interface AgentToolProfileInput {
+  tool_profile_id: string | null
+  tools_added?: string[]
+  tools_removed?: string[]
+}
+
+// Ein Werkzeug in der Vorschau: Profil (inkl. Ausnahmen) UND Rechte.
+// `visible = in_profile && allowed_by_rights`. Ein Werkzeug kann `added` und
+// trotzdem durch die Rechte verborgen sein.
+export interface ToolPreviewEntry {
+  name: string
+  group: ToolGroupKey
+  core: boolean
+  in_profile: boolean
+  added: boolean
+  removed: boolean
+  allowed_by_rights: boolean
+  visible: boolean
+}
+
+// `GET /agents/{id}/tool-profile/preview` — effektive Werkzeugliste.
+export interface AgentToolProfilePreview {
+  agent_id: string
+  tool_profile_id: string | null
+  tools_added: string[]
+  tools_removed: string[]
+  total: number
+  visible_count: number
+  tools: ToolPreviewEntry[]
 }
 
 export interface AgentInput {

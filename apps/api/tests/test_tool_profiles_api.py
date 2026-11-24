@@ -396,6 +396,132 @@ def test_verwalteter_builder_laesst_sich_zuordnen(env: Env) -> None:
     assert res.json()["tools_added"] == ["create_artifact"]
 
 
+# ------------------------------------------------------------------ Q5-0: Liste und Vorschau
+
+
+def test_liste_liefert_agent_ids_und_is_modified(env: Env) -> None:
+    """`agent_ids` fuer „Genutzt von …“, `is_modified` gegen den Lieferstand.
+
+    Der Client braucht beides, ohne `BUILTIN_PROFILES` nachzubauen (SSoT).
+    `agent_count` ist die Laenge von `agent_ids`.
+    """
+    c = env.client
+    by_key = {p["builtin_key"]: p for p in env.profiles()}
+    assert all(p["is_modified"] is False for p in by_key.values())
+    # Der verwaltete Builder steht auf „Builder“ (W59-3 = A).
+    builder = by_key["builder"]
+    expected = db_fetchval(
+        "SELECT array_agg(id::text ORDER BY created_at, id) FROM agent "
+        "WHERE workspace_id = $1 AND tool_profile_id = $2",
+        env.ws,
+        UUID(builder["id"]),
+    )
+    assert builder["agent_ids"] == list(expected)
+    assert str(env.builder) in builder["agent_ids"]
+    assert builder["agent_count"] == len(builder["agent_ids"])
+    assert by_key["read"]["agent_ids"] == []
+
+    custom = env.create("Eigenes")
+    assert custom["is_modified"] is False
+    assert custom["agent_ids"] == []
+    assert env.assign(env.agent, env.editor_h, tool_profile_id=custom["id"]).status_code == 200
+    listed = next(p for p in env.profiles() if p["id"] == custom["id"])
+    assert listed["agent_ids"] == [str(env.agent)]
+    assert listed["agent_count"] == 1
+
+    # Nur Name und Beschreibung geaendert: Wirkung gleich, nicht „angepasst“.
+    read = by_key["read"]
+    groups = [g.value for g in BUILTIN_PROFILES[BuiltinProfileKey.read].groups]
+    res = c.put(
+        env.url(f"/tool-profiles/{read['id']}"),
+        json={"name": "Nur Lesen", "description": "x", "groups": list(reversed(groups))},
+        headers=env.admin_h,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["is_modified"] is False
+
+    # Ein Werkzeug mehr: angepasst, bis zum Zuruecksetzen.
+    res = c.put(
+        env.url(f"/tool-profiles/{read['id']}"),
+        json={"name": "Lesen", "groups": groups, "tools": ["create_artifact"]},
+        headers=env.admin_h,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["is_modified"] is True
+    res = c.post(env.url(f"/tool-profiles/{read['id']}/reset"), headers=env.admin_h)
+    assert res.status_code == 200, res.text
+    assert res.json()["is_modified"] is False
+
+
+def _preview(env: Env, agent: UUID, headers: dict[str, str]) -> dict[str, Any]:
+    res = env.client.get(env.url(f"/agents/{agent}/tool-profile/preview"), headers=headers)
+    assert res.status_code == 200, res.text
+    body: dict[str, Any] = res.json()
+    return body
+
+
+def test_vorschau_rechnet_rechte_und_profil(env: Env) -> None:
+    """Die Vorschau zeigt je Werkzeug Profil, Ausnahmen und Rechte (ADR-0059 §3.1).
+
+    Der Test-Agent hat die Default-Rechte (alles lesen, nichts schreiben).
+    Profil „Lesen“, `create_artifact` freigegeben, `search` gesperrt:
+    `create_artifact` ist im Profil, aber durch die Rechte verborgen.
+    """
+    read = env.builtin_id(BuiltinProfileKey.read)
+    res = env.assign(
+        env.agent,
+        env.editor_h,
+        tool_profile_id=read,
+        tools_added=["create_artifact"],
+        tools_removed=["search"],
+    )
+    assert res.status_code == 200, res.text
+
+    body = _preview(env, env.agent, env.viewer_h)
+    assert body["agent_id"] == str(env.agent)
+    assert body["tool_profile_id"] == read
+    assert body["tools_added"] == ["create_artifact"]
+    assert body["tools_removed"] == ["search"]
+    tools = {t["name"]: t for t in body["tools"]}
+    assert list(tools) == [name for names in TOOL_GROUPS.values() for name in names]
+    assert body["total"] == len(tools)
+    assert body["visible_count"] == sum(t["visible"] for t in tools.values())
+
+    assert tools["search"] | {"name": None} == {
+        "name": None,
+        "group": "read",
+        "core": False,
+        "in_profile": False,
+        "added": False,
+        "removed": True,
+        "allowed_by_rights": True,
+        "visible": False,
+    }
+    created = tools["create_artifact"]
+    assert created["added"] and created["in_profile"]
+    assert created["allowed_by_rights"] is False
+    assert created["visible"] is False
+    assert tools["get_persona"]["visible"] is True
+    assert tools["ping"]["core"] and tools["ping"]["visible"]
+    # Nicht im Profil „Lesen“ und nicht freigegeben.
+    assert tools["update_agent"]["in_profile"] is False
+    assert tools["update_agent"]["visible"] is False
+
+    # „Alle“ ohne Ausnahmen: das Profil laesst alles durch, nur die Rechte zaehlen.
+    assert env.assign(env.agent, env.editor_h, tool_profile_id=None).status_code == 200
+    body = _preview(env, env.agent, env.agent_h)
+    assert body["tool_profile_id"] is None
+    assert all(t["in_profile"] for t in body["tools"])
+    assert {t["name"] for t in body["tools"] if t["visible"]} == {
+        t["name"] for t in body["tools"] if t["allowed_by_rights"]
+    }
+
+
+def test_vorschau_unbekannter_agent(env: Env) -> None:
+    res = env.client.get(env.url(f"/agents/{uuid4()}/tool-profile/preview"), headers=env.viewer_h)
+    assert _reason(res, 404) == "agent_not_found"
+
+
 # ------------------------------------------------------------------ whoami (§6.1)
 
 

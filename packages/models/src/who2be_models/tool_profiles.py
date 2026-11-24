@@ -42,7 +42,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, MemoryMode, ReadScope
 from who2be_models.tool_requirements import is_tool_visible, is_tool_visible_for
@@ -342,8 +342,31 @@ class ToolProfileUpdate(_ToolProfileFields):
     """Eingabe `PUT /tool-profiles/{id}` — Profil vollstaendig ersetzen (admin)."""
 
 
+def is_builtin_modified(
+    key: BuiltinProfileKey | None, groups: Iterable[str], tools: Iterable[str]
+) -> bool:
+    """Weicht ein mitgeliefertes Profil vom Lieferstand ab (Abzeichen „angepasst“)?
+
+    Verglichen werden nur Gruppen und Werkzeuge als Mengen, so wie sie auch
+    `effective_tool_set` auswertet: Name, Beschreibung und Reihenfolge
+    aendern die Wirkung nicht. Eigene Profile (`key is None`) haben keinen
+    Lieferstand und gelten nie als angepasst.
+    """
+    if key is None:
+        return False
+    profile = BUILTIN_PROFILES[key]
+    same_groups = set(groups) == {group.value for group in profile.groups}
+    return not (same_groups and set(tools) == set(profile.tools))
+
+
 class ToolProfileRead(BaseModel):
-    """Ein Werkzeug-Profil des Workspace, mit Zahl der zugeordneten Agenten."""
+    """Ein Werkzeug-Profil des Workspace, mit den zugeordneten Agenten.
+
+    `agent_ids` listet die Agenten mit diesem Profil (fuer „Genutzt von …“),
+    `agent_count` ist ihre Zahl. `is_modified` rechnet der Server gegen
+    `BUILTIN_PROFILES`, damit der Client keine zweite Kopie des Lieferstands
+    braucht.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -355,8 +378,15 @@ class ToolProfileRead(BaseModel):
     groups: list[str]
     tools: list[str]
     agent_count: int = 0
+    agent_ids: list[UUID] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_modified(self) -> bool:
+        """True, wenn ein mitgeliefertes Profil vom Lieferstand abweicht."""
+        return is_builtin_modified(self.builtin_key, self.groups, self.tools)
 
 
 class AgentToolProfileUpdate(BaseModel):
@@ -390,6 +420,75 @@ class ToolCatalogRead(BaseModel):
 
     groups: list[ToolGroupRead]
     core_tools: list[str]
+
+
+class ToolPreviewEntry(BaseModel):
+    """Ein Werkzeug in der Vorschau eines Agenten (ADR-0059 §3.1, §3.2).
+
+    `in_profile` ist das Profil inklusive Ausnahmen (`is_tool_in_profile`),
+    `allowed_by_rights` sind die Rechte (`is_tool_visible`). Sichtbar ist ein
+    Werkzeug nur, wenn beides gilt (Rechte gehen vor). `added`/`removed`
+    zeigen die Ausnahmen am Agenten: Ein Werkzeug kann in `tools_added`
+    stehen und trotzdem durch die Rechte verborgen sein.
+    """
+
+    name: str
+    group: ToolGroup
+    core: bool
+    in_profile: bool
+    added: bool
+    removed: bool
+    allowed_by_rights: bool
+    visible: bool
+
+
+class AgentToolProfilePreview(BaseModel):
+    """Antwort `GET /agents/{id}/tool-profile/preview`: die effektive Werkzeugliste.
+
+    Gerechnet mit `tool_profile_preview`, also mit denselben Bausteinen wie
+    MCP-Filter und `tools-overview`. Die Oberflaeche baut nichts nach.
+    """
+
+    agent_id: UUID
+    tool_profile_id: UUID | None = None
+    tools_added: list[str] = Field(default_factory=list)
+    tools_removed: list[str] = Field(default_factory=list)
+    total: int
+    visible_count: int
+    tools: list[ToolPreviewEntry]
+
+
+def tool_profile_preview(
+    policy: AgentToolPolicy | None, grant: ToolProfileGrant | None
+) -> list[ToolPreviewEntry]:
+    """Zustand jedes gruppierten Werkzeugs fuer `policy` und `grant` (Katalog-Reihenfolge).
+
+    Rechte ueber `is_tool_visible` (ADR-0042), Profil ueber
+    `is_tool_in_profile` — keine eigene Formel. Ein Werkzeug ohne
+    Rechte-Eintrag (`None`) gilt als erlaubt, wie im MCP-Filter (fail-open);
+    der Paritaetstest haelt Gruppen und Rechte-Mapping deckungsgleich.
+    """
+    added = set(grant.tools_added) if grant is not None else set()
+    removed = set(grant.tools_removed) if grant is not None else set()
+    entries: list[ToolPreviewEntry] = []
+    for group, tools in TOOL_GROUPS.items():
+        for name in tools:
+            core = name in CORE_TOOLS
+            in_profile = is_tool_in_profile(name, grant)
+            by_rights = is_tool_visible(name, policy) is not False
+            entries.append(
+                ToolPreviewEntry(
+                    name=name,
+                    group=group,
+                    core=core,
+                    in_profile=in_profile,
+                    added=name in added,
+                    removed=name in removed and not core,
+                    allowed_by_rights=by_rights,
+                    visible=by_rights and in_profile,
+                )
+            )
+    return entries
 
 
 def tool_catalog() -> ToolCatalogRead:
@@ -529,12 +628,14 @@ __all__ = [
     "CORE_TOOLS",
     "TOOL_GROUPS",
     "TOOL_GROUP_OF",
+    "AgentToolProfilePreview",
     "AgentToolProfileUpdate",
     "BuiltinProfile",
     "BuiltinProfileKey",
     "ToolCatalogRead",
     "ToolGroup",
     "ToolGroupRead",
+    "ToolPreviewEntry",
     "ToolProfileCreate",
     "ToolProfileGrant",
     "ToolProfileRead",
@@ -544,10 +645,12 @@ __all__ = [
     "core_tools_in",
     "effective_tool_set",
     "expand_groups",
+    "is_builtin_modified",
     "is_tool_in_profile",
     "is_tool_visible_for_with_profile",
     "is_tool_visible_with_profile",
     "tool_catalog",
+    "tool_profile_preview",
     "unknown_groups",
     "unknown_tools",
 ]
