@@ -5,22 +5,9 @@
 # Every entry is a time-boxed exception for exactly one advisory ID. No entry
 # without an expiry date; when it expires the scan turns red again and the
 # finding has to be re-evaluated with current data.
-
-[[IgnoredVulns]]
-id = "GHSA-3g3m-2fjr-6pw4"
-ignoreUntil = 2026-11-30T00:00:00Z
-reason = """glob@13.0.6: fixed only in the new major 14.0.2, which no parent package \
-accepts yet (eslint, @typescript-eslint/typescript-estree, @npmcli/* via \
-license-checker-rseidelsohn). Dev-only tooling, not in the shipped bundle. \
-Major migration tracked as a follow-up card. Re-check by the expiry date."""
-
-[[IgnoredVulns]]
-id = "GHSA-g3hv-75wg-m249"
-ignoreUntil = 2026-11-30T00:00:00Z
-reason = """minimatch@10.2.5/10.2.6/3.1.5: fixed only in the new major 11.0.1, which no \
-parent package accepts yet (eslint, @eslint/config-array, \
-@typescript-eslint/typescript-estree, @npmcli/*, @tufjs/models, \
-eslint-plugin-jsx-a11y). minimatch@3 (eslint-plugin-jsx-a11y ^3.1.2) has no \
-compatible fix at all: an override to 11 crashes the jsx-a11y lint rule (no \
-default export). Dev-only tooling, not in the shipped bundle. Major migration \
-tracked as a follow-up card. Re-check by the expiry date."""
+#
+# No exceptions are active. glob and minimatch are forced to their fixed
+# majors by the "overrides" block in package.json; the only remaining
+# minimatch@3.1.5 (pinned for eslint-plugin-jsx-a11y, which breaks on 11) is
+# outside the corrected range of GHSA-g3hv-75wg-m249 (>=7.0.0 <11.0.1, OSV
+# record modified 2026-11-04).
