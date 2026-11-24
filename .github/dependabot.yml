@@ -155,6 +155,26 @@ updates:
     commit-message:
       prefix: "deps(compose)"
     groups:
+      # valkey und supabase/postgres bekommen je eine EIGENE Gruppe ohne
+      # `update-types`-Filter. Grund: ihre typischen Updates sind weder
+      # "minor" noch "patch" im Semver-Sinn und fielen deshalb aus
+      # `compose-images` heraus — Dependabot oeffnete dann je Verzeichnis
+      # einen Einzel-PR (2026-11: #1132/#1133/#1135, #1134/#1136):
+      #   valkey/valkey      `8-alpine@sha256:…` -> neuer Digest, Tag gleich
+      #   supabase/postgres  15.19.0.007 -> 15.19.0.018 (4. Stelle)
+      # Ohne Filter faengt die Gruppe jede Update-Art, und `directories:`
+      # buendelt sie verzeichnisuebergreifend zu EINEM PR je Image. Ein
+      # supabase/postgres-Major bleibt ueber `ignore` unten draussen; ein
+      # valkey-Major (reiner Cache ohne Persistenz) kaeme als eigener
+      # Gruppen-PR nur fuer valkey und bleibt damit einzeln review-bar.
+      # Die spezifischen Gruppen stehen VOR `compose-images`, weil Dependabot
+      # ein Update der ersten passenden Gruppe zuordnet.
+      compose-valkey:
+        patterns:
+          - "valkey/valkey"
+      compose-supabase-postgres:
+        patterns:
+          - "supabase/postgres"
       compose-images:
         update-types:
           - "minor"
