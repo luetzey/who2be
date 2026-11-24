@@ -269,6 +269,7 @@ describe('DashboardWelcome', () => {
     const dialog = await screen.findByRole('dialog')
     const group = within(dialog).getByRole('group', { name: /./ })
     expect(within(group).getAllByRole('button').map((el) => el.textContent)).toEqual([
+      'ChatGPT',
       'Claude Code',
       'Cursor oder VS Code',
       'Hermes Agent',
@@ -306,5 +307,35 @@ describe('DashboardWelcome', () => {
     })
     expect(await screen.findByRole('dialog', { name: 'Verbunden!' })).toBeInTheDocument()
     expect(screen.getByTestId('success-scene')).toHaveTextContent('Hermes')
+  })
+
+  it('ChatGPT: Untertitel, URL kopieren startet das Warten, Erfolg nennt ChatGPT', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    acknowledgeCookies()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    stubApi([[welcomeTutorial()], [welcomeTutorial()], [welcomeTutorial({}, true)]])
+    const { baseElement } = renderWelcome()
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ChatGPT' }))
+    expect(await screen.findByRole('dialog', { name: /Verbinde „Builder“ mit ChatGPT/ })).toBeInTheDocument()
+
+    expect(screen.getByTestId('connect-lead')).toHaveTextContent('Nur auf chatgpt.com im Browser')
+    expect(screen.getByRole('link', { name: /^ChatGPT öffnen\s*\(öffnet in neuem Tab\)$/ })).toHaveAttribute(
+      'href',
+      'https://chatgpt.com/',
+    )
+    expect(screen.getByLabelText('Server-URL')).toHaveTextContent(/\/a\/agent-builder$/)
+    expect(await axe(baseElement)).toHaveNoViolations()
+
+    fireEvent.click(screen.getByRole('button', { name: 'URL kopieren' }))
+    expect(await screen.findByTestId('welcome-waiting')).toBeInTheDocument()
+    expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/a\/agent-builder$/))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WELCOME_POLL_INTERVAL_MS * 2)
+    })
+    expect(await screen.findByRole('dialog', { name: 'Verbunden!' })).toBeInTheDocument()
+    expect(screen.getByTestId('success-scene')).toHaveTextContent('ChatGPT')
   })
 })

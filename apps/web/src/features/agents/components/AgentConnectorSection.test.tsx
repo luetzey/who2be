@@ -403,8 +403,107 @@ describe('AgentConnectorSection — andere Programme', () => {
   })
 })
 
+describe('AgentConnectorSection — ChatGPT (Client-Auswahl P-B)', () => {
+  async function openChatgpt() {
+    stubUsage(null)
+    renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: 'ChatGPT' }))
+  }
+
+  it('kein Install-Link: Name und URL zum Eintragen, Menuenamen englisch und fett', async () => {
+    await openChatgpt()
+
+    expect(screen.getByRole('button', { name: 'ChatGPT' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('connect-lead')).toHaveTextContent(
+      'Nur auf chatgpt.com im Browser, nicht in der ChatGPT-App.',
+    )
+    const guide = screen.getByTestId('connect-guide')
+    expect(guide).toHaveAttribute('data-client', 'chatgpt')
+    expect(guide).toHaveTextContent(
+      'Öffne ChatGPT im Browser und geh auf Plugins › + › Add custom MCP server.',
+    )
+    expect(guide).toHaveTextContent('klick auf Create as a plugin. Melde dich bei Who2Be an und bestätige den Agenten „Coder“.')
+    expect(guide).toHaveTextContent('Tipp im neuen Chat @, wähl „Who2Be – Coder“ und schreib:')
+    for (const name of ['Plugins', 'Add custom MCP server', 'Create as a plugin']) {
+      const el = within(guide).getByText(name)
+      expect(el.tagName).toBe('B')
+      expect(el).toHaveAttribute('lang', 'en')
+    }
+    // Kein Claude-Link, kein Rueckfall-Aufklapper: die Felder stehen offen.
+    expect(within(guide).queryByRole('link', { name: /Mit Claude verbinden/ })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('connect-manual')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Name')).toHaveTextContent('Who2Be – Coder')
+    expect(screen.getByLabelText('Server-URL')).toHaveTextContent(URL_)
+    expect(screen.getByLabelText('Server-URL')).toHaveClass('break-all')
+    expect(screen.getByLabelText('Name')).not.toHaveClass('break-all')
+
+    const hints = screen.getByTestId('connect-hints')
+    expect(hints).toHaveTextContent('legt OpenAI fest')
+    expect(hints).toHaveTextContent('ChatGPT Business: Nur Admins fügen eigene Server hinzu.')
+    expect(hints).toHaveTextContent('bevor ein Werkzeug etwas ändert')
+  })
+
+  it('„ChatGPT öffnen“ ist ein externer Nebenlink mit sr-only-Hinweis', async () => {
+    await openChatgpt()
+
+    const open = screen.getByRole('link', { name: /^ChatGPT öffnen\s*\(öffnet in neuem Tab\)$/ })
+    expect(open).toHaveAttribute('href', 'https://chatgpt.com/')
+    expect(open).toHaveAttribute('target', '_blank')
+    expect(open).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(open.className).not.toContain('bg-brand')
+    expect(within(open).getByText('(öffnet in neuem Tab)')).toHaveClass('sr-only')
+  })
+
+  it('„URL kopieren“ ist die einzige Brand-Aktion und startet das Warten', async () => {
+    await openChatgpt()
+
+    const guide = screen.getByTestId('connect-guide')
+    const brand = within(guide)
+      .getAllByRole('button')
+      .filter((el) => el.className.includes('bg-brand'))
+    expect(brand.map((el) => el.textContent)).toEqual(['URL kopieren'])
+    expect(within(guide).getByRole('link', { name: /ChatGPT öffnen/ }).className).not.toContain('bg-brand')
+
+    // Name kopieren startet das Warten nicht.
+    fireEvent.click(screen.getByRole('button', { name: 'Namen kopieren' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Who2Be – Coder'))
+    expect(screen.queryByTestId('connect-waiting')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'URL kopieren' }))
+    await waitFor(() => expect(screen.getByTestId('connect-waiting')).toBeInTheDocument())
+    expect(writeText).toHaveBeenCalledWith(URL_)
+    expect(screen.getByTestId('connect-waiting')).toHaveTextContent('in ChatGPT')
+    // Waehrend des Wartens gibt es keine Brand-Aktion mehr.
+    expect(screen.getByRole('button', { name: 'URL kopieren' }).className).not.toContain('bg-brand')
+  })
+
+  it('„ChatGPT öffnen“ startet das Warten ebenfalls', async () => {
+    await openChatgpt()
+    fireEvent.click(screen.getByRole('link', { name: /ChatGPT öffnen/ }))
+    expect(await screen.findByTestId('connect-waiting')).toHaveTextContent('in ChatGPT')
+  })
+
+  it('Erfolg kommt aus derselben Quelle wie bei Claude Code (erster Abruf)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const calls = stubUsage(null, null, '2026-10-22T10:00:00Z')
+    renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: 'ChatGPT' }))
+    fireEvent.click(screen.getByRole('button', { name: 'URL kopieren' }))
+    await screen.findByTestId('connect-waiting')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    })
+    await waitFor(() => expect(screen.queryByTestId('connect-waiting')).not.toBeInTheDocument())
+    expect(screen.getByTestId('connect-live')).toHaveTextContent('Verbunden. „Coder“ hat seine Persona geladen.')
+    expect(screen.getByTestId('connect-status')).toHaveTextContent('Verbunden')
+    expect(calls.length).toBe(3)
+  })
+})
+
 describe('AgentConnectorSection — Auswahl (Client-Auswahl P-A)', () => {
-  it('zeigt fuenf Kacheln in fester Reihenfolge im Raster 2 × 3 / 3 × 2', async () => {
+  it('zeigt sechs Kacheln in fester Reihenfolge im Raster 2 × 3 / 3 × 2', async () => {
     stubUsage(null)
     renderSection()
     await notConnected()
@@ -412,6 +511,7 @@ describe('AgentConnectorSection — Auswahl (Client-Auswahl P-A)', () => {
     const group = screen.getByRole('group', { name: 'Wo nutzt du deine Agenten?' })
     expect(within(group).getAllByRole('button').map((el) => el.textContent)).toEqual([
       'Claude (Web, App, Handy)',
+      'ChatGPT',
       'Claude Code',
       'Cursor oder VS Code',
       'Hermes Agent',
@@ -437,6 +537,7 @@ describe('AgentConnectorSection — Auswahl (Client-Auswahl P-A)', () => {
 
   it.each([
     ['Claude (Web, App, Handy)', /Mit Claude verbinden/, '/w/ws-1/help/connect-claude#troubleshooting'],
+    ['ChatGPT', 'URL kopieren', '/w/ws-1/help/connect-chatgpt#troubleshooting'],
     ['Claude Code', 'Befehl kopieren', '/w/ws-1/help/connect-other-clients#claude-code'],
     ['Cursor oder VS Code', /Zu Cursor hinzufügen/, '/w/ws-1/help/connect-other-clients#cursor-vscode'],
     ['Etwas anderes', 'Ich habe die Adresse eingetragen', '/w/ws-1/help/connect-other-clients#andere'],
@@ -450,6 +551,14 @@ describe('AgentConnectorSection — Auswahl (Client-Auswahl P-A)', () => {
     fireEvent.click(target)
     const link = await screen.findByRole('link', { name: 'Klappt es nicht? Häufige Ursachen' })
     expect(link).toHaveAttribute('href', href)
+  })
+
+  it('a11y: keine axe-Befunde bei ChatGPT', async () => {
+    stubUsage(null)
+    const { container } = renderSection()
+    await notConnected()
+    fireEvent.click(screen.getByRole('button', { name: 'ChatGPT' }))
+    expect(await axe(container)).toHaveNoViolations()
   })
 
   it('a11y: keine axe-Befunde bei Hermes', async () => {

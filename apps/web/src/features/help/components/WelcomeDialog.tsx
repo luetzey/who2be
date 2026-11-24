@@ -72,7 +72,7 @@ const ACTION = CONNECT_ACTION
 // (Client-Auswahl-Spec §3). Reihenfolge aus `CONNECT_CLIENTS`.
 const ALT_CLIENTS = CONNECT_CLIENTS.filter((entry) => entry !== 'claude')
 // Programme mit eigenem Namen in der Erfolgs-Szene; sonst „Claude & Co.“.
-const NAMED_CLIENTS: ReadonlySet<ConnectClient> = new Set(['claude', 'code', 'hermes'])
+const NAMED_CLIENTS: ReadonlySet<ConnectClient> = new Set(['claude', 'chatgpt', 'code', 'hermes'])
 
 function useBuilder(enabled: boolean): Builder {
   const api = useApi()
