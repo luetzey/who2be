@@ -11,7 +11,7 @@
 # bewusst NICHT in den Context und synct die `billing`-Gruppe nicht — das
 # Mollie-SDK + die Billing-Schreibseite sind im On-Prem-Artefakt physisch nicht
 # vorhanden. Nur der Cloud-Build zieht sie ueber `--group billing`.
-FROM python:3.14-slim AS base
+FROM python:3.15-slim AS base
 
 # uv (nur Build-Zeit) via PyPI statt per `COPY --from=ghcr.io/astral-sh/uv`:
 # der Cross-Registry-Pull bricht auf Hosts mit (abgelaufener) ghcr-Anmeldung —
@@ -46,7 +46,7 @@ COPY packages/billing packages/billing
 RUN uv sync --frozen --group billing
 
 # --- Gemeinsame Runtime-Basis ---------------------------------------------------
-FROM python:3.14-slim AS runtime-base
+FROM python:3.15-slim AS runtime-base
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \

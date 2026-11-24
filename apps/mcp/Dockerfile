@@ -6,7 +6,7 @@
 # Transport: Default stdio (Claude Desktop / Cursor local). Mit
 # `WHO2BE_TRANSPORT=http` exponiert der Server Streamable-HTTP auf 0.0.0.0:8765
 # — geeignet als Long-Running-Service hinter Caddy (`mcp.${DOMAIN}`). ADR-0034.
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 # uv (nur Build-Zeit) via PyPI statt per `COPY --from=ghcr.io/astral-sh/uv`:
 # der Cross-Registry-Pull bricht auf Hosts mit (abgelaufener) ghcr-Anmeldung.
@@ -30,7 +30,7 @@ COPY apps/mcp apps/mcp
 # apps/api/Dockerfile Kommentar).
 RUN uv sync --frozen
 
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
