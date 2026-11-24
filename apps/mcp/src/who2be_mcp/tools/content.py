@@ -270,9 +270,11 @@ async def edit_content(
     `profile`, `usage_notes`, `modes[<Name>].identity_add|output_style_override|anti_patterns`).
     `markdown` braucht `replace` und `insert_after`, `delete` nimmt keins.
 
-    `base_rev` aus `format="source"` oder der letzten Schreibantwort. Ist schon ein Draft offen,
-    wird bei passendem `base_rev` in ihn geschrieben; sonst 409 `version_conflict`: neu lesen,
-    nicht blind wiederholen. Die Antwort traegt den neuen `base_rev`.
+    `base_rev` aus `format="source"` oder der letzten Schreibantwort. Bearbeitet wird der
+    offene Draft, sonst ein neuer auf Basis der aktiven Version; bei offenem Review 409
+    `review_conflict`. Passt `base_rev` nicht, 409 `version_conflict`: neu lesen, nicht blind
+    wiederholen. Neue Ueberschriften ohne eigenen Anker `[#id]`, den vergibt der Server
+    (sonst `anchor_unknown`). Die Antwort traegt den neuen `base_rev`.
     """
     parsed = _parse_uuid(entity_id, entity_type)
     reject_editor_json([(field or anchor or "markdown", markdown)])
