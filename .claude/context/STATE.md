@@ -2,6 +2,23 @@
 
 _Stand: 2026-10-02 (Lernschleife C2b: Secret-Scan, Verfall unbestaetigten Gedaechtnisses, `who2be-memory-expire`; PR offen)_
 
+## Backlog-Aufbereitung: Protokolle ins Queue-Issue #442 statt Protokoll-PRs (2026-11-24, Karte t_70fee960)
+
+**Stand:** Owner-Entscheidung vom 2026-11-22. Die nächtliche
+Backlog-Aufbereitung ist eine Claude-Code-Routine auf claude.ai, nicht im
+Repo. Sie hängt ihr Laufprotokoll künftig als Kommentar an #442 an. Sie legt
+keinen Branch `claude/*`, keine Datei `.claude/plan/*_backlog-aufbereitungslauf-NN.md`
+und keinen PR mehr an. Die Regel steht in `.github/PROJECT.md` §Reihenfolge.
+Den Routine-Prompt stellt der Owner in claude.ai um, denn Agenten haben keinen
+Zugriff auf das Konto.
+
+**Warum:** Von 51 offenen PRs waren 32 solche Protokolle (Lauf 89, #1156).
+Keiner davon wurde gemergt, und `.claude/plan/` endet auf `main` bei Lauf 55.
+
+**Offen:** #1156 wird mit Verweis auf #442 geschlossen, der Branch bleibt. Die
+übrigen Protokoll-PRs und die Doku-Anteile von #1152/#1105 laufen über eine
+eigene Karte.
+
 ## Lernschleife C2b: Secret-Scan, Ratenbegrenzung, Verfall (2026-10-02, Karte t_ce136b8e)
 
 **Stand:** PR offen, Review ausstehend. `save_memory` weist Zugangsdaten und

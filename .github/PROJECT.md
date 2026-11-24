@@ -55,6 +55,17 @@ Warteschlange“, die Pflege-Regeln und der Hinweis, dass das Projects-Board
 für Agenten unlesbar ist. Reihenfolge und Begründungen stammen aus der
 Tabelle unten und den offenen `agent-ready`-Issues.
 
+**Laufprotokolle der Backlog-Aufbereitung stehen als Kommentar im
+Queue-Issue, nicht im Repo** (Owner-Entscheidung 2026-11-22). Ein
+Aufbereitungslauf pflegt den Body des Queue-Issues und hängt sein Protokoll
+als neuen Kommentar an dasselbe Issue. Er legt keinen Branch, keinen Commit,
+keine Datei unter `.claude/plan/` und keinen PR an. Grund: Von 51 offenen PRs
+waren 32 solche Protokolle. Keiner davon wurde gemergt, und die Arbeit der
+Läufe 56 bis 89 war auf `main` nie sichtbar. Ein Kommentar ist dagegen sofort
+dort, wo der nächste Lauf und der Owner ohnehin lesen. Findet ein Lauf eine
+echte Doku-Korrektur, meldet er sie im Protokoll und im betroffenen Issue;
+umgesetzt wird sie über eine eigene Karte, nicht im Protokoll.
+
 #### Warum die Reihenfolge so aussieht
 
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
