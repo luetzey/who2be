@@ -73,8 +73,8 @@ def _review_conflict() -> ApiError:
     return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
-            "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
-            "Lehne die Review erst ab, bevor du weiter editierst."
+            "Diese Version steht in der Review, Bearbeiten ist gesperrt. "
+            "Review abwarten oder per transition zurück in draft holen."
         ),
         reason="review_conflict",
     )
@@ -172,6 +172,8 @@ class ExternalToolService:
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
+        if outcome.conflict == "review_pending":
+            raise _review_conflict()
         if outcome.tool is None:
             raise _not_found()
         return outcome.tool
