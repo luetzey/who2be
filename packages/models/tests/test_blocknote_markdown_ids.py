@@ -310,7 +310,7 @@ def _underlined(block_id: str) -> dict[str, Any]:
 
 
 def test_type_lists_cover_blocknote_default_schema() -> None:
-    # @blocknote/core 0.56.0, `defaultBlockSpecs` (BLOCKNOTE_VERSION haelt der Golden-Test fest).
+    # @blocknote/core 0.57.0, `defaultBlockSpecs` (BLOCKNOTE_VERSION haelt der Golden-Test fest).
     assert REPRESENTABLE_BLOCK_TYPES | NON_REPRESENTABLE_BLOCK_TYPES == {
         "audio",
         "bulletListItem",
