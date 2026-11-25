@@ -55,7 +55,7 @@ Block = dict[str, Any]
 #: Version von `@blocknote/core`, gegen die die Typlisten gezogen sind
 #: (`apps/web/package-lock.json`). Ein BlockNote-Update laesst den
 #: Versions-Test reissen, bis jemand die Listen neu geprueft hat.
-BLOCKNOTE_VERSION = "0.56.0"
+BLOCKNOTE_VERSION = "0.57.0"
 
 #: Blocktypen mit Markdown-Gegenstueck.
 REPRESENTABLE_BLOCK_TYPES: frozenset[str] = frozenset(
@@ -70,7 +70,7 @@ REPRESENTABLE_BLOCK_TYPES: frozenset[str] = frozenset(
     }
 )
 
-#: Blocktypen aus `defaultBlockSpecs` von @blocknote/core 0.56.0 ohne
+#: Blocktypen aus `defaultBlockSpecs` von @blocknote/core 0.57.0 ohne
 #: Markdown-Gegenstueck. Sie erscheinen als Marker `<!-- w2b:block ... -->`.
 NON_REPRESENTABLE_BLOCK_TYPES: frozenset[str] = frozenset(
     {"audio", "divider", "file", "image", "quote", "toggleListItem", "video"}
