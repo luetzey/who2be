@@ -82,7 +82,9 @@ erteilte Freigabe nicht jedes Mal entwertet, bleiben
 so, wie sie heute stehen. Ein Nachzieh-Merge ohne Konflikt ändert inhaltlich
 nichts am PR. Gibt es einen Konflikt, ist das Ergebnis ein neuer Stand und
 braucht ein neues Review (Regel aus `CONTRIBUTING.md`, „After resolving a
-conflict: read the net diff“).
+conflict: read the net diff“). Das Ruleset führt außerdem
+`require_extra_approval_for_unattributed_changes: true`. Das betrifft nur
+Copilot-PRs ohne menschlichen Mitwirkenden und hat hier keine Wirkung.
 
 **Vor „strict“: „Always suggest updating pull request branches“
 einschalten.** Die Repo-Einstellung `allow_update_branch` steht heute auf
@@ -129,7 +131,7 @@ freigeben. „Yannick klickt selbst“ geht deshalb nicht, solange PRs unter
 | Wer freigibt | `luetzey`, also Yannick per Klick oder `@reviewer` mit Yannicks Token (Unterweiche) | das Reviewer-Konto |
 | Für | Autor und Freigabe sind getrennt. Yannick kann selbst freigeben. Die Historie zeigt, was ein Agent geschrieben hat. | Am wenigsten Umbau: nur `@reviewer` braucht ein neues Token. |
 | Gegen | Alle Agenten-Profile brauchen ein neues Token und eine neue Git-Identität. CLA- und Commit-Regeln für das Bot-Konto sind zu prüfen. | Ein Agent gibt einen Agenten frei. Der Server erzwingt damit eine Board-Rolle, aber keinen Menschen. |
-| Gemeinsam | Ein zweites GitHub-Konto mit Schreibrecht auf beide Repos (GitHub erlaubt einen Machine-User je Person). Dessen Token ist ein neues Geheimnis, das gepflegt werden muss. | |
+| Gemeinsam | Ein zweites GitHub-Konto mit Schreibrecht auf beide Repos (GitHub erlaubt einen kostenlosen Machine-User je Person). Dessen Token ist ein neues Geheimnis, das gepflegt werden muss. | |
 
 Weitere denkbare Wege, nur zur Vollständigkeit: eine GitHub App als Reviewer,
 deren Freigaben für das Ruleset noch zu prüfen wären, oder Yannick als
@@ -160,7 +162,8 @@ an dieser Weiche nicht und kann sofort gelten.
 | Ruleset `16707501`: `strict_required_status_checks_policy: true` | Yannick (Admin) | offen |
 | Ruleset `16707501`: `required_approving_review_count: 1` | Yannick (Admin) | offen, erst nach Abschnitt 4 |
 | Gleiche Regeln für `who2be-website` | Yannick / eigene Karte | offen |
-| Doku: `auto-merge-agenten.md`, `branch-protection-main.md`, `AGENTS.md`, `CONTRIBUTING.md` | @coder (diese Karte) | mit dieser ADR |
+| Doku: `auto-merge-agenten.md`, `branch-protection-main.md`, `CONTRIBUTING.md` | @coder (diese Karte) | mit dieser ADR |
+| Doku: beide Arbeitsregeln in `AGENTS.md` | @pm / Owner | offen, geschützte Instruktionsdatei, braucht Owner-Freigabe |
 
 Nachmessen, ob die Umstellung greift:
 
