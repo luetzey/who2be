@@ -144,6 +144,20 @@ hitting one of those denials means the rule fired, not that a bug was found.
 If the checks stay red the pull request simply is not merged. That is the
 mechanism working, not a stuck state: fix the build, do not remove the check.
 
+### Keeping `main` green
+
+Two working rules ([ADR-0064](docs/adr/0064-main-dauerhaft-gruen.md)):
+
+- **Red is fixed the same day.** Anything red on `main` or in an open pull
+  request is fixed on the day it turns red, before new work starts.
+- **At most 3–5 finished pull requests are open.** At the limit, merge or
+  close first, then open new ones.
+
+Before merging, or before requesting auto-merge, bring the branch up to date
+with `main`. Merge `origin/main` into the branch, without rebase and without
+force-push, and let `all-green` run again. Once the ruleset requires up-to-date
+branches, GitHub enforces this step.
+
 ## Referencing code
 
 Never point at a code location with a bare `file.py:441`. Line numbers drift as
