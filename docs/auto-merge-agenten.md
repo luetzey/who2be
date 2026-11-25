@@ -16,9 +16,14 @@ dem Moment, in dem ein Agent Auto-Merge anfordern darf, sind nicht mehr das Verb
 sondern **diese drei Gates** die Sicherung:
 
 1. **Review freigegeben.** Auto-Merge wird erst nach einer erteilten Freigabe
-   angefordert. Dieses Gate ist organisatorisch, nicht technisch — GitHub erzwingt
-   es hier nicht, weil das Ruleset `required_approving_review_count: 0` führt.
-   Es hängt daran, dass niemand vorher anfordert.
+   angefordert. Heute ist dieses Gate organisatorisch: Das Ruleset führt
+   noch `required_approving_review_count: 0`, also hängt es daran, dass niemand
+   vorher anfordert. Laut [ADR-0064](adr/0064-main-dauerhaft-gruen.md) wird
+   der Wert auf `1` gesetzt. **Sobald das Ruleset umgestellt ist, erzwingt
+   GitHub Gate 1 serverseitig.** Ein PR ohne Freigabe wird dann auch mit
+   angefordertem Auto-Merge nicht gemergt. Wer die Freigabe liefert, ist noch
+   offen (ADR-0064, Abschnitt 4). Die Regel „erst nach Freigabe anfordern“ gilt
+   unabhängig davon weiter.
 2. **`all-green` ist grün.** Der Aggregat-Job aus `.github/workflows/ci.yml` urteilt
    über alle CI-Jobs und ist der einzige Required Check. Begründung, warum genau
    einer und warum dieser: [`branch-protection-main.md`](branch-protection-main.md).
@@ -27,9 +32,51 @@ sondern **diese drei Gates** die Sicherung:
    jeder PR sofort mergebar, und Auto-Merge würde nicht verzögern, sondern sofort
    durchgreifen.
 
-Gate 1 ist das schwächste, weil es kein Server erzwingt. Deshalb die Regel unten:
-anfordern **erst nach** freigegebenem Review, nie vorher, nie „damit es schon mal
-läuft".
+Bis zur Ruleset-Umstellung ist Gate 1 das schwächste, weil es kein Server
+erzwingt. Deshalb die Regel unten: anfordern **erst nach** freigegebenem Review,
+nie vorher, nie „damit es schon mal läuft".
+
+## Branch aktuell halten („strict“)
+
+Laut [ADR-0064](adr/0064-main-dauerhaft-gruen.md) verlangt das Ruleset, dass
+der Branch vor dem Merge auf dem Stand von `main` ist
+(`strict_required_status_checks_policy: true`, „Require branches to be up to
+date“). Für den Auto-Merge-Weg heißt das:
+
+- **Vor dem Anfordern von Auto-Merge bzw. vor dem Merge den Branch auf `main`
+  nachziehen.** Den Merge von `origin/main` in den PR-Branch macht der Agent,
+  ohne Rebase und ohne Force-Push. Danach läuft `all-green` neu.
+- `mergeStateStatus: BEHIND` bedeutet: Nachziehen fehlt. Der PR wird nicht
+  gemergt, auch nicht mit angefordertem Auto-Merge. GitHub zieht ohne Merge
+  Queue nicht selbst nach.
+- Hat das Nachziehen einen Konflikt gelöst, ist der Stand neu. Erst kommt ein
+  erneutes Review, dann wird angefordert (siehe
+  [Auto-Merge war aktiv und ist plötzlich weg](#auto-merge-war-aktiv-und-ist-plötzlich-weg)).
+- Nachziehen ohne Konflikt erzeugt einen neuen Head-SHA, also den
+  Nachzieh-Commit. Die Freigabe gilt laut Checkliste für den exakten Head.
+  Deshalb bestätigt der Reviewer den neuen Head: Der Nettodiff gegen `main`
+  ist inhaltlich derselbe wie am freigegebenen Stand. Dafür muss `all-green`
+  noch nicht durchgelaufen sein. Den Lauf sichern Gate 2 und 3 serverseitig.
+- Nach dem Nachziehen laufen die Checks. Der PR ist dann nicht `CLEAN`, und
+  die Anforderung wird angenommen. `expectedHeadOid` zeigt auf den
+  Nachzieh-Commit. Das Kommando unten liest ihn selbst aus.
+- Nachgezogen wird per „Update branch“ bzw. `gh pr update-branch <PR>`
+  (Merge, kein Rebase) oder lokal per Merge von `origin/main`. Den Knopf zeigt
+  GitHub für jeden zurückliegenden PR nur, wenn die Repo-Einstellung
+  `allow_update_branch: true` gesetzt ist („Always suggest updating pull
+  request branches“). Ohne sie gibt es ihn nur, solange „strict“ gilt. Am
+  2026-11-25 stand sie auf `false`. Laut ADR-0064 wird sie vor „strict“
+  eingeschaltet.
+- PRs, die `apps/web/package-lock.json` ändern, werden **streng
+  nacheinander** gemergt. Den nächsten erst nachziehen, wenn der vorige auf
+  `main` liegt. Für mehrere solche PRs gleichzeitig wird kein Auto-Merge
+  angefordert.
+- Auch **Dependabot-PRs** brauchen die Pflicht-Freigabe, sobald das Ruleset
+  `required_approving_review_count: 1` führt. `@dependabot rebase` zieht nach,
+  ersetzt aber kein Review.
+
+Solange das Ruleset noch „loose“ führt, ist Nachziehen Empfehlung, keine
+Bedingung.
 
 ## Wer anfordern darf
 
@@ -60,6 +107,11 @@ Wer Durchsatz über Nacht braucht, muss das dem Owner vorher so sagen und
 Alternativen nennen (Owner mergt vor dem Schlafen, gestapelte PRs,
 Owner-Freigabe für PM-Merge).
 
+Mit „strict“ ([ADR-0064](adr/0064-main-dauerhaft-gruen.md)) wird der Fall
+häufiger, in dem nach der Freigabe noch Checks laufen. Jeder PR muss vor dem
+Merge nachgezogen werden, und danach läuft `all-green` neu. Den Stau löst das
+nicht: Mergt ein anderer PR zuerst, liegt der Branch wieder zurück.
+
 ## Vor dem Aufruf — Checkliste
 
 - [ ] Das Review ist **freigegeben**, nicht nur angefordert.
@@ -68,6 +120,9 @@ Owner-Freigabe für PM-Merge).
       nicht und verkürzt es nicht. `mergeStateStatus == CLEAN` ist **keine**
       Vorbedingung — bei `CLEAN` lehnt GitHub ab, das ist Fall (a).
 - [ ] Der PR ist offen und hat keine ungelösten Konflikte.
+- [ ] Der Branch ist auf `main` nachgezogen (`mergeStateStatus` nicht
+      `BEHIND`), sobald das Ruleset „strict“ führt. Siehe
+      [Branch aktuell halten](#branch-aktuell-halten-strict).
 - [ ] `all-green` läuft noch (`gh pr checks <PR>`). Ist er auf dem Head schon
       grün, lehnt GitHub mit `clean status` ab — dann Fall (a) unter
       [Fehlerbilder](#pull-request-is-in-clean-status), Merge geht an den Owner.
@@ -242,6 +297,14 @@ gh api repos/luetzey/who2be --jq '{allow_auto_merge,allow_squash_merge,allow_mer
 
 Erwartet: `allow_auto_merge: true`. Steht die Einstellung wieder auf `false`,
 scheitert jede Anforderung, bevor irgendein Gate greift.
+
+Vor der Umstellung auf „strict“ ([ADR-0064](adr/0064-main-dauerhaft-gruen.md))
+zusätzlich „Always suggest updating pull request branches“ einschalten:
+
+```bash
+gh api -X PATCH repos/luetzey/who2be -F allow_update_branch=true
+gh api repos/luetzey/who2be --jq .allow_update_branch   # erwartet: true
+```
 
 ## Belegt, nicht behauptet
 

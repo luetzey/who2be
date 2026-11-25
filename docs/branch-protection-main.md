@@ -5,7 +5,15 @@ Dokument war ursprünglich ein Vorschlag; er ist angenommen und angewendet. Es b
 Entscheidungsgrundlage stehen — es begründet, warum genau ein Required Check und welcher.
 Die Nutzlast in §„Nutzlast, die angewendet wurde" ist Beleg, kein offener Auftrag; die
 Karte P3b, die das Einschalten beauftragte, ist geschlossen (als Dublette archiviert,
-gültig waren `t_b0233031` / `t_25a1e9f2`). Es gibt zu diesem Ruleset keine offene Aufgabe.
+gültig waren `t_b0233031` / `t_25a1e9f2`).
+
+> **Abgelöst in zwei Punkten durch [ADR-0064](adr/0064-main-dauerhaft-gruen.md)
+> (Owner, 2026-11-25):** Regel 1 wird „strict“
+> (`strict_required_status_checks_policy: true`). Regel 3 bekommt ein
+> Pflicht-Review (`required_approving_review_count: 1`). Die Begründungen für
+> „loose“ und „0 Reviews“ unten sind damit Historie. Die Umstellung nimmt der
+> Owner im Ruleset vor. Bis dahin zeigt der Auszug unten den gemessenen
+> Ist-Stand. Wer das Pflicht-Review liefert, ist offen (ADR-0064, Abschnitt 4).
 
 Gemessener Ist-Zustand, `gh api repos/luetzey/who2be/rulesets/16707501` am **2026-09-24**
 (gekürzt auf die entscheidenden Felder):
